@@ -6,12 +6,15 @@
  */
 
 import { useEffect, useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import { ApiHttpError } from '@/lib/api-client';
+import { apiErrorMessage } from '@/lib/i18n/api-error';
+import { formatDateTime } from '@/lib/i18n/format';
 import {
   zoomLiveApi,
   type PaginatedWebhookEvents,
@@ -29,6 +32,8 @@ const PAGE_SIZE = 25;
 
 /** Pestaña "Zoom" de /admin/webhooks. Antes `/admin/zoom/webhook-events`. */
 export function ZoomWebhookEventsTab() {
+  const t = useTranslations('adminApi');
+  const tErrors = useTranslations('errors');
   const [data, setData] = useState<PaginatedWebhookEvents | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [eventType, setEventType] = useState('');
@@ -46,7 +51,7 @@ export function ZoomWebhookEventsTab() {
       });
       setData(res);
     } catch (e) {
-      setError(e instanceof ApiHttpError ? e.message : 'No pudimos cargar los eventos.');
+      setError(e instanceof ApiHttpError ? apiErrorMessage(e, tErrors) : t('zoom.loadError'));
     }
   }
 
@@ -61,13 +66,8 @@ export function ZoomWebhookEventsTab() {
     <div className="flex flex-col gap-6">
       <header className="flex items-end justify-between gap-4">
         <div>
-          <h2 className="font-display text-lg font-semibold tracking-tight">
-            Eventos webhook · Zoom
-          </h2>
-          <p className="mt-1 text-text-muted">
-            Trazabilidad de los eventos recibidos del webhook de Zoom. Útil para diagnosticar
-            sesiones que no transicionan o grabaciones que no aparecen.
-          </p>
+          <h2 className="font-display text-lg font-semibold tracking-tight">{t('zoom.title')}</h2>
+          <p className="mt-1 text-text-muted">{t('zoom.description')}</p>
         </div>
       </header>
 
@@ -75,12 +75,12 @@ export function ZoomWebhookEventsTab() {
         <CardContent className="flex flex-wrap items-end gap-4 p-4">
           <div className="flex-1 min-w-[220px]">
             <label className="text-xs font-semibold text-text-muted" htmlFor="eventType">
-              Tipo de evento
+              {t('zoom.eventTypeLabel')}
             </label>
             <Input
               id="eventType"
               type="search"
-              placeholder="ej. meeting.started"
+              placeholder={t('zoom.eventTypePlaceholder')}
               value={eventType}
               onChange={(e) => setEventType(e.target.value)}
               onKeyDown={(e) => {
@@ -94,7 +94,7 @@ export function ZoomWebhookEventsTab() {
           </div>
           <div>
             <label className="text-xs font-semibold text-text-muted" htmlFor="result">
-              Resultado
+              {t('zoom.resultLabel')}
             </label>
             <Select
               id="result"
@@ -102,10 +102,10 @@ export function ZoomWebhookEventsTab() {
               onChange={(e) => setResultFilter(e.target.value as '' | WebhookEventResult)}
               className="mt-1 min-w-[160px]"
             >
-              <option value="">Todos</option>
-              <option value="OK">OK</option>
-              <option value="IGNORED">IGNORED</option>
-              <option value="ERROR">ERROR</option>
+              <option value="">{t('zoom.resultAll')}</option>
+              <option value="OK">{t('zoomResult.OK')}</option>
+              <option value="IGNORED">{t('zoomResult.IGNORED')}</option>
+              <option value="ERROR">{t('zoomResult.ERROR')}</option>
             </Select>
           </div>
           <Button
@@ -115,7 +115,7 @@ export function ZoomWebhookEventsTab() {
               void reload();
             }}
           >
-            Aplicar
+            {t('zoom.apply')}
           </Button>
         </CardContent>
       </Card>
@@ -136,30 +136,29 @@ export function ZoomWebhookEventsTab() {
       ) : data.items.length === 0 ? (
         <Card>
           <CardContent className="flex flex-col items-center gap-3 p-12 text-center">
-            <h3 className="font-display text-xl font-semibold">Sin eventos</h3>
-            <p className="max-w-md text-text-muted">
-              Todavía no llegaron webhooks de Zoom para tu tenant, o ningún evento matchea los
-              filtros.
-            </p>
+            <h3 className="font-display text-xl font-semibold">{t('zoom.emptyTitle')}</h3>
+            <p className="max-w-md text-text-muted">{t('zoom.emptyDescription')}</p>
           </CardContent>
         </Card>
       ) : (
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">{data.total} eventos</CardTitle>
+            <CardTitle className="text-base">
+              {t('zoom.totalEvents', { total: String(data.total) })}
+            </CardTitle>
             <CardDescription>
-              Página {data.page} de {totalPages}.
+              {t('zoom.pageOf', { page: String(data.page), totalPages: String(totalPages) })}
             </CardDescription>
           </CardHeader>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-y border-border bg-surface-2 text-left text-xs uppercase tracking-wide text-text-muted">
-                  <th className="px-6 py-3 font-semibold">Recibido</th>
-                  <th className="px-3 py-3 font-semibold">Evento</th>
-                  <th className="px-3 py-3 font-semibold">Meeting</th>
-                  <th className="px-3 py-3 font-semibold">Resultado</th>
-                  <th className="px-6 py-3 font-semibold">Detalle</th>
+                  <th className="px-6 py-3 font-semibold">{t('zoom.colReceived')}</th>
+                  <th className="px-3 py-3 font-semibold">{t('zoom.colEvent')}</th>
+                  <th className="px-3 py-3 font-semibold">{t('zoom.colMeeting')}</th>
+                  <th className="px-3 py-3 font-semibold">{t('zoom.colResult')}</th>
+                  <th className="px-6 py-3 font-semibold">{t('zoom.colDetail')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -176,10 +175,10 @@ export function ZoomWebhookEventsTab() {
               disabled={page <= 1}
               onClick={() => setPage((p) => Math.max(1, p - 1))}
             >
-              Anterior
+              {t('zoom.previous')}
             </Button>
             <span className="text-xs text-text-muted">
-              {data.items.length} de {data.total}
+              {t('zoom.shownOf', { shown: String(data.items.length), total: String(data.total) })}
             </span>
             <Button
               variant="secondary"
@@ -187,7 +186,7 @@ export function ZoomWebhookEventsTab() {
               disabled={page >= totalPages}
               onClick={() => setPage((p) => p + 1)}
             >
-              Siguiente
+              {t('zoom.next')}
             </Button>
           </CardContent>
         </Card>
@@ -197,21 +196,22 @@ export function ZoomWebhookEventsTab() {
 }
 
 function EventRow({ event }: { event: ZoomWebhookEventItem }) {
+  const t = useTranslations('adminApi');
   return (
     <tr className="border-b border-border last:border-0 hover:bg-surface-2">
-      <td className="px-6 py-3 tabular-nums text-text-muted">
-        {new Date(event.receivedAt).toLocaleString('es-ES')}
-      </td>
+      <td className="px-6 py-3 tabular-nums text-text-muted">{formatDateTime(event.receivedAt)}</td>
       <td className="px-3 py-3 font-mono text-xs text-text">{event.eventType}</td>
       <td className="px-3 py-3 font-mono text-xs text-text-muted">{event.meetingId ?? '—'}</td>
       <td className="px-3 py-3">
-        <Badge variant={RESULT_VARIANT[event.result]}>{event.result}</Badge>
+        <Badge variant={RESULT_VARIANT[event.result]}>{t(`zoomResult.${event.result}`)}</Badge>
       </td>
       <td className="px-6 py-3 text-xs text-text-muted">
         {event.errorMessage ? (
           <span className="text-danger-700">{event.errorMessage}</span>
         ) : event.sessionId ? (
-          <span className="font-mono">session: {event.sessionId.slice(0, 8)}…</span>
+          <span className="font-mono">
+            {t('zoom.sessionPrefix', { id: event.sessionId.slice(0, 8) })}
+          </span>
         ) : (
           '—'
         )}

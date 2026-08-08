@@ -30,6 +30,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import { EeGate, LICENSE_CAPABILITIES, useLicense } from '@didacta/license-sdk/react';
 import { Icon } from '@/components/icon';
 import { ZoomWebhookEventsTab } from '@/components/admin/zoom-webhook-events-tab';
@@ -42,6 +43,8 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { ApiHttpError } from '@/lib/api-client';
 import { authStorage } from '@/lib/auth-storage';
+import { apiErrorMessage } from '@/lib/i18n/api-error';
+import { formatDateTime } from '@/lib/i18n/format';
 import {
   webhooksApi,
   type WebhookDeadLetterItem,
@@ -61,6 +64,7 @@ type TabKey = (typeof TABS)[number];
  * lado venía el evento. Esa ruta redirige ahora a la pestaña "Zoom".
  */
 export default function AdminWebhooksPage() {
+  const t = useTranslations('adminApi');
   const router = useRouter();
   const params = useSearchParams();
   const requested = params.get('tab');
@@ -71,10 +75,8 @@ export default function AdminWebhooksPage() {
   return (
     <div className="flex flex-col gap-6">
       <header className="flex flex-col gap-1">
-        <h1 className="font-display text-2xl font-bold tracking-tight">Webhooks</h1>
-        <p className="text-text-muted">
-          Los eventos que salen de la plataforma hacia tus sistemas y los que entran desde Zoom.
-        </p>
+        <h1 className="font-display text-2xl font-bold tracking-tight">{t('webhooks.title')}</h1>
+        <p className="text-text-muted">{t('webhooks.subtitle')}</p>
       </header>
 
       <Tabs
@@ -84,17 +86,13 @@ export default function AdminWebhooksPage() {
         }
       >
         <TabsList>
-          <TabsTrigger value="salientes">Salientes</TabsTrigger>
-          <TabsTrigger value="zoom">Zoom</TabsTrigger>
+          <TabsTrigger value="salientes">{t('webhooks.tabOutbound')}</TabsTrigger>
+          <TabsTrigger value="zoom">{t('webhooks.tabZoom')}</TabsTrigger>
         </TabsList>
 
         <TabsContent value="salientes" className="mt-5">
           <div className="flex flex-col gap-4">
-            <p className="text-sm text-text-muted">
-              URLs externas que reciben una notificación cada vez que sucede un evento en la
-              plataforma (alumno completa curso, nuevo post en comunidad, etc.). Útil para integrar
-              con sistemas internos (Slack, CRM, ERP) o automatizaciones n8n / Zapier.
-            </p>
+            <p className="text-sm text-text-muted">{t('webhooks.outboundIntro')}</p>
             <WebhooksDashboard />
           </div>
         </TabsContent>
@@ -107,6 +105,8 @@ export default function AdminWebhooksPage() {
 }
 
 function WebhooksDashboard() {
+  const t = useTranslations('adminApi');
+  const tErrors = useTranslations('errors');
   const [info, setInfo] = useState<WebhooksInfo | null>(null);
   const [endpoints, setEndpoints] = useState<WebhookEndpoint[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -122,11 +122,7 @@ function WebhooksDashboard() {
       setInfo(freshInfo);
       setEndpoints(freshList);
     } catch (e) {
-      setError(
-        e instanceof ApiHttpError
-          ? e.message
-          : 'No se pudo cargar la información de webhooks salientes.',
-      );
+      setError(e instanceof ApiHttpError ? apiErrorMessage(e, tErrors) : t('webhooks.loadError'));
     }
   };
 
@@ -158,21 +154,22 @@ function WebhooksDashboard() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Icon name="trending" size={18} />
-            Plan activo
+            {t('webhooks.activePlan')}
             <TierBadge tier={info.tier} />
           </CardTitle>
           <CardDescription>
-            Capability asociada: <code className="font-mono text-xs">{info.capability}</code>
+            {t('webhooks.capabilityLabel')}{' '}
+            <code className="font-mono text-xs">{info.capability}</code>
           </CardDescription>
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-2 gap-4 text-sm">
             <div>
-              <div className="text-text-muted">Endpoints máximos</div>
+              <div className="text-text-muted">{t('webhooks.maxEndpoints')}</div>
               <div className="font-mono text-lg">{info.limits.maxEndpoints}</div>
             </div>
             <div>
-              <div className="text-text-muted">Eventos por endpoint</div>
+              <div className="text-text-muted">{t('webhooks.eventsPerEndpoint')}</div>
               <div className="font-mono text-lg">
                 {info.limits.maxEventsPerEndpoint === 0 ? '∞' : info.limits.maxEventsPerEndpoint}
               </div>
@@ -187,56 +184,53 @@ function WebhooksDashboard() {
       {/* Comparativa CE vs EE */}
       <Card>
         <CardHeader>
-          <CardTitle>Comparativa de planes</CardTitle>
-          <CardDescription>
-            En Community, las entregas son síncronas best-effort (1 reintento). En Enterprise,
-            BullMQ con reintentos exponenciales, firma HMAC-SHA256 y dead-letter persistido.
-          </CardDescription>
+          <CardTitle>{t('webhooks.planComparison')}</CardTitle>
+          <CardDescription>{t('webhooks.planComparisonDescription')}</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto rounded-lg border border-border-soft">
             <table className="w-full text-sm">
               <thead className="bg-surface-2">
                 <tr>
-                  <th className="px-4 py-2 text-left font-semibold">Característica</th>
-                  <th className="px-4 py-2 text-left font-semibold">Community</th>
-                  <th className="px-4 py-2 text-left font-semibold">Enterprise</th>
+                  <th className="px-4 py-2 text-left font-semibold">{t('webhooks.colFeature')}</th>
+                  <th className="px-4 py-2 text-left font-semibold">{t('tier.community')}</th>
+                  <th className="px-4 py-2 text-left font-semibold">{t('tier.enterprise')}</th>
                 </tr>
               </thead>
               <tbody>
                 <tr className="border-t border-border-soft">
-                  <td className="px-4 py-3">Endpoints / tenant</td>
+                  <td className="px-4 py-3">{t('webhooks.rowEndpointsPerTenant')}</td>
                   <td className="px-4 py-3 font-mono">{info.community.maxEndpoints}</td>
                   <td className="px-4 py-3 font-mono">{info.enterprise.maxEndpoints}</td>
                 </tr>
                 <tr className="border-t border-border-soft">
-                  <td className="px-4 py-3">Eventos / endpoint</td>
+                  <td className="px-4 py-3">{t('webhooks.rowEventsPerEndpoint')}</td>
                   <td className="px-4 py-3 font-mono">{info.community.maxEventsPerEndpoint}</td>
                   <td className="px-4 py-3 font-mono">
                     {info.enterprise.maxEventsPerEndpoint === 0
-                      ? 'Ilimitado'
+                      ? t('webhooks.unlimited')
                       : info.enterprise.maxEventsPerEndpoint}
                   </td>
                 </tr>
                 <tr className="border-t border-border-soft">
-                  <td className="px-4 py-3">Reintentos</td>
-                  <td className="px-4 py-3">1 reintento síncrono</td>
-                  <td className="px-4 py-3">5 reintentos exp. (30s/2m/8m/30m/2h)</td>
+                  <td className="px-4 py-3">{t('webhooks.rowRetries')}</td>
+                  <td className="px-4 py-3">{t('webhooks.retriesCommunity')}</td>
+                  <td className="px-4 py-3">{t('webhooks.retriesEnterprise')}</td>
                 </tr>
                 <tr className="border-t border-border-soft">
-                  <td className="px-4 py-3">Firma HMAC-SHA256</td>
-                  <td className="px-4 py-3">No</td>
-                  <td className="px-4 py-3">Sí (X-Didacta-Signature)</td>
+                  <td className="px-4 py-3">{t('webhooks.rowHmac')}</td>
+                  <td className="px-4 py-3">{t('webhooks.no')}</td>
+                  <td className="px-4 py-3">{t('webhooks.hmacEnterprise')}</td>
                 </tr>
                 <tr className="border-t border-border-soft">
-                  <td className="px-4 py-3">Dead-letter persistido</td>
-                  <td className="px-4 py-3">No</td>
-                  <td className="px-4 py-3">Sí — reintento manual desde UI</td>
+                  <td className="px-4 py-3">{t('webhooks.rowDeadLetter')}</td>
+                  <td className="px-4 py-3">{t('webhooks.no')}</td>
+                  <td className="px-4 py-3">{t('webhooks.deadLetterEnterprise')}</td>
                 </tr>
                 <tr className="border-t border-border-soft">
-                  <td className="px-4 py-3">Métricas Prometheus</td>
-                  <td className="px-4 py-3">Básicas</td>
-                  <td className="px-4 py-3">Latencia P50/P95/P99, queue depth</td>
+                  <td className="px-4 py-3">{t('webhooks.rowMetrics')}</td>
+                  <td className="px-4 py-3">{t('webhooks.metricsCommunity')}</td>
+                  <td className="px-4 py-3">{t('webhooks.metricsEnterprise')}</td>
                 </tr>
               </tbody>
             </table>
@@ -270,6 +264,7 @@ function EndpointsPanel({
   endpoints: WebhookEndpoint[];
   onChange: () => void;
 }) {
+  const t = useTranslations('adminApi');
   const [showCreate, setShowCreate] = useState(false);
   const reachedLimit = endpoints.length >= info.limits.maxEndpoints;
 
@@ -277,13 +272,16 @@ function EndpointsPanel({
     <Card>
       <CardHeader className="flex flex-row items-start justify-between gap-2">
         <div>
-          <CardTitle>Endpoints configurados</CardTitle>
+          <CardTitle>{t('webhooks.endpointsTitle')}</CardTitle>
           <CardDescription>
-            {endpoints.length} / {info.limits.maxEndpoints} endpoint(s) usados
+            {t('webhooks.endpointsUsed', {
+              used: String(endpoints.length),
+              max: String(info.limits.maxEndpoints),
+            })}
           </CardDescription>
         </div>
         <Button onClick={() => setShowCreate((v) => !v)} disabled={reachedLimit}>
-          {showCreate ? 'Cancelar' : 'Nuevo endpoint'}
+          {showCreate ? t('webhooks.cancel') : t('webhooks.newEndpoint')}
         </Button>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
@@ -298,10 +296,7 @@ function EndpointsPanel({
         ) : null}
 
         {endpoints.length === 0 ? (
-          <p className="text-sm text-text-muted">
-            Aún no configuraste ningún endpoint. Pulsa &ldquo;Nuevo endpoint&rdquo; para crear el
-            primero.
-          </p>
+          <p className="text-sm text-text-muted">{t('webhooks.emptyEndpoints')}</p>
         ) : (
           <div className="flex flex-col gap-3">
             {endpoints.map((ep) => (
@@ -312,8 +307,7 @@ function EndpointsPanel({
 
         {reachedLimit ? (
           <p className="text-sm text-warning-700">
-            Alcanzaste el límite de tu plan. Borra alguno o actualiza a Enterprise para subir el
-            límite a {info.enterprise.maxEndpoints}.
+            {t('webhooks.limitReached', { max: String(info.enterprise.maxEndpoints) })}
           </p>
         ) : null}
       </CardContent>
@@ -322,6 +316,8 @@ function EndpointsPanel({
 }
 
 function CreateEndpointForm({ info, onCreated }: { info: WebhooksInfo; onCreated: () => void }) {
+  const t = useTranslations('adminApi');
+  const tErrors = useTranslations('errors');
   const [url, setUrl] = useState('');
   const [eventCsv, setEventCsv] = useState('learning.course.completed');
   const [error, setError] = useState<string | null>(null);
@@ -336,7 +332,7 @@ function CreateEndpointForm({ info, onCreated }: { info: WebhooksInfo; onCreated
       .map((s) => s.trim())
       .filter(Boolean);
     if (events.length === 0) {
-      setError('Indica al menos un tipo de evento (separados por coma).');
+      setError(t('webhooks.eventsRequired'));
       return;
     }
     try {
@@ -346,7 +342,7 @@ function CreateEndpointForm({ info, onCreated }: { info: WebhooksInfo; onCreated
       });
       setCreated(res);
     } catch (e) {
-      setError(e instanceof ApiHttpError ? e.message : 'No se pudo crear el endpoint.');
+      setError(e instanceof ApiHttpError ? apiErrorMessage(e, tErrors) : t('webhooks.createError'));
     }
   };
 
@@ -354,20 +350,18 @@ function CreateEndpointForm({ info, onCreated }: { info: WebhooksInfo; onCreated
     return (
       <Card className="border-success-300 bg-success-50">
         <CardHeader>
-          <CardTitle className="text-success-800">Endpoint creado</CardTitle>
-          <CardDescription>
-            Guarda este secret AHORA. No volveremos a mostrarlo en ninguna otra pantalla.
-          </CardDescription>
+          <CardTitle className="text-success-800">{t('webhooks.endpointCreated')}</CardTitle>
+          <CardDescription>{t('webhooks.saveSecretNow')}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
           <div>
-            <Label>URL</Label>
+            <Label>{t('webhooks.urlLabel')}</Label>
             <code className="block break-all rounded-md bg-surface-2 p-2 font-mono text-xs">
               {created.url}
             </code>
           </div>
           <div>
-            <Label>Secret (one-shot)</Label>
+            <Label>{t('webhooks.secretOneShot')}</Label>
             <code className="block break-all rounded-md bg-warning-50 p-2 font-mono text-xs">
               {created.secret}
             </code>
@@ -378,7 +372,7 @@ function CreateEndpointForm({ info, onCreated }: { info: WebhooksInfo; onCreated
               onCreated();
             }}
           >
-            He guardado el secret
+            {t('webhooks.secretSaved')}
           </Button>
         </CardContent>
       </Card>
@@ -388,7 +382,7 @@ function CreateEndpointForm({ info, onCreated }: { info: WebhooksInfo; onCreated
   return (
     <div className="space-y-3 rounded-lg border border-border-soft p-4">
       <div>
-        <Label htmlFor="webhook-url">URL del webhook</Label>
+        <Label htmlFor="webhook-url">{t('webhooks.webhookUrlLabel')}</Label>
         <Input
           id="webhook-url"
           type="url"
@@ -398,7 +392,7 @@ function CreateEndpointForm({ info, onCreated }: { info: WebhooksInfo; onCreated
         />
       </div>
       <div>
-        <Label htmlFor="webhook-events">Eventos suscritos (separados por coma)</Label>
+        <Label htmlFor="webhook-events">{t('webhooks.subscribedEvents')}</Label>
         <Input
           id="webhook-events"
           placeholder="learning.course.completed, learning.enrollment.created"
@@ -406,23 +400,29 @@ function CreateEndpointForm({ info, onCreated }: { info: WebhooksInfo; onCreated
           onChange={(e) => setEventCsv(e.target.value)}
         />
         <p className="mt-1 text-xs text-text-muted">
-          Eventos disponibles: <span className="font-mono">{info.knownEventTypes.join(', ')}</span>
+          {t('webhooks.availableEvents')}{' '}
+          <span className="font-mono">{info.knownEventTypes.join(', ')}</span>
         </p>
         <p className="mt-1 text-xs text-text-muted">
-          Tu plan permite máximo{' '}
-          {info.limits.maxEventsPerEndpoint === 0 ? '∞' : info.limits.maxEventsPerEndpoint} tipos
-          por endpoint.
+          {t('webhooks.maxEventTypes', {
+            max:
+              info.limits.maxEventsPerEndpoint === 0
+                ? '∞'
+                : String(info.limits.maxEventsPerEndpoint),
+          })}
         </p>
       </div>
       {error ? <p className="text-sm text-danger-700">{error}</p> : null}
       <Button onClick={handleSubmit} disabled={!url || !eventCsv}>
-        Crear endpoint
+        {t('webhooks.createEndpoint')}
       </Button>
     </div>
   );
 }
 
 function EndpointRow({ endpoint, onChange }: { endpoint: WebhookEndpoint; onChange: () => void }) {
+  const t = useTranslations('adminApi');
+  const tErrors = useTranslations('errors');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -435,14 +435,14 @@ function EndpointRow({ endpoint, onChange }: { endpoint: WebhookEndpoint; onChan
       await webhooksApi.updateEndpoint(token, endpoint.id, { active: !endpoint.active });
       onChange();
     } catch (e) {
-      setError(e instanceof ApiHttpError ? e.message : 'No se pudo actualizar el endpoint.');
+      setError(e instanceof ApiHttpError ? apiErrorMessage(e, tErrors) : t('webhooks.updateError'));
     } finally {
       setBusy(false);
     }
   };
 
   const handleDelete = async () => {
-    if (!window.confirm(`¿Borrar el endpoint ${endpoint.url}?`)) return;
+    if (!window.confirm(t('webhooks.confirmDelete', { url: endpoint.url }))) return;
     const token = authStorage.getAccessToken();
     if (!token) return;
     setBusy(true);
@@ -451,7 +451,7 @@ function EndpointRow({ endpoint, onChange }: { endpoint: WebhookEndpoint; onChan
       await webhooksApi.deleteEndpoint(token, endpoint.id);
       onChange();
     } catch (e) {
-      setError(e instanceof ApiHttpError ? e.message : 'No se pudo borrar el endpoint.');
+      setError(e instanceof ApiHttpError ? apiErrorMessage(e, tErrors) : t('webhooks.deleteError'));
     } finally {
       setBusy(false);
     }
@@ -470,8 +470,11 @@ function EndpointRow({ endpoint, onChange }: { endpoint: WebhookEndpoint; onChan
             ))}
           </div>
           <div className="mt-2 text-xs text-text-muted">
-            Secret <span className="font-mono">{endpoint.secretMasked}</span> · creado{' '}
-            {new Date(endpoint.createdAt).toLocaleString('es-ES')}
+            {t.rich('webhooks.secretLine', {
+              mono: (chunks) => <span className="font-mono">{chunks}</span>,
+              masked: endpoint.secretMasked,
+              date: formatDateTime(endpoint.createdAt),
+            })}
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -479,10 +482,12 @@ function EndpointRow({ endpoint, onChange }: { endpoint: WebhookEndpoint; onChan
             checked={endpoint.active}
             onCheckedChange={handleToggle}
             disabled={busy}
-            aria-label={endpoint.active ? 'Desactivar endpoint' : 'Activar endpoint'}
+            aria-label={
+              endpoint.active ? t('webhooks.deactivateEndpoint') : t('webhooks.activateEndpoint')
+            }
           />
           <Button variant="outline" size="sm" onClick={handleDelete} disabled={busy}>
-            Borrar
+            {t('webhooks.delete')}
           </Button>
         </div>
       </div>
@@ -496,6 +501,8 @@ function EndpointRow({ endpoint, onChange }: { endpoint: WebhookEndpoint; onChan
 // ---------------------------------------------------------------------------
 
 function DeadLetterPanel() {
+  const t = useTranslations('adminApi');
+  const tErrors = useTranslations('errors');
   const [items, setItems] = useState<WebhookDeadLetterItem[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -506,7 +513,9 @@ function DeadLetterPanel() {
       const page = await webhooksApi.listDeadLetter(token);
       setItems(page.items);
     } catch (e) {
-      setError(e instanceof ApiHttpError ? e.message : 'No se pudo cargar el dead-letter.');
+      setError(
+        e instanceof ApiHttpError ? apiErrorMessage(e, tErrors) : t('webhooks.deadLetterLoadError'),
+      );
     }
   };
 
@@ -521,19 +530,21 @@ function DeadLetterPanel() {
       await webhooksApi.retryDeadLetter(token, id);
       void refresh();
     } catch (e) {
-      setError(e instanceof ApiHttpError ? e.message : 'Reintento falló.');
+      setError(e instanceof ApiHttpError ? apiErrorMessage(e, tErrors) : t('webhooks.retryFailed'));
     }
   };
 
   const handleDismiss = async (id: string) => {
     const token = authStorage.getAccessToken();
     if (!token) return;
-    if (!window.confirm('¿Descartar esta entrada del dead-letter?')) return;
+    if (!window.confirm(t('webhooks.confirmDismiss'))) return;
     try {
       await webhooksApi.dismissDeadLetter(token, id);
       void refresh();
     } catch (e) {
-      setError(e instanceof ApiHttpError ? e.message : 'No se pudo descartar.');
+      setError(
+        e instanceof ApiHttpError ? apiErrorMessage(e, tErrors) : t('webhooks.dismissError'),
+      );
     }
   };
 
@@ -542,22 +553,17 @@ function DeadLetterPanel() {
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Icon name="shield" size={18} />
-          Dead-letter (Enterprise)
-          <Badge className="bg-success-600 text-white">Estás usando path Enterprise</Badge>
+          {t('webhooks.deadLetterTitle')}
+          <Badge className="bg-success-600 text-white">{t('webhooks.enterprisePathBadge')}</Badge>
         </CardTitle>
-        <CardDescription>
-          Eventos cuyas entregas agotaron los 5 reintentos exponenciales. Reintenta manualmente o
-          descarta tras corregir la causa.
-        </CardDescription>
+        <CardDescription>{t('webhooks.deadLetterDescription')}</CardDescription>
       </CardHeader>
       <CardContent>
         {error ? <p className="mb-3 text-sm text-danger-700">{error}</p> : null}
         {items === null ? (
           <div className="skeleton h-24 w-full" />
         ) : items.length === 0 ? (
-          <p className="text-sm text-text-muted">
-            Sin entradas en dead-letter. Todas las entregas recientes tuvieron éxito.
-          </p>
+          <p className="text-sm text-text-muted">{t('webhooks.deadLetterEmpty')}</p>
         ) : (
           <div className="space-y-3">
             {items.map((it) => (
@@ -567,7 +573,10 @@ function DeadLetterPanel() {
                     {it.eventType}
                   </Badge>
                   <span className="text-xs text-text-muted">
-                    {it.attempts} intento(s) · {new Date(it.createdAt).toLocaleString('es-ES')}
+                    {t('webhooks.attemptsLine', {
+                      attempts: String(it.attempts),
+                      date: formatDateTime(it.createdAt),
+                    })}
                   </span>
                 </div>
                 <div className="mt-2 break-all rounded-md bg-danger-50 p-2 font-mono text-xs text-danger-800">
@@ -575,10 +584,10 @@ function DeadLetterPanel() {
                 </div>
                 <div className="mt-2 flex gap-2">
                   <Button size="sm" onClick={() => handleRetry(it.id)}>
-                    Reintentar
+                    {t('webhooks.retry')}
                   </Button>
                   <Button size="sm" variant="outline" onClick={() => handleDismiss(it.id)}>
-                    Descartar
+                    {t('webhooks.dismiss')}
                   </Button>
                 </div>
               </div>
@@ -591,19 +600,16 @@ function DeadLetterPanel() {
 }
 
 function DeadLetterUpsell() {
+  const t = useTranslations('adminApi');
   return (
     <Card className="border-dashed">
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Icon name="lock" size={18} />
-          Dead-letter & métricas avanzadas
-          <Badge variant="outline">Enterprise</Badge>
+          {t('webhooks.upsellTitle')}
+          <Badge variant="outline">{t('tier.enterprise')}</Badge>
         </CardTitle>
-        <CardDescription>
-          En tu plan actual, las entregas fallidas se loguean y descartan. En Enterprise, quedan
-          registradas en una bandeja de dead-letter con reintento manual + métricas Prometheus
-          (latencia P50/P95/P99, queue depth, success rate por endpoint).
-        </CardDescription>
+        <CardDescription>{t('webhooks.upsellDescription')}</CardDescription>
       </CardHeader>
     </Card>
   );
@@ -614,10 +620,11 @@ function DeadLetterUpsell() {
 // ---------------------------------------------------------------------------
 
 function TierBadge({ tier }: { tier: WebhooksInfo['tier'] }) {
+  const t = useTranslations('adminApi');
   if (tier === 'enterprise') {
-    return <Badge className="bg-success-600 text-white">Enterprise</Badge>;
+    return <Badge className="bg-success-600 text-white">{t('tier.enterprise')}</Badge>;
   }
-  return <Badge variant="outline">Community</Badge>;
+  return <Badge variant="outline">{t('tier.community')}</Badge>;
 }
 
 /**
@@ -625,22 +632,19 @@ function TierBadge({ tier }: { tier: WebhooksInfo['tier'] }) {
  * (negative gate, mismo patrón que rate-limit/page.tsx).
  */
 function UpgradeCta() {
+  const t = useTranslations('adminApi');
   const { isCapabilityEnabled } = useLicense();
   if (isCapabilityEnabled(LICENSE_CAPABILITIES.API_WEBHOOKS_HIGH_THROUGHPUT)) {
     return null;
   }
   return (
-    <Card role="region" aria-label="Upgrade a Enterprise" className="border-dashed">
+    <Card role="region" aria-label={t('webhooks.upgradeAria')} className="border-dashed">
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Icon name="lock" size={18} />
-          ¿Tu integración necesita más fiabilidad?
+          {t('webhooks.upgradeTitle')}
         </CardTitle>
-        <CardDescription>
-          Enterprise sube a 20 endpoints por tenant, eventos ilimitados, firma HMAC, reintentos
-          exponenciales y dead-letter persistido. Recomendado si tus webhooks alimentan facturación,
-          CRM o sistemas críticos.
-        </CardDescription>
+        <CardDescription>{t('webhooks.upgradeDescription')}</CardDescription>
       </CardHeader>
       <CardContent>
         <a
@@ -649,7 +653,7 @@ function UpgradeCta() {
           rel="noopener noreferrer"
           className="inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-700"
         >
-          Ver planes Enterprise
+          {t('webhooks.seePlans')}
           <Icon name="arrow-right" size={14} />
         </a>
       </CardContent>

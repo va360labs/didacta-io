@@ -24,6 +24,7 @@
  */
 
 import { useEffect, useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { EeGate, LICENSE_CAPABILITIES } from '@didacta/license-sdk/react';
 import { Icon } from '@/components/icon';
 import { Badge } from '@/components/ui/badge';
@@ -31,18 +32,17 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { ApiHttpError } from '@/lib/api-client';
 import { authStorage } from '@/lib/auth-storage';
+import { apiErrorMessage } from '@/lib/i18n/api-error';
+import { formatDateTime } from '@/lib/i18n/format';
 import { scimTokenApi, type ScimTokenCreated, type ScimTokenStatus } from '@/lib/scim';
 
 export default function AdminScimPage() {
+  const t = useTranslations('adminApi');
   return (
     <div className="flex flex-col gap-6">
       <header className="flex flex-col gap-1">
-        <h1 className="font-display text-2xl font-bold tracking-tight">SCIM Provisioning</h1>
-        <p className="text-text-muted">
-          Permite a tu IdP (Okta, Azure AD, Auth0, Google Workspace) crear, actualizar y desactivar
-          usuarios automáticamente en Didacta — sin que tu equipo tenga que mantener listas
-          duplicadas.
-        </p>
+        <h1 className="font-display text-2xl font-bold tracking-tight">{t('scim.title')}</h1>
+        <p className="text-text-muted">{t('scim.subtitle')}</p>
       </header>
 
       <EeGate capability={LICENSE_CAPABILITIES.SCIM} fallback={<ScimUpsellCard />}>
@@ -56,6 +56,8 @@ export default function AdminScimPage() {
  * Panel principal — solo se renderiza cuando la capability está activa.
  */
 function ScimPanel() {
+  const t = useTranslations('adminApi');
+  const tErrors = useTranslations('errors');
   const [status, setStatus] = useState<ScimTokenStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
@@ -71,7 +73,9 @@ function ScimPanel() {
         const fresh = await scimTokenApi.status(token);
         setStatus(fresh);
       } catch (e) {
-        setError(e instanceof ApiHttpError ? e.message : 'No se pudo cargar el estado SCIM.');
+        setError(
+          e instanceof ApiHttpError ? apiErrorMessage(e, tErrors) : t('scim.statusLoadError'),
+        );
       }
     })();
   }, []);
@@ -90,12 +94,7 @@ function ScimPanel() {
   async function handleCreate() {
     const token = authStorage.getAccessToken();
     if (!token) return;
-    if (
-      status?.active &&
-      !window.confirm(
-        '¿Generar un token nuevo? El token actual quedará revocado y el IdP recibirá 401 hasta que pegues el nuevo.',
-      )
-    ) {
+    if (status?.active && !window.confirm(t('scim.confirmRotate'))) {
       return;
     }
     setCreating(true);
@@ -106,7 +105,7 @@ function ScimPanel() {
       await refresh();
     } catch (e) {
       setActionError(
-        e instanceof ApiHttpError ? e.message : 'No se pudo generar el token. Reintenta.',
+        e instanceof ApiHttpError ? apiErrorMessage(e, tErrors) : t('scim.createError'),
       );
     } finally {
       setCreating(false);
@@ -116,11 +115,7 @@ function ScimPanel() {
   async function handleRevoke() {
     const token = authStorage.getAccessToken();
     if (!token) return;
-    if (
-      !window.confirm(
-        '¿Revocar el token SCIM? El IdP recibirá 401 inmediatamente y dejará de provisionar usuarios.',
-      )
-    ) {
+    if (!window.confirm(t('scim.confirmRevoke'))) {
       return;
     }
     setRevoking(true);
@@ -130,7 +125,7 @@ function ScimPanel() {
       await refresh();
     } catch (e) {
       setActionError(
-        e instanceof ApiHttpError ? e.message : 'No se pudo revocar el token. Reintenta.',
+        e instanceof ApiHttpError ? apiErrorMessage(e, tErrors) : t('scim.revokeError'),
       );
     } finally {
       setRevoking(false);
@@ -163,40 +158,47 @@ function ScimPanel() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Icon name="lock" size={18} />
-            Token de provisioning
+            {t('scim.tokenTitle')}
             <ScimStatusBadge active={status?.active ?? false} />
           </CardTitle>
           <CardDescription>
-            El IdP envía este token como <code className="font-mono">Authorization: Bearer …</code>{' '}
-            en cada request a <code className="font-mono">/scim/v2/Users</code>. Per-tenant.
+            {t.rich('scim.tokenDescription', {
+              code: (chunks) => <code className="font-mono">{chunks}</code>,
+            })}
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
           {status?.active ? (
             <div className="rounded-lg border border-border-soft bg-surface-2 p-4 text-sm">
               <p>
-                Token activo: <code className="font-mono">{status.prefix}…</code>
+                {t.rich('scim.tokenActive', {
+                  code: (chunks) => <code className="font-mono">{chunks}</code>,
+                  prefix: status.prefix,
+                })}
               </p>
               <p className="text-text-muted">
-                Creado {new Date(status.createdAt).toLocaleString('es-ES')}
-                {status.lastUsedAt
-                  ? ` · usado por última vez ${new Date(status.lastUsedAt).toLocaleString('es-ES')}`
-                  : ' · aún no usado por el IdP'}
+                {t('scim.tokenMeta', {
+                  created: formatDateTime(status.createdAt),
+                  hasLastUsed: String(Boolean(status.lastUsedAt)),
+                  lastUsed: status.lastUsedAt ? formatDateTime(status.lastUsedAt) : '',
+                })}
               </p>
             </div>
           ) : (
-            <p className="text-sm text-text-muted">
-              Aún no has generado un token SCIM. Genera uno para que el IdP empiece a provisionar.
-            </p>
+            <p className="text-sm text-text-muted">{t('scim.noToken')}</p>
           )}
 
           <div className="flex flex-wrap gap-2">
             <Button type="button" onClick={handleCreate} disabled={creating}>
-              {creating ? 'Generando…' : status?.active ? 'Rotar token' : 'Generar token'}
+              {creating
+                ? t('scim.generating')
+                : status?.active
+                  ? t('scim.rotateToken')
+                  : t('scim.generateToken')}
             </Button>
             {status?.active ? (
               <Button type="button" variant="ghost" onClick={handleRevoke} disabled={revoking}>
-                {revoking ? 'Revocando…' : 'Revocar'}
+                {revoking ? t('scim.revoking') : t('scim.revoke')}
               </Button>
             ) : null}
           </div>
@@ -213,12 +215,9 @@ function ScimPanel() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Icon name="code" size={18} />
-            Endpoint SCIM
+            {t('scim.endpointTitle')}
           </CardTitle>
-          <CardDescription>
-            Configura esta URL en el panel SCIM del IdP. Per-tenant — el token resuelve la
-            organización.
-          </CardDescription>
+          <CardDescription>{t('scim.endpointDescription')}</CardDescription>
         </CardHeader>
         <CardContent>
           <code className="block break-all rounded bg-surface-2 px-3 py-2 font-mono text-sm">
@@ -232,62 +231,55 @@ function ScimPanel() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Icon name="help" size={18} />
-            Configurar tu IdP
+            {t('scim.configureIdpTitle')}
           </CardTitle>
-          <CardDescription>
-            Pasos genéricos que aplican a Okta / Azure AD / Auth0 / Google Workspace. Los nombres de
-            campos pueden variar levemente entre IdPs.
-          </CardDescription>
+          <CardDescription>{t('scim.configureIdpDescription')}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4 text-sm">
           <div>
-            <p className="font-semibold">1. Crear app SCIM en el IdP</p>
+            <p className="font-semibold">{t('scim.step1Title')}</p>
+            <p className="text-text-muted">{t('scim.step1Description')}</p>
+          </div>
+          <div>
+            <p className="font-semibold">{t('scim.step2Title')}</p>
             <p className="text-text-muted">
-              En el catálogo de aplicaciones del IdP, busca &ldquo;SCIM 2.0&rdquo; o crea una app
-              custom con &ldquo;SCIM Provisioning&rdquo; activado.
+              {t.rich('scim.step2Description', {
+                code: (chunks) => <code className="font-mono">{chunks}</code>,
+              })}
             </p>
           </div>
           <div>
-            <p className="font-semibold">2. Configurar la URL del endpoint</p>
+            <p className="font-semibold">{t('scim.step3Title')}</p>
             <p className="text-text-muted">
-              Pega la URL de la sección anterior en el campo{' '}
-              <code className="font-mono">SCIM Connector base URL</code> (Okta) /{' '}
-              <code className="font-mono">Tenant URL</code> (Azure AD) / similar.
+              {t.rich('scim.step3Description', {
+                code: (chunks) => <code className="font-mono">{chunks}</code>,
+                strong: (chunks) => <strong>{chunks}</strong>,
+              })}
             </p>
           </div>
           <div>
-            <p className="font-semibold">3. Configurar el token</p>
+            <p className="font-semibold">{t('scim.step4Title')}</p>
             <p className="text-text-muted">
-              Pega el token generado más arriba en el campo{' '}
-              <code className="font-mono">OAuth Bearer Token</code> /{' '}
-              <code className="font-mono">Secret Token</code>. Marca el método de auth como{' '}
-              <strong>Bearer</strong>.
+              {t.rich('scim.step4Description', {
+                code: (chunks) => <code className="font-mono">{chunks}</code>,
+              })}
             </p>
           </div>
           <div>
-            <p className="font-semibold">4. Mapear atributos</p>
+            <p className="font-semibold">{t('scim.step5Title')}</p>
             <p className="text-text-muted">
-              Mapea <code className="font-mono">userName</code> al email del usuario,{' '}
-              <code className="font-mono">name.givenName</code> y{' '}
-              <code className="font-mono">name.familyName</code> a los campos de nombre, y{' '}
-              <code className="font-mono">active</code> al campo de estado del usuario en el IdP.
-            </p>
-          </div>
-          <div>
-            <p className="font-semibold">5. Probar conexión</p>
-            <p className="text-text-muted">
-              El IdP suele tener un botón &ldquo;Test Connection&rdquo; — al pulsarlo hace un{' '}
-              <code className="font-mono">GET /scim/v2/ServiceProviderConfig</code>. Si responde
-              200, listo.
+              {t.rich('scim.step5Description', {
+                code: (chunks) => <code className="font-mono">{chunks}</code>,
+              })}
             </p>
           </div>
           <div className="rounded-lg border border-warning-200 bg-warning-50 p-4 text-warning-800">
-            <p className="font-semibold">Nota: solo Users en este piloto</p>
+            <p className="font-semibold">{t('scim.usersOnlyTitle')}</p>
             <p className="text-xs">
-              Groups (sincronización de grupos) NO está soportado todavía — los IdPs lo intentarán y
-              recibirán <code className="font-mono">501 Not Implemented</code> o{' '}
-              <code className="font-mono">404</code>. Las asignaciones de roles las sigues haciendo
-              desde <a href="/admin/usuarios">Usuarios</a>.
+              {t.rich('scim.usersOnlyDescription', {
+                code: (chunks) => <code className="font-mono">{chunks}</code>,
+                usersLink: (chunks) => <a href="/admin/usuarios">{chunks}</a>,
+              })}
             </p>
           </div>
         </CardContent>
@@ -297,8 +289,9 @@ function ScimPanel() {
 }
 
 function ScimStatusBadge({ active }: { active: boolean }) {
-  if (active) return <Badge className="bg-success-600 text-white">Activo</Badge>;
-  return <Badge variant="outline">Sin token</Badge>;
+  const t = useTranslations('adminApi');
+  if (active) return <Badge className="bg-success-600 text-white">{t('scim.badgeActive')}</Badge>;
+  return <Badge variant="outline">{t('scim.badgeNoToken')}</Badge>;
 }
 
 /**
@@ -307,6 +300,7 @@ function ScimStatusBadge({ active }: { active: boolean }) {
  * desaparecer.
  */
 function RevealedTokenCard({ reveal, onClose }: { reveal: ScimTokenCreated; onClose: () => void }) {
+  const t = useTranslations('adminApi');
   const [copied, setCopied] = useState(false);
 
   async function handleCopy() {
@@ -323,13 +317,13 @@ function RevealedTokenCard({ reveal, onClose }: { reveal: ScimTokenCreated; onCl
   return (
     <Card
       role="region"
-      aria-label="Token SCIM recién generado"
+      aria-label={t('scim.revealedAria')}
       className="border-warning-300 bg-warning-50"
     >
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-warning-900">
           <Icon name="lock" size={18} />
-          Token generado — cópialo AHORA
+          {t('scim.revealedTitle')}
         </CardTitle>
         <CardDescription className="text-warning-800">{reveal.warning}</CardDescription>
       </CardHeader>
@@ -339,10 +333,10 @@ function RevealedTokenCard({ reveal, onClose }: { reveal: ScimTokenCreated; onCl
         </code>
         <div className="flex flex-wrap gap-2">
           <Button type="button" onClick={handleCopy}>
-            {copied ? '¡Copiado!' : 'Copiar al portapapeles'}
+            {copied ? t('scim.copied') : t('scim.copyToClipboard')}
           </Button>
           <Button type="button" variant="ghost" onClick={onClose}>
-            Ya lo copié, cerrar
+            {t('scim.copiedClose')}
           </Button>
         </div>
       </CardContent>
@@ -354,26 +348,24 @@ function RevealedTokenCard({ reveal, onClose }: { reveal: ScimTokenCreated; onCl
  * Tarjeta de upsell para plan community (sin licencia EE).
  */
 export function ScimUpsellCard() {
+  const t = useTranslations('adminApi');
   return (
-    <Card role="region" aria-label="SCIM Provisioning (Enterprise)" className="border-dashed">
+    <Card role="region" aria-label={t('scim.upsellAria')} className="border-dashed">
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Icon name="lock" size={18} />
-          Función Enterprise — actualiza tu plan
+          {t('scim.upsellTitle')}
         </CardTitle>
-        <CardDescription>
-          SCIM 2.0 (System for Cross-domain Identity Management) es parte del paquete Didacta
-          Enterprise. Permite que tu IdP (Okta, Azure AD, Auth0, Google Workspace) cree, actualice y
-          desactive usuarios en Didacta automáticamente — sin que tu equipo tenga que mantener
-          listas duplicadas.
-        </CardDescription>
+        <CardDescription>{t('scim.upsellDescription')}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
         <p className="text-sm text-text-muted">
-          La capability requerida es{' '}
-          <code className="rounded bg-surface-2 px-1.5 py-0.5 font-mono text-xs">feat:scim</code>.
-          Sin Enterprise, los endpoints <code className="font-mono">/scim/v2/Users</code> devuelven{' '}
-          <code className="font-mono">402 Payment Required</code> y los IdPs no pueden provisionar.
+          {t.rich('scim.upsellCapability', {
+            codeChip: (chunks) => (
+              <code className="rounded bg-surface-2 px-1.5 py-0.5 font-mono text-xs">{chunks}</code>
+            ),
+            code: (chunks) => <code className="font-mono">{chunks}</code>,
+          })}
         </p>
         <a
           href="https://didacta.io/pricing"
@@ -381,7 +373,7 @@ export function ScimUpsellCard() {
           rel="noopener noreferrer"
           className="inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-700"
         >
-          Ver planes Enterprise
+          {t('scim.seePlans')}
           <Icon name="arrow-right" size={14} />
         </a>
       </CardContent>
