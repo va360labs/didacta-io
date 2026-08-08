@@ -7,6 +7,7 @@
 
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useState, type ReactNode } from 'react';
+import { useTranslations } from 'next-intl';
 import { AppSidebar, type SidebarGroup } from '@/components/app-sidebar';
 import { CommandPalette } from '@/components/command-palette';
 import { Icon } from '@/components/icon';
@@ -19,6 +20,7 @@ import { FloatingChat, MessagingProvider } from '@/modules/messaging';
 import { authStorage, type StoredSession } from '@/lib/auth-storage';
 import { clearIntendedPath, rememberIntendedPath } from '@/lib/post-login-redirect';
 import { meApi } from '@/lib/me';
+import { labelOr } from '@/lib/i18n/labels';
 import { formatTenantName } from '@/lib/tenant-name';
 import { useTenantContext } from '@/lib/tenant-context';
 import { mergeExtensionSidebarItems } from '@/lib/sidebar-extensions-merge';
@@ -296,7 +298,14 @@ function Shell({
   // con fallback al slug title-cased.
   const { tenant: hostTenant } = useTenantContext();
   const tenantName = hostTenant?.name?.trim() || formatTenantName(session.user.tenantSlug);
-  const sectionLabel = resolveSectionLabel(mergedGroups, pathname ?? '');
+  // Los `label` del sidebar son TOKENS canónicos en español (ver SidebarContent):
+  // sin resolverlos, con la UI en inglés el `<title>` del navegador mezclaría
+  // idiomas. `labelOr` degrada al token crudo si no hay traducción.
+  const tNav = useTranslations('nav');
+  const rawSectionLabel = resolveSectionLabel(mergedGroups, pathname ?? '');
+  const sectionLabel = rawSectionLabel
+    ? labelOr(tNav, `items.${rawSectionLabel}`, rawSectionLabel)
+    : null;
   useEffect(() => {
     const parts = [sectionLabel, tenantName, 'Didacta'].filter((p): p is string => Boolean(p));
     document.title = parts.join(' | ');
