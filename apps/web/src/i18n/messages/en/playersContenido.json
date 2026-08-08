@@ -18,9 +18,9 @@
   },
   "newCourse": {
     "titleLabel": "Title <req>*</req>",
-    "titlePlaceholder": "E.g.: Introduction to n8n for automation",
+    "titlePlaceholder": "E.g.: Introduction to project management",
     "slugLabel": "Slug <req>*</req>",
-    "slugPlaceholder": "introduccion-n8n",
+    "slugPlaceholder": "introduction-project-management",
     "slugHelp": "Generated automatically from the title. Use kebab-case, no accents. It is the course's public URL.",
     "descriptionLabel": "Description",
     "descriptionPlaceholder": "What is this course about? Who is it for? What will they learn?",

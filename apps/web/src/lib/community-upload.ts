@@ -26,7 +26,7 @@ const ALLOWED_FILE_TYPES = new Set([
   'application/x-zip-compressed',
   'text/plain',
   'text/csv',
-  'application/json', // workflows exportados (n8n, Make…)
+  'application/json', // configuraciones o workflows exportados
 ]);
 
 /**
