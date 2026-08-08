@@ -5,6 +5,7 @@
  * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
  */
 
+import { useTranslations } from 'next-intl';
 import { useRef, useState } from 'react';
 import {
   bunnyEmbedUrl,
@@ -58,6 +59,7 @@ export function VideoEmbed({
   onWatch,
   watchEnabled = true,
 }: Props) {
+  const t = useTranslations('playersContenido');
   // `seek` cambia al pulsar un capítulo; `nonce` fuerza el re-mount del iframe.
   const [seek, setSeek] = useState<{ seconds: number; nonce: number } | null>(null);
   const nonceRef = useRef(0);
@@ -94,7 +96,7 @@ export function VideoEmbed({
   if (!url) {
     player = (
       <div className="rounded-lg border border-dashed border-border-strong bg-surface-2 px-6 py-12 text-center text-sm text-text-muted">
-        Falta el vídeo. Pídele al formador que lo cargue.
+        {t('video.missing')}
       </div>
     );
   } else if (bunny) {
@@ -165,7 +167,7 @@ export function VideoEmbed({
         <div className="mt-8 space-y-6">
           {chapters.length > 0 && (
             <div className="space-y-1.5">
-              <h3 className="text-sm font-semibold text-text">Capítulos</h3>
+              <h3 className="text-sm font-semibold text-text">{t('video.chapters')}</h3>
               <ul className="space-y-0.5">
                 {chapters.map((c, i) => (
                   <li key={`${c.seconds}-${i}`}>
@@ -187,7 +189,9 @@ export function VideoEmbed({
 
           {bullets.length > 0 && (
             <div className="space-y-1.5">
-              {chapters.length > 0 && <h3 className="text-sm font-semibold text-text">Recursos</h3>}
+              {chapters.length > 0 && (
+                <h3 className="text-sm font-semibold text-text">{t('video.resources')}</h3>
+              )}
               <ul className="list-disc space-y-1.5 pl-5 text-sm text-text">
                 {bullets.map((b, i) => (
                   <li key={i}>

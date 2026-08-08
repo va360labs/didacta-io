@@ -5,6 +5,7 @@
  * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
  */
 
+import { useTranslations } from 'next-intl';
 import { useCallback, useEffect, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -12,6 +13,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { ApiHttpError } from '@/lib/api-client';
+import { apiErrorMessage } from '@/lib/i18n/api-error';
+import { formatTime } from '@/lib/i18n/format';
+import { labelOr } from '@/lib/i18n/labels';
 import {
   assessmentsApi,
   type AlumnoQuestion,
@@ -34,16 +38,9 @@ type ViewState =
   | { kind: 'attempt'; quiz: QuizAlumnoView; attempt: AttemptSummary }
   | { kind: 'result'; quiz: QuizAlumnoView; attempt: AttemptSummary };
 
-const QUESTION_TYPE_HINT: Record<string, string> = {
-  SINGLE_CHOICE: 'Una respuesta correcta',
-  MULTIPLE_CHOICE: 'Una o más respuestas correctas',
-  TRUE_FALSE: 'Verdadero o falso',
-  FILL_IN_BLANK: 'Rellena el hueco',
-  SHORT_ANSWER: 'Respuesta corta · revisión manual',
-  LONG_ANSWER: 'Respuesta extensa · revisión manual',
-};
-
 export function QuizPlayer({ quizId, enrollmentId, lessonId, onPassed }: Props) {
+  const t = useTranslations('playersContenido');
+  const tErrors = useTranslations('errors');
   const [state, setState] = useState<ViewState>({ kind: 'loading' });
   const [pending, setPending] = useState(false);
   const [answers, setAnswers] = useState<Record<string, string[]>>({});
@@ -63,13 +60,10 @@ export function QuizPlayer({ quizId, enrollmentId, lessonId, onPassed }: Props) 
     } catch (e) {
       setState({
         kind: 'error',
-        message:
-          e instanceof ApiHttpError
-            ? e.message
-            : 'No pudimos cargar el quiz. Prueba refrescar la página.',
+        message: e instanceof ApiHttpError ? apiErrorMessage(e, tErrors) : t('quiz.errorLoad'),
       });
     }
-  }, [quizId]);
+  }, [quizId, t, tErrors]);
 
   useEffect(() => {
     void load();
@@ -86,7 +80,7 @@ export function QuizPlayer({ quizId, enrollmentId, lessonId, onPassed }: Props) 
     } catch (e) {
       setState({
         kind: 'error',
-        message: e instanceof ApiHttpError ? e.message : 'No pudimos iniciar tu intento.',
+        message: e instanceof ApiHttpError ? apiErrorMessage(e, tErrors) : t('quiz.errorStart'),
       });
     } finally {
       setPending(false);
@@ -116,7 +110,7 @@ export function QuizPlayer({ quizId, enrollmentId, lessonId, onPassed }: Props) 
     } catch (e) {
       setState({
         kind: 'error',
-        message: e instanceof ApiHttpError ? e.message : 'No pudimos enviar tus respuestas.',
+        message: e instanceof ApiHttpError ? apiErrorMessage(e, tErrors) : t('quiz.errorSubmit'),
       });
     } finally {
       setPending(false);
@@ -143,10 +137,7 @@ export function QuizPlayer({ quizId, enrollmentId, lessonId, onPassed }: Props) 
     );
   }
 
-  if (state.kind === 'empty')
-    return (
-      <Empty hint="Esta lección está marcada como Quiz pero el formador aún no vinculó las preguntas." />
-    );
+  if (state.kind === 'empty') return <Empty hint={t('quiz.emptyNoQuestions')} />;
 
   if (state.kind === 'error') {
     return (
@@ -175,10 +166,13 @@ export function QuizPlayer({ quizId, enrollmentId, lessonId, onPassed }: Props) 
         <CardHeader>
           <CardTitle>{state.quiz.title}</CardTitle>
           <CardDescription>
-            {state.quiz.questions.length} pregunta{state.quiz.questions.length === 1 ? '' : 's'} ·
-            umbral <strong className="text-text">{state.quiz.passThreshold}%</strong>
-            {state.quiz.timeLimitMinutes ? ` · ${state.quiz.timeLimitMinutes} min` : ''}
-            {state.quiz.maxAttempts ? ` · máx. ${state.quiz.maxAttempts} intentos` : ''}
+            {t.rich('quiz.idleMeta', {
+              b: (chunks) => <strong className="text-text">{chunks}</strong>,
+              count: state.quiz.questions.length,
+              threshold: state.quiz.passThreshold,
+              timeLimit: state.quiz.timeLimitMinutes ?? 0,
+              maxAttempts: state.quiz.maxAttempts ?? 0,
+            })}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -188,11 +182,8 @@ export function QuizPlayer({ quizId, enrollmentId, lessonId, onPassed }: Props) 
 
           {hasPendingReview ? (
             <div className="rounded-lg border border-brand-200 bg-brand-50 p-3 text-sm">
-              <p className="font-semibold text-brand-700">Tu intento está en revisión</p>
-              <p className="mt-0.5 text-text">
-                El formador está corrigiendo tus respuestas abiertas. Te avisaremos cuando esté
-                listo.
-              </p>
+              <p className="font-semibold text-brand-700">{t('quiz.pendingReviewTitle')}</p>
+              <p className="mt-0.5 text-text">{t('quiz.pendingReviewBody')}</p>
             </div>
           ) : lastSubmitted ? (
             <div
@@ -209,19 +200,21 @@ export function QuizPlayer({ quizId, enrollmentId, lessonId, onPassed }: Props) 
                     : 'font-semibold text-warning-700'
                 }
               >
-                Último intento: {lastSubmitted.scorePercent ?? 0}%{' '}
-                {lastSubmitted.passed ? '· aprobado' : '· no aprobado'}
+                {t('quiz.lastAttempt', {
+                  score: lastSubmitted.scorePercent ?? 0,
+                  passed: lastSubmitted.passed ? 'yes' : 'no',
+                })}
               </p>
             </div>
           ) : null}
 
           {reachedLimit ? (
             <div className="rounded-lg border border-warning-200 bg-warning-50 p-3 text-sm text-warning-700">
-              Alcanzaste el máximo de intentos permitidos.
+              {t('quiz.reachedLimit')}
             </div>
           ) : (
             <Button onClick={handleStart} disabled={pending} size="lg">
-              {pending ? 'Iniciando…' : lastSubmitted ? 'Reintentar quiz' : 'Empezar quiz'}
+              {pending ? t('quiz.startPending') : lastSubmitted ? t('quiz.retry') : t('quiz.start')}
             </Button>
           )}
         </CardContent>
@@ -235,11 +228,12 @@ export function QuizPlayer({ quizId, enrollmentId, lessonId, onPassed }: Props) 
         <CardHeader>
           <CardTitle>{state.quiz.title}</CardTitle>
           <CardDescription>
-            Responde todas las preguntas y envía. Umbral de aprobación:{' '}
-            <strong className="text-text">{state.quiz.passThreshold}%</strong>.
-            {state.attempt.expiresAt
-              ? ` Tienes tiempo hasta las ${new Date(state.attempt.expiresAt).toLocaleTimeString('es-ES')}.`
-              : ''}
+            {t.rich('quiz.attemptMeta', {
+              b: (chunks) => <strong className="text-text">{chunks}</strong>,
+              threshold: state.quiz.passThreshold,
+              hasDeadline: state.attempt.expiresAt ? 'yes' : 'no',
+              deadline: state.attempt.expiresAt ? formatTime(state.attempt.expiresAt) : '',
+            })}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-8">
@@ -254,10 +248,10 @@ export function QuizPlayer({ quizId, enrollmentId, lessonId, onPassed }: Props) 
                 </span>
                 <span className="mt-1 flex flex-wrap items-center gap-2">
                   <Badge variant="muted" className="text-[10px]">
-                    {QUESTION_TYPE_HINT[q.type] ?? q.type}
+                    {labelOr(t, `quiz.questionType.${q.type}`, q.type)}
                   </Badge>
                   <span className="text-xs text-text-subtle">
-                    {q.points} pt{q.points === 1 ? '' : 's'}
+                    {t('quiz.points', { points: q.points })}
                   </span>
                 </span>
               </legend>
@@ -267,14 +261,14 @@ export function QuizPlayer({ quizId, enrollmentId, lessonId, onPassed }: Props) 
                   type="text"
                   value={textAnswers[q.id] ?? ''}
                   onChange={(e) => setTextAnswers((prev) => ({ ...prev, [q.id]: e.target.value }))}
-                  placeholder="Escribe tu respuesta…"
+                  placeholder={t('quiz.answerPlaceholder')}
                 />
               ) : q.type === 'SHORT_ANSWER' || q.type === 'LONG_ANSWER' ? (
                 <Textarea
                   rows={q.type === 'LONG_ANSWER' ? 8 : 3}
                   value={textAnswers[q.id] ?? ''}
                   onChange={(e) => setTextAnswers((prev) => ({ ...prev, [q.id]: e.target.value }))}
-                  placeholder="Escribe tu respuesta — el formador la corregirá manualmente."
+                  placeholder={t('quiz.openAnswerPlaceholder')}
                 />
               ) : (
                 <div className="space-y-1">
@@ -305,7 +299,7 @@ export function QuizPlayer({ quizId, enrollmentId, lessonId, onPassed }: Props) 
             </fieldset>
           ))}
           <Button onClick={handleSubmit} disabled={pending} size="lg" className="w-full sm:w-auto">
-            {pending ? 'Enviando…' : 'Enviar respuestas'}
+            {pending ? t('quiz.submitPending') : t('quiz.submit')}
           </Button>
         </CardContent>
       </Card>
@@ -335,35 +329,40 @@ export function QuizPlayer({ quizId, enrollmentId, lessonId, onPassed }: Props) 
 
         <h3 className="font-display mt-4 text-2xl font-bold tracking-tight">
           {isPendingReview
-            ? 'En revisión por tu formador'
+            ? t('quiz.resultPendingReviewTitle')
             : a.passed
-              ? '¡Lo lograste!'
-              : 'No alcanzaste el umbral'}
+              ? t('quiz.resultPassedTitle')
+              : t('quiz.resultFailedTitle')}
         </h3>
 
         {!isPendingReview ? (
           <p className="mt-2 text-text-muted">
-            <span className="font-display text-4xl font-extrabold text-text tabular-nums">
-              {a.scorePercent ?? 0}%
-            </span>
-            <span className="ml-2 text-sm">
-              ({a.scoreEarned ?? 0} de {a.scoreMax ?? 0} puntos · umbral {state.quiz.passThreshold}
-              %)
-            </span>
+            {t.rich('quiz.resultScore', {
+              big: (chunks) => (
+                <span className="font-display text-4xl font-extrabold text-text tabular-nums">
+                  {chunks}
+                </span>
+              ),
+              detail: (chunks) => <span className="ml-2 text-sm">{chunks}</span>,
+              score: a.scorePercent ?? 0,
+              earned: a.scoreEarned ?? 0,
+              max: a.scoreMax ?? 0,
+              threshold: state.quiz.passThreshold,
+            })}
           </p>
         ) : null}
 
         <p className="mt-4 text-sm text-text-muted leading-relaxed max-w-md mx-auto">
           {isPendingReview
-            ? 'Tu intento contiene respuestas abiertas. Cuando el formador termine de corregir, vas a poder ver el resultado y, si aprobaste, la lección queda completada automáticamente.'
+            ? t('quiz.resultPendingReviewHint')
             : a.passed
-              ? 'La lección queda marcada como completada. Si era la última que te faltaba, tu certificado se está emitiendo en este momento.'
-              : 'Si el quiz lo permite, puedes reintentar. Repasa las lecciones anteriores y vuelve cuando estés listo.'}
+              ? t('quiz.resultPassedHint')
+              : t('quiz.resultFailedHint')}
         </p>
 
         <div className="mt-6 flex flex-wrap justify-center gap-2">
           <Button variant="secondary" onClick={() => void load()} disabled={pending}>
-            Volver al quiz
+            {t('quiz.backToQuiz')}
           </Button>
         </div>
       </CardContent>

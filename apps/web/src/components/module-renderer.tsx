@@ -15,6 +15,7 @@
  * @see module-loader.ts — Loader que hace fetch y eval del bundle
  */
 
+import { useTranslations } from 'next-intl';
 import { Component, Suspense, use, type ReactNode } from 'react';
 import {
   loadModuleUI,
@@ -186,20 +187,23 @@ function ModuleLoadingSkeleton() {
 }
 
 function ModuleNotFoundCard({ moduleName, surface }: { moduleName: string; surface: string }) {
+  // `moduleName` y `surface` son identificadores del runtime de módulos
+  // (protocolo, no copy): viajan como argumentos, nunca se traducen.
+  const t = useTranslations('playersContenido');
   return (
     <Card className="border-amber-200 bg-amber-50">
       <CardHeader>
-        <CardTitle className="text-amber-900">UI no disponible</CardTitle>
+        <CardTitle className="text-amber-900">{t('moduleRenderer.notFoundTitle')}</CardTitle>
         <CardDescription className="text-amber-700">
-          El módulo <code className="font-mono">{moduleName}</code> no tiene interfaz para la
-          surface <code className="font-mono">{surface}</code>.
+          {t.rich('moduleRenderer.notFoundDescription', {
+            code: (chunks) => <code className="font-mono">{chunks}</code>,
+            moduleName,
+            surface,
+          })}
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <p className="text-sm text-amber-700">
-          Esto puede ocurrir si el módulo solo tiene backend o si la UI fue removida en una
-          actualización.
-        </p>
+        <p className="text-sm text-amber-700">{t('moduleRenderer.notFoundHint')}</p>
       </CardContent>
     </Card>
   );
@@ -216,15 +220,19 @@ function ModuleErrorCard({
   error: Error;
   onRetry: () => void;
 }) {
+  const t = useTranslations('playersContenido');
   const isLoadError = error instanceof ModuleUILoadError;
 
   return (
     <Card className="border-red-200 bg-red-50">
       <CardHeader>
-        <CardTitle className="text-red-900">Error cargando módulo</CardTitle>
+        <CardTitle className="text-red-900">{t('moduleRenderer.errorTitle')}</CardTitle>
         <CardDescription className="text-red-700">
-          No se pudo cargar la UI del módulo <code className="font-mono">{moduleName}</code> para{' '}
-          <code className="font-mono">{surface}</code>.
+          {t.rich('moduleRenderer.errorDescription', {
+            code: (chunks) => <code className="font-mono">{chunks}</code>,
+            moduleName,
+            surface,
+          })}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -233,11 +241,11 @@ function ModuleErrorCard({
         </div>
         <div className="flex gap-2">
           <Button variant="secondary" size="sm" onClick={onRetry}>
-            Reintentar
+            {t('moduleRenderer.retry')}
           </Button>
           {isLoadError && (
             <Button variant="ghost" size="sm" onClick={() => window.location.reload()}>
-              Recargar página
+              {t('moduleRenderer.reload')}
             </Button>
           )}
         </div>
