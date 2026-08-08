@@ -5,6 +5,7 @@
  * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
  */
 
+import { useTranslations } from 'next-intl';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { Icon, type IconName } from '@/components/icon';
@@ -12,7 +13,7 @@ import { SpaceIcon } from '@/components/space-icon';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { ApiHttpError } from '@/lib/api-client';
+import { apiErrorMessage } from '@/lib/i18n/api-error';
 import {
   communityApi,
   invalidateCommunitySpacesCache,
@@ -47,6 +48,8 @@ interface Props {
 }
 
 export function CreateSpaceModal({ open, onClose }: Props) {
+  const t = useTranslations('comunidadComponentes');
+  const tErrors = useTranslations('errors');
   const [title, setTitle] = useState('');
   const [slug, setSlug] = useState('');
   const [iconMode, setIconMode] = useState<IconMode>('icon');
@@ -105,7 +108,7 @@ export function CreateSpaceModal({ open, onClose }: Props) {
       window.dispatchEvent(new Event('didacta:spaces-changed'));
       onClose();
     } catch (err) {
-      setError(err instanceof ApiHttpError ? err.message : 'No se pudo crear el espacio.');
+      setError(apiErrorMessage(err, tErrors));
     } finally {
       setPending(false);
     }
@@ -121,16 +124,14 @@ export function CreateSpaceModal({ open, onClose }: Props) {
       <div
         role="dialog"
         aria-modal="true"
-        aria-label="Nuevo espacio"
+        aria-label={t('newSpaceTitle')}
         className="relative w-full max-w-sm rounded-xl border border-border bg-surface shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
         <div className="border-b border-border-soft px-5 py-4">
-          <h2 className="text-base font-semibold text-text">Nuevo espacio</h2>
-          <p className="mt-0.5 text-xs text-text-muted">
-            Aparecerá en el sidebar para todos los miembros.
-          </p>
+          <h2 className="text-base font-semibold text-text">{t('newSpaceTitle')}</h2>
+          <p className="mt-0.5 text-xs text-text-muted">{t('newSpaceSubtitle')}</p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4 p-5">
@@ -145,7 +146,7 @@ export function CreateSpaceModal({ open, onClose }: Props) {
 
           {/* Nombre */}
           <div className="space-y-1.5">
-            <Label htmlFor="cs-title">Nombre</Label>
+            <Label htmlFor="cs-title">{t('nameLabel')}</Label>
             <Input
               ref={titleRef}
               id="cs-title"
@@ -156,7 +157,7 @@ export function CreateSpaceModal({ open, onClose }: Props) {
               }}
               required
               maxLength={60}
-              placeholder="Recursos compartidos"
+              placeholder={t('namePlaceholder')}
             />
             {slug ? <p className="font-mono text-[11px] text-text-subtle">/{slug}</p> : null}
           </div>
@@ -164,7 +165,7 @@ export function CreateSpaceModal({ open, onClose }: Props) {
           {/* Icono — toggle icono / emoji */}
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <Label>Icono</Label>
+              <Label>{t('iconLabel')}</Label>
               <div className="flex rounded-md border border-border text-xs">
                 <button
                   type="button"
@@ -175,7 +176,7 @@ export function CreateSpaceModal({ open, onClose }: Props) {
                       : 'rounded-l-md px-2.5 py-1 text-text-muted hover:text-text'
                   }
                 >
-                  Icono
+                  {t('iconLabel')}
                 </button>
                 <button
                   type="button"
@@ -186,7 +187,7 @@ export function CreateSpaceModal({ open, onClose }: Props) {
                       : 'rounded-r-md px-2.5 py-1 text-text-muted hover:text-text'
                   }
                 >
-                  Emoji
+                  {t('emojiTitle')}
                 </button>
               </div>
             </div>
@@ -216,25 +217,25 @@ export function CreateSpaceModal({ open, onClose }: Props) {
                   ref={emojiRef}
                   value={emojiValue}
                   onChange={(e) => setEmojiValue(e.target.value)}
-                  placeholder="Pega o escribe un emoji: 🚀 📚 💡 🎯"
+                  placeholder={t('emojiPlaceholder')}
                   maxLength={4}
                   className="text-lg"
                 />
-                <p className="text-[11px] text-text-subtle">Un solo emoji o carácter especial.</p>
+                <p className="text-[11px] text-text-subtle">{t('emojiHint')}</p>
               </div>
             )}
           </div>
 
           {/* Color */}
           <div className="space-y-1.5">
-            <Label>Color</Label>
+            <Label>{t('colorLabel')}</Label>
             <div className="flex flex-wrap gap-2">
               {SUGGESTED_COLORS.map((c) => (
                 <button
                   key={c}
                   type="button"
                   onClick={() => setColor(c)}
-                  aria-label={`Color ${c}`}
+                  aria-label={t('colorAria', { color: c })}
                   aria-pressed={color === c}
                   className={
                     color === c
@@ -254,17 +255,17 @@ export function CreateSpaceModal({ open, onClose }: Props) {
           >
             <SpaceIcon icon={currentIcon} color={color} size={16} />
             <span className="text-sm font-medium" style={{ color }}>
-              {title || 'Nombre del espacio'}
+              {title || t('spaceNameFallback')}
             </span>
           </div>
 
           {/* Footer */}
           <div className="flex justify-end gap-2 border-t border-border-soft pt-3">
             <Button type="button" variant="ghost" onClick={onClose} disabled={pending}>
-              Cancelar
+              {t('cancel')}
             </Button>
             <Button type="submit" disabled={pending || !title.trim() || !slug.trim()}>
-              {pending ? 'Creando…' : 'Crear espacio'}
+              {pending ? t('creating') : t('createSpace')}
             </Button>
           </div>
         </form>

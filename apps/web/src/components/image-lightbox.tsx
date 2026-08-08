@@ -5,6 +5,7 @@
  * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
  */
 
+import { useTranslations } from 'next-intl';
 import { useEffect, useState } from 'react';
 import type { AttachmentImage } from '@/modules/community';
 
@@ -21,6 +22,7 @@ export function ImageLightbox({
   initialIdx: number;
   onClose: () => void;
 }) {
+  const t = useTranslations('comunidadComponentes');
   const [idx, setIdx] = useState(initialIdx);
 
   useEffect(() => {
@@ -44,7 +46,7 @@ export function ImageLightbox({
       <button
         type="button"
         onClick={onClose}
-        aria-label="Cerrar"
+        aria-label={t('close')}
         className="absolute top-4 right-4 grid h-10 w-10 place-items-center rounded-full bg-white/10 text-white transition-colors hover:bg-white/20"
       >
         <svg
@@ -67,7 +69,7 @@ export function ImageLightbox({
               e.stopPropagation();
               setIdx((i) => (i - 1 + images.length) % images.length);
             }}
-            aria-label="Anterior"
+            aria-label={t('previous')}
             className="absolute left-4 grid h-10 w-10 place-items-center rounded-full bg-white/10 text-white transition-colors hover:bg-white/20"
           >
             <svg
@@ -87,7 +89,7 @@ export function ImageLightbox({
               e.stopPropagation();
               setIdx((i) => (i + 1) % images.length);
             }}
-            aria-label="Siguiente"
+            aria-label={t('next')}
             className="absolute right-4 grid h-10 w-10 place-items-center rounded-full bg-white/10 text-white transition-colors hover:bg-white/20"
           >
             <svg
@@ -121,7 +123,7 @@ export function ImageLightbox({
                 e.stopPropagation();
                 setIdx(i);
               }}
-              aria-label={`Imagen ${i + 1}`}
+              aria-label={t('imageN', { n: i + 1 })}
               className={`h-1.5 rounded-full transition-all ${i === idx ? 'w-4 bg-white' : 'w-1.5 bg-white/40'}`}
             />
           ))}

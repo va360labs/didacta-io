@@ -5,11 +5,13 @@
  * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
  */
 
+import { useTranslations } from 'next-intl';
 import { useEffect, useRef, useState } from 'react';
 import { EmojiPicker } from '@/components/emoji-picker';
 import { MentionTextarea } from '@/components/mention-textarea';
 import { authStorage } from '@/lib/auth-storage';
 import { uploadCommunityFile, uploadCommunityImage } from '@/lib/community-upload';
+import { apiErrorMessage } from '@/lib/i18n/api-error';
 import {
   buildBodyWithAttachments,
   communityApi,
@@ -52,8 +54,10 @@ interface Props {
 }
 
 export function PostComposerModal({ open, onClose, spaceSlug, onSuccess, editPost }: Props) {
+  const t = useTranslations('comunidadComponentes');
+  const tErrors = useTranslations('errors');
   const session = authStorage.getSession();
-  const userName = session?.user.name ?? session?.user.email ?? 'Usuario';
+  const userName = session?.user.name ?? session?.user.email ?? t('userFallback');
   const roles = session?.user.roles ?? [];
   const isAdmin = roles.includes('super_admin') || roles.includes('tenant_admin');
   const isEdit = Boolean(editPost);
@@ -179,13 +183,13 @@ export function PostComposerModal({ open, onClose, spaceSlug, onSuccess, editPos
   }
 
   function insertLink() {
-    const url = window.prompt('URL del enlace:');
+    const url = window.prompt(t('linkPrompt'));
     if (!url) return;
     const ta = bodyRef.current;
     if (!ta) return;
     const start = ta.selectionStart;
     const end = ta.selectionEnd;
-    const selected = ta.value.slice(start, end) || 'enlace';
+    const selected = ta.value.slice(start, end) || t('linkDefaultLabel');
     const replacement = `[${selected}](${url})`;
     setBody(ta.value.slice(0, start) + replacement + ta.value.slice(end));
     ta.focus();
@@ -210,7 +214,7 @@ export function PostComposerModal({ open, onClose, spaceSlug, onSuccess, editPos
     e.target.value = '';
     if (!selectedFiles.length) return;
     if (images.length + selectedFiles.length > 10) {
-      setError('Máximo 10 imágenes por publicación.');
+      setError(t('maxImages'));
       return;
     }
     setUploading(true);
@@ -225,7 +229,7 @@ export function PostComposerModal({ open, onClose, spaceSlug, onSuccess, editPos
         ]);
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Error al subir la imagen.');
+      setError(apiErrorMessage(err, tErrors));
     } finally {
       setUploading(false);
     }
@@ -236,7 +240,7 @@ export function PostComposerModal({ open, onClose, spaceSlug, onSuccess, editPos
     if (!file) return;
     e.target.value = '';
     if (files.length >= 5) {
-      setError('Máximo 5 archivos por publicación.');
+      setError(t('maxFiles'));
       return;
     }
     setUploading(true);
@@ -245,7 +249,7 @@ export function PostComposerModal({ open, onClose, spaceSlug, onSuccess, editPos
       const { url, name } = await uploadCommunityFile(file);
       setFiles((prev) => [...prev, { id: crypto.randomUUID(), url, name, size: file.size }]);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Error al subir el archivo.');
+      setError(apiErrorMessage(err, tErrors));
     } finally {
       setUploading(false);
     }
@@ -279,7 +283,7 @@ export function PostComposerModal({ open, onClose, spaceSlug, onSuccess, editPos
       onSuccess();
       onClose();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Error al publicar');
+      setError(apiErrorMessage(err, tErrors));
     } finally {
       setSubmitting(false);
     }
@@ -294,7 +298,7 @@ export function PostComposerModal({ open, onClose, spaceSlug, onSuccess, editPos
       <div
         role="dialog"
         aria-modal="true"
-        aria-label="Nueva publicación"
+        aria-label={t('newPostAria')}
         className="relative z-10 w-full max-w-2xl rounded-2xl bg-white shadow-2xl max-h-[90vh] overflow-y-auto"
       >
         {/* Header */}
@@ -311,7 +315,7 @@ export function PostComposerModal({ open, onClose, spaceSlug, onSuccess, editPos
                 className="flex items-center gap-1.5 rounded-full border border-[#1E5AA8]/30 bg-[#1E5AA8]/8 px-2.5 py-0.5 text-xs font-semibold text-[#1E5AA8] hover:bg-[#1E5AA8]/15 transition-colors"
               >
                 <span className="text-[#1E5AA8]">#</span>
-                Publicando en {spaceMeta?.title ?? selectedSpace}
+                {t('publishingIn', { space: spaceMeta?.title ?? selectedSpace })}
                 <svg
                   width="10"
                   height="10"
@@ -369,7 +373,7 @@ export function PostComposerModal({ open, onClose, spaceSlug, onSuccess, editPos
             type="text"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            placeholder="Título de la publicación"
+            placeholder={t('titlePlaceholder')}
             maxLength={200}
             className="w-full border-none bg-transparent text-2xl font-bold text-[#0D1B2A] placeholder:text-[#CBD5E1] focus:outline-none"
           />
@@ -377,7 +381,7 @@ export function PostComposerModal({ open, onClose, spaceSlug, onSuccess, editPos
             ref={bodyRef}
             value={body}
             onChange={(e) => setBody(e.target.value)}
-            placeholder="Escribe aquí el contenido… escribe @ para mencionar"
+            placeholder={t('bodyPlaceholder')}
             rows={4}
             maxLength={10000}
             className="min-h-0 w-full resize-none border-none bg-transparent px-0 py-0 text-[15px] leading-relaxed text-[#374151] shadow-none placeholder:text-[#CBD5E1] focus:outline-none focus-visible:border-transparent focus-visible:shadow-none focus-visible:outline-none"
@@ -397,7 +401,7 @@ export function PostComposerModal({ open, onClose, spaceSlug, onSuccess, editPos
                     type="button"
                     onClick={() => setImages((prev) => prev.filter((i) => i.id !== img.id))}
                     className="absolute -top-1.5 -right-1.5 grid h-5 w-5 place-items-center rounded-full bg-[#0D1B2A] text-white opacity-0 group-hover:opacity-100 transition-opacity text-xs leading-none"
-                    title="Eliminar imagen"
+                    title={t('removeImage')}
                   >
                     ×
                   </button>
@@ -431,7 +435,9 @@ export function PostComposerModal({ open, onClose, spaceSlug, onSuccess, editPos
                     <polyline points="14 2 14 8 20 8" />
                   </svg>
                   <span className="flex-1 text-xs text-[#374151] truncate">{f.name}</span>
-                  <span className="text-xs text-[#94A3B8]">{(f.size / 1024).toFixed(0)} KB</span>
+                  <span className="text-xs text-[#94A3B8]">
+                    {t('fileSizeKb', { size: Math.round(f.size / 1024) })}
+                  </span>
                   <button
                     type="button"
                     onClick={() => setFiles((prev) => prev.filter((x) => x.id !== f.id))}
@@ -469,7 +475,7 @@ export function PostComposerModal({ open, onClose, spaceSlug, onSuccess, editPos
                 onChange={(e) => setTagInput(e.target.value)}
                 onKeyDown={handleTagKey}
                 onBlur={() => tagInput && addTag(tagInput)}
-                placeholder="+ Añadir tag"
+                placeholder={t('addTagPlaceholder')}
                 className="border border-dashed border-[#CBD5E1] rounded-full px-3 py-1 text-xs text-[#94A3B8] placeholder:text-[#CBD5E1] focus:outline-none focus:border-[#1E5AA8] focus:text-[#374151] bg-transparent w-28 transition-colors"
               />
             )}
@@ -483,7 +489,7 @@ export function PostComposerModal({ open, onClose, spaceSlug, onSuccess, editPos
           <button
             type="button"
             onClick={() => wrapSelection('**')}
-            title="Negrita"
+            title={t('boldTitle')}
             className="grid h-8 w-8 place-items-center rounded-lg text-[#64748B] hover:bg-[#F1F5F9] hover:text-[#0D1B2A] transition-colors font-bold text-sm"
           >
             B
@@ -491,7 +497,7 @@ export function PostComposerModal({ open, onClose, spaceSlug, onSuccess, editPos
           <button
             type="button"
             onClick={insertListItem}
-            title="Lista"
+            title={t('listTitle')}
             className="grid h-8 w-8 place-items-center rounded-lg text-[#64748B] hover:bg-[#F1F5F9] hover:text-[#0D1B2A] transition-colors"
           >
             <svg
@@ -513,7 +519,7 @@ export function PostComposerModal({ open, onClose, spaceSlug, onSuccess, editPos
           <button
             type="button"
             onClick={insertLink}
-            title="Enlace"
+            title={t('linkTitle')}
             className="grid h-8 w-8 place-items-center rounded-lg text-[#64748B] hover:bg-[#F1F5F9] hover:text-[#0D1B2A] transition-colors"
           >
             <svg
@@ -534,7 +540,7 @@ export function PostComposerModal({ open, onClose, spaceSlug, onSuccess, editPos
           {/* Imagen — múltiple */}
           <button
             type="button"
-            title="Imágenes"
+            title={t('imagesTitle')}
             onClick={() => imageInputRef.current?.click()}
             disabled={uploading || submitting || images.length >= 10}
             className="grid h-8 w-8 place-items-center rounded-lg text-[#64748B] hover:bg-[#F1F5F9] hover:text-[#0D1B2A] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
@@ -556,7 +562,7 @@ export function PostComposerModal({ open, onClose, spaceSlug, onSuccess, editPos
           {/* Adjunto */}
           <button
             type="button"
-            title="Adjunto"
+            title={t('attachmentTitle')}
             onClick={() => fileInputRef.current?.click()}
             disabled={uploading || submitting || files.length >= 5}
             className="grid h-8 w-8 place-items-center rounded-lg text-[#64748B] hover:bg-[#F1F5F9] hover:text-[#0D1B2A] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
@@ -575,7 +581,7 @@ export function PostComposerModal({ open, onClose, spaceSlug, onSuccess, editPos
 
           <button
             type="button"
-            title="Encuesta (próximamente)"
+            title={t('pollTitle')}
             disabled
             className="grid h-8 w-8 place-items-center rounded-lg text-[#64748B] opacity-30 cursor-not-allowed"
           >
@@ -597,7 +603,7 @@ export function PostComposerModal({ open, onClose, spaceSlug, onSuccess, editPos
           <div className="relative">
             <button
               type="button"
-              title="Emoji"
+              title={t('emojiTitle')}
               onClick={() => setEmojiPickerOpen((v) => !v)}
               aria-expanded={emojiPickerOpen}
               aria-haspopup="dialog"
@@ -656,7 +662,7 @@ export function PostComposerModal({ open, onClose, spaceSlug, onSuccess, editPos
                   onChange={(e) => setNotifyAll(e.target.checked)}
                   className="h-3.5 w-3.5 accent-[#1E5AA8]"
                 />
-                📣 Avisar a todos por email
+                {t('notifyAllLabel')}
               </label>
               {notifyAll ? (
                 <label className="flex cursor-pointer items-center gap-2 pl-5 text-[11px] text-[#64748B]">
@@ -666,7 +672,7 @@ export function PostComposerModal({ open, onClose, spaceSlug, onSuccess, editPos
                     onChange={(e) => setImportant(e.target.checked)}
                     className="h-3 w-3 accent-[#FF6F61]"
                   />
-                  Importante (ignora las bajas)
+                  {t('importantLabel')}
                 </label>
               ) : null}
             </div>
@@ -684,18 +690,18 @@ export function PostComposerModal({ open, onClose, spaceSlug, onSuccess, editPos
                 <line x1="12" y1="8" x2="12" y2="12" />
                 <line x1="12" y1="16" x2="12.01" y2="16" />
               </svg>
-              Visible para toda la comunidad
+              {t('visibleToAll')}
             </p>
           )}
           <div className="flex items-center gap-3">
-            {uploading && <p className="text-xs text-[#64748B]">Subiendo…</p>}
+            {uploading && <p className="text-xs text-[#64748B]">{t('uploading')}</p>}
             {error && <p className="text-xs text-red-500">{error}</p>}
             <button
               type="button"
               onClick={onClose}
               className="px-4 py-2 text-sm font-semibold text-[#374151] hover:text-[#0D1B2A] transition-colors"
             >
-              Cancelar
+              {t('cancel')}
             </button>
             <button
               type="button"
@@ -706,11 +712,11 @@ export function PostComposerModal({ open, onClose, spaceSlug, onSuccess, editPos
               <span>→</span>{' '}
               {submitting
                 ? isEdit
-                  ? 'Guardando…'
-                  : 'Publicando…'
+                  ? t('saving')
+                  : t('publishing')
                 : isEdit
-                  ? 'Guardar cambios'
-                  : 'Publicar'}
+                  ? t('saveChanges')
+                  : t('publish')}
             </button>
           </div>
         </div>

@@ -5,6 +5,7 @@
  * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
  */
 
+import { useTranslations } from 'next-intl';
 import { useEffect, useRef } from 'react';
 
 const EMOJIS = [
@@ -96,6 +97,7 @@ interface EmojiPickerProps {
 }
 
 export function EmojiPicker({ onSelect, onClose }: EmojiPickerProps) {
+  const t = useTranslations('comunidadComponentes');
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -112,7 +114,7 @@ export function EmojiPicker({ onSelect, onClose }: EmojiPickerProps) {
     <div
       ref={ref}
       role="dialog"
-      aria-label="Selector de emojis"
+      aria-label={t('emojiPickerAria')}
       className="absolute bottom-full left-0 mb-2 z-30 rounded-xl border border-[#E2E8F0] bg-white shadow-lg p-2 w-[272px]"
     >
       <div className="grid grid-cols-10 gap-0.5">

@@ -5,12 +5,16 @@
  * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
  */
 
+import { useTranslations } from 'next-intl';
 import { useEffect, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { UserChip } from '@/components/user-chip';
 import { ApiHttpError } from '@/lib/api-client';
+import { apiErrorMessage } from '@/lib/i18n/api-error';
+import { formatDate } from '@/lib/i18n/format';
+import type { TranslatorLike } from '@/lib/i18n/labels';
 import { learningApi, type LessonComment } from '@/lib/learning';
 
 interface Props {
@@ -27,6 +31,8 @@ interface Props {
  * Aprobar/Rechazar inline en lugar de tener que abrir cada lección.
  */
 export function PendingCommentsQueue({ courseId }: Props) {
+  const t = useTranslations('comunidadComponentes');
+  const tErrors = useTranslations('errors');
   const [items, setItems] = useState<LessonComment[] | null>(null);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -42,7 +48,7 @@ export function PendingCommentsQueue({ courseId }: Props) {
         setItems([]);
         return;
       }
-      setError(e instanceof ApiHttpError ? e.message : 'No pudimos cargar la cola.');
+      setError(apiErrorMessage(e, tErrors));
     }
   }
 
@@ -58,22 +64,21 @@ export function PendingCommentsQueue({ courseId }: Props) {
       await learningApi.approveLessonComment(c.id);
       await reload();
     } catch (e) {
-      setError(e instanceof ApiHttpError ? e.message : 'No pudimos aprobar el comentario.');
+      setError(apiErrorMessage(e, tErrors));
     } finally {
       setPending(false);
     }
   }
 
   async function handleReject(c: LessonComment) {
-    const reason =
-      window.prompt('Motivo del rechazo (opcional, se muestra al autor):') ?? undefined;
+    const reason = window.prompt(t('promptRejectReason')) ?? undefined;
     setPending(true);
     setError(null);
     try {
       await learningApi.rejectLessonComment(c.id, reason || undefined);
       await reload();
     } catch (e) {
-      setError(e instanceof ApiHttpError ? e.message : 'No pudimos rechazar el comentario.');
+      setError(apiErrorMessage(e, tErrors));
     } finally {
       setPending(false);
     }
@@ -87,15 +92,12 @@ export function PendingCommentsQueue({ courseId }: Props) {
     <Card>
       <CardHeader>
         <div className="flex items-center gap-2">
-          <CardTitle>Comentarios pendientes</CardTitle>
+          <CardTitle>{t('pendingCommentsTitle')}</CardTitle>
           <Badge variant="warning" dot>
             {items.length}
           </Badge>
         </div>
-        <CardDescription>
-          Comentarios de alumnos esperando tu revisión. Aprueba los útiles para que el resto los
-          vea, rechaza los que no aporten (con un motivo opcional que se muestra al autor).
-        </CardDescription>
+        <CardDescription>{t('pendingCommentsDescription')}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
         {error ? (
@@ -114,15 +116,17 @@ export function PendingCommentsQueue({ courseId }: Props) {
                 <UserChip
                   userId={c.authorId}
                   name={c.authorDisplayName}
-                  fallback="Anónimo"
+                  fallback={t('anonymous')}
                   showAvatar={false}
                   size={20}
                   nameClassName="block truncate font-semibold text-text"
                 />
                 <span>·</span>
-                <span>{relTime(c.createdAt)}</span>
+                <span>{relTime(c.createdAt, t)}</span>
                 <span>·</span>
-                <code className="font-mono text-[11px]">lección {c.lessonId.slice(0, 8)}</code>
+                <code className="font-mono text-[11px]">
+                  {t('lessonRef', { id: c.lessonId.slice(0, 8) })}
+                </code>
               </div>
               <p className="mt-1.5 whitespace-pre-wrap text-sm leading-relaxed text-text">
                 {c.body}
@@ -135,7 +139,7 @@ export function PendingCommentsQueue({ courseId }: Props) {
                   onClick={() => void handleApprove(c)}
                   disabled={pending}
                 >
-                  Aprobar
+                  {t('approve')}
                 </Button>
                 <Button
                   type="button"
@@ -144,7 +148,7 @@ export function PendingCommentsQueue({ courseId }: Props) {
                   onClick={() => void handleReject(c)}
                   disabled={pending}
                 >
-                  Rechazar
+                  {t('reject')}
                 </Button>
               </div>
             </li>
@@ -155,11 +159,11 @@ export function PendingCommentsQueue({ courseId }: Props) {
   );
 }
 
-function relTime(iso: string): string {
+function relTime(iso: string, t: TranslatorLike): string {
   const diff = (Date.now() - new Date(iso).getTime()) / 1000;
-  if (diff < 60) return 'ahora';
-  if (diff < 3600) return `hace ${Math.floor(diff / 60)}m`;
-  if (diff < 86400) return `hace ${Math.floor(diff / 3600)}h`;
-  if (diff < 86400 * 7) return `hace ${Math.floor(diff / 86400)}d`;
-  return new Date(iso).toLocaleDateString('es-ES', { day: '2-digit', month: 'short' });
+  if (diff < 60) return t('relTimeNow');
+  if (diff < 3600) return t('relTimeMinutes', { minutes: Math.floor(diff / 60) });
+  if (diff < 86400) return t('relTimeHours', { hours: Math.floor(diff / 3600) });
+  if (diff < 86400 * 7) return t('relTimeDays', { days: Math.floor(diff / 86400) });
+  return formatDate(iso, { day: '2-digit', month: 'short' });
 }
