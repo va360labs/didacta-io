@@ -19,6 +19,7 @@
  */
 
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
+import { useTranslations } from 'next-intl';
 import { Icon } from '@/components/icon';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -33,12 +34,9 @@ import {
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { ApiHttpError } from '@/lib/api-client';
-import {
-  adminLicenseApi,
-  LICENSE_STATUS_LABEL,
-  type AdminLicenseStatusDto,
-} from '@/lib/admin-license';
+import { adminLicenseApi, type AdminLicenseStatusDto } from '@/lib/admin-license';
+import { apiErrorMessage } from '@/lib/i18n/api-error';
+import { formatDateTime } from '@/lib/i18n/format';
 
 interface ToastState {
   variant: 'success' | 'error';
@@ -46,6 +44,9 @@ interface ToastState {
 }
 
 export default function AdminLicenciaPage() {
+  const t = useTranslations('adminMonetizacion.license');
+  const tLicStatus = useTranslations('adminMonetizacion.licenseStatus');
+  const tErrors = useTranslations('errors');
   const [status, setStatus] = useState<AdminLicenseStatusDto | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [keyInput, setKeyInput] = useState('');
@@ -60,11 +61,9 @@ export default function AdminLicenciaPage() {
       const data = await adminLicenseApi.get();
       setStatus(data);
     } catch (err) {
-      setLoadError(
-        err instanceof ApiHttpError ? err.message : 'No se pudo cargar el estado de la licencia.',
-      );
+      setLoadError(apiErrorMessage(err, tErrors));
     }
-  }, []);
+  }, [tErrors]);
 
   useEffect(() => {
     void load();
@@ -74,7 +73,7 @@ export default function AdminLicenciaPage() {
     e.preventDefault();
     setToast(null);
     if (!keyInput.trim()) {
-      setToast({ variant: 'error', message: 'Pega la clave de licencia.' });
+      setToast({ variant: 'error', message: t('pasteKey') });
       return;
     }
     setSaving(true);
@@ -84,12 +83,12 @@ export default function AdminLicenciaPage() {
       setKeyInput('');
       setToast({
         variant: 'success',
-        message: `Licencia activada: ${LICENSE_STATUS_LABEL[updated.status]}.`,
+        message: t('activated', { status: tLicStatus(updated.status) }),
       });
     } catch (err) {
       setToast({
         variant: 'error',
-        message: err instanceof ApiHttpError ? err.message : 'No se pudo activar la licencia.',
+        message: apiErrorMessage(err, tErrors),
       });
     } finally {
       setSaving(false);
@@ -104,7 +103,7 @@ export default function AdminLicenciaPage() {
     } catch (err) {
       setToast({
         variant: 'error',
-        message: err instanceof ApiHttpError ? err.message : 'No se pudo revalidar el estado.',
+        message: apiErrorMessage(err, tErrors),
       });
     } finally {
       setRefreshing(false);
@@ -116,12 +115,12 @@ export default function AdminLicenciaPage() {
     try {
       const updated = await adminLicenseApi.clearKey();
       setStatus(updated);
-      setToast({ variant: 'success', message: 'Licencia eliminada del panel.' });
+      setToast({ variant: 'success', message: t('removed') });
       setDeleteDialogOpen(false);
     } catch (err) {
       setToast({
         variant: 'error',
-        message: err instanceof ApiHttpError ? err.message : 'No se pudo eliminar la licencia.',
+        message: apiErrorMessage(err, tErrors),
       });
     } finally {
       setDeleting(false);
@@ -131,11 +130,8 @@ export default function AdminLicenciaPage() {
   return (
     <div className="flex flex-col gap-6">
       <header className="flex flex-col gap-1">
-        <h1 className="font-display text-2xl font-bold tracking-tight">Licencia</h1>
-        <p className="text-text-muted">
-          Activa una licencia Enterprise pegando la clave que recibiste al comprarla. La
-          verificación es local — la instancia no llama a ningún servidor externo para comprobarla.
-        </p>
+        <h1 className="font-display text-2xl font-bold tracking-tight">{t('title')}</h1>
+        <p className="text-text-muted">{t('intro')}</p>
       </header>
 
       {loadError ? (
@@ -155,19 +151,17 @@ export default function AdminLicenciaPage() {
           <Card>
             <CardHeader>
               <CardTitle>
-                {status.hasKeyConfigured ? 'Cambiar clave' : 'Activar licencia'}
+                {status.hasKeyConfigured ? t('changeKeyTitle') : t('activateTitle')}
               </CardTitle>
               <CardDescription>
-                {status.managedByEnv
-                  ? 'La clave está fijada por la variable de entorno DIDACTA_LICENSE_KEY del operador del despliegue — no se puede cambiar desde aquí.'
-                  : 'Pega el JWT (empieza por "eyJ") que recibiste al comprar tu licencia Enterprise.'}
+                {status.managedByEnv ? t('managedByEnvDescription') : t('pasteJwtDescription')}
               </CardDescription>
             </CardHeader>
             {status.managedByEnv ? null : (
               <CardContent className="space-y-4">
                 <form onSubmit={handleSubmit} aria-busy={saving} className="space-y-3">
                   <div className="space-y-1.5">
-                    <Label htmlFor="license-key">Clave de licencia</Label>
+                    <Label htmlFor="license-key">{t('keyLabel')}</Label>
                     <Textarea
                       id="license-key"
                       rows={4}
@@ -197,10 +191,10 @@ export default function AdminLicenciaPage() {
                   <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border-soft pt-4">
                     <Button type="submit" disabled={saving}>
                       {saving
-                        ? 'Activando…'
+                        ? t('activating')
                         : status.hasKeyConfigured
-                          ? 'Guardar nueva clave'
-                          : 'Activar'}
+                          ? t('saveNewKey')
+                          : t('activate')}
                     </Button>
                     {status.hasKeyConfigured ? (
                       <Button
@@ -209,7 +203,7 @@ export default function AdminLicenciaPage() {
                         onClick={() => setDeleteDialogOpen(true)}
                         className="text-danger-700 hover:bg-danger-50"
                       >
-                        Quitar licencia
+                        {t('removeKey')}
                       </Button>
                     ) : null}
                   </div>
@@ -221,10 +215,8 @@ export default function AdminLicenciaPage() {
           {status.capabilities.length > 0 ? (
             <Card>
               <CardHeader>
-                <CardTitle>Capabilities activas</CardTitle>
-                <CardDescription>
-                  Funcionalidades Enterprise habilitadas por esta licencia.
-                </CardDescription>
+                <CardTitle>{t('capabilitiesTitle')}</CardTitle>
+                <CardDescription>{t('capabilitiesDescription')}</CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="flex flex-wrap gap-2">
@@ -243,11 +235,8 @@ export default function AdminLicenciaPage() {
       <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Quitar licencia</DialogTitle>
-            <DialogDescription>
-              La instalación volverá a modo Community (o al valor de DIDACTA_LICENSE_KEY si el
-              operador fijó uno por env). Las capabilities Enterprise se desactivan de inmediato.
-            </DialogDescription>
+            <DialogTitle>{t('removeDialogTitle')}</DialogTitle>
+            <DialogDescription>{t('removeDialogDescription')}</DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <Button
@@ -256,7 +245,7 @@ export default function AdminLicenciaPage() {
               onClick={() => setDeleteDialogOpen(false)}
               disabled={deleting}
             >
-              Cancelar
+              {t('cancel')}
             </Button>
             <Button
               type="button"
@@ -264,7 +253,7 @@ export default function AdminLicenciaPage() {
               onClick={() => void handleDelete()}
               disabled={deleting}
             >
-              {deleting ? 'Quitando…' : 'Quitar'}
+              {deleting ? t('removing') : t('remove')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -315,9 +304,9 @@ const STATUS_STYLE: Record<
   },
 };
 
-function formatDate(iso: string | undefined | null): string | null {
+function licenseDate(iso: string | undefined | null): string | null {
   if (!iso) return null;
-  return new Date(iso).toLocaleString('es-ES', {
+  return formatDateTime(iso, {
     day: '2-digit',
     month: 'short',
     year: 'numeric',
@@ -335,6 +324,8 @@ function StatusCard({
   onRefresh: () => void;
   refreshing: boolean;
 }) {
+  const t = useTranslations('adminMonetizacion.license');
+  const tLicStatus = useTranslations('adminMonetizacion.licenseStatus');
   const style = STATUS_STYLE[status.status];
 
   return (
@@ -342,7 +333,7 @@ function StatusCard({
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Icon name="shield" size={18} />
-          Estado de la licencia
+          {t('statusTitle')}
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -353,12 +344,12 @@ function StatusCard({
         >
           <span className="flex items-center gap-2">
             <Icon name={style.icon} size={16} aria-hidden="true" />
-            <strong>{LICENSE_STATUS_LABEL[status.status]}</strong>
+            <strong>{tLicStatus(status.status)}</strong>
             {status.organizationName ? <span>— {status.organizationName}</span> : null}
           </span>
           {status.managedByEnv ? (
-            <Badge variant="outline" title="Fijada por DIDACTA_LICENSE_KEY">
-              definido por el operador · solo lectura
+            <Badge variant="outline" title={t('managedByEnvTitle')}>
+              {t('managedByEnvBadge')}
             </Badge>
           ) : null}
         </div>
@@ -367,26 +358,26 @@ function StatusCard({
           <dl className="grid gap-3 text-sm sm:grid-cols-2">
             {status.plan ? (
               <div>
-                <dt className="text-text-subtle">Plan</dt>
+                <dt className="text-text-subtle">{t('planLabel')}</dt>
                 <dd className="font-medium">{status.plan}</dd>
               </div>
             ) : null}
             {status.edition ? (
               <div>
-                <dt className="text-text-subtle">Edición</dt>
+                <dt className="text-text-subtle">{t('editionLabel')}</dt>
                 <dd className="font-medium capitalize">{status.edition}</dd>
               </div>
             ) : null}
-            {formatDate(status.issuedAt) ? (
+            {licenseDate(status.issuedAt) ? (
               <div>
-                <dt className="text-text-subtle">Emitida</dt>
-                <dd className="font-medium">{formatDate(status.issuedAt)}</dd>
+                <dt className="text-text-subtle">{t('issuedLabel')}</dt>
+                <dd className="font-medium">{licenseDate(status.issuedAt)}</dd>
               </div>
             ) : null}
-            {formatDate(status.expiresAt) ? (
+            {licenseDate(status.expiresAt) ? (
               <div>
-                <dt className="text-text-subtle">Expira</dt>
-                <dd className="font-medium">{formatDate(status.expiresAt)}</dd>
+                <dt className="text-text-subtle">{t('expiresLabel')}</dt>
+                <dd className="font-medium">{licenseDate(status.expiresAt)}</dd>
               </div>
             ) : null}
           </dl>
@@ -402,7 +393,7 @@ function StatusCard({
 
         <div className="flex items-center justify-between border-t border-border-soft pt-3">
           <span className="text-xs text-text-subtle">
-            Última revisión: {formatDate(status.loadedAt) ?? '—'}
+            {t('lastCheck', { date: licenseDate(status.loadedAt) ?? '—' })}
           </span>
           <Button
             type="button"
@@ -411,7 +402,7 @@ function StatusCard({
             onClick={onRefresh}
             disabled={refreshing}
           >
-            {refreshing ? 'Revalidando…' : 'Revalidar estado'}
+            {refreshing ? t('revalidating') : t('revalidate')}
           </Button>
         </div>
       </CardContent>

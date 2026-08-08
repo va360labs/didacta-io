@@ -6,13 +6,15 @@
  */
 
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
+import { useTranslations } from 'next-intl';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
-import { ApiHttpError } from '@/lib/api-client';
+import { apiErrorMessage } from '@/lib/i18n/api-error';
+import { formatDateTime } from '@/lib/i18n/format';
 import { communityApi, type Broadcast } from '@/modules/community';
 
 /**
@@ -32,17 +34,16 @@ function hasActive(list: Broadcast[]): boolean {
   return list.some((b) => b.status === 'PENDING' || b.status === 'RUNNING');
 }
 
-const STATUS_META: Record<
-  Broadcast['status'],
-  { label: string; variant: 'muted' | 'info' | 'success' | 'danger' }
-> = {
-  PENDING: { label: 'En cola', variant: 'muted' },
-  RUNNING: { label: 'Enviando', variant: 'info' },
-  DONE: { label: 'Enviado', variant: 'success' },
-  FAILED: { label: 'Fallido', variant: 'danger' },
+const STATUS_VARIANT: Record<Broadcast['status'], 'muted' | 'info' | 'success' | 'danger'> = {
+  PENDING: 'muted',
+  RUNNING: 'info',
+  DONE: 'success',
+  FAILED: 'danger',
 };
 
 export default function CommunityBroadcastsAdminPage() {
+  const t = useTranslations('adminMonetizacion.broadcasts');
+  const tErrors = useTranslations('errors');
   const [subject, setSubject] = useState('');
   const [bodyText, setBodyText] = useState('');
   const [important, setImportant] = useState(false);
@@ -60,12 +61,10 @@ export default function CommunityBroadcastsAdminPage() {
       setListError(null);
       return list;
     } catch (e) {
-      setListError(
-        e instanceof ApiHttpError ? e.message : 'No pudimos cargar los avisos enviados.',
-      );
+      setListError(apiErrorMessage(e, tErrors));
       return null;
     }
-  }, []);
+  }, [tErrors]);
 
   useEffect(() => {
     void reload();
@@ -103,10 +102,10 @@ export default function CommunityBroadcastsAdminPage() {
       setSubject('');
       setBodyText('');
       setImportant(false);
-      setNotice('Aviso encolado: se irá enviando por lotes.');
+      setNotice(t('queued'));
       await reload();
     } catch (err) {
-      setError(err instanceof ApiHttpError ? err.message : 'No pudimos encolar el aviso.');
+      setError(apiErrorMessage(err, tErrors));
     } finally {
       setSending(false);
     }
@@ -115,18 +114,15 @@ export default function CommunityBroadcastsAdminPage() {
   return (
     <section className="space-y-6">
       <header>
-        <h1 className="font-display text-2xl font-bold tracking-tight">Avisos a la comunidad</h1>
-        <p className="mt-1 max-w-2xl text-text-muted">
-          Envía un email + notificación a todos los miembros. Se manda por lotes para no saturar el
-          correo; cada email lleva enlace de baja.
-        </p>
+        <h1 className="font-display text-2xl font-bold tracking-tight">{t('title')}</h1>
+        <p className="mt-1 max-w-2xl text-text-muted">{t('intro')}</p>
       </header>
 
       <div className="grid gap-6 lg:grid-cols-[1fr_1fr]">
         {/* ── Composición ─────────────────────────────────────────────────── */}
         <Card>
           <CardHeader>
-            <CardTitle>Nuevo aviso</CardTitle>
+            <CardTitle>{t('composeTitle')}</CardTitle>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4">
@@ -148,7 +144,7 @@ export default function CommunityBroadcastsAdminPage() {
               ) : null}
 
               <div className="space-y-1.5">
-                <Label htmlFor="broadcast-subject">Asunto</Label>
+                <Label htmlFor="broadcast-subject">{t('subjectLabel')}</Label>
                 <Input
                   id="broadcast-subject"
                   value={subject}
@@ -156,12 +152,12 @@ export default function CommunityBroadcastsAdminPage() {
                   required
                   minLength={3}
                   maxLength={200}
-                  placeholder="Novedades de la comunidad…"
+                  placeholder={t('subjectPlaceholder')}
                 />
               </div>
 
               <div className="space-y-1.5">
-                <Label htmlFor="broadcast-body">Mensaje</Label>
+                <Label htmlFor="broadcast-body">{t('bodyLabel')}</Label>
                 <Textarea
                   id="broadcast-body"
                   value={bodyText}
@@ -169,7 +165,7 @@ export default function CommunityBroadcastsAdminPage() {
                   required
                   minLength={1}
                   rows={8}
-                  placeholder="Escribe aquí el contenido del aviso…"
+                  placeholder={t('bodyPlaceholder')}
                 />
               </div>
 
@@ -181,17 +177,16 @@ export default function CommunityBroadcastsAdminPage() {
                   className="mt-0.5 h-4 w-4 rounded border-border-strong text-brand-500 focus:ring-brand-500"
                 />
                 <span>
-                  Marcar como importante (ignora las bajas)
+                  {t('importantLabel')}
                   <span className="mt-0.5 block text-xs text-text-subtle">
-                    Los avisos importantes se envían incluso a quienes se dieron de baja de los
-                    correos de la comunidad.
+                    {t('importantHelp')}
                   </span>
                 </span>
               </label>
 
               <div className="flex justify-end border-t border-border-soft pt-3">
                 <Button type="submit" disabled={!canSend}>
-                  {sending ? 'Enviando…' : 'Enviar a todos'}
+                  {sending ? t('sending') : t('sendToAll')}
                 </Button>
               </div>
             </form>
@@ -201,7 +196,7 @@ export default function CommunityBroadcastsAdminPage() {
         {/* ── Historial de envíos ─────────────────────────────────────────── */}
         <Card>
           <CardHeader>
-            <CardTitle>Envíos</CardTitle>
+            <CardTitle>{t('historyTitle')}</CardTitle>
           </CardHeader>
           <CardContent>
             {listError ? (
@@ -218,9 +213,7 @@ export default function CommunityBroadcastsAdminPage() {
                 ))}
               </div>
             ) : broadcasts.length === 0 ? (
-              <p className="py-6 text-center text-sm text-text-muted">
-                Aún no has enviado ningún aviso.
-              </p>
+              <p className="py-6 text-center text-sm text-text-muted">{t('historyEmpty')}</p>
             ) : (
               <ul className="space-y-3">
                 {broadcasts.map((b) => (
@@ -237,8 +230,9 @@ export default function CommunityBroadcastsAdminPage() {
 
 /** Fila de un aviso: asunto, estado, progreso y fecha. */
 function BroadcastRow({ broadcast }: { broadcast: Broadcast }) {
-  const meta = STATUS_META[broadcast.status];
-  const createdAt = new Date(broadcast.createdAt).toLocaleString('es-ES');
+  const t = useTranslations('adminMonetizacion.broadcasts');
+  const tStatus = useTranslations('adminMonetizacion.broadcastStatus');
+  const createdAt = formatDateTime(broadcast.createdAt);
 
   return (
     <li className="rounded-lg border border-border-soft bg-surface p-4">
@@ -247,24 +241,28 @@ function BroadcastRow({ broadcast }: { broadcast: Broadcast }) {
         <div className="flex shrink-0 items-center gap-1.5">
           {broadcast.important ? (
             <Badge variant="warning" dot>
-              Importante
+              {t('importantBadge')}
             </Badge>
           ) : null}
-          <Badge variant={meta.variant} dot>
-            {meta.label}
+          <Badge variant={STATUS_VARIANT[broadcast.status]} dot>
+            {tStatus(broadcast.status)}
           </Badge>
         </div>
       </div>
 
       <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-text-muted">
         <span className="tabular-nums">
-          {broadcast.sent}/{broadcast.total} enviados
+          {t('sentProgress', { sent: String(broadcast.sent), total: String(broadcast.total) })}
         </span>
         {broadcast.skipped > 0 ? (
-          <span className="tabular-nums text-text-subtle">{broadcast.skipped} omitidos</span>
+          <span className="tabular-nums text-text-subtle">
+            {t('skipped', { count: String(broadcast.skipped) })}
+          </span>
         ) : null}
         {broadcast.failed > 0 ? (
-          <span className="tabular-nums text-danger-700">{broadcast.failed} fallidos</span>
+          <span className="tabular-nums text-danger-700">
+            {t('failed', { count: String(broadcast.failed) })}
+          </span>
         ) : null}
         <span className="ml-auto text-text-subtle">{createdAt}</span>
       </div>

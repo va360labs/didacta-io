@@ -27,6 +27,7 @@
  */
 
 import { useEffect, useRef, useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { Icon, type IconName } from '@/components/icon';
 import {
   AlertDialog,
@@ -41,6 +42,9 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { ApiHttpError } from '@/lib/api-client';
+import { apiErrorMessage } from '@/lib/i18n/api-error';
+import { formatDateTime } from '@/lib/i18n/format';
+import { labelOr } from '@/lib/i18n/labels';
 import {
   marketplaceApi,
   type InstalledModuleSource,
@@ -52,18 +56,20 @@ import {
 const MAX_BYTES = 50 * 1024 * 1024;
 
 export default function AdminMarketplacePage() {
+  const t = useTranslations('adminMonetizacion.marketplace');
   return (
     <div className="flex flex-col gap-6">
       <header className="flex flex-col gap-1">
-        <h1 className="font-display text-2xl font-bold tracking-tight">Marketplace de módulos</h1>
+        <h1 className="font-display text-2xl font-bold tracking-tight">{t('title')}</h1>
         <p className="text-text-muted">
-          Sube un paquete <code>.zip</code> firmado por Didacta para añadir un módulo a esta
-          instancia sin reiniciar el API. Los módulos quedan disponibles para ser activados por
-          tenant en{' '}
-          <a href="/admin/configuracion" className="underline">
-            Configuración
-          </a>
-          .
+          {t.rich('intro', {
+            code: (chunks) => <code>{chunks}</code>,
+            link: (chunks) => (
+              <a href="/admin/configuracion" className="underline">
+                {chunks}
+              </a>
+            ),
+          })}
         </p>
       </header>
 
@@ -75,6 +81,8 @@ export default function AdminMarketplacePage() {
 }
 
 function UploadCard() {
+  const t = useTranslations('adminMonetizacion.marketplace');
+  const tErrors = useTranslations('errors');
   const fileRef = useRef<HTMLInputElement>(null);
   const [drag, setDrag] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -95,7 +103,7 @@ function UploadCard() {
   const handleFiles = async (file: File) => {
     setFeedback(null);
     if (file.size > MAX_BYTES) {
-      setFeedback({ kind: 'error', message: `El paquete excede 50 MiB (${file.size} bytes).` });
+      setFeedback({ kind: 'error', message: t('packageTooBig', { bytes: String(file.size) }) });
       return;
     }
     setBusy(true);
@@ -117,7 +125,7 @@ function UploadCard() {
     } catch (e) {
       setFeedback({
         kind: 'error',
-        message: e instanceof ApiHttpError ? e.message : 'Error desconocido al subir el paquete.',
+        message: apiErrorMessage(e, tErrors),
         code: e instanceof ApiHttpError ? e.code : undefined,
       });
     } finally {
@@ -128,10 +136,9 @@ function UploadCard() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Subir paquete</CardTitle>
+        <CardTitle>{t('uploadTitle')}</CardTitle>
         <CardDescription>
-          Arrastra el <code>.zip</code> aquí o selecciónalo del disco. La instancia valida firma +
-          lint del bundle + migrations SQL antes de aceptar.
+          {t.rich('uploadDescription', { code: (chunks) => <code>{chunks}</code> })}
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -154,12 +161,10 @@ function UploadCard() {
           ].join(' ')}
         >
           <Icon name="package" className="mx-auto mb-3 h-10 w-10 text-text-muted" />
-          <p className="mb-2 font-medium">
-            {busy ? 'Procesando paquete…' : 'Arrastra el .zip aquí'}
-          </p>
-          <p className="mb-4 text-sm text-text-muted">o</p>
+          <p className="mb-2 font-medium">{busy ? t('processing') : t('dropHere')}</p>
+          <p className="mb-4 text-sm text-text-muted">{t('or')}</p>
           <Button variant="secondary" disabled={busy} onClick={() => fileRef.current?.click()}>
-            Seleccionar archivo
+            {t('selectFile')}
           </Button>
           <input
             ref={fileRef}
@@ -172,9 +177,7 @@ function UploadCard() {
               e.target.value = ''; // permite re-seleccionar el mismo archivo
             }}
           />
-          <p className="mt-4 text-xs text-text-muted">
-            Máximo 50 MiB · solo paquetes firmados por Didacta
-          </p>
+          <p className="mt-4 text-xs text-text-muted">{t('maxNote')}</p>
         </div>
 
         {feedback?.kind === 'success' && (
@@ -189,9 +192,9 @@ function UploadCard() {
             <strong>
               {feedback.name}@{feedback.version}
             </strong>{' '}
-            instalado correctamente.
+            {t('installedOk')}
             {!feedback.signatureVerified && (
-              <span className="ml-2 font-normal">(sin verificar — ver advertencia)</span>
+              <span className="ml-2 font-normal">{t('unverifiedTag')}</span>
             )}
           </div>
         )}
@@ -208,34 +211,29 @@ function UploadCard() {
             <AlertDialogHeader>
               <AlertDialogTitle className="flex items-center gap-2 text-amber-600">
                 <Icon name="alert" className="h-5 w-5" />
-                Módulo no verificado
+                {t('unverifiedTitle')}
               </AlertDialogTitle>
               <AlertDialogDescription className="space-y-3">
                 <p>
-                  El módulo{' '}
-                  <strong>
-                    {feedback?.kind === 'success' ? `${feedback.name}@${feedback.version}` : ''}
-                  </strong>{' '}
-                  se instaló correctamente pero <strong>no tiene firma verificada</strong> de
-                  Didacta.
+                  {t.rich('unverifiedBody', {
+                    strong: (chunks) => <strong>{chunks}</strong>,
+                    module:
+                      feedback?.kind === 'success' ? `${feedback.name}@${feedback.version}` : '',
+                  })}
                 </p>
-                <p>
-                  Esto significa que el paquete fue subido directamente y no pasó por el proceso de
-                  revisión y firma del marketplace oficial.
-                </p>
+                <p>{t('unverifiedExplain')}</p>
                 {feedback?.kind === 'success' && feedback.signatureError && (
                   <div className="rounded border border-amber-200 bg-amber-50 p-2 text-xs text-amber-800">
-                    <strong>Detalle:</strong> {feedback.signatureError}
+                    <strong>{t('detailLabel')}</strong> {feedback.signatureError}
                   </div>
                 )}
-                <p className="text-amber-700">
-                  Solo confía en módulos de fuentes que conozcas. Si no reconoces este paquete,
-                  considera desinstalarlo desde la lista de módulos.
-                </p>
+                <p className="text-amber-700">{t('unverifiedAdvice')}</p>
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
-              <AlertDialogAction onClick={() => setWarningOpen(false)}>Entendido</AlertDialogAction>
+              <AlertDialogAction onClick={() => setWarningOpen(false)}>
+                {t('understood')}
+              </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
@@ -245,6 +243,8 @@ function UploadCard() {
 }
 
 function InstalledList() {
+  const t = useTranslations('adminMonetizacion.marketplace');
+  const tErrors = useTranslations('errors');
   const [rows, setRows] = useState<InstalledModuleSummary[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -254,7 +254,7 @@ function InstalledList() {
       const out = await marketplaceApi.list();
       setRows(out.modules);
     } catch (e) {
-      setError(e instanceof ApiHttpError ? e.message : 'Error al listar módulos instalados.');
+      setError(apiErrorMessage(e, tErrors));
     }
   };
 
@@ -268,13 +268,15 @@ function InstalledList() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Módulos instalados</CardTitle>
+        <CardTitle>{t('installedTitle')}</CardTitle>
         <CardDescription>
-          Lista a nivel de instancia. La activación por tenant sigue viviendo en{' '}
-          <a href="/admin/configuracion" className="underline">
-            Configuración
-          </a>
-          .
+          {t.rich('installedDescription', {
+            link: (chunks) => (
+              <a href="/admin/configuracion" className="underline">
+                {chunks}
+              </a>
+            ),
+          })}
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -283,12 +285,9 @@ function InstalledList() {
             {error}
           </div>
         )}
-        {rows === null && !error && <p className="text-sm text-text-muted">Cargando…</p>}
+        {rows === null && !error && <p className="text-sm text-text-muted">{t('loading')}</p>}
         {rows && rows.length === 0 && (
-          <p className="text-sm text-text-muted">
-            Aún no hay módulos instalados via marketplace. Los módulos compilados en la imagen
-            Docker (mod.courses, mod.community, etc.) se gestionan desde Configuración.
-          </p>
+          <p className="text-sm text-text-muted">{t('installedEmpty')}</p>
         )}
         {rows && rows.length > 0 && (
           <div className="flex flex-col gap-2">
@@ -303,19 +302,20 @@ function InstalledList() {
 }
 
 function InstalledRow({ row, onChange }: { row: InstalledModuleSummary; onChange: () => void }) {
+  const t = useTranslations('adminMonetizacion.marketplace');
+  const tErrors = useTranslations('errors');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const onUninstall = async () => {
-    if (!confirm(`¿Desinstalar "${row.name}@${row.version}"? Esta acción no se puede deshacer.`))
-      return;
+    if (!confirm(t('confirmUninstall', { module: `${row.name}@${row.version}` }))) return;
     setBusy(true);
     setError(null);
     try {
       await marketplaceApi.uninstall(row.name);
       onChange();
     } catch (e) {
-      setError(e instanceof ApiHttpError ? e.message : 'Error al desinstalar.');
+      setError(apiErrorMessage(e, tErrors));
     } finally {
       setBusy(false);
     }
@@ -335,17 +335,21 @@ function InstalledRow({ row, onChange }: { row: InstalledModuleSummary; onChange
           </div>
           {row.description && <p className="text-sm text-text-muted">{row.description}</p>}
           <p className="text-xs text-text-muted">
-            Namespace: <code>{row.apiNamespace}</code> · prefix: <code>{row.tablePrefix}</code>
-            {row.installedAt && ` · instalado ${new Date(row.installedAt).toLocaleString()}`}
+            {t.rich('metaLine', {
+              code: (chunks) => <code>{chunks}</code>,
+              ns: row.apiNamespace,
+              prefix: row.tablePrefix,
+            })}
+            {row.installedAt && ` · ${t('installedAt', { date: formatDateTime(row.installedAt) })}`}
           </p>
           {row.status === 'FAILED' && row.errorMessage && (
             <p className="text-xs text-red-700">
-              <strong>Error:</strong> {row.errorMessage}
+              <strong>{t('errorLabel')}</strong> {row.errorMessage}
             </p>
           )}
         </div>
         <Button variant="destructive" size="sm" disabled={busy} onClick={onUninstall}>
-          {busy ? 'Desinstalando…' : 'Desinstalar'}
+          {busy ? t('uninstalling') : t('uninstall')}
         </Button>
       </div>
       {error && <div className="mt-2 text-xs text-red-700">{error}</div>}
@@ -356,56 +360,51 @@ function InstalledRow({ row, onChange }: { row: InstalledModuleSummary; onChange
 function StatusBadge({ status }: { status: InstalledModuleStatus }) {
   // El map cubre los valores tipados, pero la API puede devolver rows legacy
   // o futuros con un status que el frontend todavía no conoce. Fallback antes
-  // de destructurar para que la página no se rompa entera por una fila exótica.
-  const map: Record<
-    InstalledModuleStatus,
-    { variant: 'info' | 'success' | 'danger' | 'muted'; label: string }
-  > = {
-    INSTALLING: { variant: 'info', label: 'Instalando…' },
-    INSTALLED: { variant: 'success', label: 'Instalado' },
-    FAILED: { variant: 'danger', label: 'Falló' },
-    DEPRECATED: { variant: 'muted', label: 'Deprecated' },
+  // de indexar (labelOr) para que la página no se rompa entera por una fila exótica.
+  const t = useTranslations('adminMonetizacion.moduleStatus');
+  const variants: Record<InstalledModuleStatus, 'info' | 'success' | 'danger' | 'muted'> = {
+    INSTALLING: 'info',
+    INSTALLED: 'success',
+    FAILED: 'danger',
+    DEPRECATED: 'muted',
   };
-  const entry = map[status] ?? { variant: 'muted' as const, label: String(status ?? '—') };
-  return <Badge variant={entry.variant}>{entry.label}</Badge>;
+  return (
+    <Badge variant={variants[status] ?? 'muted'}>{labelOr(t, status, String(status ?? '—'))}</Badge>
+  );
 }
 
 function SourceBadge({ source }: { source: InstalledModuleSource }) {
   // Mismo principio que StatusBadge: la API puede devolver módulos built-in
   // del core con `source` null o con un valor legacy fuera del enum tipado.
-  // Si destructuramos sin fallback, un solo módulo exótico revienta toda
+  // Si indexamos sin fallback, un solo módulo exótico revienta toda
   // la página /admin/marketplace.
+  const t = useTranslations('adminMonetizacion.moduleSource');
   const config: Record<
     InstalledModuleSource,
-    { variant: 'success' | 'info' | 'warning'; label: string; icon: IconName }
+    { variant: 'success' | 'info' | 'warning'; icon: IconName }
   > = {
-    MARKETPLACE_OFFICIAL: { variant: 'success', label: 'Oficial', icon: 'check' },
-    MARKETPLACE_COMMUNITY: { variant: 'info', label: 'Comunidad', icon: 'users' },
-    DIRECT_UPLOAD: { variant: 'warning', label: 'No verificado', icon: 'alert' },
+    MARKETPLACE_OFFICIAL: { variant: 'success', icon: 'check' },
+    MARKETPLACE_COMMUNITY: { variant: 'info', icon: 'users' },
+    DIRECT_UPLOAD: { variant: 'warning', icon: 'alert' },
   };
-  const entry = config[source] ?? {
-    variant: 'warning' as const,
-    label: String(source ?? 'Desconocido'),
-    icon: 'alert' as IconName,
-  };
+  const entry = config[source] ?? { variant: 'warning' as const, icon: 'alert' as IconName };
+  const label = source ? labelOr(t, source, String(source)) : t('unknown');
   return (
     <Badge variant={entry.variant} className="gap-1 text-[10px]">
       <Icon name={entry.icon} className="h-3 w-3" />
-      {entry.label}
+      {label}
     </Badge>
   );
 }
 
 function FromWebMarketplaceTeaser() {
+  const t = useTranslations('adminMonetizacion.marketplace');
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Desde el marketplace web (próximamente)</CardTitle>
+        <CardTitle>{t('teaserTitle')}</CardTitle>
         <CardDescription>
-          Pronto vas a poder navegar el catálogo público de módulos en didacta.io y dispararlos a
-          esta instancia con un click. El flujo está descrito en{' '}
-          <code>docs/MARKETPLACE-WEB-SPEC.md</code>. Mientras, el upload offline de arriba es la
-          forma soportada.
+          {t.rich('teaserDescription', { code: (chunks) => <code>{chunks}</code> })}
         </CardDescription>
       </CardHeader>
     </Card>
