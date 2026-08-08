@@ -1,1 +1,47 @@
-{}
+{
+  "admin": {
+    "title": "Virtual classroom · Zoom Server-to-Server",
+    "description": "Paste the Server-to-Server OAuth credentials of your Zoom account. They are stored encrypted (AES-256-GCM) and never returned in plain text. If you leave them empty, the module falls back to the development stub.",
+    "accountId": "Account ID",
+    "clientId": "Client ID",
+    "clientSecret": "Client Secret",
+    "webhookSecret": "Webhook Secret Token",
+    "webhookSecretPlaceholder": "(leave empty to keep the current one)",
+    "webhookSecretHint": "The \"Secret Token\" Zoom gives you when you set up your app's webhook, pointing at <code>https://your-domain/api/v1/webhooks/zoom</code>. Without it, the virtual classroom receives no meeting start/end events.",
+    "saving": "Saving…",
+    "save": "Save credentials",
+    "testing": "Testing…",
+    "test": "Test credentials",
+    "clear": "Delete credentials",
+    "clearConfirm": "Delete the Zoom S2S credentials? New sessions will fall back to the stub.",
+    "saved": "✓ Saved encrypted.",
+    "testOk": "✓ Credentials are valid. Linked to Zoom account {accountId}.",
+    "testStub": "⚠ The module is using the local stub — no real credentials are configured yet.",
+    "testError": "✗ {message}"
+  },
+  "calendar": {
+    "title": "Add to calendar",
+    "titleRegistered": "You're in!",
+    "description": "Save \"{topic}\" to your calendar.",
+    "descriptionRegistered": "You have registered for \"{topic}\". Save it to your calendar so you don't miss it.",
+    "footer": "We will also email you 2 hours before it starts.",
+    "targets": {
+      "google": {
+        "label": "Google Calendar",
+        "hint": "Gmail and Workspace accounts"
+      },
+      "outlook": {
+        "label": "Outlook.com",
+        "hint": "Personal Outlook or Hotmail accounts"
+      },
+      "office365": {
+        "label": "Outlook (Microsoft 365)",
+        "hint": "Work or school accounts"
+      },
+      "ics": {
+        "label": "Apple Calendar and others",
+        "hint": "Download the .ics event and open it with your calendar"
+      }
+    }
+  }
+}

@@ -5,6 +5,7 @@
  * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
  */
 
+import { useTranslations } from 'next-intl';
 import { useCallback, useEffect, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -12,8 +13,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { NativeSelect } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import { ApiHttpError } from '@/lib/api-client';
 import { coursesApi, type Course } from '@/lib/courses';
+import { apiErrorMessage } from '@/lib/i18n/api-error';
+import { formatDate } from '@/lib/i18n/format';
 import { aiTutorReviewApi, type CorrectionView } from './client';
 
 /**
@@ -27,7 +29,7 @@ import { aiTutorReviewApi, type CorrectionView } from './client';
  */
 
 function formatFecha(iso: string): string {
-  return new Date(iso).toLocaleDateString('es-ES', {
+  return formatDate(iso, {
     day: '2-digit',
     month: 'short',
     year: 'numeric',
@@ -35,6 +37,8 @@ function formatFecha(iso: string): string {
 }
 
 export function AdminTutorCorrecciones(): React.JSX.Element {
+  const t = useTranslations('modAiTutor');
+  const tErrors = useTranslations('errors');
   const [items, setItems] = useState<CorrectionView[] | null>(null);
   const [cursos, setCursos] = useState<Course[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -50,9 +54,7 @@ export function AdminTutorCorrecciones(): React.JSX.Element {
 
   useEffect(() => {
     cargar().catch((e) => {
-      setError(
-        e instanceof ApiHttpError ? e.message : 'No pudimos cargar el conocimiento validado.',
-      );
+      setError(apiErrorMessage(e, tErrors));
     });
     coursesApi
       .list()
@@ -60,6 +62,9 @@ export function AdminTutorCorrecciones(): React.JSX.Element {
       .catch(() => {
         /* el selector de curso es opcional */
       });
+    // `tErrors` queda fuera de deps a propósito: solo se usa para traducir el
+    // error de la carga inicial, y next-intl ya devuelve un translator estable.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cargar]);
 
   async function crear() {
@@ -76,7 +81,7 @@ export function AdminTutorCorrecciones(): React.JSX.Element {
       setNuevoCurso('');
       await cargar();
     } catch (e) {
-      setError(e instanceof ApiHttpError ? e.message : 'No pudimos guardar la respuesta.');
+      setError(apiErrorMessage(e, tErrors));
     } finally {
       setBusy(false);
     }
@@ -89,7 +94,7 @@ export function AdminTutorCorrecciones(): React.JSX.Element {
       await aiTutorReviewApi.updateCorrection(item.id, { active: !item.active });
       await cargar();
     } catch (e) {
-      setError(e instanceof ApiHttpError ? e.message : 'No pudimos cambiar el estado.');
+      setError(apiErrorMessage(e, tErrors));
     } finally {
       setBusy(false);
     }
@@ -102,7 +107,7 @@ export function AdminTutorCorrecciones(): React.JSX.Element {
       await aiTutorReviewApi.deleteCorrection(item.id);
       await cargar();
     } catch (e) {
-      setError(e instanceof ApiHttpError ? e.message : 'No pudimos borrarla.');
+      setError(apiErrorMessage(e, tErrors));
     } finally {
       setBusy(false);
     }
@@ -121,28 +126,25 @@ export function AdminTutorCorrecciones(): React.JSX.Element {
 
       <Card>
         <CardHeader>
-          <CardTitle>Añadir una respuesta validada</CardTitle>
-          <CardDescription>
-            El tutor la usará cuando alguien pregunte algo parecido, por encima del contenido del
-            curso. No hay que reindexar: entra en caliente.
-          </CardDescription>
+          <CardTitle>{t('corrections.createTitle')}</CardTitle>
+          <CardDescription>{t('corrections.createDescription')}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
           <div className="space-y-1">
             <label className="text-sm text-text-muted" htmlFor="nueva-pregunta">
-              Pregunta
+              {t('corrections.questionLabel')}
             </label>
             <Input
               id="nueva-pregunta"
               data-testid="nueva-correccion-pregunta"
               value={nuevaPregunta}
-              placeholder="p. ej. ¿cómo descargo mi factura?"
+              placeholder={t('corrections.questionPlaceholder')}
               onChange={(e) => setNuevaPregunta(e.target.value)}
             />
           </div>
           <div className="space-y-1">
             <label className="text-sm text-text-muted" htmlFor="nueva-respuesta">
-              Respuesta
+              {t('corrections.answerLabel')}
             </label>
             <Textarea
               id="nueva-respuesta"
@@ -154,14 +156,14 @@ export function AdminTutorCorrecciones(): React.JSX.Element {
           </div>
           <div className="space-y-1">
             <label className="text-sm text-text-muted" htmlFor="nuevo-curso">
-              Curso
+              {t('corrections.courseLabel')}
             </label>
             <NativeSelect
               id="nuevo-curso"
               value={nuevoCurso}
               onChange={(e) => setNuevoCurso(e.target.value)}
             >
-              <option value="">Todos los cursos (duda transversal)</option>
+              <option value="">{t('corrections.allCoursesOption')}</option>
               {cursos.map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.title}
@@ -174,28 +176,25 @@ export function AdminTutorCorrecciones(): React.JSX.Element {
             disabled={busy || nuevaPregunta.trim().length < 3 || nuevaRespuesta.trim().length < 10}
             onClick={() => void crear()}
           >
-            Guardar
+            {t('corrections.save')}
           </Button>
         </CardContent>
       </Card>
 
       <Card data-testid="correcciones-card">
         <CardHeader>
-          <CardTitle>Conocimiento validado</CardTitle>
+          <CardTitle>{t('corrections.listTitle')}</CardTitle>
           <CardDescription>
             {items === null
-              ? 'Cargando…'
-              : `${items.length} respuesta${items.length !== 1 ? 's' : ''} escritas por el equipo.`}
+              ? t('corrections.loading')
+              : t('corrections.listDescription', { count: items.length })}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
           {items === null ? (
             <div className="skeleton h-24 w-full" />
           ) : items.length === 0 ? (
-            <p className="text-sm text-text-subtle">
-              Todavía no hay ninguna. Se crean al corregir una respuesta en la pestaña «Revisión» o
-              a mano aquí arriba.
-            </p>
+            <p className="text-sm text-text-subtle">{t('corrections.empty')}</p>
           ) : (
             items.map((c) => (
               <div key={c.id} className="rounded-lg border border-border-soft p-3">
@@ -203,14 +202,17 @@ export function AdminTutorCorrecciones(): React.JSX.Element {
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-semibold text-text">{c.question}</p>
                     <p className="mt-0.5 text-xs text-text-subtle">
-                      {c.courseTitle ?? 'Todos los cursos'} · {c.authorName ?? 'equipo'} ·{' '}
-                      {formatFecha(c.createdAt)} · usada {c.timesUsed}{' '}
-                      {c.timesUsed === 1 ? 'vez' : 'veces'}
+                      {t('corrections.meta', {
+                        course: c.courseTitle ?? t('corrections.allCourses'),
+                        author: c.authorName ?? t('corrections.teamAuthor'),
+                        date: formatFecha(c.createdAt),
+                        times: c.timesUsed,
+                      })}
                     </p>
                   </div>
                   <div className="flex shrink-0 items-center gap-2">
                     <Badge variant={c.active ? 'success' : 'muted'}>
-                      {c.active ? 'Activa' : 'Desactivada'}
+                      {c.active ? t('corrections.active') : t('corrections.inactive')}
                     </Badge>
                     <Button
                       size="sm"
@@ -218,7 +220,7 @@ export function AdminTutorCorrecciones(): React.JSX.Element {
                       disabled={busy}
                       onClick={() => void alternar(c)}
                     >
-                      {c.active ? 'Desactivar' : 'Activar'}
+                      {c.active ? t('corrections.deactivate') : t('corrections.activate')}
                     </Button>
                     <Button
                       size="sm"
@@ -226,7 +228,7 @@ export function AdminTutorCorrecciones(): React.JSX.Element {
                       disabled={busy}
                       onClick={() => void borrar(c)}
                     >
-                      Borrar
+                      {t('corrections.delete')}
                     </Button>
                   </div>
                 </div>

@@ -1,1 +1,46 @@
-{}
+{
+  "modal": {
+    "close": "Cerrar"
+  },
+  "share": {
+    "label": "Compartir recurso",
+    "title": "Compartir recurso",
+    "subtitle": "Un workflow, una skill, una herramienta o una plantilla que le sirva a la comunidad.",
+    "titleLabel": "Título",
+    "titlePlaceholder": "Workflow de captación en n8n",
+    "collectionLabel": "Colección",
+    "kindLabel": "Tipo",
+    "kindFile": "Archivo",
+    "kindLink": "Enlace",
+    "fileLabel": "Archivo (PDF, Word, Excel, ZIP, JSON…)",
+    "linkLabel": "Enlace",
+    "linkPlaceholder": "https://…",
+    "descriptionLabel": "Descripción (opcional)",
+    "descriptionPlaceholder": "Qué es y para qué sirve",
+    "cancel": "Cancelar",
+    "sharing": "Compartiendo…",
+    "submit": "Compartir recurso",
+    "titleTooShort": "El título necesita al menos 3 caracteres.",
+    "pickCollection": "Elige una colección.",
+    "pickFile": "Selecciona el archivo a subir."
+  },
+  "collection": {
+    "label": "Colección",
+    "titleNew": "Nueva colección",
+    "titleEdit": "Editar colección",
+    "subtitle": "Las colecciones agrupan los recursos y tienen su propia portada.",
+    "titleLabel": "Título",
+    "titlePlaceholder": "Workflows de clase",
+    "descriptionLabel": "Descripción",
+    "descriptionPlaceholder": "Qué se encuentra dentro",
+    "coverLabel": "Portada",
+    "coverEmpty": "Sin portada: se usa el degradado de marca",
+    "coverRemove": "Quitar",
+    "coverUploading": "Subiendo portada…",
+    "cancel": "Cancelar",
+    "saving": "Guardando…",
+    "save": "Guardar cambios",
+    "create": "Crear colección",
+    "titleTooShort": "El título necesita al menos 3 caracteres."
+  }
+}

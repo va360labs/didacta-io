@@ -1,1 +1,44 @@
-{}
+{
+  "file": {
+    "change": "Cambiar archivo",
+    "pick": "Elegir archivo",
+    "remove": "quitar",
+    "none": "Ningún archivo seleccionado"
+  },
+  "perk": {
+    "eyebrow": "Pedir beneficio",
+    "unlockedWith": "Desbloqueado con el nivel {level}.",
+    "noteLabel": "¿Algo que debamos saber antes? (opcional)",
+    "notePlaceholder": "Por ejemplo, qué te gustaría trabajar o tu disponibilidad.",
+    "pendingNotice": "Al enviarlo queda como solicitud pendiente: te escribiremos para cuadrarlo.",
+    "pendingNoticeWithQuota": "Al enviarlo queda como solicitud pendiente: te escribiremos para cuadrarlo. Te {count, plural, one {queda #} other {quedan #}}.",
+    "cancel": "Cancelar",
+    "sending": "Enviando…",
+    "send": "Enviar solicitud"
+  },
+  "submit": {
+    "eyebrow": "Entregar reto",
+    "worth": "Vale {points} puntos. La revisa el equipo antes de acreditarlos.",
+    "noteLabel": "Cuéntanos qué has hecho",
+    "notePlaceholder": "Un par de líneas sobre el resultado.",
+    "proofLabel": "Sube la prueba",
+    "proofLabelOptional": "Sube la prueba (opcional)",
+    "linkLabel": "…o pega un enlace",
+    "linkPlaceholder": "https://…",
+    "uploadError": "No se pudo subir el archivo. Prueba con otro formato o tamaño.",
+    "proofRequired": "Este reto exige adjuntar la prueba: sube el archivo o pega el enlace.",
+    "cancel": "Cancelar",
+    "uploading": "Subiendo…",
+    "continue": "Continuar",
+    "confirmEyebrow": "Confirmar entrega",
+    "confirmIntro": "Esto es lo que vas a enviar:",
+    "confirmProofTerm": "Prueba:",
+    "confirmNoProof": "sin adjuntar",
+    "confirmNoteTerm": "Comentario:",
+    "confirmNoNote": "sin comentario",
+    "confirmWarning": "Solo puedes entregar este reto una vez, así que revísalo antes de enviar.",
+    "back": "Volver",
+    "sending": "Enviando…",
+    "confirmSend": "Confirmar y enviar"
+  }
+}

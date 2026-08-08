@@ -1,1 +1,47 @@
-{}
+{
+  "admin": {
+    "title": "Aula virtual · Zoom Server-to-Server",
+    "description": "Pega las credenciales Server-to-Server OAuth de tu cuenta Zoom. Se guardan cifradas (AES-256-GCM) y nunca se devuelven en claro. Si las dejas vacías, el módulo cae al stub de desarrollo.",
+    "accountId": "Account ID",
+    "clientId": "Client ID",
+    "clientSecret": "Client Secret",
+    "webhookSecret": "Webhook Secret Token",
+    "webhookSecretPlaceholder": "(dejar vacío para conservar el actual)",
+    "webhookSecretHint": "El \"Secret Token\" que Zoom te da al configurar el webhook de tu app, apuntando a <code>https://tu-dominio/api/v1/webhooks/zoom</code>. Sin esto, el aula virtual no recibe eventos de inicio/fin de reunión.",
+    "saving": "Guardando…",
+    "save": "Guardar credenciales",
+    "testing": "Probando…",
+    "test": "Probar credenciales",
+    "clear": "Borrar credenciales",
+    "clearConfirm": "¿Borrar las credenciales Zoom S2S? Las sesiones nuevas caerán al stub.",
+    "saved": "✓ Guardado cifrado.",
+    "testOk": "✓ Credenciales válidas. Vinculado a la cuenta Zoom {accountId}.",
+    "testStub": "⚠ El módulo está usando el stub local — no hay credenciales reales configuradas todavía.",
+    "testError": "✗ {message}"
+  },
+  "calendar": {
+    "title": "Añadir al calendario",
+    "titleRegistered": "¡Estás dentro!",
+    "description": "Guarda \"{topic}\" en tu calendario.",
+    "descriptionRegistered": "Te has inscrito a \"{topic}\". Guárdala en tu calendario para que no se te pase.",
+    "footer": "Te avisaremos también por email 2 horas antes de empezar.",
+    "targets": {
+      "google": {
+        "label": "Google Calendar",
+        "hint": "Cuentas de Gmail y Workspace"
+      },
+      "outlook": {
+        "label": "Outlook.com",
+        "hint": "Cuentas personales de Outlook o Hotmail"
+      },
+      "office365": {
+        "label": "Outlook (Microsoft 365)",
+        "hint": "Cuentas de trabajo o del centro"
+      },
+      "ics": {
+        "label": "Apple Calendar y otros",
+        "hint": "Descarga el evento .ics y ábrelo con tu calendario"
+      }
+    }
+  }
+}

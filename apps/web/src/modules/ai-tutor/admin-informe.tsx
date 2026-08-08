@@ -5,13 +5,15 @@
  * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
  */
 
+import { useLocale, useTranslations } from 'next-intl';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { NativeSelect } from '@/components/ui/select';
 import { StatCard } from '@/components/stat-card';
-import { ApiHttpError } from '@/lib/api-client';
+import { apiErrorMessage } from '@/lib/i18n/api-error';
+import { formatDate } from '@/lib/i18n/format';
 import { aiTutorReviewApi, type MonthlyReportView, type ReportTopicView } from './client';
 
 /**
@@ -33,26 +35,36 @@ function ultimosMeses(n: number): Array<{ value: string; label: string }> {
     const value = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
     out.push({
       value,
-      label: d.toLocaleDateString('es-ES', { month: 'long', year: 'numeric', timeZone: 'UTC' }),
+      // timeZone UTC fija: el mes se construye en UTC y la etiqueta tiene que
+      // nombrar ESE mes, no el que toque en la zona horaria del usuario.
+      label: formatDate(d, { month: 'long', year: 'numeric', timeZone: 'UTC' }),
     });
   }
   return out;
 }
 
 export function AdminTutorInforme(): React.JSX.Element {
-  const meses = useMemo(() => ultimosMeses(12), []);
+  const t = useTranslations('modAiTutor');
+  const tErrors = useTranslations('errors');
+  const locale = useLocale();
+  // `locale` en deps: las etiquetas de mes las formatea el locale activo, así
+  // que cambiar de idioma tiene que recalcularlas.
+  const meses = useMemo(() => ultimosMeses(12), [locale]);
   const [mes, setMes] = useState(meses[0]?.value ?? '');
   const [informe, setInforme] = useState<MonthlyReportView | null>(null);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // `tErrors` fuera de deps a propósito: `cargar` entra en un useEffect y una
+  // identidad inestable dispararía un bucle de recargas.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const cargar = useCallback(async (mesPedido: string) => {
     setCargando(true);
     setError(null);
     try {
       setInforme(await aiTutorReviewApi.monthlyReport(mesPedido || undefined));
     } catch (e) {
-      setError(e instanceof ApiHttpError ? e.message : 'No pudimos generar el informe.');
+      setError(apiErrorMessage(e, tErrors));
       setInforme(null);
     } finally {
       setCargando(false);
@@ -67,16 +79,13 @@ export function AdminTutorInforme(): React.JSX.Element {
     <div className="space-y-4">
       <Card>
         <CardHeader>
-          <CardTitle>Informe del mes</CardTitle>
-          <CardDescription>
-            Preguntas agrupadas por significado, de más a menos repetidas, con quién las hizo. Un
-            tema muy preguntado y sin respaldo en el material es contenido que falta.
-          </CardDescription>
+          <CardTitle>{t('report.title')}</CardTitle>
+          <CardDescription>{t('report.description')}</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="flex flex-wrap items-end gap-3">
             <label className="space-y-1 text-sm">
-              <span className="text-text-muted">Mes</span>
+              <span className="text-text-muted">{t('report.monthLabel')}</span>
               <NativeSelect
                 value={mes}
                 data-testid="informe-mes"
@@ -90,7 +99,7 @@ export function AdminTutorInforme(): React.JSX.Element {
               </NativeSelect>
             </label>
             <Button variant="secondary" disabled={cargando} onClick={() => void cargar(mes)}>
-              {cargando ? 'Calculando…' : 'Actualizar'}
+              {cargando ? t('report.calculating') : t('report.refresh')}
             </Button>
           </div>
         </CardContent>
@@ -111,29 +120,29 @@ export function AdminTutorInforme(): React.JSX.Element {
         <>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <StatCard
-              label="Preguntas"
+              label={t('report.statQuestions')}
               value={informe.totalPreguntas}
-              hint={`${informe.temas.length} temas distintos`}
+              hint={t('report.statQuestionsHint', { count: informe.temas.length })}
               icon="message"
               tone="info"
             />
             <StatCard
-              label="Alumnos que preguntaron"
+              label={t('report.statStudents')}
               value={informe.alumnosActivos}
               icon="users"
               tone="info"
             />
             <StatCard
-              label="Sin respaldo"
+              label={t('report.statUnsupported')}
               value={informe.sinRespaldo}
-              hint="el tutor no pudo citar material"
+              hint={t('report.statUnsupportedHint')}
               icon="alert"
               tone={informe.sinRespaldo > 0 ? 'warn' : 'success'}
             />
             <StatCard
-              label="Sin revisar"
+              label={t('report.statPending')}
               value={informe.pendientesDeRevision}
-              hint={`${informe.corregidas} corregidas`}
+              hint={t('report.statPendingHint', { count: informe.corregidas })}
               icon="bell"
               tone={informe.pendientesDeRevision > 0 ? 'warn' : 'success'}
             />
@@ -141,23 +150,22 @@ export function AdminTutorInforme(): React.JSX.Element {
 
           {informe.truncado ? (
             <div className="rounded-lg border border-warning-200 bg-[var(--didacta-warn-bg)] p-3 text-sm text-[var(--didacta-warn-fg)]">
-              Este mes tuvo más preguntas de las que analizamos de una vez. El informe cubre las más
-              antiguas del mes; el resto queda fuera.
+              {t('report.truncated')}
             </div>
           ) : null}
 
           <Card data-testid="informe-temas-card">
             <CardHeader>
-              <CardTitle>Temas más preguntados</CardTitle>
+              <CardTitle>{t('report.topicsTitle')}</CardTitle>
               <CardDescription>
                 {informe.temas.length === 0
-                  ? 'Todavía no hay preguntas este mes.'
-                  : 'Ordenados por número de preguntas.'}
+                  ? t('report.topicsEmpty')
+                  : t('report.topicsDescription')}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
-              {informe.temas.slice(0, 30).map((t, i) => (
-                <TemaFila key={`${t.pregunta}-${i}`} tema={t} />
+              {informe.temas.slice(0, 30).map((tema, i) => (
+                <TemaFila key={`${tema.pregunta}-${i}`} tema={tema} />
               ))}
             </CardContent>
           </Card>
@@ -165,18 +173,16 @@ export function AdminTutorInforme(): React.JSX.Element {
           {informe.topAlumnos.length > 0 ? (
             <Card>
               <CardHeader>
-                <CardTitle>Quién más pregunta</CardTitle>
-                <CardDescription>
-                  Útil para detectar a quien se está atascando y no lo dice en la comunidad.
-                </CardDescription>
+                <CardTitle>{t('report.topAskersTitle')}</CardTitle>
+                <CardDescription>{t('report.topAskersDescription')}</CardDescription>
               </CardHeader>
               <CardContent>
                 <ul className="space-y-1.5">
                   {informe.topAlumnos.map((a) => (
                     <li key={a.id} className="flex items-center justify-between text-sm">
-                      <span className="text-text">{a.name ?? 'Alumno'}</span>
+                      <span className="text-text">{a.name ?? t('report.studentFallback')}</span>
                       <span className="text-text-subtle">
-                        {a.veces} pregunta{a.veces !== 1 ? 's' : ''}
+                        {t('report.askedTimes', { count: a.veces })}
                       </span>
                     </li>
                   ))}
@@ -191,6 +197,7 @@ export function AdminTutorInforme(): React.JSX.Element {
 }
 
 function TemaFila({ tema }: { tema: ReportTopicView }): React.JSX.Element {
+  const t = useTranslations('modAiTutor');
   const [abierto, setAbierto] = useState(false);
   return (
     <div className="rounded-lg border border-border-soft p-3" data-testid="informe-tema">
@@ -198,20 +205,26 @@ function TemaFila({ tema }: { tema: ReportTopicView }): React.JSX.Element {
         <div className="min-w-0 flex-1">
           <p className="text-sm font-semibold text-text">{tema.pregunta}</p>
           <p className="mt-0.5 text-xs text-text-subtle">
-            {tema.veces} pregunta{tema.veces !== 1 ? 's' : ''} · {tema.alumnos} alumno
-            {tema.alumnos !== 1 ? 's' : ''} ·{' '}
-            {tema.cursos.map((c) => c.title ?? 'curso').join(', ')}
+            {t('report.topicMeta', {
+              questions: tema.veces,
+              students: tema.alumnos,
+              courses: tema.cursos.map((c) => c.title ?? t('report.courseFallback')).join(', '),
+            })}
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-2">
           {tema.sinRespaldo > 0 ? (
-            <Badge variant="warning">{tema.sinRespaldo} sin respaldo</Badge>
+            <Badge variant="warning">
+              {t('report.unsupportedBadge', { count: tema.sinRespaldo })}
+            </Badge>
           ) : null}
           {tema.corregidas > 0 ? (
-            <Badge variant="primary">{tema.corregidas} corregidas</Badge>
+            <Badge variant="primary">
+              {t('report.correctedBadge', { count: tema.corregidas })}
+            </Badge>
           ) : null}
           <Button size="sm" variant="ghost" onClick={() => setAbierto(!abierto)}>
-            {abierto ? 'Menos' : 'Detalle'}
+            {abierto ? t('report.less') : t('report.detail')}
           </Button>
         </div>
       </div>
@@ -219,13 +232,13 @@ function TemaFila({ tema }: { tema: ReportTopicView }): React.JSX.Element {
       {abierto ? (
         <div className="mt-3 space-y-2 border-t border-border-soft pt-3 text-sm">
           <div>
-            <p className="text-xs font-semibold text-text-muted">Quién lo preguntó</p>
+            <p className="text-xs font-semibold text-text-muted">{t('report.whoAsked')}</p>
             <ul className="mt-1 space-y-0.5">
               {tema.quienes.map((q) => (
                 <li key={q.id} className="text-text">
-                  {q.name ?? 'Alumno'}{' '}
+                  {q.name ?? t('report.studentFallback')}{' '}
                   <span className="text-text-subtle">
-                    ({q.veces} {q.veces === 1 ? 'vez' : 'veces'})
+                    {t('report.timesAsked', { count: q.veces })}
                   </span>
                 </li>
               ))}
@@ -233,7 +246,7 @@ function TemaFila({ tema }: { tema: ReportTopicView }): React.JSX.Element {
           </div>
           {tema.variantes.length > 0 ? (
             <div>
-              <p className="text-xs font-semibold text-text-muted">Otras formas de preguntarlo</p>
+              <p className="text-xs font-semibold text-text-muted">{t('report.variantsTitle')}</p>
               <ul className="mt-1 list-disc space-y-0.5 pl-5 text-text-muted">
                 {tema.variantes.map((v, i) => (
                   <li key={i}>{v}</li>
@@ -243,7 +256,7 @@ function TemaFila({ tema }: { tema: ReportTopicView }): React.JSX.Element {
           ) : null}
           {tema.pendientesDeRevision > 0 ? (
             <p className="text-xs text-text-subtle">
-              {tema.pendientesDeRevision} de estas respuestas siguen sin revisar.
+              {t('report.stillPending', { count: tema.pendientesDeRevision })}
             </p>
           ) : null}
         </div>

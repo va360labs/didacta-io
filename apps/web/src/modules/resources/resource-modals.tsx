@@ -5,12 +5,13 @@
  * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
  */
 
+import { useTranslations } from 'next-intl';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Icon } from '@/components/icon';
-import { ApiHttpError } from '@/lib/api-client';
 import { uploadCommunityFile, uploadCommunityImage } from '@/lib/community-upload';
+import { apiErrorMessage } from '@/lib/i18n/api-error';
 import { resourcesApi, type CollectionView, type CreateResourceInput } from './client';
 
 /** Modales de mod.resources: compartir recurso (todos) y colección (staff). */
@@ -28,6 +29,8 @@ function ModalShell({
   onClose: () => void;
   children: React.ReactNode;
 }) {
+  const t = useTranslations('modResources');
+
   return (
     <div
       className="fixed inset-0 z-(--z-overlay) grid place-items-center overflow-y-auto bg-[#0d1b2a]/60 p-4"
@@ -45,7 +48,7 @@ function ModalShell({
             <button
               type="button"
               onClick={onClose}
-              aria-label="Cerrar"
+              aria-label={t('modal.close')}
               className="grid h-8 w-8 place-items-center rounded-lg text-text-subtle hover:bg-bg-subtle hover:text-text"
             >
               <Icon name="x" size={16} />
@@ -72,6 +75,8 @@ export function ShareResourceModal({
   onClose: () => void;
   onCreated: () => void;
 }) {
+  const t = useTranslations('modResources');
+  const tErrors = useTranslations('errors');
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [collectionId, setCollectionId] = useState(defaultCollectionId ?? collections[0]?.id ?? '');
@@ -85,11 +90,11 @@ export function ShareResourceModal({
     if (busy) return;
     setError(null);
     if (title.trim().length < 3) {
-      setError('El título necesita al menos 3 caracteres.');
+      setError(t('share.titleTooShort'));
       return;
     }
     if (!collectionId) {
-      setError('Elige una colección.');
+      setError(t('share.pickCollection'));
       return;
     }
     setBusy(true);
@@ -97,7 +102,7 @@ export function ShareResourceModal({
       let input: CreateResourceInput;
       if (kind === 'FILE') {
         if (!file) {
-          setError('Selecciona el archivo a subir.');
+          setError(t('share.pickFile'));
           setBusy(false);
           return;
         }
@@ -122,11 +127,7 @@ export function ShareResourceModal({
       await resourcesApi.create(input);
       onCreated();
     } catch (e) {
-      setError(
-        e instanceof ApiHttpError || e instanceof Error
-          ? e.message
-          : 'No pudimos compartir el recurso.',
-      );
+      setError(apiErrorMessage(e, tErrors));
     } finally {
       setBusy(false);
     }
@@ -134,28 +135,28 @@ export function ShareResourceModal({
 
   return (
     <ModalShell
-      label="Compartir recurso"
-      title="Compartir recurso"
-      subtitle="Un workflow, una skill, una herramienta o una plantilla que le sirva a la comunidad."
+      label={t('share.label')}
+      title={t('share.title')}
+      subtitle={t('share.subtitle')}
       onClose={onClose}
     >
       <div className="space-y-1.5">
         <label className="text-sm font-medium text-text" htmlFor="res-title">
-          Título
+          {t('share.titleLabel')}
         </label>
         <input
           id="res-title"
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           maxLength={160}
-          placeholder="Workflow de captación en n8n"
+          placeholder={t('share.titlePlaceholder')}
           className={inputClass}
         />
       </div>
 
       <div className="space-y-1.5">
         <label className="text-sm font-medium text-text" htmlFor="res-collection">
-          Colección
+          {t('share.collectionLabel')}
         </label>
         <select
           id="res-collection"
@@ -172,17 +173,25 @@ export function ShareResourceModal({
       </div>
 
       <div className="space-y-1.5">
-        <p className="text-sm font-medium text-text">Tipo</p>
+        <p className="text-sm font-medium text-text">{t('share.kindLabel')}</p>
         <div className="flex gap-1.5">
-          <Chip label="Archivo" active={kind === 'FILE'} onClick={() => setKind('FILE')} />
-          <Chip label="Enlace" active={kind === 'LINK'} onClick={() => setKind('LINK')} />
+          <Chip
+            label={t('share.kindFile')}
+            active={kind === 'FILE'}
+            onClick={() => setKind('FILE')}
+          />
+          <Chip
+            label={t('share.kindLink')}
+            active={kind === 'LINK'}
+            onClick={() => setKind('LINK')}
+          />
         </div>
       </div>
 
       {kind === 'FILE' ? (
         <div className="space-y-1.5">
           <label className="text-sm font-medium text-text" htmlFor="res-file">
-            Archivo (PDF, Word, Excel, ZIP, JSON…)
+            {t('share.fileLabel')}
           </label>
           <input
             id="res-file"
@@ -194,13 +203,13 @@ export function ShareResourceModal({
       ) : (
         <div className="space-y-1.5">
           <label className="text-sm font-medium text-text" htmlFor="res-link">
-            Enlace
+            {t('share.linkLabel')}
           </label>
           <input
             id="res-link"
             value={link}
             onChange={(e) => setLink(e.target.value)}
-            placeholder="https://…"
+            placeholder={t('share.linkPlaceholder')}
             className={inputClass}
           />
         </div>
@@ -208,7 +217,7 @@ export function ShareResourceModal({
 
       <div className="space-y-1.5">
         <label className="text-sm font-medium text-text" htmlFor="res-desc">
-          Descripción (opcional)
+          {t('share.descriptionLabel')}
         </label>
         <textarea
           id="res-desc"
@@ -216,7 +225,7 @@ export function ShareResourceModal({
           onChange={(e) => setDescription(e.target.value)}
           rows={2}
           maxLength={1000}
-          placeholder="Qué es y para qué sirve"
+          placeholder={t('share.descriptionPlaceholder')}
           className={inputClass}
         />
       </div>
@@ -229,10 +238,10 @@ export function ShareResourceModal({
 
       <div className="flex justify-end gap-2">
         <Button variant="ghost" onClick={onClose} disabled={busy}>
-          Cancelar
+          {t('share.cancel')}
         </Button>
         <Button onClick={() => void submit()} disabled={busy}>
-          {busy ? 'Compartiendo…' : 'Compartir recurso'}
+          {busy ? t('share.sharing') : t('share.submit')}
         </Button>
       </div>
     </ModalShell>
@@ -249,6 +258,8 @@ export function CollectionFormModal({
   onClose: () => void;
   onSaved: () => void;
 }) {
+  const t = useTranslations('modResources');
+  const tErrors = useTranslations('errors');
   const [title, setTitle] = useState(existing?.title ?? '');
   const [description, setDescription] = useState(existing?.description ?? '');
   const [coverUrl, setCoverUrl] = useState<string | null>(existing?.coverUrl ?? null);
@@ -263,7 +274,7 @@ export function CollectionFormModal({
     try {
       setCoverUrl(await uploadCommunityImage(file));
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'No pudimos subir la portada.');
+      setError(apiErrorMessage(e, tErrors));
     } finally {
       setUploading(false);
     }
@@ -273,7 +284,7 @@ export function CollectionFormModal({
     if (busy) return;
     setError(null);
     if (title.trim().length < 3) {
-      setError('El título necesita al menos 3 caracteres.');
+      setError(t('collection.titleTooShort'));
       return;
     }
     setBusy(true);
@@ -293,7 +304,7 @@ export function CollectionFormModal({
       }
       onSaved();
     } catch (e) {
-      setError(e instanceof ApiHttpError ? e.message : 'No pudimos guardar la colección.');
+      setError(apiErrorMessage(e, tErrors));
     } finally {
       setBusy(false);
     }
@@ -301,28 +312,28 @@ export function CollectionFormModal({
 
   return (
     <ModalShell
-      label="Colección"
-      title={existing ? 'Editar colección' : 'Nueva colección'}
-      subtitle="Las colecciones agrupan los recursos y tienen su propia portada."
+      label={t('collection.label')}
+      title={existing ? t('collection.titleEdit') : t('collection.titleNew')}
+      subtitle={t('collection.subtitle')}
       onClose={onClose}
     >
       <div className="space-y-1.5">
         <label className="text-sm font-medium text-text" htmlFor="col-title">
-          Título
+          {t('collection.titleLabel')}
         </label>
         <input
           id="col-title"
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           maxLength={160}
-          placeholder="Workflows de clase"
+          placeholder={t('collection.titlePlaceholder')}
           className={inputClass}
         />
       </div>
 
       <div className="space-y-1.5">
         <label className="text-sm font-medium text-text" htmlFor="col-desc">
-          Descripción
+          {t('collection.descriptionLabel')}
         </label>
         <textarea
           id="col-desc"
@@ -330,14 +341,14 @@ export function CollectionFormModal({
           onChange={(e) => setDescription(e.target.value)}
           rows={2}
           maxLength={1000}
-          placeholder="Qué se encuentra dentro"
+          placeholder={t('collection.descriptionPlaceholder')}
           className={inputClass}
         />
       </div>
 
       <div className="space-y-1.5">
         <label className="text-sm font-medium text-text" htmlFor="col-cover">
-          Portada
+          {t('collection.coverLabel')}
         </label>
         <div
           className="relative grid h-32 place-items-center overflow-hidden rounded-xl border border-border"
@@ -347,7 +358,7 @@ export function CollectionFormModal({
             // eslint-disable-next-line @next/next/no-img-element
             <img src={coverUrl} alt="" className="absolute inset-0 h-full w-full object-cover" />
           ) : (
-            <p className="text-xs text-white/60">Sin portada: se usa el degradado de marca</p>
+            <p className="text-xs text-white/60">{t('collection.coverEmpty')}</p>
           )}
         </div>
         <div className="flex items-center gap-2">
@@ -360,11 +371,13 @@ export function CollectionFormModal({
           />
           {coverUrl ? (
             <Button variant="ghost" size="sm" onClick={() => setCoverUrl(null)} disabled={busy}>
-              Quitar
+              {t('collection.coverRemove')}
             </Button>
           ) : null}
         </div>
-        {uploading ? <p className="text-xs text-text-subtle">Subiendo portada…</p> : null}
+        {uploading ? (
+          <p className="text-xs text-text-subtle">{t('collection.coverUploading')}</p>
+        ) : null}
       </div>
 
       {error ? (
@@ -375,10 +388,10 @@ export function CollectionFormModal({
 
       <div className="flex justify-end gap-2">
         <Button variant="ghost" onClick={onClose} disabled={busy}>
-          Cancelar
+          {t('collection.cancel')}
         </Button>
         <Button onClick={() => void submit()} disabled={busy || uploading}>
-          {busy ? 'Guardando…' : existing ? 'Guardar cambios' : 'Crear colección'}
+          {busy ? t('collection.saving') : existing ? t('collection.save') : t('collection.create')}
         </Button>
       </div>
     </ModalShell>

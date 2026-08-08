@@ -1,1 +1,44 @@
-{}
+{
+  "file": {
+    "change": "Change file",
+    "pick": "Choose file",
+    "remove": "remove",
+    "none": "No file selected"
+  },
+  "perk": {
+    "eyebrow": "Request perk",
+    "unlockedWith": "Unlocked at the {level} level.",
+    "noteLabel": "Anything we should know beforehand? (optional)",
+    "notePlaceholder": "For example, what you would like to work on or when you are available.",
+    "pendingNotice": "Once sent it becomes a pending request: we will get in touch to arrange it.",
+    "pendingNoticeWithQuota": "Once sent it becomes a pending request: we will get in touch to arrange it. You have {count, plural, other {# left}}.",
+    "cancel": "Cancel",
+    "sending": "Sending…",
+    "send": "Send request"
+  },
+  "submit": {
+    "eyebrow": "Submit challenge",
+    "worth": "Worth {points} points. The team reviews it before crediting them.",
+    "noteLabel": "Tell us what you did",
+    "notePlaceholder": "A couple of lines about the result.",
+    "proofLabel": "Upload your proof",
+    "proofLabelOptional": "Upload your proof (optional)",
+    "linkLabel": "…or paste a link",
+    "linkPlaceholder": "https://…",
+    "uploadError": "We could not upload the file. Try another format or size.",
+    "proofRequired": "This challenge requires proof: upload the file or paste the link.",
+    "cancel": "Cancel",
+    "uploading": "Uploading…",
+    "continue": "Continue",
+    "confirmEyebrow": "Confirm submission",
+    "confirmIntro": "This is what you are about to send:",
+    "confirmProofTerm": "Proof:",
+    "confirmNoProof": "not attached",
+    "confirmNoteTerm": "Comment:",
+    "confirmNoNote": "no comment",
+    "confirmWarning": "You can only submit this challenge once, so review it before sending.",
+    "back": "Back",
+    "sending": "Sending…",
+    "confirmSend": "Confirm and send"
+  }
+}

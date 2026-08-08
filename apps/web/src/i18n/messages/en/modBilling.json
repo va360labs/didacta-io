@@ -1,1 +1,31 @@
-{}
+{
+  "sales": {
+    "startTitle": "Start this course",
+    "startSubtitle": "Instant access to every lesson, updates included.",
+    "startSubtitleMembership": "This course is included in the membership. If your organisation gave you an invitation code, you can redeem it below.",
+    "benefitLifetime": "Lifetime access and updates",
+    "benefitCertificate": "Verifiable certificate when you finish",
+    "benefitPace": "Learn at your own pace, on any device",
+    "benefitCommunity": "Student community and support",
+    "notForSale": "This course is not on sale yet. If you have an invitation code, you can redeem it below.",
+    "formatsTitle": "Choose your format",
+    "formatsSubtitle": "The same course with a different level of support.",
+    "onePayment": "One-off payment · VAT included",
+    "featured": "Most popular",
+    "defaultOptionName": "Full course",
+    "buy": "Buy",
+    "buyFrom": "Buy from {price}",
+    "buyFor": "Buy for {price}",
+    "discount": "−{percent}%"
+  },
+  "membership": {
+    "eyebrow": "Full access",
+    "pitch": "Get <strong>every course</strong> from <strong>{price}</strong> {period}.",
+    "cta": "See memberships",
+    "noCommitment": "Cancel anytime, no minimum term",
+    "unlockAll": "Unlock everything · See memberships",
+    "periodMonthly": "a month",
+    "periodYearly": "a year",
+    "periodEvery": "every {months} months"
+  }
+}

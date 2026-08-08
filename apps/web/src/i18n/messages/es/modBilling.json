@@ -1,1 +1,31 @@
-{}
+{
+  "sales": {
+    "startTitle": "Empieza este curso",
+    "startSubtitle": "Acceso inmediato a todas las lecciones, con las actualizaciones incluidas.",
+    "startSubtitleMembership": "Este curso está incluido en la membresía. Si tu organización te dio un código de invitación, puedes canjearlo abajo.",
+    "benefitLifetime": "Acceso de por vida y actualizaciones",
+    "benefitCertificate": "Certificado verificable al terminar",
+    "benefitPace": "Aprendes a tu ritmo, desde cualquier dispositivo",
+    "benefitCommunity": "Comunidad de alumnos y soporte",
+    "notForSale": "Este curso todavía no está disponible para la compra. Si tienes un código de invitación, puedes canjearlo abajo.",
+    "formatsTitle": "Elige tu formato",
+    "formatsSubtitle": "El mismo curso con distinto nivel de acompañamiento.",
+    "onePayment": "Pago único · IVA incluido",
+    "featured": "El más elegido",
+    "defaultOptionName": "Curso completo",
+    "buy": "Comprar",
+    "buyFrom": "Comprar desde {price}",
+    "buyFor": "Comprar por {price}",
+    "discount": "−{percent}%"
+  },
+  "membership": {
+    "eyebrow": "Acceso total",
+    "pitch": "Accede a <strong>todos los cursos</strong> desde <strong>{price}</strong> {period}.",
+    "cta": "Ver membresías",
+    "noCommitment": "Cancela cuando quieras, sin permanencia",
+    "unlockAll": "Desbloquea todo · Ver membresías",
+    "periodMonthly": "al mes",
+    "periodYearly": "al año",
+    "periodEvery": "cada {months} meses"
+  }
+}
