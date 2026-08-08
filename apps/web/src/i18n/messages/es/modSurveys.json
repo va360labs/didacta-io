@@ -1,1 +1,12 @@
-{}
+{
+  "panelTitle": "Valora esta clase",
+  "panelNote": "30 segundos. La respuesta es <strong>anónima</strong> — nos ayuda a decidir qué grabar y qué mejorar.",
+  "thanks": "¡Gracias por tu respuesta! La tenemos en cuenta para las próximas clases.",
+  "submit": "Enviar valoración",
+  "submitting": "Enviando…",
+  "errorSubmit": "No pudimos enviar tu respuesta.",
+  "textPlaceholder": "Tu respuesta (opcional)",
+  "scaleHint": "(1 = mal · 5 = genial)",
+  "npsHint": "0 = nada probable · 10 = seguro que sí",
+  "optionLabel": "{label}: {value}"
+}

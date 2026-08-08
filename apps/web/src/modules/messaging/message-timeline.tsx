@@ -5,6 +5,7 @@
  * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
  */
 
+import { useTranslations } from 'next-intl';
 import { AuthorNameLink, CommunityAvatar } from '@/components/community-avatar';
 import type { MessageView } from './client';
 import { dayLabel, timeLabel } from './shared';
@@ -28,10 +29,11 @@ export function MessageTimeline({
   showAuthor: boolean;
   avatars: Map<string, { avatarUrl: string | null }>;
 }) {
+  const t = useTranslations('modMessaging');
   const items: Array<{ type: 'day'; label: string } | { type: 'msg'; msg: MessageView }> = [];
   let lastDay = '';
   for (const m of messages) {
-    const day = dayLabel(m.createdAt);
+    const day = dayLabel(m.createdAt, t);
     if (day !== lastDay) {
       items.push({ type: 'day', label: day });
       lastDay = day;
@@ -76,6 +78,8 @@ export function MessageBubble({
   showAuthor: boolean;
   avatarUrl: string | null;
 }) {
+  const t = useTranslations('modMessaging');
+
   return (
     <li
       className={`flex items-end gap-2 ${own ? 'justify-end' : 'justify-start'}`}
@@ -104,7 +108,7 @@ export function MessageBubble({
           />
         ) : null}
         {msg.deletedAt ? (
-          <p className="text-sm italic opacity-70">Mensaje eliminado</p>
+          <p className="text-sm italic opacity-70">{t('messageDeleted')}</p>
         ) : (
           <p className="whitespace-pre-wrap break-words text-sm leading-relaxed">{msg.body}</p>
         )}

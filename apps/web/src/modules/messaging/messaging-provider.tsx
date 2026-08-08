@@ -15,6 +15,7 @@ import {
   useState,
   type ReactNode,
 } from 'react';
+import { useTranslations } from 'next-intl';
 import { authStorage } from '@/lib/auth-storage';
 import {
   messagingApi,
@@ -82,6 +83,7 @@ interface MessagingContextValue {
 const MessagingContext = createContext<MessagingContextValue | null>(null);
 
 export function MessagingProvider({ children }: { children: ReactNode }) {
+  const t = useTranslations('modMessaging');
   const [conversations, setConversations] = useState<ConversationView[] | null>(null);
   const [listError, setListError] = useState<string | null>(null);
   const [presence, setPresence] = useState<PresenceSnapshot>(EMPTY_PRESENCE);
@@ -107,13 +109,9 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
     } catch (e) {
       // Best-effort: el shell nunca se rompe porque falle la mensajería. El
       // primer fallo deja la lista como está y anota el error para la UI.
-      setListError(
-        e instanceof Error && e.message
-          ? e.message
-          : 'No pudimos cargar los mensajes. Recarga para reintentar.',
-      );
+      setListError(e instanceof Error && e.message ? e.message : t('errorLoad'));
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     if (!enabled) return;

@@ -78,7 +78,8 @@ async function rawFetch<T>(
   expect: 'json' | 'empty' = 'json',
 ): Promise<T> {
   const token = authStorage.getAccessToken();
-  if (!token) throw new ApiHttpError({ message: 'Sesión expirada', status: 401 });
+  if (!token)
+    throw new ApiHttpError({ message: 'Sesión expirada', status: 401, code: 'sessionExpired' });
   const url = path.startsWith('http') ? path : `${API_URL}${path}`;
   const headers = new Headers(init.headers);
   headers.set('Authorization', `Bearer ${token}`);

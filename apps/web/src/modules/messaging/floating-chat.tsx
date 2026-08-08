@@ -6,6 +6,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState, type Ref } from 'react';
+import { useTranslations } from 'next-intl';
 import { CommunityAvatar } from '@/components/community-avatar';
 import { Icon } from '@/components/icon';
 import { Button } from '@/components/ui/button';
@@ -40,6 +41,7 @@ import { useConversationThread } from './use-conversation-thread';
  * dice; no se inventa nada (regla #3).
  */
 export function FloatingChat() {
+  const t = useTranslations('modMessaging');
   const session = useMemo(() => authStorage.getSession(), []);
   const isStaff = useMemo(
     () => (session?.user.roles ?? []).some((r) => STAFF_ROLES.includes(r)),
@@ -226,8 +228,8 @@ export function FloatingChat() {
   );
 
   const pill = useMemo<PillState>(
-    () => derivePillState({ conversations, typing, viewerId, now: Date.now() }),
-    [conversations, typing, viewerId],
+    () => derivePillState({ conversations, typing, viewerId, now: Date.now() }, t),
+    [conversations, typing, viewerId, t],
   );
   const pillAvatars = usePublicUsers(pill.avatarUserIds);
 
@@ -299,7 +301,8 @@ function ChatPill({
   open: boolean;
   onToggle: () => void;
 }) {
-  const label = `${pill.line1.prefix}${pill.line1.target ?? ''}`;
+  const t = useTranslations('modMessaging');
+  const label = pill.line1.target ? `${pill.line1.prefix} ${pill.line1.target}` : pill.line1.prefix;
 
   return (
     <button
@@ -307,7 +310,7 @@ function ChatPill({
       type="button"
       onClick={onToggle}
       aria-expanded={open}
-      aria-label={open ? 'Cerrar mensajes' : `Abrir mensajes. ${label}`}
+      aria-label={open ? t('closeMessages') : t('pillOpenLabel', { label })}
       data-testid="chat-pill"
       className="flex h-12 items-center gap-3 rounded-full bg-[var(--didacta-night)] py-0 pl-2 pr-3 text-left shadow-[0_8px_22px_rgba(13,27,42,0.28)] transition-transform hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 motion-reduce:transition-none motion-reduce:hover:translate-y-0 lg:h-[46px] lg:pr-4"
     >
@@ -355,7 +358,10 @@ function ChatPill({
         <span className="truncate text-[13px] font-semibold leading-tight text-white">
           {pill.line1.prefix}
           {pill.line1.target ? (
-            <span style={{ color: 'var(--didacta-growth-on-dark)' }}>{pill.line1.target}</span>
+            <>
+              {' '}
+              <span style={{ color: 'var(--didacta-growth-on-dark)' }}>{pill.line1.target}</span>
+            </>
           ) : null}
         </span>
         {pill.line2 ? (
@@ -389,13 +395,20 @@ function ChatToast({
   onOpen: () => void;
   onDismiss: () => void;
 }) {
+  const t = useTranslations('modMessaging');
+
   useEffect(() => {
     const handle = setTimeout(onDismiss, CHAT_TOAST_MS);
     return () => clearTimeout(handle);
   }, [onDismiss]);
 
-  const who = toast.author?.trim() || 'Alguien';
-  const where = toast.title ? (toast.isRoom ? ` en ${toast.title}` : '') : '';
+  const who = toast.author?.trim() || t('someone');
+  // Sala → «Fulano en #general»; directo o conversación aún sin título → solo
+  // el nombre. Frase completa por key: nada de concatenar « en » a mano.
+  const heading =
+    toast.title && toast.isRoom
+      ? t('toastAuthorInRoom', { who, room: toast.title })
+      : t('toastAuthor', { who });
 
   return (
     <div
@@ -410,19 +423,16 @@ function ChatToast({
       >
         <CommunityAvatar userId={toast.authorId} name={toast.author} size={30} />
         <span className="min-w-0 flex-1">
-          <span className="block truncate text-[13px] font-semibold text-text">
-            {who}
-            {where}
-          </span>
+          <span className="block truncate text-[13px] font-semibold text-text">{heading}</span>
           <span className="mt-0.5 line-clamp-2 block text-xs text-text-muted">
-            {toast.body || '(mensaje eliminado)'}
+            {toast.body || t('previewDeleted')}
           </span>
         </span>
       </button>
       <button
         type="button"
         onClick={onDismiss}
-        aria-label="Descartar aviso"
+        aria-label={t('toastDismiss')}
         className="shrink-0 rounded-md p-1 text-text-subtle transition-colors hover:bg-bg-subtle hover:text-text"
       >
         <Icon name="x" size={14} />
@@ -456,6 +466,7 @@ function ChatPanel({
   listError: string | null;
   presence: ReturnType<typeof useMessagingContext>['presence'];
 }) {
+  const t = useTranslations('modMessaging');
   const groups = useMemo(() => groupConversations(conversations ?? []), [conversations]);
   const onlineUserIds = useMemo(() => new Set(presence.onlineUserIds), [presence.onlineUserIds]);
   // La presencia se cuenta sin el propio usuario: «3 personas activas» son otras
@@ -468,7 +479,7 @@ function ChatPanel({
       ref={ref}
       role="dialog"
       aria-modal="false"
-      aria-label="Mensajes"
+      aria-label={t('panelTitle')}
       data-testid="chat-panel"
       // Alto acotado al viewport: en pantallas bajas el panel no puede salirse
       // por arriba ni empujar a la píldora fuera de la ventana.
@@ -479,12 +490,10 @@ function ChatPanel({
       ) : (
         <div className="flex items-center justify-between gap-2 border-b border-border-soft px-4 py-3">
           <div className="min-w-0">
-            <p className="font-display text-sm font-bold text-text">Mensajes</p>
+            <p className="font-display text-sm font-bold text-text">{t('panelTitle')}</p>
             {othersOnline > 0 ? (
               <p className="text-xs font-semibold" style={{ color: 'var(--didacta-growth)' }}>
-                {othersOnline === 1
-                  ? '1 persona activa ahora'
-                  : `${othersOnline} personas activas ahora`}
+                {t('panelOnline', { count: othersOnline })}
               </p>
             ) : null}
           </div>
@@ -493,10 +502,8 @@ function ChatPanel({
               type="button"
               onClick={onToggleSound}
               aria-pressed={soundOn}
-              aria-label={
-                soundOn ? 'Silenciar el aviso de mensajes' : 'Activar el aviso sonoro de mensajes'
-              }
-              title={soundOn ? 'Aviso sonoro activado' : 'Aviso sonoro silenciado'}
+              aria-label={soundOn ? t('panelSoundMute') : t('panelSoundUnmute')}
+              title={soundOn ? t('panelSoundOnTitle') : t('panelSoundOffTitle')}
               data-testid="chat-sound-toggle"
               className="grid h-8 w-8 place-items-center rounded-lg text-text-muted transition-colors hover:bg-bg-subtle hover:text-text"
             >
@@ -505,7 +512,7 @@ function ChatPanel({
             <button
               type="button"
               onClick={onClose}
-              aria-label="Cerrar mensajes"
+              aria-label={t('closeMessages')}
               data-testid="chat-panel-close"
               className="grid h-8 w-8 place-items-center rounded-lg text-text-muted transition-colors hover:bg-bg-subtle hover:text-text"
             >
@@ -539,13 +546,11 @@ function ChatPanel({
                 <div className="skeleton h-12 w-full" />
               </div>
             ) : conversations.length === 0 ? (
-              <p className="p-6 text-center text-sm text-text-muted">
-                Todavía no hay conversaciones en esta comunidad.
-              </p>
+              <p className="p-6 text-center text-sm text-text-muted">{t('panelEmpty')}</p>
             ) : (
               <>
                 <ConversationGroup
-                  label="Salas"
+                  label={t('groupSalas')}
                   items={groups.salas}
                   activeKey={activeKey}
                   onSelect={(c) => void thread.select(c)}
@@ -554,7 +559,7 @@ function ChatPanel({
                   size={32}
                 />
                 <ConversationGroup
-                  label={isStaff ? 'Consultas de alumnos' : 'Profesores'}
+                  label={isStaff ? t('groupConsultas') : t('groupProfesores')}
                   items={groups.profesores}
                   activeKey={activeKey}
                   onSelect={(c) => void thread.select(c)}
@@ -564,7 +569,7 @@ function ChatPanel({
                   size={32}
                 />
                 <ConversationGroup
-                  label="Directos"
+                  label={t('groupDirectos')}
                   items={groups.directos}
                   activeKey={activeKey}
                   onSelect={(c) => void thread.select(c)}
@@ -582,7 +587,7 @@ function ChatPanel({
               className="text-[13px] font-semibold text-brand-600 hover:text-brand-700"
               data-testid="chat-panel-see-all"
             >
-              Ver todos los mensajes ›
+              {t('seeAll')}
             </a>
           </div>
         </>
@@ -592,13 +597,14 @@ function ChatPanel({
 }
 
 function ThreadHeader({ thread, onClose }: { thread: ThreadApi; onClose: () => void }) {
+  const t = useTranslations('modMessaging');
   if (!thread.active) return null;
   return (
     <div className="flex items-center gap-2 border-b border-border-soft px-3 py-2.5">
       <button
         type="button"
         onClick={thread.close}
-        aria-label="Volver a la lista"
+        aria-label={t('panelBack')}
         data-testid="chat-panel-back"
         className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-text-muted transition-colors hover:bg-bg-subtle hover:text-text"
       >
@@ -614,7 +620,7 @@ function ThreadHeader({ thread, onClose }: { thread: ThreadApi; onClose: () => v
       <button
         type="button"
         onClick={onClose}
-        aria-label="Cerrar mensajes"
+        aria-label={t('closeMessages')}
         data-testid="chat-panel-close"
         className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-text-muted transition-colors hover:bg-bg-subtle hover:text-text"
       >
@@ -625,6 +631,7 @@ function ThreadHeader({ thread, onClose }: { thread: ThreadApi; onClose: () => v
 }
 
 function ThreadBody({ thread, isStaff }: { thread: ThreadApi; isStaff: boolean }) {
+  const t = useTranslations('modMessaging');
   if (!thread.active) return null;
   return (
     <>
@@ -643,7 +650,7 @@ function ThreadBody({ thread, isStaff }: { thread: ThreadApi; isStaff: boolean }
               onClick={() => void thread.loadOlder()}
               disabled={thread.loadingMore}
             >
-              {thread.loadingMore ? 'Cargando…' : 'Cargar anteriores'}
+              {thread.loadingMore ? t('loadingOlder') : t('loadOlder')}
             </Button>
           </div>
         ) : null}
@@ -655,8 +662,8 @@ function ThreadBody({ thread, isStaff }: { thread: ThreadApi; isStaff: boolean }
         ) : thread.messages.length === 0 ? (
           <p className="py-8 text-center text-sm text-text-muted">
             {thread.active.type === 'FACULTY' && !isStaff
-              ? 'Escribe tu primera consulta: el equipo de profesores la verá al momento.'
-              : 'Todavía no hay mensajes. Escribe el primero.'}
+              ? t('threadEmptyFaculty')
+              : t('threadEmpty')}
           </p>
         ) : (
           <MessageTimeline

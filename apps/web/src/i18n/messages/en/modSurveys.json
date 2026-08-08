@@ -1,1 +1,12 @@
-{}
+{
+  "panelTitle": "Rate this class",
+  "panelNote": "30 seconds. Your answer is <strong>anonymous</strong> — it helps us decide what to record and what to improve.",
+  "thanks": "Thanks for your feedback! We'll take it into account for upcoming classes.",
+  "submit": "Send rating",
+  "submitting": "Sending…",
+  "errorSubmit": "We couldn't send your answer.",
+  "textPlaceholder": "Your answer (optional)",
+  "scaleHint": "(1 = poor · 5 = great)",
+  "npsHint": "0 = not at all likely · 10 = absolutely",
+  "optionLabel": "{label}: {value}"
+}

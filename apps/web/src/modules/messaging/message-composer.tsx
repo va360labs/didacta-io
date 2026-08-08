@@ -6,6 +6,7 @@
  */
 
 import { useCallback, useRef, type FormEvent, type KeyboardEvent } from 'react';
+import { useTranslations } from 'next-intl';
 import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/icon';
 import { MESSAGE_MAX_LENGTH, TYPING_THROTTLE_MS } from './constants';
@@ -34,6 +35,7 @@ export function MessageComposer({
   onTyping?: () => void;
   compact?: boolean;
 }) {
+  const t = useTranslations('modMessaging');
   const lastTypingAtRef = useRef(0);
 
   const handleChange = useCallback(
@@ -72,7 +74,7 @@ export function MessageComposer({
         onKeyDown={onKeyDown}
         rows={compact ? 1 : 2}
         maxLength={MESSAGE_MAX_LENGTH}
-        placeholder="Escribe un mensaje…"
+        placeholder={t('composerPlaceholder')}
         className="max-h-40 flex-1 resize-none rounded-lg border border-border-strong bg-surface px-3 py-2 text-sm text-text placeholder:text-text-muted focus-visible:border-brand-500 focus-visible:outline-none"
         data-testid="chat-composer-input"
       />
@@ -81,7 +83,7 @@ export function MessageComposer({
           type="submit"
           disabled={sending || value.trim().length === 0}
           className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-brand-500 text-text-on-brand transition-opacity disabled:opacity-40"
-          aria-label="Enviar mensaje"
+          aria-label={t('composerSendLabel')}
           data-testid="chat-send"
         >
           <Icon name="arrow-right" size={16} />
@@ -92,7 +94,7 @@ export function MessageComposer({
           disabled={sending || value.trim().length === 0}
           data-testid="chat-send"
         >
-          {sending ? 'Enviando…' : 'Enviar'}
+          {sending ? t('composerSending') : t('composerSend')}
         </Button>
       )}
     </form>

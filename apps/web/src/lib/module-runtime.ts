@@ -243,7 +243,11 @@ export function initModuleRuntime(): DidactaRuntime {
       fetchAuth: <T>(path: string, init: RequestInit = {}): Promise<T> => {
         const token = authStorage.getAccessToken();
         if (!token) {
-          throw new ApiHttpError({ message: 'Sesión expirada', status: 401 });
+          throw new ApiHttpError({
+            message: 'Sesión expirada',
+            status: 401,
+            code: 'sessionExpired',
+          });
         }
         return apiFetch<T>(path, init, token);
       },

@@ -1,1 +1,7 @@
-{}
+{
+  "notificationAction": {
+    "reply": "Reply",
+    "view": "View"
+  },
+  "tenantFallbackName": "the organization"
+}

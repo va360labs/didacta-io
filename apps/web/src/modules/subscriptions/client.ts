@@ -17,6 +17,7 @@
  */
 
 import { apiFetch } from '@/lib/api-client';
+import { formatCurrency } from '@/lib/i18n/format';
 
 export type SubscriptionStatus =
   | 'PENDING'
@@ -136,15 +137,17 @@ export const subscriptionsApi = {
 };
 
 /**
- * Formatea importe de céntimos a string visual: 1999 + 'eur' → "19,99 €".
+ * Formatea importe de céntimos a string visual en el LOCALE ACTIVO:
+ * 1999 + 'eur' → "19,99 €".
+ *
+ * Conserva decimales SIEMPRE (no usa `formatCents`): son importes de
+ * suscripción que se cotejan con el panel del proveedor. El `catch` cubre un
+ * código de moneda inválido, que haría reventar a `Intl`.
  */
 export function formatAmount(unitAmount: number, currency: string): string {
   const value = unitAmount / 100;
   try {
-    return new Intl.NumberFormat('es-ES', {
-      style: 'currency',
-      currency: currency.toUpperCase(),
-    }).format(value);
+    return formatCurrency(value, currency.toUpperCase());
   } catch {
     return `${value.toFixed(2)} ${currency.toUpperCase()}`;
   }

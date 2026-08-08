@@ -5,10 +5,12 @@
  * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
  */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
+import { useTranslations } from 'next-intl';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { ApiHttpError } from '@/lib/api-client';
+import { apiErrorMessage } from '@/lib/i18n/api-error';
 import {
   surveysApi,
   type SessionSurveyView,
@@ -22,6 +24,8 @@ import {
  * respuesta es anónima; si el usuario ya respondió muestra el agradecimiento.
  */
 export function SurveyPanel({ sessionId }: { sessionId: string }) {
+  const t = useTranslations('modSurveys');
+  const tErrors = useTranslations('errors');
   const [survey, setSurvey] = useState<SessionSurveyView | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [values, setValues] = useState<Record<string, number>>({});
@@ -63,8 +67,8 @@ export function SurveyPanel({ sessionId }: { sessionId: string }) {
     const answers: SurveyAnswerInput[] = [];
     for (const q of survey.questions) {
       if (q.type === 'TEXT') {
-        const t = (text[q.id] ?? '').trim();
-        if (t) answers.push({ questionId: q.id, valueText: t });
+        const free = (text[q.id] ?? '').trim();
+        if (free) answers.push({ questionId: q.id, valueText: free });
       } else {
         answers.push({ questionId: q.id, valueInt: values[q.id]! });
       }
@@ -77,7 +81,7 @@ export function SurveyPanel({ sessionId }: { sessionId: string }) {
         // Ya respondida (otra pestaña, doble click…): mismo estado final.
         setDone(true);
       } else {
-        setError(e instanceof ApiHttpError ? e.message : 'No pudimos enviar tu respuesta.');
+        setError(e instanceof ApiHttpError ? apiErrorMessage(e, tErrors) : t('errorSubmit'));
       }
     } finally {
       setBusy(false);
@@ -88,16 +92,17 @@ export function SurveyPanel({ sessionId }: { sessionId: string }) {
     <Card data-testid="survey-panel">
       <CardContent className="space-y-4 p-6">
         <div>
-          <h2 className="text-base font-bold text-text">Valora esta clase</h2>
+          <h2 className="text-base font-bold text-text">{t('panelTitle')}</h2>
           <p className="mt-0.5 text-xs text-text-muted">
-            30 segundos. La respuesta es <strong>anónima</strong> — nos ayuda a decidir qué grabar y
-            qué mejorar.
+            {t.rich('panelNote', {
+              strong: (chunks: ReactNode) => <strong>{chunks}</strong>,
+            })}
           </p>
         </div>
 
         {thanks ? (
           <p data-testid="survey-thanks" className="text-sm font-medium text-(--didacta-growth)">
-            ¡Gracias por tu respuesta! La tenemos en cuenta para las próximas clases.
+            {t('thanks')}
           </p>
         ) : (
           <>
@@ -108,7 +113,7 @@ export function SurveyPanel({ sessionId }: { sessionId: string }) {
                 value={values[q.id]}
                 text={text[q.id] ?? ''}
                 onValue={(v) => setValues((prev) => ({ ...prev, [q.id]: v }))}
-                onText={(t) => setText((prev) => ({ ...prev, [q.id]: t }))}
+                onText={(value) => setText((prev) => ({ ...prev, [q.id]: value }))}
               />
             ))}
 
@@ -119,7 +124,7 @@ export function SurveyPanel({ sessionId }: { sessionId: string }) {
             ) : null}
 
             <Button onClick={() => void submit()} disabled={!complete || busy}>
-              {busy ? 'Enviando…' : 'Enviar valoración'}
+              {busy ? t('submitting') : t('submit')}
             </Button>
           </>
         )}
@@ -139,8 +144,10 @@ function QuestionField({
   value: number | undefined;
   text: string;
   onValue: (v: number) => void;
-  onText: (t: string) => void;
+  onText: (value: string) => void;
 }) {
+  const t = useTranslations('modSurveys');
+
   if (question.type === 'TEXT') {
     return (
       <div className="space-y-1.5">
@@ -150,7 +157,7 @@ function QuestionField({
           onChange={(e) => onText(e.target.value)}
           rows={3}
           maxLength={2000}
-          placeholder="Tu respuesta (opcional)"
+          placeholder={t('textPlaceholder')}
           className="w-full rounded-lg border border-border bg-surface p-2.5 text-sm text-text placeholder:text-text-subtle focus:border-border-strong focus:outline-none"
         />
       </div>
@@ -167,7 +174,7 @@ function QuestionField({
       <p className="text-sm font-medium text-text">
         {question.label}
         {question.type === 'SCALE' ? (
-          <span className="ml-1 text-xs font-normal text-text-muted">(1 = mal · 5 = genial)</span>
+          <span className="ml-1 text-xs font-normal text-text-muted">{t('scaleHint')}</span>
         ) : null}
       </p>
       <div className="flex flex-wrap gap-1.5">
@@ -177,7 +184,7 @@ function QuestionField({
             type="button"
             onClick={() => onValue(n)}
             aria-pressed={value === n}
-            aria-label={`${question.label}: ${n}`}
+            aria-label={t('optionLabel', { label: question.label, value: n })}
             className={`grid h-9 w-9 place-items-center rounded-lg border text-sm font-semibold transition-colors ${
               value === n
                 ? 'border-transparent bg-(--didacta-trust) text-white'
@@ -189,7 +196,7 @@ function QuestionField({
         ))}
       </div>
       {question.type === 'NPS' ? (
-        <p className="text-[11px] text-text-subtle">0 = nada probable · 10 = seguro que sí</p>
+        <p className="text-[11px] text-text-subtle">{t('npsHint')}</p>
       ) : null}
     </div>
   );

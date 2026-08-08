@@ -29,7 +29,8 @@ export interface Certificate {
 
 function bearer(): string {
   const token = authStorage.getAccessToken();
-  if (!token) throw new ApiHttpError({ message: 'Sesión expirada', status: 401 });
+  if (!token)
+    throw new ApiHttpError({ message: 'Sesión expirada', status: 401, code: 'sessionExpired' });
   return token;
 }
 

@@ -5,6 +5,7 @@
  * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
  */
 
+import { useTranslations } from 'next-intl';
 import { CommunityAvatar } from '@/components/community-avatar';
 import { Icon } from '@/components/icon';
 import { SpaceIcon } from '@/components/space-icon';
@@ -28,6 +29,8 @@ export function ConversationBadge({
   /** Punto verde de presencia (solo tiene sentido en conversaciones con persona). */
   online?: boolean;
 }) {
+  const t = useTranslations('modMessaging');
+
   if (conv.type === 'SPACE' && conv.space) {
     return (
       <span
@@ -55,7 +58,7 @@ export function ConversationBadge({
         {online ? (
           <span
             className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-surface bg-success-500"
-            aria-label="Conectado ahora"
+            aria-label={t('presenceOnline')}
             data-testid="presence-dot"
           />
         ) : null}

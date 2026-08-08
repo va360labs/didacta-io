@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
  */
 
+import type { TranslatorLike } from '@/lib/i18n/labels';
 import type { ConversationView } from './client';
 import type { TypingSignal } from './messaging-provider';
 
@@ -22,7 +23,11 @@ export type PillLineKind = 'typing' | 'unread' | 'idle';
 
 export interface PillLine {
   kind: PillLineKind;
-  /** Texto plano de la línea (lo que lee un lector de pantalla junto a `target`). */
+  /**
+   * Texto plano de la línea, SIN espacio final: quien la pinta añade el
+   * separador antes de `target` (un espacio load-bearing dentro de un valor
+   * del catálogo se pierde en cuanto alguien reformatea el JSON).
+   */
   prefix: string;
   /** Destino destacado en color (`#sala` o nombre). `null` si la línea no lo tiene. */
   target: string | null;
@@ -55,7 +60,11 @@ function labelOf(conversation: ConversationView): { text: string; isRoom: boolea
   return { text: conversation.title, isRoom: false };
 }
 
-export function derivePillState({ conversations, typing, viewerId, now }: PillInput): PillState {
+/** `t` = `useTranslations('modMessaging')` del componente que la llama. */
+export function derivePillState(
+  { conversations, typing, viewerId, now }: PillInput,
+  t: TranslatorLike,
+): PillState {
   const list = conversations ?? [];
   const byId = new Map(list.filter((c) => c.id !== null).map((c) => [c.id as string, c]));
 
@@ -87,26 +96,25 @@ export function derivePillState({ conversations, typing, viewerId, now }: PillIn
 
   if (topTyping) {
     const conversation = byId.get(topTyping.conversationId) ?? null;
-    const who = topTyping.displayName?.trim() || 'Alguien';
+    const who = topTyping.displayName?.trim() || t('someone');
     if (conversation) {
       const label = labelOf(conversation);
       line1 = label.isRoom
-        ? { kind: 'typing', prefix: `${who} escribe en `, target: label.text }
-        : { kind: 'typing', prefix: `${who} te escribe`, target: null };
+        ? { kind: 'typing', prefix: t('pillTypingRoom', { who }), target: label.text }
+        : { kind: 'typing', prefix: t('pillTypingDm', { who }), target: null };
     } else {
       // Conversación fuera de la lista (p. ej. sala que este usuario no tiene
       // materializada): se nombra a la persona, nunca una sala inventada.
-      line1 = { kind: 'typing', prefix: `${who} está escribiendo`, target: null };
+      line1 = { kind: 'typing', prefix: t('pillTypingUnknown', { who }), target: null };
     }
   } else if (topUnread) {
     const label = labelOf(topUnread);
-    const n = topUnread.unreadCount;
-    const noun = n === 1 ? '1 mensaje nuevo' : `${n} mensajes nuevos`;
+    const count = topUnread.unreadCount;
     line1 = label.isRoom
-      ? { kind: 'unread', prefix: `${noun} en `, target: label.text }
-      : { kind: 'unread', prefix: `${noun} de `, target: label.text };
+      ? { kind: 'unread', prefix: t('pillUnreadRoom', { count }), target: label.text }
+      : { kind: 'unread', prefix: t('pillUnreadDm', { count }), target: label.text };
   } else {
-    line1 = { kind: 'idle', prefix: 'Mensajes', target: null };
+    line1 = { kind: 'idle', prefix: t('pillIdle'), target: null };
   }
 
   // ── Línea 2: resumen agregado ────────────────────────────────────────────
@@ -119,12 +127,12 @@ export function derivePillState({ conversations, typing, viewerId, now }: PillIn
 
   let line2: string | null;
   if (!hasAnyMessage) {
-    line2 = conversations === null ? null : 'Empieza una conversación';
+    line2 = conversations === null ? null : t('pillStartConversation');
   } else if (unreadCount > 0) {
-    const parts: string[] = [];
-    if (rooms > 0) parts.push(rooms === 1 ? '1 sala' : `${rooms} salas`);
-    parts.push(`${unreadCount} sin leer`);
-    line2 = parts.join(' · ');
+    line2 =
+      rooms > 0
+        ? t('pillSummaryWithRooms', { rooms, unread: unreadCount })
+        : t('pillSummary', { unread: unreadCount });
   } else {
     line2 = null;
   }

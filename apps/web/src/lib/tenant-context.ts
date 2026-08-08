@@ -6,6 +6,7 @@
  */
 
 import { useEffect, useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { apiFetch } from './api-client';
 import { authStorage } from './auth-storage';
 import { formatTenantName } from './tenant-name';
@@ -124,6 +125,7 @@ export function useTenantContext(): {
  * cursos de X") se leerían mal a medias mientras carga.
  */
 export function useTenantDisplayName(): string {
+  const t = useTranslations('libShared');
   const { tenant } = useTenantContext();
   const [slug, setSlug] = useState<string | null>(null);
 
@@ -133,5 +135,5 @@ export function useTenantDisplayName(): string {
 
   const real = tenant?.name?.trim();
   if (real) return real;
-  return slug ? formatTenantName(slug) : 'la organización';
+  return slug ? formatTenantName(slug) : t('tenantFallbackName');
 }

@@ -1,1 +1,43 @@
-{}
+{
+  "channel": {
+    "EMAIL": "Email",
+    "IN_APP": "In-app",
+    "WEBHOOK": "Webhook"
+  },
+  "category": {
+    "account": "Account and access",
+    "members": "Member enrolment",
+    "billing": "Membership and payments",
+    "learning": "Learning",
+    "community": "Community",
+    "system": "System"
+  },
+  "errorLoad": "We couldn't load the emails.",
+  "errorSave": "We couldn't save the template.",
+  "errorTest": "We couldn't send the test.",
+  "errorRestore": "We couldn't restore the template.",
+  "noticeSaved": "Template for «{name}» customised.",
+  "noticeTestSent": "Test sent to {email}. If it doesn't arrive, check your spam folder.",
+  "noticeRestored": "«{name}» is back to the default text.",
+  "promptTestAddress": "Which address should we send the «{name}» test to?",
+  "confirmRestore": "Restore «{name}» ({channel} · {locale}) to the product's default text?",
+  "editorTitle": "Customise «{name}»",
+  "variablesTitle": "Available variables (unresolved ones are left empty):",
+  "channelLabel": "Channel",
+  "localeLabel": "Language",
+  "localeOption": "{label} ({code})",
+  "transactionalNote": "Transactional email — only the Email channel in Spanish (es-ES) can be customised.",
+  "subjectLabel": "Subject",
+  "bodyLabel": "Body",
+  "restoreDefault": "Restore default",
+  "sendTest": "Send me a test",
+  "cancel": "Cancel",
+  "saving": "Saving…",
+  "save": "Save",
+  "customized": "Customised",
+  "subjectPrefix": "Subject:",
+  "noSubject": "(no subject)",
+  "edit": "Edit",
+  "restore": "Restore",
+  "customize": "Customise"
+}
