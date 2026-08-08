@@ -118,15 +118,20 @@ export class SetupService {
 
     const slug = (dto.organization.slug ?? this.slugify(dto.organization.name)).toLowerCase();
     if (!SLUG_RE.test(slug)) {
-      throw new ConflictException(
-        'No pudimos generar un slug válido a partir del nombre. Indica uno manualmente (minúsculas, números, guiones).',
-      );
+      throw new ConflictException({
+        message:
+          'No pudimos generar un slug válido a partir del nombre. Indica uno manualmente (minúsculas, números, guiones).',
+        code: 'SETUP_SLUG_INVALID',
+      });
     }
     const hostname = (dto.organization.primaryHostname ?? requestHostname ?? 'localhost')
       .trim()
       .toLowerCase();
     if (!HOSTNAME_RE.test(hostname)) {
-      throw new ConflictException('Hostname inválido.');
+      throw new ConflictException({
+        message: 'Hostname inválido.',
+        code: 'SETUP_HOSTNAME_INVALID',
+      });
     }
 
     const passwordHash = await this.passwords.hash(dto.admin.password);

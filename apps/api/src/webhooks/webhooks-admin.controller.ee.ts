@@ -42,9 +42,10 @@ const ADMIN_ROLES = new Set(['super_admin', 'tenant_admin']);
 function requireTenantAdmin(user: SessionClaims | undefined): SessionClaims {
   if (!user) throw new UnauthorizedException();
   if (!user.roles.some((r) => ADMIN_ROLES.has(r))) {
-    throw new ForbiddenException(
-      'Solo super_admin y tenant_admin pueden gestionar la dead-letter de webhooks.',
-    );
+    throw new ForbiddenException({
+      message: 'Solo super_admin y tenant_admin pueden gestionar la dead-letter de webhooks.',
+      code: 'WEBHOOKS_DEAD_LETTER_ADMIN_REQUIRED',
+    });
   }
   return user;
 }
@@ -109,16 +110,20 @@ export class WebhooksAdminControllerEE {
       where: { id, tenantId: session.tenantId },
     });
     if (!row) {
-      throw new ForbiddenException('Dead-letter no encontrado o ajeno al tenant.');
+      throw new ForbiddenException({
+        message: 'Dead-letter no encontrado o ajeno al tenant.',
+        code: 'WEBHOOKS_DEAD_LETTER_NOT_FOUND',
+      });
     }
 
     const endpoint = await this.prisma.webhookEndpoint.findFirst({
       where: { id: row.endpointId, tenantId: session.tenantId },
     });
     if (!endpoint) {
-      throw new ForbiddenException(
-        'El endpoint asociado fue borrado — no hay forma de reintentar.',
-      );
+      throw new ForbiddenException({
+        message: 'El endpoint asociado fue borrado — no hay forma de reintentar.',
+        code: 'WEBHOOKS_DEAD_LETTER_ENDPOINT_DELETED',
+      });
     }
 
     await this.dispatcher.dispatch({
