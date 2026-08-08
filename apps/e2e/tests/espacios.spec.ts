@@ -75,9 +75,10 @@ test.describe('Sidebar — sección ESPACIOS', () => {
   test('la sección ESPACIOS es visible en el sidebar', async ({ page }) => {
     await withAdminSession(page, '/comunidad');
     const sidebar = page.locator('aside').first();
-    // El label del grupo es "Espacios" en el DOM (CSS text-transform:uppercase es solo visual).
-    // exact:true evita que coincida con otros elementos que contienen "Espacios" como substring.
-    await expect(sidebar.getByText('Espacios', { exact: true })).toBeVisible();
+    // El label del grupo es "Foros" en el DOM desde el bloque 9 de simplificación
+    // de navegación (`app/(app)/layout.tsx`); el CSS text-transform:uppercase es
+    // solo visual. exact:true evita coincidir con substrings de otros elementos.
+    await expect(sidebar.getByText('Foros', { exact: true })).toBeVisible();
   });
 
   test('el sidebar carga espacios reales de la BD (al menos 1 item en ESPACIOS)', async ({
@@ -97,13 +98,13 @@ test.describe('Sidebar — sección ESPACIOS', () => {
   test('como alumno (rol) NO hay botón "+" junto a ESPACIOS', async ({ page }) => {
     await withAdminSession(page, '/comunidad', ['alumno']);
     const sidebar = page.locator('aside').first();
-    await expect(sidebar.getByRole('button', { name: /Añadir a Espacios/i })).not.toBeVisible();
+    await expect(sidebar.getByRole('button', { name: /Añadir a Foros/i })).not.toBeVisible();
   });
 
   test('como admin SÍ hay botón "+" junto a ESPACIOS', async ({ page }) => {
     await withAdminSession(page, '/comunidad');
     const sidebar = page.locator('aside').first();
-    await expect(sidebar.getByRole('button', { name: /Añadir a Espacios/i })).toBeVisible();
+    await expect(sidebar.getByRole('button', { name: /Añadir a Foros/i })).toBeVisible();
   });
 
   test('los items de ESPACIOS no muestran texto crudo de IconName (bug regresión)', async ({
@@ -134,7 +135,7 @@ test.describe('Sidebar — sección ESPACIOS', () => {
 test.describe('CreateSpaceModal — modal de creación de espacio', () => {
   test.beforeEach(async ({ page }) => {
     await withAdminSession(page, '/comunidad');
-    await page.getByRole('button', { name: /Añadir a Espacios/i }).click();
+    await page.getByRole('button', { name: /Añadir a Foros/i }).click();
     await expect(page.getByRole('dialog', { name: 'Nuevo espacio' })).toBeVisible();
   });
 
@@ -357,10 +358,8 @@ test.describe('Consistencia visual y rutas', () => {
 
   test('la sección ESPACIOS en el sidebar tiene el label en mayúsculas (CSS)', async ({ page }) => {
     await withAdminSession(page, '/comunidad');
-    // El DOM tiene "Espacios"; la clase CSS "uppercase" lo hace aparecer en mayúsculas visualmente.
-    await expect(
-      page.locator('aside').first().getByText('Espacios', { exact: true }),
-    ).toBeVisible();
+    // El DOM tiene "Foros"; la clase CSS "uppercase" lo hace aparecer en mayúsculas visualmente.
+    await expect(page.locator('aside').first().getByText('Foros', { exact: true })).toBeVisible();
   });
 
   test('/comunidad no da error 500', async ({ page }) => {

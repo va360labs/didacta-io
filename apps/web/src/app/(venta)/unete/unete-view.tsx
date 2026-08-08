@@ -21,7 +21,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/icon';
 import { ApiHttpError } from '@/lib/api-client';
@@ -72,6 +72,11 @@ function intervalDescriptionLabel(t: TranslatorLike, intervalMonths: number): st
 export function UneteView() {
   const t = useTranslations('publicSite');
   const tCommon = useTranslations('common');
+  // `/unete` sí se pinta en SSR y ahí el singleton de `user-prefs` está vacío a
+  // propósito: sin `locale` explícito el servidor pintaría la fecha del primer
+  // cargo con el locale por defecto y el cliente la repintaría → mismatch de
+  // hidratación visible.
+  const locale = useLocale();
   const params = useSearchParams();
   const status = params.get('status');
   const { tenant } = useTenantContext();
@@ -309,11 +314,11 @@ export function UneteView() {
                         <span className="flex flex-wrap items-baseline gap-2">
                           {plan.compareAtCents && plan.compareAtCents > plan.amountCents ? (
                             <span className="text-sm text-text-subtle line-through">
-                              {formatCents(plan.compareAtCents, plan.currency)}
+                              {formatCents(plan.compareAtCents, plan.currency, { locale })}
                             </span>
                           ) : null}
                           <span className="text-xl font-bold">
-                            {formatCents(plan.amountCents, plan.currency)}
+                            {formatCents(plan.amountCents, plan.currency, { locale })}
                           </span>
                           <span className="text-sm text-text-muted">
                             {intervalSuffixLabel(t, plan.intervalMonths)}
@@ -344,8 +349,8 @@ export function UneteView() {
                   <span className="font-semibold">{t('unete.totalToday')}</span>
                   <span className="text-[22px] font-extrabold">
                     {trialDays > 0
-                      ? formatCents(0, selected.currency)
-                      : formatCents(selected.amountCents, selected.currency)}
+                      ? formatCents(0, selected.currency, { locale })
+                      : formatCents(selected.amountCents, selected.currency, { locale })}
                   </span>
                 </div>
                 {savings ? (
@@ -353,7 +358,7 @@ export function UneteView() {
                     <span className="text-text-muted">{t('unete.savingsLabel')}</span>
                     <span className="font-bold text-success-700">
                       {t('unete.savingsAmount', {
-                        amount: formatCents(savings, selected.currency),
+                        amount: formatCents(savings, selected.currency, { locale }),
                       })}
                     </span>
                   </div>
@@ -362,8 +367,9 @@ export function UneteView() {
                   {trialDays > 0
                     ? t('unete.trialFirstCharge', {
                         days: trialDays,
-                        amount: formatCents(selected.amountCents, selected.currency),
+                        amount: formatCents(selected.amountCents, selected.currency, { locale }),
                         date: formatDate(firstChargeDate, {
+                          locale,
                           day: 'numeric',
                           month: 'long',
                           year: 'numeric',
@@ -510,21 +516,21 @@ export function UneteView() {
             <div>
               <div className="text-[13px] text-text-muted">{t('unete.boughtSeparately')}</div>
               <div className="text-[22px] font-bold text-text-subtle line-through">
-                {formatCents(page.standaloneTotalCents, selected.currency)}
+                {formatCents(page.standaloneTotalCents, selected.currency, { locale })}
               </div>
             </div>
             <Icon name="arrow-right" className="h-6 w-6 text-success-600" />
             <div>
               <div className="text-[13px] text-text-muted">{t('unete.withMembership')}</div>
               <div className="text-[22px] font-bold">
-                {formatCents(selected.amountCents, selected.currency)}
+                {formatCents(selected.amountCents, selected.currency, { locale })}
                 {intervalSuffixLabel(t, selected.intervalMonths)}
               </div>
             </div>
             {catalogSavings ? (
               <span className="ml-auto rounded-full bg-success-100 px-4 py-2.5 text-sm font-bold text-success-700">
                 {t('unete.youSave', {
-                  amount: formatCents(catalogSavings, selected.currency),
+                  amount: formatCents(catalogSavings, selected.currency, { locale }),
                 })}
               </span>
             ) : null}
@@ -611,6 +617,7 @@ function CourseCardWithDetail({
 }) {
   const t = useTranslations('publicSite');
   const tCommon = useTranslations('common');
+  const locale = useLocale();
   const meta = [
     course.estimatedMinutes ? formatDuration(course.estimatedMinutes, tCommon) : null,
     course.moduleCount > 0 ? t('unete.modulesCount', { count: course.moduleCount }) : null,
@@ -649,7 +656,7 @@ function CourseCardWithDetail({
           )}
           {course.amountCents !== null ? (
             <span className="absolute right-2.5 top-2.5 rounded-lg bg-black/75 px-2.5 py-1 text-xs font-bold text-white">
-              {formatCents(course.amountCents, currency)}
+              {formatCents(course.amountCents, currency, { locale })}
             </span>
           ) : null}
         </div>
@@ -734,7 +741,7 @@ function CourseCardWithDetail({
               {course.amountCents !== null ? (
                 <span className="text-[13px] text-text-subtle line-through">
                   {t('unete.standalonePrice', {
-                    amount: formatCents(course.amountCents, currency),
+                    amount: formatCents(course.amountCents, currency, { locale }),
                   })}
                 </span>
               ) : null}

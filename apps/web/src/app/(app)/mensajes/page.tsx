@@ -290,6 +290,9 @@ function NewDmDialog({
   onOpened: (conversationId: string, member: MessagingPublicUser) => void | Promise<void>;
 }) {
   const t = useTranslations('alumnoSocial');
+  // `humanizeError` resuelve su copy contra el namespace del módulo, no contra
+  // el de esta página: por eso hacen falta dos traductores.
+  const tMsg = useTranslations('modMessaging');
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<MessagingPublicUser[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -310,10 +313,10 @@ function NewDmDialog({
           setResults(r.members);
           setError(null);
         })
-        .catch((e) => setError(humanizeError(e)));
+        .catch((e) => setError(humanizeError(e, tMsg)));
     }, 250);
     return () => clearTimeout(handle);
-  }, [open, query]);
+  }, [open, query, tMsg]);
 
   async function pick(member: MessagingPublicUser) {
     setOpeningId(member.id);
@@ -322,7 +325,7 @@ function NewDmDialog({
       const { conversationId } = await messagingApi.openDm(member.id);
       await onOpened(conversationId, member);
     } catch (e) {
-      setError(humanizeError(e));
+      setError(humanizeError(e, tMsg));
       setOpeningId(null);
     }
   }

@@ -47,6 +47,9 @@ export function NotificationsToaster() {
 
 function ToastCard({ toast, onDismiss }: { toast: ToastItem; onDismiss: (id: string) => void }) {
   const t = useTranslations('shell');
+  // `notificationLink` resuelve «Responder»/«Ver» contra `libShared`, que es su
+  // propio namespace: no se puede pedir con el traductor de `shell`.
+  const tLib = useTranslations('libShared');
   const { id } = toast;
 
   useEffect(() => {
@@ -54,7 +57,7 @@ function ToastCard({ toast, onDismiss }: { toast: ToastItem; onDismiss: (id: str
     return () => clearTimeout(handle);
   }, [id, onDismiss]);
 
-  const link = notificationLink(toast.templateKey, toast.metadata);
+  const link = notificationLink(toast.templateKey, toast.metadata, tLib);
   const title = toast.subject ?? t('notifications.toastDefaultTitle');
 
   return (

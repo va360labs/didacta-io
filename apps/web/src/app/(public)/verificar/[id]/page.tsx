@@ -7,7 +7,7 @@
 
 import { useParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { Icon } from '@/components/icon';
@@ -24,6 +24,7 @@ type State = 'loading' | 'ok' | 'notfound' | 'error';
  */
 export default function VerifyCertificatePage() {
   const t = useTranslations('publicSite');
+  const locale = useLocale();
   const params = useParams<{ id: string }>();
   // La API pública no devuelve el emisor: usamos el nombre del tenant resuelto
   // por host (misma resolución que el resto de pantallas sin sesión).
@@ -116,7 +117,7 @@ export default function VerifyCertificatePage() {
               <dl className="mx-auto grid max-w-xs grid-cols-2 gap-x-4 gap-y-2 border-t border-border pt-4 text-left text-sm">
                 <dt className="text-text-subtle">{t('verificar.issuedAt')}</dt>
                 <dd className="text-right font-medium text-text tabular-nums">
-                  {issuedDateLabel(cert.issuedAt)}
+                  {issuedDateLabel(cert.issuedAt, locale)}
                 </dd>
                 <dt className="text-text-subtle">{t('verificar.certNumber')}</dt>
                 <dd className="text-right font-mono text-text">{cert.number}</dd>
@@ -132,8 +133,14 @@ export default function VerifyCertificatePage() {
   );
 }
 
-function issuedDateLabel(iso: string): string {
+/**
+ * El `locale` va EXPLÍCITO: esta es un área pública que sí se pinta en SSR, y
+ * ahí el singleton de `user-prefs` está vacío a propósito. Sin él el servidor
+ * pintaría la fecha con el locale por defecto y el cliente la repintaría con el
+ * activo → mismatch de hidratación visible.
+ */
+function issuedDateLabel(iso: string, locale: string): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return '—';
-  return formatDate(d, { day: '2-digit', month: 'long', year: 'numeric' });
+  return formatDate(d, { locale, day: '2-digit', month: 'long', year: 'numeric' });
 }

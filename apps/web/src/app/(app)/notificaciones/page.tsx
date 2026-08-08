@@ -81,6 +81,8 @@ function formatRelative(iso: string, t: TranslatorLike): string {
 export default function NotificacionesPage() {
   const t = useTranslations('alumnoSocial');
   const tErrors = useTranslations('errors');
+  // `notificationLink` resuelve «Responder»/«Ver» contra su propio namespace.
+  const tLib = useTranslations('libShared');
   const [notifications, setNotifications] = useState<Notification[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
@@ -193,7 +195,7 @@ export default function NotificacionesPage() {
                 tone: 'info' as const,
               };
               const style = TONE_STYLES[spec.tone];
-              const link = notificationLink(n.templateKey, n.metadata);
+              const link = notificationLink(n.templateKey, n.metadata, tLib);
               const details = (
                 <>
                   <div className="flex flex-wrap items-baseline gap-2">
