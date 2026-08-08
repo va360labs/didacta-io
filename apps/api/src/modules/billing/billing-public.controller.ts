@@ -33,7 +33,10 @@ const uuidSchema = z.string().uuid();
  */
 function ensureUuid(id: string): string {
   if (!uuidSchema.safeParse(id).success) {
-    throw new NotFoundException('Curso no encontrado.');
+    throw new NotFoundException({
+      message: 'Curso no encontrado.',
+      code: 'BILLING_COURSE_NOT_FOUND',
+    });
   }
   return id;
 }
@@ -179,9 +182,16 @@ export class BillingPublicController {
         where: { id: courseId, tenantId, deletedAt: null },
         select: { status: true },
       });
-      if (!curso) throw new NotFoundException('Curso no encontrado.');
+      if (!curso)
+        throw new NotFoundException({
+          message: 'Curso no encontrado.',
+          code: 'BILLING_COURSE_NOT_FOUND',
+        });
       if (curso.status !== 'PUBLISHED') {
-        throw new ConflictException('Este curso no está disponible para la compra.');
+        throw new ConflictException({
+          message: 'Este curso no está disponible para la compra.',
+          code: 'BILLING_COURSE_NOT_PURCHASABLE',
+        });
       }
 
       const billing = this.registry.getBillingService();
@@ -213,7 +223,10 @@ export class BillingPublicController {
     const hostStr = Array.isArray(host) ? host[0] : host;
     const tenant = await this.tenantResolver.resolveByHost(hostStr);
     if (!tenant) {
-      throw new NotFoundException('Comunidad no encontrada para este dominio.');
+      throw new NotFoundException({
+        message: 'Comunidad no encontrada para este dominio.',
+        code: 'BILLING_TENANT_NOT_FOUND',
+      });
     }
     return tenant.id;
   }

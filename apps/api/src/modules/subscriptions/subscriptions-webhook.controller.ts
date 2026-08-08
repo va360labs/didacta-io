@@ -70,14 +70,20 @@ export class SubscriptionsWebhookController {
       this.tenantResolver.resolveByHost(hostStr),
     );
     if (!tenant) {
-      throw new NotFoundException('No se reconoce el dominio de este webhook.');
+      throw new NotFoundException({
+        message: 'No se reconoce el dominio de este webhook.',
+        code: 'SUBS_WEBHOOK_UNKNOWN_DOMAIN',
+      });
     }
 
     const resolved = await runAsTenantOrSanctioned(tenant.id, () =>
       this.stripeResolver.resolve(tenant.id),
     );
     if (!resolved) {
-      throw new UnauthorizedException('Stripe no está configurado para este tenant.');
+      throw new UnauthorizedException({
+        message: 'Stripe no está configurado para este tenant.',
+        code: 'SUBS_STRIPE_NOT_CONFIGURED',
+      });
     }
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const StripeCtor = require('stripe').default ?? require('stripe');
@@ -88,16 +94,27 @@ export class SubscriptionsWebhookController {
     );
 
     const signature = readHeader(req.headers, 'stripe-signature');
-    if (!signature) throw new UnauthorizedException('stripe-signature ausente.');
+    if (!signature)
+      throw new UnauthorizedException({
+        message: 'stripe-signature ausente.',
+        code: 'SUBS_WEBHOOK_SIGNATURE_MISSING',
+      });
     const rawBody = req.rawBody?.toString('utf8') ?? '';
-    if (!rawBody) throw new BadRequestException('Body raw vacío — Stripe siempre envía payload.');
+    if (!rawBody)
+      throw new BadRequestException({
+        message: 'Body raw vacío — Stripe siempre envía payload.',
+        code: 'SUBS_WEBHOOK_EMPTY_BODY',
+      });
 
     let event;
     try {
       event = stripe.constructWebhookEvent(rawBody, signature);
     } catch (err) {
       if (err instanceof WebhookSignatureInvalidError) throw err;
-      throw new UnauthorizedException(`Firma del webhook inválida: ${(err as Error).message}`);
+      throw new UnauthorizedException({
+        message: `Firma del webhook inválida: ${(err as Error).message}`,
+        code: 'SUBS_WEBHOOK_SIGNATURE_REJECTED',
+      });
     }
 
     let parsedBody: unknown;

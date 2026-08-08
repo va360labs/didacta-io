@@ -65,13 +65,20 @@ export class NotificationStreamController {
       'Stream SSE de notificaciones en tiempo real. Autentica con ?ticket=<jwt sse>. Eventos: type=notification|ping.',
   })
   async stream(@Query('ticket') ticket: string | undefined): Promise<Observable<MessageEvent>> {
-    if (!ticket) throw new UnauthorizedException('Falta el ticket de stream');
+    if (!ticket)
+      throw new UnauthorizedException({
+        message: 'Falta el ticket de stream',
+        code: 'NOTIF_STREAM_TICKET_MISSING',
+      });
 
     let claims: StreamTicketClaims;
     try {
       claims = await this.tokens.verifyStreamTicket(ticket);
     } catch {
-      throw new UnauthorizedException('Ticket de stream inválido o expirado');
+      throw new UnauthorizedException({
+        message: 'Ticket de stream inválido o expirado',
+        code: 'NOTIF_STREAM_TICKET_INVALID',
+      });
     }
 
     // El request llega SIN Authorization, así que TenantMiddleware no abrió el

@@ -179,7 +179,10 @@ export class AuditExportService {
     try {
       key = resolveAuditReportMasterKey();
     } catch (err) {
-      throw new ServiceUnavailableException(err instanceof Error ? err.message : String(err));
+      throw new ServiceUnavailableException({
+        message: err instanceof Error ? err.message : String(err),
+        code: 'AUDIT_EXPORT_SIGNING_UNAVAILABLE',
+      });
     }
     if (key === AUDIT_REPORT_HMAC_FALLBACK_KEY) {
       this.logger.warn(

@@ -50,7 +50,10 @@ function requireTemplateEditor(user: SessionClaims | undefined): SessionClaims {
   if (!user) throw new UnauthorizedException();
   const allowed = user.roles.some((r) => (TEMPLATE_EDITOR_ROLES as readonly string[]).includes(r));
   if (!allowed) {
-    throw new ForbiddenException('Esta acción requiere rol formador, tenant_admin o super_admin.');
+    throw new ForbiddenException({
+      message: 'Esta acción requiere rol formador, tenant_admin o super_admin.',
+      code: 'CERTS_STAFF_ROLE_REQUIRED',
+    });
   }
   return user;
 }
@@ -162,7 +165,11 @@ export class CertificatesController {
   private assertOwnerOrStaff(user: SessionClaims, cert: { userId: string }): void {
     if (cert.userId === user.sub) return;
     const staff = user.roles.some((r) => (TEMPLATE_EDITOR_ROLES as readonly string[]).includes(r));
-    if (!staff) throw new NotFoundException('Certificado no encontrado.');
+    if (!staff)
+      throw new NotFoundException({
+        message: 'Certificado no encontrado.',
+        code: 'CERTS_NOT_FOUND',
+      });
   }
 
   @Get(':id')

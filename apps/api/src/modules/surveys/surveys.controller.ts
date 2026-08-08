@@ -124,7 +124,11 @@ export class SurveysController {
       where: { id: sessionId, tenantId: u.tenantId },
       select: { topic: true },
     });
-    if (!session) throw new NotFoundException('Clase no encontrada.');
+    if (!session)
+      throw new NotFoundException({
+        message: 'Clase no encontrada.',
+        code: 'SURVEYS_SESSION_NOT_FOUND',
+      });
     const result = await this.registry.getSurveysService().createForZoomSession({
       tenantId: u.tenantId,
       sessionId,
@@ -165,7 +169,10 @@ export class SurveysController {
   private requireAdmin(user: SessionClaims | undefined): SessionClaims {
     const u = this.requireUser(user);
     if (!u.roles.some((r) => ADMIN_ROLES.has(r))) {
-      throw new ForbiddenException('Sólo super_admin / tenant_admin pueden gestionar encuestas.');
+      throw new ForbiddenException({
+        message: 'Sólo super_admin / tenant_admin pueden gestionar encuestas.',
+        code: 'SURVEYS_ADMIN_REQUIRED',
+      });
     }
     return u;
   }

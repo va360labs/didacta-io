@@ -53,7 +53,10 @@ export class AiGraderController {
   private requireFormador(user: SessionClaims | undefined): SessionClaims {
     if (!user) throw new UnauthorizedException();
     if (!user.roles.some((r) => FORMADOR_ROLES.has(r))) {
-      throw new ForbiddenException('Solo formadores y admins pueden usar AI Grader.');
+      throw new ForbiddenException({
+        message: 'Solo formadores y admins pueden usar AI Grader.',
+        code: 'AI_GRADER_STAFF_REQUIRED',
+      });
     }
     return user;
   }

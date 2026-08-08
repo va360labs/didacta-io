@@ -54,7 +54,10 @@ function requireFormador(user: SessionClaims | undefined): SessionClaims {
   if (!user) throw new UnauthorizedException();
   const allowed = user.roles.some((r) => (FORMADOR_ROLES as readonly string[]).includes(r));
   if (!allowed) {
-    throw new ForbiddenException('Esta acción requiere rol formador, tenant_admin o super_admin.');
+    throw new ForbiddenException({
+      message: 'Esta acción requiere rol formador, tenant_admin o super_admin.',
+      code: 'AI_CONTENT_STAFF_ROLE_REQUIRED',
+    });
   }
   return user;
 }

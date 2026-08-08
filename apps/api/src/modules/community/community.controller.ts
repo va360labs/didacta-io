@@ -267,7 +267,10 @@ export class CommunityController {
   async runDigestNow(@CurrentUser() user: SessionClaims | undefined) {
     if (!user) throw new UnauthorizedException();
     if (!user.roles.includes('super_admin')) {
-      throw new ForbiddenException('Solo super_admin puede disparar el digest manualmente.');
+      throw new ForbiddenException({
+        message: 'Solo super_admin puede disparar el digest manualmente.',
+        code: 'COMMUNITY_DIGEST_SUPER_ADMIN_REQUIRED',
+      });
     }
     await this.digest.triggerNow();
     return { enqueued: true };

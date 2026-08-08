@@ -226,7 +226,10 @@ export class PaymentConnectionsController {
   private assertSuperAdmin(user: SessionClaims | undefined): SessionClaims {
     if (!user) throw new UnauthorizedException();
     if (!user.roles.includes('super_admin')) {
-      throw new ForbiddenException('Solo super_admin puede gestionar conexiones de pago.');
+      throw new ForbiddenException({
+        message: 'Solo super_admin puede gestionar conexiones de pago.',
+        code: 'PAYCONN_SUPER_ADMIN_REQUIRED',
+      });
     }
     return user;
   }
@@ -696,7 +699,10 @@ export class PaymentConnectionsController {
       try {
         new RegExp(r.pattern, 'i');
       } catch {
-        throw new BadRequestException(`El patrón "${r.pattern}" no es una expresión válida.`);
+        throw new BadRequestException({
+          message: `El patrón "${r.pattern}" no es una expresión válida.`,
+          code: 'PAYCONN_PATTERN_INVALID',
+        });
       }
     }
     await this.registry.getPaymentConnectionsService().saveEntitlementRuleset(user.tenantId, dto);
@@ -774,16 +780,24 @@ export class PaymentConnectionsController {
   ) {
     const user = this.assertSuperAdmin(rawUser);
     const sub = await this.registry.getPaymentConnectionsService().getSubscriber(user.tenantId, id);
-    if (!sub) throw new NotFoundException('Suscriptor no encontrado.');
+    if (!sub)
+      throw new NotFoundException({
+        message: 'Suscriptor no encontrado.',
+        code: 'PAYCONN_SUBSCRIBER_NOT_FOUND',
+      });
     const to = sub.userEmail?.trim();
     if (!to) {
-      throw new BadRequestException('El suscriptor no tiene email para enviarle el recordatorio.');
+      throw new BadRequestException({
+        message: 'El suscriptor no tiene email para enviarle el recordatorio.',
+        code: 'PAYCONN_SUBSCRIBER_NO_EMAIL',
+      });
     }
     const resolved = await this.smtpResolver.resolve(user.tenantId);
     if (!resolved) {
-      throw new ConflictException(
-        'No hay SMTP configurado (ni del tenant ni global) para enviar el recordatorio.',
-      );
+      throw new ConflictException({
+        message: 'No hay SMTP configurado (ni del tenant ni global) para enviar el recordatorio.',
+        code: 'PAYCONN_SMTP_NOT_CONFIGURED',
+      });
     }
     const branding = await resolveEmailBranding(
       this.prisma as unknown as BrandingPrisma,
@@ -801,7 +815,10 @@ export class PaymentConnectionsController {
       branding.tenantName,
     );
     if (!result.ok) {
-      throw new ConflictException(`No se pudo enviar el email: ${result.error ?? 'error SMTP'}`);
+      throw new ConflictException({
+        message: `No se pudo enviar el email: ${result.error ?? 'error SMTP'}`,
+        code: 'PAYCONN_EMAIL_SEND_FAILED',
+      });
     }
     return { ok: true, to };
   }

@@ -87,14 +87,21 @@ export class WooWebhookController {
     }
 
     if (!tenantSlug) {
-      throw new BadRequestException('Falta ?tenant= en la URL del webhook.');
+      throw new BadRequestException({
+        message: 'Falta ?tenant= en la URL del webhook.',
+        code: 'PAYCONN_WEBHOOK_TENANT_MISSING',
+      });
     }
 
     const tenant = await this.prisma.tenant.findFirst({
       where: { slug: tenantSlug, deletedAt: null },
       select: { id: true },
     });
-    if (!tenant) throw new BadRequestException('Tenant desconocido.');
+    if (!tenant)
+      throw new BadRequestException({
+        message: 'Tenant desconocido.',
+        code: 'PAYCONN_WEBHOOK_TENANT_UNKNOWN',
+      });
 
     // RLS F2: con el tenant resuelto por slug, todo lo demás (secreto,
     // ruleset, conexión, espejo del pedido) corre bajo su ALS.
@@ -121,7 +128,10 @@ export class WooWebhookController {
     if (!secret) {
       // Sin secreto configurado no se puede verificar nada. Rechazar es la
       // única opción segura: aceptar dejaría el endpoint abierto.
-      throw new UnauthorizedException('El webhook de WooCommerce no está configurado.');
+      throw new UnauthorizedException({
+        message: 'El webhook de WooCommerce no está configurado.',
+        code: 'PAYCONN_WOO_WEBHOOK_NOT_CONFIGURED',
+      });
     }
 
     // Se firma sobre el BUFFER, no sobre el string: convertir a texto y volver
@@ -142,7 +152,10 @@ export class WooWebhookController {
         },
         'woo-webhook: firma inválida — payload descartado',
       );
-      throw new UnauthorizedException('Firma del webhook inválida.');
+      throw new UnauthorizedException({
+        message: 'Firma del webhook inválida.',
+        code: 'PAYCONN_WEBHOOK_SIGNATURE_INVALID',
+      });
     }
 
     // Solo nos interesan los pedidos. El resto se acepta con 200 para que
@@ -155,11 +168,18 @@ export class WooWebhookController {
     try {
       payload = JSON.parse(rawBody);
     } catch {
-      throw new BadRequestException('El cuerpo del webhook no es JSON válido.');
+      throw new BadRequestException({
+        message: 'El cuerpo del webhook no es JSON válido.',
+        code: 'PAYCONN_WEBHOOK_BODY_INVALID',
+      });
     }
 
     const order = mapWooOrderPayload(payload);
-    if (!order) throw new BadRequestException('El payload no parece un pedido de WooCommerce.');
+    if (!order)
+      throw new BadRequestException({
+        message: 'El payload no parece un pedido de WooCommerce.',
+        code: 'PAYCONN_WEBHOOK_NOT_AN_ORDER',
+      });
     if (!order.customerEmail) {
       // Sin email no hay a quién atribuirlo. Se responde 200 para no provocar
       // reintentos infinitos de algo que nunca va a poder procesarse.

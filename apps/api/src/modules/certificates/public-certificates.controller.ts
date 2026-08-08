@@ -34,7 +34,11 @@ export class PublicCertificatesController {
   @ApiResponse({ status: 200 })
   @ApiResponse({ status: 404, description: 'Certificado no encontrado.' })
   async verify(@Param('id') id: string) {
-    if (!UUID_RE.test(id)) throw new NotFoundException('Certificado no encontrado.');
+    if (!UUID_RE.test(id))
+      throw new NotFoundException({
+        message: 'Certificado no encontrado.',
+        code: 'CERTS_NOT_FOUND',
+      });
     // Lookup cross-tenant DELIBERADO (decisión de diseño): la URL de
     // verificación es compartible sin contexto de tenant (LinkedIn la referencia
     // como certUrl) y la credencial es el propio UUID. Inventario F3: post-flip
@@ -45,7 +49,11 @@ export class PublicCertificatesController {
         select: { number: true, snapshot: true, issuedAt: true, revokedAt: true },
       }),
     );
-    if (!cert) throw new NotFoundException('Certificado no encontrado.');
+    if (!cert)
+      throw new NotFoundException({
+        message: 'Certificado no encontrado.',
+        code: 'CERTS_NOT_FOUND',
+      });
 
     const snap = (cert.snapshot ?? {}) as {
       studentName?: string;

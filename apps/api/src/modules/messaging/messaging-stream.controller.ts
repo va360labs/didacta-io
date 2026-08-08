@@ -49,13 +49,20 @@ export class MessagingStreamController {
       'Stream SSE de mensajería. Autentica con ?ticket=<jwt sse>. Eventos JSON con discriminador `kind` (message.created | ping).',
   })
   async stream(@Query('ticket') ticket: string | undefined): Promise<Observable<MessageEvent>> {
-    if (!ticket) throw new UnauthorizedException('Falta el ticket de stream');
+    if (!ticket)
+      throw new UnauthorizedException({
+        message: 'Falta el ticket de stream',
+        code: 'MSG_STREAM_TICKET_MISSING',
+      });
 
     let claims: StreamTicketClaims;
     try {
       claims = await this.tokens.verifyStreamTicket(ticket);
     } catch {
-      throw new UnauthorizedException('Ticket de stream inválido o expirado');
+      throw new UnauthorizedException({
+        message: 'Ticket de stream inválido o expirado',
+        code: 'MSG_STREAM_TICKET_INVALID',
+      });
     }
 
     // Sin Authorization no hay ALS del middleware: abrimos el contexto con el
