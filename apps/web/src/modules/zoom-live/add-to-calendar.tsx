@@ -19,27 +19,27 @@
  * esa página la que decide si enseñarlo (gating server-side, ADR-017).
  */
 
+import { useTranslations } from 'next-intl';
 import { Icon } from '@/components/icon';
 import { Dialog } from '@/components/ui/dialog';
 
 interface CalendarTarget {
+  /** Segmento de la URL de la API. El de Apple lleva punto: `calendar.ics`. */
   key: string;
-  label: string;
-  hint: string;
+  /**
+   * Key del catálogo. Va aparte de `key` a propósito: `calendar.ics` se leería
+   * como un path anidado de next-intl (`calendar` → `ics`).
+   */
+  msg: 'google' | 'outlook' | 'office365' | 'ics';
   /** El `.ics` se descarga; los demás abren el proveedor en otra pestaña. */
   download?: boolean;
 }
 
 const TARGETS: CalendarTarget[] = [
-  { key: 'google', label: 'Google Calendar', hint: 'Cuentas de Gmail y Workspace' },
-  { key: 'outlook', label: 'Outlook.com', hint: 'Cuentas personales de Outlook o Hotmail' },
-  { key: 'office365', label: 'Outlook (Microsoft 365)', hint: 'Cuentas de trabajo o del centro' },
-  {
-    key: 'calendar.ics',
-    label: 'Apple Calendar y otros',
-    hint: 'Descarga el evento .ics y ábrelo con tu calendario',
-    download: true,
-  },
+  { key: 'google', msg: 'google' },
+  { key: 'outlook', msg: 'outlook' },
+  { key: 'office365', msg: 'office365' },
+  { key: 'calendar.ics', msg: 'ics', download: true },
 ];
 
 function hrefFor(sessionId: string, target: CalendarTarget): string {
@@ -64,15 +64,17 @@ export function AddToCalendarDialog({
   onOpenChange,
   justRegistered = false,
 }: AddToCalendarDialogProps) {
+  const t = useTranslations('modZoomLive');
+
   return (
     <Dialog
       open={open}
       onOpenChange={onOpenChange}
-      title={justRegistered ? '¡Estás dentro!' : 'Añadir al calendario'}
+      title={justRegistered ? t('calendar.titleRegistered') : t('calendar.title')}
       description={
         justRegistered
-          ? `Te has inscrito a "${topic}". Guárdala en tu calendario para que no se te pase.`
-          : `Guarda "${topic}" en tu calendario.`
+          ? t('calendar.descriptionRegistered', { topic })
+          : t('calendar.description', { topic })
       }
       maxWidthClass="max-w-md"
     >
@@ -91,16 +93,18 @@ export function AddToCalendarDialog({
               <Icon name={target.download ? 'download-cloud' : 'calendar'} size={16} />
             </span>
             <span className="min-w-0">
-              <span className="block text-sm font-semibold text-text">{target.label}</span>
-              <span className="block text-xs text-text-muted">{target.hint}</span>
+              <span className="block text-sm font-semibold text-text">
+                {t(`calendar.targets.${target.msg}.label`)}
+              </span>
+              <span className="block text-xs text-text-muted">
+                {t(`calendar.targets.${target.msg}.hint`)}
+              </span>
             </span>
           </a>
         ))}
       </div>
 
-      <p className="mt-4 text-xs text-text-subtle">
-        Te avisaremos también por email 2 horas antes de empezar.
-      </p>
+      <p className="mt-4 text-xs text-text-subtle">{t('calendar.footer')}</p>
     </Dialog>
   );
 }
