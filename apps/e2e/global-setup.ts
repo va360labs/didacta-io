@@ -11,7 +11,9 @@
  * fallo ruidoso ANTES de correr un solo test, y deja el entorno en el estado
  * que la suite da por supuesto:
  *
- *   1. api y web responden.
+ *   1. api, web Y la api a través del rewrite de Next responden — las tres,
+ *      porque la suite entera habla por el rewrite y ese camino puede estar
+ *      caído con la api directa perfectamente sana.
  *   2. Redis configurado — sin él la mensajería realtime es un no-op silencioso.
  *   3. Cupo de rate limit con margen — con Redis activo el limiter deja de
  *      fallar abierto y el cupo público por defecto (30 req/min COMPARTIDOS
@@ -19,6 +21,11 @@
  *   4. Secretos de webhooks de pago presentes.
  *   5. Espacios de sistema sembrados (`prisma/seed.sql`).
  *   6. Onboarding cerrado para los admins sembrados.
+ *
+ * Regla que rige todo el fichero: «no he podido comprobarlo» NUNCA se traduce
+ * a un estado. Un no-2xx inesperado es un fallo con mensaje, no un estado
+ * inferido — que es exactamente el agujero que tuvo `readInstanceState` y que
+ * dejaba saltarse ENTERA la preparación del entorno sin que nada fallara.
  *
  * La receta completa para dejar el stack en pie está en `scripts/e2e-stack.sh`.
  */
@@ -54,23 +61,41 @@ function fail(what: string, why: string): never {
   );
 }
 
-async function waitForService(url: string, label: string): Promise<void> {
+/**
+ * Qué cuenta como «este servicio ya sirve». Se enumeran a propósito en vez de
+ * aceptar cualquier respuesta: un 502 del proxy de Next TAMBIÉN es una
+ * respuesta, y darlo por bueno era justo lo que dejaba pasar un rewrite que
+ * todavía no proxyaba.
+ */
+type SondaAceptable = (status: number) => boolean;
+
+/** Para endpoints de API: sólo 2xx. Un 5xx del proxy no es «arriba». */
+const SOLO_2XX: SondaAceptable = (s) => s >= 200 && s < 300;
+
+/** Para páginas de Next: 2xx o la redirección del gate de sesión (307/308). */
+const PAGINA_SERVIDA: SondaAceptable = (s) => s >= 200 && s < 400;
+
+async function waitForService(
+  url: string,
+  label: string,
+  aceptable: SondaAceptable,
+  pista: string,
+): Promise<void> {
   const deadline = Date.now() + READINESS_TIMEOUT_MS;
-  let last = '';
+  let ultimo = 'sin intentos';
   while (Date.now() < deadline) {
     try {
       const res = await fetch(url);
-      // Cualquier respuesta HTTP vale: lo que comprobamos es que hay alguien
-      // escuchando y sirviendo, no que la ruta concreta devuelva 200.
-      if (res.status > 0) return;
+      if (aceptable(res.status)) return;
+      ultimo = `HTTP ${res.status}`;
     } catch (err) {
-      last = (err as Error).message;
+      ultimo = (err as Error).message;
     }
     await new Promise((r) => setTimeout(r, READINESS_POLL_MS));
   }
   fail(
-    `${label} no responde en ${url}.`,
-    `Tras ${READINESS_TIMEOUT_MS / 1000}s sigue sin contestar (último error: ${last || 'timeout'}).`,
+    `${label} no responde como debe en ${url}.`,
+    `Tras ${READINESS_TIMEOUT_MS / 1000}s el último resultado fue: ${ultimo}.\n\n${pista}`,
   );
 }
 
@@ -116,8 +141,9 @@ async function assertRateLimitHeadroom(): Promise<void> {
     // sale como UN test rojo con nombre, no como un arranque abortado.
     // eslint-disable-next-line no-console
     console.warn(
-      '[arnés E2E] Sin cabecera X-RateLimit-Limit en /auth/signin: no se pudo comprobar\n' +
-        '            el cupo. Lo verifica igualmente "Contrato del arnés E2E".',
+      `[arnés E2E] Sin cabecera X-RateLimit-Limit en /auth/signin (respondió HTTP ${res.status}):\n` +
+        '            no se pudo comprobar el cupo. Lo verifica igualmente el test\n' +
+        '            "Contrato del arnés E2E", que sí exige la cabecera.',
     );
     return;
   }
@@ -169,9 +195,18 @@ async function assertSystemSpacesSeeded(bearer: string): Promise<void> {
       'Sin este endpoint no se puede verificar el sembrado de espacios.',
     );
   }
-  const body = (await res.json()) as Array<{ slug: string }> | { spaces?: Array<{ slug: string }> };
-  const spaces = Array.isArray(body) ? body : (body.spaces ?? []);
-  const present = new Set(spaces.map((s) => s.slug));
+  const body = (await res.json()) as unknown;
+  const spaces = Array.isArray(body) ? body : (body as { spaces?: unknown }).spaces;
+  if (!Array.isArray(spaces)) {
+    // Mismo criterio que `readInstanceState`: un cuerpo con otra forma es "no
+    // he podido preguntar", no "no hay espacios". Antes esto caía a `[]` y el
+    // arranque abortaba diciendo que faltaba el seed, que es una pista falsa.
+    fail(
+      `GET /modules/community/spaces devolvió un cuerpo con forma inesperada.`,
+      `Se esperaba un array o \`{ spaces: [...] }\` y llegó: ${JSON.stringify(body).slice(0, 200)}`,
+    );
+  }
+  const present = new Set((spaces as Array<{ slug: string }>).map((s) => s.slug));
   const missing = SYSTEM_SPACE_SLUGS.filter((slug) => !present.has(slug));
   if (missing.length === 0) return;
   fail(
@@ -185,32 +220,114 @@ async function assertSystemSpacesSeeded(bearer: string): Promise<void> {
 }
 
 /**
+ * Estado de la instancia. Son DOS respuestas válidas, y no hay una tercera:
+ * «no he podido preguntar» NO es un estado, es un fallo.
+ */
+type EstadoInstancia = 'inicializada' | 'virgen';
+
+/**
  * ¿La instancia ya tiene al menos un tenant? Se lo preguntamos al producto
  * (`GET /setup/status`) en vez de deducirlo de una variable de entorno: el job
  * del wizard de `/setup` corre a propósito contra una instancia VIRGEN, y ahí
  * no hay admin sembrado que preparar. Distinguirlo por estado real evita un
  * interruptor de "sáltate el arranque" que tarde o temprano se deja puesto.
+ *
+ * OJO — aquí vivía el agujero que este fichero existe para no tener. La
+ * versión anterior devolvía `boolean` y hacía `if (!res.ok) return false`, o
+ * sea que CUALQUIER no-2xx se traducía a «instancia virgen». Y la petición va
+ * a `E2E_API_URL`, que es la web (`http://localhost:3010`), o sea a través del
+ * rewrite de Next: un 502 del proxy —el stack sano, sólo el rewrite todavía
+ * sin proxyar— se leía como «no hay tenants», el arranque se saltaba ENTERA la
+ * preparación del entorno con un `console.info`, y la tanda daba 43 rojos que
+ * parecían del producto.
+ *
+ * Por eso ahora: sólo un 200 con `initialized` booleano es una respuesta.
+ * Cualquier otra cosa —error de red, no-2xx, cuerpo con otra forma— es un
+ * fallo ruidoso, porque significa que no sabemos en qué estado está la
+ * instancia, y actuar sin saberlo es exactamente lo que rompió la tanda.
  */
-async function isInstanceInitialized(): Promise<boolean> {
-  const res = await fetch(`${API_URL}/api/v1/setup/status`);
-  if (!res.ok) return false;
-  const body = (await res.json()) as { initialized?: boolean };
-  return body.initialized === true;
+async function readInstanceState(): Promise<EstadoInstancia> {
+  const url = `${API_URL}/api/v1/setup/status`;
+  const noSePudoPreguntar = (detalle: string): never =>
+    fail(
+      `No se pudo determinar el estado de la instancia en ${url}.`,
+      `${detalle}\n\n` +
+        'Esto NO se interpreta como "instancia virgen": no saberlo es un fallo.\n' +
+        'Recuerda que E2E_API_URL apunta a la web, así que esta llamada pasa por\n' +
+        'el rewrite de Next (`next.config.mjs`), no por la API directa. Si la API\n' +
+        'directa responde y esto no, el que falla es el rewrite.\n\n' +
+        'Diagnóstico:  bash scripts/e2e-stack.sh check',
+    );
+
+  let res: Response;
+  try {
+    res = await fetch(url);
+  } catch (err) {
+    return noSePudoPreguntar(`La petición ni siquiera llegó: ${(err as Error).message}`);
+  }
+
+  if (res.status !== 200) {
+    const cuerpo = await res.text().catch(() => '');
+    return noSePudoPreguntar(
+      `Respondió HTTP ${res.status}. Cuerpo: ${cuerpo.slice(0, 200) || '(vacío)'}`,
+    );
+  }
+
+  let body: unknown;
+  try {
+    body = await res.json();
+  } catch (err) {
+    return noSePudoPreguntar(`El 200 no traía JSON: ${(err as Error).message}`);
+  }
+
+  const initialized = (body as { initialized?: unknown }).initialized;
+  if (typeof initialized !== 'boolean') {
+    return noSePudoPreguntar(
+      `El cuerpo no trae \`initialized\` booleano: ${JSON.stringify(body).slice(0, 200)}`,
+    );
+  }
+
+  return initialized ? 'inicializada' : 'virgen';
 }
 
 export default async function globalSetup(): Promise<void> {
-  await waitForService(`${API_DIRECT_URL}/healthz`, 'La API');
-  await waitForService(`${BASE_URL}/signin`, 'La web');
+  await waitForService(
+    `${API_DIRECT_URL}/healthz`,
+    'La API',
+    SOLO_2XX,
+    'Arranca el stack con:  bash scripts/e2e-stack.sh start',
+  );
+  await waitForService(
+    `${BASE_URL}/signin`,
+    'La web',
+    PAGINA_SERVIDA,
+    'Arranca el stack con:  bash scripts/e2e-stack.sh start',
+  );
+  // La API A TRAVÉS DEL REWRITE de Next, que es por donde habla la suite
+  // entera (`E2E_API_URL` es la web, no la API directa). Sondearla aquí la
+  // calienta Y la verifica: antes el arranque sólo miraba `healthz` directo y
+  // `/signin`, así que este camino —del que depende cada spec— nunca se
+  // comprobaba y su primer uso real caía dentro de `readInstanceState`.
+  await waitForService(
+    `${API_URL}/api/v1/setup/status`,
+    'La API a través del rewrite de Next',
+    SOLO_2XX,
+    'La API directa puede estar perfectamente y este camino no. Comprueba el\n' +
+      'rewrite de `apps/web/next.config.mjs` y que API_INTERNAL_URL apuntaba a la\n' +
+      'API cuando se construyó la web: se congela en el build, no basta con\n' +
+      'reexportar la variable.',
+  );
 
   assertRealtimeBackendConfigured();
   assertPaymentSecretsConfigured();
   await assertRateLimitHeadroom();
 
-  if (!(await isInstanceInitialized())) {
+  if ((await readInstanceState()) === 'virgen') {
     // eslint-disable-next-line no-console
     console.info(
-      '[arnés E2E] Instancia sin inicializar (no hay tenants): sólo comprobaciones de entorno.\n' +
-        '            Es el estado que necesita el wizard de /setup — ver el job "setup-wizard".',
+      '[arnés E2E] Instancia sin inicializar (el producto dice initialized:false):\n' +
+        '            sólo comprobaciones de entorno. Es el estado que necesita el\n' +
+        '            wizard de /setup — ver el job "setup-wizard".',
     );
     return;
   }
