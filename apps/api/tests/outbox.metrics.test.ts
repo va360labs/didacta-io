@@ -11,6 +11,7 @@ function makeMetrics(): {
   events: Counter<'result'>;
   oldestAge: Gauge<string>;
   pending: Gauge<string>;
+  collisions: Counter<'result'>;
 } {
   const registry = new Registry();
   const dispatch = new Counter({
@@ -47,8 +48,34 @@ function makeMetrics(): {
     help: 't',
     registers: [registry],
   });
-  const metrics = new OutboxMetrics(dispatch, duration, sweeps, events, oldestAge, pending);
-  return { metrics, registry, dispatch, duration, sweeps, events, oldestAge, pending };
+  const undelivered = new Counter({
+    name: 'outbox_undelivered_total',
+    help: 't',
+    registers: [registry],
+  });
+  const replayed = new Counter({
+    name: 'outbox_replayed_total',
+    help: 't',
+    registers: [registry],
+  });
+  const collisions = new Counter({
+    name: 'outbox_enqueue_collisions_total',
+    help: 't',
+    labelNames: ['result'],
+    registers: [registry],
+  });
+  const metrics = new OutboxMetrics(
+    dispatch,
+    duration,
+    sweeps,
+    events,
+    oldestAge,
+    pending,
+    undelivered,
+    replayed,
+    collisions,
+  );
+  return { metrics, registry, dispatch, duration, sweeps, events, oldestAge, pending, collisions };
 }
 
 describe('OutboxMetrics', () => {
@@ -97,6 +124,26 @@ describe('OutboxMetrics', () => {
     expect(byLabel['failed']).toBe(1);
   });
 
+  it('recordRecoveryEvents saca los deduplicados a su propia label', async () => {
+    // Si se sumaran a `processed` la métrica volvería a decir que el failsafe
+    // recuperó eventos que en realidad no se entregaron.
+    setup.metrics.recordRecoveryEvents(1, 0, 4);
+    const value = await setup.events.get();
+    const byLabel = Object.fromEntries(value.values.map((v) => [v.labels.result, v.value]));
+    expect(byLabel['deduplicated']).toBe(4);
+    expect(byLabel['processed']).toBe(1);
+  });
+
+  it('recordEnqueueCollision distingue replaced/swallowed', async () => {
+    setup.metrics.recordEnqueueCollision('replaced');
+    setup.metrics.recordEnqueueCollision('swallowed');
+    setup.metrics.recordEnqueueCollision('swallowed');
+    const value = await setup.collisions.get();
+    const byLabel = Object.fromEntries(value.values.map((v) => [v.labels.result, v.value]));
+    expect(byLabel['replaced']).toBe(1);
+    expect(byLabel['swallowed']).toBe(2);
+  });
+
   it('setOldestPendingAgeSeconds expone el último valor', async () => {
     setup.metrics.setOldestPendingAgeSeconds(42);
     const v1 = await setup.oldestAge.get();
@@ -117,9 +164,11 @@ describe('OutboxMetrics', () => {
     setup.metrics.recordSweep('success');
     setup.metrics.recordRecoveryEvents(1, 0);
     setup.metrics.recordDispatchDuration(0.02);
+    setup.metrics.recordEnqueueCollision('swallowed');
     setup.metrics.setOldestPendingAgeSeconds(123);
     setup.metrics.setPendingEventsCount(4);
     const text = await setup.registry.metrics();
+    expect(text).toContain('outbox_enqueue_collisions_total');
     expect(text).toContain('outbox_dispatch_total');
     expect(text).toContain('outbox_dispatch_duration_seconds');
     expect(text).toContain('outbox_recovery_sweeps_total');

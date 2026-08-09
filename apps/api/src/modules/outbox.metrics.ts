@@ -23,7 +23,15 @@ import { Counter, Gauge, Histogram } from 'prom-client';
  * - `outbox_recovery_sweeps_total{result}` (counter): cada barrido
  *   del recovery worker (`success` | `error`).
  * - `outbox_recovery_events_total{result}` (counter): eventos recuperados
- *   por los sweeps (`processed` | `failed`).
+ *   por los sweeps (`processed` | `failed` | `deduplicated`).
+ *   `deduplicated` es la etiqueta que hace visible el failsafe que no
+ *   entrega: un re-enqueue que BullMQ descartó contra un job terminal. Antes
+ *   iba sumado a `processed` y era indistinguible de una recuperación real.
+ * - `outbox_enqueue_collisions_total{result}` (counter): encolados que
+ *   chocaron con un job terminal ocupando el mismo `jobId` (`replaced` = se
+ *   retiró el viejo y se reencoló; `swallowed` = no se pudo, el evento NO se
+ *   despacha por la cola). Cualquier valor > 0 sostenido en `swallowed` es
+ *   pérdida de despacho y merece alerta.
  * - `outbox_pending_oldest_age_seconds` (gauge): edad en segundos del
  *   evento `processedAt IS NULL` más viejo. 0 si no hay pendientes.
  *   Lo refresca el recovery worker en cada sweep — refleja un valor
@@ -65,7 +73,18 @@ export class OutboxMetrics {
     private readonly undeliveredCounter: Counter<string>,
     @InjectMetric('outbox_replayed_total')
     private readonly replayedCounter: Counter<string>,
+    @InjectMetric('outbox_enqueue_collisions_total')
+    private readonly enqueueCollisionsCounter: Counter<'result'>,
   ) {}
+
+  /**
+   * Un encolado chocó con un job terminal que ocupaba el mismo `jobId`.
+   * `replaced` = se retiró y se reencoló (el evento sí se despachará);
+   * `swallowed` = BullMQ se lo tragó y no se pudo reemplazar.
+   */
+  recordEnqueueCollision(result: 'replaced' | 'swallowed'): void {
+    this.enqueueCollisionsCounter.inc({ result });
+  }
 
   /** Un evento se despachó y no había ningún handler suscrito. */
   recordUndelivered(): void {
@@ -93,9 +112,10 @@ export class OutboxMetrics {
     this.sweepsCounter.inc({ result });
   }
 
-  recordRecoveryEvents(processed: number, failed: number): void {
+  recordRecoveryEvents(processed: number, failed: number, deduplicated = 0): void {
     if (processed > 0) this.recoveryEventsCounter.inc({ result: 'processed' }, processed);
     if (failed > 0) this.recoveryEventsCounter.inc({ result: 'failed' }, failed);
+    if (deduplicated > 0) this.recoveryEventsCounter.inc({ result: 'deduplicated' }, deduplicated);
   }
 
   /**
@@ -148,5 +168,10 @@ export const outboxMetricsProviders = [
   makeCounterProvider({
     name: 'outbox_replayed_total',
     help: 'Total de eventos re-entregados tras aparecer un subscriber que antes faltaba.',
+  }),
+  makeCounterProvider({
+    name: 'outbox_enqueue_collisions_total',
+    help: 'Encolados que chocaron con un job terminal bajo el mismo jobId (replaced = reencolado; swallowed = no despachado).',
+    labelNames: ['result'],
   }),
 ];

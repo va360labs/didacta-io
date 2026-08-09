@@ -1100,7 +1100,12 @@ export class ModuleRegistryService implements OnModuleInit {
     return this.messaging;
   }
 
-  async recoverOutbox(): Promise<{ processed: number; failed: number; undelivered: number }> {
+  async recoverOutbox(): Promise<{
+    processed: number;
+    failed: number;
+    undelivered: number;
+    deduplicated: number;
+  }> {
     return this.factory.getEventBus().recoverPending();
   }
 

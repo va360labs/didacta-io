@@ -2,7 +2,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   NO_HANDLER_REPLAY_WINDOW_MS,
   PersistentEventBus,
+  type EnqueueOutcome,
   type OutboxDispatcher,
+  type OutboxJobRef,
 } from '../src/modules/persistent-event-bus';
 import { tenantContextStorage, type TenantContext } from '../src/tenancy/tenant-context.storage';
 
@@ -108,15 +110,22 @@ function makeFakePrisma() {
   return prisma;
 }
 
-function makeFakeDispatcher(): OutboxDispatcher & { enqueued: bigint[]; enabled: boolean } {
+function makeFakeDispatcher(): OutboxDispatcher & {
+  enqueued: bigint[];
+  enabled: boolean;
+  /** Qué contesta el encolado. `deduplicated` = BullMQ se lo tragó. */
+  outcome: EnqueueOutcome;
+} {
   const state = {
     enqueued: [] as bigint[],
     enabled: true,
+    outcome: 'queued' as EnqueueOutcome,
     isEnabled() {
       return state.enabled;
     },
-    async enqueue(id: bigint) {
-      state.enqueued.push(id);
+    async enqueue(ref: OutboxJobRef) {
+      state.enqueued.push(ref.id);
+      return state.outcome;
     },
   };
   return state;
@@ -512,7 +521,75 @@ describe('PersistentEventBus', () => {
       dispatcher.enabled = true;
       const result = await bus.recoverPending();
       expect(result.processed).toBe(1);
+      expect(result.deduplicated).toBe(0);
       expect(dispatcher.enqueued).toEqual([row.id]);
+    });
+
+    it('recoverPending NO cuenta como procesado un re-enqueue deduplicado', async () => {
+      // El failsafe reportando éxito sin entregar nada: `processed++` sobre un
+      // `add` que BullMQ descartó contra un job terminal. La fila sigue
+      // pendiente, el handler no corrió, y el sweep decía que todo bien.
+      const dispatcher = makeFakeDispatcher();
+      const bus = new PersistentEventBus(prisma as never, silentLogger, dispatcher);
+      const handler = vi.fn(async () => {});
+      bus.subscribe('learning.course.completed', handler);
+
+      dispatcher.enabled = false;
+      await bus.publish(makeEvent('learning.course.completed', {}, 'idem-dedup'));
+      const [row] = [...prisma._rows.values()];
+      row.processedAt = null; // pendiente, como si el despacho original no hubiera ido
+
+      dispatcher.enabled = true;
+      dispatcher.outcome = 'deduplicated';
+      const result = await bus.recoverPending();
+
+      expect(result.deduplicated).toBe(1);
+      expect(result.processed).toBe(0);
+      expect(result.failed).toBe(0);
+      // Y sigue pendiente: el próximo barrido lo vuelve a intentar.
+      expect(row.processedAt).toBeNull();
+    });
+
+    it('publish cae a in-process si el enqueue quedó deduplicado', async () => {
+      // `deduplicated` no es una excepción, así que sin desenlace explícito
+      // publish() se daba por satisfecho y volvía. El evento no lo despachaba
+      // nadie: ni la cola (job terminal) ni el proceso.
+      const dispatcher = makeFakeDispatcher();
+      dispatcher.outcome = 'deduplicated';
+      const bus = new PersistentEventBus(prisma as never, silentLogger, dispatcher);
+      const handler = vi.fn(async () => {});
+      bus.subscribe('learning.course.completed', handler);
+
+      await bus.publish(makeEvent('learning.course.completed', {}, 'idem-dedup-pub'));
+
+      expect(dispatcher.enqueued).toHaveLength(1);
+      expect(handler).toHaveBeenCalledOnce();
+      const row = [...prisma._rows.values()][0];
+      expect(row!.processedAt).toBeInstanceOf(Date);
+    });
+
+    it('el dispatcher recibe la fila entera, no sólo el id (createdAt es identidad)', async () => {
+      // Si el bus siguiera pasando `row.id`, `buildOutboxJobId` no tendría de
+      // dónde sacar el discriminante que sobrevive a recrear la base.
+      const seen: OutboxJobRef[] = [];
+      const dispatcher: OutboxDispatcher = {
+        isEnabled: () => true,
+        enqueue: async (ref) => {
+          seen.push(ref);
+          return 'queued';
+        },
+      };
+      const bus = new PersistentEventBus(prisma as never, silentLogger, dispatcher);
+      bus.subscribe(
+        'learning.course.completed',
+        vi.fn(async () => {}),
+      );
+
+      await bus.publish(makeEvent('learning.course.completed', {}, 'idem-ref'));
+
+      expect(seen).toHaveLength(1);
+      expect(seen[0]!.createdAt).toBeInstanceOf(Date);
+      expect(seen[0]!.id).toBe([...prisma._rows.values()][0]!.id);
     });
   });
 });
