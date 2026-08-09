@@ -693,6 +693,35 @@ describe('MembershipService · checkout', () => {
     expect(ctx.prisma.plans.get(plan.id)?.stripePriceId).toBe('price_1');
   });
 
+  it('el idioma del comprador viaja en la metadata de la session, y sin él NO se inventa la clave', async () => {
+    const plan = await ctx.service.createPlan(TENANT, {
+      name: 'Anual',
+      intervalMonths: 12,
+      amountCents: 99_900,
+    });
+    await ctx.service.startMembershipCheckout({
+      tenantId: TENANT,
+      planId: plan.id,
+      locale: 'en-US',
+      successUrl: 'https://x/s',
+      cancelUrl: 'https://x/c',
+    });
+    expect(ctx.stripe.createCheckoutSession.mock.calls[0]![0].metadata).toMatchObject({
+      locale: 'en-US',
+    });
+
+    ctx.stripe.createCheckoutSession.mockClear();
+    await ctx.service.startMembershipCheckout({
+      tenantId: TENANT,
+      planId: plan.id,
+      successUrl: 'https://x/s',
+      cancelUrl: 'https://x/c',
+    });
+    expect(ctx.stripe.createCheckoutSession.mock.calls[0]![0].metadata).not.toHaveProperty(
+      'locale',
+    );
+  });
+
   it('renombrar el plan renombra su Product en Stripe', async () => {
     const plan = await ctx.service.createPlan(TENANT, {
       name: 'Membresía Anual',
@@ -785,6 +814,29 @@ describe('MembershipService · fulfillment (webhook)', () => {
     expect(ctx.prisma.subs.size).toBe(1);
     expect(ctx.pub.events).toHaveLength(1);
     expect(again).toMatchObject({ userId: 'user_1', userCreated: false });
+  });
+
+  it('el idioma de la compra sobrevive al salto a Stripe y llega al provisioner', async () => {
+    // La fila de `user` NO existe cuando se inicia el checkout: se crea aquí,
+    // después de que el comprador se haya ido a Stripe y haya vuelto. La
+    // metadata de la session es el ÚNICO canal que sobrevive a ese salto.
+    const provision = vi.fn(async () => ({ userId: 'user_1', created: true }));
+    await ctx.service.fulfillMembershipCheckout(
+      membershipSession({
+        metadata: { membership: '1', tenantId: TENANT, planId, locale: 'en-US' } as never,
+      }),
+      provision,
+    );
+    expect(provision).toHaveBeenCalledWith(expect.objectContaining({ locale: 'en-US' }));
+  });
+
+  it('sin idioma en la metadata, el provisioner recibe undefined (no un idioma inventado)', async () => {
+    const provision = vi.fn(async () => ({ userId: 'user_1', created: true }));
+    await ctx.service.fulfillMembershipCheckout(
+      membershipSession({ metadata: { membership: '1', tenantId: TENANT, planId } as never }),
+      provision,
+    );
+    expect(provision).toHaveBeenCalledWith(expect.objectContaining({ locale: undefined }));
   });
 
   it('email normalizado a minúsculas antes de provisionar', async () => {

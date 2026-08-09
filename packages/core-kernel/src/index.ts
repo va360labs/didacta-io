@@ -40,6 +40,8 @@ export type {
   EvidenceVaultService,
   NotificationHubService,
   NotificationCategory,
+  NotificationTerm,
+  NotificationValue,
   I18nService,
   TenantConfigService,
 } from './module/module.js';

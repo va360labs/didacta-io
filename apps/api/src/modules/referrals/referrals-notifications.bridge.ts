@@ -4,7 +4,7 @@
  */
 
 import { Injectable, type OnModuleInit } from '@nestjs/common';
-import type { DomainEvent } from '@didacta/core-kernel';
+import type { DomainEvent, NotificationValue } from '@didacta/core-kernel';
 import { Logger as PinoLogger } from 'nestjs-pino';
 import { ModuleContextFactory } from '../module-context.factory';
 
@@ -37,11 +37,15 @@ interface PayoutRecordedPayload {
   externalReference?: string;
 }
 
-function formatCents(cents: number, currency: string): string {
-  return new Intl.NumberFormat('es-ES', {
-    style: 'currency',
-    currency: currency.toUpperCase(),
-  }).format(cents / 100);
+/**
+ * Importe SIN formatear: viaja como descriptor y lo formatea el hub, que es
+ * quien conoce el idioma del referente. Aquí estaba cableado
+ * `Intl.NumberFormat('es-ES')`, así que un referente con `locale = en-US` leía
+ * «You earned a commission of 1.234,50 €!» — separadores y posición del
+ * símbolo en español dentro de una frase inglesa.
+ */
+function moneyValue(cents: number, currency: string): NotificationValue {
+  return { hubValue: 'money', cents, currency };
 }
 
 @Injectable()
@@ -60,10 +64,10 @@ export class ReferralsNotificationsBridge implements OnModuleInit {
         await this.notify(event.metadata.tenantId, event.data.referrerUserId, {
           templateKey: 'referrals.commission.earned',
           variables: {
-            amount: formatCents(event.data.amountCents, event.data.currency),
+            amount: moneyValue(event.data.amountCents, event.data.currency),
             baseAmount:
               event.data.baseAmountCents !== undefined
-                ? formatCents(event.data.baseAmountCents, event.data.currency)
+                ? moneyValue(event.data.baseAmountCents, event.data.currency)
                 : '',
           },
         });
@@ -75,7 +79,7 @@ export class ReferralsNotificationsBridge implements OnModuleInit {
         await this.notify(event.metadata.tenantId, event.data.referrerUserId, {
           templateKey: 'referrals.payout.recorded',
           variables: {
-            amount: formatCents(event.data.totalCents, event.data.currency),
+            amount: moneyValue(event.data.totalCents, event.data.currency),
             reference: event.data.externalReference ?? '',
           },
         });

@@ -3,7 +3,7 @@ import { createTranslator } from 'next-intl';
 import es from '@/i18n/messages/es';
 import en from '@/i18n/messages/en';
 import { ApiHttpError } from '@/lib/api-client';
-import { apiErrorMessage, CODES_WITH_DETAIL } from './api-error';
+import { apiErrorMessage, CODES_WITH_DETAIL, CODES_WITH_PARAMS } from './api-error';
 import { labelOr, type TranslatorLike } from './labels';
 
 const tEs = createTranslator({ locale: 'es-ES', messages: es, namespace: 'errors' });
@@ -381,6 +381,134 @@ describe('apiErrorMessage con detalle estructurado', () => {
       expect(apiErrorMessage(e, tEn), `${code}: el EN sigue pintando el español`).not.toBe(
         backendMessage,
       );
+    }
+  });
+});
+
+// ============================================================================
+// Codes cuyo `message` interpola DOS o más valores con copy español entre
+// medias (`ApiError.params`). El bug que cierran: con un `detail` único, el
+// inglés heredaba el conector español — «The AI provider failed: openai falló:
+// timeout» — así que colapsarlos MOVÍA el bug en vez de arreglarlo.
+// ============================================================================
+describe('apiErrorMessage con placeholders con nombre', () => {
+  function withParams(
+    message: string,
+    code: string,
+    params?: Record<string, string>,
+  ): ApiHttpError {
+    return new ApiHttpError({ message, status: 502, code, params });
+  }
+
+  it('el catálogo ES rinde byte a byte el `message` del backend, y el EN no hereda su gramática', () => {
+    // Los `message` NO salen del catálogo (sería tautológico): son los que
+    // componen los `super(...)` del backend con los valores ya interpolados.
+    const CASOS: ReadonlyArray<readonly [string, string, Record<string, string>]> = [
+      [
+        'AI_GRADER_PROVIDER_ERROR',
+        'Provider openai falló: timeout tras 30s',
+        { provider: 'openai', reason: 'timeout tras 30s' },
+      ],
+      [
+        'AI_TUTOR_CHAT_PROVIDER_ERROR',
+        'Provider anthropic falló: 429 rate limited',
+        { provider: 'anthropic', reason: '429 rate limited' },
+      ],
+      [
+        'AI_TUTOR_EMBEDDINGS_PROVIDER_ERROR',
+        'Provider voyage falló: connection reset',
+        { provider: 'voyage', reason: 'connection reset' },
+      ],
+      [
+        'AI_PROVIDER_UNAVAILABLE',
+        'openai respondió 503: upstream connect error',
+        { provider: 'openai', statusCode: '503', body: 'upstream connect error' },
+      ],
+      [
+        'AI_CONTENT_INVALID_JSON',
+        'El JSON propuesto para draft tipo QUIZ no es válido: falta el campo questions.',
+        { type: 'QUIZ', reason: 'falta el campo questions' },
+      ],
+    ];
+    expect(CASOS.length, 'la tabla dejó de cubrir CODES_WITH_PARAMS').toBe(CODES_WITH_PARAMS.size);
+    for (const [code, backendMessage, params] of CASOS) {
+      const e = withParams(backendMessage, code, params);
+      expect(apiErrorMessage(e, tEs), `${code}: el ES dejó de ser el message crudo`).toBe(
+        backendMessage,
+      );
+      const english = apiErrorMessage(e, tEn);
+      for (const value of Object.values(params)) {
+        expect(english, `${code}: el EN se traga ${value}`).toContain(value);
+      }
+      // El bug que MOVERÍA un `detail` único: el conector español dentro del
+      // inglés. Ninguno de los tres aparece en la frase inglesa.
+      for (const conector of [' falló:', ' respondió ', ' no es válido:']) {
+        expect(english, `${code}: el EN hereda el conector español`).not.toContain(conector);
+      }
+      expect(english, `${code}: el EN sigue pintando el español`).not.toBe(backendMessage);
+      expect(english, `${code}: pinta la key`).not.toContain(code);
+    }
+  });
+
+  it('un statusCode numérico NO se formatea con separador de miles', () => {
+    // Va como string a propósito: con un número, ICU lo formatearía por idioma
+    // y el ES dejaría de rendir byte a byte el `message` del backend.
+    const e = withParams('openai respondió 1234: x', 'AI_PROVIDER_UNAVAILABLE', {
+      provider: 'openai',
+      statusCode: '1234',
+      body: 'x',
+    });
+    expect(apiErrorMessage(e, tEs)).toBe('openai respondió 1234: x');
+    expect(apiErrorMessage(e, tEn)).toContain('1234');
+    expect(apiErrorMessage(e, tEn)).not.toContain('1.234');
+  });
+
+  it('CAMINO DEGRADADO: params ausente, incompleto o en blanco → message crudo', () => {
+    const message = 'Provider openai falló: timeout';
+    const PARCIALES: ReadonlyArray<Record<string, string> | undefined> = [
+      undefined,
+      {},
+      { provider: 'openai' },
+      { provider: 'openai', reason: '   ' },
+      { reason: 'timeout' },
+    ];
+    for (const params of PARCIALES) {
+      const e = withParams(message, 'AI_GRADER_PROVIDER_ERROR', params);
+      const rendered = apiErrorMessage(e, tEn);
+      expect(rendered, `params=${JSON.stringify(params)}`).toBe(message);
+      expect(rendered).not.toContain('AI_GRADER_PROVIDER_ERROR');
+    }
+  });
+
+  it('los dos catálogos interpolan TODOS los placeholders declarados', () => {
+    // Recorre la lista REAL: añadir un code y olvidar una traducción (o
+    // escribir otro nombre de placeholder) rompe aquí, no en producción.
+    const CATALOGOS: ReadonlyArray<readonly [string, TranslatorLike]> = [
+      ['es', tEs],
+      ['en', tEn],
+    ];
+    for (const [code, names] of CODES_WITH_PARAMS) {
+      for (const [locale, t] of CATALOGOS) {
+        expect(t.has(code), `${locale}: falta la key ${code} en el catálogo`).toBe(true);
+        const values = Object.fromEntries(names.map((n, i) => [n, `ZZ${i}`]));
+        const text = t(code, values);
+        for (const centinela of Object.values(values)) {
+          expect(text, `${locale}/${code} no interpola ${centinela}`).toContain(centinela);
+        }
+        // La key cruda en pantalla es el síntoma de un ICU que no resolvió (la
+        // trampa de las comillas simples alrededor de un placeholder).
+        expect(text, `${locale}/${code} pinta la key`).not.toContain(code);
+        expect(text, `${locale}/${code} deja un placeholder crudo`).not.toMatch(/\{[a-zA-Z]/);
+      }
+    }
+  });
+
+  it('CODES_WITH_PARAMS y CODES_WITH_DETAIL no comparten ningún code', () => {
+    // Un code manda UN dato anónimo o VARIOS con nombre. `apiErrorMessage` mira
+    // `params` primero, así que estar en las dos dejaría el `{detail}` sin
+    // rellenar en silencio.
+    for (const code of CODES_WITH_PARAMS.keys()) {
+      expect(CODES_WITH_DETAIL.has(code), `${code} está en las dos listas`).toBe(false);
     }
   });
 });

@@ -16,6 +16,8 @@ import { buildDecisionEmail } from './email-templates';
 import { resolveEmailBranding, type BrandingPrisma } from '../../common/branded-email';
 import {
   fetchEmailOverride,
+  HUB_DEFAULT_LOCALE,
+  resolveRecipientLocale,
   type TemplateOverridePrisma,
 } from '../notifications/email-template-catalog';
 import { MemberDecisionService } from './member-decision.service';
@@ -381,10 +383,15 @@ export class MemberRegistrationService {
         return;
       }
 
+      // Idioma del APROBADOR (no el del solicitante): es quien lee este email.
+      const locale = await this.resolveApproverLocale(tenantId, approver);
+      // El override se busca primero en el idioma del aprobador y, si el tenant
+      // no lo personalizó ahí, en el de referencia (misma precedencia que el hub).
       const override = await fetchEmailOverride(
         this.prisma as unknown as TemplateOverridePrisma,
         tenantId,
         'member_registration.approval_request',
+        locale,
       );
       const mail = buildDecisionEmail(
         {
@@ -400,6 +407,7 @@ export class MemberRegistrationService {
           subscriptionFailures: failures,
           purchases,
         },
+        locale,
         override,
       );
       const result = await this.smtp.send(
@@ -418,6 +426,37 @@ export class MemberRegistrationService {
         { err, tenantId, userId },
         'member-registration: excepción al notificar al aprobador',
       );
+    }
+  }
+
+  /**
+   * Idioma en el que redactar el email de decisión.
+   *
+   * El aprobador se configura como DIRECCIÓN de correo (setting del tenant, o
+   * el override del alta manual), no como userId, así que el idioma se busca
+   * por (tenant, email) en `user`.
+   *
+   * DOS CAMINOS DEGRADADOS, los dos a `HUB_DEFAULT_LOCALE` y los dos deliberados:
+   *
+   *  (a) La dirección no corresponde a ningún usuario del tenant. Es un caso
+   *      NORMAL: el aprobador puede ser un buzón compartido
+   *      (`inscripciones@…`) que nunca ha entrado a la plataforma.
+   *  (b) La consulta revienta. Perder el idioma es aceptable; perder el aviso
+   *      de que hay una inscripción esperando, no.
+   */
+  private async resolveApproverLocale(tenantId: string, approverEmail: string): Promise<string> {
+    try {
+      const user = await this.prisma.user.findUnique({
+        where: { tenantId_email: { tenantId, email: approverEmail } },
+        select: { locale: true },
+      });
+      return resolveRecipientLocale(user?.locale);
+    } catch (err) {
+      this.logger.warn(
+        { err, tenantId },
+        `member-registration: no se pudo leer el idioma del aprobador, se usa ${HUB_DEFAULT_LOCALE}`,
+      );
+      return HUB_DEFAULT_LOCALE;
     }
   }
 }

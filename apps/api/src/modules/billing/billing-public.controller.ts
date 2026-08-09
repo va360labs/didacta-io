@@ -18,6 +18,7 @@ import { z } from 'zod';
 import type { FastifyRequest } from 'fastify';
 import type { CourseOfferOption } from '@didacta/mod-billing';
 import { extractClientContext } from '../../auth/client-context';
+import { readRequestLocale } from '../../common/checkout-locale';
 import { ZodValidationPipe } from '../../auth/zod-validation.pipe';
 import { PrismaService } from '../../prisma/prisma.service';
 import { runAsTenant } from '../../tenancy/tenant-context.storage';
@@ -206,6 +207,10 @@ export class BillingPublicController {
         userEmail: dto.email,
         courseId,
         optionId: dto.optionId,
+        // Idioma con el que el comprador está navegando AHORA. Viaja en la
+        // metadata de Stripe porque su fila de `user` no existe todavía: se
+        // crea en el webhook, después del salto a la pasarela.
+        locale: readRequestLocale(req.headers),
         // Retorno a las páginas PÚBLICAS del catálogo: el comprador aún no tiene
         // sesión y las de /cursos/checkout viven tras el gate de login.
         successUrl: `${base}/catalogo/checkout/success?session_id={CHECKOUT_SESSION_ID}`,

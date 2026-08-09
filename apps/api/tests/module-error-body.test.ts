@@ -28,7 +28,14 @@ import { SpaceNotFoundError } from '@didacta/mod-community';
 import { InvitationInvalidError } from '@didacta/mod-learning';
 import { TemplateInUseError } from '@didacta/mod-certificates';
 import { CustomCssTooLargeError, LogoTooLargeError } from '@didacta/mod-theming';
+import { GraderProviderError } from '@didacta/mod-ai-grader';
+import { ChatProviderError, EmbeddingsProviderError } from '@didacta/mod-ai-tutor';
+import { InvalidContentJsonError } from '@didacta/mod-ai-content';
+import { ProviderUnavailableError } from '../src/ai/types/contracts';
 import { moduleErrorBody } from '../src/common/module-error-body';
+import { AiGraderErrorFilter } from '../src/modules/ai-grader/ai-grader-error.filter';
+import { AiTutorErrorFilter } from '../src/modules/ai-tutor/ai-tutor-error.filter';
+import { AiContentErrorFilter } from '../src/modules/ai-content/ai-content-error.filter';
 import { BillingErrorFilter } from '../src/modules/billing/billing-error.filter';
 import { ZoomLiveErrorFilter } from '../src/modules/zoom-live/zoom-live-error.filter';
 import { AssessmentsErrorFilter } from '../src/modules/assessments/assessments-error.filter';
@@ -86,6 +93,44 @@ describe('moduleErrorBody', () => {
       reasons: ['a', 'b'],
     });
     expect(body).toMatchObject({ detail: 'd', reasons: ['a', 'b'] });
+  });
+
+  it('emite `params` cuando la excepción trae varios valores con nombre', () => {
+    const body = moduleErrorBody(
+      {
+        code: 'AI_GRADER_PROVIDER_ERROR',
+        message: 'Provider openai falló: timeout',
+        params: { provider: 'openai', reason: 'timeout' },
+      },
+      502,
+    );
+    expect(body).toEqual({
+      statusCode: 502,
+      code: 'AI_GRADER_PROVIDER_ERROR',
+      message: 'Provider openai falló: timeout',
+      params: { provider: 'openai', reason: 'timeout' },
+    });
+  });
+
+  it('CAMINO DEGRADADO: `params` a medias NO se emite (todo o nada)', () => {
+    // Un solo hueco vacío haría que el front pintase «The AI provider  failed:
+    // timeout». Sin el campo, degrada al `message` crudo —español, pero
+    // completo—, que es la misma decisión que se tomó para `detail`.
+    const PARCIALES: unknown[] = [
+      undefined,
+      {},
+      { provider: 'openai', reason: '' },
+      { provider: 'openai', reason: '   ' },
+      { provider: 'openai', reason: 42 },
+      { provider: 'openai', reason: null },
+    ];
+    for (const params of PARCIALES) {
+      const body = moduleErrorBody(
+        { code: 'X', message: 'm', params: params as Record<string, string> },
+        502,
+      );
+      expect(body, `params=${JSON.stringify(params)}`).not.toHaveProperty('params');
+    }
   });
 });
 
@@ -145,6 +190,53 @@ describe('los ExceptionFilter emiten el `detail` de su módulo', () => {
     expect(body['detail']).toBe(detail);
     expect(typeof body['detail']).toBe('string');
     expect(String(body['message'])).toContain(detail);
+  });
+
+  it.each([
+    // Los 5 codes que `detail` NO podía cerrar: dos o más valores con copy
+    // español entre medias. El filtro tiene que emitirlos CON NOMBRE, porque
+    // colapsarlos en un `detail` único metería el «falló» español dentro de la
+    // frase inglesa.
+    [
+      new AiGraderErrorFilter(),
+      new GraderProviderError('openai', 'timeout'),
+      'AI_GRADER_PROVIDER_ERROR',
+      { provider: 'openai', reason: 'timeout' },
+    ],
+    [
+      new AiTutorErrorFilter(),
+      new ChatProviderError('anthropic', '429'),
+      'AI_TUTOR_CHAT_PROVIDER_ERROR',
+      { provider: 'anthropic', reason: '429' },
+    ],
+    [
+      new AiTutorErrorFilter(),
+      new EmbeddingsProviderError('voyage', 'reset'),
+      'AI_TUTOR_EMBEDDINGS_PROVIDER_ERROR',
+      { provider: 'voyage', reason: 'reset' },
+    ],
+    [
+      new AiTutorErrorFilter(),
+      new ProviderUnavailableError('openai', 503, 'upstream'),
+      'AI_PROVIDER_UNAVAILABLE',
+      // `statusCode` como STRING: con un number, ICU lo formatearía por idioma.
+      { provider: 'openai', statusCode: '503', body: 'upstream' },
+    ],
+    [
+      new AiContentErrorFilter(),
+      new InvalidContentJsonError('QUIZ', 'falta questions'),
+      'AI_CONTENT_INVALID_JSON',
+      { type: 'QUIZ', reason: 'falta questions' },
+    ],
+  ])('%# → el body lleva los valores CON NOMBRE', (filter, error, code, params) => {
+    const body = bodyOf(filter as never, error);
+    expect(body['code']).toBe(code);
+    expect(body['params']).toEqual(params);
+    expect(body).not.toHaveProperty('detail');
+    // Y el `message` español NO cambia: sigue llevando los datos incrustados.
+    for (const value of Object.values(params)) {
+      expect(String(body['message'])).toContain(value);
+    }
   });
 
   it('un error del módulo sin dato interpolado no inventa `detail`', () => {

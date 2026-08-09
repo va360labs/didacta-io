@@ -7,6 +7,7 @@ import { Body, Controller, Get, NotFoundException, Post, Req } from '@nestjs/com
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { FastifyRequest } from 'fastify';
 import { extractClientContext } from '../../auth/client-context';
+import { readRequestLocale } from '../../common/checkout-locale';
 import { ZodValidationPipe } from '../../auth/zod-validation.pipe';
 import { runAsTenant } from '../../tenancy/tenant-context.storage';
 import { TenantResolverService } from '../../tenancy/tenant-resolver.service';
@@ -61,6 +62,10 @@ export class MembershipPublicController {
           planId: dto.planId,
           email: dto.email,
           referralCode: dto.referralCode,
+          // Idioma con el que el comprador está navegando AHORA. Viaja en la
+          // metadata de Stripe porque su fila de `user` no existe todavía: se
+          // crea en el webhook, después del salto a la pasarela.
+          locale: readRequestLocale(req.headers),
           successUrl: `${base}/unete?status=success`,
           cancelUrl: `${base}/unete?status=cancel`,
         });

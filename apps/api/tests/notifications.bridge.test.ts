@@ -146,10 +146,19 @@ describe('NotificationsBridge handlers', () => {
         passed: true,
       }),
     );
+    // MUST-FIX 37: el resultado viaja como TÉRMINO sin redactar. El bridge no
+    // sabe en qué idioma lee el alumno; lo sabe el hub, que resuelve
+    // `user.locale`. Que «aprobado» siga siendo «aprobado» en español lo fija
+    // `hub-values.test.ts` sobre la tabla de términos.
     expect(sendCalls[0]).toMatchObject({
       templateKey: 'attempt.graded',
-      variables: expect.objectContaining({ result: 'aprobado' }),
+      variables: expect.objectContaining({
+        result: { hubValue: 'term', term: 'quiz.result.passed' },
+      }),
     });
+    // Y lo que NO puede volver a pasar: una palabra española ya renderizada.
+    const vars = sendCalls[0]?.variables as Record<string, unknown> | undefined;
+    expect(typeof vars?.['result']).not.toBe('string');
 
     await subs.get('assessments.attempt.graded')!(
       event('assessments.attempt.graded', {
@@ -159,7 +168,9 @@ describe('NotificationsBridge handlers', () => {
         passed: false,
       }),
     );
-    expect(sendCalls[1]?.variables).toMatchObject({ result: 'no aprobado' });
+    expect(sendCalls[1]?.variables).toMatchObject({
+      result: { hubValue: 'term', term: 'quiz.result.not_passed' },
+    });
   });
 
   it('respeta el tenantId del metadata del evento', async () => {

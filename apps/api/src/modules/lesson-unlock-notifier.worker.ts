@@ -12,6 +12,7 @@ import {
 } from '@nestjs/common';
 import { Queue, Worker, type ConnectionOptions } from 'bullmq';
 import IORedis, { type Redis } from 'ioredis';
+import type { NotificationValue } from '@didacta/core-kernel';
 import { Logger as PinoLogger } from 'nestjs-pino';
 import { PrismaService } from '../prisma/prisma.service';
 import { runAsTenant, runSanctionedGlobalAccess } from '../tenancy/tenant-context.storage';
@@ -20,6 +21,12 @@ import { ModuleContextFactory } from './module-context.factory';
 const QUEUE_NAME = 'didacta.learning.lesson-unlock';
 // Cada 10 min por defecto. Configurable vía env.
 const REPEAT_PATTERN = process.env['LESSON_UNLOCK_CRON'] ?? '*/10 * * * *';
+
+/** Relleno cuando el curso de la lección no se puede resolver. Lo traduce el hub. */
+const UNKNOWN_COURSE_TITLE: NotificationValue = {
+  hubValue: 'term',
+  term: 'learning.course.unknown',
+};
 
 /**
  * Worker BullMQ que avisa a los alumnos suscritos cuando una clase programada
@@ -149,7 +156,12 @@ export class LessonUnlockNotifierWorker implements OnApplicationBootstrap, OnMod
       const lesson = lessonById.get(sub.lessonId);
       if (!lesson) continue; // su lección aún no está publicada
       const courseId = courseIdByModule.get(lesson.moduleId);
-      const courseTitle = (courseId && courseTitleById.get(courseId)) || 'tu curso';
+      // CAMINO DEGRADADO NOMBRADO: la lección existe pero su curso no se pudo
+      // resolver (borrado entre el barrido y el aviso). El texto de relleno lo
+      // pone el hub, que conoce el idioma del alumno: aquí estaba cableado «tu
+      // curso» y se colaba en la frase inglesa de `lesson.unlocked`.
+      const courseTitle: string | NotificationValue =
+        (courseId && courseTitleById.get(courseId)) || UNKNOWN_COURSE_TITLE;
       const variables = { lessonTitle: lesson.title, courseTitle };
       try {
         // Procesado por fila bajo el tenant de la suscripción: la extensión

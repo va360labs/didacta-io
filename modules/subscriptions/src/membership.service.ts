@@ -158,6 +158,13 @@ export type UserProvisioner = (args: {
   tenantId: string;
   email: string;
   name: string | null;
+  /**
+   * Idioma con el que el comprador estaba navegando al pagar, capturado en
+   * `startMembershipCheckout` y transportado en la metadata de la sesión (es lo
+   * único que sobrevive al salto a Stripe). Opaco para este módulo: lo valida y
+   * lo persiste el host, y SOLO si crea la fila.
+   */
+  locale?: string;
 }) => Promise<{ userId: string; created: boolean }>;
 
 export class MembershipService {
@@ -414,6 +421,13 @@ export class MembershipService {
      * el payload del evento de activación — este módulo NO lo interpreta.
      */
     referralCode?: string;
+    /**
+     * Idioma activo de la UI del comprador. Viaja opaco en la metadata de la
+     * session y vuelve en el webhook, que es lo único que sobrevive al salto a
+     * Stripe: la fila de `user` no existe todavía cuando se inicia el checkout.
+     * Este módulo NO lo interpreta ni lo valida — lo hace el host.
+     */
+    locale?: string;
   }): Promise<{ url: string; sessionId: string }> {
     const config = await this.getConfig(args.tenantId);
     if (!config.active) throw new MembershipPageInactiveError();
@@ -439,6 +453,7 @@ export class MembershipService {
         membership: '1',
         planId: plan.id,
         ...(args.referralCode ? { referralCode: args.referralCode } : {}),
+        ...(args.locale ? { locale: args.locale } : {}),
       },
     });
     return { url: session.url, sessionId: session.id };
@@ -527,6 +542,10 @@ export class MembershipService {
       tenantId,
       email: email.trim().toLowerCase(),
       name: session.customer_details?.name ?? null,
+      // Idioma con el que compró (lo escribió `startMembershipCheckout`). Va sin
+      // validar a propósito: quien escribe la fila de `user` es el host y es él
+      // quien decide qué locales acepta.
+      locale: meta['locale'],
     });
 
     // Trial: si el plan tiene días de prueba, la sub nace TRIALING (con

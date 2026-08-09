@@ -46,6 +46,20 @@ export interface ApiError {
    * No es copy: nunca se traduce, viene tal cual del proveedor.
    */
   detail?: string;
+  /**
+   * Los MISMOS datos crudos que `detail`, pero CON NOMBRE, para los `message`
+   * que interpolan dos o más valores con copy español entre medias
+   * (`Provider ${provider} falló: ${reason}`).
+   *
+   * Con un `detail` único la frase inglesa heredaría el conector español
+   * («The AI provider failed: openai *falló*: timeout»). Nombrados, cada
+   * catálogo escribe su frase e interpola `{provider}` y `{reason}` donde su
+   * gramática los pide (ver `CODES_WITH_PARAMS` en `lib/i18n/api-error.ts`).
+   *
+   * Tampoco es copy: los valores vienen tal cual del backend o del proveedor.
+   * Un code usa `detail` o `params`, nunca los dos.
+   */
+  params?: Record<string, string>;
 }
 
 export class ApiHttpError extends Error implements ApiError {
@@ -53,12 +67,14 @@ export class ApiHttpError extends Error implements ApiError {
   issues?: ApiError['issues'];
   code?: string;
   detail?: string;
+  params?: Record<string, string>;
   constructor(payload: ApiError) {
     super(payload.message);
     this.status = payload.status;
     this.issues = payload.issues;
     this.code = payload.code;
     this.detail = payload.detail;
+    this.params = payload.params;
     this.name = 'ApiHttpError';
   }
 }
@@ -163,6 +179,24 @@ async function refreshAccessToken(): Promise<string | null> {
   return refreshInFlight;
 }
 
+/**
+ * `params` del body de error → mapa de strings, o `undefined`.
+ *
+ * Es estricto a propósito: un valor que no sea string se descarta ENTERO (no
+ * se coerce ni se conserva a medias). Interpolar `undefined` o `[object
+ * Object]` dentro de la frase traducida sería peor que degradar al `message`
+ * crudo del backend, que es lo que hace `apiErrorMessage` cuando el mapa falta.
+ */
+function readStringMap(raw: unknown): Record<string, string> | undefined {
+  if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) return undefined;
+  const out: Record<string, string> = {};
+  for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
+    if (typeof value !== 'string') return undefined;
+    out[key] = value;
+  }
+  return Object.keys(out).length > 0 ? out : undefined;
+}
+
 export async function apiFetch<T>(
   path: string,
   init: RequestInit = {},
@@ -193,6 +227,7 @@ export async function apiFetch<T>(
       status: response.status,
       code: typeof payload.code === 'string' ? payload.code : undefined,
       detail: typeof payload.detail === 'string' ? payload.detail : undefined,
+      params: readStringMap(payload.params),
     });
 
     // Sesión expirada: el access token (1h) caducó pero el refresh (30d) puede

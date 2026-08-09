@@ -55,6 +55,7 @@ export type {
   MemberPurchaseLookupResult,
   SubscriptionStatusCategory,
   SubscriptionStatusInfo,
+  SubscriptionStatusLang,
   SubscriberSyncResult,
   SubscriberListOptions,
   SubscriberRow,

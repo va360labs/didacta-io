@@ -190,11 +190,17 @@ export const HUB_TEMPLATE_DEFAULTS: Record<string, TemplateDef> = {
       'Tu resumen semanal de la comunidad ({{mentionsCount}} menciones · {{repliesCount}} respuestas)',
     body: 'Esta semana en la comunidad:\n\n· {{mentionsCount}} mención(es) nueva(s)\n· {{repliesCount}} respuesta(s) en hilos donde participaste\n\nRevísalas todas en tu sección de menciones. Desde el resumen anterior: {{sinceIso}}.',
   },
-  // Aviso masivo (broadcast) a toda la comunidad. Passthrough: el worker compone
-  // el asunto y el cuerpo (mensaje + enlace de baja en email) y los pasa como vars.
+  // Aviso masivo (broadcast) a toda la comunidad. El asunto y el cuerpo los
+  // escribe el admin al enviarlo, así que van como passthrough; el enlace a la
+  // publicación y el pie de baja SÍ son copy del producto y por eso viven aquí
+  // (antes los concatenaba el worker al `body`, en español, y llegaban al hub
+  // dentro de una variable donde ninguna traducción los alcanzaba).
+  //
+  // Los dos bloques son secciones: sin `postUrl` / sin `unsubUrl` desaparecen,
+  // que es como el aviso in-app se queda sin pie de baja.
   'community.broadcast': {
     subject: '{{subject}}',
-    body: '{{body}}',
+    body: '{{body}}{{#postUrl}}\n\nVer la publicación: {{postUrl}}{{/postUrl}}{{#unsubUrl}}\n\n———\nRecibes este aviso como miembro de la comunidad. Para dejar de recibir avisos, entra aquí: {{unsubUrl}}{{/unsubUrl}}',
   },
   // Aviso de desbloqueo de una clase programada por fecha (MEJ-009). Lo dispara
   // el LessonUnlockNotifierWorker cuando la lección cruza su publishAt.
@@ -317,11 +323,12 @@ export const HUB_TEMPLATE_DEFAULTS_EN: Record<string, TemplateDef> = {
     subject: 'Your weekly community digest ({{mentionsCount}} mentions · {{repliesCount}} replies)',
     body: 'This week in the community:\n\n· {{mentionsCount}} new mention(s)\n· {{repliesCount}} new replies in threads you took part in\n\nReview them all in your mentions section. Since the previous digest: {{sinceIso}}.',
   },
-  // Passthrough puro: el asunto y el cuerpo los escribe el admin al enviar el
-  // aviso, así que no hay nada que traducir — el copy viaja en las variables.
+  // El asunto y el cuerpo los escribe el admin al enviar el aviso (passthrough,
+  // no hay nada que traducir ahí). Lo que SÍ es copy del producto —el enlace a
+  // la publicación y el pie de baja— se traduce aquí.
   'community.broadcast': {
     subject: '{{subject}}',
-    body: '{{body}}',
+    body: '{{body}}{{#postUrl}}\n\nSee the post: {{postUrl}}{{/postUrl}}{{#unsubUrl}}\n\n———\nYou receive this notice as a member of the community. To stop receiving notices, go here: {{unsubUrl}}{{/unsubUrl}}',
   },
   'lesson.unlocked': {
     subject: 'Now available: {{lessonTitle}}',
@@ -426,7 +433,33 @@ export const FIXED_EMAIL_COPY = {
     'cta.signin': 'Entrar',
     'footer.hub_member': 'Recibiste este correo como miembro de {{tenantName}}.',
     'footer.signin_hint': 'Después podrás iniciar sesión desde {{signinUrl}} con tu email.',
+    'cta.decision_approve': 'Aprobar',
+    'cta.decision_reject': 'Rechazar',
+    'label.applicant_email': 'Email',
+    'label.applicant_name': 'Nombre',
+    'label.applicant_telegram': 'Telegram ID',
     'label.otp_code': 'Código',
+    // Bloque de decisión al aprobador (`buildDecisionEmail`). Es ESTRUCTURAL:
+    // un override del tenant edita el asunto y la intro, nunca estos rótulos.
+    'decision.delinquent': '⚠ CONSTA COMO IMPAGO',
+    'decision.membership_in_group': 'Miembro del grupo de {{tenantName}}',
+    'decision.membership_not_in_group': 'NO está en el grupo - revisar caso',
+    'decision.membership_unknown': 'Pertenencia NO verificable (error Telegram)',
+    'decision.partial_result': '⚠ Resultado parcial',
+    'decision.partial_result_html':
+      '⚠ Resultado parcial: no se pudo consultar {{count}} cuenta(s) de pago ({{names}}).',
+    'decision.partial_suffix': ' (no se pudo consultar {{count}} cuenta(s) de pago: {{names}})',
+    'decision.purchases': 'Compras detectadas ({{count}})',
+    'decision.state': 'Estado',
+    'decision.subscription_active': 'Suscripción vigente',
+    'decision.subscription_inactive': '⚠ Suscripción NO vigente (baja o impago)',
+    'decision.subscription_inactive_html': '⚠ Suscripción no vigente (baja o impago)',
+    'decision.subscription_none': 'Suscripción detectada: ninguna en las cuentas de pago conectadas.', // prettier-ignore
+    'decision.subscription_none_html': 'Sin suscripción detectada en las cuentas de pago conectadas.', // prettier-ignore
+    'decision.subscription_unverifiable':
+      '⚠ No se pudo verificar la suscripción{{suffix}}. Revisar manualmente antes de decidir.',
+    'decision.subscription_unverifiable_html':
+      '⚠ No se pudo verificar la suscripción ({{names}}). Revisar manualmente antes de decidir.',
     'title.member_rejection': 'Sobre tu inscripción',
     'title.member_welcome': '¡Bienvenido!',
     'title.otp_code': 'Tu código de acceso',
@@ -447,7 +480,31 @@ export const FIXED_EMAIL_COPY = {
     'cta.signin': 'Sign in',
     'footer.hub_member': 'You received this email as a member of {{tenantName}}.',
     'footer.signin_hint': 'From then on you can sign in at {{signinUrl}} with your email.',
+    'cta.decision_approve': 'Approve',
+    'cta.decision_reject': 'Reject',
+    'label.applicant_email': 'Email',
+    'label.applicant_name': 'Name',
+    'label.applicant_telegram': 'Telegram ID',
     'label.otp_code': 'Code',
+    'decision.delinquent': '⚠ RECORDED AS UNPAID',
+    'decision.membership_in_group': 'Member of the {{tenantName}} group',
+    'decision.membership_not_in_group': 'NOT in the group - review this case',
+    'decision.membership_unknown': 'Membership NOT verifiable (Telegram error)',
+    'decision.partial_result': '⚠ Partial result',
+    'decision.partial_result_html':
+      '⚠ Partial result: {{count}} payment account(s) could not be queried ({{names}}).',
+    'decision.partial_suffix': ' ({{count}} payment account(s) could not be queried: {{names}})',
+    'decision.purchases': 'Purchases found ({{count}})',
+    'decision.state': 'Status',
+    'decision.subscription_active': 'Active subscription',
+    'decision.subscription_inactive': '⚠ Subscription NOT active (cancelled or unpaid)',
+    'decision.subscription_inactive_html': '⚠ Subscription not active (cancelled or unpaid)',
+    'decision.subscription_none': 'Subscriptions found: none in the connected payment accounts.',
+    'decision.subscription_none_html': 'No subscription found in the connected payment accounts.',
+    'decision.subscription_unverifiable':
+      '⚠ The subscription could not be verified{{suffix}}. Review it manually before deciding.',
+    'decision.subscription_unverifiable_html':
+      '⚠ The subscription could not be verified ({{names}}). Review it manually before deciding.',
     'title.member_rejection': 'About your registration',
     'title.member_welcome': 'Welcome!',
     'title.otp_code': 'Your access code',
@@ -727,6 +784,8 @@ const HUB_TEMPLATE_META: Record<
     variables: [
       { name: 'subject', description: 'Asunto escrito por el admin' },
       { name: 'body', description: 'Mensaje escrito por el admin' },
+      { name: 'postUrl', description: 'Enlace a la publicación (vacío si el aviso no la lleva)' },
+      { name: 'unsubUrl', description: 'Enlace de baja de avisos (solo en el email)' },
       { name: 'tenantName', description: 'Nombre de la plataforma' },
     ],
   },
@@ -1081,12 +1140,13 @@ export const TRANSACTIONAL_EMAIL_DEFS: EmailTemplateCatalogEntry[] = [
  *  - `payment_connections.access_expiring` → idem
  *  - `subscriptions.admin_digest`          → idem
  *
- * La única key transaccional que sigue SIN traducir es
- * `member_registration.approval_request`: su email es en su mayor parte bloques
- * de datos estructurales cuyo copy (las etiquetas de estado de suscripción de
- * `classifySubscriptionStatus`) vive en `modules/payment-connections`. Traducir
- * solo la intro dejaría un email mitad inglés mitad español, que es peor que el
- * de hoy. El test de camino degradado la usa como caso VIVO.
+ * Desde este PR NO queda ninguna key transaccional sin traducir. La última era
+ * `member_registration.approval_request`, que estaba bloqueada porque las
+ * etiquetas de estado de suscripción las redacta `classifySubscriptionStatus`
+ * en `modules/payment-connections` y traducir solo la intro habría dejado un
+ * email mitad inglés mitad español. Esa función admite ahora un idioma (con
+ * español por defecto, así que sus otros tres consumidores no cambian) y el
+ * resto del bloque estructural vive en `FIXED_EMAIL_COPY` (`decision.*`).
  */
 export const TRANSACTIONAL_TEMPLATE_DEFAULTS_EN: Record<string, TemplateDef> = {
   'auth.password_reset': {
@@ -1100,6 +1160,10 @@ export const TRANSACTIONAL_TEMPLATE_DEFAULTS_EN: Record<string, TemplateDef> = {
   'member_registration.otp_code': {
     subject: 'Your access code',
     body: 'Your access code for {{tenantName}} is the one shown below.\n\nEnter it on the verification screen to continue. This code expires in {{ttlMinutes}} minutes.\n\nIf you did not request this access, please ignore this message.',
+  },
+  'member_registration.approval_request': {
+    subject: 'New registration pending — {{name}}',
+    body: 'There is a new registration waiting for your approval at {{tenantName}}.',
   },
   'member_registration.welcome_approved': {
     subject: 'Your registration at {{tenantName}} has been approved',

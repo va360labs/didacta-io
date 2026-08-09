@@ -4,7 +4,7 @@
  */
 
 import { randomUUID } from 'node:crypto';
-import type { ModuleContext } from '@didacta/core-kernel';
+import type { ModuleContext, NotificationValue } from '@didacta/core-kernel';
 import type { PrismaClient } from '@didacta/database';
 import type {
   AddReactionDto,
@@ -35,6 +35,19 @@ import {
  * Cota de seguridad para no traer toda la tabla; suficiente para v1.
  */
 const ATTACHMENT_POST_SCAN_LIMIT = 1000;
+
+/**
+ * CAMINO DEGRADADO NOMBRADO: quien comentó o mencionó no tiene `displayName`.
+ *
+ * El relleno lo redacta el HUB, no este módulo: la misma mención puede ir a
+ * gente que lee en idiomas distintos y aquí no hay forma de saberlo. Antes
+ * viajaba «Alguien» ya escrito dentro de `variables`, así que un destinatario
+ * `en-US` recibía «Alguien mentioned you in a comment.».
+ */
+const UNKNOWN_ACTOR_NAME: NotificationValue = {
+  hubValue: 'term',
+  term: 'community.actor.unknown',
+};
 
 /** Destinatario de un lote de aviso masivo. `optedOut` = dado de baja de broadcasts. */
 export interface BroadcastRecipient {
@@ -351,7 +364,7 @@ export class CommunityService {
 
     const variables = {
       actorId: args.author.id,
-      actorName: args.author.displayName ?? 'Alguien',
+      actorName: args.author.displayName ?? UNKNOWN_ACTOR_NAME,
       postId: args.post.id,
       postTitle: args.post.title,
       commentId: args.comment.id,
@@ -953,7 +966,7 @@ export class CommunityService {
           to: m.mentionedUserId,
           variables: {
             authorId,
-            authorName: authorDisplayName ?? 'Alguien',
+            authorName: authorDisplayName ?? UNKNOWN_ACTOR_NAME,
             postId: m.postId,
             commentId: m.commentId,
             handle: m.mentionedHandle,
