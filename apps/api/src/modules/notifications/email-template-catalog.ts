@@ -190,11 +190,17 @@ export const HUB_TEMPLATE_DEFAULTS: Record<string, TemplateDef> = {
       'Tu resumen semanal de la comunidad ({{mentionsCount}} menciones · {{repliesCount}} respuestas)',
     body: 'Esta semana en la comunidad:\n\n· {{mentionsCount}} mención(es) nueva(s)\n· {{repliesCount}} respuesta(s) en hilos donde participaste\n\nRevísalas todas en tu sección de menciones. Desde el resumen anterior: {{sinceIso}}.',
   },
-  // Aviso masivo (broadcast) a toda la comunidad. Passthrough: el worker compone
-  // el asunto y el cuerpo (mensaje + enlace de baja en email) y los pasa como vars.
+  // Aviso masivo (broadcast) a toda la comunidad. El asunto y el cuerpo los
+  // escribe el admin al enviarlo, así que van como passthrough; el enlace a la
+  // publicación y el pie de baja SÍ son copy del producto y por eso viven aquí
+  // (antes los concatenaba el worker al `body`, en español, y llegaban al hub
+  // dentro de una variable donde ninguna traducción los alcanzaba).
+  //
+  // Los dos bloques son secciones: sin `postUrl` / sin `unsubUrl` desaparecen,
+  // que es como el aviso in-app se queda sin pie de baja.
   'community.broadcast': {
     subject: '{{subject}}',
-    body: '{{body}}',
+    body: '{{body}}{{#postUrl}}\n\nVer la publicación: {{postUrl}}{{/postUrl}}{{#unsubUrl}}\n\n———\nRecibes este aviso como miembro de la comunidad. Para dejar de recibir avisos, entra aquí: {{unsubUrl}}{{/unsubUrl}}',
   },
   // Aviso de desbloqueo de una clase programada por fecha (MEJ-009). Lo dispara
   // el LessonUnlockNotifierWorker cuando la lección cruza su publishAt.
@@ -317,11 +323,12 @@ export const HUB_TEMPLATE_DEFAULTS_EN: Record<string, TemplateDef> = {
     subject: 'Your weekly community digest ({{mentionsCount}} mentions · {{repliesCount}} replies)',
     body: 'This week in the community:\n\n· {{mentionsCount}} new mention(s)\n· {{repliesCount}} new replies in threads you took part in\n\nReview them all in your mentions section. Since the previous digest: {{sinceIso}}.',
   },
-  // Passthrough puro: el asunto y el cuerpo los escribe el admin al enviar el
-  // aviso, así que no hay nada que traducir — el copy viaja en las variables.
+  // El asunto y el cuerpo los escribe el admin al enviar el aviso (passthrough,
+  // no hay nada que traducir ahí). Lo que SÍ es copy del producto —el enlace a
+  // la publicación y el pie de baja— se traduce aquí.
   'community.broadcast': {
     subject: '{{subject}}',
-    body: '{{body}}',
+    body: '{{body}}{{#postUrl}}\n\nSee the post: {{postUrl}}{{/postUrl}}{{#unsubUrl}}\n\n———\nYou receive this notice as a member of the community. To stop receiving notices, go here: {{unsubUrl}}{{/unsubUrl}}',
   },
   'lesson.unlocked': {
     subject: 'Now available: {{lessonTitle}}',
@@ -727,6 +734,8 @@ const HUB_TEMPLATE_META: Record<
     variables: [
       { name: 'subject', description: 'Asunto escrito por el admin' },
       { name: 'body', description: 'Mensaje escrito por el admin' },
+      { name: 'postUrl', description: 'Enlace a la publicación (vacío si el aviso no la lleva)' },
+      { name: 'unsubUrl', description: 'Enlace de baja de avisos (solo en el email)' },
       { name: 'tenantName', description: 'Nombre de la plataforma' },
     ],
   },

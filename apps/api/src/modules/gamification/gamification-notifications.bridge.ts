@@ -4,6 +4,7 @@
  */
 
 import { Injectable, Logger, type OnModuleInit } from '@nestjs/common';
+import type { NotificationTerm, NotificationValue } from '@didacta/core-kernel';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ModuleContextFactory } from '../module-context.factory';
 
@@ -42,12 +43,34 @@ interface PerkRequestedPayload {
   perkId: string;
 }
 
-/** Frase del aviso según cómo se resolvió la solicitud. */
-const PERK_STATUS_TEXT: Record<string, string> = {
-  APPROVED: 'Hemos aprobado tu solicitud de "{{perkTitle}}". Te escribimos para cuadrarlo.',
-  DONE: 'Tu solicitud de "{{perkTitle}}" ya está hecha. ¡Esperamos que te haya servido!',
-  REJECTED: 'Esta vez no hemos podido atender tu solicitud de "{{perkTitle}}".',
+/**
+ * Cómo se resolvió la solicitud → TÉRMINO del hub. La frase ya no se redacta
+ * aquí: este bridge no sabe en qué idioma lee el miembro (lo resuelve el hub
+ * con su `user.locale`), así que antes mandaba la frase española dentro de la
+ * variable `statusText` y el catálogo inglés no la alcanzaba — el email salía
+ * en inglés con el párrafo central en español.
+ *
+ * `Partial` porque el payload del evento es un `string` en el borde: un estado
+ * que este bridge no conozca cae al camino degradado de `perkStatusValue`.
+ */
+const PERK_STATUS_TERM: Partial<Record<string, NotificationTerm>> = {
+  APPROVED: 'gamification.perk.approved',
+  DONE: 'gamification.perk.done',
+  REJECTED: 'gamification.perk.rejected',
 };
+
+/**
+ * CAMINO DEGRADADO NOMBRADO: un `status` que este bridge no conoce (el módulo
+ * añadió uno nuevo y nadie tocó este mapa) manda cadena vacía, exactamente como
+ * antes (`PERK_STATUS_TEXT[status] ?? ''`). El email sale sin el párrafo del
+ * resultado pero CON el asunto, el título del beneficio y la nota del equipo:
+ * el miembro se entera de que su solicitud se ha resuelto.
+ */
+function perkStatusValue(status: string, perkTitle: string): NotificationValue | string {
+  const term = PERK_STATUS_TERM[status];
+  if (!term) return '';
+  return { hubValue: 'term', term, vars: { perkTitle } };
+}
 
 /**
  * Avisos de mod.gamification.
@@ -96,15 +119,11 @@ export class GamificationNotificationsBridge implements OnModuleInit {
     });
 
     bus.subscribe<PerkHandledPayload>('gamification.perk.handled', async (event) => {
-      const text = (PERK_STATUS_TEXT[event.data.status] ?? '').replace(
-        '{{perkTitle}}',
-        event.data.perkTitle,
-      );
       await this.notifyMember(event.metadata.tenantId, event.data.userId, {
         templateKey: 'gamification.perk.handled',
         variables: {
           perkTitle: event.data.perkTitle,
-          statusText: text,
+          statusText: perkStatusValue(event.data.status, event.data.perkTitle),
           staffNote: event.data.staffNote ?? '',
         },
       });
@@ -112,17 +131,11 @@ export class GamificationNotificationsBridge implements OnModuleInit {
 
     // Avisos al equipo: hay algo esperando en la cola.
     bus.subscribe<ChallengeSubmittedPayload>('gamification.challenge.submitted', async (event) => {
-      await this.notifyStaff(
-        event.metadata.tenantId,
-        'Nueva entrega de reto pendiente de revisar.',
-      );
+      await this.notifyStaff(event.metadata.tenantId, 'gamification.staff.challenge_submitted');
     });
 
     bus.subscribe<PerkRequestedPayload>('gamification.perk.requested', async (event) => {
-      await this.notifyStaff(
-        event.metadata.tenantId,
-        'Alguien ha pedido un beneficio de su nivel.',
-      );
+      await this.notifyStaff(event.metadata.tenantId, 'gamification.staff.perk_requested');
     });
 
     this.logger.log('Avisos de gamificación suscritos (5 eventos)');
@@ -155,10 +168,17 @@ export class GamificationNotificationsBridge implements OnModuleInit {
   }
 
   /**
-   * Al equipo: solo dentro de la plataforma. Se envía sin plantilla del
-   * catálogo porque es un aviso operativo, no un email al miembro.
+   * Al equipo: solo dentro de la plataforma. Usa la plantilla
+   * `gamification.staff.pending`, que enmarca el aviso; el aviso EN SÍ viaja
+   * como término (`term`) porque el equipo de un tenant puede tener gente en
+   * los dos idiomas y quien conoce el de cada uno es el hub. Antes se pasaba la
+   * frase española ya redactada y el admin anglófono leía «You have something
+   * to review» seguido de «Nueva entrega de reto pendiente de revisar.».
    */
-  private async notifyStaff(tenantId: string | undefined, message: string): Promise<void> {
+  private async notifyStaff(
+    tenantId: string | undefined,
+    message: NotificationTerm,
+  ): Promise<void> {
     if (!tenantId) return;
     try {
       const staff = await this.prisma.user.findMany({
@@ -178,7 +198,7 @@ export class GamificationNotificationsBridge implements OnModuleInit {
           channel: 'in-app',
           templateKey: 'gamification.staff.pending',
           to: member.id,
-          variables: { message },
+          variables: { message: { hubValue: 'term', term: message } },
           category: 'COMMUNITY',
         });
       }

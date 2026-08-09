@@ -24,6 +24,7 @@ import {
   resolveHubDefault,
   toHubTemplateLang,
 } from './notifications/email-template-catalog';
+import { resolveNotificationVariables } from './notifications/hub-values';
 
 /**
  * Implementación real del NotificationHub: persiste cada notificación en
@@ -105,12 +106,22 @@ export class PrismaNotificationHubService implements NotificationHubService {
       notification.tenantId,
       webBaseUrl,
     );
-    const renderVars = { tenantName: branding.tenantName, ...notification.variables };
 
     // El idioma lo pone el destinatario salvo que el caller lo imponga. La
     // consulta extra solo ocurre cuando el caller NO pasó locale.
     const locale =
       notification.locale ?? (await this.resolveUserLocale(notification.tenantId, notification.to));
+
+    // MUST-FIX 37 — los valores que DEPENDEN DEL IDIOMA (una fecha, un importe,
+    // una etiqueta de estado) llegan crudos y se formatean aquí, que es el
+    // único sitio que conoce el idioma del destinatario. Antes los componía el
+    // emisor con `es-ES` cableado y ninguna traducción del catálogo los
+    // alcanzaba: la plantilla salía en inglés con el dato en español dentro.
+    //
+    // Se resuelve ANTES de persistir, así que `metadata` y el evento realtime
+    // siguen guardando texto plano y nada aguas abajo ve un descriptor.
+    const variables = resolveNotificationVariables(notification.variables, locale);
+    const renderVars = { tenantName: branding.tenantName, ...variables };
 
     const rendered = await this.renderForTenant(
       notification.tenantId,
@@ -128,7 +139,7 @@ export class PrismaNotificationHubService implements NotificationHubService {
         templateKey: notification.templateKey,
         subject: rendered.subject ?? null,
         body: rendered.body,
-        metadata: notification.variables as never,
+        metadata: variables as never,
         sentAt: channel === 'IN_APP' ? new Date() : null,
       },
     });
@@ -142,7 +153,7 @@ export class PrismaNotificationHubService implements NotificationHubService {
         templateKey: notification.templateKey,
         subject: rendered.subject ?? null,
         createdAt: created.createdAt,
-        metadata: notification.variables,
+        metadata: variables,
       });
       return;
     }

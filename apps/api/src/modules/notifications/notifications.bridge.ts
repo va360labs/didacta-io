@@ -4,6 +4,7 @@
  */
 
 import { Injectable, type OnModuleInit } from '@nestjs/common';
+import type { NotificationValue } from '@didacta/core-kernel';
 import { Logger as PinoLogger } from 'nestjs-pino';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ModuleContextFactory } from '../module-context.factory';
@@ -121,16 +122,19 @@ export class NotificationsBridge implements OnModuleInit {
     eventBus.subscribe<AttemptOutcome>('assessments.attempt.graded', async (e) => {
       const tenantId = e.metadata.tenantId;
       const { userId, quizId, scorePercent, passed } = e.data;
+      // El resultado viaja como TÉRMINO, no como palabra: quien sabe en qué
+      // idioma lo lee el alumno es el hub. Antes salía «aprobado» incrustado
+      // dentro de la frase inglesa de `attempt.graded`.
+      const result: NotificationValue = {
+        hubValue: 'term',
+        term: passed ? 'quiz.result.passed' : 'quiz.result.not_passed',
+      };
       await hub.send({
         tenantId,
         channel: 'in-app',
         templateKey: 'attempt.graded',
         to: userId,
-        variables: {
-          quiz: quizId,
-          scorePercent,
-          result: passed ? 'aprobado' : 'no aprobado',
-        },
+        variables: { quiz: quizId, scorePercent, result },
       });
     });
 

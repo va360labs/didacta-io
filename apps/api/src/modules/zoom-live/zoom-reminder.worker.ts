@@ -12,6 +12,7 @@ import {
 } from '@nestjs/common';
 import { Queue, Worker, type ConnectionOptions } from 'bullmq';
 import IORedis, { type Redis } from 'ioredis';
+import type { NotificationValue } from '@didacta/core-kernel';
 import { Logger as PinoLogger } from 'nestjs-pino';
 import { runAsTenant, runSanctionedGlobalAccess } from '../../tenancy/tenant-context.storage';
 import { ModuleContextFactory } from '../module-context.factory';
@@ -33,23 +34,21 @@ function reminderHoursBefore(): number {
 }
 
 /**
- * Hora de inicio en la zona del formador. Es la referencia que el alumno ya
- * ve en el email de confirmación; cambiar de criterio ahora sería contarle
- * dos horas distintas para la misma clase.
+ * Hora de inicio en la zona del formador, SIN formatear. Es la referencia que
+ * el alumno ya ve en el email de confirmación; cambiar de criterio ahora sería
+ * contarle dos horas distintas para la misma clase.
+ *
+ * El formato lo pone el hub, que es quien conoce el idioma de cada inscrito:
+ * aquí estaba cableado `Intl.DateTimeFormat('es-ES')` y un alumno con `locale =
+ * en-US` recibía «lunes, 14 de marzo, 18:00» dentro de una frase inglesa.
  */
-function formatStartsAt(date: Date, timezone: string): string {
-  try {
-    return new Intl.DateTimeFormat('es-ES', {
-      timeZone: timezone || 'UTC',
-      weekday: 'long',
-      day: '2-digit',
-      month: 'long',
-      hour: '2-digit',
-      minute: '2-digit',
-    }).format(date);
-  } catch {
-    return date.toISOString();
-  }
+function startsAtValue(date: Date, timezone: string): NotificationValue {
+  return {
+    hubValue: 'date',
+    iso: date.toISOString(),
+    timeZone: timezone,
+    format: 'weekday_datetime',
+  };
 }
 
 /**
@@ -164,7 +163,7 @@ export class ZoomReminderWorker implements OnApplicationBootstrap, OnModuleDestr
         const userIds = await service.listRegisteredUserIds(pending.tenantId, pending.id);
         const variables = {
           topic: info.topic,
-          startsAt: formatStartsAt(info.startTime, info.timezone),
+          startsAt: startsAtValue(info.startTime, info.timezone),
           hoursBefore,
           ...calendarVariables(pending.id),
         };

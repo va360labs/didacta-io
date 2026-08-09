@@ -128,7 +128,13 @@ export class CommunityBroadcastWorker implements OnApplicationBootstrap, OnModul
     if (done || !broadcast) return true;
 
     const webBase = (process.env['WEB_PUBLIC_URL'] ?? '').replace(/\/$/, '');
-    const postLine = broadcast.postId ? `\n\nVer la publicación: ${webBase}/comunidad` : '';
+    // El enlace viaja SOLO (sin su frase): «Ver la publicación:» y la nota de
+    // baja son copy del producto y viven en la plantilla `community.broadcast`,
+    // que tiene gemela inglesa. Aquí estaban concatenados al cuerpo, así que
+    // llegaban al hub dentro de `variables` y ninguna traducción los alcanzaba:
+    // un miembro con `locale = en-US` recibía el aviso de su admin con el pie
+    // de baja en español.
+    const postUrl = broadcast.postId ? `${webBase}/comunidad` : '';
     let sent = 0;
     let failed = 0;
     let skipped = 0;
@@ -146,25 +152,23 @@ export class CommunityBroadcastWorker implements OnApplicationBootstrap, OnModul
           broadcast.tenantId,
           r.userId,
         )}`;
-        const emailBody =
-          broadcast.bodyText +
-          postLine +
-          `\n\n———\nRecibes este aviso como miembro de la comunidad. ` +
-          `Para dejar de recibir avisos, entra aquí: ${unsubUrl}`;
         try {
+          // La baja SOLO va por email (in-app no se «recibe» en la bandeja):
+          // la plantilla envuelve su bloque en `{{#unsubUrl}}`, así que omitir
+          // la variable hace desaparecer el pie, igual que antes.
           await ctx.notificationHub.send({
             tenantId: broadcast.tenantId,
             channel: 'email',
             templateKey: 'community.broadcast',
             to: r.userId,
-            variables: { subject: broadcast.subject, body: emailBody },
+            variables: { subject: broadcast.subject, body: broadcast.bodyText, postUrl, unsubUrl },
           });
           await ctx.notificationHub.send({
             tenantId: broadcast.tenantId,
             channel: 'in-app',
             templateKey: 'community.broadcast',
             to: r.userId,
-            variables: { subject: broadcast.subject, body: broadcast.bodyText + postLine },
+            variables: { subject: broadcast.subject, body: broadcast.bodyText, postUrl },
           });
           sent++;
         } catch (err) {

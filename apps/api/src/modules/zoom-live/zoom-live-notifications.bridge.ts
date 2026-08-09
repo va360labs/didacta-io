@@ -4,7 +4,7 @@
  */
 
 import { Injectable, type OnModuleInit } from '@nestjs/common';
-import type { DomainEvent } from '@didacta/core-kernel';
+import type { DomainEvent, NotificationValue } from '@didacta/core-kernel';
 import { Logger as PinoLogger } from 'nestjs-pino';
 import { ModuleContextFactory } from '../module-context.factory';
 import { calendarVariables } from './class-links';
@@ -47,20 +47,21 @@ interface SessionCancelledPayload {
   registeredUserIds?: string[];
 }
 
-function formatStartsAt(iso: string | undefined, timezone: string | undefined): string {
+/**
+ * Hora de inicio SIN formatear: viaja como descriptor y la formatea el hub, que
+ * es quien conoce el idioma de cada inscrito. Antes se componía aquí con
+ * `Intl.DateTimeFormat('es-ES')` cableado, así que un alumno con `locale =
+ * en-US` recibía la frase inglesa con «14 de marzo de 2026, 18:00» dentro.
+ *
+ * Sin `startTime` (el evento de cancelación lo trae opcional) se manda cadena
+ * vacía, igual que antes: la plantilla ya cuenta con el hueco.
+ */
+function startsAtValue(
+  iso: string | undefined,
+  timezone: string | undefined,
+): NotificationValue | string {
   if (!iso) return '';
-  try {
-    return new Intl.DateTimeFormat('es-ES', {
-      timeZone: timezone || 'UTC',
-      day: '2-digit',
-      month: 'long',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    }).format(new Date(iso));
-  } catch {
-    return new Date(iso).toISOString();
-  }
+  return { hubValue: 'date', iso, timeZone: timezone, format: 'datetime' };
 }
 
 @Injectable()
@@ -80,7 +81,7 @@ export class ZoomLiveNotificationsBridge implements OnModuleInit {
           templateKey: 'zoom.class.registration.confirmed',
           variables: {
             topic: event.data.topic,
-            startsAt: formatStartsAt(event.data.startTime, event.data.timezone),
+            startsAt: startsAtValue(event.data.startTime, event.data.timezone),
             ...calendarVariables(event.data.sessionId),
           },
         });
@@ -94,7 +95,7 @@ export class ZoomLiveNotificationsBridge implements OnModuleInit {
         if (userIds.length === 0) return;
         const variables = {
           topic: event.data.topic ?? '',
-          startsAt: formatStartsAt(event.data.startTime, event.data.timezone),
+          startsAt: startsAtValue(event.data.startTime, event.data.timezone),
         };
         // Secuencial a propósito: el hub hace SMTP por destinatario y no
         // queremos ráfagas paralelas contra el servidor de correo. El

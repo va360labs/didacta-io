@@ -153,6 +153,66 @@ export interface EvidenceVaultService {
  */
 export type NotificationCategory = 'COMMUNITY' | 'LEARNING' | 'ASSESSMENTS' | 'SYSTEM';
 
+/**
+ * Términos con frase propia por idioma que el HUB resuelve al despachar.
+ *
+ * Un emisor NO puede redactarlos: no sabe en qué idioma lee el destinatario
+ * (una misma notificación se manda a N personas con N idiomas distintos). Por
+ * eso viajan como CLAVE y el hub los cambia por texto con el locale que ya
+ * tiene resuelto. La lista es CERRADA a propósito: así una clave inventada es
+ * un error de compilación y no una frase vacía en un email.
+ */
+export type NotificationTerm =
+  | 'quiz.result.passed'
+  | 'quiz.result.not_passed'
+  | 'gamification.perk.approved'
+  | 'gamification.perk.done'
+  | 'gamification.perk.rejected'
+  | 'gamification.staff.challenge_submitted'
+  | 'gamification.staff.perk_requested'
+  | 'community.actor.unknown'
+  | 'learning.course.unknown';
+
+/**
+ * Valor de una variable de notificación que el emisor entrega CRUDO para que lo
+ * formatee el hub.
+ *
+ * El bug que cierra: el emisor renderizaba el dato («aprobado», una fecha con
+ * `Intl.DateTimeFormat('es-ES')`, un importe con `Intl.NumberFormat('es-ES')`)
+ * y lo metía en `variables` ya convertido en texto español. La plantilla sí se
+ * traducía, pero el dato incrustado no: un destinatario `en-US` recibía una
+ * frase inglesa con «aprobado» y «14 de marzo de 2026» dentro.
+ *
+ * El emisor NO tiene el idioma —lo tiene el hub, que resuelve `user.locale` de
+ * cada destinatario— así que el formateo TIENE que hacerse ahí. Estos
+ * descriptores son la forma de entregar el dato sin formatear.
+ *
+ * Se resuelven ANTES de persistir la notificación, así que `metadata` sigue
+ * guardando texto y nadie aguas abajo ve un descriptor.
+ */
+export type NotificationValue =
+  | {
+      readonly hubValue: 'date';
+      /** Instante en ISO 8601. */
+      readonly iso: string;
+      /** IANA con la que mostrarlo (la del formador, la del tenant…). */
+      readonly timeZone?: string;
+      readonly format: 'datetime' | 'weekday_datetime';
+    }
+  | {
+      readonly hubValue: 'money';
+      /** Importe en la unidad MENOR de la moneda (céntimos). */
+      readonly cents: number;
+      /** ISO 4217. */
+      readonly currency: string;
+    }
+  | {
+      readonly hubValue: 'term';
+      readonly term: NotificationTerm;
+      /** Valores `{{var}}` que el término interpola en su propia frase. */
+      readonly vars?: Readonly<Record<string, string>>;
+    };
+
 export interface NotificationHubService {
   send(notification: {
     tenantId: string;
@@ -166,7 +226,13 @@ export interface NotificationHubService {
      */
     locale?: string;
     to: string;
-    variables: Record<string, unknown>;
+    /**
+     * Datos de la plantilla. Un valor que dependa del IDIOMA (una fecha, un
+     * importe, una etiqueta de estado) NO se formatea aquí: se entrega crudo
+     * como `NotificationValue` y lo resuelve el hub, que es quien conoce el
+     * idioma del destinatario. Ver `NotificationValue`.
+     */
+    variables: Record<string, unknown | NotificationValue>;
     /**
      * Opcional. Si se provee, el hub consulta la matriz de preferencias del
      * usuario (`user_notification_preference`) para (categoría, canal) y omite
