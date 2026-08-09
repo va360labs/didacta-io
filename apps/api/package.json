@@ -55,7 +55,7 @@
     "@nestjs/swagger": "^11.4.6",
     "@node-saml/node-saml": "^5.0.1",
     "@willsoto/nestjs-prometheus": "^6.0.2",
-    "adm-zip": "^0.5.17",
+    "adm-zip": "^0.6.0",
     "argon2": "^0.41.1",
     "bullmq": "^5.76.2",
     "fastify": "^5.10.0",
@@ -63,7 +63,7 @@
     "jose": "^5.9.6",
     "nestjs-pino": "^4.3.0",
     "node-sql-parser": "^5.4.0",
-    "nodemailer": "^8.0.6",
+    "nodemailer": "^9.0.5",
     "openid-client": "^5.7.0",
     "otplib": "^12.0.1",
     "pino": "^9.5.0",
@@ -73,7 +73,7 @@
     "qrcode": "^1.5.4",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
-    "sharp": "^0.34.5",
+    "sharp": "^0.35.3",
     "zod": "^3.24.1"
   },
   "devDependencies": {
@@ -90,6 +90,6 @@
     "tsconfig-paths": "^4.2.0",
     "typescript": "^5.7.2",
     "unplugin-swc": "^1.5.1",
-    "vitest": "^2.1.8"
+    "vitest": "^3.2.7"
   }
 }

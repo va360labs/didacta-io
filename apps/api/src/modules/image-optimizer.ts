@@ -4,6 +4,9 @@
  */
 
 import sharp from 'sharp';
+// sharp 0.35 dejó de exponer sus tipos como namespace del default export
+// (`sharp.Sharp`): ahora son exports con nombre. Se importan como tipos.
+import type { OutputInfo, Sharp } from 'sharp';
 
 /**
  * Optimizador de imágenes para web. Recomprime y redimensiona imágenes raster a
@@ -179,9 +182,9 @@ export async function optimizeImage(
  * blanco que acabamos de poner. Un logo pesa unas decenas de KB: barato.
  */
 async function encodePngParaEmail(
-  pipeline: sharp.Sharp,
+  pipeline: Sharp,
   conAlfa: boolean,
-): Promise<{ data: Buffer; info: sharp.OutputInfo }> {
+): Promise<{ data: Buffer; info: OutputInfo }> {
   if (!conAlfa) {
     return pipeline
       .png({ compressionLevel: 9, palette: true })
