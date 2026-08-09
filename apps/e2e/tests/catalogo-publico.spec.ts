@@ -240,13 +240,20 @@ test.describe('Viaje 2 público — catálogo y compra anónima (F4)', () => {
     ).toBe(`COMPLETED|${userId}`);
 
     // El bridge matriculó (source PURCHASE) — el evento va por outbox: poll.
+    // La ventana es holgada a propósito. Con REDIS_URL (el entorno del arnés y
+    // el de producción) el outbox NO despacha en proceso: encola en BullMQ y
+    // lo resuelve un worker. En una máquina ociosa tarda milisegundos, pero a
+    // mitad de una tanda completa el job puede quedarse esperando su turno y
+    // 30 s se agotaban de vez en cuando — un rojo que no era del producto.
+    // Mismo criterio que `drip-tier-grupo.spec.ts`, que ya esperaba 110 s por
+    // esta misma razón.
     await expect
       .poll(
         () =>
           sql(
             `SELECT status || '|' || source FROM mod_learning_enrollment WHERE tenant_id='${tid}' AND user_id='${userId}' AND course_id='${course.id}'`,
           ),
-        { timeout: 30_000 },
+        { timeout: 90_000 },
       )
       .toBe('ACTIVE|PURCHASE');
 

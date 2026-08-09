@@ -53,13 +53,23 @@ test.describe('Branding · uploader de logo del tenant', () => {
     expect(theme.logoUrl).toMatch(/^\/api\/v1\/modules\/theming\/tenants\/[\w-]+\/logo\?v=\d+$/);
 
     // 2. El endpoint público (sin auth) devuelve el blob con Content-Type
-    //    correcto. Es WebP y no PNG: el logo se optimiza al subirlo igual que
-    //    el resto de imágenes de la plataforma.
+    //    correcto. Es PNG a propósito, NO WebP: el logo acaba en la cabecera de
+    //    todos los emails del tenant y los clientes de correo ignoran el canal
+    //    alfa del WebP (rectángulo negro con las letras recortadas). Por eso
+    //    `theming.service.ts` pide `format: 'png'` al optimizador — ver el
+    //    commit d01a5dc4 "el logo del tenant se guarda en PNG, no en WebP".
+    //    Este spec seguía afirmando WebP, o sea el comportamiento anterior.
     const publicGet = await request.get(`${API_URL}${theme.logoUrl!.split('?')[0]}`);
     expect(publicGet.ok()).toBe(true);
-    expect(publicGet.headers()['content-type']).toContain('image/webp');
+    expect(publicGet.headers()['content-type']).toContain('image/png');
     const buffer = await publicGet.body();
+    // Y sí se recomprime: la fixture entra sin comprimir (deflate nivel 0, ver
+    // helpers/png.ts) y sale muy por debajo. Esto es lo que de verdad prueba
+    // que el optimizador corrió, más que el content-type.
     expect(buffer.length).toBeGreaterThan(10);
+    expect(buffer.length, 'el PNG sale recomprimido, no tal cual').toBeLessThan(
+      Buffer.from(logoPngBase64, 'base64').length,
+    );
 
     // 3. El admin abre /admin/branding y ve el preview del logo subido.
     await page.goto('/signin');

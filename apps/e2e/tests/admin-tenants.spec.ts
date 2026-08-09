@@ -36,6 +36,19 @@ test.describe('Super_admin tenants CRUD (HU-SA-001)', () => {
     const newSlug = `e2e-tenant-${stamp}`;
     const newHostname = `e2e-${stamp}.localhost`;
 
+    // El alta de tenants adicionales es una capacidad de pago
+    // (`feat:multi_tenant.real`): en Community el techo es UN tenant y crear
+    // el segundo devuelve 402. Se lo preguntamos al producto en vez de darlo
+    // por hecho — la instalación de referencia del arnés corre con licencia
+    // Community, así que el camino que se ejercita de verdad es el del gate.
+    const capacityRes = await fetch(`${API_URL}/api/v1/admin/tenants/capacity`, { headers });
+    expect(capacityRes.ok, 'capacity → 200').toBe(true);
+    const capacity = (await capacityRes.json()) as {
+      canCreate: boolean;
+      capabilityActive: boolean;
+      capability: string;
+    };
+
     // Create.
     const created = await fetch(`${API_URL}/api/v1/admin/tenants`, {
       method: 'POST',
@@ -47,6 +60,24 @@ test.describe('Super_admin tenants CRUD (HU-SA-001)', () => {
         primaryHostname: newHostname,
       }),
     });
+
+    if (!capacity.canCreate) {
+      // Camino Community: el gate de licencia responde 402 con la capacidad
+      // que haría falta, y no se crea nada. Es la mitad del contrato que esta
+      // instalación puede ejercitar de verdad.
+      expect(created.status, 'sin la capacidad EE, crear un tenant → 402').toBe(402);
+      const gate = (await created.json()) as { capability?: string };
+      expect(gate.capability).toBe(capacity.capability);
+      const after = (await (
+        await fetch(`${API_URL}/api/v1/admin/tenants`, { headers })
+      ).json()) as Array<{ slug: string }>;
+      expect(
+        after.some((t) => t.slug === newSlug),
+        'el tenant NO se creó',
+      ).toBe(false);
+      return;
+    }
+
     expect(created.ok, 'create → 200').toBe(true);
     const tenant = (await created.json()) as { id: string; slug: string; status: string };
     expect(tenant.slug).toBe(newSlug);

@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { adminTokenForBootstrap, API_URL } from '../helpers/api';
+import { adminSessionForBootstrap, API_URL } from '../helpers/api';
 import { injectSession } from '../helpers/auth';
 
 /**
@@ -26,7 +26,7 @@ test.describe('mod.payment-connections — contrato admin + render del panel', (
     page,
   }) => {
     const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'demo';
-    const bearer = await adminTokenForBootstrap(tenantSlug);
+    const { accessToken: bearer, user: adminUser } = await adminSessionForBootstrap(tenantSlug);
     const apiHeaders = {
       Authorization: `Bearer ${bearer}`,
       'Content-Type': 'application/json',
@@ -57,35 +57,29 @@ test.describe('mod.payment-connections — contrato admin + render del panel', (
     expect([401, 403], 'sin token → 401/403').toContain(noAuthRes.status);
 
     // 4) Render del panel para super_admin.
-    const meRes = await fetch(`${API_URL}/api/v1/me`, {
+    // El perfil se lee de `/me/profile` (MeController: @Controller('me') +
+    // @Get('profile')). Antes esto pegaba a `/api/v1/me` a secas, que NUNCA ha
+    // existido: el 404 hacía caer el test aquí mismo y enmascaraba el error de
+    // la aserción de más abajo.
+    const meRes = await fetch(`${API_URL}/api/v1/me/profile`, {
       headers: { Authorization: `Bearer ${bearer}` },
     });
-    expect(meRes.ok, '/api/v1/me devuelve 200').toBe(true);
-    const me = (await meRes.json()) as {
-      id: string;
-      email: string;
-      tenantId: string;
-      roles: string[];
-    };
+    expect(meRes.ok, '/api/v1/me/profile devuelve 200').toBe(true);
+    const me = (await meRes.json()) as { id: string; email: string; roles: string[] };
+    expect(me.roles, 'el admin sembrado es super_admin').toContain('super_admin');
 
     await page.goto('/signin');
-    await injectSession(page, {
-      accessToken: bearer,
-      user: {
-        id: me.id,
-        email: me.email,
-        name: 'Admin E2E',
-        tenantId: me.tenantId,
-        tenantSlug,
-        roles: me.roles,
-        mfaEnabled: true,
-      },
-    });
+    await injectSession(page, { accessToken: bearer, user: adminUser });
 
     await page.goto('/admin/integraciones/payment-connections');
     await expect(page.getByRole('heading', { name: 'Conexiones de pago' })).toBeVisible({
       timeout: 15_000,
     });
-    await expect(page.getByText('Conectar una cuenta de Stripe')).toBeVisible({ timeout: 10_000 });
+    // El form de alta se titula "Conectar una cuenta de PAGO" — el panel sirve
+    // a stripe, paypal y woocommerce, no sólo a Stripe (ver el <select> de
+    // `provider` en la página y `adminPagos.connections.formTitle`). El texto
+    // "Conectar una cuenta de Stripe" que se afirmaba aquí no ha existido
+    // jamás en el producto: `git log -S` sólo lo encuentra en este spec.
+    await expect(page.getByText('Conectar una cuenta de pago')).toBeVisible({ timeout: 10_000 });
   });
 });

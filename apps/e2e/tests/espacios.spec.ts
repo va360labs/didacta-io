@@ -86,9 +86,15 @@ test.describe('Sidebar — sección ESPACIOS', () => {
   }) => {
     await withAdminSession(page, '/comunidad');
     const sidebar = page.locator('aside').first();
-    // Esperar a que carguen los espacios (puede haber un flash de loading)
-    await page.waitForTimeout(1500);
-    // Debe haber al menos un link dentro de la sección ESPACIOS apuntando a /espacios/
+    // La sección arranca PLEGADA y sólo enseña el contador (botón "Foros N"),
+    // así que los enlaces no están en el DOM hasta desplegarla. Antes se
+    // esperaba 1,5 s a un "flash de loading" y se afirmaba sobre enlaces que
+    // ya no se pintan de entrada: el fallo no era de datos.
+    const toggle = sidebar.getByRole('button', { name: /^Foros/ });
+    await expect(toggle).toBeVisible({ timeout: 8000 });
+    await toggle.click();
+
+    // Debe haber al menos un link dentro de la sección apuntando a /espacios/
     const espaciosLinks = sidebar.locator('a[href^="/espacios/"]');
     await expect(espaciosLinks.first()).toBeVisible({ timeout: 8000 });
     const count = await espaciosLinks.count();
@@ -241,8 +247,15 @@ test.describe('Página /espacios/[space]', () => {
   test('el compositor se abre al pulsar "Nueva publicación"', async ({ page }) => {
     await withAdminSession(page, '/espacios/general');
     await page.getByRole('button', { name: 'Nueva publicación' }).click();
-    // El modal PostComposerModal debe aparecer
-    await expect(page.locator('[role="dialog"]').first()).toBeVisible({ timeout: 5000 });
+    // El modal PostComposerModal debe aparecer. Se busca POR NOMBRE, no con
+    // `[role="dialog"]`.first(): el drawer de navegación móvil es también un
+    // `role="dialog"` (aria-label "Menú de navegación") y, aunque esté cerrado,
+    // aparece antes en el DOM — `.first()` resolvía a él y la aserción moría
+    // con "unexpected value hidden". Es el mismo patrón que ya usa el resto
+    // del fichero para el modal "Nuevo espacio".
+    await expect(page.getByRole('dialog', { name: 'Nueva publicación' })).toBeVisible({
+      timeout: 5000,
+    });
   });
 
   test('el selector de ordenación tiene las 3 opciones', async ({ page }) => {
