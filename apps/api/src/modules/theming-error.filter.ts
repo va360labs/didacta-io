@@ -12,6 +12,7 @@ import {
 } from '@nestjs/common';
 import { ThemingError } from '@didacta/mod-theming';
 import type { FastifyReply } from 'fastify';
+import { moduleErrorBody } from '../common/module-error-body';
 
 const STATUS_BY_CODE: Record<string, number> = {
   THEMING_INVALID_HUE: HttpStatus.UNPROCESSABLE_ENTITY,
@@ -31,11 +32,7 @@ const STATUS_BY_CODE: Record<string, number> = {
 export class ThemingErrorFilter implements ExceptionFilter<ThemingError> {
   catch(exception: ThemingError, host: ArgumentsHost) {
     const status = STATUS_BY_CODE[exception.code] ?? HttpStatus.BAD_REQUEST;
-    const body = {
-      statusCode: status,
-      code: exception.code,
-      message: exception.message,
-    };
+    const body = moduleErrorBody(exception, status);
     if (host.getType() === 'http') {
       const reply = host.switchToHttp().getResponse<FastifyReply>();
       void reply.status(status).send(body);

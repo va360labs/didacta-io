@@ -3,13 +3,27 @@
  * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
  */
 
+/**
+ * Opciones de un error de dominio. `detail` es el dato que el `message` español
+ * lleva incrustado y que el catálogo inglés se tragaba al traducir por `code`:
+ * viaja como campo APARTE hasta el front. Contrato completo en
+ * `apps/api/src/common/module-error-body.ts`.
+ */
+export interface CertificatesErrorOptions {
+  readonly detail?: string;
+}
+
 export class CertificatesError extends Error {
+  readonly detail?: string;
+
   constructor(
     public readonly code: string,
     message: string,
+    options?: CertificatesErrorOptions,
   ) {
     super(message);
     this.name = 'CertificatesError';
+    this.detail = options?.detail;
   }
 }
 
@@ -33,7 +47,9 @@ export class TemplateNotFoundError extends CertificatesError {
 
 export class TemplateNameTakenError extends CertificatesError {
   constructor(name: string) {
-    super('TEMPLATE_NAME_TAKEN', `Ya existe una plantilla con nombre "${name}" en este tenant.`);
+    super('TEMPLATE_NAME_TAKEN', `Ya existe una plantilla con nombre "${name}" en este tenant.`, {
+      detail: name,
+    });
   }
 }
 
@@ -42,6 +58,9 @@ export class TemplateInUseError extends CertificatesError {
     super(
       'TEMPLATE_IN_USE',
       `No se puede eliminar: ${courseCount} curso(s) están usando esta plantilla.`,
+      // String() a propósito: si ICU recibiera un number lo formatearía con
+      // separador de miles por idioma y el ES dejaría de rendir byte a byte.
+      { detail: String(courseCount) },
     );
   }
 }

@@ -11,13 +11,27 @@
  * con códigos estables.
  */
 
+/**
+ * Opciones de un error de dominio. `detail` es el dato que el `message` español
+ * lleva incrustado y que el catálogo inglés se tragaba al traducir por `code`:
+ * viaja como campo APARTE hasta el front. Contrato completo en
+ * `apps/api/src/common/module-error-body.ts`.
+ */
+export interface ReferralsErrorOptions {
+  readonly detail?: string;
+}
+
 export class ReferralsError extends Error {
+  readonly detail?: string;
+
   constructor(
     message: string,
     public readonly code: string,
+    options?: ReferralsErrorOptions,
   ) {
     super(message);
     this.name = 'ReferralsError';
+    this.detail = options?.detail;
   }
 }
 
@@ -42,7 +56,7 @@ export class ReferralsMembershipRequiredError extends ReferralsError {
 
 export class ReferralsCommissionNotFoundError extends ReferralsError {
   constructor(id: string) {
-    super(`Comisión no encontrada: ${id}`, 'REFERRALS_COMMISSION_NOT_FOUND');
+    super(`Comisión no encontrada: ${id}`, 'REFERRALS_COMMISSION_NOT_FOUND', { detail: id });
     this.name = 'ReferralsCommissionNotFoundError';
   }
 }

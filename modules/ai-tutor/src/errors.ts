@@ -3,13 +3,28 @@
  * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
  */
 
+/**
+ * Opciones de un error de dominio. `detail` es el diagnóstico CRUDO que el
+ * `message` español lleva incrustado (lo que responde el proveedor de IA): viaja
+ * como campo APARTE hasta el front para que el catálogo inglés no se lo trague
+ * al traducir por `code`. Contrato completo en
+ * `apps/api/src/common/module-error-body.ts`.
+ */
+export interface AiTutorErrorOptions {
+  readonly detail?: string;
+}
+
 export class AiTutorError extends Error {
+  readonly detail?: string;
+
   constructor(
     public readonly code: string,
     message: string,
+    options?: AiTutorErrorOptions,
   ) {
     super(message);
     this.name = 'AiTutorError';
+    this.detail = options?.detail;
   }
 }
 
@@ -19,6 +34,7 @@ export class CourseNotIndexedError extends AiTutorError {
       'AI_TUTOR_COURSE_NOT_INDEXED',
       `El curso ${courseId} no está indexado todavía. ` +
         'Publica el curso o solicita re-indexación al admin.',
+      { detail: courseId },
     );
   }
 }
@@ -28,6 +44,7 @@ export class CourseNotPublishedError extends AiTutorError {
     super(
       'AI_TUTOR_COURSE_NOT_PUBLISHED',
       `El curso ${courseId} no está publicado; el tutor IA solo opera sobre cursos publicados.`,
+      { detail: courseId },
     );
   }
 }
@@ -42,6 +59,7 @@ export class CourseAccessDeniedError extends AiTutorError {
     super(
       'AI_TUTOR_COURSE_ACCESS_DENIED',
       `Sin acceso al curso ${courseId}: el tutor sólo responde sobre cursos en los que estás matriculado.`,
+      { detail: courseId },
     );
   }
 }
@@ -75,13 +93,16 @@ export class MessageNotFoundError extends AiTutorError {
     super(
       'AI_TUTOR_MESSAGE_NOT_FOUND',
       `No existe la respuesta ${messageId} del tutor en este tenant.`,
+      { detail: messageId },
     );
   }
 }
 
 export class CorrectionNotFoundError extends AiTutorError {
   constructor(correctionId: string) {
-    super('AI_TUTOR_CORRECTION_NOT_FOUND', `No existe la corrección ${correctionId}.`);
+    super('AI_TUTOR_CORRECTION_NOT_FOUND', `No existe la corrección ${correctionId}.`, {
+      detail: correctionId,
+    });
   }
 }
 

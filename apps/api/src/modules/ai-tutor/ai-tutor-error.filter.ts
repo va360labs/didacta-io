@@ -13,6 +13,7 @@ import {
 import { AiTutorError } from '@didacta/mod-ai-tutor';
 import { AiGatewayError } from '../../ai/types/contracts';
 import type { FastifyReply } from 'fastify';
+import { moduleErrorBody } from '../../common/module-error-body';
 
 const STATUS_BY_CODE: Record<string, number> = {
   // mod.ai-tutor
@@ -38,11 +39,7 @@ export class AiTutorErrorFilter implements ExceptionFilter<AiTutorError | AiGate
   catch(exception: AiTutorError | AiGatewayError, host: ArgumentsHost) {
     const reply = host.switchToHttp().getResponse<FastifyReply>();
     const status = STATUS_BY_CODE[exception.code] ?? HttpStatus.BAD_REQUEST;
-    const body = {
-      statusCode: status,
-      code: exception.code,
-      message: exception.message,
-    };
+    const body = moduleErrorBody(exception, status);
     if (host.getType() === 'http') {
       void reply.status(status).send(body);
       return;

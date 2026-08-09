@@ -3,13 +3,27 @@
  * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
  */
 
+/**
+ * Opciones de un error de dominio. `detail` es el dato que el `message` español
+ * lleva incrustado y que el catálogo inglés se tragaba al traducir por `code`:
+ * viaja como campo APARTE hasta el front. Contrato completo en
+ * `apps/api/src/common/module-error-body.ts`.
+ */
+export interface LearningErrorOptions {
+  readonly detail?: string;
+}
+
 export class LearningError extends Error {
+  readonly detail?: string;
+
   constructor(
     public readonly code: string,
     message: string,
+    options?: LearningErrorOptions,
   ) {
     super(message);
     this.name = 'LearningError';
+    this.detail = options?.detail;
   }
 }
 
@@ -30,7 +44,7 @@ export class EnrollmentNotFoundError extends LearningError {
 
 export class InvitationInvalidError extends LearningError {
   constructor(reason: string) {
-    super('INVITATION_INVALID', `Invitación inválida: ${reason}`);
+    super('INVITATION_INVALID', `Invitación inválida: ${reason}`, { detail: reason });
   }
 }
 
@@ -68,7 +82,7 @@ export class TrialContentLockedError extends LearningError {
 
 export class ScormPackageInvalidError extends LearningError {
   constructor(reason: string) {
-    super('SCORM_PACKAGE_INVALID', `Paquete SCORM inválido: ${reason}`);
+    super('SCORM_PACKAGE_INVALID', `Paquete SCORM inválido: ${reason}`, { detail: reason });
   }
 }
 

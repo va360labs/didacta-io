@@ -12,6 +12,7 @@ import {
 } from '@nestjs/common';
 import type { FastifyReply } from 'fastify';
 import { TenantModulesError, type TenantModulesErrorCode } from './tenant-modules.service';
+import { moduleErrorBody } from '../common/module-error-body';
 
 const STATUS_BY_CODE: Record<TenantModulesErrorCode, number> = {
   MODULE_NOT_FOUND: HttpStatus.NOT_FOUND,
@@ -24,12 +25,9 @@ const STATUS_BY_CODE: Record<TenantModulesErrorCode, number> = {
 export class TenantModulesErrorFilter implements ExceptionFilter<TenantModulesError> {
   catch(exception: TenantModulesError, host: ArgumentsHost) {
     const status = STATUS_BY_CODE[exception.code] ?? HttpStatus.BAD_REQUEST;
-    const body = {
-      statusCode: status,
-      code: exception.code,
-      message: exception.message,
+    const body = moduleErrorBody(exception, status, {
       ...(Object.keys(exception.metadata).length > 0 ? { details: exception.metadata } : {}),
-    };
+    });
     if (host.getType() === 'http') {
       const reply = host.switchToHttp().getResponse<FastifyReply>();
       void reply.status(status).send(body);

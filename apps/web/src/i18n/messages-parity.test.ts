@@ -39,7 +39,7 @@
  *     crudo y el admin español conserve el detalle. El EN sí lleva una redacción
  *     genérica, porque sin key el anglófono vería el mensaje en español.
  *
- * Son los 148 codes declarados abajo. Van uno a uno y no como un `skip`
+ * Son los 73 codes declarados abajo. Van uno a uno y no como un `skip`
  * sobre `errorsApi*`: un code nuevo que aparezca solo en EN por descuido rompe
  * la CI igual que cualquier otra huérfana, y un code que se declare aquí y luego
  * se arregle (o se borre) también, porque la lista se valida contra los
@@ -63,28 +63,79 @@
  *
  * ── Lo que este test NO valida (y sigue pendiente) ────────────────────────────
  *
- * La CALIDAD de la redacción genérica inglesa de los 148 que quedan. Del barrido
- * de la Sesión I sobre `apps/api/src` (31 codes con `message` interpolado) se
- * cerraron 26 con `{detail}`; los 5 que siguen abajo lo son porque arreglarlos
- * NO es el mismo cambio mecánico:
+ * La CALIDAD de la redacción genérica inglesa de los 73 que quedan.
  *
- *   · `ADMIN_ROLE_NOT_FOUND` y `ADMIN_TENANT_HOSTNAME_EXISTS` — el backend manda
- *     DOS frases españolas distintas para el mismo code (`admin-users.service`
- *     262 vs 553/596; `admin-tenants.service` 217 vs 394). Una sola key ES no
- *     puede rendir las dos byte a byte: hay que unificar el copy del backend
- *     primero, y eso cambia mensajes que hoy asertan tests.
- *   · `AI_PROVIDERS_PURPOSE_NOT_SUPPORTED` y `COMMUNITY_SPACE_UNKNOWN` —
- *     interpolan DOS valores con copy español entre medias. `detail` es un campo
- *     único: soportarlos exige ampliar el contrato del body de error.
- *   · `ZOOM_LIVE_STAFF_ONLY` — el valor interpolado ES copy español («ver la
- *     asistencia»), no un dato. Traducirlo exige convertir `action` en un enum
- *     con frase por idioma: decisión de producto.
+ * Historia de los dos barridos, porque la lista solo se entiende con ella:
  *
- * Fuera de `apps/api/src` hay ~45 codes más con el mismo defecto, definidos en
- * las clases de error de `modules/<mod>/src/errors.ts` (p. ej.
- * `BILLING_STRIPE_API_ERROR`, `ZOOM_API_ERROR`, `AI_GRADER_PROVIDER_ERROR`).
- * Ese barrido nunca se hizo: arreglarlos pide `detail` en la clase de error y en
- * su `ExceptionFilter`, y `modules/**` cae fuera de la frontera de esta sesión.
+ *   · Sesión I / `apps/api/src` (shape `code: 'X'`): 31 codes con `message`
+ *     interpolado, 26 cerrados con `{detail}`.
+ *   · Este barrido / `modules/<mod>/src/errors.ts` (shape `super(msg, CODE)`,
+ *     que ningún barrido anterior miraba porque solo buscaban `code: 'X'`): 98
+ *     `super()` con interpolación, 96 con key EN. **75 cerrados** con
+ *     `{detail}` — los 11 que perdían un diagnóstico EXTERNO (Stripe, Zoom, el
+ *     proveedor de IA, el paquete SCORM) y 64 que perdían un dato del producto.
+ *
+ * Los que siguen declarados abajo NO son «pendientes de traducir»: son los que
+ * el patrón `{detail}` NO puede cerrar, y por un motivo concreto cada uno.
+ *
+ * ① El backend manda DOS frases españolas distintas para el mismo code. Una
+ *    sola key ES no puede rendir las dos byte a byte; unificar el copy del
+ *    backend primero es un cambio de producto que además toca tests vivos.
+ *      `ADMIN_ROLE_NOT_FOUND` (`admin-users.service` 262 vs 553/596)
+ *      `ADMIN_TENANT_HOSTNAME_EXISTS` (`admin-tenants.service` 217 vs 394)
+ *      `COURSE_NOT_FOUND` (`modules/courses/src/errors.ts:18` «Curso no
+ *        encontrado: <id>» vs `courses.controller.ts:244` «Curso no encontrado»)
+ *      `ZOOM_SESSION_NOT_FOUND` (`modules/zoom-live/src/errors.ts:18` vs
+ *        `zoom-live.controller.ts:67` «Sesión no encontrada.»)
+ *      `LESSON_LOCKED` (`modules/learning/src/errors.ts:46` — ternario entre
+ *        «se libera el <fecha>» y «aún no está disponible»)
+ *
+ * ② Interpolan DOS o más valores CON COPY ESPAÑOL ENTRE MEDIAS. `detail` es un
+ *    campo único; colapsarlos en uno dejaría el conector español dentro del
+ *    inglés («The AI provider failed: openai falló: timeout»), que mueve el bug
+ *    en vez de arreglarlo. Cerrarlos pide ampliar el contrato del body a
+ *    placeholders CON NOMBRE (`{provider}` + `{detail}`): es una decisión de
+ *    arquitectura, no el cambio mecánico de este PR, y se deja fuera a propósito
+ *    para que esa ampliación se revise por sí sola y no dentro de un barrido de
+ *    75 codes.
+ *      Con diagnóstico EXTERNO (los graves que quedan):
+ *        `AI_GRADER_PROVIDER_ERROR` (`modules/ai-grader/src/errors.ts:54`)
+ *        `AI_TUTOR_CHAT_PROVIDER_ERROR` (`modules/ai-tutor/src/errors.ts:96`)
+ *        `AI_TUTOR_EMBEDDINGS_PROVIDER_ERROR` (`modules/ai-tutor/src/errors.ts:90`)
+ *        `AI_PROVIDER_UNAVAILABLE` (`apps/api/src/ai/types/contracts.ts:144`,
+ *          TRES valores: provider, status y body)
+ *        `AI_CONTENT_INVALID_JSON` (`modules/ai-content/src/errors.ts:55`)
+ *      Con dato del producto:
+ *        `AI_GRADER_QUESTION_NOT_GRADABLE`, `AI_PROVIDERS_PURPOSE_NOT_SUPPORTED`,
+ *        `AI_PROVIDER_AUTH`, `AI_PROVIDER_NOT_CONFIGURED`,
+ *        `AI_PROVIDER_RATE_LIMIT`, `AI_PROVIDER_UNSUPPORTED_CAPABILITY`,
+ *        `AI_TUTOR_DAILY_QUESTION_QUOTA`, `AI_TUTOR_TOKEN_QUOTA_EXCEEDED`,
+ *        `AI_CONTENT_DRAFT_NOT_IN_DRAFT`, `COMMUNITY_SPACE_UNKNOWN`,
+ *        `FUNDAE_BLOCK_HOURS_EXCEED`, `FUNDAE_COMPANY_TIENE_GRUPOS_ACTIVOS`,
+ *        `FUNDAE_CREDITO_INSUFICIENTE`, `FUNDAE_GROUP_PARTICIPANT_DUPLICADO`,
+ *        `FUNDAE_GROUP_PARTICIPANT_NOT_IN_COURSE`,
+ *        `FUNDAE_GROUP_TRANSICION_INVALIDA`, `FUNDAE_RLPT_PLAZO_NO_CUMPLIDO`,
+ *        `GRADE_EXCEEDS_QUESTION_POINTS`, `THEMING_SIGNIN_COPY_TOO_LONG`,
+ *        `THEMING_UNSUPPORTED_FONT`, `THEMING_UNSUPPORTED_LOGO_TYPE`
+ *
+ * ③ El valor interpolado ES COPY ESPAÑOL, no un dato: mandarlo como `detail`
+ *    metería español dentro de la frase inglesa. Cerrarlos pide convertir ese
+ *    valor en un enum con frase por idioma: decisión de producto.
+ *      `ZOOM_LIVE_STAFF_ONLY` (`zoom-live.controller.ts:193,206,223,315`)
+ *      `COURSE_PUBLISH_VALIDATION_FAILED` (`modules/courses/src/errors.ts:42` —
+ *        `reasons.join('; ')`, frases del validador en español; el body ya manda
+ *        el array `reasons` aparte)
+ *      `ZOOM_ATTENDANCE_NOT_AVAILABLE` (`modules/zoom-live/src/errors.ts:77` —
+ *        el `message` ENTERO lo pone el caller)
+ *      `GAMIFICATION_*`, `REFERRALS_COMMISSION_STATE`, `REFERRALS_CONFIG_INVALID`,
+ *        `REFERRALS_PAYOUT_INVALID`, `RESOURCES_VALIDATION`,
+ *        `SURVEYS_INVALID_ANSWER`, `SPACE_NOT_DELETABLE` (ídem: la clase base
+ *        recibe el `message` ya compuesto por el servicio)
+ *
+ * ④ Sin interpolación: el EN es una traducción libre de un `message` fijo que
+ *    todavía no tiene gemelo ES. Es deuda de traducción normal, no este bug.
+ *      los `errorsApiResto` y `CORE_MODULE_NOT_DISABLEABLE`, `MODULE_NOT_FOUND`,
+ *      `MODULE_HAS_ACTIVE_DEPENDENTS`, `AUDIT_EXPORT_SIGNING_UNAVAILABLE`
  */
 
 import { readdirSync, readFileSync } from 'node:fs';
@@ -115,89 +166,40 @@ const EN_ONLY_BY_DESIGN: Readonly<Record<string, readonly string[]>> = {
   errorsApiModulesA: [
     'AI_PROVIDERS_PURPOSE_NOT_SUPPORTED',
     'CORE_MODULE_NOT_DISABLEABLE',
-    'COURSE_ALREADY_PUBLISHED',
     'COURSE_NOT_FOUND',
     'COURSE_PUBLISH_VALIDATION_FAILED',
-    'COURSE_SLUG_EXISTS',
-    'INVITATION_INVALID',
     'LESSON_LOCKED',
     'MODULE_HAS_ACTIVE_DEPENDENTS',
     'MODULE_NOT_FOUND',
-    'SCORM_PACKAGE_INVALID',
-    'THEMING_CUSTOM_CSS_TOO_LARGE',
-    'THEMING_CUSTOM_CSS_UNSAFE',
-    'THEMING_FOOTER_HTML_TOO_LARGE',
-    'THEMING_INVALID_URL',
-    'THEMING_LOGO_TOO_LARGE',
     'THEMING_SIGNIN_COPY_TOO_LONG',
     'THEMING_UNSUPPORTED_FONT',
     'THEMING_UNSUPPORTED_LOGO_TYPE',
-    'ZOOM_API_ERROR',
     'ZOOM_ATTENDANCE_NOT_AVAILABLE',
-    'ZOOM_COURSE_NOT_IN_TENANT',
-    'ZOOM_HOST_NOT_FOUND',
     'ZOOM_LIVE_STAFF_ONLY',
     'ZOOM_SESSION_NOT_FOUND',
   ],
   errorsApiModulesB: [
-    'AI_CONTENT_DRAFT_NOT_FOUND',
     'AI_CONTENT_DRAFT_NOT_IN_DRAFT',
     'AI_CONTENT_INVALID_JSON',
-    'AI_CONTENT_LESSON_TEXT_EMPTY',
-    'AI_CONTENT_PROVIDER_ERROR',
-    'AI_GRADER_ATTEMPT_NOT_PENDING',
     'AI_GRADER_PROVIDER_ERROR',
     'AI_GRADER_QUESTION_NOT_GRADABLE',
-    'AI_GRADER_RESPONSE_PARSE_ERROR',
-    'AI_GRADER_RUBRIC_INVALID',
-    'AI_GRADER_RUBRIC_NOT_FOUND',
-    'AI_GRADER_SUGGESTION_NOT_FOUND',
     'AI_PROVIDER_AUTH',
     'AI_PROVIDER_NOT_CONFIGURED',
     'AI_PROVIDER_RATE_LIMIT',
     'AI_PROVIDER_UNAVAILABLE',
     'AI_PROVIDER_UNSUPPORTED_CAPABILITY',
     'AI_TUTOR_CHAT_PROVIDER_ERROR',
-    'AI_TUTOR_CORRECTION_NOT_FOUND',
-    'AI_TUTOR_COURSE_ACCESS_DENIED',
-    'AI_TUTOR_COURSE_NOT_INDEXED',
-    'AI_TUTOR_COURSE_NOT_PUBLISHED',
     'AI_TUTOR_DAILY_QUESTION_QUOTA',
     'AI_TUTOR_EMBEDDINGS_PROVIDER_ERROR',
-    'AI_TUTOR_MESSAGE_NOT_FOUND',
     'AI_TUTOR_TOKEN_QUOTA_EXCEEDED',
     'AUDIT_EXPORT_SIGNING_UNAVAILABLE',
-    'BILLING_ORDER_NOT_FOUND',
-    'BILLING_PRODUCT_ALREADY_EXISTS',
-    'BILLING_PRODUCT_INACTIVE',
-    'BILLING_PRODUCT_NOT_FOUND',
-    'BILLING_STRIPE_API_ERROR',
-    'BILLING_STRIPE_CONFIG_MISSING',
-    'BILLING_WEBHOOK_SIGNATURE_INVALID',
     'COMMUNITY_SPACE_UNKNOWN',
-    'FUNDAE_ACTION_NOT_FOUND',
-    'FUNDAE_ACTION_WITHOUT_COURSE',
     'FUNDAE_BLOCK_HOURS_EXCEED',
-    'FUNDAE_BLOCK_NOT_FOUND',
-    'FUNDAE_BLOCK_ORDINAL_DUPLICADO',
-    'FUNDAE_CODIGO_DUPLICADO',
-    'FUNDAE_COMPANY_NIF_DUPLICADO',
-    'FUNDAE_COMPANY_NOT_FOUND',
     'FUNDAE_COMPANY_TIENE_GRUPOS_ACTIVOS',
-    'FUNDAE_COST_NOT_FOUND',
-    'FUNDAE_COURSE_NOT_IN_TENANT',
     'FUNDAE_CREDITO_INSUFICIENTE',
-    'FUNDAE_GROUP_CERRADO',
-    'FUNDAE_GROUP_NOT_FOUND',
-    'FUNDAE_GROUP_NUMERO_DUPLICADO',
     'FUNDAE_GROUP_PARTICIPANT_DUPLICADO',
-    'FUNDAE_GROUP_PARTICIPANT_NOT_FOUND',
     'FUNDAE_GROUP_PARTICIPANT_NOT_IN_COURSE',
-    'FUNDAE_GROUP_SIN_CURSO',
     'FUNDAE_GROUP_TRANSICION_INVALIDA',
-    'FUNDAE_PARTICIPANT_NOT_IN_ACTION',
-    'FUNDAE_RLPT_NOTIFICACION_INICIAL_MISSING',
-    'FUNDAE_RLPT_NOT_FOUND',
     'FUNDAE_RLPT_PLAZO_NO_CUMPLIDO',
     'GAMIFICATION_CHALLENGE_CLOSED',
     'GAMIFICATION_CONFLICT',
@@ -205,38 +207,12 @@ const EN_ONLY_BY_DESIGN: Readonly<Record<string, readonly string[]>> = {
     'GAMIFICATION_PERK_UNAVAILABLE',
     'GAMIFICATION_VALIDATION',
     'GRADE_EXCEEDS_QUESTION_POINTS',
-    'MAX_ATTEMPTS_REACHED',
-    'MEMBERSHIP_CONFIG_INCOMPLETE',
-    'MEMBERSHIP_PLAN_INTERVAL_INVALID',
-    'MEMBERSHIP_PLAN_NOT_FOUND',
-    'MESSAGING_SPACE_NOT_FOUND',
-    'PAYMENT_CONNECTIONS_ALREADY_EXISTS',
-    'PAYMENT_CONNECTIONS_NOT_FOUND',
-    'PAYMENT_CONNECTIONS_PORTAL_UNAVAILABLE',
-    'PAYMENT_CONNECTIONS_PROVIDER_NOT_SUPPORTED',
-    'PAYMENT_CONNECTIONS_STRIPE_API_ERROR',
-    'PAYMENT_CONNECTIONS_STRIPE_KEY_INVALID',
-    'PAYMENT_CONNECTIONS_TIER_NAME_CONFLICT',
-    'PAYMENT_CONNECTIONS_TIER_NOT_FOUND',
-    'REFERRALS_COMMISSION_NOT_FOUND',
     'REFERRALS_COMMISSION_STATE',
     'REFERRALS_CONFIG_INVALID',
     'REFERRALS_PAYOUT_INVALID',
     'RESOURCES_VALIDATION',
-    'SPACE_EXISTS',
     'SPACE_NOT_DELETABLE',
-    'SPACE_NOT_FOUND',
-    'SUBSCRIPTIONS_ALREADY_ACTIVE',
-    'SUBSCRIPTIONS_NOT_FOUND',
-    'SUBSCRIPTIONS_PRICE_NOT_RECURRING',
-    'SUBSCRIPTIONS_STRIPE_API_ERROR',
-    'SUBSCRIPTIONS_STRIPE_CONFIG_MISSING',
-    'SUBSCRIPTIONS_WEBHOOK_SIGNATURE_INVALID',
     'SURVEYS_INVALID_ANSWER',
-    'TAG_NAME_EXISTS',
-    'TAG_NOT_FOUND',
-    'TEMPLATE_IN_USE',
-    'TEMPLATE_NAME_TAKEN',
   ],
   errorsApiResto: [
     'ALREADY_INSTALLED',

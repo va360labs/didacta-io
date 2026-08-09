@@ -9,13 +9,27 @@
  * frontend los humaniza por código.
  */
 
+/**
+ * Opciones de un error de dominio. `detail` es el dato que el `message` español
+ * lleva incrustado y que el catálogo inglés se tragaba al traducir por `code`:
+ * viaja como campo APARTE hasta el front. Contrato completo en
+ * `apps/api/src/common/module-error-body.ts`.
+ */
+export interface MessagingErrorOptions {
+  readonly detail?: string;
+}
+
 export class MessagingError extends Error {
+  readonly detail?: string;
+
   constructor(
     message: string,
     public readonly code: string,
+    options?: MessagingErrorOptions,
   ) {
     super(message);
     this.name = 'MessagingError';
+    this.detail = options?.detail;
   }
 }
 
@@ -49,7 +63,7 @@ export class TargetUserNotFoundError extends MessagingError {
 
 export class SpaceNotFoundError extends MessagingError {
   constructor(slug: string) {
-    super(`El espacio "${slug}" no existe.`, 'MESSAGING_SPACE_NOT_FOUND');
+    super(`El espacio "${slug}" no existe.`, 'MESSAGING_SPACE_NOT_FOUND', { detail: slug });
     this.name = 'SpaceNotFoundError';
   }
 }

@@ -12,6 +12,7 @@ import {
 } from '@nestjs/common';
 import { SubscriptionsError } from '@didacta/mod-subscriptions';
 import type { FastifyReply } from 'fastify';
+import { moduleErrorBody } from '../../common/module-error-body';
 
 const STATUS_BY_CODE: Record<string, number> = {
   SUBSCRIPTIONS_NOT_FOUND: HttpStatus.NOT_FOUND,
@@ -33,11 +34,7 @@ const STATUS_BY_CODE: Record<string, number> = {
 export class SubscriptionsErrorFilter implements ExceptionFilter<SubscriptionsError> {
   catch(exception: SubscriptionsError, host: ArgumentsHost) {
     const status = STATUS_BY_CODE[exception.code] ?? HttpStatus.BAD_REQUEST;
-    const body = {
-      statusCode: status,
-      code: exception.code,
-      message: exception.message,
-    };
+    const body = moduleErrorBody(exception, status);
     if (host.getType() === 'http') {
       const reply = host.switchToHttp().getResponse<FastifyReply>();
       void reply.status(status).send(body);

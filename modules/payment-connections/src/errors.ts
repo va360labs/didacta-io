@@ -12,19 +12,36 @@
  * filtrar detalles de implementación (ni nunca la API key) al cliente.
  */
 
+/**
+ * Opciones de un error de dominio. `detail` es el diagnóstico CRUDO que el
+ * `message` español lleva incrustado (lo que responde el proveedor de pago):
+ * viaja como campo APARTE hasta el front para que el catálogo inglés no se lo
+ * trague al traducir por `code`. Contrato completo en
+ * `apps/api/src/common/module-error-body.ts`.
+ */
+export interface PaymentConnectionsErrorOptions {
+  readonly detail?: string;
+}
+
 export class PaymentConnectionsError extends Error {
+  readonly detail?: string;
+
   constructor(
     message: string,
     public readonly code: string,
+    options?: PaymentConnectionsErrorOptions,
   ) {
     super(message);
     this.name = 'PaymentConnectionsError';
+    this.detail = options?.detail;
   }
 }
 
 export class PaymentConnectionNotFoundError extends PaymentConnectionsError {
   constructor(id: string) {
-    super(`Conexión de pago no encontrada: ${id}`, 'PAYMENT_CONNECTIONS_NOT_FOUND');
+    super(`Conexión de pago no encontrada: ${id}`, 'PAYMENT_CONNECTIONS_NOT_FOUND', {
+      detail: id,
+    });
     this.name = 'PaymentConnectionNotFoundError';
   }
 }
@@ -34,6 +51,7 @@ export class PaymentConnectionAlreadyExistsError extends PaymentConnectionsError
     super(
       `Ya existe una conexión Stripe con el nombre "${displayName}". Usa un nombre distinto.`,
       'PAYMENT_CONNECTIONS_ALREADY_EXISTS',
+      { detail: displayName },
     );
     this.name = 'PaymentConnectionAlreadyExistsError';
   }
@@ -44,6 +62,7 @@ export class PaymentConnectionProviderNotSupportedError extends PaymentConnectio
     super(
       `Proveedor de pago no soportado: "${provider}". En esta versión solo se soporta "stripe" (PayPal en roadmap).`,
       'PAYMENT_CONNECTIONS_PROVIDER_NOT_SUPPORTED',
+      { detail: provider },
     );
     this.name = 'PaymentConnectionProviderNotSupportedError';
   }
@@ -61,6 +80,7 @@ export class StripeReadKeyInvalidError extends PaymentConnectionsError {
     super(
       `Credencial de la cuenta de pago inválida o sin permiso de lectura: ${reason}`,
       'PAYMENT_CONNECTIONS_STRIPE_KEY_INVALID',
+      { detail: reason },
     );
     this.name = 'StripeReadKeyInvalidError';
   }
@@ -68,7 +88,13 @@ export class StripeReadKeyInvalidError extends PaymentConnectionsError {
 
 export class StripeReadApiError extends PaymentConnectionsError {
   constructor(message: string) {
-    super(`Error leyendo de la cuenta de pago: ${message}`, 'PAYMENT_CONNECTIONS_STRIPE_API_ERROR');
+    super(
+      `Error leyendo de la cuenta de pago: ${message}`,
+      'PAYMENT_CONNECTIONS_STRIPE_API_ERROR',
+      {
+        detail: message,
+      },
+    );
     this.name = 'StripeReadApiError';
   }
 }
@@ -83,6 +109,7 @@ export class PaymentPortalUnavailableError extends PaymentConnectionsError {
     super(
       `El proveedor "${provider}" no ofrece un portal de gestión de suscripción integrado.`,
       'PAYMENT_CONNECTIONS_PORTAL_UNAVAILABLE',
+      { detail: provider },
     );
     this.name = 'PaymentPortalUnavailableError';
   }
@@ -90,14 +117,16 @@ export class PaymentPortalUnavailableError extends PaymentConnectionsError {
 
 export class TierNotFoundError extends PaymentConnectionsError {
   constructor(id: string) {
-    super(`Tier no encontrado: ${id}`, 'PAYMENT_CONNECTIONS_TIER_NOT_FOUND');
+    super(`Tier no encontrado: ${id}`, 'PAYMENT_CONNECTIONS_TIER_NOT_FOUND', { detail: id });
     this.name = 'TierNotFoundError';
   }
 }
 
 export class TierNameConflictError extends PaymentConnectionsError {
   constructor(name: string) {
-    super(`Ya existe un tier con el nombre "${name}".`, 'PAYMENT_CONNECTIONS_TIER_NAME_CONFLICT');
+    super(`Ya existe un tier con el nombre "${name}".`, 'PAYMENT_CONNECTIONS_TIER_NAME_CONFLICT', {
+      detail: name,
+    });
     this.name = 'TierNameConflictError';
   }
 }

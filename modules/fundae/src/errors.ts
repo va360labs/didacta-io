@@ -3,19 +3,35 @@
  * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
  */
 
+/**
+ * Opciones de un error de dominio. `detail` es el dato que el `message` español
+ * lleva incrustado y que el catálogo inglés se tragaba al traducir por `code`:
+ * viaja como campo APARTE hasta el front. Contrato completo en
+ * `apps/api/src/common/module-error-body.ts`.
+ */
+export interface FundaeErrorOptions {
+  readonly detail?: string;
+}
+
 export class FundaeError extends Error {
+  readonly detail?: string;
+
   constructor(
     public readonly code: string,
     message: string,
+    options?: FundaeErrorOptions,
   ) {
     super(message);
     this.name = 'FundaeError';
+    this.detail = options?.detail;
   }
 }
 
 export class ActionNotFoundError extends FundaeError {
   constructor(actionId: string) {
-    super('FUNDAE_ACTION_NOT_FOUND', `La acción formativa ${actionId} no existe.`);
+    super('FUNDAE_ACTION_NOT_FOUND', `La acción formativa ${actionId} no existe.`, {
+      detail: actionId,
+    });
   }
 }
 
@@ -24,6 +40,7 @@ export class CodigoDuplicadoError extends FundaeError {
     super(
       'FUNDAE_CODIGO_DUPLICADO',
       `Ya existe una acción formativa con código "${codigo}" en este tenant.`,
+      { detail: codigo },
     );
   }
 }
@@ -39,13 +56,17 @@ export class FechasInvalidasError extends FundaeError {
 
 export class CourseNotInTenantError extends FundaeError {
   constructor(courseId: string) {
-    super('FUNDAE_COURSE_NOT_IN_TENANT', `El curso ${courseId} no pertenece a este tenant.`);
+    super('FUNDAE_COURSE_NOT_IN_TENANT', `El curso ${courseId} no pertenece a este tenant.`, {
+      detail: courseId,
+    });
   }
 }
 
 export class BlockNotFoundError extends FundaeError {
   constructor(blockId: string) {
-    super('FUNDAE_BLOCK_NOT_FOUND', `El módulo formativo ${blockId} no existe.`);
+    super('FUNDAE_BLOCK_NOT_FOUND', `El módulo formativo ${blockId} no existe.`, {
+      detail: blockId,
+    });
   }
 }
 
@@ -63,6 +84,9 @@ export class BlockOrdinalDuplicadoError extends FundaeError {
     super(
       'FUNDAE_BLOCK_ORDINAL_DUPLICADO',
       `Ya existe un bloque con ordinal ${ordinal} en esta acción.`,
+      // String() a propósito: si ICU recibiera un number lo formatearía con
+      // separador de miles por idioma y el ES dejaría de rendir byte a byte.
+      { detail: String(ordinal) },
     );
   }
 }
@@ -72,6 +96,7 @@ export class ParticipantNotInActionError extends FundaeError {
     super(
       'FUNDAE_PARTICIPANT_NOT_IN_ACTION',
       `El usuario ${userId} no está matriculado en el curso vinculado a esta acción.`,
+      { detail: userId },
     );
   }
 }
@@ -81,13 +106,16 @@ export class ActionWithoutCourseError extends FundaeError {
     super(
       'FUNDAE_ACTION_WITHOUT_COURSE',
       `La acción ${actionId} no tiene curso vinculado; no es posible generar evidencias por participante.`,
+      { detail: actionId },
     );
   }
 }
 
 export class CompanyNotFoundError extends FundaeError {
   constructor(companyId: string) {
-    super('FUNDAE_COMPANY_NOT_FOUND', `La empresa bonificada ${companyId} no existe.`);
+    super('FUNDAE_COMPANY_NOT_FOUND', `La empresa bonificada ${companyId} no existe.`, {
+      detail: companyId,
+    });
   }
 }
 
@@ -96,6 +124,7 @@ export class CompanyNifDuplicadoError extends FundaeError {
     super(
       'FUNDAE_COMPANY_NIF_DUPLICADO',
       `Ya existe una empresa bonificada con NIF "${nif}" en este tenant.`,
+      { detail: nif },
     );
   }
 }
@@ -111,7 +140,9 @@ export class CompanyTieneGruposActivosError extends FundaeError {
 
 export class RlptNotFoundError extends FundaeError {
   constructor(noticeId: string) {
-    super('FUNDAE_RLPT_NOT_FOUND', `La notificación RLPT ${noticeId} no existe.`);
+    super('FUNDAE_RLPT_NOT_FOUND', `La notificación RLPT ${noticeId} no existe.`, {
+      detail: noticeId,
+    });
   }
 }
 
@@ -121,6 +152,7 @@ export class RlptNotificacionInicialMissingError extends FundaeError {
       'FUNDAE_RLPT_NOTIFICACION_INICIAL_MISSING',
       `La empresa ${companyId} no tiene una notificación inicial a la RLPT registrada; ` +
         'no se puede iniciar un grupo bonificable hasta hacerla y subir la evidencia.',
+      { detail: companyId },
     );
   }
 }
@@ -137,7 +169,9 @@ export class RlptPlazoNoCumplidoError extends FundaeError {
 
 export class GroupNotFoundError extends FundaeError {
   constructor(groupId: string) {
-    super('FUNDAE_GROUP_NOT_FOUND', `El grupo bonificable ${groupId} no existe.`);
+    super('FUNDAE_GROUP_NOT_FOUND', `El grupo bonificable ${groupId} no existe.`, {
+      detail: groupId,
+    });
   }
 }
 
@@ -146,6 +180,9 @@ export class GroupNumeroDuplicadoError extends FundaeError {
     super(
       'FUNDAE_GROUP_NUMERO_DUPLICADO',
       `Ya existe un grupo con número ${numeroGrupo} en esta acción.`,
+      // String() a propósito: si ICU recibiera un number lo formatearía con
+      // separador de miles por idioma y el ES dejaría de rendir byte a byte.
+      { detail: String(numeroGrupo) },
     );
   }
 }
@@ -161,13 +198,14 @@ export class GroupCerradoError extends FundaeError {
     super(
       'FUNDAE_GROUP_CERRADO',
       `El grupo ${groupId} está cerrado: no se pueden modificar costes ni metadatos.`,
+      { detail: groupId },
     );
   }
 }
 
 export class CostNotFoundError extends FundaeError {
   constructor(costId: string) {
-    super('FUNDAE_COST_NOT_FOUND', `El coste ${costId} no existe.`);
+    super('FUNDAE_COST_NOT_FOUND', `El coste ${costId} no existe.`, { detail: costId });
   }
 }
 
@@ -183,7 +221,9 @@ export class CreditoInsuficienteError extends FundaeError {
 
 export class GroupParticipantNotFoundError extends FundaeError {
   constructor(participantId: string) {
-    super('FUNDAE_GROUP_PARTICIPANT_NOT_FOUND', `La matriculación ${participantId} no existe.`);
+    super('FUNDAE_GROUP_PARTICIPANT_NOT_FOUND', `La matriculación ${participantId} no existe.`, {
+      detail: participantId,
+    });
   }
 }
 
@@ -212,6 +252,7 @@ export class GroupSinCursoError extends FundaeError {
       'FUNDAE_GROUP_SIN_CURSO',
       `El grupo ${groupId} pertenece a una acción sin curso vinculado; ` +
         'no se puede hacer bulk-enroll desde el catálogo. Añade los participantes uno a uno.',
+      { detail: groupId },
     );
   }
 }
