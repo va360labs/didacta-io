@@ -44,6 +44,14 @@ function makeHarness(
     existingUser?: { id: string; status: string } | null;
     throwP2002?: boolean;
     roleMissing?: boolean;
+    /**
+     * Fila de `user` del APROBADOR (lookup por tenant+email al redactar el
+     * email de decisión). `null` = la dirección no es un usuario del tenant,
+     * que es el caso NORMAL de un buzón compartido.
+     */
+    approverRow?: { locale: string } | null;
+    /** Fuerza que ese lookup reviente (camino degradado (b)). */
+    approverLookupThrows?: boolean;
   } = {},
 ) {
   const txUser = {
@@ -60,6 +68,12 @@ function makeHarness(
   userFindUnique.mockResolvedValueOnce(opts.existingUser ?? null);
   if (opts.throwP2002) {
     userFindUnique.mockResolvedValueOnce({ id: 'race-user' });
+  }
+  // Cualquier lookup POSTERIOR es el del idioma del aprobador (por tenant+email).
+  if (opts.approverLookupThrows) {
+    userFindUnique.mockRejectedValue(new Error('db down'));
+  } else {
+    userFindUnique.mockResolvedValue(opts.approverRow ?? null);
   }
 
   const prisma = {
@@ -289,5 +303,64 @@ describe('MemberRegistrationService.createPending', () => {
       expect(h.logger.warn).toHaveBeenCalled();
     });
     expect(h.smtp.send).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * El email de decisión era la ÚLTIMA plantilla transaccional monolingüe. Quien
+ * lo lee es el APROBADOR (no el solicitante), y el aprobador se configura como
+ * DIRECCIÓN, no como userId: el idioma se busca por (tenant, email) en `user`.
+ */
+describe('MemberRegistrationService · idioma del email de decisión', () => {
+  beforeEach(() => {
+    process.env['MEMBER_APPROVAL_EMAIL'] = 'aprobador@example.com';
+  });
+  afterEach(() => {
+    delete process.env['MEMBER_APPROVAL_EMAIL'];
+  });
+
+  async function subjectFor(opts: Parameters<typeof makeHarness>[0]) {
+    const h = makeHarness({ existingUser: null, ...opts });
+    await h.service.createPending(TENANT_ID, BASE_INPUT, WEB_BASE_URL, CTX);
+    await vi.waitFor(() => {
+      expect(h.smtp.send).toHaveBeenCalledTimes(1);
+    });
+    return { subject: h.smtp.send.mock.calls[0]![1].subject as string, h };
+  }
+
+  it('aprobador con locale en-US: el email sale ENTERO en inglés', async () => {
+    const { subject, h } = await subjectFor({ approverRow: { locale: 'en-US' } });
+    expect(subject).toBe('New registration pending — Ana López');
+    const message = h.smtp.send.mock.calls[0]![1];
+    expect(message.text).toContain('There is a new registration waiting for your approval');
+    expect(message.text).toContain('Approve: ');
+    expect(message.text).not.toContain('Aprobar: ');
+    expect(message.html).toContain('<html lang="en">');
+  });
+
+  it('aprobador con locale es-ES: byte a byte el email de siempre', async () => {
+    const { subject, h } = await subjectFor({ approverRow: { locale: 'es-ES' } });
+    expect(subject).toBe('Nueva inscripción pendiente — Ana López');
+    expect(h.smtp.send.mock.calls[0]![1].html).toContain('<html lang="es">');
+  });
+
+  it('CAMINO DEGRADADO (a): la dirección no es un usuario del tenant → español', async () => {
+    // Caso NORMAL: el aprobador suele ser un buzón compartido que nunca ha
+    // entrado a la plataforma, así que no hay ningún idioma que leer.
+    const { subject } = await subjectFor({ approverRow: null });
+    expect(subject).toBe('Nueva inscripción pendiente — Ana López');
+  });
+
+  it('CAMINO DEGRADADO (b): el lookup del idioma revienta → español, y el aviso SALE', async () => {
+    // Perder el idioma es aceptable; perder el aviso de que hay una inscripción
+    // esperando, no.
+    const { subject, h } = await subjectFor({ approverLookupThrows: true });
+    expect(subject).toBe('Nueva inscripción pendiente — Ana López');
+    expect(h.logger.warn).toHaveBeenCalled();
+  });
+
+  it('CAMINO DEGRADADO: un locale sin catálogo (pt-BR) también cae al español', async () => {
+    const { subject } = await subjectFor({ approverRow: { locale: 'pt-BR' } });
+    expect(subject).toBe('Nueva inscripción pendiente — Ana López');
   });
 });

@@ -31,7 +31,12 @@ import {
   buildOtpEmail,
   buildRejectionEmail,
   buildWelcomeEmail,
+  type DecisionEmailParams,
 } from '../src/modules/member-registration/email-templates';
+import {
+  classifySubscriptionStatus,
+  type MemberSubscriptionMatch,
+} from '@didacta/mod-payment-connections';
 import type { EmailBranding } from '../src/common/branded-email';
 
 // ============================================================================
@@ -363,29 +368,30 @@ describe('catálogo transaccional por idioma', () => {
         esByKey.get('auth.password_reset'),
       );
     }
-    // Key con composer aún monolingüe: en inglés devuelve el español, nunca
-    // undefined ni un cuerpo vacío. `member_registration.approval_request` es
-    // el caso VIVO —y ya el único—: su email es casi todo bloques de datos
-    // estructurales cuyo copy vive en `modules/payment-connections`
-    // (`classifySubscriptionStatus`), así que traducir solo su intro dejaría un
-    // email mitad inglés mitad español. Ver `buildDecisionEmail`.
-    expect(
-      TRANSACTIONAL_TEMPLATE_DEFAULTS_EN['member_registration.approval_request'],
-    ).toBeUndefined();
-    expect(resolveTransactionalDefault('member_registration.approval_request', 'en-US')).toEqual(
-      esByKey.get('member_registration.approval_request'),
-    );
+    // La otra mitad de la degradación —«key SIN traducir cae al español»— ya
+    // NO tiene caso vivo: `member_registration.approval_request` era el último
+    // y este PR lo cierra. La rama sigue en el código como red para una key
+    // NUEVA, y quien la deja sin inglés lo descubre en el test de abajo («el
+    // mapa inglés cubre TODA key transaccional»), no en la bandeja de un
+    // aprobador anglófono.
+    for (const def of TRANSACTIONAL_EMAIL_DEFS) {
+      const en = resolveTransactionalDefault(def.key, 'en-US');
+      expect(en, `${def.key} sin copy en inglés`).toBeDefined();
+      expect(en!.body.trim().length, `${def.key} con cuerpo vacío`).toBeGreaterThan(0);
+    }
   });
 
-  it('el mapa inglés cubre TODA key transaccional salvo la declarada monolingüe', () => {
-    // Antes el mapa era parcial con 9 huecos y la garantía tenía que ser débil
-    // («lo que esté, que sea coherente»). Ahora solo queda uno declarado, así
-    // que la garantía se puede endurecer: cualquier plantilla transaccional
-    // NUEVA que llegue sin inglés hace fallar este test en vez de colarse
-    // silenciosamente y llegarle en español a un destinatario anglófono.
-    const SIN_TRADUCIR = new Set(['member_registration.approval_request']);
+  it('el mapa inglés cubre TODA key transaccional, sin excepciones declaradas', () => {
+    // Historia de la guarda, porque explica su forma: primero el mapa era
+    // parcial con 9 huecos y solo se podía exigir «lo que esté, que sea
+    // coherente»; luego quedó UNO declarado
+    // (`member_registration.approval_request`, bloqueado por el copy de
+    // `modules/payment-connections`); ahora no queda ninguno y la lista de
+    // excepciones desaparece. Cualquier plantilla transaccional NUEVA que
+    // llegue sin inglés rompe aquí en vez de colarse y llegarle en español a un
+    // destinatario anglófono.
     const huecos = TRANSACTIONAL_EMAIL_DEFS.filter(
-      (d) => !TRANSACTIONAL_TEMPLATE_DEFAULTS_EN[d.key] && !SIN_TRADUCIR.has(d.key),
+      (d) => !TRANSACTIONAL_TEMPLATE_DEFAULTS_EN[d.key],
     ).map((d) => d.key);
     expect(huecos, `plantillas transaccionales sin copy inglés: ${huecos.join(', ')}`).toEqual([]);
   });
@@ -408,7 +414,20 @@ describe('copy fijo de emails (CTA, títulos, rellenos)', () => {
   });
 
   it('ninguna etiqueta inglesa se quedó en español (era el bug: cuerpo EN, botón ES)', () => {
+    // Rótulos que se escriben IGUAL en los dos idiomas. Van declarados uno a
+    // uno y no como un `skip` genérico: la coincidencia tiene que ser una
+    // decisión, no el síntoma de una traducción que falta.
+    const IGUALES_EN_LOS_DOS_IDIOMAS = new Set<FixedEmailCopyKey>([
+      'label.applicant_email', // «Email» es la misma palabra en ES y EN.
+      'label.applicant_telegram', // «Telegram ID» es un nombre propio + sigla.
+    ]);
     for (const key of Object.keys(FIXED_EMAIL_COPY.es) as FixedEmailCopyKey[]) {
+      if (IGUALES_EN_LOS_DOS_IDIOMAS.has(key)) {
+        expect(FIXED_EMAIL_COPY.en[key], `${key} declarada igual pero difiere`).toBe(
+          FIXED_EMAIL_COPY.es[key],
+        );
+        continue;
+      }
       expect(FIXED_EMAIL_COPY.en[key], `${key} sin traducir`).not.toBe(FIXED_EMAIL_COPY.es[key]);
     }
   });
@@ -527,6 +546,7 @@ describe('builders de inscripción con override', () => {
         rejectUrl: 'https://x/reject?t=BBB',
         branding: branding(),
       },
+      'es-ES',
       { subject: 'Solicitud de {{name}}', body: 'Intro personalizada para {{tenantName}}.' },
     );
     expect(out.subject).toBe('Solicitud de Ana');
@@ -659,25 +679,178 @@ describe('builders de inscripción · idioma del destinatario', () => {
     }
   });
 
-  it('el email de decisión al aprobador sigue monolingüe A PROPÓSITO, y lo declara', () => {
-    // No es un olvido: su cuerpo es casi todo estructura cuyo copy vive en
-    // `modules/payment-connections`. Si alguien lo traduce a medias, este test
-    // le obliga a pasar por `buildDecisionEmail` antes de cambiarlo.
-    const out = buildDecisionEmail({
-      name: 'Ana',
-      email: 'ana@example.test',
-      telegramId: null,
-      inGroup: 'true',
-      isDelinquent: false,
-      approveUrl: 'https://x/a',
-      rejectUrl: 'https://x/r',
-      branding: branding(),
-    });
+  // ── El email de decisión al aprobador: era la ÚLTIMA plantilla monolingüe ──
+  // Lo que la bloqueaba: las etiquetas de estado de suscripción las redacta
+  // `classifySubscriptionStatus` en `modules/payment-connections`, así que
+  // traducir solo la intro dejaba un email mitad inglés mitad español. Estos
+  // tests fijan las dos mitades: el ES no cambia y el EN sale ENTERO.
+  const decisionParams = (over: Partial<DecisionEmailParams> = {}): DecisionEmailParams => ({
+    name: 'Ana',
+    email: 'ana@example.test',
+    telegramId: null,
+    inGroup: 'true',
+    isDelinquent: false,
+    approveUrl: 'https://x/a',
+    rejectUrl: 'https://x/r',
+    branding: branding(),
+    ...over,
+  });
+
+  const match = (over: Partial<MemberSubscriptionMatch> = {}): MemberSubscriptionMatch =>
+    ({
+      provider: 'stripe',
+      planName: 'Plan Anual',
+      status: 'active',
+      unitAmount: 9900,
+      currency: 'eur',
+      ...over,
+    }) as MemberSubscriptionMatch;
+
+  it('decisión es-ES: byte a byte lo que ya recibía el aprobador', () => {
+    const out = buildDecisionEmail(
+      decisionParams({
+        telegramId: '42',
+        isDelinquent: true,
+        subscriptionMatches: [match()],
+        subscriptionFailures: [{ connectionName: 'Woo viejo' }] as never,
+      }),
+      'es-ES',
+    );
+    expect(out.subject).toBe('Nueva inscripción pendiente — Ana');
     expect(out.html).toContain('<html lang="es">');
-    expect(out.html).toContain('Aprobar');
-    expect(
-      TRANSACTIONAL_TEMPLATE_DEFAULTS_EN['member_registration.approval_request'],
-    ).toBeUndefined();
+    expect(out.text).toContain('Hay una nueva inscripción pendiente de tu aprobación en Academia Demo.'); // prettier-ignore
+    expect(out.text).toContain('Estado: Miembro del grupo de Academia Demo');
+    expect(out.text).toContain('⚠ CONSTA COMO IMPAGO');
+    expect(out.text).toContain('  Nombre: Ana');
+    expect(out.text).toContain('  Email: ana@example.test');
+    expect(out.text).toContain('  Telegram ID: 42');
+    expect(out.text).toContain('Suscripción vigente:');
+    expect(out.text).toContain('  • Stripe: Plan Anual — Activa — 99.00 EUR');
+    expect(out.text).toContain('⚠ Resultado parcial (no se pudo consultar 1 cuenta(s) de pago: Woo viejo).'); // prettier-ignore
+    expect(out.text).toContain('Aprobar: https://x/a');
+    expect(out.text).toContain('Rechazar: https://x/r');
+  });
+
+  it('decisión en-US: sale ENTERO en inglés, sin una sola pieza en español', () => {
+    const out = buildDecisionEmail(
+      decisionParams({
+        telegramId: '42',
+        isDelinquent: true,
+        subscriptionMatches: [match({ status: 'past_due' })],
+        purchases: [
+          {
+            orderId: 'o1',
+            orderNumber: '1001',
+            createdAt: '2026-03-14T10:00:00.000Z',
+            status: 'completed',
+            total: 4900,
+            currency: 'eur',
+            products: ['Curso de TS'],
+          } as never,
+        ],
+      }),
+      'en-US',
+    );
+    expect(out.subject).toBe('New registration pending — Ana');
+    expect(out.html).toContain('<html lang="en">');
+    expect(out.text).toContain('There is a new registration waiting for your approval');
+    expect(out.text).toContain('Status: Member of the Academia Demo group');
+    expect(out.text).toContain('⚠ RECORDED AS UNPAID');
+    expect(out.text).toContain('  Name: Ana');
+    expect(out.text).toContain('Active subscription:');
+    // La pieza que bloqueaba la traducción: la etiqueta de estado vive en
+    // `modules/payment-connections` y ahora sale en el idioma del aprobador.
+    expect(out.text).toContain('Payment overdue (unpaid)');
+    expect(out.text).toContain('Purchases found (1)');
+    expect(out.text).toContain('Approve: https://x/a');
+    expect(out.text).toContain('Reject: https://x/r');
+
+    // Y NINGUNA pieza española suelta — el «mitad y mitad» que se declaró.
+    for (const espanol of [
+      'Estado:',
+      'IMPAGO',
+      'Nombre:',
+      'Suscripción',
+      'Pago atrasado',
+      'Compras detectadas',
+      'Aprobar:',
+      'Rechazar:',
+      'pendiente de tu aprobación',
+    ]) {
+      expect(out.text, `sigue en español: ${espanol}`).not.toContain(espanol);
+    }
+  });
+
+  it('decisión en-US: la fecha del pedido usa el formato inglés', () => {
+    const out = buildDecisionEmail(
+      decisionParams({
+        purchases: [
+          {
+            orderId: 'o1',
+            orderNumber: '1001',
+            createdAt: '2026-03-14T10:00:00.000Z',
+            status: 'completed',
+            total: 4900,
+            currency: 'eur',
+            products: [],
+          } as never,
+        ],
+      }),
+      'en-US',
+    );
+    // `toLocaleDateString('es-ES')` da 14/3/2026; el inglés, 3/14/2026.
+    expect(out.text).toContain('3/14/2026');
+    expect(out.text).not.toContain('14/3/2026');
+  });
+
+  it('decisión: los 4 casos del bloque de suscripción salen en inglés', () => {
+    const casos: Array<[Partial<DecisionEmailParams>, string]> = [
+      [{ subscriptionMatches: [match()] }, 'Active subscription'],
+      [{ subscriptionMatches: [match({ status: 'canceled' })] }, 'Subscription NOT active'],
+      [
+        { subscriptionFailures: [{ connectionName: 'Woo' }] as never },
+        'The subscription could not be verified',
+      ],
+      [{}, 'Subscriptions found: none in the connected payment accounts.'],
+    ];
+    for (const [over, esperado] of casos) {
+      const out = buildDecisionEmail(decisionParams(over), 'en-US');
+      expect(out.text, esperado).toContain(esperado);
+    }
+  });
+
+  it('decisión: un estado de suscripción DESCONOCIDO pinta el valor crudo, nunca la key', () => {
+    // `classifySubscriptionStatus` se decidió como espejo del enum del backend,
+    // no como copy de pantalla: ante un estado nuevo del proveedor, al aprobador
+    // le sirve más el valor crudo que un identificador interno o «Desconocido».
+    const out = buildDecisionEmail(
+      decisionParams({ subscriptionMatches: [match({ status: 'paused_indefinitely' })] }),
+      'en-US',
+    );
+    expect(out.text).toContain('paused_indefinitely');
+    expect(out.text).not.toContain('unknown');
+  });
+
+  it('CAMINO DEGRADADO: la decisión en un locale sin catálogo sale en español', () => {
+    for (const locale of ['pt-BR', 'zz', '', '   ']) {
+      expect(buildDecisionEmail(decisionParams(), locale).subject, locale).toBe(
+        'Nueva inscripción pendiente — Ana',
+      );
+    }
+  });
+
+  it('los idiomas de `classifySubscriptionStatus` son los MISMOS del catálogo', () => {
+    // La lista de idiomas se redeclara en `modules/payment-connections` porque
+    // un módulo no puede importar de `apps/api`. Sin esta guarda, añadir un
+    // idioma al catálogo dejaría las etiquetas de suscripción atrás y el email
+    // volvería a salir a medias — el bug exacto que este cabo cierra.
+    for (const lang of HUB_TEMPLATE_LANGS) {
+      const info = classifySubscriptionStatus('active', lang);
+      expect(info.label.trim().length, `sin etiqueta de suscripción en ${lang}`).toBeGreaterThan(0);
+      expect(info.entitled, lang).toBe(true);
+    }
+    const etiquetas = HUB_TEMPLATE_LANGS.map((l) => classifySubscriptionStatus('active', l).label);
+    expect(new Set(etiquetas).size, 'dos idiomas comparten etiqueta').toBe(etiquetas.length);
   });
 });
 

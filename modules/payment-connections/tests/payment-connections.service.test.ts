@@ -814,6 +814,43 @@ describe('classifySubscriptionStatus', () => {
     expect(unknown.entitled).toBe(false);
     expect(unknown.label).toBe('rarísimo');
   });
+
+  // ── El idioma, que llegó con el email de decisión al aprobador ────────────
+  // Esta función es el ESPEJO del enum del backend, no copy de pantalla, y sus
+  // tres consumidores de siempre (el sync de suscriptores, `getMySubscription`
+  // y el espejo del front) la llaman con un solo argumento. El idioma es
+  // opcional para que ninguno de ellos cambie.
+
+  it('sin idioma sigue devolviendo el español, byte a byte', () => {
+    for (const [status, expected] of Object.entries(SUBSCRIPTION_STATUS_TABLE)) {
+      expect(classifySubscriptionStatus(status)).toEqual(classifySubscriptionStatus(status, 'es'));
+      expect(classifySubscriptionStatus(status).label).toBe(expected.label);
+    }
+  });
+
+  it('en inglés cambia SOLO la etiqueta: categoría y `entitled` son los mismos', () => {
+    for (const status of Object.keys(SUBSCRIPTION_STATUS_TABLE)) {
+      const es = classifySubscriptionStatus(status, 'es');
+      const en = classifySubscriptionStatus(status, 'en');
+      expect(en.category, status).toBe(es.category);
+      expect(en.entitled, status).toBe(es.entitled);
+      expect(en.label, `${status} sin traducir`).not.toBe(es.label);
+      expect(en.label.trim().length, status).toBeGreaterThan(0);
+    }
+  });
+
+  it('CAMINO DEGRADADO: un estado desconocido pinta el valor CRUDO en los dos idiomas', () => {
+    // Nunca un identificador interno: ante un estado nuevo del proveedor, al
+    // aprobador le sirve más «paused_indefinitely» que «Unknown».
+    for (const lang of ['es', 'en'] as const) {
+      expect(classifySubscriptionStatus('paused_indefinitely', lang).label).toBe(
+        'paused_indefinitely',
+      );
+    }
+    // Y con el status vacío sí gana la etiqueta, en su idioma.
+    expect(classifySubscriptionStatus('', 'es').label).toBe('Desconocido');
+    expect(classifySubscriptionStatus('', 'en').label).toBe('Unknown');
+  });
 });
 
 describe('listConnections', () => {

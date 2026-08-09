@@ -81,51 +81,118 @@ export type SubscriptionStatusCategory =
 
 export interface SubscriptionStatusInfo {
   category: SubscriptionStatusCategory;
-  /** Etiqueta legible en español (p.ej. "Dada de baja", "En impago"). */
+  /** Etiqueta legible en el idioma pedido (p.ej. "Dada de baja", "En impago"). */
   label: string;
   /** Si el estado concede acceso vigente hoy (sirve para preseleccionar el tier). */
   entitled: boolean;
 }
 
 /**
+ * Idiomas con etiqueta propia. Es la MISMA lista cerrada que `HUB_TEMPLATE_LANGS`
+ * del catálogo de emails del host; se redeclara aquí porque un módulo no puede
+ * importar de `apps/api` (contrato de módulos). Hay test de que coinciden.
+ */
+export type SubscriptionStatusLang = 'es' | 'en';
+
+/** Identificador interno de etiqueta. NO es el `status` crudo del proveedor. */
+type StatusLabelKey =
+  | 'active'
+  | 'trialing'
+  | 'past_due'
+  | 'unpaid'
+  | 'on_hold'
+  | 'paused'
+  | 'pending_cancel'
+  | 'canceled'
+  | 'expired'
+  | 'incomplete'
+  | 'pending'
+  | 'unknown';
+
+/**
+ * Las etiquetas por idioma. El español es EXACTAMENTE el que había: esto no
+ * reescribe copy, lo saca de un `switch` para que el inglés pueda existir.
+ */
+const SUBSCRIPTION_STATUS_LABELS: Record<SubscriptionStatusLang, Record<StatusLabelKey, string>> = {
+  es: {
+    active: 'Activa',
+    trialing: 'En prueba',
+    past_due: 'Pago atrasado (impago)',
+    unpaid: 'Impago — suspendida',
+    on_hold: 'En espera (impago)',
+    paused: 'Pausada',
+    pending_cancel: 'Baja programada',
+    canceled: 'Dada de baja',
+    expired: 'Expirada',
+    incomplete: 'Pago no completado',
+    pending: 'Pendiente de pago',
+    unknown: 'Desconocido',
+  },
+  en: {
+    active: 'Active',
+    trialing: 'Trialing',
+    past_due: 'Payment overdue (unpaid)',
+    unpaid: 'Unpaid — suspended',
+    on_hold: 'On hold (unpaid)',
+    paused: 'Paused',
+    pending_cancel: 'Cancellation scheduled',
+    canceled: 'Cancelled',
+    expired: 'Expired',
+    incomplete: 'Payment not completed',
+    pending: 'Awaiting payment',
+    unknown: 'Unknown',
+  },
+};
+
+/** El `status` crudo del proveedor → categoría, etiqueta y si concede acceso. */
+const STATUS_MAP: Record<
+  string,
+  { category: SubscriptionStatusCategory; label: StatusLabelKey; entitled: boolean }
+> = {
+  active: { category: 'active', label: 'active', entitled: true },
+  trialing: { category: 'active', label: 'trialing', entitled: true },
+  past_due: { category: 'past_due', label: 'past_due', entitled: true },
+  unpaid: { category: 'unpaid', label: 'unpaid', entitled: false },
+  // WooCommerce 'on-hold' = impago/espera de pago. El set activo de la
+  // reconciliación de tiers (WC_ACTIVE_STATUSES) la cuenta como suscrita, así
+  // que aquí también es `entitled` (con etiqueta de impago) para no contradecir
+  // al sync de tiers — mismo criterio que el past_due de Stripe.
+  'on-hold': { category: 'past_due', label: 'on_hold', entitled: true },
+  paused: { category: 'paused', label: 'paused', entitled: false },
+  'pending-cancel': { category: 'canceled', label: 'pending_cancel', entitled: true },
+  canceled: { category: 'canceled', label: 'canceled', entitled: false },
+  cancelled: { category: 'canceled', label: 'canceled', entitled: false },
+  expired: { category: 'canceled', label: 'expired', entitled: false },
+  incomplete: { category: 'incomplete', label: 'incomplete', entitled: false },
+  incomplete_expired: { category: 'incomplete', label: 'incomplete', entitled: false },
+  pending: { category: 'incomplete', label: 'pending', entitled: false },
+};
+
+/**
  * Clasifica el `status` crudo de una suscripción (Stripe / WooCommerce / PayPal)
  * en una categoría normalizada + etiqueta legible. Permite mostrarle al aprobador
  * "Dada de baja" o "En impago" en lugar de ocultar la suscripción cuando ya no
  * está activa (un cancelado o un impago no es lo mismo que "sin suscripción").
+ *
+ * `lang` es OPCIONAL y por defecto español: los tres consumidores que ya
+ * existían (`getMySubscription`, el sync de suscriptores y el espejo del front)
+ * siguen llamándola con un argumento y reciben byte a byte lo de siempre. Solo
+ * el email de decisión, que sí conoce el idioma del aprobador, lo pasa.
+ *
+ * CAMINO DEGRADADO NOMBRADO: un `status` que este mapa no conoce devuelve el
+ * VALOR CRUDO del proveedor como etiqueta (`status || label.unknown`), nunca un
+ * identificador interno. Es la decisión de origen de esta función —espejo del
+ * enum del backend, no copy de pantalla— y se conserva: ante un estado nuevo de
+ * Stripe, al aprobador le sirve más «paused_indefinitely» que «Desconocido».
  */
-export function classifySubscriptionStatus(status: string): SubscriptionStatusInfo {
-  switch ((status ?? '').toLowerCase().trim()) {
-    case 'active':
-      return { category: 'active', label: 'Activa', entitled: true };
-    case 'trialing':
-      return { category: 'active', label: 'En prueba', entitled: true };
-    case 'past_due':
-      return { category: 'past_due', label: 'Pago atrasado (impago)', entitled: true };
-    case 'unpaid':
-      return { category: 'unpaid', label: 'Impago — suspendida', entitled: false };
-    case 'on-hold':
-      // WooCommerce 'on-hold' = impago/espera de pago. El set activo de la
-      // reconciliación de tiers (WC_ACTIVE_STATUSES) la cuenta como suscrita, así
-      // que aquí también es `entitled` (con etiqueta de impago) para no contradecir
-      // al sync de tiers — mismo criterio que el past_due de Stripe.
-      return { category: 'past_due', label: 'En espera (impago)', entitled: true };
-    case 'paused':
-      return { category: 'paused', label: 'Pausada', entitled: false };
-    case 'pending-cancel':
-      return { category: 'canceled', label: 'Baja programada', entitled: true };
-    case 'canceled':
-    case 'cancelled':
-      return { category: 'canceled', label: 'Dada de baja', entitled: false };
-    case 'expired':
-      return { category: 'canceled', label: 'Expirada', entitled: false };
-    case 'incomplete':
-    case 'incomplete_expired':
-      return { category: 'incomplete', label: 'Pago no completado', entitled: false };
-    case 'pending':
-      return { category: 'incomplete', label: 'Pendiente de pago', entitled: false };
-    default:
-      return { category: 'unknown', label: status || 'Desconocido', entitled: false };
-  }
+export function classifySubscriptionStatus(
+  status: string,
+  lang: SubscriptionStatusLang = 'es',
+): SubscriptionStatusInfo {
+  const labels = SUBSCRIPTION_STATUS_LABELS[lang] ?? SUBSCRIPTION_STATUS_LABELS.es;
+  const hit = STATUS_MAP[(status ?? '').toLowerCase().trim()];
+  if (!hit) return { category: 'unknown', label: status || labels.unknown, entitled: false };
+  return { category: hit.category, label: labels[hit.label], entitled: hit.entitled };
 }
 
 /**
