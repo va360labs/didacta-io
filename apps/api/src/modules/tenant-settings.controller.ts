@@ -27,6 +27,12 @@ import { ZodValidationPipe } from '../auth/zod-validation.pipe';
 import { ModuleContextFactory } from './module-context.factory';
 import { PrismaService } from '../prisma/prisma.service';
 import { mergeSecretFields, redactSensitiveFields } from './redact-sensitive-fields';
+import {
+  interpolate,
+  resolveFixedEmailCopy,
+  resolveRecipientLocale,
+  resolveSmtpSettingsPing,
+} from './notifications/email-template-catalog';
 
 const ADMIN_ROLES = new Set(['super_admin', 'tenant_admin']);
 
@@ -267,7 +273,7 @@ export class TenantSettingsController {
 
     const me = await this.prisma.user.findUnique({
       where: { id: claims.sub },
-      select: { email: true, tenantId: true },
+      select: { email: true, tenantId: true, locale: true },
     });
     if (!me || me.tenantId !== claims.tenantId) {
       throw new BadRequestException({
@@ -281,10 +287,18 @@ export class TenantSettingsController {
       select: { slug: true },
     });
 
+    // El ping se lo manda el admin a SÍ MISMO (`to: me.email`), así que sale en
+    // SU idioma. El copy vive en el catálogo de plantillas, no aquí.
+    const locale = resolveRecipientLocale(me.locale);
+    const ping = resolveSmtpSettingsPing(locale);
+    const vars = {
+      tenantSlug: tenant?.slug ?? resolveFixedEmailCopy('value.unknown_tenant_slug', locale),
+      timestamp: new Date().toISOString(),
+    };
     const result = await smtp.send(parsed, {
       to: me.email,
-      subject: 'Prueba de SMTP — Didacta',
-      text: `Si recibiste este correo, la configuración SMTP de tu tenant en Didacta funciona correctamente.\n\nTenant: ${tenant?.slug ?? '(desconocido)'}\nFecha: ${new Date().toISOString()}`,
+      subject: ping.subject ?? '',
+      text: interpolate(ping.body, vars),
     });
 
     if (!result.ok) {
