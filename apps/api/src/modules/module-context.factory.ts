@@ -19,6 +19,7 @@ import type { StorageService } from '@didacta/core-kernel';
 import { LocalDiskStorageService } from './local-disk-storage.service';
 import { S3StorageService, buildS3StorageFromEnv } from './s3-storage.service';
 import { withImageOptimization } from './image-optimizing-storage';
+import { OutboxMetrics } from './outbox.metrics';
 import { OutboxQueueService } from './outbox-queue.service';
 import { PersistentEventBus } from './persistent-event-bus';
 import { PrismaAuditLogService } from './prisma-audit-log.service';
@@ -119,6 +120,7 @@ export class ModuleContextFactory implements OnApplicationShutdown {
     private readonly pino: PinoLogger,
     @Inject(forwardRef(() => OutboxQueueService))
     private readonly outboxQueue: OutboxQueueService,
+    private readonly outboxMetrics: OutboxMetrics,
   ) {}
 
   build(): ModuleContext {
@@ -127,7 +129,12 @@ export class ModuleContextFactory implements OnApplicationShutdown {
     // bridges se suscriben en onModuleInit (que en Nest 11 puede correr ANTES
     // de que el registry construya el contexto) — todos deben compartir la
     // misma instancia o las suscripciones se pierden.
-    this.eventBus ??= new PersistentEventBus(this.prisma, adaptedLogger, this.outboxQueue);
+    this.eventBus ??= new PersistentEventBus(
+      this.prisma,
+      adaptedLogger,
+      this.outboxQueue,
+      this.outboxMetrics,
+    );
     const auditLog = new PrismaAuditLogService(this.prisma);
     const evidenceVault = new PrismaEvidenceVaultService(this.prisma, this.storage);
     this.tenantConfig = new PrismaTenantConfigService(this.prisma, this.cipher, auditLog);
@@ -312,6 +319,7 @@ export class ModuleContextFactory implements OnApplicationShutdown {
       this.prisma,
       this.adaptLogger(this.pino),
       this.outboxQueue,
+      this.outboxMetrics,
     );
     return this.eventBus;
   }
