@@ -82,8 +82,13 @@ export class OutboxRecoveryWorker implements OnApplicationBootstrap, OnModuleDes
     try {
       const result = await this.registry.recoverOutbox();
       this.metrics.recordSweep('success');
-      this.metrics.recordRecoveryEvents(result.processed, result.failed);
-      if (result.processed > 0 || result.failed > 0 || result.undelivered > 0) {
+      this.metrics.recordRecoveryEvents(result.processed, result.failed, result.deduplicated);
+      if (
+        result.processed > 0 ||
+        result.failed > 0 ||
+        result.undelivered > 0 ||
+        result.deduplicated > 0
+      ) {
         this.logger.log(result, 'outbox recovery sweep');
       }
     } catch (error) {

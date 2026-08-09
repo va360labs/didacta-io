@@ -65,13 +65,42 @@ function rowToEvent(row: OutboxRowLike): DomainEvent<unknown> {
 }
 
 /**
+ * Referencia a la fila de `outbox_event` cuyo despacho se va a encolar.
+ *
+ * NO es sólo el `id` a propósito. El `id` es un BIGSERIAL: si la base se
+ * recrea, la secuencia vuelve a empezar en 1 y un evento NUEVO hereda la
+ * identidad de uno viejo. `createdAt` es lo que rompe esa herencia sin dejar
+ * de ser determinista — cualquier proceso que lea la misma fila deriva la
+ * misma identidad, que es lo que sostiene la deduplicación. Ver
+ * `buildOutboxJobId` en `outbox-enqueue.ts`.
+ */
+export interface OutboxJobRef {
+  id: bigint;
+  createdAt: Date;
+}
+
+/**
+ * Desenlace de un intento de encolado. Es lo que devuelve `enqueue()` en lugar
+ * del `void` anterior, que no tenía forma de representar el único fallo que de
+ * verdad importa aquí: que el `add` a BullMQ se lo trague un job homónimo que
+ * ya nunca se va a ejecutar.
+ *
+ *   queued       → existe un job que despachará este evento (recién añadido,
+ *                  o uno anterior que sigue pendiente de ejecutarse).
+ *   deduplicated → el `add` fue absorbido por un job TERMINAL (completado o
+ *                  fallido) que no se pudo reemplazar. El evento NO se va a
+ *                  despachar por la cola.
+ */
+export type EnqueueOutcome = 'queued' | 'deduplicated';
+
+/**
  * Adaptador opcional de despacho asíncrono. Si está presente y `isEnabled()`
  * devuelve true, `publish()` encola en lugar de despachar in-process. La
  * implementación real es `OutboxQueueService` con BullMQ + Redis.
  */
 export interface OutboxDispatcher {
   isEnabled(): boolean;
-  enqueue(outboxId: bigint): Promise<void>;
+  enqueue(ref: OutboxJobRef): Promise<EnqueueOutcome>;
 }
 
 /**
@@ -163,8 +192,17 @@ export class PersistentEventBus implements EventBus {
 
     if (this.dispatcher?.isEnabled()) {
       try {
-        await this.dispatcher.enqueue(persisted.id);
-        return;
+        const outcome = await this.dispatcher.enqueue(persisted);
+        if (outcome === 'queued') return;
+        // `deduplicated`: el add se lo tragó un job terminal homónimo que ya
+        // no va a correr. Cae al despacho in-process por el mismo motivo que
+        // el catch de abajo — el evento existe, está sin procesar y nadie más
+        // lo va a recoger. No hay riesgo de doble entrega: sólo se llega aquí
+        // con un job en estado terminal.
+        this.logger.error('enqueue absorbido por un job ya terminado, fallback in-process', {
+          outboxId: persisted.id.toString(),
+          event: event.name,
+        });
       } catch (err) {
         // Si Redis falló al encolar, no perdemos el evento: la tabla outbox
         // tiene la fila con processedAt=null. El recovery worker lo reencola
@@ -236,10 +274,22 @@ export class PersistentEventBus implements EventBus {
    * Si hay dispatcher async habilitado, reencola los pendientes a la cola
    * (failsafe para casos de Redis caído al momento del publish original).
    * Sin dispatcher, los procesa in-process.
+   *
+   * `deduplicated` es un desenlace propio y NO se suma a `processed`: un
+   * re-enqueue que BullMQ descarta contra un job terminal no entrega nada.
+   * Contarlo como procesado —lo que hacía antes— convertía al failsafe en un
+   * mentiroso: reportaba éxito mientras la fila seguía pendiente y el gauge de
+   * lag subía. Tampoco es `failed`: no ha fallado nada, es que la entrega
+   * simplemente no ha ocurrido y hay que poder alertar sobre ese caso concreto.
+   *
+   * A diferencia de `publish()`, aquí NO se cae a despacho in-process: el
+   * barrido toca hasta 50 filas cada 5 min y despacharlas dentro del timer
+   * cambiaría el perfil de carga del proceso. El evento se reintenta en el
+   * siguiente barrido, donde `enqueue()` vuelve a intentar el reemplazo.
    */
   async recoverPending(
     limit = 50,
-  ): Promise<{ processed: number; failed: number; undelivered: number }> {
+  ): Promise<{ processed: number; failed: number; undelivered: number; deduplicated: number }> {
     // Barrido cross-tenant de pendientes: acceso global sancionado.
     const pending = await runSanctionedGlobalAccess(() =>
       this.prisma.outboxEvent.findMany({
@@ -252,12 +302,21 @@ export class PersistentEventBus implements EventBus {
     let processed = 0;
     let failed = 0;
     let undelivered = 0;
+    let deduplicated = 0;
 
     for (const row of pending) {
       if (this.dispatcher?.isEnabled()) {
         try {
-          await this.dispatcher.enqueue(row.id);
-          processed++;
+          const outcome = await this.dispatcher.enqueue(row);
+          if (outcome === 'queued') {
+            processed++;
+          } else {
+            deduplicated++;
+            this.logger.error(
+              'recovery: re-enqueue absorbido por un job terminal — el evento sigue SIN entregar',
+              { outboxId: row.id.toString(), event: row.eventName },
+            );
+          }
         } catch (err) {
           failed++;
           this.logger.error('recovery: falló re-enqueue', {
@@ -279,10 +338,11 @@ export class PersistentEventBus implements EventBus {
         processed,
         failed,
         undelivered,
+        deduplicated,
         viaQueue: this.dispatcher?.isEnabled() ?? false,
       });
     }
-    return { processed, failed, undelivered };
+    return { processed, failed, undelivered, deduplicated };
   }
 
   /**
