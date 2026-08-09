@@ -26,6 +26,8 @@ import { ZoomApiError } from '@didacta/mod-zoom-live';
 import { MaxAttemptsReachedError } from '@didacta/mod-assessments';
 import { SpaceNotFoundError } from '@didacta/mod-community';
 import { InvitationInvalidError } from '@didacta/mod-learning';
+import { TemplateInUseError } from '@didacta/mod-certificates';
+import { CustomCssTooLargeError, LogoTooLargeError } from '@didacta/mod-theming';
 import { moduleErrorBody } from '../src/common/module-error-body';
 import { BillingErrorFilter } from '../src/modules/billing/billing-error.filter';
 import { ZoomLiveErrorFilter } from '../src/modules/zoom-live/zoom-live-error.filter';
@@ -123,6 +125,25 @@ describe('los ExceptionFilter emiten el `detail` de su módulo', () => {
     expect(body['detail']).toBe(detail);
     // Y el `message` español NO cambia: sigue llevando el dato incrustado, que
     // es el fallback honesto si el front no conoce el code.
+    expect(String(body['message'])).toContain(detail);
+  });
+
+  it.each([
+    // El `message` compone el número con la aritmética de JS («5242880»), sin
+    // separador de miles. Si el `detail` viajara como number, ICU lo
+    // formatearía por idioma («5.242.880» en es-ES) y la frase traducida
+    // dejaría de ser byte a byte la que ya ve el admin español. El tipo
+    // `detail?: string` lo impide en compilación; esto lo fija en runtime.
+    [new TemplateInUseError(1200), 'TEMPLATE_IN_USE', '1200'],
+    [new CustomCssTooLargeError(5242880), 'THEMING_CUSTOM_CSS_TOO_LARGE', '5242880'],
+    // Y el que ya venía formateado como texto (MB con un decimal) tampoco se
+    // recalcula: viaja tal cual lo compuso el backend.
+    [new LogoTooLargeError(2 * 1024 * 1024), 'THEMING_LOGO_TOO_LARGE', '2.0'],
+  ])('%# → el límite numérico viaja como string, sin formatear', (error, code, detail) => {
+    const body = bodyOf(new AssessmentsErrorFilter() as never, error);
+    expect(body['code']).toBe(code);
+    expect(body['detail']).toBe(detail);
+    expect(typeof body['detail']).toBe('string');
     expect(String(body['message'])).toContain(detail);
   });
 
