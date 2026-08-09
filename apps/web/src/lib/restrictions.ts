@@ -16,24 +16,30 @@
 import { useCallback, useEffect, useState } from 'react';
 import { apiFetch } from './api-client';
 import { authStorage } from './auth-storage';
-import { formatDate } from './i18n/format';
 
-/** Mismas claves que `restriction-scopes.ts` en la API. */
+/**
+ * Mismas claves que `restriction-scopes.ts` en la API. Solo el `value`: el texto
+ * de cada ámbito lo pone el llamante desde el catálogo
+ * (`restrictionScope.*` / `restrictionScopeHint.*`).
+ */
 export const RESTRICTION_SCOPES = [
-  { value: 'community', label: 'Comunidad', hint: 'Publicar, comentar y reaccionar' },
-  { value: 'messaging', label: 'Mensajes', hint: 'Escribir en chats y abrir conversaciones' },
-  { value: 'uploads', label: 'Subidas de archivos', hint: 'Subir imágenes y recursos' },
-  { value: 'ai', label: 'Tutor IA', hint: 'Hacer preguntas al tutor' },
+  { value: 'community' },
+  { value: 'messaging' },
+  { value: 'uploads' },
+  { value: 'ai' },
 ] as const;
 
 export const SCOPE_ALL = 'all';
 
-/** Duraciones del diálogo. `null` = permanente. */
+/**
+ * Duraciones del diálogo. `null` = permanente. El texto sale de
+ * `restrictionDuration.*`, no de aquí.
+ */
 export const RESTRICTION_DURATIONS = [
-  { value: '24h', label: '24 horas', hours: 24 },
-  { value: '7d', label: '7 días', hours: 24 * 7 },
-  { value: '30d', label: '30 días', hours: 24 * 30 },
-  { value: 'permanent', label: 'Permanente', hours: null },
+  { value: '24h', hours: 24 },
+  { value: '7d', hours: 24 * 7 },
+  { value: '30d', hours: 24 * 30 },
+  { value: 'permanent', hours: null },
 ] as const;
 
 export type DurationValue = (typeof RESTRICTION_DURATIONS)[number]['value'];
@@ -208,50 +214,9 @@ export function useUserRestriction(
   return value;
 }
 
-/**
- * Hook: sanciones vigentes de una lista de usuarios (batch + caché).
- * Para páginas que ya tienen todos los ids a mano (listados de admin).
- */
-export function useActiveRestrictions(
-  ids: Array<string | null | undefined>,
-  enabled: boolean,
-): Map<string, ActiveRestrictionSummary | null> {
-  const key = [...new Set(ids.filter((x): x is string => !!x))].sort().join(',');
-  const [map, setMap] = useState<Map<string, ActiveRestrictionSummary | null>>(new Map());
-
-  const load = useCallback(() => {
-    if (!enabled || !key) {
-      setMap(new Map());
-      return;
-    }
-    void fetchActiveRestrictions(key.split(',')).then(setMap);
-  }, [key, enabled]);
-
-  useEffect(() => {
-    load();
-    listeners.add(load);
-    return () => {
-      listeners.delete(load);
-    };
-  }, [load]);
-
-  return map;
-}
-
 /** Convierte la duración elegida en el ISO que espera la API. */
 export function expiresAtFromDuration(duration: DurationValue): string | null {
   const found = RESTRICTION_DURATIONS.find((d) => d.value === duration);
   if (!found || found.hours === null) return null;
   return new Date(Date.now() + found.hours * 3600_000).toISOString();
-}
-
-/** Texto corto de vigencia para listas y tooltips. */
-export function restrictionSummary(r: Restriction): string {
-  const areas = r.scopeLabels.join(', ');
-  if (!r.expiresAt) return `${areas} · permanente`;
-  return `${areas} · hasta ${formatDate(r.expiresAt, {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-  })}`;
 }

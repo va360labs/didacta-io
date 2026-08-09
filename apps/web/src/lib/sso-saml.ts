@@ -79,10 +79,6 @@ export type SamlConnectionProbe =
     }
   | { ok: false; error: string };
 
-export interface SamlStatusResponse {
-  enabled: boolean;
-}
-
 const ADMIN_BASE = '/api/v1/admin/sso/saml';
 
 export const samlAdminApi = {
@@ -114,17 +110,6 @@ export const samlAdminApi = {
     );
   },
 };
-
-export async function fetchSamlStatus(tenantSlug: string): Promise<SamlStatusResponse> {
-  try {
-    return await apiFetch<SamlStatusResponse>(
-      `/api/v1/auth/saml/${encodeURIComponent(tenantSlug)}/status`,
-      { method: 'GET' },
-    );
-  } catch {
-    return { enabled: false };
-  }
-}
 
 /**
  * URL completa para iniciar el flow SAML. El click del botón de signin hace

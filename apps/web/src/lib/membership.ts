@@ -189,29 +189,3 @@ export function formatCents(
 ): string {
   return formatCentsI18n(cents, currency.toUpperCase(), opts);
 }
-
-/** Etiqueta de periodicidad: "/mes", "/trimestre", …, "/N meses". */
-export function intervalSuffix(intervalMonths: number): string {
-  if (intervalMonths === 12) return '/año';
-  if (intervalMonths === 6) return '/semestre';
-  if (intervalMonths === 3) return '/trimestre';
-  if (intervalMonths === 1) return '/mes';
-  return `/${intervalMonths} meses`;
-}
-
-/** Nombre largo: "Suscripción mensual/trimestral/…/cada N meses". */
-export function intervalDescription(intervalMonths: number): string {
-  if (intervalMonths === 12) return 'Suscripción anual';
-  if (intervalMonths === 6) return 'Suscripción semestral';
-  if (intervalMonths === 3) return 'Suscripción trimestral';
-  if (intervalMonths === 1) return 'Suscripción mensual';
-  return `Suscripción cada ${intervalMonths} meses`;
-}
-
-/** Fecha del próximo pago: hoy + trial + periodo. */
-export function nextPaymentDate(intervalMonths: number, trialDays: number): Date {
-  const d = new Date();
-  d.setDate(d.getDate() + trialDays);
-  d.setMonth(d.getMonth() + intervalMonths);
-  return d;
-}

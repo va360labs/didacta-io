@@ -14,11 +14,6 @@
 
 import { apiFetch } from './api-client';
 import { authStorage } from './auth-storage';
-import {
-  formatCurrency,
-  formatDate as formatDateI18n,
-  formatDateTime as formatDateTimeI18n,
-} from './i18n/format';
 import type { Restriction } from './restrictions';
 
 export interface DossierOrder {
@@ -65,27 +60,6 @@ export interface DossierExternalOrder {
   daysToExpiry: number | null;
   products: string[];
 }
-
-/** Etiquetas de los tipos de derecho de acceso. Espejo de `KIND_LABELS` en la API. */
-export const ENTITLEMENT_LABELS: Record<string, string> = {
-  LIFETIME: 'Acceso permanente',
-  SUBSCRIPTION: 'Suscripción',
-  TIMED: 'Acceso con vigencia',
-  ONE_OFF: 'Compra suelta',
-  INFRA: 'Servicio',
-};
-
-/** Estados de WooCommerce en cristiano. */
-export const WOO_STATUS_LABELS: Record<string, string> = {
-  completed: 'Pagado',
-  processing: 'Pagado (en curso)',
-  refunded: 'Devuelto',
-  cancelled: 'Cancelado',
-  failed: 'Fallido',
-  pending: 'Pendiente de pago',
-  'on-hold': 'En espera',
-  'lead-magnet': 'Gratuito',
-};
 
 export interface UserDossier {
   identity: {
@@ -241,32 +215,3 @@ export const dossierApi = {
     );
   },
 };
-
-/** Céntimos → «119,00 €» en el locale activo. */
-export function formatMoney(cents: number | null, currency = 'eur'): string {
-  if (cents === null) return '—';
-  return formatCurrency(cents / 100, currency.toUpperCase());
-}
-
-/** «hace 3 meses», «hace 2 años»: la antigüedad se lee mejor que 847 días. */
-export function formatMembership(days: number): string {
-  if (days < 1) return 'hoy';
-  if (days === 1) return '1 día';
-  if (days < 30) return `${days} días`;
-  const months = Math.floor(days / 30);
-  if (months < 12) return months === 1 ? '1 mes' : `${months} meses`;
-  const years = Math.floor(days / 365);
-  const restMonths = Math.floor((days % 365) / 30);
-  const y = years === 1 ? '1 año' : `${years} años`;
-  return restMonths > 0 ? `${y} y ${restMonths} ${restMonths === 1 ? 'mes' : 'meses'}` : y;
-}
-
-export function formatDate(iso: string | null): string {
-  if (!iso) return '—';
-  return formatDateI18n(iso, { day: '2-digit', month: '2-digit', year: 'numeric' });
-}
-
-export function formatDateTime(iso: string | null): string {
-  if (!iso) return '—';
-  return formatDateTimeI18n(iso);
-}

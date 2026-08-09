@@ -33,7 +33,7 @@
  * ```
  */
 
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, type ReactNode } from 'react';
 import { initModuleRuntime } from '@/lib/module-runtime';
 
 export interface ModuleRuntimeProviderProps {
@@ -41,27 +41,23 @@ export interface ModuleRuntimeProviderProps {
 }
 
 export function ModuleRuntimeProvider({ children }: ModuleRuntimeProviderProps) {
-  const [initialized, setInitialized] = useState(false);
-
   useEffect(() => {
-    // Inicializar el runtime solo en el cliente
+    // Inicializar el runtime solo en el cliente.
+    //
+    // NO hay estado `initialized`: los children se pintan igual antes y después
+    // (ver abajo), así que guardarlo solo provocaba un render extra. Si algún
+    // día hace falta bloquear el árbol hasta que el runtime esté listo, hay que
+    // reintroducir el estado Y usarlo en el return — no basta con escribirlo.
     try {
       initModuleRuntime();
-      setInitialized(true);
     } catch (err) {
       console.error('[ModuleRuntimeProvider] Error inicializando runtime:', err);
-      // Aún así renderizar children para no bloquear la app
-      setInitialized(true);
+      // Aún así renderizamos children para no bloquear la app.
     }
   }, []);
 
-  // En SSR, renderizar children sin esperar (el runtime se inicializa en hydration)
-  // En el cliente, esperar a que el runtime esté listo
-  if (typeof window === 'undefined') {
-    return <>{children}</>;
-  }
-
-  // Mostrar children inmediatamente - el runtime se inicializa en paralelo
-  // Los módulos que intenten cargarse antes recibirán un error claro
+  // Mostrar children inmediatamente — tanto en SSR como en cliente. El runtime
+  // se inicializa en paralelo y los módulos que intenten cargarse antes reciben
+  // un error claro desde `getModuleRuntime()`.
   return <>{children}</>;
 }

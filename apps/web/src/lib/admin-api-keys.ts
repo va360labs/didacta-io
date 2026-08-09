@@ -11,12 +11,6 @@ import { apiFetch } from './api-client';
 export const API_KEY_SCOPES = ['enrollments:write', 'courses:read', 'community:post'] as const;
 export type ApiKeyScope = (typeof API_KEY_SCOPES)[number];
 
-export const API_KEY_SCOPE_LABELS: Record<ApiKeyScope, string> = {
-  'enrollments:write': 'Inscribir y dar de baja alumnos (POST /inscribe, /inscribe/revoke)',
-  'courses:read': 'Listar cursos para mapear productos (GET /inscribe/courses)',
-  'community:post': 'Publicar en la comunidad como el dueño de la key (POST /community-api/posts)',
-};
-
 export interface TenantApiKey {
   id: string;
   name: string;

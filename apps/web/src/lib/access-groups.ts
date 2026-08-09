@@ -9,12 +9,6 @@ import { apiFetch } from './api-client';
 
 export type AccessGroupKind = 'ALL_COURSES' | 'COURSE' | 'MULTI_COURSE';
 
-export const ACCESS_GROUP_KIND_LABELS: Record<AccessGroupKind, string> = {
-  ALL_COURSES: 'Todos los cursos',
-  COURSE: 'Un curso',
-  MULTI_COURSE: 'Varios cursos',
-};
-
 export interface AccessGroupListItem {
   id: string;
   slug: string;

@@ -46,15 +46,6 @@ export interface OptimizeOutcome {
   error?: string;
 }
 
-/** Etiqueta legible de cada fuente, en singular. */
-export const SOURCE_LABELS: Record<ImageSource, string> = {
-  avatar: 'Avatar',
-  curso: 'Portada de curso',
-  coleccion: 'Portada de recursos',
-  logo: 'Logo',
-  post: 'Imagen de un post',
-};
-
 export const adminImagesApi = {
   inventory(bearer: string): Promise<ImagesInventory> {
     return apiFetch<ImagesInventory>('/api/v1/admin/images/inventory', {}, bearer);
