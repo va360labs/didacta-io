@@ -836,7 +836,7 @@ describe('MembershipService · fulfillment (webhook)', () => {
       membershipSession({ metadata: { membership: '1', tenantId: TENANT, planId } as never }),
       provision,
     );
-    expect(provision.mock.calls[0]![0]).toMatchObject({ locale: undefined });
+    expect(provision).toHaveBeenCalledWith(expect.objectContaining({ locale: undefined }));
   });
 
   it('email normalizado a minúsculas antes de provisionar', async () => {

@@ -21,6 +21,19 @@ function branding(tenantName = 'Didacta'): EmailBranding {
   return { tenantName, logoUrl: null, brandColor: '#1E5AA8' };
 }
 
+/**
+ * El email de decisión EN ESPAÑOL, que es el único que este fichero aserta.
+ *
+ * `buildDecisionEmail` pasó de monolingüe a bilingüe y el `locale` es
+ * obligatorio (con un opcional no se distingue «va en español» de «se me
+ * olvidó pasarlo»). Fijarlo aquí deja que estos 22 casos sigan siendo la
+ * prueba byte a byte de que el español NO se movió al traducirlo; el inglés lo
+ * cubre `email-template-catalog.test.ts`.
+ */
+function decisionEmailEs(params: DecisionEmailParams) {
+  return buildDecisionEmail(params, 'es-ES');
+}
+
 function baseDecisionParams(overrides: Partial<DecisionEmailParams> = {}): DecisionEmailParams {
   return {
     name: 'Alex',
@@ -73,49 +86,49 @@ describe('buildOtpEmail', () => {
 describe('buildDecisionEmail', () => {
   it('incluye AMBOS hrefs (approveUrl y rejectUrl) en el html', () => {
     const params = baseDecisionParams();
-    const { html } = buildDecisionEmail(params);
+    const { html } = decisionEmailEs(params);
     expect(html).toContain(`href="${params.approveUrl}"`);
     expect(html).toContain(`href="${params.rejectUrl}"`);
   });
 
   it('incluye ambas URLs también en la versión texto', () => {
     const params = baseDecisionParams();
-    const { text } = buildDecisionEmail(params);
+    const { text } = decisionEmailEs(params);
     expect(text).toContain(params.approveUrl);
     expect(text).toContain(params.rejectUrl);
   });
 
   it('muestra el banner de impago SOLO si isDelinquent', () => {
-    const con = buildDecisionEmail(baseDecisionParams({ isDelinquent: true }));
+    const con = decisionEmailEs(baseDecisionParams({ isDelinquent: true }));
     expect(con.html).toContain('CONSTA COMO IMPAGO');
     expect(con.text).toContain('CONSTA COMO IMPAGO');
 
-    const sin = buildDecisionEmail(baseDecisionParams({ isDelinquent: false }));
+    const sin = decisionEmailEs(baseDecisionParams({ isDelinquent: false }));
     expect(sin.html).not.toContain('CONSTA COMO IMPAGO');
     expect(sin.text).not.toContain('CONSTA COMO IMPAGO');
   });
 
   it("encabezado cuando inGroup = 'true'", () => {
-    const { html, text } = buildDecisionEmail(baseDecisionParams({ inGroup: 'true' }));
+    const { html, text } = decisionEmailEs(baseDecisionParams({ inGroup: 'true' }));
     // El nombre del grupo se deriva del tenant (branding), sin marca fija.
     expect(html).toContain('Miembro del grupo de Didacta');
     expect(text).toContain('Miembro del grupo de Didacta');
   });
 
   it("encabezado cuando inGroup = 'false'", () => {
-    const { html, text } = buildDecisionEmail(baseDecisionParams({ inGroup: 'false' }));
+    const { html, text } = decisionEmailEs(baseDecisionParams({ inGroup: 'false' }));
     expect(html).toContain('NO está en el grupo - revisar caso');
     expect(text).toContain('NO está en el grupo - revisar caso');
   });
 
   it("encabezado cuando inGroup = 'unknown'", () => {
-    const { html, text } = buildDecisionEmail(baseDecisionParams({ inGroup: 'unknown' }));
+    const { html, text } = decisionEmailEs(baseDecisionParams({ inGroup: 'unknown' }));
     expect(html).toContain('Pertenencia NO verificable');
     expect(text).toContain('Pertenencia NO verificable');
   });
 
   it('sin Telegram (telegramId null): omite el encabezado de pertenencia y la fila Telegram ID', () => {
-    const { html, text } = buildDecisionEmail(
+    const { html, text } = decisionEmailEs(
       baseDecisionParams({ telegramId: null, inGroup: 'unknown' }),
     );
     expect(html).not.toContain('Telegram ID');
@@ -128,7 +141,7 @@ describe('buildDecisionEmail', () => {
   });
 
   it('escapa los datos del solicitante en el html (anti-inyección)', () => {
-    const { html } = buildDecisionEmail(
+    const { html } = decisionEmailEs(
       baseDecisionParams({ name: 'Al<b>ex</b>', email: 'a"b@x.com' }),
     );
     expect(html).toContain('Al&lt;b&gt;ex&lt;/b&gt;');
@@ -136,14 +149,12 @@ describe('buildDecisionEmail', () => {
   });
 
   it('el subject incluye el nombre del solicitante', () => {
-    const { subject } = buildDecisionEmail(baseDecisionParams({ name: 'Alex' }));
+    const { subject } = decisionEmailEs(baseDecisionParams({ name: 'Alex' }));
     expect(subject).toBe('Nueva inscripción pendiente — Alex');
   });
 
   it('firma con el nombre del tenant', () => {
-    const { text } = buildDecisionEmail(
-      baseDecisionParams({ branding: branding('Academia Demo') }),
-    );
+    const { text } = decisionEmailEs(baseDecisionParams({ branding: branding('Academia Demo') }));
     expect(text).toContain('aprobación en Academia Demo');
     expect(text).toContain('— Academia Demo');
   });
@@ -161,7 +172,7 @@ describe('buildDecisionEmail', () => {
   };
 
   it('sin matches ni fallos: dice "ninguna" (negativo honesto)', () => {
-    const { text, html } = buildDecisionEmail(
+    const { text, html } = decisionEmailEs(
       baseDecisionParams({ subscriptionMatches: [], subscriptionFailures: [] }),
     );
     expect(text).toContain('ninguna en las cuentas de pago conectadas');
@@ -169,7 +180,7 @@ describe('buildDecisionEmail', () => {
   });
 
   it('con match vigente: muestra proveedor, plan, estado legible e importe en text y html', () => {
-    const { text, html } = buildDecisionEmail(baseDecisionParams({ subscriptionMatches: [MATCH] }));
+    const { text, html } = decisionEmailEs(baseDecisionParams({ subscriptionMatches: [MATCH] }));
     // El estado crudo (active) se muestra clasificado y legible ("Activa").
     expect(text).toContain('Stripe: Plan Pro — Activa');
     expect(text).toContain('19.99 EUR');
@@ -180,9 +191,7 @@ describe('buildDecisionEmail', () => {
 
   it('con match NO vigente (baja/impago): lo destaca como no vigente, no como detectada', () => {
     const canceled = { ...MATCH, status: 'canceled', subscriptionId: 'sub_cancel' };
-    const { text, html } = buildDecisionEmail(
-      baseDecisionParams({ subscriptionMatches: [canceled] }),
-    );
+    const { text, html } = decisionEmailEs(baseDecisionParams({ subscriptionMatches: [canceled] }));
     expect(text).toContain('Suscripción NO vigente');
     expect(text).toContain('Stripe: Plan Pro — Dada de baja');
     expect(html).toContain('Suscripción no vigente');
@@ -190,7 +199,7 @@ describe('buildDecisionEmail', () => {
   });
 
   it('sin match pero con fallo: NO afirma "ninguna" — avisa de no verificable', () => {
-    const { text, html } = buildDecisionEmail(
+    const { text, html } = decisionEmailEs(
       baseDecisionParams({
         subscriptionMatches: [],
         subscriptionFailures: [
@@ -206,7 +215,7 @@ describe('buildDecisionEmail', () => {
   });
 
   it('con match y además un fallo: marca resultado parcial', () => {
-    const { text, html } = buildDecisionEmail(
+    const { text, html } = decisionEmailEs(
       baseDecisionParams({
         subscriptionMatches: [MATCH],
         subscriptionFailures: [
@@ -219,7 +228,7 @@ describe('buildDecisionEmail', () => {
   });
 
   it('escapa los datos de la suscripción/fallos en el html (anti-inyección)', () => {
-    const { html } = buildDecisionEmail(
+    const { html } = decisionEmailEs(
       baseDecisionParams({
         subscriptionMatches: [{ ...MATCH, planName: 'Plan <b>X</b>' }],
         subscriptionFailures: [
@@ -253,7 +262,7 @@ describe('buildDecisionEmail · compras puntuales', () => {
   };
 
   it('lista las compras con nº, estado, importe y productos en text y html', () => {
-    const { text, html } = buildDecisionEmail(baseDecisionParams({ purchases: [PURCHASE] }));
+    const { text, html } = decisionEmailEs(baseDecisionParams({ purchases: [PURCHASE] }));
     for (const body of [text, html]) {
       expect(body).toContain('Compras detectadas (1)');
       expect(body).toContain('#8801');
@@ -264,7 +273,7 @@ describe('buildDecisionEmail · compras puntuales', () => {
   });
 
   it('convive con "sin suscripción detectada" (es justo el caso lifetime)', () => {
-    const { text } = buildDecisionEmail(
+    const { text } = decisionEmailEs(
       baseDecisionParams({ subscriptionMatches: [], purchases: [PURCHASE] }),
     );
     expect(text).toContain('Suscripción detectada: ninguna');
@@ -272,13 +281,13 @@ describe('buildDecisionEmail · compras puntuales', () => {
   });
 
   it('sin compras no añade el bloque (no mete ruido en las solicitudes normales)', () => {
-    const { text, html } = buildDecisionEmail(baseDecisionParams({ purchases: [] }));
+    const { text, html } = decisionEmailEs(baseDecisionParams({ purchases: [] }));
     expect(text).not.toContain('Compras detectadas');
     expect(html).not.toContain('Compras detectadas');
   });
 
   it('escapa el nombre del producto en el HTML', () => {
-    const { html } = buildDecisionEmail(
+    const { html } = decisionEmailEs(
       baseDecisionParams({ purchases: [{ ...PURCHASE, products: ['Curso <b>X</b>'] }] }),
     );
     expect(html).toContain('Curso &lt;b&gt;X&lt;/b&gt;');
@@ -286,7 +295,7 @@ describe('buildDecisionEmail · compras puntuales', () => {
   });
 
   it('un pedido sin fecha ni importe no rompe la línea', () => {
-    const { text } = buildDecisionEmail(
+    const { text } = decisionEmailEs(
       baseDecisionParams({
         purchases: [{ ...PURCHASE, createdAt: null, total: null, currency: null, products: [] }],
       }),

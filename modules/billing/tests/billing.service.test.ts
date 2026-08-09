@@ -1081,7 +1081,7 @@ describe('BillingService — checkout PÚBLICO (viaje 2: visitante sin cuenta)',
       {},
       { provisionUser: provision },
     );
-    expect(provision.mock.calls[0]![0]).toMatchObject({ locale: undefined });
+    expect(provision).toHaveBeenCalledWith(expect.objectContaining({ locale: undefined }));
   });
 
   it('reentrega del webhook: NO provisiona dos veces ni re-emite el evento', async () => {

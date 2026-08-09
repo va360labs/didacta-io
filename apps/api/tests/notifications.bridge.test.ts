@@ -157,7 +157,8 @@ describe('NotificationsBridge handlers', () => {
       }),
     });
     // Y lo que NO puede volver a pasar: una palabra española ya renderizada.
-    expect(typeof sendCalls[0]?.variables?.['result']).not.toBe('string');
+    const vars = sendCalls[0]?.variables as Record<string, unknown> | undefined;
+    expect(typeof vars?.['result']).not.toBe('string');
 
     await subs.get('assessments.attempt.graded')!(
       event('assessments.attempt.graded', {
