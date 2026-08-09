@@ -1,0 +1,12 @@
+{
+  "//": "Typecheck de tests/. tsconfig.json es el config de BUILD (emite a dist/ con rootDir=src) y por eso no puede incluir tests/. Sin este config los tests no se typechequean y un cambio de firma en src/ los rompe en silencio: el fallo solo aparece en runtime, y solo si algún test ejercita esa ruta.",
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "rootDir": ".",
+    "composite": false,
+    "incremental": false
+  },
+  "include": ["src/**/*", "tests/**/*"],
+  "exclude": ["node_modules", "dist", "web", "src/ui"]
+}

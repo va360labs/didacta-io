@@ -34,7 +34,7 @@ const ITERATIONS = 200;
 
 function percentile(sortedMs: number[], p: number): number {
   const idx = Math.min(sortedMs.length - 1, Math.ceil((p / 100) * sortedMs.length) - 1);
-  return sortedMs[Math.max(0, idx)];
+  return sortedMs[Math.max(0, idx)]!;
 }
 
 async function measure(fn: () => Promise<unknown>): Promise<number[]> {

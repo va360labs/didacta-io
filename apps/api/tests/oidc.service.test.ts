@@ -219,9 +219,14 @@ class TestOidcService extends OidcService {
   public issuerStub: IssuerStub | null = null;
   public clientStub: ClientStub | null = null;
   public discoveryFails: Error | null = null;
+  // vitest 2 cambió el genérico de `vi.fn<[Args], Ret>` a `vi.fn<(…) => Ret>`.
+  // Con la forma vieja los parámetros llegaban implícitamente `any` y
+  // `mock.calls[0][1]` no tenía tipo.
   public buildSpy = vi.fn<
-    [unknown, { scope: string; state: string; nonce: string; codeChallenge: string }],
-    string
+    (
+      c: unknown,
+      p: { scope: string; state: string; nonce: string; codeChallenge: string },
+    ) => string
   >(
     (_c, p) =>
       `https://idp.example.com/authorize?state=${p.state}&nonce=${p.nonce}&scope=${encodeURIComponent(p.scope)}`,
@@ -245,19 +250,19 @@ class TestOidcService extends OidcService {
       }>)
     | null = null;
 
-  protected async discoverIssuer(): Promise<{ issuer: unknown; client: unknown }> {
+  protected override async discoverIssuer(): Promise<{ issuer: unknown; client: unknown }> {
     if (this.discoveryFails) throw this.discoveryFails;
     return { issuer: this.issuerStub, client: this.clientStub };
   }
 
-  protected buildAuthorizationUrl(
+  protected override buildAuthorizationUrl(
     client: unknown,
     params: { scope: string; state: string; nonce: string; codeChallenge: string },
   ): string {
     return this.buildSpy(client, params);
   }
 
-  protected async exchangeCode(
+  protected override async exchangeCode(
     _client: unknown,
     params: { code: string; state: string; nonce: string; codeVerifier: string },
   ): Promise<{
@@ -401,7 +406,7 @@ describe('OidcService.getSafeConfig', () => {
     const safe = await svc.getSafeConfig(tenantId);
     expect(safe).toBeTruthy();
     expect(safe!.hasSecret).toBe(true);
-    expect((safe as Record<string, unknown>)['clientSecret']).toBeUndefined();
+    expect(safe).not.toHaveProperty('clientSecret');
     expect(safe!.clientId).toBe(CLIENT_ID);
     expect(safe!.issuer).toBe(ISSUER);
     expect(safe!.redirectUri).toContain('/api/v1/auth/oidc/callback');

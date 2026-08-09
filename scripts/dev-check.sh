@@ -59,8 +59,37 @@ run_step() {
 
 step_types() {
   # Typecheck de los workspaces principales sin emitir.
-  run_step "typecheck apps/api" $TSC --noEmit -p apps/api/tsconfig.json || return 1
+  #
+  # apps/api usa `tsconfig.tests.json`, NO `tsconfig.json`: el segundo es el
+  # config de BUILD (nest-cli emite a dist/ desde él) y por eso se limita a
+  # `src/**`. El primero es un superconjunto — src + tests + scripts — y es el
+  # único que mira `apps/api/tests/**`. Sin esto, un cambio de firma en src
+  # rompía los tests en silencio: solo saltaba en runtime, y solo si algún
+  # test ejercitaba esa ruta concreta.
+  run_step "typecheck apps/api (src + tests)" $TSC --noEmit -p apps/api/tsconfig.tests.json || return 1
+  # apps/web no necesita config aparte: sus tests viven en `src/**` y ya entran.
   run_step "typecheck apps/web" $TSC --noEmit -p apps/web/tsconfig.json || return 1
+  # apps/e2e ya incluía `tests/**` en su tsconfig; se añade aquí para que
+  # dev-check lo cubra sin depender del workflow e2e.
+  run_step "typecheck apps/e2e" $TSC --noEmit -p apps/e2e/tsconfig.json || return 1
+  # packages/* y modules/* llevan su propio `tsconfig.tests.json` por la misma
+  # razón que apps/api (su `tsconfig.json` emite a dist/ con rootDir=src).
+  step_types_workspaces || return 1
+}
+
+# Typecheck de tests de packages/* y modules/*. Cada workspace con `tests/`
+# tiene un `tsconfig.tests.json`; se recorren todos y se acumulan los fallos
+# para reportar la lista completa en una sola pasada.
+step_types_workspaces() {
+  local failed=0
+  local cfg
+  for cfg in packages/*/tsconfig.tests.json modules/*/tsconfig.tests.json; do
+    [[ -f "$cfg" ]] || continue
+    if ! run_step "typecheck ${cfg%/tsconfig.tests.json} (src + tests)" $TSC --noEmit -p "$cfg"; then
+      failed=1
+    fi
+  done
+  return $failed
 }
 
 step_lint() {

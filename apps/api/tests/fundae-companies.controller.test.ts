@@ -17,13 +17,14 @@ function makeUser(overrides: Partial<SessionClaims> = {}): SessionClaims {
     tenantId: 'tenant-A',
     roles: ['tenant_admin'],
     email: 'admin@example.com',
+    mfaVerified: true,
     ...(overrides as Record<string, unknown>),
   } as SessionClaims;
 }
 
 function makeRegistry() {
   const list = vi.fn(async () => []);
-  const get = vi.fn(async () => null);
+  const get = vi.fn(async () => null as { id: string; razonSocial: string } | null);
   const create = vi.fn(async (_t: string, _a: string | null, dto: { nif: string }) => ({
     id: 'created-id',
     ...dto,

@@ -15,7 +15,11 @@ import {
 // Mocks de bullmq + ioredis
 // ─────────────────────────────────────────────────────────────────────────────
 
-const queueAdd = vi.fn(async () => ({ id: 'job-id' }));
+const queueAdd = vi.fn(
+  async (_name: string, _data: unknown, _opts?: { delay?: number; jobId?: string }) => ({
+    id: 'job-id',
+  }),
+);
 const queueClose = vi.fn(async () => undefined);
 
 vi.mock('bullmq', () => ({

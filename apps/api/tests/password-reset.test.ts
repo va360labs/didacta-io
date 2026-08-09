@@ -242,7 +242,7 @@ describe('PasswordResetService.request', () => {
     expect(result?.rawToken).toMatch(/^[a-f0-9]{64}$/);
     expect(prisma.tokens).toHaveLength(1);
     // El token persistido es el hash, no el raw.
-    expect(prisma.tokens[0].tokenHash).toBe(hash(result!.rawToken));
+    expect(prisma.tokens[0]!.tokenHash).toBe(hash(result!.rawToken));
   });
 
   it('expone el idioma del DESTINATARIO para que el email salga en su lengua', async () => {
@@ -292,15 +292,15 @@ describe('PasswordResetService.request', () => {
     expect(b).not.toBeNull();
     // Ambos rows existen, el primero tiene usedAt seteado por la invalidación.
     expect(prisma.tokens).toHaveLength(2);
-    expect(prisma.tokens[0].usedAt).not.toBeNull();
-    expect(prisma.tokens[1].usedAt).toBeNull();
+    expect(prisma.tokens[0]!.usedAt).not.toBeNull();
+    expect(prisma.tokens[1]!.usedAt).toBeNull();
   });
 
   it('expira en 60 minutos por default', async () => {
     const { service, prisma } = makeService();
     const before = Date.now();
     await service.request({ tenantSlug: 'demo', email: 'ana@example.com' });
-    const expiresAt = prisma.tokens[0].expiresAt.getTime();
+    const expiresAt = prisma.tokens[0]!.expiresAt.getTime();
     expect(expiresAt - before).toBeGreaterThanOrEqual(59 * 60_000);
     expect(expiresAt - before).toBeLessThanOrEqual(61 * 60_000);
   });
@@ -383,8 +383,8 @@ describe('PasswordResetService.reset', () => {
     const result = await service.request({ tenantSlug: 'demo', email: 'ana@example.com' });
     expect(result).not.toBeNull();
     await service.reset(result!.rawToken, 'NuevaPasswordSegura123');
-    expect(prisma.users[0].passwordHash).toBe('argon2:NuevaPasswordSegura123');
-    expect(prisma.tokens[0].usedAt).not.toBeNull();
+    expect(prisma.users[0]!.passwordHash).toBe('argon2:NuevaPasswordSegura123');
+    expect(prisma.tokens[0]!.usedAt).not.toBeNull();
   });
 
   it('rechaza si el token no existe', async () => {
@@ -407,7 +407,7 @@ describe('PasswordResetService.reset', () => {
     const { service, prisma } = makeService();
     const result = await service.request({ tenantSlug: 'demo', email: 'ana@example.com' });
     // Forzamos expiración manualmente.
-    prisma.tokens[0].expiresAt = new Date(Date.now() - 1000);
+    prisma.tokens[0]!.expiresAt = new Date(Date.now() - 1000);
     await expect(service.reset(result!.rawToken, 'NuevaPasswordSegura123')).rejects.toBeInstanceOf(
       UnauthorizedException,
     );
@@ -468,7 +468,7 @@ describe('PasswordResetService.reset', () => {
     const { service, prisma } = makeService();
     const result = await service.request({ tenantSlug: 'demo', email: 'ana@example.com' });
     await service.reset(result!.rawToken, 'NuevaPasswordSegura123');
-    expect(prisma.users[0].status).toBe('ACTIVE');
+    expect(prisma.users[0]!.status).toBe('ACTIVE');
   });
 });
 

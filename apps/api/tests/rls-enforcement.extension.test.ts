@@ -207,8 +207,10 @@ describe('runCallerTransaction (inyecci贸n del GUC en $transaction del caller 鈥
 
   it('forma batch con contexto sin gucApplied: antepone el set_config y descarta su resultado', async () => {
     const { runWithGucApplied, wasOpened } = makeRunner();
-    const original = vi.fn(async (members: unknown[]) =>
-      members.map((_, i) => (i === 0 ? 'setcfg' : `row-${i}`)),
+    // `runCallerTransaction.original` es `(...args: unknown[]) => Promise<unknown>`:
+    // un doble con par谩metros posicionales no es asignable a esa firma.
+    const original = vi.fn(async (...args: unknown[]) =>
+      (args[0] as unknown[]).map((_, i) => (i === 0 ? 'setcfg' : `row-${i}`)),
     );
     const out = await runCallerTransaction({
       original,
@@ -234,7 +236,9 @@ describe('runCallerTransaction (inyecci贸n del GUC en $transaction del caller 鈥
         return Promise.resolve();
       },
     };
-    const original = vi.fn(async (cb: (t: typeof tx) => Promise<unknown>) => cb(tx));
+    const original = vi.fn(async (...args: unknown[]) =>
+      (args[0] as (t: typeof tx) => Promise<unknown>)(tx),
+    );
     const userCallback = vi.fn(async () => 'result');
     const out = await runCallerTransaction({
       original,
@@ -251,7 +255,7 @@ describe('runCallerTransaction (inyecci贸n del GUC en $transaction del caller 鈥
 
   it('con gucApplied: no inyecta nada, solo marca el scope de transacci贸n', async () => {
     const { runWithGucApplied, wasOpened } = makeRunner();
-    const original = vi.fn(async () => 'passthrough');
+    const original = vi.fn(async (..._args: unknown[]) => 'passthrough');
     const inTxDuringCall = { seen: false };
     const out = await runCallerTransaction({
       original: async (...a: unknown[]) => {
@@ -271,7 +275,7 @@ describe('runCallerTransaction (inyecci贸n del GUC en $transaction del caller 鈥
 
   it('sin contexto de tenant: passthrough con solo el marker de transacci贸n', async () => {
     const { runWithGucApplied, wasOpened } = makeRunner();
-    const original = vi.fn(async () => 'no-ctx');
+    const original = vi.fn(async (..._args: unknown[]) => 'no-ctx');
     const out = await runCallerTransaction({
       original,
       args: [['op']],
@@ -288,8 +292,8 @@ describe('runCallerTransaction (inyecci贸n del GUC en $transaction del caller 鈥
   it('sancionado sin tenantId, forma batch: antepone SET LOCAL ROLE y descarta su resultado', async () => {
     const SET_ROLE = { __setRole: true };
     const makeSetRole = () => SET_ROLE;
-    const original = vi.fn(async (members: unknown[]) =>
-      members.map((_, i) => (i === 0 ? 'setrole' : `row-${i}`)),
+    const original = vi.fn(async (...args: unknown[]) =>
+      (args[0] as unknown[]).map((_, i) => (i === 0 ? 'setrole' : `row-${i}`)),
     );
     const out = await runCallerTransaction({
       original,
@@ -314,7 +318,9 @@ describe('runCallerTransaction (inyecci贸n del GUC en $transaction del caller 鈥
         return Promise.resolve();
       },
     };
-    const original = vi.fn(async (cb: (t: typeof tx) => Promise<unknown>) => cb(tx));
+    const original = vi.fn(async (...args: unknown[]) =>
+      (args[0] as (t: typeof tx) => Promise<unknown>)(tx),
+    );
     const userCallback = vi.fn(async () => 'result');
     const out = await runCallerTransaction({
       original,
@@ -332,7 +338,7 @@ describe('runCallerTransaction (inyecci贸n del GUC en $transaction del caller 鈥
 
   it('sancionado pero ya gucApplied: no inyecta el rol (ya hay GUC de tenant en la tx)', async () => {
     const makeSetRole = vi.fn(() => ({}));
-    const original = vi.fn(async () => 'passthrough');
+    const original = vi.fn(async (..._args: unknown[]) => 'passthrough');
     const out = await runCallerTransaction({
       original,
       args: [['op']],

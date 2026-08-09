@@ -170,7 +170,7 @@ describe('AiContentService — generate', () => {
     expect((draft.content as { text: string }).text).toContain('Resumen');
     expect(draft.inputTokens).toBe(100);
     expect(publisher.events).toHaveLength(1);
-    expect(publisher.events[0].name).toBe('ai-content.draft.generated');
+    expect(publisher.events[0]!.name).toBe('ai-content.draft.generated');
   });
 
   it('FLASHCARDS: valida shape (cards array no vacío, front/back strings)', async () => {
@@ -302,7 +302,7 @@ describe('AiContentService — transiciones', () => {
     expect(updated.status).toBe('PUBLISHED');
     expect(updated.reviewedBy).toBe('reviewer');
     expect(publisher.events).toHaveLength(1);
-    expect(publisher.events[0].name).toBe('ai-content.draft.published');
+    expect(publisher.events[0]!.name).toBe('ai-content.draft.published');
   });
 
   it('publish desde PUBLISHED lanza DraftNotInDraftStateError', async () => {
@@ -319,7 +319,7 @@ describe('AiContentService — transiciones', () => {
     const updated = await svc.reject('t1', 'reviewer', draft.id, 'No es preciso');
     expect(updated.status).toBe('REJECTED');
     expect(updated.rejectReason).toBe('No es preciso');
-    expect(publisher.events[0].name).toBe('ai-content.draft.rejected');
+    expect(publisher.events[0]!.name).toBe('ai-content.draft.rejected');
   });
 
   it('updateContent en DRAFT: revalida shape', async () => {

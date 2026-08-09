@@ -64,7 +64,7 @@ describe('PrismaAuditLogService', () => {
     });
 
     expect(prisma._rows).toHaveLength(1);
-    const [first] = prisma._rows;
+    const first = prisma._rows[0]!;
     expect(first.prevHash).toBeNull();
     expect(first.hash).toMatch(/^[a-f0-9]{64}$/);
   });
@@ -89,7 +89,7 @@ describe('PrismaAuditLogService', () => {
     });
 
     const [a, b] = prisma._rows;
-    expect(b.prevHash).toBe(a.hash);
+    expect(b!.prevHash).toBe(a!.hash);
   });
 
   it('cadenas separadas por tenant', async () => {
@@ -111,8 +111,8 @@ describe('PrismaAuditLogService', () => {
       resourceId: 'u2',
     });
 
-    expect(prisma._rows[0].prevHash).toBeNull();
-    expect(prisma._rows[1].prevHash).toBeNull();
+    expect(prisma._rows[0]!.prevHash).toBeNull();
+    expect(prisma._rows[1]!.prevHash).toBeNull();
   });
 
   it('hash refleja los datos: cambios en metadata cambian el hash', async () => {
@@ -136,7 +136,7 @@ describe('PrismaAuditLogService', () => {
       metadata: { from: 'b' },
     });
 
-    expect(prisma._rows[0].hash).not.toEqual(prisma._rows[1].hash);
+    expect(prisma._rows[0]!.hash).not.toEqual(prisma._rows[1]!.hash);
   });
 
   describe('verifyChain', () => {
@@ -234,7 +234,7 @@ describe('PrismaAuditLogService', () => {
       });
 
       // Tampering: alguien modifica metadata de la 2ª fila sin recalcular el hash
-      prisma._rows[1].metadata = { mutado: true };
+      prisma._rows[1]!.metadata = { mutado: true };
 
       const result = await svc.verifyChain('t1');
       expect(result.valid).toBe(false);
@@ -269,7 +269,7 @@ describe('PrismaAuditLogService', () => {
       });
 
       // Tampering: reescriben el hash de la 2ª fila — la propia fila ya no valida
-      prisma._rows[1].hash = 'f'.repeat(64);
+      prisma._rows[1]!.hash = 'f'.repeat(64);
 
       const result = await svc.verifyChain('t1');
       expect(result.valid).toBe(false);

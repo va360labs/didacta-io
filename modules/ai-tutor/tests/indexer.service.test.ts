@@ -2,11 +2,14 @@ import { describe, expect, it, vi } from 'vitest';
 import { CourseNotPublishedError, EmbeddingsProviderError } from '../src/errors.js';
 import { AiTutorIndexerService, type EmbedFn } from '../src/indexer.service.js';
 
+// Los dobles NO se castean a `never` al declararse: con `never` no se les
+// puede leer ninguna propiedad y las aserciones sobre sus espías dejan de
+// typechequearse. El cast va donde se inyectan, que es donde hace falta.
 function makeContext() {
   return {
     logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn(), child: vi.fn() },
     eventBus: { publish: vi.fn(async () => {}) },
-  } as never;
+  };
 }
 
 interface FakeRows {
@@ -42,7 +45,7 @@ function makeFakePrisma(opts: FakeRows) {
       }
       return 0;
     }),
-  } as never;
+  };
 }
 
 const fakeEmbed =
@@ -58,7 +61,7 @@ const fakeEmbed =
 describe('AiTutorIndexerService (LMS-90.C)', () => {
   it('lanza si curso no existe', async () => {
     const prisma = makeFakePrisma({ course: null });
-    const svc = new AiTutorIndexerService(prisma, makeContext(), fakeEmbed());
+    const svc = new AiTutorIndexerService(prisma as never, makeContext() as never, fakeEmbed());
     await expect(svc.indexCourse('t1', 'c-missing')).rejects.toThrow(/not found/);
   });
 
@@ -66,7 +69,7 @@ describe('AiTutorIndexerService (LMS-90.C)', () => {
     const prisma = makeFakePrisma({
       course: { id: 'c1', tenantId: 't1', status: 'DRAFT' },
     });
-    const svc = new AiTutorIndexerService(prisma, makeContext(), fakeEmbed());
+    const svc = new AiTutorIndexerService(prisma as never, makeContext() as never, fakeEmbed());
     await expect(svc.indexCourse('t1', 'c1')).rejects.toBeInstanceOf(CourseNotPublishedError);
   });
 
@@ -75,7 +78,7 @@ describe('AiTutorIndexerService (LMS-90.C)', () => {
       course: { id: 'c1', tenantId: 't1', status: 'DRAFT' },
       modules: [],
     });
-    const svc = new AiTutorIndexerService(prisma, makeContext(), fakeEmbed());
+    const svc = new AiTutorIndexerService(prisma as never, makeContext() as never, fakeEmbed());
     const result = await svc.indexCourse('t1', 'c1', { allowDraft: true });
     expect(result.lessonsProcessed).toBe(0);
     expect(result.chunksGenerated).toBe(0);
@@ -87,7 +90,7 @@ describe('AiTutorIndexerService (LMS-90.C)', () => {
       course: { id: 'c1', tenantId: 't1', status: 'PUBLISHED' },
       modules: [],
     });
-    const svc = new AiTutorIndexerService(prisma, ctx, fakeEmbed());
+    const svc = new AiTutorIndexerService(prisma as never, ctx as never, fakeEmbed());
     const result = await svc.indexCourse('t1', 'c1');
     expect(result.chunksGenerated).toBe(0);
     expect(result.lessonsProcessed).toBe(0);
@@ -120,7 +123,7 @@ describe('AiTutorIndexerService (LMS-90.C)', () => {
         },
       ],
     });
-    const svc = new AiTutorIndexerService(prisma, ctx, fakeEmbed());
+    const svc = new AiTutorIndexerService(prisma as never, ctx as never, fakeEmbed());
     const result = await svc.indexCourse('t1', 'c1');
 
     expect(result.lessonsProcessed).toBe(2);
@@ -172,7 +175,7 @@ describe('AiTutorIndexerService (LMS-90.C)', () => {
         },
       ],
     });
-    const svc = new AiTutorIndexerService(prisma, makeContext(), fakeEmbed());
+    const svc = new AiTutorIndexerService(prisma as never, makeContext() as never, fakeEmbed());
     const result = await svc.indexCourse('t1', 'c1');
     // Solo cuenta TEXT
     expect(result.lessonsProcessed).toBe(1);
@@ -195,7 +198,7 @@ describe('AiTutorIndexerService (LMS-90.C)', () => {
         },
       ],
     });
-    const svc = new AiTutorIndexerService(prisma, ctx, fakeEmbed(768));
+    const svc = new AiTutorIndexerService(prisma as never, ctx as never, fakeEmbed(768));
     await expect(svc.indexCourse('t1', 'c1')).rejects.toBeInstanceOf(EmbeddingsProviderError);
   });
 
@@ -218,7 +221,7 @@ describe('AiTutorIndexerService (LMS-90.C)', () => {
     const failingEmbed: EmbedFn = async () => {
       throw new Error('rate limit');
     };
-    const svc = new AiTutorIndexerService(prisma, ctx, failingEmbed);
+    const svc = new AiTutorIndexerService(prisma as never, ctx as never, failingEmbed);
     await expect(svc.indexCourse('t1', 'c1')).rejects.toBeInstanceOf(EmbeddingsProviderError);
     expect(ctx.eventBus.publish).toHaveBeenCalledWith(
       expect.objectContaining({ name: 'ai-tutor.course.index-failed' }),
@@ -240,7 +243,7 @@ describe('AiTutorIndexerService (LMS-90.C)', () => {
         },
       ],
     });
-    const svc = new AiTutorIndexerService(prisma, makeContext(), fakeEmbed());
+    const svc = new AiTutorIndexerService(prisma as never, makeContext() as never, fakeEmbed());
     await svc.indexCourse('t1', 'c1');
     expect(prisma.deletes).toHaveLength(1);
     expect(prisma.inserts.length).toBeGreaterThan(0);
@@ -255,7 +258,7 @@ describe('AiTutorIndexerService (LMS-90.C)', () => {
     const prisma = makeFakePrisma({
       course: { id: 'c1', tenantId: 't1', status: 'PUBLISHED' },
     });
-    const svc = new AiTutorIndexerService(prisma, ctx, fakeEmbed());
+    const svc = new AiTutorIndexerService(prisma as never, ctx as never, fakeEmbed());
     await svc.unindexCourse('t1', 'c1');
     expect(prisma.deletes).toHaveLength(1);
     expect(ctx.eventBus.publish).toHaveBeenCalledWith(
@@ -291,7 +294,7 @@ describe('AiTutorIndexerService (LMS-90.C)', () => {
         },
       ],
     });
-    const svc = new AiTutorIndexerService(prisma, makeContext(), fakeEmbed());
+    const svc = new AiTutorIndexerService(prisma as never, makeContext() as never, fakeEmbed());
     await svc.indexCourse('t1', 'c1');
 
     // Cada chunk content (param 5) debe incluir cabecera de módulo

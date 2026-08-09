@@ -102,9 +102,9 @@ describe('LearningService.getCourseAvailability (drip)', () => {
     const svc = build({ schedules: [tierSchedule()], userTier: { manualName: 'Pro' } });
     const res = await svc.getCourseAvailability(TENANT, 'u1', COURSE);
     expect(res.drip).toBe(true);
-    expect(res.lessons['L0'].available).toBe(true);
-    expect(res.lessons['L1'].available).toBe(false);
-    expect(res.lessons['L2'].available).toBe(false);
+    expect(res.lessons['L0']!.available).toBe(true);
+    expect(res.lessons['L1']!.available).toBe(false);
+    expect(res.lessons['L2']!.available).toBe(false);
   });
 
   it('tier del usuario NO coincide con el del schedule → sin drip', async () => {
@@ -120,7 +120,7 @@ describe('LearningService.getCourseAvailability (drip)', () => {
     });
     const res = await svc.getCourseAvailability(TENANT, 'u1', COURSE);
     expect(res.drip).toBe(true);
-    expect(res.lessons['L1'].available).toBe(false);
+    expect(res.lessons['L1']!.available).toBe(false);
   });
 
   it('schedule inactivo → no aplica', async () => {
@@ -138,9 +138,9 @@ describe('LearningService.getCourseAvailability (drip)', () => {
       userTier: { manualName: 'Pro' },
     });
     const res = await svc.getCourseAvailability(TENANT, 'u1', COURSE);
-    expect(res.lessons['L0'].available).toBe(true);
-    expect(res.lessons['L1'].available).toBe(true);
-    expect(res.lessons['L2'].available).toBe(false);
+    expect(res.lessons['L0']!.available).toBe(true);
+    expect(res.lessons['L1']!.available).toBe(true);
+    expect(res.lessons['L2']!.available).toBe(false);
   });
 
   // B2: ancla estable = enrolledAt (no startedAt). Regresión del re-bloqueo.
@@ -155,9 +155,9 @@ describe('LearningService.getCourseAvailability (drip)', () => {
     const res = await svc.getCourseAvailability(TENANT, 'u1', COURSE);
     expect(res.drip).toBe(true);
     // Con ancla=enrolledAt (now), L0 está libre. Si usara startedAt (later) estaría bloqueada.
-    expect(res.lessons['L0'].available).toBe(true);
+    expect(res.lessons['L0']!.available).toBe(true);
     // L1 se libera a enrolledAt + 7d, no a startedAt + 7d.
-    const unlock = new Date(res.lessons['L1'].availableAt).getTime();
+    const unlock = new Date(res.lessons['L1']!.availableAt!).getTime();
     expect(Math.abs(unlock - (now.getTime() + 7 * 24 * 60 * 60 * 1000))).toBeLessThan(2000);
   });
 

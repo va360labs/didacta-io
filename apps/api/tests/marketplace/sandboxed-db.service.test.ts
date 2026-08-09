@@ -440,7 +440,7 @@ function makePrismaMock(opts: PrismaMockState = { txCount: 0, executed: [] }): {
 
   const prisma = {
     $transaction: vi.fn(
-      async (cb: (tx: typeof tx) => Promise<unknown>, _opts?: { timeout?: number }) => {
+      async (cb: (tx: unknown) => Promise<unknown>, _opts?: { timeout?: number }) => {
         state.txCount++;
         return cb(tx);
       },

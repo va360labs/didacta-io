@@ -107,7 +107,7 @@ describe('BillingProvisioningService.provision', () => {
     const result = await svc.provision(args);
 
     expect(result).toEqual({ userId: 'user-nuevo', created: true });
-    const data = tx.user.create.mock.calls[0][0].data;
+    const data = tx.user.create.mock.calls[0]![0].data;
     expect(data).toMatchObject({
       tenantId: TENANT,
       email: 'compradora@example.com',
@@ -127,7 +127,7 @@ describe('BillingProvisioningService.provision', () => {
       CTX,
       { ttlMinutes: 7 * 24 * 60 },
     );
-    const sent = (smtp as { send: ReturnType<typeof vi.fn> }).send.mock.calls[0][1];
+    const sent = (smtp as { send: ReturnType<typeof vi.fn> }).send.mock.calls[0]![1];
     expect(sent.to).toBe('compradora@example.com');
     expect(sent.text).toContain('reset-password?token=tok-123');
   });
@@ -171,7 +171,7 @@ describe('BillingProvisioningService · idioma del comprador', () => {
 
   /** El email que salió al MTA. */
   function sent(smtp: unknown): { subject: string; text: string; html: string } {
-    return (smtp as { send: ReturnType<typeof vi.fn> }).send.mock.calls[0][1];
+    return (smtp as { send: ReturnType<typeof vi.fn> }).send.mock.calls[0]![1];
   }
 
   it('comprador en-US: asunto, cuerpo, botón y pie en inglés', async () => {
@@ -232,8 +232,9 @@ describe('BillingProvisioningService · idioma del comprador', () => {
         notificationTemplate: { findUnique: ReturnType<typeof vi.fn> };
       }
     ).notificationTemplate.findUnique.mock.calls.map(
-      (c: [{ where: { tenantId_key_channel_locale: { locale: string } } }]) =>
-        c[0].where.tenantId_key_channel_locale.locale,
+      (c: unknown[]) =>
+        (c[0] as { where: { tenantId_key_channel_locale: { locale: string } } }).where
+          .tenantId_key_channel_locale.locale,
     );
     // Misma precedencia que `renderForTenant` del hub: no es una regla nueva.
     expect(locales).toEqual(['en-US', 'es-ES']);

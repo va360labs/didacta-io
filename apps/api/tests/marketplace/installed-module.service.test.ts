@@ -73,6 +73,7 @@ describe('InstalledModuleService', () => {
       packageSha256: 'a'.repeat(64),
       packageSizeBytes: 1024,
       installedById: 'user-1',
+      source: 'DIRECT_UPLOAD',
     });
     expect(row.status).toBe('INSTALLING');
     expect(row.name).toBe('mod.example');
@@ -98,6 +99,7 @@ describe('InstalledModuleService', () => {
       packageSha256: 'b'.repeat(64),
       packageSizeBytes: 2048,
       installedById: 'user-2',
+      source: 'DIRECT_UPLOAD',
     });
     const updated = store.get('mod.example')!;
     expect(updated.status).toBe('INSTALLING');
@@ -126,7 +128,7 @@ describe('InstalledModuleService', () => {
 
   it('appendMigrationsApplied: array vacío solo actualiza timestamp', async () => {
     const { prisma } = makePrismaMock([
-      { id: 'r1', name: 'mod.example', migrationsApplied: [] } as InstalledModule,
+      { id: 'r1', name: 'mod.example', migrationsApplied: [] as string[] } as InstalledModule,
     ]);
     const svc = new InstalledModuleService(prisma);
     const updated = await svc.appendMigrationsApplied('r1', []);

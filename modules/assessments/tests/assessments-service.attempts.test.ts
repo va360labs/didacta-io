@@ -143,7 +143,9 @@ function makeFakePrisma(
         return row;
       },
     },
-    async $transaction<T>(cb: (tx: typeof prisma) => Promise<T>): Promise<T> {
+    // `typeof prisma` aquí haría que `prisma` se refiriese a sí mismo en su
+    // propio inicializador (TS7022) y todo el doble caería a `any` implícito.
+    async $transaction<T>(cb: (tx: unknown) => Promise<T>): Promise<T> {
       return cb(prisma);
     },
     _attempts: attempts,

@@ -94,7 +94,9 @@ function stgRowWithSentinel(opts: {
 
 function makeCtx(db: unknown, overrides: Record<string, unknown> = {}) {
   const log = vi.fn();
-  const lessonsUpsert = vi.fn(async () => ({ id: 'didacta-uuid-of-lesson' }));
+  const lessonsUpsert = vi.fn(async (_input: Record<string, unknown>) => ({
+    id: 'didacta-uuid-of-lesson',
+  }));
   return {
     moduleName: 'mod.migrator-learndash',
     moduleVersion: '1.0.33',
@@ -166,7 +168,9 @@ describe('loader skip visibility (v1.0.33)', () => {
         contentHtml: '<p>content</p>',
       },
     });
-    const lessonsUpsert = vi.fn(async () => ({ id: 'lesson-uuid-202' }));
+    const lessonsUpsert = vi.fn(async (_input: Record<string, unknown>) => ({
+      id: 'lesson-uuid-202',
+    }));
     const { db, calls } = makeDbStub({
       queryRows: [[jobLoadingRow('topics')], [topicRow], []],
       executeRowCounts: [1, 1, 1],

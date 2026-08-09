@@ -10,12 +10,16 @@ function makeUser(overrides: Partial<SessionClaims> = {}): SessionClaims {
     tenantId: 'tenant-A',
     roles: ['tenant_admin'],
     email: 'admin@example.com',
+    mfaVerified: true,
     ...(overrides as Record<string, unknown>),
   } as SessionClaims;
 }
 
 function makeRegistry() {
-  const upload = vi.fn(async () => ({ id: 'rlpt-1', tipo: 'NOTIFICACION_INICIAL' }));
+  const upload = vi.fn(async (_input: { blob: Buffer; contentType: string }) => ({
+    id: 'rlpt-1',
+    tipo: 'NOTIFICACION_INICIAL',
+  }));
   const listByCompany = vi.fn(async () => []);
   const softDelete = vi.fn(async () => ({ id: 'rlpt-1', deletedAt: new Date().toISOString() }));
   return {

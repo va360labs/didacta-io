@@ -157,7 +157,10 @@ export class GroqAdapter extends OpenAiAdapter {
   protected override defaultBaseUrl = 'https://api.groq.com/openai/v1';
   protected override defaultChatModel = 'llama-3.3-70b-versatile';
 
-  override async embed(): Promise<EmbedResult> {
+  // Los parámetros se declaran aunque no se usen: sin ellos el override
+  // estrecha la firma pública del adapter a `() => …` y llamarlo como manda
+  // el contrato (`embed(input, config)`) deja de compilar en el subtipo.
+  override async embed(_input: EmbedInput, _config: ResolvedProviderConfig): Promise<EmbedResult> {
     throw new ProviderUnsupportedCapabilityError(this.id, 'embed');
   }
 }
@@ -169,7 +172,8 @@ export class OpenRouterAdapter extends OpenAiAdapter {
   protected override defaultBaseUrl = 'https://openrouter.ai/api/v1';
   protected override defaultChatModel = 'openai/gpt-4o-mini';
 
-  override async embed(): Promise<EmbedResult> {
+  // Idem GroqAdapter: la firma completa mantiene el contrato del subtipo.
+  override async embed(_input: EmbedInput, _config: ResolvedProviderConfig): Promise<EmbedResult> {
     throw new ProviderUnsupportedCapabilityError(this.id, 'embed');
   }
 }

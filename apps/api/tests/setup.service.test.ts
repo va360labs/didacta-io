@@ -178,7 +178,9 @@ function makeFakePrisma() {
     tenantModule: {
       createMany: vi.fn(async () => ({ count: 0 })),
     },
-    $transaction: async (cb: (tx: typeof client) => Promise<unknown>) => cb(client),
+    // El callback recibe el propio cliente; tiparlo como `typeof client` haría
+    // que `client` se refiriese a sí mismo en su propio inicializador (TS7022).
+    $transaction: async (cb: (tx: unknown) => Promise<unknown>) => cb(client),
   };
 
   return { state, client };

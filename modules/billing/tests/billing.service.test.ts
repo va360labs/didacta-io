@@ -118,14 +118,10 @@ class MockPrisma {
     },
     create: async (args: { data: Omit<ProductRow, 'id' | 'createdAt' | 'updatedAt'> }) => {
       const id = `prod-${this.products.size + 1}`;
+      // Sin defaults muertos: `args.data` declara estos campos obligatorios
+      // y el spread los pisaba siempre.
       const row: ProductRow = {
         id,
-        compareAtAmount: null,
-        name: '',
-        perks: [],
-        sortOrder: 0,
-        isFeatured: false,
-        externalRef: null,
         ...args.data,
         createdAt: new Date(),
         updatedAt: new Date(),
@@ -174,7 +170,6 @@ class MockPrisma {
       const row: OrderRow = {
         id,
         amountPaid: null,
-        stripePaymentIntentId: null,
         customerEmail: null,
         completedAt: null,
         refundedAt: null,
@@ -446,8 +441,8 @@ describe('BillingService — startCheckout (alumno)', () => {
     expect(stored?.stripeSessionId).toBe(result.sessionId);
 
     expect(publisher.events).toHaveLength(1);
-    expect(publisher.events[0].name).toBe('billing.order.created');
-    expect(publisher.events[0].payload.stripeSessionId).toBe(result.sessionId);
+    expect(publisher.events[0]!.name).toBe('billing.order.created');
+    expect(publisher.events[0]!.payload.stripeSessionId).toBe(result.sessionId);
   });
 
   it('falla si el producto no existe para el curso', async () => {
@@ -721,8 +716,8 @@ describe('BillingService — handleWebhookEvent (idempotente)', () => {
     expect(updated.completedAt).toBeInstanceOf(Date);
 
     expect(publisher.events).toHaveLength(1);
-    expect(publisher.events[0].name).toBe('billing.order.completed');
-    expect(publisher.events[0].payload.amountPaid).toBe(1999);
+    expect(publisher.events[0]!.name).toBe('billing.order.completed');
+    expect(publisher.events[0]!.payload.amountPaid).toBe(1999);
   });
 
   async function comprarYCobrar() {
@@ -764,8 +759,8 @@ describe('BillingService — handleWebhookEvent (idempotente)', () => {
     expect(prisma.orders.get(orderId)!.status).toBe('REFUNDED');
     expect(prisma.orders.get(orderId)!.refundedAt).toBeInstanceOf(Date);
     expect(publisher.events).toHaveLength(1);
-    expect(publisher.events[0].name).toBe('billing.order.refunded');
-    expect(publisher.events[0].payload.courseId).toBe('course-1');
+    expect(publisher.events[0]!.name).toBe('billing.order.refunded');
+    expect(publisher.events[0]!.payload.courseId).toBe('course-1');
   });
 
   it('un reembolso PARCIAL no retira el acceso ni marca la orden', async () => {
@@ -812,7 +807,7 @@ describe('BillingService — handleWebhookEvent (idempotente)', () => {
     await svc.handleWebhookEvent(reintento, {});
 
     expect(publisher.events).toHaveLength(1);
-    expect(publisher.events[0].name).toBe('billing.order.completed');
+    expect(publisher.events[0]!.name).toBe('billing.order.completed');
   });
 
   it('ignora en silencio el checkout de OTRO módulo (membresía) en el endpoint compartido', async () => {
@@ -919,7 +914,7 @@ describe('BillingService — handleWebhookEvent (idempotente)', () => {
 
     expect(prisma.orders.get(checkout.orderId)!.status).toBe('FAILED');
     expect(publisher.events).toHaveLength(1);
-    expect(publisher.events[0].name).toBe('billing.order.failed');
+    expect(publisher.events[0]!.name).toBe('billing.order.failed');
   });
 
   it('checkout logueado: el fulfillment NO llama al provisioner (la order ya tiene dueño)', async () => {
@@ -943,8 +938,8 @@ describe('BillingService — handleWebhookEvent (idempotente)', () => {
     );
 
     expect(provision).not.toHaveBeenCalled();
-    expect(publisher.events[0].payload.userId).toBe('u1');
-    expect(publisher.events[0].payload.userCreated).toBe(false);
+    expect(publisher.events[0]!.payload.userId).toBe('u1');
+    expect(publisher.events[0]!.payload.userCreated).toBe(false);
   });
 
   it('eventos no relevantes (ej. invoice.paid) se persisten pero no afectan estado', async () => {
@@ -1024,8 +1019,8 @@ describe('BillingService — checkout PÚBLICO (viaje 2: visitante sin cuenta)',
     // Sin email: lo recoge el checkout hosted de Stripe.
     expect(stripe.lastCheckout?.customerEmail).toBeUndefined();
     // ORDER_CREATED sin actor (no hay usuario todavía).
-    expect(publisher.events[0].name).toBe('billing.order.created');
-    expect(publisher.events[0].actorId).toBeNull();
+    expect(publisher.events[0]!.name).toBe('billing.order.created');
+    expect(publisher.events[0]!.actorId).toBeNull();
   });
 
   it('fulfillment anónimo: materializa al comprador con el email CONFIRMADO en Stripe y emite completed con su userId', async () => {
@@ -1052,9 +1047,9 @@ describe('BillingService — checkout PÚBLICO (viaje 2: visitante sin cuenta)',
     expect(updated.status).toBe('COMPLETED');
     expect(updated.userId).toBe('u-nueva');
     expect(publisher.events).toHaveLength(1);
-    expect(publisher.events[0].name).toBe('billing.order.completed');
-    expect(publisher.events[0].payload.userId).toBe('u-nueva');
-    expect(publisher.events[0].payload.userCreated).toBe(true);
+    expect(publisher.events[0]!.name).toBe('billing.order.completed');
+    expect(publisher.events[0]!.payload.userId).toBe('u-nueva');
+    expect(publisher.events[0]!.payload.userCreated).toBe(true);
   });
 
   it('reentrega del webhook: NO provisiona dos veces ni re-emite el evento', async () => {
@@ -1116,7 +1111,7 @@ describe('BillingService — checkout PÚBLICO (viaje 2: visitante sin cuenta)',
     );
 
     expect(prisma.orders.get(checkout.orderId)!.userId).toBe('u-existente');
-    expect(publisher.events[0].payload.userCreated).toBe(false);
+    expect(publisher.events[0]!.payload.userCreated).toBe(false);
   });
 
   it('getCatalog agrupa las opciones ACTIVAS por curso con el % de descuento derivado', async () => {
@@ -1152,8 +1147,8 @@ describe('BillingService — checkout PÚBLICO (viaje 2: visitante sin cuenta)',
     expect(ids).toEqual(['course-1', 'course-2']);
     const curso2 = catalogo.find((c) => c.courseId === 'course-2')!;
     expect(curso2.options.map((o) => o.name)).toEqual(['Curso', 'Curso Avanzado']);
-    expect(curso2.options[0].discountPercent).toBe(50);
-    expect(curso2.options[1].discountPercent).toBeNull();
+    expect(curso2.options[0]!.discountPercent).toBe(50);
+    expect(curso2.options[1]!.discountPercent).toBeNull();
   });
 
   it('checkout anónimo expirado: order CANCELLED sin provisionar a nadie', async () => {

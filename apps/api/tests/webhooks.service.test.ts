@@ -138,19 +138,24 @@ class FakeEndpointRepo {
   }
 }
 
-class FakeDeadLetterRepo {
-  rows: Array<{
-    id: string;
-    tenantId: string;
-    endpointId: string;
-    eventType: string;
-    payload: unknown;
-    lastError: string;
-    attempts: number;
-    createdAt: Date;
-  }> = [];
+// La fila se nombra en vez de derivarla con `(typeof this.rows)[number]`:
+// dentro de la firma de un método, `this` no tiene tipo y el parámetro caía
+// a `any` implícito.
+interface DeadLetterRow {
+  id: string;
+  tenantId: string;
+  endpointId: string;
+  eventType: string;
+  payload: unknown;
+  lastError: string;
+  attempts: number;
+  createdAt: Date;
+}
 
-  async create(args: { data: Omit<(typeof this.rows)[number], 'id' | 'createdAt'> }) {
+class FakeDeadLetterRepo {
+  rows: DeadLetterRow[] = [];
+
+  async create(args: { data: Omit<DeadLetterRow, 'id' | 'createdAt'> }) {
     const row = {
       id: `dl-${this.rows.length + 1}`,
       ...args.data,

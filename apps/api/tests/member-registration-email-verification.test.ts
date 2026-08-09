@@ -179,19 +179,19 @@ describe('EmailVerificationService.requestCode', () => {
     expect(expiresInSeconds).toBe(600); // 10 minutos.
     expect(prisma.codes).toHaveLength(1);
     const row = prisma.codes[0];
-    expect(row.tenantId).toBe(TENANT_ID);
-    expect(row.email).toBe(EMAIL);
-    expect(row.attempts).toBe(0);
-    expect(row.usedAt).toBeNull();
+    expect(row!.tenantId).toBe(TENANT_ID);
+    expect(row!.email).toBe(EMAIL);
+    expect(row!.attempts).toBe(0);
+    expect(row!.usedAt).toBeNull();
     // El codeHash es SHA-256 hex de 64 chars; nunca el código en claro.
-    expect(row.codeHash).toMatch(/^[a-f0-9]{64}$/);
+    expect(row!.codeHash).toMatch(/^[a-f0-9]{64}$/);
   });
 
   it('expira a los 10 minutos del request', async () => {
     const { service, prisma } = makeService();
     const before = Date.now();
     await service.requestCode(TENANT_ID, EMAIL, CTX);
-    const delta = prisma.codes[0].expiresAt.getTime() - before;
+    const delta = prisma.codes[0]!.expiresAt.getTime() - before;
     expect(delta).toBeGreaterThanOrEqual(9 * 60_000);
     expect(delta).toBeLessThanOrEqual(11 * 60_000);
   });
@@ -203,8 +203,8 @@ describe('EmailVerificationService.requestCode', () => {
 
     expect(prisma.codes).toHaveLength(2);
     // El primero quedó invalidado (usedAt seteado), el segundo sigue vigente.
-    expect(prisma.codes[0].usedAt).not.toBeNull();
-    expect(prisma.codes[1].usedAt).toBeNull();
+    expect(prisma.codes[0]!.usedAt).not.toBeNull();
+    expect(prisma.codes[1]!.usedAt).toBeNull();
   });
 
   it('llama al SMTP con el código (envío best-effort)', async () => {
@@ -255,7 +255,7 @@ describe('EmailVerificationService.verifyCode', () => {
 
     const ok = await service.verifyCode(TENANT_ID, EMAIL, '123456', CTX);
     expect(ok).toBe(true);
-    expect(prisma.codes[0].usedAt).not.toBeNull();
+    expect(prisma.codes[0]!.usedAt).not.toBeNull();
   });
 
   it('con un código incorrecto devuelve false e incrementa attempts', async () => {
@@ -264,8 +264,8 @@ describe('EmailVerificationService.verifyCode', () => {
 
     const ok = await service.verifyCode(TENANT_ID, EMAIL, '000000', CTX);
     expect(ok).toBe(false);
-    expect(prisma.codes[0].attempts).toBe(1);
-    expect(prisma.codes[0].usedAt).toBeNull();
+    expect(prisma.codes[0]!.attempts).toBe(1);
+    expect(prisma.codes[0]!.usedAt).toBeNull();
   });
 
   it('rechaza (false) cuando ya se alcanzó el máximo de intentos', async () => {
@@ -276,7 +276,7 @@ describe('EmailVerificationService.verifyCode', () => {
     const ok = await service.verifyCode(TENANT_ID, EMAIL, '123456', CTX);
     expect(ok).toBe(false);
     // No incrementa más allá del máximo (la guarda corta antes).
-    expect(prisma.codes[0].attempts).toBe(5);
+    expect(prisma.codes[0]!.attempts).toBe(5);
   });
 
   it('rechaza (false) un código expirado aunque el dígito sea correcto', async () => {
@@ -288,7 +288,7 @@ describe('EmailVerificationService.verifyCode', () => {
 
     const ok = await service.verifyCode(TENANT_ID, EMAIL, '123456', CTX);
     expect(ok).toBe(false);
-    expect(prisma.codes[0].usedAt).toBeNull();
+    expect(prisma.codes[0]!.usedAt).toBeNull();
   });
 
   it('devuelve false cuando no hay ninguna fila vigente para (tenant, email)', async () => {

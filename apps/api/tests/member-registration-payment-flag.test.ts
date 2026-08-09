@@ -135,7 +135,7 @@ function makeFakePrisma(users: UserRow[] = []) {
     async deleteMany(args: { where: { tenantId: string; id: string } }) {
       let count = 0;
       for (let i = flags.length - 1; i >= 0; i--) {
-        if (flags[i].tenantId === args.where.tenantId && flags[i].id === args.where.id) {
+        if (flags[i]!.tenantId === args.where.tenantId && flags[i]!.id === args.where.id) {
           flags.splice(i, 1);
           count++;
         }
@@ -218,7 +218,7 @@ describe('MemberPaymentFlagService.upsert', () => {
   it('normaliza el email a minúsculas y sin espacios', async () => {
     const { service, prisma } = makeService();
     await service.upsert(TENANT_ID, dto({ email: ' Moroso@Example.com ' }), ACTOR_ID, CTX);
-    expect(prisma.flags[0].email).toBe('moroso@example.com');
+    expect(prisma.flags[0]!.email).toBe('moroso@example.com');
   });
 
   it('es idempotente por email: re-upsert actualiza la fila existente', async () => {
@@ -238,8 +238,8 @@ describe('MemberPaymentFlagService.upsert', () => {
 
     expect(second.id).toBe(first.id);
     expect(prisma.flags).toHaveLength(1);
-    expect(prisma.flags[0].isDelinquent).toBe(false);
-    expect(prisma.flags[0].name).toBe('Ya pagó');
+    expect(prisma.flags[0]!.isDelinquent).toBe(false);
+    expect(prisma.flags[0]!.name).toBe('Ya pagó');
   });
 
   it('migra una fila legacy: match por telegramId y adopción del email nuevo', async () => {
@@ -275,8 +275,8 @@ describe('MemberPaymentFlagService.upsert', () => {
   it('normaliza name y note ausentes a null', async () => {
     const { service, prisma } = makeService();
     await service.upsert(TENANT_ID, dto({ email: 'x@example.com' }), ACTOR_ID, CTX);
-    expect(prisma.flags[0].name).toBeNull();
-    expect(prisma.flags[0].note).toBeNull();
+    expect(prisma.flags[0]!.name).toBeNull();
+    expect(prisma.flags[0]!.note).toBeNull();
   });
 });
 
@@ -288,7 +288,7 @@ describe('MemberPaymentFlagService.list', () => {
 
     const rows = await service.list(TENANT_ID);
     expect(rows).toHaveLength(1);
-    expect(rows[0].email).toBe('a@example.com');
+    expect(rows[0]!.email).toBe('a@example.com');
     // La fila del otro tenant sigue persistida pero no se devuelve.
     expect(prisma.flags).toHaveLength(2);
   });
@@ -312,7 +312,7 @@ describe('MemberPaymentFlagService.list', () => {
     const onlyDelinquent = await service.list(TENANT_ID, { delinquentOnly: true });
     expect(all).toHaveLength(2);
     expect(onlyDelinquent).toHaveLength(1);
-    expect(onlyDelinquent[0].email).toBe('a@example.com');
+    expect(onlyDelinquent[0]!.email).toBe('a@example.com');
   });
 
   it('con q hace match parcial por email, telegramId o name (case-insensitive)', async () => {
@@ -332,15 +332,15 @@ describe('MemberPaymentFlagService.list', () => {
 
     const byId = await service.list(TENANT_ID, { q: '123' });
     expect(byId).toHaveLength(1);
-    expect(byId[0].telegramId).toBe('12345');
+    expect(byId[0]!.telegramId).toBe('12345');
 
     const byName = await service.list(TENANT_ID, { q: 'marta' });
     expect(byName).toHaveLength(1);
-    expect(byName[0].name).toBe('Marta');
+    expect(byName[0]!.name).toBe('Marta');
 
     const byEmail = await service.list(TENANT_ID, { q: 'CARLOS@EX' });
     expect(byEmail).toHaveLength(1);
-    expect(byEmail[0].email).toBe('carlos@example.com');
+    expect(byEmail[0]!.email).toBe('carlos@example.com');
   });
 });
 

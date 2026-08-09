@@ -12,9 +12,13 @@ function buildRegistryStub(
   opts: { initialized?: boolean; expiredByTenant?: Record<string, unknown[]> } = {},
 ) {
   const expiredByTenant = opts.expiredByTenant ?? {};
-  const findTenantsWithExpiredGrace = vi.fn(async () => Object.keys(expiredByTenant));
+  // Los parámetros se declaran aunque el doble no los use: el worker llama
+  // `findTenantsWithExpiredGrace(now)` y `expireGracePeriodsForTenant(tenantId, now)`.
+  // Sin declararlos, `mock.calls[0][0]` no existe para el typecheck y la
+  // aserción sobre el `now` propagado sería incomprobable.
+  const findTenantsWithExpiredGrace = vi.fn(async (_now: Date) => Object.keys(expiredByTenant));
   const expireGracePeriodsForTenant = vi.fn(
-    async (tenantId: string) => expiredByTenant[tenantId] ?? [],
+    async (tenantId: string, _now: Date) => expiredByTenant[tenantId] ?? [],
   );
   const service = { findTenantsWithExpiredGrace, expireGracePeriodsForTenant };
   const registry = {
@@ -24,7 +28,7 @@ function buildRegistryStub(
       }
       return service;
     }),
-  } as never;
+  };
   return { registry, service, findTenantsWithExpiredGrace, expireGracePeriodsForTenant };
 }
 
@@ -55,7 +59,7 @@ describe('SubscriptionsGraceExpirationWorker.triggerNow (degraded mode, sin Redi
         },
       });
 
-    const worker = new SubscriptionsGraceExpirationWorker(registry, noopLogger);
+    const worker = new SubscriptionsGraceExpirationWorker(registry as never, noopLogger);
 
     // Sin onApplicationBootstrap (no Redis). triggerNow debe degradar a in-process.
     await worker.triggerNow();
@@ -83,7 +87,7 @@ describe('SubscriptionsGraceExpirationWorker.triggerNow (degraded mode, sin Redi
       })),
     } as never;
 
-    const worker = new SubscriptionsGraceExpirationWorker(registry, noopLogger);
+    const worker = new SubscriptionsGraceExpirationWorker(registry as never, noopLogger);
     await worker.triggerNow();
 
     expect(seenContexts).toEqual(['t1', 't2']);
@@ -95,9 +99,9 @@ describe('SubscriptionsGraceExpirationWorker.triggerNow (degraded mode, sin Redi
       log: vi.fn(),
       warn: vi.fn(),
       error: vi.fn(),
-    } as never;
+    };
 
-    const worker = new SubscriptionsGraceExpirationWorker(registry, logger);
+    const worker = new SubscriptionsGraceExpirationWorker(registry as never, logger as never);
 
     await expect(worker.triggerNow()).resolves.toBeUndefined();
     expect(logger.warn).toHaveBeenCalled();
@@ -117,7 +121,7 @@ describe('SubscriptionsGraceExpirationWorker.triggerNow (degraded mode, sin Redi
       })),
     } as never;
 
-    const worker = new SubscriptionsGraceExpirationWorker(registry, noopLogger);
+    const worker = new SubscriptionsGraceExpirationWorker(registry as never, noopLogger);
 
     await expect(worker.triggerNow()).rejects.toThrow('boom');
     expect(findTenantsWithExpiredGrace).toHaveBeenCalledTimes(1);
@@ -148,9 +152,9 @@ describe('SubscriptionsGraceExpirationWorker.onApplicationBootstrap', () => {
       log: vi.fn(),
       warn: vi.fn(),
       error: vi.fn(),
-    } as never;
+    };
 
-    const worker = new SubscriptionsGraceExpirationWorker(registry, logger);
+    const worker = new SubscriptionsGraceExpirationWorker(registry as never, logger as never);
     await worker.onApplicationBootstrap();
 
     expect(logger.warn).toHaveBeenCalled();
@@ -165,9 +169,9 @@ describe('SubscriptionsGraceExpirationWorker.onApplicationBootstrap', () => {
       log: vi.fn(),
       warn: vi.fn(),
       error: vi.fn(),
-    } as never;
+    };
 
-    const worker = new SubscriptionsGraceExpirationWorker(registry, logger);
+    const worker = new SubscriptionsGraceExpirationWorker(registry as never, logger as never);
 
     // No debe intentar conectar a Redis ni loguear "scheduler activo".
     await worker.onApplicationBootstrap();

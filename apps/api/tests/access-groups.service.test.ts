@@ -180,9 +180,11 @@ function makeHarness(opts: { publishedCourses?: string[] } = {}) {
         const g = groups.find((x) => x.id === where.id)!;
         for (const [k, v] of Object.entries(data)) {
           if (v && typeof v === 'object' && 'increment' in v) {
-            (g as never as Record<string, number>)[k] += (v as { increment: number }).increment;
+            (g as never as Record<string, number>)[k] =
+              (g as never as Record<string, number>)[k]! + (v as { increment: number }).increment;
           } else if (v && typeof v === 'object' && 'decrement' in v) {
-            (g as never as Record<string, number>)[k] -= (v as { decrement: number }).decrement;
+            (g as never as Record<string, number>)[k] =
+              (g as never as Record<string, number>)[k]! - (v as { decrement: number }).decrement;
           } else if (v !== undefined) {
             (g as never as Record<string, unknown>)[k] = v;
           }
@@ -235,9 +237,9 @@ function makeHarness(opts: { publishedCourses?: string[] } = {}) {
         for (let i = groupCourses.length - 1; i >= 0; i--) {
           const c = groupCourses[i];
           if (
-            c.tenantId === where.tenantId &&
-            c.groupId === where.groupId &&
-            (inList === null || inList.includes(c.courseId))
+            c!.tenantId === where.tenantId &&
+            c!.groupId === where.groupId &&
+            (inList === null || inList.includes(c!.courseId))
           ) {
             groupCourses.splice(i, 1);
             count++;
@@ -496,13 +498,13 @@ describe('AccessGroupsService.assignMembers', () => {
     expect(h.enrollFromGroup).toHaveBeenCalledWith(TENANT, 'u1', 'c1');
     expect(h.enrollFromGroup).toHaveBeenCalledWith(TENANT, 'u1', 'c2');
     expect(h.grants.filter((x) => x.revokedAt === null)).toHaveLength(2);
-    expect(h.groups[0].memberCount).toBe(1);
+    expect(h.groups[0]!.memberCount).toBe(1);
 
     // Re-asignar el mismo usuario no duplica membresía ni memberCount.
     const r2 = await h.service.assignMembers(TENANT, g.id, ['u1']);
     expect(r2.added).toBe(0);
     expect(h.members.filter((m) => m.userId === 'u1')).toHaveLength(1);
-    expect(h.groups[0].memberCount).toBe(1);
+    expect(h.groups[0]!.memberCount).toBe(1);
   });
 
   it('alta MANUAL marca la membresía con source=MANUAL', async () => {
@@ -563,7 +565,7 @@ describe('AccessGroupsService.revokeMember (refcount)', () => {
     await h.service.assignMembers(TENANT, g.id, ['u1']);
     await h.service.revokeMember(TENANT, g.id, 'u1');
     expect(h.unenrollFromGroup).toHaveBeenCalledWith(TENANT, 'u1', 'c1');
-    expect(h.groups[0].memberCount).toBe(0);
+    expect(h.groups[0]!.memberCount).toBe(0);
   });
 
   it('NO desmatricula si otro grupo vivo otorga el mismo curso (refcount > 0)', async () => {
@@ -642,23 +644,23 @@ describe('AccessGroupsService.updateGroup (vínculo de tier)', () => {
     await h.service.reconcileTierMembership(TENANT, 'u1', 'gold');
     expect(member(h, g.id, 'u1')?.status).toBe('ACTIVE');
     expect(member(h, g.id, 'u1')?.source).toBe('TIER');
-    expect(h.groups[0].memberCount).toBe(1);
+    expect(h.groups[0]!.memberCount).toBe(1);
     h.unenrollFromGroup.mockClear();
 
     // Cambiamos el vínculo a otro tier → los TIER del vínculo anterior se retiran.
     await h.service.updateGroup(TENANT, g.id, { linkedTierName: 'silver' });
     expect(member(h, g.id, 'u1')?.status).toBe('REVOKED');
     expect(h.unenrollFromGroup).toHaveBeenCalledWith(TENANT, 'u1', 'c1');
-    expect(h.groups[0].memberCount).toBe(0);
+    expect(h.groups[0]!.memberCount).toBe(0);
   });
 
   it('cadena vacía en linkedTierName se normaliza a null (desvincula)', async () => {
     const h = makeHarness();
     const g = await h.service.createGroup(TENANT, { name: 'Pro', kind: 'ALL_COURSES' } as never);
     await h.service.updateGroup(TENANT, g.id, { linkedTierName: 'gold' });
-    expect(h.groups[0].linkedTierName).toBe('gold');
+    expect(h.groups[0]!.linkedTierName).toBe('gold');
     await h.service.updateGroup(TENANT, g.id, { linkedTierName: '   ' });
-    expect(h.groups[0].linkedTierName).toBeNull();
+    expect(h.groups[0]!.linkedTierName).toBeNull();
   });
 
   it('no toca a los miembros MANUAL al cambiar el vínculo de tier', async () => {
@@ -693,7 +695,7 @@ describe('AccessGroupsService.reconcileTierMembership', () => {
     expect(member(h, g.id, 'u1')?.source).toBe('TIER');
     expect(member(h, g.id, 'u1')?.status).toBe('ACTIVE');
     expect(h.enrollFromGroup).toHaveBeenCalledWith(TENANT, 'u1', 'c1');
-    expect(h.groups[0].memberCount).toBe(1);
+    expect(h.groups[0]!.memberCount).toBe(1);
   });
 
   it('cambio de tier: retira la membresía TIER stale de otro grupo y desmatricula', async () => {
@@ -765,7 +767,7 @@ describe('AccessGroupsService.reconcileTierMembership', () => {
     expect(res).toEqual({ addedToGroups: 0, removedFromGroups: 1 });
     expect(member(h, gold.id, 'u1')?.status).toBe('REVOKED');
     expect(h.unenrollFromGroup).toHaveBeenCalledWith(TENANT, 'u1', 'c1');
-    expect(h.groups[0].memberCount).toBe(0);
+    expect(h.groups[0]!.memberCount).toBe(0);
   });
 
   it('es idempotente: re-reconciliar el mismo tier no descuadra memberCount ni duplica', async () => {
@@ -783,7 +785,7 @@ describe('AccessGroupsService.reconcileTierMembership', () => {
 
     expect(h.members.filter((m) => m.userId === 'u1' && m.groupId === gold.id)).toHaveLength(1);
     expect(h.grants.filter((g) => g.userId === 'u1' && g.revokedAt === null)).toHaveLength(1);
-    expect(h.groups[0].memberCount).toBe(1);
+    expect(h.groups[0]!.memberCount).toBe(1);
   });
 
   it('sin grupos del tier ni membresías TIER stale → no-op', async () => {
@@ -850,7 +852,7 @@ describe('AccessGroupsService source=MEMBERSHIP (bridge de membresía, F6)', () 
     expect(r.added).toBe(1);
     expect(member(h, g.id, 'u1')?.source).toBe('MEMBERSHIP');
     expect(h.enrollFromGroup).toHaveBeenCalledWith(TENANT, 'u1', 'c1');
-    expect(h.groups[0].memberCount).toBe(1);
+    expect(h.groups[0]!.memberCount).toBe(1);
   });
 
   it('revokeMember con onlySource MEMBERSHIP revoca la MEMBERSHIP y desmatricula', async () => {
@@ -866,7 +868,7 @@ describe('AccessGroupsService source=MEMBERSHIP (bridge de membresía, F6)', () 
     expect(res).toEqual({ revoked: true });
     expect(member(h, g.id, 'u1')?.status).toBe('REVOKED');
     expect(h.unenrollFromGroup).toHaveBeenCalledWith(TENANT, 'u1', 'c1');
-    expect(h.groups[0].memberCount).toBe(0);
+    expect(h.groups[0]!.memberCount).toBe(0);
   });
 
   it('revokeMember con onlySource MEMBERSHIP NUNCA toca una membresía MANUAL (sticky)', async () => {
@@ -882,7 +884,7 @@ describe('AccessGroupsService source=MEMBERSHIP (bridge de membresía, F6)', () 
     expect(res).toEqual({ revoked: false });
     expect(member(h, g.id, 'u1')?.status).toBe('ACTIVE');
     expect(h.unenrollFromGroup).not.toHaveBeenCalled();
-    expect(h.groups[0].memberCount).toBe(1);
+    expect(h.groups[0]!.memberCount).toBe(1);
   });
 
   it('tampoco toca una membresía TIER (cada bridge revoca solo lo suyo)', async () => {
@@ -948,7 +950,7 @@ describe('AccessGroupsService source=MEMBERSHIP (bridge de membresía, F6)', () 
     await h.service.assignMembers(TENANT, g.id, ['u1'], 'MEMBERSHIP');
     expect(member(h, g.id, 'u1')?.status).toBe('ACTIVE');
     expect(member(h, g.id, 'u1')?.source).toBe('MEMBERSHIP');
-    expect(h.groups[0].memberCount).toBe(1);
+    expect(h.groups[0]!.memberCount).toBe(1);
   });
 
   it('reconcileTierMembership no retira membresías MEMBERSHIP (solo TIER stale)', async () => {

@@ -31,14 +31,18 @@ const MATCH = {
   subscriptionId: 'sub_1',
 };
 
+/// Implementación de doble. Los overrides eran `unknown`, que `vi.fn()` no
+/// acepta: el typecheck lo destapa en cuanto entra en cobertura.
+type FakeImpl = (...args: any[]) => any;
+
 function build(overrides?: {
-  getUserEmail?: unknown;
-  getForUser?: unknown;
-  runAndStore?: unknown;
-  resolveRenewalUrlByRef?: unknown;
-  getRenewalTemplate?: unknown;
-  resolve?: unknown;
-  send?: unknown;
+  getUserEmail?: FakeImpl;
+  getForUser?: FakeImpl;
+  runAndStore?: FakeImpl;
+  resolveRenewalUrlByRef?: FakeImpl;
+  getRenewalTemplate?: FakeImpl;
+  resolve?: FakeImpl;
+  send?: FakeImpl;
 }) {
   const registration = {
     getUserEmail: vi.fn(overrides?.getUserEmail ?? (async () => 'aspirante@x.com')),

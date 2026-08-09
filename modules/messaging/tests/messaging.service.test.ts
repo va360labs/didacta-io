@@ -301,7 +301,7 @@ const USERS: Record<string, MessagingPublicUser> = {
 };
 
 function callerOf(key: keyof typeof USERS, roles: string[] = ['alumno']): MessagingCaller {
-  return { userId: USERS[key].id, displayName: USERS[key].name, roles };
+  return { userId: USERS[key]!.id, displayName: USERS[key]!.name, roles };
 }
 
 describe('MessagingService', () => {
@@ -320,15 +320,15 @@ describe('MessagingService', () => {
       built.publisher,
       async () => spaces,
       async (_tenantId, ids) => Object.values(USERS).filter((u) => ids.includes(u.id)),
-      async () => [USERS.profe.id],
+      async () => [USERS.profe!.id],
     );
   });
 
   describe('openDm', () => {
     it('crea el DM una sola vez por par (idempotente)', async () => {
-      const first = await service.openDm(TENANT, callerOf('alice'), USERS.bob.id);
+      const first = await service.openDm(TENANT, callerOf('alice'), USERS.bob!.id);
       expect(first.created).toBe(true);
-      const second = await service.openDm(TENANT, callerOf('bob'), USERS.alice.id);
+      const second = await service.openDm(TENANT, callerOf('bob'), USERS.alice!.id);
       expect(second.created).toBe(false);
       expect(second.conversationId).toBe(first.conversationId);
       expect(prisma.conversations.filter((c) => c.type === 'DM')).toHaveLength(1);
@@ -337,7 +337,7 @@ describe('MessagingService', () => {
     });
 
     it('rechaza el DM con uno mismo', async () => {
-      await expect(service.openDm(TENANT, callerOf('alice'), USERS.alice.id)).rejects.toThrow(
+      await expect(service.openDm(TENANT, callerOf('alice'), USERS.alice!.id)).rejects.toThrow(
         SelfDmError,
       );
     });
@@ -349,7 +349,7 @@ describe('MessagingService', () => {
     });
 
     it('resuelve la carrera P2002 devolviendo el DM existente', async () => {
-      await service.openDm(TENANT, callerOf('alice'), USERS.bob.id);
+      await service.openDm(TENANT, callerOf('alice'), USERS.bob!.id);
       // Fuerza la rama de carrera: findFirst inicial "no lo ve".
       const original = prisma.modMessagingConversation.findFirst;
       let calls = 0;
@@ -358,7 +358,7 @@ describe('MessagingService', () => {
         if (calls === 1) return null;
         return original(args);
       }) as never;
-      const raced = await service.openDm(TENANT, callerOf('alice'), USERS.bob.id);
+      const raced = await service.openDm(TENANT, callerOf('alice'), USERS.bob!.id);
       expect(raced.created).toBe(false);
       expect(prisma.conversations.filter((c) => c.type === 'DM')).toHaveLength(1);
     });
@@ -366,7 +366,7 @@ describe('MessagingService', () => {
 
   describe('sendMessage', () => {
     it('valida el cuerpo (vacío y >4000)', async () => {
-      const { conversationId } = await service.openDm(TENANT, callerOf('alice'), USERS.bob.id);
+      const { conversationId } = await service.openDm(TENANT, callerOf('alice'), USERS.bob!.id);
       await expect(
         service.sendMessage(TENANT, callerOf('alice'), conversationId, '   '),
       ).rejects.toThrow(MessageBodyInvalidError);
@@ -376,7 +376,7 @@ describe('MessagingService', () => {
     });
 
     it('persiste, actualiza lastMessageAt y devuelve al otro como destinatario', async () => {
-      const { conversationId } = await service.openDm(TENANT, callerOf('alice'), USERS.bob.id);
+      const { conversationId } = await service.openDm(TENANT, callerOf('alice'), USERS.bob!.id);
       const result = await service.sendMessage(
         TENANT,
         callerOf('alice'),
@@ -385,21 +385,21 @@ describe('MessagingService', () => {
       );
       expect(result.message.body).toBe('Hola 👋');
       expect(result.message.authorDisplayName).toBe('Alice Alumna');
-      expect(result.recipientUserIds).toEqual([USERS.bob.id]);
+      expect(result.recipientUserIds).toEqual([USERS.bob!.id]);
       const conv = prisma.conversations.find((c) => c.id === conversationId);
       expect(conv?.lastMessageAt).not.toBeNull();
       expect(events.some((e) => e.name === 'messaging.message.sent')).toBe(true);
     });
 
     it('rechaza a quien no participa del DM', async () => {
-      const { conversationId } = await service.openDm(TENANT, callerOf('alice'), USERS.bob.id);
+      const { conversationId } = await service.openDm(TENANT, callerOf('alice'), USERS.bob!.id);
       await expect(
         service.sendMessage(TENANT, callerOf('profe', ['alumno']), conversationId, 'intruso'),
       ).rejects.toThrow(NotParticipantError);
     });
 
     it('no encuentra conversaciones de otro tenant (aislamiento)', async () => {
-      const { conversationId } = await service.openDm(TENANT, callerOf('alice'), USERS.bob.id);
+      const { conversationId } = await service.openDm(TENANT, callerOf('alice'), USERS.bob!.id);
       await expect(
         service.sendMessage(OTHER_TENANT, callerOf('alice'), conversationId, 'cruce'),
       ).rejects.toThrow(ConversationNotFoundError);
@@ -429,7 +429,7 @@ describe('MessagingService', () => {
         'hola sala',
       );
       // Alice abrió la sala (fila de participante) → recibe el push.
-      expect(result.recipientUserIds).toEqual([USERS.alice.id]);
+      expect(result.recipientUserIds).toEqual([USERS.alice!.id]);
     });
 
     it('una sala cuyo espacio ya no existe queda archivada (fuera del listado)', async () => {
@@ -478,8 +478,8 @@ describe('MessagingService', () => {
         conversationId,
         'Te respondo ahora mismo',
       );
-      expect(reply.recipientUserIds).toContain(USERS.alice.id);
-      expect(reply.recipientUserIds).not.toContain(USERS.profe.id);
+      expect(reply.recipientUserIds).toContain(USERS.alice!.id);
+      expect(reply.recipientUserIds).not.toContain(USERS.profe!.id);
     });
 
     it('la bandeja del staff solo lista canales con actividad, titulados con el alumno', async () => {
@@ -498,7 +498,7 @@ describe('MessagingService', () => {
 
   describe('no-leídos y lectura', () => {
     it('cuenta solo mensajes ajenos posteriores a lastReadAt y markRead los limpia', async () => {
-      const { conversationId } = await service.openDm(TENANT, callerOf('alice'), USERS.bob.id);
+      const { conversationId } = await service.openDm(TENANT, callerOf('alice'), USERS.bob!.id);
       await service.sendMessage(TENANT, callerOf('alice'), conversationId, 'uno');
       await service.sendMessage(TENANT, callerOf('alice'), conversationId, 'dos');
 
@@ -526,12 +526,12 @@ describe('MessagingService', () => {
 
   describe('autoría del último mensaje (píldora del chat flotante)', () => {
     it('el listado expone el authorId del último mensaje', async () => {
-      const { conversationId } = await service.openDm(TENANT, callerOf('alice'), USERS.bob.id);
+      const { conversationId } = await service.openDm(TENANT, callerOf('alice'), USERS.bob!.id);
       await service.sendMessage(TENANT, callerOf('alice'), conversationId, 'hola');
 
       const list = await service.listConversations(TENANT, callerOf('bob'));
       const dm = list.find((c) => c.id === conversationId);
-      expect(dm?.lastMessage?.authorId).toBe(USERS.alice.id);
+      expect(dm?.lastMessage?.authorId).toBe(USERS.alice!.id);
       expect(dm?.lastMessage?.authorDisplayName).toBe('Alice Alumna');
     });
 
@@ -544,17 +544,17 @@ describe('MessagingService', () => {
 
   describe('destinatarios del indicador de escritura', () => {
     it('en un directo, el otro participante', async () => {
-      const { conversationId } = await service.openDm(TENANT, callerOf('alice'), USERS.bob.id);
+      const { conversationId } = await service.openDm(TENANT, callerOf('alice'), USERS.bob!.id);
       const recipients = await service.recipientsForTyping(
         TENANT,
         callerOf('alice'),
         conversationId,
       );
-      expect(recipients).toEqual([USERS.bob.id]);
+      expect(recipients).toEqual([USERS.bob!.id]);
     });
 
     it('quien no participa no puede anunciar que escribe', async () => {
-      const { conversationId } = await service.openDm(TENANT, callerOf('alice'), USERS.bob.id);
+      const { conversationId } = await service.openDm(TENANT, callerOf('alice'), USERS.bob!.id);
       await expect(
         service.recipientsForTyping(TENANT, callerOf('profe', ['alumno']), conversationId),
       ).rejects.toThrow(NotParticipantError);
@@ -569,7 +569,7 @@ describe('MessagingService', () => {
 
       await service.openSpace(TENANT, callerOf('bob'), 'general');
       expect(await service.recipientsForTyping(TENANT, callerOf('alice'), conversationId)).toEqual([
-        USERS.bob.id,
+        USERS.bob!.id,
       ]);
     });
   });
@@ -583,13 +583,13 @@ describe('MessagingService', () => {
     });
 
     it('pagina el histórico por cursor (50 por página, desc)', async () => {
-      const { conversationId } = await service.openDm(TENANT, callerOf('alice'), USERS.bob.id);
+      const { conversationId } = await service.openDm(TENANT, callerOf('alice'), USERS.bob!.id);
       for (let i = 0; i < 55; i += 1) {
         prisma.messages.push({
           id: `feedf00d-0000-0000-0000-${String(i).padStart(12, '0')}`,
           tenantId: TENANT,
           conversationId,
-          authorId: USERS.alice.id,
+          authorId: USERS.alice!.id,
           authorDisplayName: 'Alice Alumna',
           kind: 'TEXT',
           body: `msg ${i}`,

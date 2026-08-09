@@ -141,8 +141,14 @@ describe('OidcAdminController.getConfig', () => {
     );
     const result = await ctrl.getConfig(adminUser());
     expect(result.exists).toBe(true);
-    expect((result as { config: Record<string, unknown> }).config['hasSecret']).toBe(true);
-    expect((result as { config: Record<string, unknown> }).config['clientSecret']).toBeUndefined();
+    // `getConfig` devuelve una unión (rama sin config / rama con config). Se
+    // estrecha con `in` en vez de castear: el cast a `{ config: … }` no solapa
+    // con la otra rama y ocultaba que el tipo del resultado había cambiado.
+    if (!('config' in result) || !result.config) {
+      throw new Error('esperaba la rama exists:true con config');
+    }
+    expect(result.config.hasSecret).toBe(true);
+    expect(result.config).not.toHaveProperty('clientSecret');
   });
 });
 

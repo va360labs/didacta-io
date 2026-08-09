@@ -27,6 +27,7 @@ const adminUser = {
   sub: 'user-1',
   tenantId: 'tenant-1',
   roles: ['tenant_admin'],
+  mfaVerified: true,
   email: 'admin@tenant.test',
 } as Parameters<ThemingController['updateMine']>[0];
 

@@ -23,7 +23,7 @@
     "build:ui": "esbuild src/ui/admin.tsx --bundle --platform=browser --target=es2020 --format=iife --global-name=__didacta_module_exports__ --jsx=transform --jsx-factory=React.createElement --jsx-fragment=React.Fragment --outfile=dist/ui/admin.js",
     "build:tsc": "tsc -p tsconfig.json",
     "dev": "tsc -p tsconfig.json --watch",
-    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.ui.json --noEmit && tsc -p tsconfig.scripts.json --noEmit",
+    "typecheck": "tsc -p tsconfig.tests.json --noEmit && tsc -p tsconfig.ui.json --noEmit && tsc -p tsconfig.scripts.json --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
     "clean": "rm -rf dist .turbo .vitest-cache"

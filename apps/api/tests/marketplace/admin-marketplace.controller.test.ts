@@ -61,8 +61,8 @@ describe('AdminMarketplaceController.installPackage', () => {
     const ctrl = makeController({ install });
     await ctrl.installPackage(userWith(['super_admin']), Buffer.from('payload'));
     expect(installCalls).toHaveLength(1);
-    expect(installCalls[0].userId).toBe('u-1');
-    expect(installCalls[0].buffer.toString()).toBe('payload');
+    expect(installCalls[0]!.userId).toBe('u-1');
+    expect(installCalls[0]!.buffer.toString()).toBe('payload');
   });
 });
 
@@ -93,7 +93,7 @@ describe('AdminMarketplaceController.list', () => {
     const out = await ctrl.list(userWith(['super_admin']), 'installed', 'didacta');
     expect(installed.list).toHaveBeenCalledWith({ status: 'INSTALLED', vendor: 'DIDACTA' });
     expect(out.modules).toHaveLength(1);
-    expect(out.modules[0].name).toBe('mod.example');
+    expect(out.modules[0]!.name).toBe('mod.example');
     expect(out.modules[0]).not.toHaveProperty('manifestJson'); // no exponemos el JSON crudo
   });
 });

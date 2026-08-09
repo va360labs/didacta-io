@@ -14,7 +14,7 @@ const CREDS = { accountId: 'acc', clientId: 'cid', clientSecret: 'secret' };
 
 const INPUT = {
   topic: 'Masterclass',
-  startTime: new Date('2026-08-03T14:00:00.000Z'),
+  startTime: new Date('2026-08-03T14:00:00.000Z').toISOString(),
   durationMinutes: 90,
   timezone: 'Europe/Madrid',
   hostEmail: 'anfitrion@example.com',

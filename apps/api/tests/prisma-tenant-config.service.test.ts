@@ -91,14 +91,14 @@ function makeFakePrisma() {
           : {}),
       };
       if (idx >= 0) {
-        rows[idx] = { ...rows[idx], ...normalizedUpdate, updatedAt: now };
+        rows[idx] = { ...rows[idx]!, ...normalizedUpdate, updatedAt: now };
         return rows[idx];
       }
+      // tenantId/moduleName/key NO se ponen aquí: `args.create` los trae
+      // siempre (su tipo los declara obligatorios) y el spread de abajo los
+      // pisaba, así que ponerlos era código muerto.
       const row: SettingRow = {
         id: String(nextId++),
-        tenantId,
-        moduleName,
-        key,
         isSecret: false,
         valueJson: null,
         valueCipher: null,
@@ -171,11 +171,11 @@ describe('PrismaTenantConfigService', () => {
     it('persiste en valueJson y NO en valueCipher cuando isSecret=false', async () => {
       await svc.set(TENANT_A, 'mod', 'k', { foo: 'bar' });
       const row = prisma._rows[0];
-      expect(row.isSecret).toBe(false);
-      expect(row.valueJson).toEqual({ foo: 'bar' });
-      expect(row.valueCipher).toBeNull();
-      expect(row.valueIv).toBeNull();
-      expect(row.valueTag).toBeNull();
+      expect(row!.isSecret).toBe(false);
+      expect(row!.valueJson).toEqual({ foo: 'bar' });
+      expect(row!.valueCipher).toBeNull();
+      expect(row!.valueIv).toBeNull();
+      expect(row!.valueTag).toBeNull();
     });
 
     it('un set posterior overridea el anterior', async () => {
@@ -198,13 +198,13 @@ describe('PrismaTenantConfigService', () => {
         },
       );
       const row = prisma._rows[0];
-      expect(row.isSecret).toBe(true);
-      expect(row.valueJson).toBeNull();
-      expect(row.valueCipher).not.toBeNull();
-      expect(row.valueIv).toHaveLength(12);
-      expect(row.valueTag).toHaveLength(16);
+      expect(row!.isSecret).toBe(true);
+      expect(row!.valueJson).toBeNull();
+      expect(row!.valueCipher).not.toBeNull();
+      expect(row!.valueIv).toHaveLength(12);
+      expect(row!.valueTag).toHaveLength(16);
       // El ciphertext NO debe contener el plaintext en claro
-      expect(row.valueCipher!.toString('utf8')).not.toContain('p4ss!');
+      expect(row!.valueCipher!.toString('utf8')).not.toContain('p4ss!');
     });
 
     it('get descifra transparentemente', async () => {
@@ -217,20 +217,20 @@ describe('PrismaTenantConfigService', () => {
       await svc.set(TENANT_A, 'mod', 'k', 'old-secret', { isSecret: true });
       await svc.set(TENANT_A, 'mod', 'k', 'now-public', { isSecret: false });
       const row = prisma._rows[0];
-      expect(row.isSecret).toBe(false);
-      expect(row.valueJson).toBe('now-public');
-      expect(row.valueCipher).toBeNull();
-      expect(row.valueIv).toBeNull();
-      expect(row.valueTag).toBeNull();
+      expect(row!.isSecret).toBe(false);
+      expect(row!.valueJson).toBe('now-public');
+      expect(row!.valueCipher).toBeNull();
+      expect(row!.valueIv).toBeNull();
+      expect(row!.valueTag).toBeNull();
     });
 
     it('cambiar de no-secret a secret limpia valueJson', async () => {
       await svc.set(TENANT_A, 'mod', 'k', 'public');
       await svc.set(TENANT_A, 'mod', 'k', 'now-secret', { isSecret: true });
       const row = prisma._rows[0];
-      expect(row.isSecret).toBe(true);
-      expect(row.valueJson).toBeNull();
-      expect(row.valueCipher).not.toBeNull();
+      expect(row!.isSecret).toBe(true);
+      expect(row!.valueJson).toBeNull();
+      expect(row!.valueCipher).not.toBeNull();
     });
   });
 
@@ -246,9 +246,9 @@ describe('PrismaTenantConfigService', () => {
       const a = await svc.list(TENANT_A);
       const b = await svc.list(TENANT_B);
       expect(a).toHaveLength(1);
-      expect(a[0].key).toBe('k1');
+      expect(a[0]!.key).toBe('k1');
       expect(b).toHaveLength(1);
-      expect(b[0].key).toBe('k2');
+      expect(b[0]!.key).toBe('k2');
     });
   });
 
@@ -270,7 +270,7 @@ describe('PrismaTenantConfigService', () => {
       await svc.set(TENANT_A, 'zoom', 'k2', 'v2');
       const onlyNotif = await svc.list(TENANT_A, 'notifications');
       expect(onlyNotif).toHaveLength(1);
-      expect(onlyNotif[0].moduleName).toBe('notifications');
+      expect(onlyNotif[0]!.moduleName).toBe('notifications');
     });
 
     it('has devuelve true/false correctamente', async () => {
@@ -325,7 +325,7 @@ describe('PrismaTenantConfigService', () => {
 
     it('audit metadata incluye flag isSecret', async () => {
       await svc.set(TENANT_A, 'mod', 'k', 'v', { isSecret: true });
-      expect(audit.entries[0].metadata).toMatchObject({ isSecret: true });
+      expect(audit.entries[0]!.metadata).toMatchObject({ isSecret: true });
     });
   });
 });

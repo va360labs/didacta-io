@@ -81,7 +81,17 @@ function makeService(allUsers: SeedUser[]) {
   const noopLogger = { warn: vi.fn(), log: vi.fn(), error: vi.fn(), debug: vi.fn() } as never;
 
   return {
-    service: new AdminUsersService(prisma, noopAudit, noopReset, noopLogger),
+    service: new AdminUsersService(
+      prisma,
+      noopAudit,
+      noopReset,
+      noopLogger,
+      // accountState y accessGroups no participan en `list()`. Se pasan
+      // explícitamente para que la aridad del constructor quede cubierta por
+      // el typecheck (mismo criterio que admin-users-invite.test.ts).
+      undefined as never,
+      undefined as never,
+    ),
     userCount,
     userFindMany,
   };

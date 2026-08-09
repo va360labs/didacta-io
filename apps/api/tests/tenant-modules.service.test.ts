@@ -148,13 +148,19 @@ function setup(modules: DidactaModule[], tenantExists = true) {
 
   const auditLog = {
     record: vi.fn(async () => {}),
-  } as never;
+  };
 
   const accessCache = {
     invalidate: vi.fn(),
   } as never;
 
-  const service = new TenantModulesService(prisma, registryService, factory, auditLog, accessCache);
+  const service = new TenantModulesService(
+    prisma,
+    registryService,
+    factory,
+    auditLog as never,
+    accessCache,
+  );
 
   return {
     service,
@@ -337,6 +343,6 @@ describe('TenantModulesService · módulos categoría core', () => {
     const modules = [fakeModule('mod.a')];
     const { service } = setup(modules);
     const list = await service.list('t1');
-    expect(list[0].isCore).toBe(false);
+    expect(list[0]!.isCore).toBe(false);
   });
 });

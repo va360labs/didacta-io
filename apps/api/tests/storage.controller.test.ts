@@ -20,6 +20,7 @@ function makeUser(overrides: Partial<SessionClaims> = {}): SessionClaims {
     tenantId: 'tenant-1',
     roles: ['formador'],
     email: 'foo@example.com',
+    mfaVerified: true,
     ...(overrides as Record<string, unknown>),
   } as SessionClaims;
 }

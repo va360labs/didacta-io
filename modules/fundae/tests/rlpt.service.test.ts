@@ -89,7 +89,7 @@ function makeFakePrisma(opts: { companies?: CompanyRow[] } = {}) {
           updatedAt: now,
           deletedAt: null,
           evidence: { hash: 'hash-placeholder', size: BigInt(0) },
-          ...(args.data as RlptRow),
+          ...args.data,
         };
         rlptRows.push(row);
         return row;
@@ -108,7 +108,7 @@ function makeFakePrisma(opts: { companies?: CompanyRow[] } = {}) {
   };
 }
 
-function makeCtx(): never {
+function makeCtx() {
   return {
     logger: {
       debug: vi.fn(),
@@ -127,7 +127,7 @@ function makeCtx(): never {
         storageKey: 'evidence/x',
       })),
     },
-  } as never;
+  };
 }
 
 describe('FundaeRlptService.upload', () => {
@@ -136,7 +136,7 @@ describe('FundaeRlptService.upload', () => {
       companies: [{ id: 'c-1', tenantId: 't-1', deletedAt: null }],
     });
     const ctx = makeCtx();
-    const svc = new FundaeRlptService(prisma as never, ctx);
+    const svc = new FundaeRlptService(prisma as never, ctx as never);
 
     const fecha = new Date('2026-04-01T10:00:00.000Z');
     const view = await svc.upload({
@@ -159,7 +159,7 @@ describe('FundaeRlptService.upload', () => {
     const prisma = makeFakePrisma({
       companies: [{ id: 'c-1', tenantId: 't-1', deletedAt: null }],
     });
-    const svc = new FundaeRlptService(prisma as never, makeCtx());
+    const svc = new FundaeRlptService(prisma as never, makeCtx() as never);
     const fecha = '2026-04-15T10:00:00.000Z';
     const view = await svc.upload({
       tenantId: 't-1',
@@ -173,7 +173,7 @@ describe('FundaeRlptService.upload', () => {
 
   it('rechaza con CompanyNotFoundError si la empresa no existe en el tenant', async () => {
     const prisma = makeFakePrisma({ companies: [] });
-    const svc = new FundaeRlptService(prisma as never, makeCtx());
+    const svc = new FundaeRlptService(prisma as never, makeCtx() as never);
     await expect(
       svc.upload({
         tenantId: 't-1',
@@ -190,7 +190,7 @@ describe('FundaeRlptService.upload', () => {
       companies: [{ id: 'c-1', tenantId: 't-1', deletedAt: null }],
     });
     const ctx = makeCtx();
-    const svc = new FundaeRlptService(prisma as never, ctx);
+    const svc = new FundaeRlptService(prisma as never, ctx as never);
     await svc.upload({
       tenantId: 't-1',
       companyId: 'c-1',
@@ -209,7 +209,7 @@ describe('FundaeRlptService.assertGroupCanStart', () => {
     const prisma = makeFakePrisma({
       companies: [{ id: 'c-1', tenantId: 't-1', deletedAt: null }],
     });
-    const svc = new FundaeRlptService(prisma as never, makeCtx());
+    const svc = new FundaeRlptService(prisma as never, makeCtx() as never);
     await expect(
       svc.assertGroupCanStart({ tenantId: 't-1', companyId: 'c-1' }),
     ).rejects.toBeInstanceOf(RlptNotificacionInicialMissingError);
@@ -219,7 +219,7 @@ describe('FundaeRlptService.assertGroupCanStart', () => {
     const prisma = makeFakePrisma({
       companies: [{ id: 'c-1', tenantId: 't-1', deletedAt: null }],
     });
-    const svc = new FundaeRlptService(prisma as never, makeCtx());
+    const svc = new FundaeRlptService(prisma as never, makeCtx() as never);
     const fechaNotif = new Date('2026-04-29T10:00:00.000Z');
     await svc.upload({
       tenantId: 't-1',
@@ -239,7 +239,7 @@ describe('FundaeRlptService.assertGroupCanStart', () => {
     const prisma = makeFakePrisma({
       companies: [{ id: 'c-1', tenantId: 't-1', deletedAt: null }],
     });
-    const svc = new FundaeRlptService(prisma as never, makeCtx());
+    const svc = new FundaeRlptService(prisma as never, makeCtx() as never);
     const fechaNotif = new Date('2026-04-01T10:00:00.000Z');
     await svc.upload({
       tenantId: 't-1',
@@ -258,7 +258,7 @@ describe('FundaeRlptService.assertGroupCanStart', () => {
     const prisma = makeFakePrisma({
       companies: [{ id: 'c-1', tenantId: 't-1', deletedAt: null }],
     });
-    const svc = new FundaeRlptService(prisma as never, makeCtx());
+    const svc = new FundaeRlptService(prisma as never, makeCtx() as never);
     const hoy = new Date('2026-04-29T10:00:00.000Z');
     await svc.upload({
       tenantId: 't-1',
@@ -286,7 +286,7 @@ describe('FundaeRlptService.list / get / softDelete', () => {
     const prisma = makeFakePrisma({
       companies: [{ id: 'c-1', tenantId: 't-1', deletedAt: null }],
     });
-    const svc = new FundaeRlptService(prisma as never, makeCtx());
+    const svc = new FundaeRlptService(prisma as never, makeCtx() as never);
     const a = await svc.upload({
       tenantId: 't-1',
       companyId: 'c-1',
@@ -311,7 +311,7 @@ describe('FundaeRlptService.list / get / softDelete', () => {
 
   it('get rechaza con RlptNotFoundError si la id es desconocida', async () => {
     const prisma = makeFakePrisma();
-    const svc = new FundaeRlptService(prisma as never, makeCtx());
+    const svc = new FundaeRlptService(prisma as never, makeCtx() as never);
     await expect(svc.get('t-1', 'no-existe')).rejects.toBeInstanceOf(RlptNotFoundError);
   });
 
@@ -319,7 +319,7 @@ describe('FundaeRlptService.list / get / softDelete', () => {
     const prisma = makeFakePrisma({
       companies: [{ id: 'c-1', tenantId: 't-1', deletedAt: null }],
     });
-    const svc = new FundaeRlptService(prisma as never, makeCtx());
+    const svc = new FundaeRlptService(prisma as never, makeCtx() as never);
     const created = await svc.upload({
       tenantId: 't-1',
       companyId: 'c-1',

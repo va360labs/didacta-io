@@ -96,11 +96,11 @@ describe('BillingPublicController — catálogo público', () => {
     const result = await controller.catalog(req());
 
     expect(result.courses).toHaveLength(1);
-    expect(result.courses[0].slug).toBe('curso-uno');
-    expect(result.courses[0].options).toBe(options);
+    expect(result.courses[0]!.slug).toBe('curso-uno');
+    expect(result.courses[0]!.options).toBe(options);
     // La query al core filtra por tenant y estado publicado (nunca borrados).
     const where = (prisma as never as { modCoursesCourse: { findMany: ReturnType<typeof vi.fn> } })
-      .modCoursesCourse.findMany.mock.calls[0][0].where;
+      .modCoursesCourse.findMany.mock.calls[0]![0].where;
     expect(where).toMatchObject({ tenantId: TENANT, status: 'PUBLISHED', deletedAt: null });
   });
 });
@@ -162,7 +162,7 @@ describe('BillingPublicController — checkout anónimo', () => {
     // Al visitante solo se le devuelve lo que necesita para redirigir.
     expect(result).toEqual({ url: 'https://stripe/cs_1', sessionId: 'cs_1' });
     const args = (billing as { startCheckout: ReturnType<typeof vi.fn> }).startCheckout.mock
-      .calls[0][0];
+      .calls[0]![0];
     expect(args.userId).toBeNull();
     expect(args.userEmail).toBe('visitante@example.com');
     expect(args.optionId).toBe('33333333-3333-4333-8333-333333333333');

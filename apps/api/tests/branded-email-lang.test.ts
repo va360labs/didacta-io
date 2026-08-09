@@ -119,7 +119,10 @@ async function sentHtml(locale: string): Promise<string> {
   // comprobar.
   process.env['WEB_PUBLIC_URL'] = 'https://demo.test';
   const prisma = makePrisma(locale);
-  const send = vi.fn(async () => ({ ok: true, messageId: '<id>' }));
+  const send = vi.fn(async (_config: unknown, _message: { html: string }) => ({
+    ok: true,
+    messageId: '<id>',
+  }));
   const smtp = {
     parseConfig: (raw: unknown) => raw,
     isConfigValid: () => true,

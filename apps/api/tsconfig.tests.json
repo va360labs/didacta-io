@@ -1,0 +1,21 @@
+{
+  "//": "Typecheck de TODO lo que no entra en el build. `tsconfig.json` es el config de build (nest-cli lo usa para emitir a dist/) y por eso se limita a src/**. Este config añade tests/ y scripts/ para que `tsc --noEmit` los cubra: sin él, una firma cambiada en src rompe los tests en silencio y solo se ve en runtime (y solo si el test ejercita esa ruta).",
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    // `tsconfig.json` compila a CommonJS porque eso es lo que ejecuta
+    // producción. Los tests NO: vitest los transforma con swc a ES modules
+    // (`module: { type: 'es6' }` en vitest.config.ts), así que `import.meta`
+    // es legal en runtime. Con CommonJS aquí, tsc lo rechazaría (TS1343)
+    // pese a funcionar. ES2022 es el módulo que realmente corren.
+    "module": "ES2022",
+    // Los tests viven fuera de `rootDir: ./src`; sin ensancharlo, tsc
+    // rechaza el programa entero.
+    "rootDir": ".",
+    // Buildinfo aparte: `tsconfig.json` lo escribe en dist/ y nest-cli borra
+    // ese directorio en cada build. Compartirlo dejaría dist vacío.
+    "incremental": false
+  },
+  "include": ["src/**/*", "tests/**/*", "scripts/**/*.ts"],
+  "exclude": ["node_modules", "dist"]
+}

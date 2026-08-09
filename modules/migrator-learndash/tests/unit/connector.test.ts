@@ -21,7 +21,7 @@ describe('ApplicationPasswordAuth', () => {
     const auth = new ApplicationPasswordAuth('admin', 'app pass word');
     const header = auth.headers().Authorization;
     expect(header).toMatch(/^Basic /);
-    const decoded = Buffer.from(header.replace('Basic ', ''), 'base64').toString('utf8');
+    const decoded = Buffer.from(header!.replace('Basic ', ''), 'base64').toString('utf8');
     expect(decoded).toBe('admin:app pass word');
   });
 

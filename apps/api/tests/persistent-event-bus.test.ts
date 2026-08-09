@@ -168,8 +168,8 @@ describe('PersistentEventBus', () => {
 
     expect(handler).toHaveBeenCalledOnce();
     const row = [...prisma._rows.values()][0];
-    expect(row.processedAt).toBeInstanceOf(Date);
-    expect(row.processingAttempts).toBe(0);
+    expect(row!.processedAt).toBeInstanceOf(Date);
+    expect(row!.processingAttempts).toBe(0);
   });
 
   it('abre el contexto ALS del tenant del evento alrededor de los handlers (RLS F1)', async () => {
@@ -267,7 +267,7 @@ describe('PersistentEventBus', () => {
       const row = [...prisma._rows.values()][0]!;
       expect(row.lastError).toBe('NO_HANDLER: billing.order.completed');
 
-      const bridge = vi.fn(async () => {});
+      const bridge = vi.fn(async (_event: unknown) => {});
       bus.subscribe('billing.order.completed', bridge);
 
       const result = await bus.replayUndelivered();
@@ -285,7 +285,7 @@ describe('PersistentEventBus', () => {
     it('no re-entrega dos veces: tras el replay la fila ya no es elegible', async () => {
       const bus = new PersistentEventBus(prisma as never, silentLogger);
       await bus.publish(makeEvent('billing.order.completed', {}, 'idem-once'));
-      const bridge = vi.fn(async () => {});
+      const bridge = vi.fn(async (_event: unknown) => {});
       bus.subscribe('billing.order.completed', bridge);
 
       await bus.replayUndelivered();
@@ -315,7 +315,7 @@ describe('PersistentEventBus', () => {
       // no puede desencadenar una re-entrega masiva de historia.
       row.createdAt = new Date(Date.now() - NO_HANDLER_REPLAY_WINDOW_MS - 60_000);
 
-      const bridge = vi.fn(async () => {});
+      const bridge = vi.fn(async (_event: unknown) => {});
       bus.subscribe('billing.order.completed', bridge);
 
       const result = await bus.replayUndelivered();
@@ -352,9 +352,9 @@ describe('PersistentEventBus', () => {
     await bus.publish(makeEvent('learning.course.completed'));
 
     const row = [...prisma._rows.values()][0];
-    expect(row.processedAt).toBeNull();
-    expect(row.processingAttempts).toBe(1);
-    expect(row.lastError).toContain('boom');
+    expect(row!.processedAt).toBeNull();
+    expect(row!.processingAttempts).toBe(1);
+    expect(row!.lastError).toContain('boom');
   });
 
   it('upsert por idempotencyKey: no duplica si llega el mismo evento dos veces', async () => {
@@ -390,7 +390,7 @@ describe('PersistentEventBus', () => {
     expect(result.processed).toBe(1);
     expect(ok).toHaveBeenCalledOnce();
     const row = [...prisma._rows.values()][0];
-    expect(row.processedAt).toBeInstanceOf(Date);
+    expect(row!.processedAt).toBeInstanceOf(Date);
   });
 
   describe('con OutboxDispatcher async (BullMQ)', () => {
@@ -405,7 +405,7 @@ describe('PersistentEventBus', () => {
       expect(handler).not.toHaveBeenCalled(); // delegó a la queue
       expect(dispatcher.enqueued).toHaveLength(1);
       const row = [...prisma._rows.values()][0];
-      expect(row.processedAt).toBeNull(); // queda pendiente hasta que el worker lo procese
+      expect(row!.processedAt).toBeNull(); // queda pendiente hasta que el worker lo procese
     });
 
     it('dispatcher.enabled=false hace fallback a in-process', async () => {
@@ -436,7 +436,7 @@ describe('PersistentEventBus', () => {
 
       expect(handler).toHaveBeenCalledOnce();
       const row = [...prisma._rows.values()][0];
-      expect(row.processedAt).toBeInstanceOf(Date);
+      expect(row!.processedAt).toBeInstanceOf(Date);
     });
 
     it('processOutboxId ejecuta los handlers para una fila pendiente', async () => {
@@ -446,7 +446,7 @@ describe('PersistentEventBus', () => {
       bus.subscribe('learning.course.completed', handler);
 
       await bus.publish(makeEvent('learning.course.completed', {}, 'idem-proc'));
-      const [row] = [...prisma._rows.values()];
+      const row = [...prisma._rows.values()][0]!;
       expect(row.processedAt).toBeNull();
 
       // Simulamos al worker BullMQ levantando el job
@@ -463,7 +463,7 @@ describe('PersistentEventBus', () => {
       bus.subscribe('learning.course.completed', handler);
 
       await bus.publish(makeEvent('learning.course.completed', {}, 'idem-i'));
-      const [row] = [...prisma._rows.values()];
+      const row = [...prisma._rows.values()][0]!;
       await bus.processOutboxId(row.id);
       expect(handler).toHaveBeenCalledTimes(1);
 
@@ -479,7 +479,7 @@ describe('PersistentEventBus', () => {
       });
 
       await bus.publish(makeEvent('learning.course.completed', {}, 'idem-throw'));
-      const [row] = [...prisma._rows.values()];
+      const row = [...prisma._rows.values()][0]!;
 
       await expect(bus.processOutboxId(row.id)).rejects.toThrow(/outbox dispatch falló/);
       expect(row.processedAt).toBeNull();
@@ -491,7 +491,7 @@ describe('PersistentEventBus', () => {
       const bus = new PersistentEventBus(prisma as never, silentLogger, dispatcher);
 
       await bus.publish(makeEvent('nadie.escucha', {}, 'idem-nohandler-q'));
-      const [row] = [...prisma._rows.values()];
+      const row = [...prisma._rows.values()][0]!;
 
       // Lanzar haría que BullMQ reintentara 5 veces con backoff CADA evento sin
       // consumidor. Reintentar contra un set de handlers vacío no arregla nada:
@@ -514,7 +514,7 @@ describe('PersistentEventBus', () => {
         throw new Error('first fail');
       });
       await bus.publish(makeEvent('learning.course.completed', {}, 'idem-rec-q'));
-      const [row] = [...prisma._rows.values()];
+      const row = [...prisma._rows.values()][0]!;
       expect(row.processedAt).toBeNull();
 
       // Ahora Redis vuelve, recoverPending debería reencolar (no procesar local)
@@ -536,7 +536,7 @@ describe('PersistentEventBus', () => {
 
       dispatcher.enabled = false;
       await bus.publish(makeEvent('learning.course.completed', {}, 'idem-dedup'));
-      const [row] = [...prisma._rows.values()];
+      const row = [...prisma._rows.values()][0]!;
       row.processedAt = null; // pendiente, como si el despacho original no hubiera ido
 
       dispatcher.enabled = true;
