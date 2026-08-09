@@ -50,14 +50,14 @@ describe('escapeHtml', () => {
 
 describe('buildOtpEmail', () => {
   it('incluye el código tanto en text como en html', () => {
-    const { subject, text, html } = buildOtpEmail('482913', branding());
+    const { subject, text, html } = buildOtpEmail('482913', branding(), 'es-ES');
     expect(subject).toBe('Tu código de acceso');
     expect(text).toContain('482913');
     expect(html).toContain('482913');
   });
 
   it('firma con el nombre del tenant', () => {
-    const custom = buildOtpEmail('000000', branding('Academia Demo'));
+    const custom = buildOtpEmail('000000', branding('Academia Demo'), 'es-ES');
     expect(custom.text).toContain('Academia Demo');
     expect(custom.html).toContain('Academia Demo');
     // Footer discreto con la marca de la plataforma.
@@ -65,7 +65,7 @@ describe('buildOtpEmail', () => {
   });
 
   it('escapa el tenantName en el html', () => {
-    const { html } = buildOtpEmail('000000', branding('A & B'));
+    const { html } = buildOtpEmail('000000', branding('A & B'), 'es-ES');
     expect(html).toContain('A &amp; B');
   });
 });
@@ -301,6 +301,7 @@ describe('buildWelcomeEmail', () => {
       'Alex',
       'https://didacta.io/signin',
       branding('Academia Demo'),
+      'es-ES',
     );
     expect(subject).toContain('Academia Demo');
     expect(text).toContain('Hola Alex,');
@@ -308,14 +309,14 @@ describe('buildWelcomeEmail', () => {
   });
 
   it('usa saludo genérico cuando no hay nombre', () => {
-    const { text } = buildWelcomeEmail('', 'https://didacta.io/signin', branding());
+    const { text } = buildWelcomeEmail('', 'https://didacta.io/signin', branding(), 'es-ES');
     expect(text).toContain('Hola,');
   });
 });
 
 describe('buildRejectionEmail', () => {
   it('incluye el saludo con nombre y el tenantName', () => {
-    const { text, subject } = buildRejectionEmail('Alex', branding('Academia Demo'));
+    const { text, subject } = buildRejectionEmail('Alex', branding('Academia Demo'), 'es-ES');
     expect(subject).toContain('Academia Demo');
     expect(text).toContain('Hola Alex,');
     expect(text).toContain('Academia Demo');

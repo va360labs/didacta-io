@@ -13,7 +13,7 @@ import {
 import { Queue, Worker, type ConnectionOptions } from 'bullmq';
 import IORedis, { type Redis } from 'ioredis';
 import { Logger as PinoLogger } from 'nestjs-pino';
-import type { SubscriberToWarn, UpcomingRenewal } from '@didacta/mod-payment-connections';
+import type { UpcomingRenewal } from '@didacta/mod-payment-connections';
 import { runAsTenant, runSanctionedGlobalAccess } from '../../tenancy/tenant-context.storage';
 import { ModuleRegistryService } from '../module-registry.service';
 import { SmtpAdapterService, type SmtpConfig } from '../smtp-adapter.service';
@@ -28,7 +28,15 @@ import {
 } from '../../common/branded-email';
 import {
   applyEmailOverride,
+  emailDateLocale,
   fetchEmailOverride,
+  HUB_DEFAULT_LOCALE,
+  interpolate,
+  resolveFixedEmailCopy,
+  resolveRecipientLocale,
+  resolveTransactionalDefault,
+  toHubTemplateLang,
+  type RawEmailOverride,
   type TemplateOverridePrisma,
 } from '../notifications/email-template-catalog';
 
@@ -39,6 +47,10 @@ const REPEAT_PATTERN = process.env['SUBSCRIPTIONS_DAILY_CRON'] ?? '0 9 * * *';
 const REPEAT_TZ = process.env['SUBSCRIPTIONS_DAILY_TZ'] ?? 'UTC';
 /** Ventana del resumen + del aviso previo (días antes de la renovación/caducidad). */
 const WINDOW_DAYS = Math.max(1, Number(process.env['SUBSCRIPTIONS_RENEWAL_WINDOW_DAYS'] ?? 7));
+/** Keys de este worker en el catálogo de plantillas del producto. */
+const DIGEST_TEMPLATE_KEY = 'subscriptions.admin_digest';
+const RENEWAL_TEMPLATE_KEY = 'subscriptions.renewal_warning';
+const ACCESS_EXPIRING_TEMPLATE_KEY = 'payment_connections.access_expiring';
 
 type JobData = Record<string, never>;
 
@@ -158,6 +170,37 @@ export class SubscriptionsDailyWorker implements OnApplicationBootstrap, OnModul
     }
   }
 
+  /**
+   * Idioma de cada destinatario a partir de su fila en `user`, en UNA consulta
+   * por lote (no una por email).
+   *
+   * CAMINO DEGRADADO NOMBRADO: los destinatarios de este worker son emails
+   * arbitrarios —un suscriptor de Stripe o un comprador de WooCommerce puede no
+   * ser usuario de la plataforma—, así que quien no tenga fila cae a
+   * `HUB_DEFAULT_LOCALE`. Si la consulta revienta, TODOS caen ahí y el aviso
+   * sale igual: perder el idioma es aceptable, perder el aviso no.
+   */
+  private async localesByEmail(
+    tenantId: string,
+    emails: readonly string[],
+  ): Promise<Map<string, string>> {
+    const out = new Map<string, string>();
+    if (emails.length === 0) return out;
+    try {
+      const rows = await this.prisma.user.findMany({
+        where: { tenantId, email: { in: [...new Set(emails)] } },
+        select: { email: true, locale: true },
+      });
+      for (const r of rows) out.set(r.email, resolveRecipientLocale(r.locale));
+    } catch (err) {
+      this.logger.warn(
+        { tenantId, err: err instanceof Error ? err.message : String(err) },
+        'subscriptions daily: no se pudo leer el idioma de los destinatarios',
+      );
+    }
+    return out;
+  }
+
   private async sendAdminDigest(
     service: ReturnType<ModuleRegistryService['getPaymentConnectionsService']>,
     config: SmtpConfig,
@@ -170,49 +213,65 @@ export class SubscriptionsDailyWorker implements OnApplicationBootstrap, OnModul
     ]);
     if (adminEmails.length === 0) return;
 
-    const lines = upcoming.length
-      ? upcoming.map((u) => `· ${describeUpcoming(u)}`).join('\n')
-      : `Ninguna en los próximos ${WINDOW_DAYS} días.`;
-
-    // alpha.83 — subject/cuerpo personalizables per-tenant desde /admin/emails.
-    const override = await fetchEmailOverride(
-      this.prisma as unknown as TemplateOverridePrisma,
-      tenantId,
-      'subscriptions.admin_digest',
-    );
-    let subject = `Resumen de suscripciones — ${activeCount} activas, ${upcoming.length} próximas (${WINDOW_DAYS} días)`;
-    let bodyText =
-      `Suscripciones activas: ${activeCount}\n\n` +
-      `Próximas a renovarse/caducar (${WINDOW_DAYS} días):\n${lines}`;
-    let title = 'Resumen de suscripciones';
-    if (override) {
-      const applied = applyEmailOverride(
-        override,
-        {
-          activeCount,
-          upcomingCount: upcoming.length,
-          windowDays: WINDOW_DAYS,
-          upcomingList: lines,
-          tenantName: branding.tenantName,
-        },
-        subject,
-      );
-      subject = applied.subject;
-      bodyText = applied.bodyText;
-      title = applied.subject;
-    }
-    const { html, text } = renderBrandedEmail(branding, {
-      // Monolingüe: este emisor todavía solo redacta español.
-      lang: 'es',
-      title,
-      bodyHtml: textToHtmlParagraphs(bodyText),
-      bodyText,
-    });
-
+    // Cada admin lo lee en SU idioma, así que el digest se compone una vez por
+    // idioma presente (no una por admin) y se manda a los suyos.
+    const localeOf = await this.localesByEmail(tenantId, adminEmails);
+    const byLocale = new Map<string, string[]>();
     for (const to of adminEmails) {
-      const r = await this.smtp.send(config, { to, subject, text, html }, branding.tenantName);
-      if (!r.ok) {
-        this.logger.warn({ tenantId, to, err: r.error }, 'subscriptions daily: digest admin falló');
+      const locale = localeOf.get(to) ?? HUB_DEFAULT_LOCALE;
+      byLocale.set(locale, [...(byLocale.get(locale) ?? []), to]);
+    }
+
+    for (const [locale, recipients] of byLocale) {
+      const lines = upcoming.length
+        ? upcoming.map((u) => `· ${describeUpcoming(u, locale)}`).join('\n')
+        : interpolate(resolveFixedEmailCopy('value.no_upcoming_renewals', locale), {
+            windowDays: WINDOW_DAYS,
+          });
+      const vars = {
+        activeCount,
+        upcomingCount: upcoming.length,
+        windowDays: WINDOW_DAYS,
+        upcomingList: lines,
+        tenantName: branding.tenantName,
+      };
+      // alpha.83 — subject/cuerpo personalizables per-tenant desde /admin/emails,
+      // primero en el idioma del admin y si no en el de referencia (misma
+      // precedencia que el hub).
+      const override = await fetchEmailOverride(
+        this.prisma as unknown as TemplateOverridePrisma,
+        tenantId,
+        DIGEST_TEMPLATE_KEY,
+        locale,
+      );
+      // El cuerpo se renderiza DESDE el catálogo en los dos idiomas: el default
+      // español de esta key es espejo byte a byte del copy que este worker
+      // redactaba a mano, así que composer y catálogo no pueden divergir.
+      const def = resolveTransactionalDefault(DIGEST_TEMPLATE_KEY, locale)!;
+      let subject = interpolate(def.subject ?? '', vars);
+      let bodyText = interpolate(def.body, vars);
+      let title = resolveFixedEmailCopy('title.subscriptions_digest', locale);
+      if (override) {
+        const applied = applyEmailOverride(override, vars, subject);
+        subject = applied.subject;
+        bodyText = applied.bodyText;
+        title = applied.subject;
+      }
+      const { html, text } = renderBrandedEmail(branding, {
+        lang: toHubTemplateLang(locale),
+        title,
+        bodyHtml: textToHtmlParagraphs(bodyText),
+        bodyText,
+      });
+
+      for (const to of recipients) {
+        const r = await this.smtp.send(config, { to, subject, text, html }, branding.tenantName);
+        if (!r.ok) {
+          this.logger.warn(
+            { tenantId, to, err: r.error },
+            'subscriptions daily: digest admin falló',
+          );
+        }
       }
     }
   }
@@ -227,43 +286,67 @@ export class SubscriptionsDailyWorker implements OnApplicationBootstrap, OnModul
       service.listSubscribersToWarn(tenantId, WINDOW_DAYS),
       service.getCancelPortalUrl(tenantId),
     ]);
-    // alpha.83 — override per-tenant del aviso (un fetch por tenant, no por email).
-    const override = toWarn.length
-      ? await fetchEmailOverride(
-          this.prisma as unknown as TemplateOverridePrisma,
-          tenantId,
-          'subscriptions.renewal_warning',
-        )
-      : null;
+    // El aviso lo lee el SUSCRIPTOR, así que va en su idioma. Un fetch de
+    // idiomas por lote y un fetch de override por idioma distinto (no por
+    // email): el volumen diario es bajo, pero no hace falta castigarlo.
+    const localeOf = await this.localesByEmail(
+      tenantId,
+      toWarn.map((s) => s.userEmail),
+    );
+    const overrideByLocale = new Map<string, RawEmailOverride | null>();
     let sent = 0;
     for (const s of toWarn) {
-      let subject = 'Tu suscripción se renovará pronto';
-      let bodyText = buildWarningBody(s, cancelUrl);
-      if (override) {
-        const applied = applyEmailOverride(
-          override,
-          {
-            plan: s.productName ?? '',
-            renewalDate: fmtDate(s.currentPeriodEnd),
-            amount:
-              s.unitAmount != null
-                ? `${(s.unitAmount / 100).toFixed(2)} ${(s.currency ?? 'eur').toUpperCase()}`
-                : '',
-            cancelUrl: cancelUrl ?? '',
-            tenantName: branding.tenantName,
-          },
-          subject,
+      const locale = localeOf.get(s.userEmail) ?? HUB_DEFAULT_LOCALE;
+      // alpha.83 — override per-tenant del aviso, primero en el idioma del
+      // suscriptor y si no en el de referencia (misma precedencia que el hub).
+      if (!overrideByLocale.has(locale)) {
+        overrideByLocale.set(
+          locale,
+          await fetchEmailOverride(
+            this.prisma as unknown as TemplateOverridePrisma,
+            tenantId,
+            RENEWAL_TEMPLATE_KEY,
+            locale,
+          ),
         );
+      }
+      const override = overrideByLocale.get(locale) ?? null;
+      const vars = {
+        plan: s.productName ?? '',
+        renewalDate: fmtDate(s.currentPeriodEnd, locale),
+        amount:
+          s.unitAmount != null
+            ? `${(s.unitAmount / 100).toFixed(2)} ${(s.currency ?? 'eur').toUpperCase()}`
+            : '',
+        cancelUrl: cancelUrl ?? '',
+        tenantName: branding.tenantName,
+      };
+      // Cuerpo renderizado DESDE el catálogo en los dos idiomas: el default
+      // español de esta key es espejo byte a byte del texto que este worker
+      // redactaba a mano, así que composer y catálogo son el MISMO texto.
+      const def = resolveTransactionalDefault(RENEWAL_TEMPLATE_KEY, locale)!;
+      let subject = interpolate(def.subject ?? '', vars);
+      let bodyText = interpolate(def.body, vars);
+      if (override) {
+        const applied = applyEmailOverride(override, vars, subject);
         subject = applied.subject;
         bodyText = applied.bodyText;
       }
       const { html, text } = renderBrandedEmail(branding, {
-        // Monolingüe: este emisor todavía solo redacta español.
-        lang: 'es',
+        lang: toHubTemplateLang(locale),
         title: subject,
         bodyHtml: textToHtmlParagraphs(bodyText),
         bodyText,
-        ...(cancelUrl ? { cta: { url: cancelUrl, label: 'Gestionar mi suscripción' } } : {}),
+        // Estructural: el override no puede quitar el botón del portal, pero su
+        // etiqueta sale en el idioma del suscriptor.
+        ...(cancelUrl
+          ? {
+              cta: {
+                url: cancelUrl,
+                label: resolveFixedEmailCopy('cta.manage_subscription', locale),
+              },
+            }
+          : {}),
       });
       try {
         const r = await this.smtp.send(
@@ -309,44 +392,61 @@ export class SubscriptionsDailyWorker implements OnApplicationBootstrap, OnModul
     const toWarn = await mirror.listTimedAccessToWarn(tenantId, WINDOW_DAYS);
     if (toWarn.length === 0) return;
 
-    const override = await fetchEmailOverride(
-      this.prisma as unknown as TemplateOverridePrisma,
+    // Lo lee el COMPRADOR: su idioma manda. Como en el aviso de renovación,
+    // un fetch de idiomas por lote y un override por idioma distinto.
+    const localeOf = await this.localesByEmail(
       tenantId,
-      'payment_connections.access_expiring',
+      toWarn.map((a) => a.customerEmail),
     );
+    const overrideByLocale = new Map<string, RawEmailOverride | null>();
 
     let sent = 0;
     for (const a of toWarn) {
-      const producto = a.products.join(', ') || 'tu acceso';
-      const fecha = fmtDate(a.accessEndsAt);
+      const locale = localeOf.get(a.customerEmail) ?? HUB_DEFAULT_LOCALE;
+      if (!overrideByLocale.has(locale)) {
+        overrideByLocale.set(
+          locale,
+          await fetchEmailOverride(
+            this.prisma as unknown as TemplateOverridePrisma,
+            tenantId,
+            ACCESS_EXPIRING_TEMPLATE_KEY,
+            locale,
+          ),
+        );
+      }
+      const override = overrideByLocale.get(locale) ?? null;
+      const producto = a.products.join(', ') || resolveFixedEmailCopy('value.your_access', locale);
+      const fecha = fmtDate(a.accessEndsAt, locale);
+      const vars = {
+        plan: producto,
+        renewalDate: fecha,
+        amount: '',
+        cancelUrl: '',
+        tenantName: branding.tenantName,
+      };
+      const def = resolveTransactionalDefault(ACCESS_EXPIRING_TEMPLATE_KEY, locale)!;
 
-      let subject = `Tu acceso a ${branding.tenantName} termina el ${fecha}`;
+      let subject = interpolate(def.subject ?? '', vars);
+      // El español conserva su texto propio byte a byte (saluda por nombre, que
+      // el default del catálogo no hace); el inglés se renderiza DESDE el
+      // catálogo para que composer y catálogo no puedan divergir.
       let bodyText =
-        `Hola${a.customerName ? ` ${a.customerName}` : ''},\n\n` +
-        `Tu acceso a ${producto} termina el ${fecha}.\n\n` +
-        `A diferencia de una suscripción, este acceso no se renueva solo: ` +
-        `si quieres seguir, tendrás que renovarlo antes de esa fecha.\n\n` +
-        `Si ya lo has renovado, puedes ignorar este mensaje.`;
+        toHubTemplateLang(locale) === 'en'
+          ? interpolate(def.body, vars)
+          : `Hola${a.customerName ? ` ${a.customerName}` : ''},\n\n` +
+            `Tu acceso a ${producto} termina el ${fecha}.\n\n` +
+            `A diferencia de una suscripción, este acceso no se renueva solo: ` +
+            `si quieres seguir, tendrás que renovarlo antes de esa fecha.\n\n` +
+            `Si ya lo has renovado, puedes ignorar este mensaje.`;
 
       if (override) {
-        const applied = applyEmailOverride(
-          override,
-          {
-            plan: producto,
-            renewalDate: fecha,
-            amount: '',
-            cancelUrl: '',
-            tenantName: branding.tenantName,
-          },
-          subject,
-        );
+        const applied = applyEmailOverride(override, vars, subject);
         subject = applied.subject;
         bodyText = applied.bodyText;
       }
 
       const { html, text } = renderBrandedEmail(branding, {
-        // Monolingüe: este emisor todavía solo redacta español.
-        lang: 'es',
+        lang: toHubTemplateLang(locale),
         title: subject,
         bodyHtml: textToHtmlParagraphs(bodyText),
         bodyText,
@@ -410,42 +510,23 @@ export class SubscriptionsDailyWorker implements OnApplicationBootstrap, OnModul
   }
 }
 
-function fmtAmount(unitAmount: number | null, currency: string | null): string {
-  if (unitAmount == null) return '';
-  const value = (unitAmount / 100).toFixed(2);
-  return ` por ${value} ${(currency ?? 'eur').toUpperCase()}`;
-}
-
-function fmtDate(d: Date): string {
-  return new Date(d).toLocaleDateString('es-ES', {
+/**
+ * Fecha larga en el idioma del destinatario. Antes cableaba `es-ES`, así que un
+ * email inglés decía «24 de julio de 2026» en mitad de una frase en inglés.
+ */
+function fmtDate(d: Date, locale: string): string {
+  return new Date(d).toLocaleDateString(emailDateLocale(locale), {
     day: '2-digit',
     month: 'long',
     year: 'numeric',
   });
 }
 
-function describeUpcoming(u: UpcomingRenewal): string {
-  const plan = u.productName ?? 'Suscripción';
+function describeUpcoming(u: UpcomingRenewal, locale: string): string {
+  const plan = u.productName ?? resolveFixedEmailCopy('value.subscription', locale);
   const amount =
     u.unitAmount != null
       ? ` (${(u.unitAmount / 100).toFixed(2)} ${(u.currency ?? 'eur').toUpperCase()})`
       : '';
-  return `${plan}${amount} · ${u.userEmail} · ${fmtDate(u.currentPeriodEnd)}`;
-}
-
-function buildWarningBody(s: SubscriberToWarn, cancelUrl: string | null): string {
-  const plan = s.productName ? ` (${s.productName})` : '';
-  // Si hay portal de cancelación, el enlace va en el botón CTA (no en el cuerpo).
-  const cancelLine = cancelUrl
-    ? `Si no quieres continuar, puedes cancelarla antes de esa fecha con el botón de abajo.`
-    : `Si no quieres continuar, responde a este correo para cancelarla antes de esa fecha.`;
-  return (
-    `Hola,\n\n` +
-    `Tu suscripción${plan} se renovará el ${fmtDate(s.currentPeriodEnd)}${fmtAmount(
-      s.unitAmount,
-      s.currency,
-    )}.\n\n` +
-    `${cancelLine}\n\n` +
-    `Si quieres seguir, no tienes que hacer nada.`
-  );
+  return `${plan}${amount} · ${u.userEmail} · ${fmtDate(u.currentPeriodEnd, locale)}`;
 }

@@ -419,21 +419,45 @@ export function resolveHubDefault(key: string, locale?: string | null): Template
 export const FIXED_EMAIL_COPY = {
   es: {
     'cta.hub_enter': 'Entrar a {{tenantName}}',
+    'cta.manage_subscription': 'Gestionar mi suscripción',
     'cta.password_reset': 'Restablecer contraseña',
+    'cta.set_my_password': 'Definir mi contraseña',
     'cta.set_password': 'Define tu contraseña',
+    'cta.signin': 'Entrar',
     'footer.hub_member': 'Recibiste este correo como miembro de {{tenantName}}.',
+    'footer.signin_hint': 'Después podrás iniciar sesión desde {{signinUrl}} con tu email.',
+    'label.otp_code': 'Código',
+    'title.member_rejection': 'Sobre tu inscripción',
+    'title.member_welcome': '¡Bienvenido!',
+    'title.otp_code': 'Tu código de acceso',
     'title.password_reset': 'Restablecer tu contraseña',
     'title.smtp_test': 'Prueba de SMTP',
+    'title.subscriptions_digest': 'Resumen de suscripciones',
+    'value.no_upcoming_renewals': 'Ninguna en los próximos {{windowDays}} días.',
+    'value.subscription': 'Suscripción',
     'value.unknown_tenant_slug': '(desconocido)',
+    'value.your_access': 'tu acceso',
   },
   en: {
     'cta.hub_enter': 'Go to {{tenantName}}',
+    'cta.manage_subscription': 'Manage my subscription',
     'cta.password_reset': 'Reset password',
+    'cta.set_my_password': 'Set my password',
     'cta.set_password': 'Set your password',
+    'cta.signin': 'Sign in',
     'footer.hub_member': 'You received this email as a member of {{tenantName}}.',
+    'footer.signin_hint': 'From then on you can sign in at {{signinUrl}} with your email.',
+    'label.otp_code': 'Code',
+    'title.member_rejection': 'About your registration',
+    'title.member_welcome': 'Welcome!',
+    'title.otp_code': 'Your access code',
     'title.password_reset': 'Reset your password',
     'title.smtp_test': 'SMTP test',
+    'title.subscriptions_digest': 'Subscriptions digest',
+    'value.no_upcoming_renewals': 'None in the next {{windowDays}} days.',
+    'value.subscription': 'Subscription',
     'value.unknown_tenant_slug': '(unknown)',
+    'value.your_access': 'your access',
   },
 } as const satisfies Record<HubTemplateLang, Record<string, string>>;
 
@@ -479,6 +503,90 @@ export const SMTP_SETTINGS_PING: Record<HubTemplateLang, TemplateDef> = {
 /** El ping de SMTP en el idioma del admin que lo dispara. */
 export function resolveSmtpSettingsPing(locale?: string | null): TemplateDef {
   return SMTP_SETTINGS_PING[toHubTemplateLang(locale)];
+}
+
+/**
+ * Locale BCP-47 con el que formatear fechas dentro de un email. Los emails
+ * llevan fechas «bonitas» (`24 de julio de 2026`), y `toLocaleDateString` con
+ * `es-ES` cableado escribía esa fecha en español dentro de un email inglés.
+ *
+ * Devuelve un locale COMPLETO (no el idioma base) porque `Intl` necesita región
+ * para elegir el orden día/mes. Misma lista cerrada que el resto del catálogo:
+ * lo que no sea inglés cae a `HUB_DEFAULT_LOCALE`.
+ */
+export const EMAIL_DATE_LOCALE: Record<HubTemplateLang, string> = {
+  es: HUB_DEFAULT_LOCALE,
+  en: 'en-US',
+};
+
+/** Locale de formateo de fechas para el idioma del destinatario. */
+export function emailDateLocale(locale?: string | null): string {
+  return EMAIL_DATE_LOCALE[toHubTemplateLang(locale)];
+}
+
+/**
+ * Email de INVITACIÓN al aula (`invitation-email.ts`).
+ *
+ * NO tiene entrada en `/admin/emails` — igual que `SMTP_SETTINGS_PING`, y por
+ * la misma razón de alcance: darle una la convertiría en una plantilla
+ * personalizable per-tenant, que es una decisión de PRODUCTO y no de idioma.
+ * Aquí solo se traduce lo que ya existía.
+ *
+ * El copy vive troceado (y no como un `body` único) porque este email tiene
+ * maqueta propia: una lista ordenada de 3 pasos, una nota gris y el enlace
+ * copiable. Troceándolo, los dos idiomas comparten EXACTAMENTE la misma
+ * maqueta y el español sale byte a byte igual que antes.
+ */
+export const INVITATION_EMAIL_COPY = {
+  es: {
+    subject: '{{tenantName}} te ha invitado a su aula',
+    title: 'Tu cuenta ya está lista',
+    // `introHtml` lleva el `<strong>` de la maqueta; `{{tenantName}}` entra YA
+    // escapado (lo escapa el composer), así que interpolarlo no abre XSS.
+    introHtml:
+      '<strong>{{tenantName}}</strong> te ha invitado a su aula y <strong>tu cuenta ya está creada</strong>. No tienes que registrarte: solo elegir una contraseña para entrar por primera vez.',
+    introText:
+      '{{tenantName}} te ha invitado a su aula y tu cuenta ya está creada. No tienes que registrarte: solo elegir una contraseña para entrar por primera vez.',
+    step1: 'Pulsa el botón de abajo: te lleva directo a elegir tu contraseña.',
+    step2: 'Completa tu perfil en un par de pasos.',
+    step3: 'Listo: ya puedes entrar al aula cuando quieras.',
+    validityNote: 'Tarda menos de un minuto · el enlace es personal y vale {{validez}}.',
+    validityText: 'El enlace es personal y vale {{validez}}.',
+    linkFallback: '¿No funciona el botón? Copia este enlace en tu navegador:',
+    help: 'Si te atascas en cualquier paso, responde a este correo y te echamos una mano.',
+    cta: 'Crear mi contraseña y entrar',
+    footerNote: 'Recibes este correo porque {{tenantName}} te ha dado de alta en su aula.',
+    dayOne: 'día',
+    dayMany: 'días',
+  },
+  en: {
+    subject: '{{tenantName}} has invited you to their classroom',
+    title: 'Your account is ready',
+    introHtml:
+      '<strong>{{tenantName}}</strong> has invited you to their classroom and <strong>your account is already created</strong>. You do not have to sign up: you only have to choose a password to get in for the first time.',
+    introText:
+      '{{tenantName}} has invited you to their classroom and your account is already created. You do not have to sign up: you only have to choose a password to get in for the first time.',
+    step1: 'Press the button below: it takes you straight to choosing your password.',
+    step2: 'Complete your profile in a couple of steps.',
+    step3: 'Done: you can enter the classroom whenever you like.',
+    validityNote: 'It takes less than a minute · the link is personal and valid for {{validez}}.',
+    validityText: 'The link is personal and valid for {{validez}}.',
+    linkFallback: 'Button not working? Copy this link into your browser:',
+    help: 'If you get stuck at any step, reply to this email and we will give you a hand.',
+    cta: 'Create my password and get in',
+    footerNote:
+      'You are receiving this email because {{tenantName}} signed you up to their classroom.',
+    dayOne: 'day',
+    dayMany: 'days',
+  },
+} as const satisfies Record<HubTemplateLang, Record<string, string>>;
+
+/** Piezas de copy de la invitación, ya ensanchadas a `string` por idioma. */
+export type InvitationEmailCopy = Record<keyof (typeof INVITATION_EMAIL_COPY)['es'], string>;
+
+/** Copy de la invitación al aula en el idioma del invitado. */
+export function resolveInvitationEmailCopy(locale?: string | null): InvitationEmailCopy {
+  return INVITATION_EMAIL_COPY[toHubTemplateLang(locale)];
 }
 
 /** Metadatos de los templates del hub para la UI (nombre humano, trigger, vars). */
@@ -962,8 +1070,23 @@ export const TRANSACTIONAL_EMAIL_DEFS: EmailTemplateCatalogEntry[] = [
  * pueden divergir: son el mismo texto.
  *
  * Composers que ya lo consumen:
- *  - `auth.password_reset` → apps/api/src/auth/password-reset.service.ts
- *  - `enrollment.welcome`  → apps/api/src/enrollment/inscribe.service.ts
+ *  - `auth.password_reset`                 → apps/api/src/auth/password-reset.service.ts
+ *  - `enrollment.welcome`                  → apps/api/src/enrollment/inscribe.service.ts
+ *  - `member_registration.otp_code`        → apps/api/src/modules/member-registration/email-templates.ts
+ *  - `member_registration.welcome_approved`→ idem
+ *  - `member_registration.rejection`       → idem
+ *  - `membership.welcome`                  → apps/api/src/modules/subscriptions/membership-provisioning.service.ts
+ *  - `billing.welcome`                     → apps/api/src/modules/billing/billing-provisioning.service.ts
+ *  - `subscriptions.renewal_warning`       → apps/api/src/modules/payment-connections/subscriptions-daily.worker.ts
+ *  - `payment_connections.access_expiring` → idem
+ *  - `subscriptions.admin_digest`          → idem
+ *
+ * La única key transaccional que sigue SIN traducir es
+ * `member_registration.approval_request`: su email es en su mayor parte bloques
+ * de datos estructurales cuyo copy (las etiquetas de estado de suscripción de
+ * `classifySubscriptionStatus`) vive en `modules/payment-connections`. Traducir
+ * solo la intro dejaría un email mitad inglés mitad español, que es peor que el
+ * de hoy. El test de camino degradado la usa como caso VIVO.
  */
 export const TRANSACTIONAL_TEMPLATE_DEFAULTS_EN: Record<string, TemplateDef> = {
   'auth.password_reset': {
@@ -973,6 +1096,39 @@ export const TRANSACTIONAL_TEMPLATE_DEFAULTS_EN: Record<string, TemplateDef> = {
   'enrollment.welcome': {
     subject: 'Your access to {{tenantName}}',
     body: '{{greeting}}\n\nYour account at {{tenantName}} has been created and you already have access to your course(s).\n\nAll that is left is to set your password with the button below (the link is valid for 7 days).\n\nYour username is {{email}}. If the link expires, use "Forgot your password?" on the sign-in screen.',
+  },
+  'member_registration.otp_code': {
+    subject: 'Your access code',
+    body: 'Your access code for {{tenantName}} is the one shown below.\n\nEnter it on the verification screen to continue. This code expires in {{ttlMinutes}} minutes.\n\nIf you did not request this access, please ignore this message.',
+  },
+  'member_registration.welcome_approved': {
+    subject: 'Your registration at {{tenantName}} has been approved',
+    body: '{{greeting}}\n\nGood news! Your registration at {{tenantName}} has been approved and your account is now active.',
+  },
+  'member_registration.rejection': {
+    subject: 'About your registration at {{tenantName}}',
+    body: '{{greeting}}\n\nThank you for your interest in {{tenantName}}. After reviewing your request, we have not been able to approve your registration at this time.\n\nIf you believe this is a mistake, you can get in touch with the team.',
+  },
+  'membership.welcome': {
+    subject: 'Your membership at {{tenantName}}',
+    body: '{{greeting}}\n\nYour membership at {{tenantName}} is active! You already have access to every course included.\n\nTo get in, set your password with the button below (the link is valid for 7 days).',
+  },
+  'billing.welcome': {
+    subject: 'Your course at {{tenantName}}',
+    body: '{{greeting}}\n\nYour purchase at {{tenantName}} is confirmed! We have created your account and your course is waiting for you inside.\n\nTo get in, set your password with the button below (the link is valid for 7 days).',
+  },
+  'subscriptions.renewal_warning': {
+    subject: 'Your subscription renews soon',
+    body: 'Hi,\n\nYour subscription{{#plan}} ({{plan}}){{/plan}} renews on {{renewalDate}}{{#amount}} for {{amount}}{{/amount}}.\n\n{{#cancelUrl}}If you do not want to continue, you can cancel it before that date with the button below.{{/cancelUrl}}{{^cancelUrl}}If you do not want to continue, reply to this email to cancel it before that date.{{/cancelUrl}}\n\nIf you want to carry on, you do not have to do anything.',
+  },
+  'payment_connections.access_expiring': {
+    subject: 'Your access to {{tenantName}} ends on {{renewalDate}}',
+    body: 'Hi,\n\nYour access{{#plan}} to {{plan}}{{/plan}} ends on {{renewalDate}}.\n\nUnlike a subscription, this access does not renew on its own: if you want to carry on, you will have to renew it before that date.\n\nIf you have already renewed it, you can ignore this message.',
+  },
+  'subscriptions.admin_digest': {
+    subject:
+      'Subscriptions digest — {{activeCount}} active, {{upcomingCount}} upcoming ({{windowDays}} days)',
+    body: 'Active subscriptions: {{activeCount}}\n\nRenewing/expiring soon ({{windowDays}} days):\n{{upcomingList}}',
   },
 };
 

@@ -17,7 +17,13 @@ import {
 } from '../../common/branded-email';
 import {
   applyEmailOverride,
+  emailGreeting,
   fetchEmailOverride,
+  interpolate,
+  resolveFixedEmailCopy,
+  resolveRecipientLocale,
+  resolveTransactionalDefault,
+  toHubTemplateLang,
   type TemplateOverridePrisma,
 } from '../notifications/email-template-catalog';
 import { PrismaAuditLogService } from '../prisma-audit-log.service';
@@ -28,6 +34,8 @@ import { TenantSmtpResolverService } from '../tenant-smtp-resolver.service';
 const DEFAULT_ALUMNO_ROLE = 'alumno';
 /** El comprador puede abrir el email días después de pagar: TTL 7 días. */
 const SET_PASSWORD_TTL_MINUTES = 7 * 24 * 60;
+/** Key de esta bienvenida en el catálogo de plantillas del producto. */
+const WELCOME_TEMPLATE_KEY = 'membership.welcome';
 
 /**
  * Materializa al COMPRADOR de la membresía como usuario de la plataforma.
@@ -86,7 +94,11 @@ export class MembershipProvisioningService {
           // además el cambio le obligaría a un segundo login.
           mustChangePassword: false,
         },
-        select: { id: true },
+        // `locale` del comprador: es quien lee la bienvenida. Hoy la columna
+        // toma su default porque el checkout todavía no captura el idioma del
+        // navegador (hallazgo declarado en el PR); leerlo aquí es lo que hace
+        // que el email siga al usuario en cuanto ese hueco se cierre.
+        select: { id: true, locale: true },
       });
       if (role) {
         await tx.userRole.create({ data: { userId: created.id, roleId: role.id } });
@@ -111,7 +123,14 @@ export class MembershipProvisioningService {
       userAgent: args.ctx.userAgent ?? undefined,
     });
 
-    await this.sendWelcomeEmail(tenantId, email, args.name, args.webBaseUrl, args.ctx);
+    await this.sendWelcomeEmail(
+      tenantId,
+      email,
+      args.name,
+      args.webBaseUrl,
+      args.ctx,
+      resolveRecipientLocale(user.locale),
+    );
     return { userId: user.id, created: true };
   }
 
@@ -121,6 +140,7 @@ export class MembershipProvisioningService {
     name: string | null,
     webBaseUrl: string,
     ctx: ClientContext,
+    locale: string,
   ): Promise<void> {
     try {
       const resolved = await this.smtpResolver.resolve(tenantId);
@@ -143,35 +163,45 @@ export class MembershipProvisioningService {
         tenantId,
         webBaseUrl,
       );
-      const greeting = name ? `Hola ${name},` : 'Hola,';
+      const greeting = emailGreeting(name, locale);
+      const signinUrl = `${base}/signin`;
 
       // alpha.83 — subject/cuerpo personalizables per-tenant; el botón «Definir
-      // mi contraseña» y la nota con la URL de acceso son estructurales.
+      // mi contraseña» y la nota con la URL de acceso son estructurales. El
+      // override se busca primero en el idioma del comprador y, si el tenant no
+      // lo personalizó ahí, en el de referencia (misma precedencia que el hub).
       const override = await fetchEmailOverride(
         this.prisma as unknown as TemplateOverridePrisma,
         tenantId,
-        'membership.welcome',
+        WELCOME_TEMPLATE_KEY,
+        locale,
       );
 
-      let subject = `Tu membresía en ${branding.tenantName}`;
+      const vars = {
+        greeting,
+        name: name ?? '',
+        email,
+        tenantName: branding.tenantName,
+        setPasswordUrl,
+        signinUrl,
+      };
+      // Copy del catálogo para (key, idioma). Nunca `undefined`: la key existe
+      // en `TRANSACTIONAL_EMAIL_DEFS` y un idioma sin traducir cae al español.
+      const def = resolveTransactionalDefault(WELCOME_TEMPLATE_KEY, locale)!;
+      let subject = interpolate(def.subject ?? '', vars);
       let bodyText: string;
       let bodyHtml: string;
       if (override) {
-        const applied = applyEmailOverride(
-          override,
-          {
-            greeting,
-            name: name ?? '',
-            email,
-            tenantName: branding.tenantName,
-            setPasswordUrl,
-            signinUrl: `${base}/signin`,
-          },
-          subject,
-        );
+        const applied = applyEmailOverride(override, vars, subject);
         subject = applied.subject;
         bodyText = applied.bodyText;
         bodyHtml = textToHtmlParagraphs(applied.bodyText);
+      } else if (toHubTemplateLang(locale) === 'en') {
+        // El inglés se renderiza DESDE el catálogo (misma mecánica que un
+        // override) para que composer y catálogo no puedan divergir. El español
+        // conserva su maqueta HTML propia más abajo, byte a byte.
+        bodyText = interpolate(def.body, vars);
+        bodyHtml = textToHtmlParagraphs(bodyText);
       } else {
         bodyText = `${greeting}
 
@@ -187,13 +217,16 @@ Después podrás iniciar sesión siempre desde ${base}/signin con tu email (${em
       }
 
       const { html, text } = renderBrandedEmail(branding, {
-        // Monolingüe: este emisor todavía solo redacta español.
-        lang: 'es',
+        lang: toHubTemplateLang(locale),
         title: subject,
         bodyHtml,
         bodyText,
-        cta: { label: 'Definir mi contraseña', url: setPasswordUrl },
-        footerNote: `Después podrás iniciar sesión desde ${base}/signin con tu email.`,
+        // Estructural: el override del tenant no puede quitar el botón ni la
+        // nota, pero los dos salen en el idioma del comprador.
+        cta: { label: resolveFixedEmailCopy('cta.set_my_password', locale), url: setPasswordUrl },
+        footerNote: interpolate(resolveFixedEmailCopy('footer.signin_hint', locale), {
+          signinUrl,
+        }),
       });
       const result = await this.smtp.send(
         resolved.config,

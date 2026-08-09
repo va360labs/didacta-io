@@ -17,6 +17,7 @@ import { buildRejectionEmail, buildWelcomeEmail } from './email-templates';
 import { resolveEmailBranding, type BrandingPrisma } from '../../common/branded-email';
 import {
   fetchEmailOverride,
+  resolveRecipientLocale,
   type TemplateOverridePrisma,
 } from '../notifications/email-template-catalog';
 import { MemberRegistrationEventsService } from './member-registration-events.service';
@@ -153,7 +154,8 @@ export class MemberDecisionService {
 
     const user = await this.prisma.user.findUnique({
       where: { id: record.userId },
-      select: { email: true, name: true },
+      // `locale` = idioma del MIEMBRO: es él quien lee la aprobación/rechazo.
+      select: { email: true, name: true, locale: true },
     });
     // Sin `req` (este service no ve el HTTP request): cascada env → dominio
     // primario verificado del tenant → localhost. Antes leía WEB_PUBLIC_URL
@@ -174,11 +176,13 @@ export class MemberDecisionService {
         this.prisma as unknown as TemplateOverridePrisma,
         record.tenantId,
         'member_registration.welcome_approved',
+        resolveRecipientLocale(user?.locale),
       );
       const { subject, text, html } = buildWelcomeEmail(
         user?.name ?? '',
         signinUrl,
         branding,
+        resolveRecipientLocale(user?.locale),
         welcomeOverride,
       );
       await this.sendEmail(
@@ -214,10 +218,12 @@ export class MemberDecisionService {
       this.prisma as unknown as TemplateOverridePrisma,
       record.tenantId,
       'member_registration.rejection',
+      resolveRecipientLocale(user?.locale),
     );
     const { subject, text, html } = buildRejectionEmail(
       user?.name ?? '',
       branding,
+      resolveRecipientLocale(user?.locale),
       rejectionOverride,
     );
     await this.sendEmail(
@@ -263,7 +269,7 @@ export class MemberDecisionService {
   ): Promise<{ outcome: 'approved' | 'rejected' | 'invalid' }> {
     const user = await this.prisma.user.findFirst({
       where: { tenantId, id: userId },
-      select: { id: true, email: true, name: true },
+      select: { id: true, email: true, name: true, locale: true },
     });
     if (!user) return { outcome: 'invalid' };
 
@@ -301,11 +307,13 @@ export class MemberDecisionService {
         this.prisma as unknown as TemplateOverridePrisma,
         tenantId,
         'member_registration.welcome_approved',
+        resolveRecipientLocale(user.locale),
       );
       const { subject, text, html } = buildWelcomeEmail(
         user.name ?? '',
         signinUrl,
         branding,
+        resolveRecipientLocale(user.locale),
         welcomeOverride,
       );
       await this.sendEmail(tenantId, user.email, subject, text, html, branding.tenantName);
@@ -329,10 +337,12 @@ export class MemberDecisionService {
       this.prisma as unknown as TemplateOverridePrisma,
       tenantId,
       'member_registration.rejection',
+      resolveRecipientLocale(user.locale),
     );
     const { subject, text, html } = buildRejectionEmail(
       user.name ?? '',
       branding,
+      resolveRecipientLocale(user.locale),
       rejectionOverride,
     );
     await this.sendEmail(tenantId, user.email, subject, text, html, branding.tenantName);

@@ -361,11 +361,30 @@ describe('catálogo transaccional por idioma', () => {
       );
     }
     // Key con composer aún monolingüe: en inglés devuelve el español, nunca
-    // undefined ni un cuerpo vacío.
-    expect(TRANSACTIONAL_TEMPLATE_DEFAULTS_EN['subscriptions.admin_digest']).toBeUndefined();
-    expect(resolveTransactionalDefault('subscriptions.admin_digest', 'en-US')).toEqual(
-      esByKey.get('subscriptions.admin_digest'),
+    // undefined ni un cuerpo vacío. `member_registration.approval_request` es
+    // el caso VIVO —y ya el único—: su email es casi todo bloques de datos
+    // estructurales cuyo copy vive en `modules/payment-connections`
+    // (`classifySubscriptionStatus`), así que traducir solo su intro dejaría un
+    // email mitad inglés mitad español. Ver `buildDecisionEmail`.
+    expect(
+      TRANSACTIONAL_TEMPLATE_DEFAULTS_EN['member_registration.approval_request'],
+    ).toBeUndefined();
+    expect(resolveTransactionalDefault('member_registration.approval_request', 'en-US')).toEqual(
+      esByKey.get('member_registration.approval_request'),
     );
+  });
+
+  it('el mapa inglés cubre TODA key transaccional salvo la declarada monolingüe', () => {
+    // Antes el mapa era parcial con 9 huecos y la garantía tenía que ser débil
+    // («lo que esté, que sea coherente»). Ahora solo queda uno declarado, así
+    // que la garantía se puede endurecer: cualquier plantilla transaccional
+    // NUEVA que llegue sin inglés hace fallar este test en vez de colarse
+    // silenciosamente y llegarle en español a un destinatario anglófono.
+    const SIN_TRADUCIR = new Set(['member_registration.approval_request']);
+    const huecos = TRANSACTIONAL_EMAIL_DEFS.filter(
+      (d) => !TRANSACTIONAL_TEMPLATE_DEFAULTS_EN[d.key] && !SIN_TRADUCIR.has(d.key),
+    ).map((d) => d.key);
+    expect(huecos, `plantillas transaccionales sin copy inglés: ${huecos.join(', ')}`).toEqual([]);
   });
 
   it('una key inexistente sigue devolviendo undefined en los dos idiomas', () => {
@@ -475,7 +494,7 @@ describe('ping de SMTP de /tenant-settings', () => {
 
 describe('builders de inscripción con override', () => {
   it('buildOtpEmail respeta el código como parte estructural', () => {
-    const out = buildOtpEmail('482913', branding(), {
+    const out = buildOtpEmail('482913', branding(), 'es-ES', {
       subject: 'Tu código de {{tenantName}}',
       body: 'Este es tu código para entrar.',
     });
@@ -486,7 +505,7 @@ describe('builders de inscripción con override', () => {
   });
 
   it('buildOtpEmail no duplica el código si el admin usa {{code}}', () => {
-    const out = buildOtpEmail('482913', branding(), {
+    const out = buildOtpEmail('482913', branding(), 'es-ES', {
       subject: null,
       body: 'Código: {{code}}',
     });
@@ -516,7 +535,7 @@ describe('builders de inscripción con override', () => {
   });
 
   it('buildWelcomeEmail con override mantiene el CTA Entrar', () => {
-    const out = buildWelcomeEmail('Ana', 'https://x/signin', branding(), {
+    const out = buildWelcomeEmail('Ana', 'https://x/signin', branding(), 'es-ES', {
       subject: '¡Dentro, {{name}}!',
       body: '{{greeting}} Ya puedes entrar.',
     });
@@ -526,7 +545,7 @@ describe('builders de inscripción con override', () => {
   });
 
   it('buildRejectionEmail con override usa el texto del admin', () => {
-    const out = buildRejectionEmail('Ana', branding(), {
+    const out = buildRejectionEmail('Ana', branding(), 'es-ES', {
       subject: null,
       body: 'Lo sentimos {{name}}, esta vez no.',
     });
@@ -535,11 +554,11 @@ describe('builders de inscripción con override', () => {
   });
 
   it('sin override, los builders mantienen el copy por defecto (regresión)', () => {
-    const otp = buildOtpEmail('111222', branding());
+    const otp = buildOtpEmail('111222', branding(), 'es-ES');
     expect(otp.subject).toBe('Tu código de acceso');
-    const welcome = buildWelcomeEmail('Ana', 'https://x/signin', branding());
+    const welcome = buildWelcomeEmail('Ana', 'https://x/signin', branding(), 'es-ES');
     expect(welcome.subject).toBe('Tu inscripción en Academia Demo ha sido aprobada');
-    const rejection = buildRejectionEmail('Ana', branding());
+    const rejection = buildRejectionEmail('Ana', branding(), 'es-ES');
     expect(rejection.text).toContain('Gracias por tu interés en Academia Demo');
   });
 });
