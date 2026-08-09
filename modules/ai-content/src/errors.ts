@@ -12,10 +12,17 @@
  */
 export interface AiContentErrorOptions {
   readonly detail?: string;
+  /**
+   * Valores CON NOMBRE cuando el `message` interpola DOS o más con copy
+   * español entre medias: `detail` es un campo único y colapsarlos ahí dejaría
+   * el conector español dentro de la frase inglesa. Mismo contrato.
+   */
+  readonly params?: Readonly<Record<string, string>>;
 }
 
 export class AiContentError extends Error {
   readonly detail?: string;
+  readonly params?: Readonly<Record<string, string>>;
 
   constructor(
     message: string,
@@ -25,6 +32,7 @@ export class AiContentError extends Error {
     super(message);
     this.name = 'AiContentError';
     this.detail = options?.detail;
+    this.params = options?.params;
   }
 }
 
@@ -69,9 +77,11 @@ export class AiContentProviderError extends AiContentError {
 
 export class InvalidContentJsonError extends AiContentError {
   constructor(type: string, reason: string) {
+    // Dos valores con copy español entre medias → `params`, no `detail`.
     super(
       `El JSON propuesto para draft tipo ${type} no es válido: ${reason}.`,
       'AI_CONTENT_INVALID_JSON',
+      { params: { type, reason } },
     );
     this.name = 'InvalidContentJsonError';
   }

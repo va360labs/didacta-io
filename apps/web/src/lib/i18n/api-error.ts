@@ -142,20 +142,58 @@ export const CODES_WITH_DETAIL: ReadonlySet<string> = new Set([
 ]);
 
 /**
+ * Codes cuyo `message` español interpola DOS o más valores CON COPY ESPAÑOL
+ * ENTRE MEDIAS, y que por eso no caben en el `detail` único de arriba:
+ * colapsarlos dejaría el conector español dentro de la frase inglesa («The AI
+ * provider failed: openai *falló*: timeout»).
+ *
+ * El valor de cada entrada son los nombres EXACTOS que el backend manda en
+ * `ApiError.params` y que los dos catálogos tienen que interpolar. La lista es
+ * explícita por la misma razón que `CODES_WITH_DETAIL` —es el contrato entre el
+ * body de la API y las dos traducciones— y además fija los nombres, que es lo
+ * único que impide que el ES escriba `{provider}` y el EN `{proveedor}`.
+ *
+ * ⚠️ Los valores viajan como STRING incluso cuando son números (el
+ * `statusCode` de `AI_PROVIDER_UNAVAILABLE`): con un número, ICU aplicaría el
+ * separador de miles del idioma y el ES dejaría de rendir byte a byte el
+ * `message` del backend.
+ *
+ * Se exporta SOLO para que los tests la recorran: nadie más debe leerla.
+ */
+export const CODES_WITH_PARAMS: ReadonlyMap<string, readonly string[]> = new Map([
+  ['AI_CONTENT_INVALID_JSON', ['type', 'reason']],
+  ['AI_GRADER_PROVIDER_ERROR', ['provider', 'reason']],
+  ['AI_PROVIDER_UNAVAILABLE', ['provider', 'statusCode', 'body']],
+  ['AI_TUTOR_CHAT_PROVIDER_ERROR', ['provider', 'reason']],
+  ['AI_TUTOR_EMBEDDINGS_PROVIDER_ERROR', ['provider', 'reason']],
+]);
+
+/**
  * Si el backend mandó `code` y existe `errors.<code>` en el catálogo →
  * mensaje traducido. Si no → `e.message` (el español del backend como
  * fallback honesto: nunca una key cruda ni un texto inventado en pantalla).
  *
- * CAMINO DEGRADADO ÚNICO: un code de `CODES_WITH_DETAIL` que llega SIN
- * `detail` (API vieja contra un front nuevo, o un throw que se olvidó del
- * campo). Se devuelve `e.message`, que lleva el diagnóstico incrustado en
- * español, en vez de pintar la frase traducida con el hueco vacío: preferimos
- * el idioma equivocado a prometer un diagnóstico y no enseñarlo.
+ * CAMINO DEGRADADO ÚNICO, con DOS entradas que hacen lo mismo:
+ *
+ *  · un code de `CODES_WITH_DETAIL` que llega SIN `detail`;
+ *  · un code de `CODES_WITH_PARAMS` al que le FALTA (o le llega en blanco)
+ *    cualquiera de sus placeholders.
+ *
+ * Los dos casos son la misma avería (API vieja contra un front nuevo, o un
+ * throw que se olvidó del campo) y se resuelven igual: se devuelve `e.message`,
+ * que lleva los datos incrustados en español, en vez de pintar la frase
+ * traducida con huecos vacíos. Preferimos el idioma equivocado a prometer un
+ * diagnóstico y no enseñarlo.
  */
 export function apiErrorMessage(e: unknown, t: TranslatorLike): string {
   if (e instanceof ApiHttpError) {
     // Un code con '.' se interpretaría como path de namespace: se ignora.
     if (e.code && !e.code.includes('.') && t.has(e.code)) {
+      const names = CODES_WITH_PARAMS.get(e.code);
+      if (names) {
+        const values = resolveParams(names, e.params);
+        return values ? t(e.code, values) : e.message;
+      }
       if (!CODES_WITH_DETAIL.has(e.code)) return t(e.code);
       const detail = typeof e.detail === 'string' ? e.detail.trim() : '';
       if (!detail) return e.message;
@@ -171,4 +209,24 @@ export function apiErrorMessage(e: unknown, t: TranslatorLike): string {
   if (e instanceof TypeError || e instanceof SyntaxError) return t('unknown');
   if (e instanceof Error && e.message) return e.message;
   return t('unknown');
+}
+
+/**
+ * Los `params` del body reducidos a los nombres que el catálogo interpola, o
+ * `null` si falta alguno. Todo-o-nada, igual que en el backend
+ * (`moduleErrorBody`): con un solo hueco vacío la frase traducida promete un
+ * diagnóstico y no lo enseña, que es el bug que este contrato cierra.
+ */
+function resolveParams(
+  names: readonly string[],
+  params: Record<string, string> | undefined,
+): Record<string, string> | null {
+  if (!params) return null;
+  const out: Record<string, string> = {};
+  for (const name of names) {
+    const value = params[name];
+    if (typeof value !== 'string' || value.trim() === '') return null;
+    out[name] = value;
+  }
+  return out;
 }

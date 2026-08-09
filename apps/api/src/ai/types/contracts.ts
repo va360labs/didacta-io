@@ -119,15 +119,31 @@ export interface ResolvedProviderConfig {
 
 // ─── Errores tipados ─────────────────────────────────────────────────
 
+/**
+ * Opciones de un error del gateway. `params` son los valores CON NOMBRE que el
+ * `message` español interpola en más de un hueco y que cada catálogo coloca
+ * donde su gramática los pide. Van como bolsa nombrada —y no como quinto
+ * argumento posicional— para que el call-site diga QUÉ está mandando; es el
+ * mismo shape que usan las clases de error de `modules/<mod>/src/errors.ts`.
+ * Contrato completo en `apps/api/src/common/module-error-body.ts`.
+ */
+export interface AiGatewayErrorOptions {
+  readonly params?: Readonly<Record<string, string>>;
+}
+
 export class AiGatewayError extends Error {
+  readonly params?: Readonly<Record<string, string>>;
+
   constructor(
     public readonly code: string,
     message: string,
     public readonly provider?: ProviderId,
     public readonly statusCode?: number,
+    options?: AiGatewayErrorOptions,
   ) {
     super(message);
     this.name = 'AiGatewayError';
+    this.params = options?.params;
   }
 }
 
@@ -142,11 +158,16 @@ export class ProviderNotConfiguredError extends AiGatewayError {
 
 export class ProviderUnavailableError extends AiGatewayError {
   constructor(provider: ProviderId, statusCode: number, body: string) {
+    // TRES valores con copy español entre medias → `params`, no `detail`.
+    // `statusCode` viaja como STRING a propósito: con un número, ICU lo
+    // formatearía con el separador de miles del idioma y el catálogo dejaría
+    // de rendir byte a byte el `message` del backend.
     super(
       'AI_PROVIDER_UNAVAILABLE',
       `${provider} respondió ${statusCode}: ${body}`,
       provider,
       statusCode,
+      { params: { provider, statusCode: String(statusCode), body } },
     );
   }
 }

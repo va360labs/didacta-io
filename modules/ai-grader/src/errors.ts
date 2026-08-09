@@ -12,10 +12,17 @@
  */
 export interface AiGraderErrorOptions {
   readonly detail?: string;
+  /**
+   * Valores CON NOMBRE cuando el `message` interpola DOS o más con copy
+   * español entre medias: `detail` es un campo único y colapsarlos ahí dejaría
+   * el conector español dentro de la frase inglesa. Mismo contrato.
+   */
+  readonly params?: Readonly<Record<string, string>>;
 }
 
 export class AiGraderError extends Error {
   readonly detail?: string;
+  readonly params?: Readonly<Record<string, string>>;
 
   constructor(
     public readonly code: string,
@@ -25,6 +32,7 @@ export class AiGraderError extends Error {
     super(message);
     this.name = 'AiGraderError';
     this.detail = options?.detail;
+    this.params = options?.params;
   }
 }
 
@@ -68,7 +76,11 @@ export class AttemptNotPendingReviewError extends AiGraderError {
 
 export class GraderProviderError extends AiGraderError {
   constructor(provider: string, reason: string) {
-    super('AI_GRADER_PROVIDER_ERROR', `Provider ${provider} falló: ${reason}`);
+    // Dos valores con copy español entre medias: `params` (no `detail`), para
+    // que el inglés escriba SU frase y no herede el «falló» de la española.
+    super('AI_GRADER_PROVIDER_ERROR', `Provider ${provider} falló: ${reason}`, {
+      params: { provider, reason },
+    });
   }
 }
 

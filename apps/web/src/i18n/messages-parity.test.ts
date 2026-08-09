@@ -39,7 +39,7 @@
  *     crudo y el admin español conserve el detalle. El EN sí lleva una redacción
  *     genérica, porque sin key el anglófono vería el mensaje en español.
  *
- * Son los 73 codes declarados abajo. Van uno a uno y no como un `skip`
+ * Son los 68 codes declarados abajo. Van uno a uno y no como un `skip`
  * sobre `errorsApi*`: un code nuevo que aparezca solo en EN por descuido rompe
  * la CI igual que cualquier otra huérfana, y un code que se declare aquí y luego
  * se arregle (o se borre) también, porque la lista se valida contra los
@@ -63,7 +63,7 @@
  *
  * ── Lo que este test NO valida (y sigue pendiente) ────────────────────────────
  *
- * La CALIDAD de la redacción genérica inglesa de los 73 que quedan.
+ * La CALIDAD de la redacción genérica inglesa de los 68 que quedan.
  *
  * Historia de los dos barridos, porque la lista solo se entiende con ella:
  *
@@ -93,18 +93,23 @@
  * ② Interpolan DOS o más valores CON COPY ESPAÑOL ENTRE MEDIAS. `detail` es un
  *    campo único; colapsarlos en uno dejaría el conector español dentro del
  *    inglés («The AI provider failed: openai falló: timeout»), que mueve el bug
- *    en vez de arreglarlo. Cerrarlos pide ampliar el contrato del body a
- *    placeholders CON NOMBRE (`{provider}` + `{detail}`): es una decisión de
- *    arquitectura, no el cambio mecánico de este PR, y se deja fuera a propósito
- *    para que esa ampliación se revise por sí sola y no dentro de un barrido de
- *    75 codes.
- *      Con diagnóstico EXTERNO (los graves que quedan):
- *        `AI_GRADER_PROVIDER_ERROR` (`modules/ai-grader/src/errors.ts:54`)
- *        `AI_TUTOR_CHAT_PROVIDER_ERROR` (`modules/ai-tutor/src/errors.ts:96`)
- *        `AI_TUTOR_EMBEDDINGS_PROVIDER_ERROR` (`modules/ai-tutor/src/errors.ts:90`)
- *        `AI_PROVIDER_UNAVAILABLE` (`apps/api/src/ai/types/contracts.ts:144`,
- *          TRES valores: provider, status y body)
- *        `AI_CONTENT_INVALID_JSON` (`modules/ai-content/src/errors.ts:55`)
+ *    en vez de arreglarlo.
+ *
+ *    **Los 5 con diagnóstico EXTERNO ya NO están aquí**: son los que cerró la
+ *    ampliación del contrato a placeholders CON NOMBRE (`params`), que es la
+ *    decisión de arquitectura que los PR #39 y #42 dejaron declarada. Viven en
+ *    `CODES_WITH_PARAMS` (`lib/i18n/api-error.ts`) con key en los DOS idiomas, y
+ *    este test los trata como cualquier par simétrico:
+ *      `AI_GRADER_PROVIDER_ERROR`, `AI_TUTOR_CHAT_PROVIDER_ERROR`,
+ *      `AI_TUTOR_EMBEDDINGS_PROVIDER_ERROR`, `AI_PROVIDER_UNAVAILABLE` (TRES
+ *      valores: provider, status y body) y `AI_CONTENT_INVALID_JSON`.
+ *
+ *    Los que siguen declarados abajo interpolan varios valores pero el dato es
+ *    del PROPIO producto (un límite, un slug, un id que el usuario acaba de
+ *    escribir), no un diagnóstico externo: la frase genérica inglesa no le
+ *    esconde a nadie la causa de la incidencia. Pasarlos a `params` es mecánico
+ *    y está disponible; no entra aquí para que la ampliación del contrato se
+ *    revise sobre los 5 que la motivaron y no sobre 21.
  *      Con dato del producto:
  *        `AI_GRADER_QUESTION_NOT_GRADABLE`, `AI_PROVIDERS_PURPOSE_NOT_SUPPORTED`,
  *        `AI_PROVIDER_AUTH`, `AI_PROVIDER_NOT_CONFIGURED`,
@@ -142,7 +147,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { CODES_WITH_DETAIL } from '@/lib/i18n/api-error';
+import { CODES_WITH_DETAIL, CODES_WITH_PARAMS } from '@/lib/i18n/api-error';
 
 const MESSAGES_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), 'messages');
 const LOCALES = ['es', 'en'] as const;
@@ -156,10 +161,11 @@ const ASYMMETRY_ALLOWED_PREFIX = 'errorsApi';
  * pasar entero. Ordenados alfabéticamente por namespace para que el diff de un
  * PR que añada o quite uno sea de una línea.
  *
- * Esta lista y `CODES_WITH_DETAIL` son DISJUNTAS por construcción (hay test):
- * un code o degrada al `message` crudo (aquí) o interpola `{detail}` en los dos
- * idiomas (allí). Estar en las dos significa que alguien arregló el code y se
- * olvidó de sacarlo de aquí.
+ * Esta lista, `CODES_WITH_DETAIL` y `CODES_WITH_PARAMS` son DISJUNTAS entre sí
+ * por construcción (hay test): un code o degrada al `message` crudo (aquí), o
+ * interpola `{detail}` en los dos idiomas, o interpola placeholders con nombre.
+ * Estar en dos de ellas significa que alguien arregló el code y se olvidó de
+ * sacarlo de aquí.
  */
 const EN_ONLY_BY_DESIGN: Readonly<Record<string, readonly string[]>> = {
   errorsApiAdmin: ['ADMIN_ROLE_NOT_FOUND', 'ADMIN_TENANT_HOSTNAME_EXISTS'],
@@ -180,17 +186,12 @@ const EN_ONLY_BY_DESIGN: Readonly<Record<string, readonly string[]>> = {
   ],
   errorsApiModulesB: [
     'AI_CONTENT_DRAFT_NOT_IN_DRAFT',
-    'AI_CONTENT_INVALID_JSON',
-    'AI_GRADER_PROVIDER_ERROR',
     'AI_GRADER_QUESTION_NOT_GRADABLE',
     'AI_PROVIDER_AUTH',
     'AI_PROVIDER_NOT_CONFIGURED',
     'AI_PROVIDER_RATE_LIMIT',
-    'AI_PROVIDER_UNAVAILABLE',
     'AI_PROVIDER_UNSUPPORTED_CAPABILITY',
-    'AI_TUTOR_CHAT_PROVIDER_ERROR',
     'AI_TUTOR_DAILY_QUESTION_QUOTA',
-    'AI_TUTOR_EMBEDDINGS_PROVIDER_ERROR',
     'AI_TUTOR_TOKEN_QUOTA_EXCEEDED',
     'AUDIT_EXPORT_SIGNING_UNAVAILABLE',
     'COMMUNITY_SPACE_UNKNOWN',
@@ -359,6 +360,60 @@ describe('catálogo i18n · paridad es ↔ en', () => {
       enLasDos,
       `codes que ya interpolan {detail} pero siguen declarados como asimétricos.\n` +
         `Bórralos de EN_ONLY_BY_DESIGN:\n  ${enLasDos.join('\n  ')}`,
+    ).toEqual([]);
+  });
+
+  it('ningún code está a la vez declarado asimétrico y en CODES_WITH_PARAMS', () => {
+    // Mismo razonamiento con la ampliación a placeholders con nombre: un code
+    // que ya escribe su frase en los dos idiomas no puede seguir declarado como
+    // «el ES se calla a propósito».
+    const enLasDos = Object.entries(EN_ONLY_BY_DESIGN).flatMap(([ns, codes]) =>
+      codes.filter((c) => CODES_WITH_PARAMS.has(c)).map((c) => `${ns}.${c}`),
+    );
+    expect(
+      enLasDos,
+      `codes que ya interpolan placeholders con nombre pero siguen declarados\n` +
+        `como asimétricos. Bórralos de EN_ONLY_BY_DESIGN:\n  ${enLasDos.join('\n  ')}`,
+    ).toEqual([]);
+  });
+
+  it('CODES_WITH_DETAIL y CODES_WITH_PARAMS son disjuntas', () => {
+    // El body manda UN dato anónimo (`detail`) o VARIOS con nombre (`params`),
+    // nunca los dos: `apiErrorMessage` mira `params` primero, así que un code en
+    // ambas listas dejaría su `{detail}` sin rellenar en silencio.
+    const enLasDos = [...CODES_WITH_PARAMS.keys()].filter((c) => CODES_WITH_DETAIL.has(c)).sort();
+    expect(
+      enLasDos,
+      `codes declarados a la vez con {detail} y con placeholders con nombre:\n  ${enLasDos.join('\n  ')}`,
+    ).toEqual([]);
+  });
+
+  it('cada code de CODES_WITH_PARAMS interpola SUS placeholders en los DOS idiomas', () => {
+    // La mitad de catálogo del contrato. Si el ES escribe `{provider}` y el EN
+    // se olvida (o lo llama de otra forma), el anglófono ve la frase con el
+    // hueco crudo — y a ojo no se ve.
+    const fallos: string[] = [];
+    for (const locale of LOCALES) {
+      const porCode = new Map<string, string>();
+      for (const ns of NAMESPACES.filter((n) => n.startsWith(ASYMMETRY_ALLOWED_PREFIX))) {
+        for (const [k, v] of entriesOf(locale, ns)) {
+          if (typeof v === 'string') porCode.set(k, v);
+        }
+      }
+      for (const [code, names] of CODES_WITH_PARAMS) {
+        const text = porCode.get(code);
+        if (text === undefined) {
+          fallos.push(`${locale}: ${code} no existe en ningún errorsApi*`);
+          continue;
+        }
+        for (const name of names) {
+          if (!text.includes(`{${name}}`)) fallos.push(`${locale}: ${code} no interpola {${name}}`);
+        }
+      }
+    }
+    expect(
+      fallos,
+      `catálogos que no cumplen el contrato de params:\n  ${fallos.join('\n  ')}`,
     ).toEqual([]);
   });
 });
