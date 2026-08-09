@@ -7,6 +7,41 @@ import { authenticator } from 'otplib';
 
 export const API_URL = process.env.E2E_API_URL ?? 'http://localhost:3000';
 
+/** Tenant principal del arnés — el que siembra `seed.ts` con BOOTSTRAP_*. */
+export const TENANT_SLUG = process.env.E2E_TENANT_SLUG ?? 'demo';
+
+/**
+ * Segundo tenant, sembrado por `scripts/e2e-stack.sh db` con el mismo
+ * `seed.ts`. Existe para los specs que afirman estados vacíos ("No hay grupos
+ * disponibles", "No tienes conversaciones todavía"): en `demo` dejan de ser
+ * ciertos a mitad de suite porque otros specs crean grupos, clases y mensajes.
+ */
+export const SMOKE_TENANT_SLUG = process.env.E2E_SMOKE_TENANT_SLUG ?? 'e2e-smoke';
+
+/**
+ * Base para hablar con el tenant de smoke. Es la API DIRECTA y por 127.0.0.1
+ * a propósito: el alta y el login resuelven el tenant por el Host header y esa
+ * resolución GANA sobre el `tenantSlug` del body (`resolveTenantIdFromHost` en
+ * apps/api/src/auth/auth.controller.ts:165). A través del rewrite de Next el
+ * Host que llega a la API es siempre `localhost:4000` → tenant principal, así
+ * que por ahí el segundo tenant sería inalcanzable.
+ *
+ * Sólo afecta al ALTA: una vez emitido, el JWT lleva el tenantId y el
+ * navegador puede trabajar con normalidad contra E2E_BASE_URL.
+ */
+export const SMOKE_API_URL = process.env.E2E_SMOKE_API_URL ?? 'http://127.0.0.1:4000';
+
+/**
+ * Avatar con el que el arnés cierra el onboarding. Ruta relativa de storage —
+ * el mismo formato que acepta `PATCH /me/profile` desde la UI. No se sube
+ * ningún fichero: al gate de onboarding sólo le importa que el campo no sea
+ * null (ver `missingOnboardingFields` en apps/api/src/auth/me.controller.ts).
+ */
+export const ONBOARDING_AVATAR_URL = '/api/v1/storage/file/avatars/e2e-harness.png';
+
+/** Nombre de respaldo si el usuario llegara sin `name` al onboarding. */
+export const ONBOARDING_FALLBACK_NAME = 'Usuario E2E';
+
 interface Tokens {
   accessToken: string;
   refreshToken: string;
@@ -21,6 +56,12 @@ interface AuthUser {
   tenantSlug: string;
   roles: string[];
   mfaEnabled: boolean;
+  /**
+   * Lo devuelven `/auth/signin` y `/auth/signup` (auth.service.ts). Es el
+   * campo que mira el gate de `apps/web/src/app/(app)/layout.tsx`: mientras
+   * sea null o undefined, TODA ruta autenticada acaba en `/onboarding`.
+   */
+  onboardingCompletedAt?: string | null;
 }
 
 interface AuthResponse {
@@ -60,7 +101,7 @@ function extractOtpSecret(otpauthUrl: string): string {
 
 async function api<T>(
   path: string,
-  init: { method?: string; body?: unknown; bearer?: string } = {},
+  init: { method?: string; body?: unknown; bearer?: string; baseUrl?: string } = {},
 ): Promise<T> {
   // Solo setear Content-Type cuando enviamos body. Fastify rechaza con
   // 400 "Body cannot be empty when content-type is set to 'application/json'"
@@ -70,7 +111,7 @@ async function api<T>(
   if (init.body !== undefined) headers['Content-Type'] = 'application/json';
   if (init.bearer) headers['Authorization'] = `Bearer ${init.bearer}`;
 
-  const res = await fetch(`${API_URL}${path}`, {
+  const res = await fetch(`${init.baseUrl ?? API_URL}${path}`, {
     method: init.method ?? 'GET',
     headers,
     body: init.body !== undefined ? JSON.stringify(init.body) : undefined,
@@ -87,21 +128,116 @@ async function api<T>(
   return body as T;
 }
 
-export async function signup(args: {
-  tenantSlug: string;
-  email: string;
-  password: string;
-  name?: string;
-}): Promise<AuthResponse> {
-  return api<AuthResponse>('/api/v1/auth/signup', { method: 'POST', body: args });
+export async function signup(
+  args: {
+    tenantSlug: string;
+    email: string;
+    password: string;
+    name?: string;
+  },
+  baseUrl?: string,
+): Promise<AuthResponse> {
+  return api<AuthResponse>('/api/v1/auth/signup', { method: 'POST', body: args, baseUrl });
 }
 
-export async function signin(args: {
-  tenantSlug: string;
-  email: string;
-  password: string;
-}): Promise<AuthResponse> {
-  return api<AuthResponse>('/api/v1/auth/signin', { method: 'POST', body: args });
+export async function signin(
+  args: {
+    tenantSlug: string;
+    email: string;
+    password: string;
+  },
+  baseUrl?: string,
+): Promise<AuthResponse> {
+  return api<AuthResponse>('/api/v1/auth/signin', { method: 'POST', body: args, baseUrl });
+}
+
+interface OnboardingStatus {
+  completed: boolean;
+  completedAt: string | null;
+  missing: string[];
+}
+
+/**
+ * Cierra el onboarding de primera vez del usuario del token, por el MISMO
+ * camino que la UI: rellena lo que falte con `PATCH /me/profile` y confirma
+ * con `POST /me/onboarding/complete`.
+ *
+ * Por qué existe: el gate de `apps/web/src/app/(app)/layout.tsx:92` desvía
+ * TODA ruta autenticada a `/onboarding` mientras `onboardingCompletedAt` sea
+ * falsy, y los usuarios que siembra `seed.ts` (y los que los specs crean con
+ * `signup`) nacen con el campo a null. Es la causa única de la mayoría de los
+ * fallos que parecían de producto: el test navegaba a `/comunidad` y acababa
+ * en el asistente.
+ *
+ * Idempotente: si ya estaba cerrado devuelve el timestamp existente sin
+ * re-auditar (lo garantiza el propio endpoint).
+ */
+export async function completeOnboarding(bearer: string, baseUrl?: string): Promise<string> {
+  const status = await api<OnboardingStatus>('/api/v1/me/onboarding/status', { bearer, baseUrl });
+  if (status.completed && status.completedAt) return status.completedAt;
+
+  if (status.missing.length > 0) {
+    const patch: Record<string, string> = {};
+    if (status.missing.includes('name')) patch['name'] = ONBOARDING_FALLBACK_NAME;
+    if (status.missing.includes('avatar')) patch['avatarUrl'] = ONBOARDING_AVATAR_URL;
+    await api('/api/v1/me/profile', { method: 'PATCH', body: patch, bearer, baseUrl });
+  }
+
+  const done = await api<{ onboardingCompletedAt: string }>('/api/v1/me/onboarding/complete', {
+    method: 'POST',
+    bearer,
+    baseUrl,
+  });
+  return done.onboardingCompletedAt;
+}
+
+/** Contraseña de los usuarios que el arnés fabrica. Sintética, de un solo uso. */
+export const E2E_USER_PASSWORD = 'E2eTestPassword123!';
+
+/**
+ * Alumno real, recién creado y con el onboarding cerrado, dentro del tenant
+ * de smoke (`E2E_SMOKE_TENANT_SLUG`).
+ *
+ * Lo usan los specs que afirman estados VACÍOS de la app ("No hay grupos
+ * disponibles", "No tienes conversaciones todavía", "No hay eventos
+ * programados"). En el tenant principal esas frases son mentira a mitad de
+ * suite, porque otros specs van creando grupos, clases y mensajes; en el
+ * tenant de smoke nadie escribe, así que el estado vacío es cierto de verdad.
+ *
+ * `label` sólo entra en el email para que los fallos sean rastreables.
+ */
+export async function createSmokeStudent(label: string): Promise<AuthResponse> {
+  return signupOnboarded(
+    {
+      tenantSlug: SMOKE_TENANT_SLUG,
+      email: `e2e-${label}-${Date.now()}@example.test`,
+      password: E2E_USER_PASSWORD,
+      name: 'Alumna E2E',
+    },
+    SMOKE_API_URL,
+  );
+}
+
+/**
+ * `signup` + onboarding cerrado, devolviendo el `user` YA con
+ * `onboardingCompletedAt` puesto para que se pueda inyectar tal cual.
+ *
+ * NO se mete esto dentro de `signup()` a propósito: `onboarding.spec.ts`
+ * necesita justo lo contrario — un alumno recién creado con el onboarding
+ * todavía abierto para verificar el gate por avatar y el 422.
+ */
+export async function signupOnboarded(
+  args: {
+    tenantSlug: string;
+    email: string;
+    password: string;
+    name?: string;
+  },
+  baseUrl?: string,
+): Promise<AuthResponse> {
+  const created = await signup(args, baseUrl);
+  const onboardingCompletedAt = await completeOnboarding(created.tokens.accessToken, baseUrl);
+  return { ...created, user: { ...created.user, onboardingCompletedAt } };
 }
 
 /**
@@ -620,7 +756,14 @@ export async function listCoursesViaApi(args: {
   return { courses: body?.courses ?? [], status: res.status };
 }
 
-export async function adminTokenForBootstrap(tenantSlug: string): Promise<string> {
+/**
+ * Sesión completa del admin sembrado: token ya elevado si hacía falta MFA, y
+ * el `user` tal cual lo devuelve la API (con `tenantId` y `onboardingCompletedAt`,
+ * que es lo que necesita `injectSession` para no acabar en `/onboarding`).
+ */
+export async function adminSessionForBootstrap(
+  tenantSlug: string,
+): Promise<{ accessToken: string; user: AuthUser }> {
   const adminSeedEmail = process.env.E2E_ADMIN_EMAIL;
   const adminSeedPassword = process.env.E2E_ADMIN_PASSWORD;
   if (!adminSeedEmail || !adminSeedPassword) {
@@ -638,7 +781,11 @@ export async function adminTokenForBootstrap(tenantSlug: string): Promise<string
     const verified = await setupMfaAndVerify(adminToken);
     adminToken = verified.accessToken;
   }
-  return adminToken;
+  return { accessToken: adminToken, user: adminSession.user };
+}
+
+export async function adminTokenForBootstrap(tenantSlug: string): Promise<string> {
+  return (await adminSessionForBootstrap(tenantSlug)).accessToken;
 }
 
 export interface BootstrapResult {

@@ -96,3 +96,6 @@ evidencias/
 .quality/
 doc/
 apps/e2e/test-results-demo-nav/
+
+# Estado de ejecución del arnés E2E (scripts/e2e-stack.sh): logs y PIDs.
+.e2e-stack/
