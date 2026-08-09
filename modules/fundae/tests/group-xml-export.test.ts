@@ -36,6 +36,10 @@ const GROUP: GroupView = {
   status: 'DRAFT',
   creditoEstimadoCents: 50_000_00,
   creditoConsumidoCents: 0,
+  // El XML de fin de grupo emite `<umbralFinalizacionPct>`; sin este campo el
+  // fixture generaba `undefined` en la salida y nadie se enteraba. 75 es el
+  // default de la columna en el schema.
+  umbralFinalizacionPct: 75,
   costsByTipo: { DIRECTO: 0, INDIRECTO: 0, ORGANIZACION: 0 },
   notas: null,
   createdAt: '2026-04-29T00:00:00.000Z',

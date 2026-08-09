@@ -28,6 +28,7 @@ import type {
   SubscriptionsStripeAdapter,
   CreateSubscriptionCheckoutParams,
   CreateRecurringPriceParams,
+  EndTrialNowResult,
 } from '../src/stripe-subscriptions.client.js';
 import type { SubscriptionsEventPublisher } from '../src/subscriptions.service.js';
 
@@ -260,14 +261,16 @@ function stubStripe() {
     id: 'cs_test_1',
     url: `https://checkout.stripe.test/${p.priceId}`,
   }));
-  const endTrialNow = vi.fn(async (subscriptionId: string) => ({
-    id: subscriptionId,
-    status: 'active',
-    cancelAtPeriodEnd: false,
-    currentPeriodEnd: Math.floor(Date.now() / 1000) + 86400 * 30,
-    canceledAt: null,
-    latestInvoicePaid: true,
-  }));
+  const endTrialNow = vi.fn(
+    async (subscriptionId: string): Promise<EndTrialNowResult> => ({
+      id: subscriptionId,
+      status: 'active',
+      cancelAtPeriodEnd: false,
+      currentPeriodEnd: Math.floor(Date.now() / 1000) + 86400 * 30,
+      canceledAt: null,
+      latestInvoicePaid: true,
+    }),
+  );
   const adapter: SubscriptionsStripeAdapter = {
     createCheckoutSession,
     retrievePrice: async () => {

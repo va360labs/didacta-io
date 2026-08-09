@@ -230,13 +230,13 @@ describe('MemberDecisionService.decide', () => {
     const result = await h.service.decide(approveToken, CTX);
 
     expect(result).toEqual({ outcome: 'approved', tenantId: TENANT_ID });
-    expect(h.users[0].status).toBe('ACTIVE');
-    expect(h.users[0].approvalDecidedAt).not.toBeNull();
+    expect(h.users[0]!.status).toBe('ACTIVE');
+    expect(h.users[0]!.approvalDecidedAt).not.toBeNull();
     expect(h.tokens.every((t) => t.decidedAt !== null)).toBe(true);
     // Delega el acceso en mod.access-groups (grupo por defecto al aprobar).
     expect(h.assignDefaultGroupOnApproval).toHaveBeenCalledTimes(1);
     expect(h.assignDefaultGroupOnApproval).toHaveBeenCalledWith(TENANT_ID, USER_ID);
-    expect(h.auditLog.record.mock.calls[0][0].action).toBe('member.approved');
+    expect(h.auditLog.record.mock.calls[0]![0].action).toBe('member.approved');
   });
 
   it('REJECT válido → User DEACTIVATED y devuelve rejected (sin asignar grupo)', async () => {
@@ -246,9 +246,9 @@ describe('MemberDecisionService.decide', () => {
     const result = await h.service.decide(rejectToken, CTX);
 
     expect(result).toEqual({ outcome: 'rejected', tenantId: TENANT_ID });
-    expect(h.users[0].status).toBe('DEACTIVATED');
+    expect(h.users[0]!.status).toBe('DEACTIVATED');
     expect(h.tokens.every((t) => t.decidedAt !== null)).toBe(true);
     expect(h.assignDefaultGroupOnApproval).not.toHaveBeenCalled();
-    expect(h.auditLog.record.mock.calls[0][0].action).toBe('member.rejected');
+    expect(h.auditLog.record.mock.calls[0]![0].action).toBe('member.rejected');
   });
 });

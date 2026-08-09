@@ -18,8 +18,10 @@ function makePrisma(opts: {
   existingRubric?: { id: string } | null;
 }) {
   const findQuestion = vi.fn(async () => opts.question ?? null);
-  const findRubric = vi.fn(async () => null as unknown);
-  const findRubricFirst = vi.fn(async () => opts.existingRubric ?? null);
+  const findRubric = vi.fn(async (_q: { where: Record<string, unknown> }) => null as unknown);
+  const findRubricFirst = vi.fn(
+    async (_q: { where: Record<string, unknown> }) => opts.existingRubric ?? null,
+  );
   const create = vi.fn(async ({ data }: { data: Record<string, unknown> }) => ({
     id: 'new-rubric-id',
     questionId: data.questionId,

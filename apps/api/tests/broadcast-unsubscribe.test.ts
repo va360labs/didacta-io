@@ -24,7 +24,7 @@ describe('broadcast unsubscribe token', () => {
 
   it('rechaza un token con la firma manipulada', () => {
     const token = signUnsubscribeToken(TENANT, USER);
-    const [data] = token.split('.');
+    const data = token.split('.')[0]!;
     expect(verifyUnsubscribeToken(`${data}.firmafalsa`)).toBeNull();
   });
 

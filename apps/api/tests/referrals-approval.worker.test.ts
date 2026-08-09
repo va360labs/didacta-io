@@ -10,9 +10,9 @@ const noopLogger = {
 
 function buildRegistryStub(opts: { approvedByTenant?: Record<string, number> } = {}) {
   const approvedByTenant = opts.approvedByTenant ?? {};
-  const findTenantsWithDueCommissions = vi.fn(async () => Object.keys(approvedByTenant));
+  const findTenantsWithDueCommissions = vi.fn(async (_now: Date) => Object.keys(approvedByTenant));
   const approveDueCommissionsForTenant = vi.fn(
-    async (tenantId: string) => approvedByTenant[tenantId] ?? 0,
+    async (tenantId: string, _now: Date) => approvedByTenant[tenantId] ?? 0,
   );
   const registry = {
     getReferralsService: vi.fn(() => ({
@@ -53,7 +53,7 @@ describe('ReferralsApprovalWorker.triggerNow (degraded mode, sin Redis)', () => 
 
   it('el procesado por tenant corre bajo el contexto ALS de ESE tenant (patrón F3)', async () => {
     const seenContexts: Array<string | undefined> = [];
-    const findTenantsWithDueCommissions = vi.fn(async () => ['t1', 't2']);
+    const findTenantsWithDueCommissions = vi.fn(async (_now: Date) => ['t1', 't2']);
     const approveDueCommissionsForTenant = vi.fn(async () => {
       seenContexts.push(tenantContextStorage.getStore()?.tenantId);
       return 0;

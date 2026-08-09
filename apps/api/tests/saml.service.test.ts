@@ -186,7 +186,7 @@ class TestSamlService extends SamlService {
   public parsedStub: ParsedSamlAssertion | null = null;
   public parseFails: Error | null = null;
 
-  protected buildProvider(): {
+  protected override buildProvider(): {
     getAuthorizeUrlAsync: ReturnType<typeof vi.fn>;
     validatePostResponseAsync: ReturnType<typeof vi.fn>;
     generateServiceProviderMetadata: ReturnType<typeof vi.fn>;
@@ -196,13 +196,13 @@ class TestSamlService extends SamlService {
     return this.providerStub;
   }
 
-  protected async validateAndParse(): Promise<ParsedSamlAssertion> {
+  protected override async validateAndParse(): Promise<ParsedSamlAssertion> {
     if (this.parseFails) throw this.parseFails;
     if (!this.parsedStub) throw new Error('parsedStub no configurado.');
     return this.parsedStub;
   }
 
-  protected inspectCertificate(pem: string): {
+  protected override inspectCertificate(pem: string): {
     subject?: string;
     notAfter?: string;
     signatureAlgorithm?: string;

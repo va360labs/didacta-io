@@ -151,7 +151,7 @@ describe('MfaPolicyController · gate feat:mfa.enforcement (A.1)', () => {
         gracePeriodDays: 7,
       });
       expect(recordSpy).toHaveBeenCalledTimes(1);
-      const entry = recordSpy.mock.calls[0][0];
+      const entry = recordSpy.mock.calls[0]![0];
       expect(entry.action).toBe('auth.mfa_policy.updated');
       expect(entry.tenantId).toBe('tenant-1');
       expect(entry.actorId).toBe('user-1');
@@ -175,7 +175,7 @@ describe('MfaPolicyController · gate feat:mfa.enforcement (A.1)', () => {
         gracePeriodDays: 3,
       });
       expect(recordSpy).toHaveBeenCalledTimes(2);
-      const entry2 = recordSpy.mock.calls[1][0];
+      const entry2 = recordSpy.mock.calls[1]![0];
       expect(entry2.metadata.previous).toEqual({
         requiredForAll: true,
         gracePeriodDays: 30,

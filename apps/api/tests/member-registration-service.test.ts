@@ -86,11 +86,14 @@ function makeHarness(
     hash: vi.fn(async (plain: string) => `hashed:${plain}`),
   } as never;
 
+  // Los dobles sobre los que el test afirma NO se castean a `never` en su
+  // declaración: con `never` no se les puede leer ninguna propiedad. El cast
+  // se aplica donde se inyectan, que es el único sitio donde hace falta.
   const decision = {
     issueDecisionTokens: vi
       .fn()
       .mockResolvedValue({ approveToken: 'raw-approve', rejectToken: 'raw-reject' }),
-  } as never;
+  };
 
   const paymentFlags = {
     lookup: vi.fn().mockResolvedValue({ isDelinquent: false, name: null }),
@@ -105,7 +108,7 @@ function makeHarness(
   // El lookup de suscripción corre en background; por defecto no encuentra nada.
   const subscriptionLookup = {
     runAndStore: vi.fn().mockResolvedValue({ matches: [], failures: [] }),
-  } as never;
+  };
 
   const smtp = { send: vi.fn().mockResolvedValue({ ok: true }) };
   const smtpResolver = {
@@ -113,20 +116,20 @@ function makeHarness(
   } as never;
   const auditLog = { record: vi.fn().mockResolvedValue(undefined) };
   const events = { publish: vi.fn().mockResolvedValue(undefined) };
-  const logger = { warn: vi.fn(), log: vi.fn(), error: vi.fn(), debug: vi.fn() } as never;
+  const logger = { warn: vi.fn(), log: vi.fn(), error: vi.fn(), debug: vi.fn() };
 
   const service = new MemberRegistrationService(
     prisma,
     passwords,
-    decision,
+    decision as never,
     paymentFlags,
     settings,
-    subscriptionLookup,
+    subscriptionLookup as never,
     smtp as never,
     smtpResolver,
     auditLog as never,
     events as never,
-    logger,
+    logger as never,
   );
 
   return {
@@ -162,7 +165,7 @@ describe('MemberRegistrationService.createPending', () => {
     expect(result).toEqual({ userId: 'new-user', created: true, status: 'PENDING' });
 
     // El create persiste status PENDING + telegramId + telegramInGroup (true → boolean true).
-    const createArg = h.txUser.create.mock.calls[0][0].data;
+    const createArg = h.txUser.create.mock.calls[0]![0].data;
     expect(createArg.status).toBe('PENDING');
     expect(createArg.telegramId).toBe('99887766');
     expect(createArg.telegramInGroup).toBe(true);
@@ -179,7 +182,7 @@ describe('MemberRegistrationService.createPending', () => {
     const result = await h.service.createPending(TENANT_ID, input, WEB_BASE_URL, CTX);
 
     expect(result).toEqual({ userId: 'new-user', created: true, status: 'PENDING' });
-    const createArg = h.txUser.create.mock.calls[0][0].data;
+    const createArg = h.txUser.create.mock.calls[0]![0].data;
     expect(createArg.telegramId).toBeNull();
     expect(createArg.telegramInGroup).toBeNull();
 
@@ -217,7 +220,7 @@ describe('MemberRegistrationService.createPending', () => {
     expect(h.decision.issueDecisionTokens).toHaveBeenCalledWith('tenant-1', 'new-user', CTX);
 
     // Email enviado al aprobador (destinatario del env).
-    const [, message] = h.smtp.send.mock.calls[0];
+    const [, message] = h.smtp.send.mock.calls[0]!;
     expect(message.to).toBe('aprobador@example.com');
     // Los enlaces firmados van embebidos en el cuerpo.
     expect(message.text).toContain('raw-approve');
@@ -230,7 +233,7 @@ describe('MemberRegistrationService.createPending', () => {
     await h.service.createPending(TENANT_ID, BASE_INPUT, WEB_BASE_URL, CTX);
 
     expect(h.auditLog.record).toHaveBeenCalledTimes(1);
-    const entry = h.auditLog.record.mock.calls[0][0];
+    const entry = h.auditLog.record.mock.calls[0]![0];
     expect(entry.action).toBe('member.inscription.created');
     expect(entry.tenantId).toBe('tenant-1');
     expect(entry.actorId).toBe('new-user');

@@ -135,7 +135,7 @@ describe('WpSsoService.exchange', () => {
       await makeToken({ email: 'nuevo@example.com', name: 'Nuevo' }),
     );
     expect(m.prisma.user.create).toHaveBeenCalledTimes(1);
-    const createArg = m.prisma.user.create.mock.calls[0][0];
+    const createArg = m.prisma.user.create.mock.calls[0]![0];
     expect(createArg.data.roles.create.roleId).toBe('role-alumno');
     expect(out.tokens).toEqual({ accessToken: 'AT', refreshToken: 'RT' });
     expect(out.user.roles).toContain('alumno');
@@ -184,7 +184,7 @@ describe('WpSsoService.exchange', () => {
     expect(m.prisma.userExternalIdentity.findUnique).toHaveBeenCalledTimes(1);
     expect(m.prisma.user.create).toHaveBeenCalledTimes(1);
     expect(m.prisma.userExternalIdentity.create).toHaveBeenCalledTimes(1);
-    const linkArg = m.prisma.userExternalIdentity.create.mock.calls[0][0];
+    const linkArg = m.prisma.userExternalIdentity.create.mock.calls[0]![0];
     expect(linkArg.data.externalId).toBe('wp-100');
     expect(linkArg.data.provider).toBe('wp');
     expect(linkArg.data.linkMethod).toBe('auto_provision');
@@ -225,7 +225,7 @@ describe('WpSsoService.exchange', () => {
     );
     expect(m.prisma.user.create).not.toHaveBeenCalled();
     expect(m.prisma.userExternalIdentity.create).toHaveBeenCalledTimes(1);
-    expect(m.prisma.userExternalIdentity.create.mock.calls[0][0].data.linkMethod).toBe(
+    expect(m.prisma.userExternalIdentity.create.mock.calls[0]![0].data.linkMethod).toBe(
       'auto_email',
     );
     expect(out.user.id).toBe('user-9');

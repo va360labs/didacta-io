@@ -53,6 +53,11 @@ function makeFakeStorage(): StorageService & { uploadCalls: number } {
       fake.uploadCalls++;
       return { key };
     },
+    // El vault nunca sube imágenes, pero `StorageService` declara el método:
+    // sin él el doble deja de cumplir el contrato que dice implementar.
+    async uploadImage(): Promise<never> {
+      throw new Error('not used');
+    },
     async download() {
       throw new Error('not used');
     },
@@ -107,8 +112,8 @@ describe('PrismaEvidenceVaultService', () => {
     await svc.store({ tenantId: 't2', resourceType: 'doc', resourceId: 'd1', data });
 
     expect(prisma._rows).toHaveLength(2);
-    expect(prisma._rows[0].tenantId).toBe('t1');
-    expect(prisma._rows[1].tenantId).toBe('t2');
+    expect(prisma._rows[0]!.tenantId).toBe('t1');
+    expect(prisma._rows[1]!.tenantId).toBe('t2');
   });
 
   it('tolera Uint8Array como entrada (no solo Buffer)', async () => {

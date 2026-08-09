@@ -82,7 +82,7 @@ function makeFakePrisma(opts: { groupCount?: number } = {}) {
           createdAt: now,
           updatedAt: now,
           deletedAt: null,
-          ...(args.data as CompanyRow),
+          ...args.data,
         };
         rows.push(row);
         return row;
@@ -118,13 +118,13 @@ const ctx = {
   eventBus: {
     publish: vi.fn(async () => {}),
   },
-} as never;
+};
 
 describe('FundaeCompanyService', () => {
   describe('create', () => {
     it('persiste empresa con NIF normalizado y publica evento', async () => {
       const prisma = makeFakePrisma();
-      const svc = new FundaeCompanyService(prisma as never, ctx);
+      const svc = new FundaeCompanyService(prisma as never, ctx as never);
 
       const created = await svc.create('t-1', 'admin-1', {
         nif: 'A58818501',
@@ -147,7 +147,7 @@ describe('FundaeCompanyService', () => {
 
     it('rechaza NIF duplicado dentro del mismo tenant', async () => {
       const prisma = makeFakePrisma();
-      const svc = new FundaeCompanyService(prisma as never, ctx);
+      const svc = new FundaeCompanyService(prisma as never, ctx as never);
       await svc.create('t-1', null, { nif: 'A58818501', razonSocial: 'Empresa A' });
 
       await expect(
@@ -157,7 +157,7 @@ describe('FundaeCompanyService', () => {
 
     it('NIF duplicado en OTRO tenant es OK (aislamiento por tenant)', async () => {
       const prisma = makeFakePrisma();
-      const svc = new FundaeCompanyService(prisma as never, ctx);
+      const svc = new FundaeCompanyService(prisma as never, ctx as never);
       await svc.create('t-A', null, { nif: 'A58818501', razonSocial: 'Empresa A' });
 
       const created = await svc.create('t-B', null, {
@@ -170,7 +170,7 @@ describe('FundaeCompanyService', () => {
 
     it('crédito disponible es null cuando no se fija total', async () => {
       const prisma = makeFakePrisma();
-      const svc = new FundaeCompanyService(prisma as never, ctx);
+      const svc = new FundaeCompanyService(prisma as never, ctx as never);
       const created = await svc.create('t-1', null, {
         nif: 'A58818501',
         razonSocial: 'Empresa sin crédito declarado',
@@ -183,7 +183,7 @@ describe('FundaeCompanyService', () => {
   describe('list', () => {
     it('list filtra por tenant y excluye soft-deleted por defecto', async () => {
       const prisma = makeFakePrisma();
-      const svc = new FundaeCompanyService(prisma as never, ctx);
+      const svc = new FundaeCompanyService(prisma as never, ctx as never);
       await svc.create('t-1', null, { nif: 'A58818501', razonSocial: 'Empresa Alpha' });
       const beta = await svc.create('t-1', null, {
         nif: 'P1234567D',
@@ -199,7 +199,7 @@ describe('FundaeCompanyService', () => {
 
     it('list con includeDeleted=true devuelve también soft-deleted', async () => {
       const prisma = makeFakePrisma();
-      const svc = new FundaeCompanyService(prisma as never, ctx);
+      const svc = new FundaeCompanyService(prisma as never, ctx as never);
       const alpha = await svc.create('t-1', null, {
         nif: 'A58818501',
         razonSocial: 'Empresa Alpha',
@@ -213,7 +213,7 @@ describe('FundaeCompanyService', () => {
 
     it('search filtra por NIF (normalizado) o razón social (case-insensitive)', async () => {
       const prisma = makeFakePrisma();
-      const svc = new FundaeCompanyService(prisma as never, ctx);
+      const svc = new FundaeCompanyService(prisma as never, ctx as never);
       await svc.create('t-1', null, { nif: 'A58818501', razonSocial: 'Telefónica' });
       await svc.create('t-1', null, { nif: 'P1234567D', razonSocial: 'Mercadona' });
 
@@ -228,7 +228,7 @@ describe('FundaeCompanyService', () => {
   describe('get', () => {
     it('get devuelve la empresa o lanza CompanyNotFoundError', async () => {
       const prisma = makeFakePrisma();
-      const svc = new FundaeCompanyService(prisma as never, ctx);
+      const svc = new FundaeCompanyService(prisma as never, ctx as never);
       const created = await svc.create('t-1', null, {
         nif: 'A58818501',
         razonSocial: 'Empresa',
@@ -242,7 +242,7 @@ describe('FundaeCompanyService', () => {
 
     it('get aislamiento por tenant — empresa de otro tenant es como si no existiera', async () => {
       const prisma = makeFakePrisma();
-      const svc = new FundaeCompanyService(prisma as never, ctx);
+      const svc = new FundaeCompanyService(prisma as never, ctx as never);
       const created = await svc.create('t-A', null, {
         nif: 'A58818501',
         razonSocial: 'Empresa Alpha',
@@ -254,7 +254,7 @@ describe('FundaeCompanyService', () => {
   describe('update', () => {
     it('update edita razón social y plantilla; mantiene NIF original', async () => {
       const prisma = makeFakePrisma();
-      const svc = new FundaeCompanyService(prisma as never, ctx);
+      const svc = new FundaeCompanyService(prisma as never, ctx as never);
       const created = await svc.create('t-1', null, {
         nif: 'A58818501',
         razonSocial: 'Empresa Original',
@@ -270,7 +270,7 @@ describe('FundaeCompanyService', () => {
 
     it('update lanza CompanyNotFoundError si id desconocido', async () => {
       const prisma = makeFakePrisma();
-      const svc = new FundaeCompanyService(prisma as never, ctx);
+      const svc = new FundaeCompanyService(prisma as never, ctx as never);
       await expect(
         svc.update('t-1', null, 'fantasma', { razonSocial: 'X' }),
       ).rejects.toBeInstanceOf(CompanyNotFoundError);
@@ -280,7 +280,7 @@ describe('FundaeCompanyService', () => {
   describe('softDelete', () => {
     it('softDelete marca deletedAt y publica evento', async () => {
       const prisma = makeFakePrisma();
-      const svc = new FundaeCompanyService(prisma as never, ctx);
+      const svc = new FundaeCompanyService(prisma as never, ctx as never);
       const created = await svc.create('t-1', null, {
         nif: 'A58818501',
         razonSocial: 'Empresa',
@@ -295,7 +295,7 @@ describe('FundaeCompanyService', () => {
 
     it('softDelete es idempotente sobre empresa ya borrada', async () => {
       const prisma = makeFakePrisma();
-      const svc = new FundaeCompanyService(prisma as never, ctx);
+      const svc = new FundaeCompanyService(prisma as never, ctx as never);
       const created = await svc.create('t-1', null, {
         nif: 'A58818501',
         razonSocial: 'Empresa',
@@ -307,7 +307,7 @@ describe('FundaeCompanyService', () => {
 
     it('softDelete rechaza si hay grupos activos vinculados (forward-compat con LMS-81)', async () => {
       const prisma = makeFakePrisma({ groupCount: 2 });
-      const svc = new FundaeCompanyService(prisma as never, ctx);
+      const svc = new FundaeCompanyService(prisma as never, ctx as never);
       const created = await svc.create('t-1', null, {
         nif: 'A58818501',
         razonSocial: 'Empresa',

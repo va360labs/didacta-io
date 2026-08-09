@@ -52,7 +52,7 @@ describe('NotificationStreamService', () => {
     const notifB = b.filter((e) => e.type === 'notification');
     expect(notifA).toHaveLength(1);
     expect(notifB).toHaveLength(1);
-    expect((notifA[0].data as { id: string }).id).toBe('n-1');
+    expect((notifA[0]!.data as { id: string }).id).toBe('n-1');
 
     subA.unsubscribe();
     subB.unsubscribe();

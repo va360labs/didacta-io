@@ -198,7 +198,7 @@ describe('MemberRegistrationPublicController · otp/verify', () => {
       password: 'x'.repeat(12),
       verificationToken,
     } as never);
-    const input = registration.createPending.mock.calls[0][1];
+    const input = registration.createPending.mock.calls[0]![1];
     expect(input.telegramId).toBeNull();
     expect(input.inGroup).toBe('unknown');
     expect(input.email).toBe('a@x.com');
@@ -236,7 +236,7 @@ describe('MemberRegistrationPublicController · register', () => {
       email: ' Ana@X.com ',
     } as never);
     expect(res).toEqual({ ok: true, status: 'PENDING' });
-    const input = registration.createPending.mock.calls[0][1];
+    const input = registration.createPending.mock.calls[0]![1];
     expect(input.email).toBe('ana@x.com');
     expect(input.telegramId).toBeNull();
   });
@@ -283,7 +283,7 @@ describe('MemberRegistrationPublicController · register', () => {
       email: 'a@x.com',
       ticket,
     } as never);
-    const input = registration.createPending.mock.calls[0][1];
+    const input = registration.createPending.mock.calls[0]![1];
     expect(input.telegramId).toBe('42');
     expect(input.inGroup).toBe('false');
     expect(input.email).toBe('a@x.com');

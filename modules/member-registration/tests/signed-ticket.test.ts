@@ -42,7 +42,7 @@ describe('signed-ticket', () => {
       const ticket = signTicket({ a: 1 }, SECRET, 300);
       const [data] = ticket.split('.');
       // Reemplazamos la firma por una de la misma longitud pero inválida.
-      const tampered = `${data}.${'A'.repeat(ticket.split('.')[1].length)}`;
+      const tampered = `${data}.${'A'.repeat(ticket.split('.')[1]!.length)}`;
       expect(verifyTicket(tampered, SECRET)).toBeNull();
     });
 
@@ -50,8 +50,8 @@ describe('signed-ticket', () => {
       const ticket = signTicket({ a: 1 }, SECRET, 300);
       const [data, sig] = ticket.split('.');
       // Misma longitud de data pero contenido distinto ⇒ firma no cuadra.
-      const flippedChar = data[0] === 'A' ? 'B' : 'A';
-      const tamperedData = flippedChar + data.slice(1);
+      const flippedChar = data![0] === 'A' ? 'B' : 'A';
+      const tamperedData = flippedChar + data!.slice(1);
       expect(verifyTicket(`${tamperedData}.${sig}`, SECRET)).toBeNull();
     });
 

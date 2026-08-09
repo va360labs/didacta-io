@@ -102,6 +102,9 @@ function makeCtx(db: unknown, overrides: Record<string, unknown> = {}) {
     db,
     http: {} as unknown,
     didacta: {} as unknown,
+    // El contrato de tick declara `secrets`: sin él el doble no cumple
+    // ModuleJobTickContext y el cast deja de solapar.
+    secrets: {} as unknown,
     ...overrides,
   } as Parameters<typeof onJobTick>[0];
 }

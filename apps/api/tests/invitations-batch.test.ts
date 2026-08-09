@@ -45,7 +45,7 @@ function hacerServicio(opts: {
       return { id: 'group-1' };
     }),
     assignMembers: vi.fn(async (_tenantId: string, _groupId: string, userIds: string[]) => {
-      if (opts.assignMembersFallaPara?.has(userIds[0])) throw new Error('fallo de BD');
+      if (opts.assignMembersFallaPara?.has(userIds[0]!)) throw new Error('fallo de BD');
     }),
   };
 

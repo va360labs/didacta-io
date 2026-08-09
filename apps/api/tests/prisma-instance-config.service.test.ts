@@ -73,13 +73,14 @@ function makeFakePrisma() {
           : {}),
       };
       if (idx >= 0) {
-        rows[idx] = { ...rows[idx], ...normalizedUpdate, updatedAt: now };
+        rows[idx] = { ...rows[idx]!, ...normalizedUpdate, updatedAt: now };
         return rows[idx];
       }
+      // scope/key NO se ponen aquí: `args.create` los trae siempre (su tipo
+      // los declara obligatorios) y el spread de abajo los pisaba, así que
+      // ponerlos era código muerto.
       const row: SettingRow = {
         id: String(nextId++),
-        scope,
-        key,
         isSecret: false,
         valueJson: null,
         valueCipher: null,
@@ -138,10 +139,10 @@ describe('PrismaInstanceConfigService', () => {
       const jwt = 'eyJhbGciOiJFUzI1NiJ9.super-secreto.firma';
       await svc.set('license', 'key', jwt, { isSecret: true });
       const row = prisma._rows[0];
-      expect(row.isSecret).toBe(true);
-      expect(row.valueJson).toBeNull();
-      expect(row.valueCipher).not.toBeNull();
-      expect(row.valueCipher!.toString('utf8')).not.toContain('super-secreto');
+      expect(row!.isSecret).toBe(true);
+      expect(row!.valueJson).toBeNull();
+      expect(row!.valueCipher).not.toBeNull();
+      expect(row!.valueCipher!.toString('utf8')).not.toContain('super-secreto');
     });
 
     it('get descifra transparentemente', async () => {
@@ -176,7 +177,7 @@ describe('PrismaInstanceConfigService', () => {
       await svc.set('telemetry', 'disabled', true);
       const onlyLicense = await svc.list('license');
       expect(onlyLicense).toHaveLength(1);
-      expect(onlyLicense[0].scope).toBe('license');
+      expect(onlyLicense[0]!.scope).toBe('license');
     });
 
     it('has devuelve true/false correctamente', async () => {

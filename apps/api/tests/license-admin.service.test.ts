@@ -133,7 +133,7 @@ describe('LicenseAdminService', () => {
           const idx = findIdx(scope, key);
           const now = new Date();
           if (idx >= 0) {
-            rows[idx] = { ...rows[idx], ...args.update, updatedAt: now };
+            rows[idx] = { ...rows[idx]!, ...args.update, updatedAt: now };
             return rows[idx];
           }
           const row: Row = {

@@ -97,7 +97,7 @@ function makeHarness(opts: {
             tenantName: 'Academia Demo',
           },
     ),
-  } as never;
+  };
   const logger = { warn: vi.fn(), log: vi.fn(), error: vi.fn(), debug: vi.fn() } as never;
 
   const accessGroupsSvc = {
@@ -122,7 +122,7 @@ function makeHarness(opts: {
     registry,
     smtpResolver,
     smtp as never,
-    passwordReset,
+    passwordReset as never,
     accessGroupsSvc as never,
     logger,
   );
@@ -153,7 +153,7 @@ describe('InscribeService.inscribe', () => {
 
     expect(result.userCreated).toBe(true);
     expect(result.userId).toBe('new-user');
-    const createArg = h.txUser.create.mock.calls[0][0].data;
+    const createArg = h.txUser.create.mock.calls[0]![0].data;
     expect(createArg.status).toBe('ACTIVE');
     // Ya NO se fuerza el cambio: el comprador elige su contraseña en el enlace,
     // así entra una sola vez y va directo al onboarding.
@@ -184,7 +184,7 @@ describe('InscribeService.inscribe', () => {
       expect.anything(),
       { ttlMinutes: SET_PASSWORD_TTL },
     );
-    const message = h.smtp.send.mock.calls[0][1] as { html: string; text: string };
+    const message = h.smtp.send.mock.calls[0]![1] as { html: string; text: string };
     expect(message.html).toContain(`${WEB_BASE_URL}/reset-password?token=tok-abc`);
     expect(message.html).toContain('Define tu contraseña');
     // No se filtra ninguna contraseña generada.
@@ -206,7 +206,7 @@ describe('InscribeService.inscribe', () => {
       WEB_BASE_URL,
     );
 
-    const message = h.smtp.send.mock.calls[0][1] as {
+    const message = h.smtp.send.mock.calls[0]![1] as {
       subject: string;
       html: string;
       text: string;
@@ -231,7 +231,7 @@ describe('InscribeService.inscribe', () => {
         { email: 'ana@x.com', name: 'Ana', courseIds: [COURSE_A], ...(locale ? { locale } : {}) },
         WEB_BASE_URL,
       );
-      const message = h.smtp.send.mock.calls[0][1] as { subject: string; text: string };
+      const message = h.smtp.send.mock.calls[0]![1] as { subject: string; text: string };
       expect(message.subject, String(locale)).toBe('Tu acceso a Academia Demo');
       expect(message.text, String(locale)).toContain('Hola Ana,');
       expect(message.text, String(locale)).toContain('Define tu contraseña:');

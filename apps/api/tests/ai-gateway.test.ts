@@ -7,8 +7,11 @@ import {
   type AiProviderAdapter,
 } from '../src/ai/types/contracts';
 
+// Sin `as never` en el return: el doble conserva su forma real para poder
+// hacer aserciones sobre los espías. El `as never` se aplica solo donde se
+// inyecta, que es el único punto donde hace falta.
 function makeLogger() {
-  return { log: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn(), child: vi.fn() } as never;
+  return { log: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn(), child: vi.fn() };
 }
 
 function makeRegistry(adapter: AiProviderAdapter): ProviderRegistry {
@@ -46,7 +49,7 @@ describe('AiGatewayService', () => {
     const gw = new AiGatewayService(
       makeRegistry(fakeAdapter),
       makeResolver({ provider: 'openai', model: 'gpt-4o' }),
-      makeLogger(),
+      makeLogger() as never,
     );
     const r = await gw.chat({
       tenantId: 't1',
@@ -72,7 +75,7 @@ describe('AiGatewayService', () => {
     const gw = new AiGatewayService(
       makeRegistry(fakeAdapter),
       makeResolver({ provider: 'openai' }),
-      makeLogger(),
+      makeLogger() as never,
     );
     const r = await gw.embed({ tenantId: 't1', input: { texts: ['a'] } });
     expect(r.embeddings).toHaveLength(1);
@@ -81,7 +84,11 @@ describe('AiGatewayService', () => {
 
   it('chat() lanza AiGatewayError si el provider resuelto no está registrado', async () => {
     const r = new ProviderRegistry();
-    const gw = new AiGatewayService(r, makeResolver({ provider: 'inexistente' }), makeLogger());
+    const gw = new AiGatewayService(
+      r,
+      makeResolver({ provider: 'inexistente' }),
+      makeLogger() as never,
+    );
     await expect(
       gw.chat({ tenantId: 't', input: { system: 's', messages: [] } }),
     ).rejects.toBeInstanceOf(AiGatewayError);
@@ -97,7 +104,7 @@ describe('AiGatewayService', () => {
     const gw = new AiGatewayService(
       makeRegistry(embedOnly),
       makeResolver({ provider: 'voyage' }),
-      makeLogger(),
+      makeLogger() as never,
     );
     await expect(
       gw.chat({ tenantId: 't', input: { system: 's', messages: [] } }),
@@ -114,7 +121,7 @@ describe('AiGatewayService', () => {
     const gw = new AiGatewayService(
       makeRegistry(chatOnly),
       makeResolver({ provider: 'anthropic' }),
-      makeLogger(),
+      makeLogger() as never,
     );
     await expect(gw.embed({ tenantId: 't', input: { texts: ['x'] } })).rejects.toBeInstanceOf(
       ProviderUnsupportedCapabilityError,
@@ -134,7 +141,7 @@ describe('AiGatewayService', () => {
     const gw = new AiGatewayService(
       makeRegistry(failingAdapter),
       makeResolver({ provider: 'openai' }),
-      logger,
+      logger as never,
     );
     await expect(gw.chat({ tenantId: 't', input: { system: 's', messages: [] } })).rejects.toThrow(
       /boom/,

@@ -123,7 +123,7 @@ describe('TelemetryHeartbeatService · envío', () => {
 
   it('con receptor accesible, entrega el latido', async () => {
     const svc = service();
-    const sendHeartbeat = vi.fn(() => Promise.resolve());
+    const sendHeartbeat = vi.fn((_payload: unknown) => Promise.resolve());
     (svc as never as { client: unknown }).client = { sendHeartbeat };
     await expect(svc.sendNow()).resolves.toBe(true);
     expect(sendHeartbeat).toHaveBeenCalledTimes(1);

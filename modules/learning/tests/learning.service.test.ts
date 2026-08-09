@@ -164,7 +164,9 @@ function makeFakePrisma() {
         findFirst: vi.fn(async ({ where }: { where: Partial<FakeEnrollment> }) => {
           return (
             [...enrollments.values()].find((e) =>
-              Object.entries(where).every(([k, v]) => (e as Record<string, unknown>)[k] === v),
+              Object.entries(where).every(
+                ([k, v]) => (e as unknown as Record<string, unknown>)[k] === v,
+              ),
             ) ?? null
           );
         }),
@@ -331,7 +333,9 @@ function makeFakePrisma() {
               enrollmentId: string;
               lessonId: string;
             };
-            update: Partial<FakeProgress> & { watchedSeconds?: { increment: number } };
+            update: Omit<Partial<FakeProgress>, 'watchedSeconds'> & {
+              watchedSeconds?: number | { increment: number };
+            };
           }) => {
             const key = `${where.enrollmentId_lessonId.enrollmentId}::${where.enrollmentId_lessonId.lessonId}`;
             const existing = progress.get(key);
@@ -370,9 +374,9 @@ function makeFakePrisma() {
   };
 }
 
-function makeContext(): ModuleContext {
+function makeContext() {
   return {
-    eventBus: { publish: vi.fn().mockResolvedValue(undefined), subscribe: vi.fn() } as never,
+    eventBus: { publish: vi.fn().mockResolvedValue(undefined), subscribe: vi.fn() },
     hookRegistry: { register: vi.fn(), run: vi.fn() } as never,
     storage: {} as never,
     auditLog: { record: vi.fn() } as never,
@@ -397,7 +401,7 @@ describe('LearningService', () => {
   it('rechaza enrollar en curso no publicado', async () => {
     const fake = makeFakePrisma();
     fake.courses.set('c-1', { id: 'c-1', tenantId: 't-1', status: 'DRAFT', deletedAt: null });
-    const service = new LearningService(fake.prisma as never, makeContext());
+    const service = new LearningService(fake.prisma as never, makeContext() as never);
     await expect(
       service.enrollByAdmin('t-1', 'admin', { userId: 'u-1', courseId: 'c-1' }),
     ).rejects.toBeInstanceOf(CourseNotPublishedError);
@@ -407,7 +411,7 @@ describe('LearningService', () => {
     const fake = makeFakePrisma();
     fake.courses.set('c-1', { id: 'c-1', tenantId: 't-1', status: 'PUBLISHED', deletedAt: null });
     const ctx = makeContext();
-    const service = new LearningService(fake.prisma as never, ctx);
+    const service = new LearningService(fake.prisma as never, ctx as never);
     const e = await service.enrollByAdmin('t-1', 'admin', { userId: 'u-1', courseId: 'c-1' });
     expect(e.status).toBe('ACTIVE');
     expect(ctx.eventBus.publish).toHaveBeenCalledWith(
@@ -418,7 +422,7 @@ describe('LearningService', () => {
   it('rechaza doble enrollment activo en mismo (user, course)', async () => {
     const fake = makeFakePrisma();
     fake.courses.set('c-1', { id: 'c-1', tenantId: 't-1', status: 'PUBLISHED', deletedAt: null });
-    const service = new LearningService(fake.prisma as never, makeContext());
+    const service = new LearningService(fake.prisma as never, makeContext() as never);
     await service.enrollByAdmin('t-1', 'admin', { userId: 'u-1', courseId: 'c-1' });
     await expect(
       service.enrollByAdmin('t-1', 'admin', { userId: 'u-1', courseId: 'c-1' }),
@@ -446,7 +450,7 @@ describe('LearningService', () => {
       completedAt: null,
       cancelledAt: new Date(),
     });
-    const service = new LearningService(fake.prisma as never, makeContext());
+    const service = new LearningService(fake.prisma as never, makeContext() as never);
 
     const reactivated = await service.enrollFromGroup('t-1', 'u-1', 'c-1');
 
@@ -473,7 +477,7 @@ describe('LearningService', () => {
       completedAt: new Date(),
       cancelledAt: null,
     });
-    const service = new LearningService(fake.prisma as never, makeContext());
+    const service = new LearningService(fake.prisma as never, makeContext() as never);
 
     const result = await service.enrollFromGroup('t-1', 'u-1', 'c-1');
 
@@ -496,7 +500,7 @@ describe('LearningService', () => {
       expiresAt: null,
       revokedAt: null,
     });
-    const service = new LearningService(fake.prisma as never, makeContext());
+    const service = new LearningService(fake.prisma as never, makeContext() as never);
     const e = await service.enrollByCode('t-1', 'u-1', { code: 'AAAA-BBBB' });
     expect(e.source).toBe('CODE');
     const inv = [...fake.invitations.values()][0];
@@ -517,7 +521,7 @@ describe('LearningService', () => {
       expiresAt: new Date(Date.now() - 10_000),
       revokedAt: null,
     });
-    const service = new LearningService(fake.prisma as never, makeContext());
+    const service = new LearningService(fake.prisma as never, makeContext() as never);
     await expect(service.enrollByLink('t-1', 'u-1', { token: 'tok' })).rejects.toBeInstanceOf(
       InvitationInvalidError,
     );
@@ -555,7 +559,7 @@ describe('LearningService', () => {
       deletedAt: null,
     });
     const ctx = makeContext();
-    const service = new LearningService(fake.prisma as never, ctx);
+    const service = new LearningService(fake.prisma as never, ctx as never);
     const enroll = await service.enrollByAdmin('t-1', 'admin', { userId: 'u-1', courseId: 'c-1' });
 
     await service.trackProgress('t-1', 'u-1', {
@@ -591,7 +595,7 @@ describe('LearningService', () => {
     const fake = makeFakePrisma();
     fake.courses.set('c-1', { id: 'c-1', tenantId: 't-1', status: 'PUBLISHED', deletedAt: null });
     const ctx = makeContext();
-    const service = new LearningService(fake.prisma as never, ctx);
+    const service = new LearningService(fake.prisma as never, ctx as never);
     const e = await service.enrollByAdmin('t-1', 'admin', { userId: 'u-1', courseId: 'c-1' });
     const cancelled = await service.cancelEnrollment('t-1', 'u-1', e.id);
     expect(cancelled.status).toBe('CANCELLED');
@@ -602,7 +606,7 @@ describe('LearningService', () => {
 
   it('cancelEnrollment falla si no existe para el user', async () => {
     const fake = makeFakePrisma();
-    const service = new LearningService(fake.prisma as never, makeContext());
+    const service = new LearningService(fake.prisma as never, makeContext() as never);
     await expect(service.cancelEnrollment('t-1', 'u-1', 'no-existe')).rejects.toBeInstanceOf(
       EnrollmentNotFoundError,
     );
@@ -613,7 +617,7 @@ describe('LearningService', () => {
       const fake = makeFakePrisma();
       fake.courses.set('c-1', { id: 'c-1', tenantId: 't-1', status: 'PUBLISHED', deletedAt: null });
       const ctx = makeContext();
-      const service = new LearningService(fake.prisma as never, ctx);
+      const service = new LearningService(fake.prisma as never, ctx as never);
       const e = await service.enrollByAdmin('t-1', 'admin', { userId: 'u-1', courseId: 'c-1' });
 
       // 'admin' NO es el dueño de la matrícula: cancelEnrollment se lo negaría.
@@ -629,7 +633,7 @@ describe('LearningService', () => {
       const fake = makeFakePrisma();
       fake.courses.set('c-1', { id: 'c-1', tenantId: 't-1', status: 'PUBLISHED', deletedAt: null });
       const ctx = makeContext();
-      const service = new LearningService(fake.prisma as never, ctx);
+      const service = new LearningService(fake.prisma as never, ctx as never);
       const e = await service.enrollByAdmin('t-1', 'admin', { userId: 'u-1', courseId: 'c-1' });
       await service.cancelEnrollmentByAdmin('t-1', 'admin', e.id);
 
@@ -642,7 +646,7 @@ describe('LearningService', () => {
     it('no cruza tenants: la matrícula de otro tenant es NotFound', async () => {
       const fake = makeFakePrisma();
       fake.courses.set('c-1', { id: 'c-1', tenantId: 't-1', status: 'PUBLISHED', deletedAt: null });
-      const service = new LearningService(fake.prisma as never, makeContext());
+      const service = new LearningService(fake.prisma as never, makeContext() as never);
       const e = await service.enrollByAdmin('t-1', 'admin', { userId: 'u-1', courseId: 'c-1' });
 
       await expect(service.cancelEnrollmentByAdmin('t-2', 'admin', e.id)).rejects.toBeInstanceOf(
@@ -654,7 +658,7 @@ describe('LearningService', () => {
   describe('getEnrollmentProgressDetail (vista del formador)', () => {
     it('lanza EnrollmentNotFoundError si la matrícula no existe', async () => {
       const fake = makeFakePrisma();
-      const service = new LearningService(fake.prisma as never, makeContext());
+      const service = new LearningService(fake.prisma as never, makeContext() as never);
       await expect(
         service.getEnrollmentProgressDetail('t-1', 'c-1', 'no-existe'),
       ).rejects.toBeInstanceOf(EnrollmentNotFoundError);
@@ -722,7 +726,7 @@ describe('LearningService', () => {
         lastAccessedAt,
       });
 
-      const service = new LearningService(fake.prisma as never, makeContext());
+      const service = new LearningService(fake.prisma as never, makeContext() as never);
       const detail = await service.getEnrollmentProgressDetail('t-1', 'c-1', 'en-1');
 
       expect(detail.enrollmentId).toBe('en-1');
@@ -775,7 +779,7 @@ describe('LearningService', () => {
     it('approveLessonComment aprueba un comentario del propio tenant', async () => {
       const fake = makeFakePrisma();
       seedComment(fake, 't-1');
-      const service = new LearningService(fake.prisma as never, makeContext());
+      const service = new LearningService(fake.prisma as never, makeContext() as never);
       const res = await service.approveLessonComment('t-1', 'rev-1', 'cm-1');
       expect((res as { status: string }).status).toBe('APPROVED');
     });
@@ -783,7 +787,7 @@ describe('LearningService', () => {
     it('approveLessonComment NO aprueba un comentario de OTRO tenant (write cross-tenant bloqueado)', async () => {
       const fake = makeFakePrisma();
       seedComment(fake, 't-2'); // comentario del tenant B
-      const service = new LearningService(fake.prisma as never, makeContext());
+      const service = new LearningService(fake.prisma as never, makeContext() as never);
       await expect(service.approveLessonComment('t-1', 'rev-1', 'cm-1')).rejects.toBeInstanceOf(
         EnrollmentNotFoundError,
       );
@@ -794,7 +798,7 @@ describe('LearningService', () => {
     it('rejectLessonComment NO rechaza un comentario de OTRO tenant', async () => {
       const fake = makeFakePrisma();
       seedComment(fake, 't-2');
-      const service = new LearningService(fake.prisma as never, makeContext());
+      const service = new LearningService(fake.prisma as never, makeContext() as never);
       await expect(
         service.rejectLessonComment('t-1', 'rev-1', 'cm-1', 'spam'),
       ).rejects.toBeInstanceOf(EnrollmentNotFoundError);

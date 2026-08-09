@@ -24,7 +24,7 @@ function setup(
     if (where.status === 'COMPLETED') return counts.completed;
     return counts.total;
   });
-  const certCount = vi.fn(async () => counts.cert);
+  const certCount = vi.fn(async (_args: { where: Record<string, unknown> }) => counts.cert);
 
   const prisma = {
     user: { count: userCount },
@@ -50,7 +50,7 @@ describe('AdminStatsService.getStats', () => {
     await service.getStats('t1', 'all');
     const calls = enrollmentCount.mock.calls.map((c) => c[0].where);
     expect(calls.every((w: any) => !w.enrolledAt)).toBe(true);
-    expect(certCount.mock.calls[0]?.[0].where.issuedAt).toBeUndefined();
+    expect(certCount.mock.calls[0]?.[0]!.where.issuedAt).toBeUndefined();
   });
 
   it('range=30d aplica enrolledAt gte ~30 días atrás', async () => {

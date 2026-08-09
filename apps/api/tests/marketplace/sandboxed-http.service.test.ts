@@ -185,7 +185,7 @@ describe('SandboxedHttpService — SSRF guard', () => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 function mockFetchWith(handler: (url: string, init: RequestInit) => Response | Promise<Response>) {
-  globalThis.fetch = vi.fn(async (input: RequestInfo | URL, init: RequestInit = {}) => {
+  globalThis.fetch = vi.fn(async (input: unknown, init: RequestInit = {}) => {
     return handler(String(input), init);
   }) as unknown as typeof globalThis.fetch;
 }

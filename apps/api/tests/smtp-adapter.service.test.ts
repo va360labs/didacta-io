@@ -102,7 +102,7 @@ describe('SmtpAdapterService', () => {
         { to: 'a@b.com', subject: 's', text: 't' },
         'Mal\r\nBcc: victim@x.com "raro"',
       );
-      const arg = sendMailMock.mock.calls[0][0] as { from: { name: string; address: string } };
+      const arg = sendMailMock.mock.calls[0]![0] as { from: { name: string; address: string } };
       expect(arg.from.name).not.toContain('\n');
       expect(arg.from.name).not.toContain('\r');
       expect(arg.from.name).not.toContain('"');

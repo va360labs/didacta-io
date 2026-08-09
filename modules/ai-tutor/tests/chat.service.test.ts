@@ -12,11 +12,14 @@ import {
   DailyQuestionQuotaExceededError,
 } from '../src/errors.js';
 
+// Los dobles NO se castean a `never` al declararse: con `never` no se les
+// puede leer ninguna propiedad y las aserciones sobre sus espías dejan de
+// typechequearse. El cast va donde se inyectan, que es donde hace falta.
 function makeContext() {
   return {
     logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn(), child: vi.fn() },
     eventBus: { publish: vi.fn(async () => {}) },
-  } as never;
+  };
 }
 
 interface FakeChunkRow {
@@ -110,7 +113,7 @@ function makeFakePrisma(opts: {
     }),
     ejecutados,
     $transaction: vi.fn(async (queries: Promise<unknown>[]) => Promise.all(queries)),
-  } as never;
+  };
 }
 
 const makeEmbed =
@@ -137,7 +140,12 @@ const sampleRetrieved: FakeChunkRow[] = [
 describe('AiTutorChatService.ask (LMS-90.D)', () => {
   it('lanza CourseNotIndexedError si no hay chunks', async () => {
     const prisma = makeFakePrisma({ chunkCount: 0 });
-    const svc = new AiTutorChatService(prisma, makeContext(), makeEmbed(), makeChat());
+    const svc = new AiTutorChatService(
+      prisma as never,
+      makeContext() as never,
+      makeEmbed(),
+      makeChat(),
+    );
     await expect(svc.ask('t1', 'u1', 'c1', { question: 'qué es vlookup' })).rejects.toBeInstanceOf(
       CourseNotIndexedError,
     );
@@ -158,7 +166,12 @@ describe('AiTutorChatService.ask (LMS-90.D)', () => {
         { id: 'chunk-2', content: 'INDEX y MATCH combinados son más flexibles' },
       ],
     });
-    const svc = new AiTutorChatService(prisma, makeContext(), makeEmbed(), makeChat());
+    const svc = new AiTutorChatService(
+      prisma as never,
+      makeContext() as never,
+      makeEmbed(),
+      makeChat(),
+    );
     const result = await svc.ask('t1', 'u1', 'c1', { question: 'qué es vlookup' });
 
     expect(result.conversationId).toBeTruthy();
@@ -182,7 +195,12 @@ describe('AiTutorChatService.ask (LMS-90.D)', () => {
         { id: 'chunk-2', content: 'b' },
       ],
     });
-    const svc = new AiTutorChatService(prisma, makeContext(), makeEmbed(), makeChat());
+    const svc = new AiTutorChatService(
+      prisma as never,
+      makeContext() as never,
+      makeEmbed(),
+      makeChat(),
+    );
     const result = await svc.ask('t1', 'u1', 'c1', {
       question: 'q',
       conversationId: 'existing-conv',
@@ -207,7 +225,12 @@ describe('AiTutorChatService.ask (LMS-90.D)', () => {
         { id: 'chunk-2', content: 'b' },
       ],
     });
-    const svc = new AiTutorChatService(prisma, makeContext(), makeEmbed(), makeChat());
+    const svc = new AiTutorChatService(
+      prisma as never,
+      makeContext() as never,
+      makeEmbed(),
+      makeChat(),
+    );
     await svc.ask('t1', 'u1', 'c1', { question: 'q' });
     const messageCreates = prisma.created.filter((c) => c.table === 'msg');
     expect(messageCreates).toHaveLength(2);
@@ -232,7 +255,12 @@ describe('AiTutorChatService.ask (LMS-90.D)', () => {
         { id: 'chunk-2', content: 'INDEX-MATCH es más flexible que VLOOKUP' },
       ],
     });
-    const svc = new AiTutorChatService(prisma, makeContext(), makeEmbed(), makeChat());
+    const svc = new AiTutorChatService(
+      prisma as never,
+      makeContext() as never,
+      makeEmbed(),
+      makeChat(),
+    );
     const result = await svc.ask('t1', 'u1', 'c1', { question: 'q' });
     expect(result.citations).toHaveLength(2);
     expect(result.citations[0]!.lessonId).toBe('l1');
@@ -256,7 +284,12 @@ describe('AiTutorChatService.ask (LMS-90.D)', () => {
       ],
       tokenUsageExisting: null,
     });
-    const svc = new AiTutorChatService(prisma, makeContext(), makeEmbed(), makeChat());
+    const svc = new AiTutorChatService(
+      prisma as never,
+      makeContext() as never,
+      makeEmbed(),
+      makeChat(),
+    );
     await svc.ask('t1', 'u1', 'c1', { question: 'q' });
     const usageCreate = prisma.created.find((c) => c.table === 'usage');
     expect(usageCreate).toBeDefined();
@@ -281,7 +314,12 @@ describe('AiTutorChatService.ask (LMS-90.D)', () => {
       ],
       tokenUsageExisting: { id: 'usage-existing' },
     });
-    const svc = new AiTutorChatService(prisma, makeContext(), makeEmbed(), makeChat());
+    const svc = new AiTutorChatService(
+      prisma as never,
+      makeContext() as never,
+      makeEmbed(),
+      makeChat(),
+    );
     await svc.ask('t1', 'u1', 'c1', { question: 'q' });
     const usageUpdate = prisma.updated.find((u) => u.table === 'usage');
     expect(usageUpdate).toBeDefined();
@@ -303,7 +341,7 @@ describe('AiTutorChatService.ask (LMS-90.D)', () => {
         { id: 'chunk-2', content: 'b' },
       ],
     });
-    const svc = new AiTutorChatService(prisma, ctx, makeEmbed(), makeChat());
+    const svc = new AiTutorChatService(prisma as never, ctx as never, makeEmbed(), makeChat());
     await svc.ask('t1', 'u1', 'c1', { question: 'q' });
     expect(ctx.eventBus.publish).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -323,7 +361,12 @@ describe('AiTutorChatService.ask (LMS-90.D)', () => {
     const failingChat: ChatFn = async () => {
       throw new Error('rate limit');
     };
-    const svc = new AiTutorChatService(prisma, makeContext(), makeEmbed(), failingChat);
+    const svc = new AiTutorChatService(
+      prisma as never,
+      makeContext() as never,
+      makeEmbed(),
+      failingChat,
+    );
     await expect(svc.ask('t1', 'u1', 'c1', { question: 'q' })).rejects.toBeInstanceOf(
       ChatProviderError,
     );
@@ -344,7 +387,12 @@ describe('AiTutorChatService.ask (LMS-90.D)', () => {
         { id: 'chunk-2', content: 'b' },
       ],
     });
-    const svc = new AiTutorChatService(prisma, makeContext(), makeEmbed(), makeChat());
+    const svc = new AiTutorChatService(
+      prisma as never,
+      makeContext() as never,
+      makeEmbed(),
+      makeChat(),
+    );
     await svc.ask('t1', 'u1', 'c1', { question: 'q', topK: 10 });
     // queryRawUnsafe se llamó con LIMIT 10 como parámetro
     const queryCall = (prisma.$queryRawUnsafe as ReturnType<typeof vi.fn>).mock.calls[0]!;
@@ -378,7 +426,12 @@ describe('AiTutorChatService.ask (LMS-90.D)', () => {
       inputTokens: 1,
       outputTokens: 1,
     }));
-    const svc = new AiTutorChatService(prisma, makeContext(), makeEmbed(), chatSpy);
+    const svc = new AiTutorChatService(
+      prisma as never,
+      makeContext() as never,
+      makeEmbed(),
+      chatSpy,
+    );
     await svc.ask('t1', 'u1', 'c1', {
       question: 'nueva',
       conversationId: '11111111-1111-4111-8111-111111111111',
@@ -406,8 +459,8 @@ describe('AiTutorChatService.ask · acceso y cuota', () => {
     const prisma = makeFakePrisma({ ...base, enrollment: null });
     const embedSpy = vi.fn(makeEmbed());
     const svc = new AiTutorChatService(
-      prisma,
-      makeContext(),
+      prisma as never,
+      makeContext() as never,
       embedSpy as unknown as EmbedFn,
       makeChat(),
     );
@@ -419,7 +472,12 @@ describe('AiTutorChatService.ask · acceso y cuota', () => {
 
   it('staff responde sin matrícula y sin consumir cuota', async () => {
     const prisma = makeFakePrisma({ ...base, enrollment: null });
-    const svc = new AiTutorChatService(prisma, makeContext(), makeEmbed(), makeChat());
+    const svc = new AiTutorChatService(
+      prisma as never,
+      makeContext() as never,
+      makeEmbed(),
+      makeChat(),
+    );
     const r = await svc.ask('t1', 'u1', 'c1', { question: 'hola' }, { staff: true });
     expect(r.answer).toBeTruthy();
     const usage = prisma.created.find((c) => c.table === 'usage');
@@ -433,8 +491,8 @@ describe('AiTutorChatService.ask · acceso y cuota', () => {
     });
     const embedSpy = vi.fn(makeEmbed());
     const svc = new AiTutorChatService(
-      prisma,
-      makeContext(),
+      prisma as never,
+      makeContext() as never,
       embedSpy as unknown as EmbedFn,
       makeChat(),
     );
@@ -449,7 +507,12 @@ describe('AiTutorChatService.ask · acceso y cuota', () => {
       ...base,
       tokenUsageExisting: { id: 'usage-1', questions: DAILY_QUESTION_LIMIT - 1 },
     });
-    const svc = new AiTutorChatService(prisma, makeContext(), makeEmbed(), makeChat());
+    const svc = new AiTutorChatService(
+      prisma as never,
+      makeContext() as never,
+      makeEmbed(),
+      makeChat(),
+    );
     const r = await svc.ask('t1', 'u1', 'c1', { question: 'hola' });
     expect(r.quota).toEqual({
       used: DAILY_QUESTION_LIMIT,
@@ -465,7 +528,12 @@ describe('AiTutorChatService.ask · acceso y cuota', () => {
     const chatRoto: ChatFn = async () => {
       throw new Error('502 del proveedor');
     };
-    const svc = new AiTutorChatService(prisma, makeContext(), makeEmbed(), chatRoto);
+    const svc = new AiTutorChatService(
+      prisma as never,
+      makeContext() as never,
+      makeEmbed(),
+      chatRoto,
+    );
     await expect(svc.ask('t1', 'u1', 'c1', { question: 'hola' })).rejects.toBeInstanceOf(
       ChatProviderError,
     );
@@ -482,7 +550,12 @@ describe('AiTutorChatService.ask · acceso y cuota', () => {
       inputTokens: 1,
       outputTokens: 1,
     }));
-    const svc = new AiTutorChatService(prisma, makeContext(), makeEmbed(), chatSpy);
+    const svc = new AiTutorChatService(
+      prisma as never,
+      makeContext() as never,
+      makeEmbed(),
+      chatSpy,
+    );
     await svc.ask('t1', 'u1', 'c1', {
       question: 'no me va',
       lessonId: 'l1',
@@ -504,7 +577,12 @@ describe('AiTutorChatService.ask · acceso y cuota', () => {
       ...base,
       hydrationChunks: [{ id: 'chunk-1', content: '[12:34] el webhook expone tu workflow' }],
     });
-    const svc = new AiTutorChatService(prisma, makeContext(), makeEmbed(), makeChat('Mira [1].'));
+    const svc = new AiTutorChatService(
+      prisma as never,
+      makeContext() as never,
+      makeEmbed(),
+      makeChat('Mira [1].'),
+    );
     const r = await svc.ask('t1', 'u1', 'c1', { question: 'webhook?' });
     expect(r.citations[0]!.startSeconds).toBe(754);
   });
@@ -542,7 +620,12 @@ describe('AiTutorChatService.ask · conocimiento validado', () => {
       inputTokens: 1,
       outputTokens: 1,
     }));
-    const svc = new AiTutorChatService(prisma, makeContext(), makeEmbed(), chatSpy);
+    const svc = new AiTutorChatService(
+      prisma as never,
+      makeContext() as never,
+      makeEmbed(),
+      chatSpy,
+    );
     await svc.ask('t1', 'u1', 'c1', { question: 'dónde saco la factura' });
 
     const system = (chatSpy as unknown as ReturnType<typeof vi.fn>).mock.calls[0]![0].system;
@@ -570,7 +653,12 @@ describe('AiTutorChatService.ask · conocimiento validado', () => {
       inputTokens: 1,
       outputTokens: 1,
     }));
-    const svc = new AiTutorChatService(prisma, makeContext(), makeEmbed(), chatSpy);
+    const svc = new AiTutorChatService(
+      prisma as never,
+      makeContext() as never,
+      makeEmbed(),
+      chatSpy,
+    );
     await svc.ask('t1', 'u1', 'c1', { question: 'qué es un webhook' });
 
     const system = (chatSpy as unknown as ReturnType<typeof vi.fn>).mock.calls[0]![0].system;
@@ -582,7 +670,12 @@ describe('AiTutorChatService.ask · conocimiento validado', () => {
       ...base,
       correcciones: [{ id: 'corr-1', question: 'p', answer: 'r', distance: 0.1 }],
     });
-    const svc = new AiTutorChatService(prisma, makeContext(), makeEmbed(), makeChat('ok'));
+    const svc = new AiTutorChatService(
+      prisma as never,
+      makeContext() as never,
+      makeEmbed(),
+      makeChat('ok'),
+    );
     await svc.ask('t1', 'u1', 'c1', { question: 'una duda' });
 
     const sqls = prisma.ejecutados.map((e) => e.sql);
@@ -597,7 +690,12 @@ describe('AiTutorChatService.ask · conocimiento validado', () => {
       if (sql.includes('mod_ai_tutor_correction')) throw new Error('relation does not exist');
       return sampleRetrieved;
     });
-    const svc = new AiTutorChatService(prisma, makeContext(), makeEmbed(), makeChat('Mira [1].'));
+    const svc = new AiTutorChatService(
+      prisma as never,
+      makeContext() as never,
+      makeEmbed(),
+      makeChat('Mira [1].'),
+    );
     const r = await svc.ask('t1', 'u1', 'c1', { question: 'q' });
     expect(r.answer).toContain('[1]');
   });

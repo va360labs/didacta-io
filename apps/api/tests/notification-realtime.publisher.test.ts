@@ -9,7 +9,7 @@ const noopLogger = { warn: vi.fn(), log: vi.fn(), error: vi.fn() } as never;
 
 describe('NotificationRealtimePublisher', () => {
   it('publica en el canal correcto con el payload serializado', async () => {
-    const publish = vi.fn(async () => 1);
+    const publish = vi.fn(async (_channel: string, _message: string) => 1);
     const redis: RealtimePublisherRedis = { publish };
     const pub = new NotificationRealtimePublisher(redis, noopLogger);
 
@@ -22,7 +22,7 @@ describe('NotificationRealtimePublisher', () => {
     });
 
     expect(publish).toHaveBeenCalledTimes(1);
-    const [channel, message] = publish.mock.calls[0];
+    const [channel, message] = publish.mock.calls[0]!;
     expect(channel).toBe(channelFor('t1', 'u1'));
     expect(channel).toBe('didacta:rt:notif:t1:u1');
     const parsed = JSON.parse(message as string);
@@ -35,7 +35,7 @@ describe('NotificationRealtimePublisher', () => {
   });
 
   it('serializa createdAt string tal cual', async () => {
-    const publish = vi.fn(async () => 1);
+    const publish = vi.fn(async (_channel: string, _message: string) => 1);
     const pub = new NotificationRealtimePublisher({ publish }, noopLogger);
     await pub.publishInApp('t1', 'u1', {
       id: 'n-2',
@@ -43,7 +43,7 @@ describe('NotificationRealtimePublisher', () => {
       subject: null,
       createdAt: '2026-06-03T11:00:00.000Z',
     });
-    const parsed = JSON.parse(publish.mock.calls[0][1] as string);
+    const parsed = JSON.parse(publish.mock.calls[0]![1] as string);
     expect(parsed.createdAt).toBe('2026-06-03T11:00:00.000Z');
     expect(parsed.subject).toBeNull();
   });

@@ -124,9 +124,9 @@ describe('migrator-learndash · POST /preflight con http mockeado', () => {
     appPassword: 'app pass-1234',
   };
 
-  function makeHttp(
-    handler: (url: string) => { status: number; body?: string; headers?: Record<string, string> },
-  ) {
+  type HttpStubResponse = { status: number; body?: string; headers?: Record<string, string> };
+
+  function makeHttp(handler: (url: string) => HttpStubResponse) {
     const make = async (url: string) => {
       const r = handler(url);
       return {
@@ -142,7 +142,7 @@ describe('migrator-learndash · POST /preflight con http mockeado', () => {
   it('happy path: devuelve counts reales leyendo X-WP-Total', async () => {
     const route = routes.find((r) => r.method === 'POST' && r.path === '/preflight')!;
     const calls: string[] = [];
-    const http = makeHttp((url) => {
+    const http = makeHttp((url): HttpStubResponse => {
       calls.push(url);
       if (url.endsWith('/wp-json/')) {
         return {
@@ -219,7 +219,7 @@ describe('migrator-learndash · POST /preflight con http mockeado', () => {
 
   it('LearnDash REST 404 → warning LEARNDASH_REST_UNAVAILABLE pero sigue contando', async () => {
     const route = routes.find((r) => r.method === 'POST' && r.path === '/preflight')!;
-    const http = makeHttp((url) => {
+    const http = makeHttp((url): HttpStubResponse => {
       if (url.endsWith('/wp-json/')) return { status: 200, body: '{}' };
       if (url.includes('/ldlms/v1/')) return { status: 404, body: '' };
       return { status: 200, body: '[]', headers: { 'x-wp-total': '5' } };
@@ -244,7 +244,7 @@ describe('migrator-learndash · POST /preflight con http mockeado', () => {
 
   it('CPT 404 → counts: unknown con warning CPT_NOT_FOUND', async () => {
     const route = routes.find((r) => r.method === 'POST' && r.path === '/preflight')!;
-    const http = makeHttp((url) => {
+    const http = makeHttp((url): HttpStubResponse => {
       if (url.endsWith('/wp-json/')) return { status: 200, body: '{}' };
       if (url.includes('/ldlms/v1/')) return { status: 200, body: '[]' };
       if (url.includes('sfwd-topic')) return { status: 404, body: '' };

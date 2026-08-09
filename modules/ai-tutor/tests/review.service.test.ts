@@ -12,11 +12,14 @@ import { listAnswersSchema } from '../src/dto.js';
  * Y que el informe mensual agrupe de verdad, en vez de listar 400 preguntas.
  */
 
+// Los dobles NO se castean a `never` al declararse: con `never` no se les
+// puede leer ninguna propiedad y las aserciones sobre sus espías dejan de
+// typechequearse. El cast va donde se inyectan, que es donde hace falta.
 function makeContext() {
   return {
     logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn(), child: vi.fn() },
     eventBus: { publish: vi.fn(async () => {}) },
-  } as never;
+  };
 }
 
 const embedFake: EmbedFn = async ({ texts }) => ({
@@ -85,7 +88,7 @@ function makeFakePrisma(opts: {
       ejecutados.push({ sql, params });
       return 1;
     }),
-  } as never;
+  };
 }
 
 const AHORA = new Date('2026-07-15T10:00:00.000Z');
@@ -115,7 +118,7 @@ describe('AiTutorReviewService.review', () => {
         },
       ],
     });
-    const svc = new AiTutorReviewService(prisma, makeContext(), embedFake);
+    const svc = new AiTutorReviewService(prisma as never, makeContext() as never, embedFake);
 
     const vista = await svc.review('t1', 'msg-1', { status: 'OK' }, 'admin-1');
 
@@ -147,7 +150,7 @@ describe('AiTutorReviewService.review', () => {
         },
       ],
     });
-    const svc = new AiTutorReviewService(prisma, makeContext(), embedFake);
+    const svc = new AiTutorReviewService(prisma as never, makeContext() as never, embedFake);
 
     await svc.review(
       't1',
@@ -195,7 +198,7 @@ describe('AiTutorReviewService.review', () => {
         },
       ],
     });
-    const svc = new AiTutorReviewService(prisma, makeContext(), embedFake);
+    const svc = new AiTutorReviewService(prisma as never, makeContext() as never, embedFake);
 
     await svc.review(
       't1',
@@ -233,7 +236,7 @@ describe('AiTutorReviewService.review', () => {
         },
       ],
     });
-    const svc = new AiTutorReviewService(prisma, makeContext(), embedFake);
+    const svc = new AiTutorReviewService(prisma as never, makeContext() as never, embedFake);
 
     await svc.review(
       't1',
@@ -255,7 +258,7 @@ describe('AiTutorReviewService.review', () => {
 
   it('revisar un mensaje que no existe da MessageNotFoundError', async () => {
     const prisma = makeFakePrisma({ mensaje: null });
-    const svc = new AiTutorReviewService(prisma, makeContext(), embedFake);
+    const svc = new AiTutorReviewService(prisma as never, makeContext() as never, embedFake);
     await expect(svc.review('t1', 'no-existe', { status: 'OK' }, 'admin-1')).rejects.toBeInstanceOf(
       MessageNotFoundError,
     );
@@ -301,7 +304,7 @@ describe('AiTutorReviewService.monthlyReport', () => {
       ],
       cursos: [{ id: 'curso-1', title: 'n8n desde cero' }],
     });
-    const svc = new AiTutorReviewService(prisma, makeContext(), embedFake);
+    const svc = new AiTutorReviewService(prisma as never, makeContext() as never, embedFake);
 
     const informe = await svc.monthlyReport('t1', { mes: '2026-07' });
 
@@ -325,7 +328,7 @@ describe('AiTutorReviewService.monthlyReport', () => {
         pregunta({ id: '3', sin_respaldo: false, embedding: dir(90) }),
       ],
     });
-    const svc = new AiTutorReviewService(prisma, makeContext(), embedFake);
+    const svc = new AiTutorReviewService(prisma as never, makeContext() as never, embedFake);
 
     const informe = await svc.monthlyReport('t1', { mes: '2026-07' });
 
@@ -342,7 +345,7 @@ describe('AiTutorReviewService.monthlyReport', () => {
         pregunta({ id: '2', embedding: null, question: 'otra vieja' }),
       ],
     });
-    const svc = new AiTutorReviewService(prisma, makeContext(), embedFake);
+    const svc = new AiTutorReviewService(prisma as never, makeContext() as never, embedFake);
 
     const informe = await svc.monthlyReport('t1', { mes: '2026-07' });
 
@@ -363,7 +366,7 @@ describe('AiTutorReviewService.monthlyReport', () => {
     const embedRoto: EmbedFn = async () => {
       throw new Error('provider caído');
     };
-    const svc = new AiTutorReviewService(prisma, makeContext(), embedRoto);
+    const svc = new AiTutorReviewService(prisma as never, makeContext() as never, embedRoto);
 
     const informe = await svc.monthlyReport('t1', { mes: '2026-07' });
 
@@ -375,7 +378,7 @@ describe('AiTutorReviewService.monthlyReport', () => {
 
   it('sin preguntas devuelve un informe vacío, no un error', async () => {
     const prisma = makeFakePrisma({ preguntasDelMes: [] });
-    const svc = new AiTutorReviewService(prisma, makeContext(), embedFake);
+    const svc = new AiTutorReviewService(prisma as never, makeContext() as never, embedFake);
     const informe = await svc.monthlyReport('t1', { mes: '2026-01' });
     expect(informe.totalPreguntas).toBe(0);
     expect(informe.temas).toEqual([]);

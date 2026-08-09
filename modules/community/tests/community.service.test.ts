@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { CommunityService, excerpt, parseMentionHandles } from '../src/community.service.js';
+import type { CreatePostDto } from '../src/dto.js';
 import {
   CommentNotFoundError,
   NotAuthorError,
@@ -9,6 +10,17 @@ import {
   SpaceNotDeletableError,
   SpaceNotFoundError,
 } from '../src/errors.js';
+
+/**
+ * `CreatePostDto` es el tipo de SALIDA del schema zod: `notifyAll` e
+ * `important` llevan `.default(false)`, así que tras el parse SIEMPRE vienen
+ * y el tipo los declara obligatorios. Estos tests llaman al service directo,
+ * sin pasar por zod, así que rellenan aquí lo que el parse habría puesto —
+ * en vez de repetir los dos campos en cada caso.
+ */
+function postDto(dto: Partial<CreatePostDto> & { title: string; body: string }): CreatePostDto {
+  return { notifyAll: false, important: false, ...dto };
+}
 
 interface PostRow {
   id: string;
@@ -67,7 +79,7 @@ function makeFakePrisma() {
           createdAt: new Date(),
           pinnedAt: null,
           pinnedById: null,
-          ...(args.data as PostRow),
+          ...args.data,
         };
         posts.push(row);
         return row;
@@ -178,7 +190,7 @@ function makeFakePrisma() {
           authorDisplayName: null,
           deletedAt: null,
           createdAt: new Date(),
-          ...(args.data as CommentRow),
+          ...args.data,
         };
         comments.push(row);
         return row;
@@ -223,7 +235,7 @@ function makeFakePrisma() {
           commentId: null,
           authorId: '',
           emoji: '',
-          ...(args.data as ReactionRow),
+          ...args.data,
         };
         reactions.push(row);
         return row;
@@ -263,11 +275,11 @@ describe('CommunityService.createPost', () => {
     const post = await svc.createPost(
       't1',
       { id: 'u1', displayName: 'Ana' },
-      {
+      postDto({
         title: 'Hola',
         body: 'Mundo',
         tags: ['general'],
-      },
+      }),
     );
 
     expect(post.title).toBe('Hola');
@@ -283,22 +295,22 @@ describe('CommunityService.createPost', () => {
     await svc.createPost(
       't1',
       { id: 'u1', displayName: null },
-      {
+      postDto({
         title: 'A',
         body: 'b',
         courseId: 'c1',
         tags: ['ayuda'],
-      },
+      }),
     );
     await svc.createPost(
       't1',
       { id: 'u2', displayName: null },
-      {
+      postDto({
         title: 'B',
         body: 'b',
         courseId: 'c2',
         tags: ['general'],
-      },
+      }),
     );
 
     const list1 = await svc.listPosts('t1', { courseId: 'c1', limit: 50 });
@@ -316,7 +328,7 @@ describe('CommunityService.createPost', () => {
     const post = await svc.createPost(
       't1',
       { id: 'u1', displayName: null },
-      { title: 'P', body: 'body' },
+      postDto({ title: 'P', body: 'body' }),
     );
     await svc.addComment('t1', post.id, { id: 'u2', displayName: null }, { body: 'first' });
     await svc.addComment('t1', post.id, { id: 'u3', displayName: null }, { body: 'second' });
@@ -329,7 +341,11 @@ describe('CommunityService.createPost', () => {
   it('listPosts devuelve _count.comments=0 para post sin comentarios', async () => {
     const prisma = makeFakePrisma();
     const svc = new CommunityService(prisma as never, trackingCtx([]));
-    await svc.createPost('t1', { id: 'u1', displayName: null }, { title: 'P', body: 'body' });
+    await svc.createPost(
+      't1',
+      { id: 'u1', displayName: null },
+      postDto({ title: 'P', body: 'body' }),
+    );
     const list = await svc.listPosts('t1', { limit: 50 });
     expect(list[0]?._count?.comments).toBe(0);
   });
@@ -340,13 +356,13 @@ describe('CommunityService.createPost', () => {
     const a = await svc.createPost(
       't1',
       { id: 'u1', displayName: null },
-      { title: 'A', body: 'a' },
+      postDto({ title: 'A', body: 'a' }),
     );
     await new Promise((r) => setTimeout(r, 5));
     const b = await svc.createPost(
       't1',
       { id: 'u1', displayName: null },
-      { title: 'B', body: 'b' },
+      postDto({ title: 'B', body: 'b' }),
     );
 
     const recent = await svc.listPosts('t1', { sort: 'recent', limit: 50 });
@@ -362,7 +378,7 @@ describe('CommunityService.createPost', () => {
     const post = await svc.createPost(
       't1',
       { id: 'u1', displayName: null },
-      { title: 'P', body: 'b' },
+      postDto({ title: 'P', body: 'b' }),
     );
     await svc.addReaction('t1', 'u2', { postId: post.id, emoji: '👍' });
     await svc.addReaction('t1', 'u3', { postId: post.id, emoji: '❤️' });
@@ -380,12 +396,12 @@ describe('CommunityService.createPost', () => {
     const a = await svc.createPost(
       't1',
       { id: 'u1', displayName: null },
-      { title: 'A', body: 'a' },
+      postDto({ title: 'A', body: 'a' }),
     );
     const b = await svc.createPost(
       't1',
       { id: 'u1', displayName: null },
-      { title: 'B', body: 'b' },
+      postDto({ title: 'B', body: 'b' }),
     );
     // B tiene 2 comentarios, A tiene 1 → B debe quedar primero.
     await svc.addComment('t1', a.id, { id: 'u2', displayName: null }, { body: 'c1' });
@@ -405,10 +421,10 @@ describe('CommunityService.deletePost', () => {
     const post = await svc.createPost(
       't1',
       { id: 'u1', displayName: null },
-      {
+      postDto({
         title: 'X',
         body: 'y',
-      },
+      }),
     );
     await expect(svc.deletePost('t1', 'otro', post.id)).rejects.toBeInstanceOf(NotAuthorError);
   });
@@ -425,10 +441,10 @@ describe('CommunityService.deletePost', () => {
     const post = await svc.createPost(
       't1',
       { id: 'u1', displayName: null },
-      {
+      postDto({
         title: 'X',
         body: 'y',
-      },
+      }),
     );
     await svc.deletePost('t1', 'u1', post.id);
     expect(prisma._posts[0]?.deletedAt).toBeInstanceOf(Date);
@@ -451,10 +467,10 @@ describe('CommunityService.addComment', () => {
     const post = await svc.createPost(
       't1',
       { id: 'u1', displayName: null },
-      {
+      postDto({
         title: 'P',
         body: 'b',
-      },
+      }),
     );
     const comment = await svc.addComment(
       't1',
@@ -475,10 +491,10 @@ describe('CommunityService.deleteComment', () => {
     const post = await svc.createPost(
       't1',
       { id: 'u1', displayName: null },
-      {
+      postDto({
         title: 'P',
         body: 'b',
-      },
+      }),
     );
     const c = await svc.addComment('t1', post.id, { id: 'u2', displayName: null }, { body: 'x' });
     await expect(svc.deleteComment('t1', 'otro', c.id)).rejects.toBeInstanceOf(NotAuthorError);
@@ -877,7 +893,7 @@ describe('CommunityService.pin', () => {
     const post = await svc.createPost(
       't1',
       { id: 'u1', displayName: null },
-      { title: 'Anuncio', body: 'b' },
+      postDto({ title: 'Anuncio', body: 'b' }),
     );
     const pinned = await svc.pinPost('t1', 'admin1', post.id);
     expect(pinned.pinnedAt).toBeInstanceOf(Date);
@@ -890,7 +906,7 @@ describe('CommunityService.pin', () => {
     const post = await svc.createPost(
       't1',
       { id: 'u1', displayName: null },
-      { title: 'A', body: 'b' },
+      postDto({ title: 'A', body: 'b' }),
     );
     await svc.pinPost('t1', 'admin1', post.id);
     const unpinned = await svc.unpinPost('t1', 'admin1', post.id);
@@ -912,20 +928,20 @@ describe('CommunityService.pin', () => {
     const a = await svc.createPost(
       't1',
       { id: 'u1', displayName: null },
-      { title: 'A más antiguo', body: 'b' },
+      postDto({ title: 'A más antiguo', body: 'b' }),
     );
     // Espaciamos createdAt para que el orden sea determinístico.
     await new Promise((r) => setTimeout(r, 5));
     const b = await svc.createPost(
       't1',
       { id: 'u1', displayName: null },
-      { title: 'B medio', body: 'b' },
+      postDto({ title: 'B medio', body: 'b' }),
     );
     await new Promise((r) => setTimeout(r, 5));
     const c = await svc.createPost(
       't1',
       { id: 'u1', displayName: null },
-      { title: 'C más nuevo', body: 'b' },
+      postDto({ title: 'C más nuevo', body: 'b' }),
     );
 
     // Sin pin: orden recent → c, b, a
@@ -1079,7 +1095,7 @@ describe('CommunityService.updatePost', () => {
     const post = await svc.createPost(
       't1',
       { id: 'author-1', displayName: 'Autor' },
-      { title: 'Título original', body: 'cuerpo', tags: ['general'] },
+      postDto({ title: 'Título original', body: 'cuerpo', tags: ['general'] }),
     );
     return { svc, post };
   }
@@ -1145,7 +1161,7 @@ describe('CommunityService.addComment — notificaciones', () => {
     const post = await svc.createPost(
       't1',
       { id: 'author', displayName: 'Autor' },
-      { title: 'Mi post', body: 'b' },
+      postDto({ title: 'Mi post', body: 'b' }),
     );
     await svc.addComment(
       't1',
@@ -1171,7 +1187,7 @@ describe('CommunityService.addComment — notificaciones', () => {
     const post = await svc.createPost(
       't1',
       { id: 'author', displayName: 'Autor' },
-      { title: 'P', body: 'b' },
+      postDto({ title: 'P', body: 'b' }),
     );
     await svc.addComment(
       't1',
@@ -1190,7 +1206,7 @@ describe('CommunityService.addComment — notificaciones', () => {
     const post = await svc.createPost(
       't1',
       { id: 'author', displayName: 'Autor' },
-      { title: 'P', body: 'b' },
+      postDto({ title: 'P', body: 'b' }),
     );
     const root = await svc.addComment(
       't1',
@@ -1232,7 +1248,7 @@ describe('CommunityService.addComment — notificaciones', () => {
     const post = await svc.createPost(
       't1',
       { id: 'author', displayName: 'Autor' },
-      { title: 'P', body: 'b' },
+      postDto({ title: 'P', body: 'b' }),
     );
     await svc.addComment(
       't1',

@@ -36,12 +36,14 @@ const event = (
   },
 });
 
+// Sin `as never` en la declaración: hay un test que hace `{ ...noopLogger, log }`
+// y con `never` el spread no compila. El cast va en cada punto de inyección.
 const noopLogger = {
   log: vi.fn(),
   warn: vi.fn(),
   error: vi.fn(),
   debug: vi.fn(),
-} as never;
+};
 
 function makeRegistry(enrollFromPurchase: ReturnType<typeof vi.fn>) {
   return {
@@ -59,7 +61,7 @@ describe('BillingLearningBridge.enroll', () => {
     const bridge = new BillingLearningBridge(
       makeRegistry(enrollFromPurchase),
       noopFactory,
-      noopLogger,
+      noopLogger as never,
     );
 
     await bridge.enroll(event());
@@ -73,7 +75,7 @@ describe('BillingLearningBridge.enroll', () => {
     const bridge = new BillingLearningBridge(
       makeRegistry(enrollFromPurchase),
       noopFactory,
-      noopLogger,
+      noopLogger as never,
     );
 
     const e = event();
@@ -88,7 +90,7 @@ describe('BillingLearningBridge.enroll', () => {
     const bridge = new BillingLearningBridge(
       makeRegistry(enrollFromPurchase),
       noopFactory,
-      noopLogger,
+      noopLogger as never,
     );
 
     await expect(bridge.enroll(event())).resolves.toBeUndefined();
@@ -100,7 +102,7 @@ describe('BillingLearningBridge.enroll', () => {
     const bridge = new BillingLearningBridge(
       makeRegistry(enrollFromPurchase),
       noopFactory,
-      noopLogger,
+      noopLogger as never,
     );
 
     await expect(bridge.enroll(event())).rejects.toThrow('db down');
@@ -130,7 +132,7 @@ describe('BillingLearningBridge.onModuleInit', () => {
   it('se suscribe a billing.order.completed exactamente una vez', () => {
     const subscribe = vi.fn().mockReturnValue(() => {});
     const factory = { getEventBus: () => ({ subscribe }) } as never;
-    const bridge = new BillingLearningBridge(makeRegistry(vi.fn()), factory, noopLogger);
+    const bridge = new BillingLearningBridge(makeRegistry(vi.fn()), factory, noopLogger as never);
 
     bridge.onModuleInit();
 

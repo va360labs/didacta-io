@@ -146,7 +146,7 @@ describe('ModulePackageService.validatePackage', () => {
   it('NAME_RESERVED si el nombre coincide con un built-in', async () => {
     const { pkg, sig } = makeServices();
     const reserved = Array.from(RESERVED_MODULE_NAMES)[0];
-    const slug = reserved.replace(/^mod\./, '');
+    const slug = reserved!.replace(/^mod\./, '');
     const fixture = await buildTestPackage({
       signatureService: sig,
       manifest: {

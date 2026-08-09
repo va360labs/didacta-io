@@ -36,7 +36,7 @@ function makePrismaMock(opts: PrismaMockOptions = {}): PrismaMock {
   };
 
   const prisma = {
-    $transaction: vi.fn(async (cb: (tx: typeof tx) => Promise<void>) => {
+    $transaction: vi.fn(async (cb: (tx: unknown) => Promise<void>) => {
       const buffer = [...executed];
       try {
         await cb(tx);

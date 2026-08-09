@@ -100,7 +100,8 @@ function makeFakePrisma(opts: {
         return answers.filter((a) => a.attemptId === args.where.attemptId);
       },
     },
-    async $transaction<T>(cb: (tx: typeof prisma) => Promise<T>): Promise<T> {
+    // Idem attempts: `typeof prisma` sería circular (TS7022).
+    async $transaction<T>(cb: (tx: unknown) => Promise<T>): Promise<T> {
       return cb(prisma);
     },
     _attempt: attempt,

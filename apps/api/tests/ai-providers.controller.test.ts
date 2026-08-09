@@ -23,12 +23,13 @@ function makeUser(overrides: Partial<SessionClaims> = {}): SessionClaims {
     tenantId: 'tenant-A',
     roles: ['tenant_admin'],
     email: 'admin@example.com',
+    mfaVerified: true,
     ...(overrides as Record<string, unknown>),
   } as SessionClaims;
 }
 
 function makeDeps(opts: { cipherReady?: boolean; capabilities?: ('chat' | 'embed')[] } = {}) {
-  const findMany = vi.fn(async () => []);
+  const findMany = vi.fn(async () => [] as Record<string, unknown>[]);
   const findFirst = vi.fn(async () => null as { id: string } | null);
   const create = vi.fn(async ({ data }: { data: Record<string, unknown> }) => ({
     id: 'new-id',
@@ -161,7 +162,7 @@ describe('AiProvidersController · guards', () => {
     expect(row).not.toHaveProperty('apiKeyCipher');
     expect(row).not.toHaveProperty('apiKeyIv');
     expect(row).not.toHaveProperty('apiKeyTag');
-    expect(row.hasApiKey).toBe(true);
+    expect(row!.hasApiKey).toBe(true);
   });
 });
 

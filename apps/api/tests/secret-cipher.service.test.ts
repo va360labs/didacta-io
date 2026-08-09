@@ -61,7 +61,7 @@ describe('SecretCipherService', () => {
       const cipher = new SecretCipherService(VALID_KEY);
       const payload = cipher.encrypt('importante');
       const tampered = { ...payload, cipher: Buffer.from(payload.cipher) };
-      tampered.cipher[0] ^= 0xff;
+      tampered.cipher[0] = tampered.cipher[0]! ^ 0xff;
       expect(() => cipher.decrypt(tampered)).toThrow();
     });
 
@@ -69,7 +69,7 @@ describe('SecretCipherService', () => {
       const cipher = new SecretCipherService(VALID_KEY);
       const payload = cipher.encrypt('importante');
       const tampered = { ...payload, tag: Buffer.from(payload.tag) };
-      tampered.tag[0] ^= 0xff;
+      tampered.tag[0] = tampered.tag[0]! ^ 0xff;
       expect(() => cipher.decrypt(tampered)).toThrow();
     });
 
@@ -77,7 +77,7 @@ describe('SecretCipherService', () => {
       const cipher = new SecretCipherService(VALID_KEY);
       const payload = cipher.encrypt('importante');
       const tampered = { ...payload, iv: Buffer.from(payload.iv) };
-      tampered.iv[0] ^= 0xff;
+      tampered.iv[0] = tampered.iv[0]! ^ 0xff;
       expect(() => cipher.decrypt(tampered)).toThrow();
     });
 
