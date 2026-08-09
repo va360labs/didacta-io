@@ -93,11 +93,13 @@ export function formatCurrency(
 }
 
 /**
- * Céntimos → string de moneda. ÚNICA conversión canónica de cents del
- * producto: la regla de decimales («sin decimales si es cantidad redonda»)
- * vive aquí y solo aquí. Sustituye a los wrappers locales por página y a
- * `formatCents`/`formatReferralCents` de lib/membership y lib/referrals
- * (que quedan como delegaciones o desaparecen al migrar sus consumidores).
+ * Céntimos → string de moneda. Conversión canónica de cents del producto: la
+ * regla de decimales («sin decimales si la cantidad es redonda»: 1900 → "19 €")
+ * vive aquí y solo aquí. Sustituye a los wrappers locales por página.
+ *
+ * Para importes que se cotejan con un panel externo (Stripe, la aplicación
+ * telemática de Fundae, una factura) el céntimo cero SE ESCRIBE: usa
+ * `formatCentsExact`, que es la otra regla y también es única.
  */
 export function formatCents(
   cents: number,
@@ -110,6 +112,27 @@ export function formatCents(
     maximumFractionDigits: 2,
     ...opts,
   });
+}
+
+/**
+ * Céntimos → string de moneda CONSERVANDO los decimales de la divisa (1900 →
+ * "19,00 €"). Segunda —y última— regla de céntimos del producto.
+ *
+ * No es una preferencia estética: estas cifras se cuadran a mano contra un
+ * sistema de fuera (el dashboard de Stripe, el expediente Fundae, una factura,
+ * una liquidación de comisiones) y ahí "19 €" y "19,00 €" no se leen igual de
+ * un vistazo. No la unifiques con `formatCents`.
+ *
+ * No fuerza `minimumFractionDigits`: deja que Intl aplique los dígitos propios
+ * de la divisa, que es lo que hacían los wrappers que sustituye (idéntico byte
+ * a byte para EUR/USD/GBP y correcto para una divisa cero-decimal como JPY).
+ */
+export function formatCentsExact(
+  cents: number,
+  currency = 'EUR',
+  opts?: Intl.NumberFormatOptions & FmtOverrides,
+): string {
+  return formatCurrency(cents / 100, currency, opts);
 }
 
 /**

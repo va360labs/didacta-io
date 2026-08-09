@@ -29,7 +29,7 @@ import { adminStripeApi } from '@/lib/admin-stripe';
 import { authStorage } from '@/lib/auth-storage';
 import { coursesApi, type Course } from '@/lib/courses';
 import { apiErrorMessage } from '@/lib/i18n/api-error';
-import { formatCurrency } from '@/lib/i18n/format';
+import { formatCents } from '@/lib/i18n/format';
 import {
   membershipAdminApi,
   type MembershipAdminPlan,
@@ -59,13 +59,6 @@ const CURRENCY_OPTIONS = ['eur', 'usd', 'gbp', 'mxn', 'cop', 'ars', 'pen', 'brl'
 
 /** Periodicidades habituales del selector; la API admite cualquier 1..12. */
 const INTERVAL_PRESETS = [1, 3, 6, 12];
-
-/** "999,00 €" a partir de céntimos, en el locale activo. */
-function planPrice(cents: number, currency: string): string {
-  return formatCurrency(cents / 100, currency.toUpperCase(), {
-    minimumFractionDigits: cents % 100 === 0 ? 0 : 2,
-  });
-}
 
 interface PlanDraft {
   name: string;
@@ -391,12 +384,12 @@ export default function MembresiaAdminPage() {
                       {subscriptionLabel(plan.intervalMonths)} ·{' '}
                       {plan.compareAtCents ? (
                         <span className="line-through">
-                          {planPrice(plan.compareAtCents, plan.currency)}
+                          {formatCents(plan.compareAtCents, plan.currency.toUpperCase())}
                         </span>
                       ) : null}{' '}
-                      <strong>{planPrice(plan.amountCents, plan.currency)}</strong>
+                      <strong>{formatCents(plan.amountCents, plan.currency.toUpperCase())}</strong>
                       {plan.trialDays > 0
-                        ? ` · ${t('trialDaysSuffix', { days: String(plan.trialDays) })}`
+                        ? ` · ${t('trialDaysSuffix', { days: plan.trialDays })}`
                         : ''}
                     </p>
                   </div>
