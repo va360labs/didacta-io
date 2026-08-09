@@ -57,6 +57,15 @@ const listQuerySchema = z.object({
   key: z.string().optional(),
 });
 
+/**
+ * `locale` del catálogo = idioma del override que el admin va a escribir, no el
+ * de su pantalla. Opcional para no romper a los clientes que ya llaman sin él
+ * (siguen recibiendo `HUB_DEFAULT_LOCALE`, byte a byte lo de antes).
+ */
+const catalogQuerySchema = z.object({
+  locale: z.string().trim().min(2).max(35).optional(),
+});
+
 @ApiTags('Admin · Notification templates')
 @ApiBearerAuth()
 @Controller('admin/notifications/templates')
@@ -85,11 +94,14 @@ export class NotificationTemplatesController {
   @Get('catalog')
   @ApiOperation({
     summary:
-      'Catálogo completo de emails/notificaciones del producto: nombre, trigger, default, variables y nota estructural. Para la UI /admin/emails.',
+      'Catálogo completo de emails/notificaciones del producto: nombre, trigger, default, variables y nota estructural. Para la UI /admin/emails. `?locale=` elige el idioma del copy por defecto (el que prefillea el editor); sin él, el de referencia del producto.',
   })
-  catalog(@CurrentUser() user: SessionClaims | undefined): EmailTemplateCatalogEntry[] {
+  catalog(
+    @CurrentUser() user: SessionClaims | undefined,
+    @Query(new ZodValidationPipe(catalogQuerySchema)) query: z.infer<typeof catalogQuerySchema>,
+  ): EmailTemplateCatalogEntry[] {
     this.requireAdmin(user);
-    return buildEmailTemplateCatalog();
+    return buildEmailTemplateCatalog(query.locale);
   }
 
   @Get()

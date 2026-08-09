@@ -187,6 +187,8 @@ Después podrás iniciar sesión siempre desde ${base}/signin con tu email (${em
       }
 
       const { html, text } = renderBrandedEmail(branding, {
+        // Monolingüe: este emisor todavía solo redacta español.
+        lang: 'es',
         title: subject,
         bodyHtml,
         bodyText,

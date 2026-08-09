@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { classifySubscriptionStatus } from './payment-connections';
+import { classifySubscriptionStatus, connectionStatusStyle } from './payment-connections';
 
 /**
  * Guardia de PARIDAD de `classifySubscriptionStatus`.
@@ -42,5 +42,33 @@ describe('classifySubscriptionStatus (web · paridad con el módulo)', () => {
     expect(classifySubscriptionStatus('  ACTIVE ').entitled).toBe(true);
     const unknown = classifySubscriptionStatus('rarísimo');
     expect(unknown).toEqual({ category: 'unknown', label: 'rarísimo', entitled: false });
+  });
+});
+
+/**
+ * Camino degradado de la badge de estado de una conexión.
+ *
+ * El bug que cierra: la página indexaba el mapa de estilos a pelo
+ * (`map[status].key`). Un estado que el front no conozca —basta un deploy de
+ * API por delante del de web— daba `undefined`, leer `.key` lanzaba un
+ * TypeError y el error boundary dejaba TODA la pantalla de conexiones de pago
+ * en blanco por una sola fila.
+ */
+describe('connectionStatusStyle', () => {
+  it('los 4 estados conocidos traen su key de catálogo', () => {
+    expect(connectionStatusStyle('VERIFIED').key).toBe('verified');
+    expect(connectionStatusStyle('ERROR').key).toBe('error');
+    expect(connectionStatusStyle('PENDING').key).toBe('pending');
+    expect(connectionStatusStyle('DISCONNECTED').key).toBe('disconnected');
+  });
+
+  it('CAMINO DEGRADADO: un estado desconocido devuelve estilo neutro, no revienta', () => {
+    for (const status of ['REVOKED', '', 'verified', 'ESTADO_NUEVO_DE_LA_API']) {
+      const cfg = connectionStatusStyle(status);
+      expect(cfg, status).toEqual({ key: null, variant: 'outline' });
+      // `key: null` es lo que le dice al caller que pinte el código crudo en
+      // vez de construir `connStatus.undefined` y pintar la key en pantalla.
+      expect(cfg.key, status).toBeNull();
+    }
   });
 });

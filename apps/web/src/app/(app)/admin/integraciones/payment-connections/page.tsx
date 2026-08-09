@@ -37,6 +37,7 @@ import { formatCurrency, formatDateTime } from '@/lib/i18n/format';
 import { SubscriptionsDashboard } from './subscriptions-dashboard';
 import { SubscriptionAlertsSettings } from './subscription-alerts-settings';
 import {
+  connectionStatusStyle,
   paymentConnectionsApi,
   paymentTiersApi,
   stripeSubscriptionUrl,
@@ -697,21 +698,12 @@ function TierCatalogPanel() {
 
 function StatusBadge({ status }: { status: PaymentConnectionStatus }) {
   const t = useTranslations('adminPagos');
-  const map: Record<
-    PaymentConnectionStatus,
-    {
-      key: 'verified' | 'error' | 'pending' | 'disconnected';
-      className?: string;
-      variant?: 'outline';
-    }
-  > = {
-    VERIFIED: { key: 'verified', className: 'bg-success-600 text-white' },
-    ERROR: { key: 'error', className: 'bg-danger-600 text-white' },
-    PENDING: { key: 'pending', variant: 'outline' },
-    DISCONNECTED: { key: 'disconnected', variant: 'outline' },
-  };
-  const cfg = map[status];
-  const label = t(`connStatus.${cfg.key}`);
+  const cfg = connectionStatusStyle(status);
+  // `key: null` = estado que este front no conoce (ver `connectionStatusStyle`).
+  // Se pinta el código crudo: feo, pero la pantalla se ve. Antes se indexaba el
+  // mapa a pelo y un estado nuevo reventaba con un TypeError que subía al error
+  // boundary y dejaba toda la pantalla en blanco.
+  const label = cfg.key ? t(`connStatus.${cfg.key}`) : status;
   return cfg.className ? (
     <Badge className={cfg.className}>{label}</Badge>
   ) : (

@@ -227,6 +227,7 @@ export class AccessGroupsService {
       throw new BadRequestException({
         message: `Ya existe un grupo con el slug "${slug}"`,
         code: 'ACCESS_GROUPS_SLUG_TAKEN',
+        detail: slug,
       });
 
     const group = await this.prisma.modAccessGroup.create({

@@ -131,6 +131,9 @@ export class ModulesDispatcherController {
       throw new NotFoundException({
         message: `No hay módulo registrado para ${method} ${stripped}`,
         code: 'MARKETPLACE_DISPATCHER_ROUTE_NOT_FOUND',
+        // Verbo y ruta van juntos en un solo `detail`: el catálogo no necesita
+        // separarlos y así el contrato sigue teniendo un único campo extra.
+        detail: `${method} ${stripped}`,
       });
     }
 

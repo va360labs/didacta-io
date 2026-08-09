@@ -208,6 +208,7 @@ export class AdminTenantsService {
       throw new ConflictException({
         message: `Ya existe un tenant con slug "${dto.slug}".`,
         code: 'ADMIN_TENANT_SLUG_EXISTS',
+        detail: dto.slug,
       });
     }
     const existingDomain = await this.prisma.tenantDomain.findUnique({ where: { hostname } });

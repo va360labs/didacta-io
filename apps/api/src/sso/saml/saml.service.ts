@@ -488,6 +488,10 @@ export class SamlService {
       throw new UnauthorizedException({
         message: `SAMLResponse inválido: ${msg}`,
         code: 'SSO_SAML_RESPONSE_INVALID',
+        // El motivo real del rechazo (firma, condiciones, reloj) lo produce el
+        // validador SAML, no nosotros: viaja aparte para que cada idioma lo
+        // enmarque sin borrarlo.
+        detail: msg,
       });
     }
 
@@ -513,6 +517,7 @@ export class SamlService {
         throw new UnauthorizedException({
           message: `El email "${email}" no pertenece a los dominios permitidos para SSO en este tenant.`,
           code: 'SSO_EMAIL_DOMAIN_NOT_ALLOWED',
+          detail: email,
         });
       }
     }

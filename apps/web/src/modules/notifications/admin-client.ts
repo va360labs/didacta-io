@@ -63,12 +63,16 @@ export const adminNotificationsApi = {
     );
   },
 
-  async getCatalog(): Promise<EmailTemplateCatalogEntry[]> {
-    return apiFetch<EmailTemplateCatalogEntry[]>(
-      '/api/v1/admin/notifications/templates/catalog',
-      { method: 'GET' },
-      withAuth(),
-    );
+  /**
+   * `locale` = idioma del override que el admin va a escribir, no el de su
+   * pantalla: es lo que prefillea el editor. Omitirlo devuelve el idioma de
+   * referencia del producto (comportamiento previo del endpoint).
+   */
+  async getCatalog(locale?: string): Promise<EmailTemplateCatalogEntry[]> {
+    const params = new URLSearchParams();
+    if (locale) params.set('locale', locale);
+    const path = `/api/v1/admin/notifications/templates/catalog${params.toString() ? `?${params}` : ''}`;
+    return apiFetch<EmailTemplateCatalogEntry[]>(path, { method: 'GET' }, withAuth());
   },
 
   async listOverrides(key?: string): Promise<NotificationTemplateOverride[]> {

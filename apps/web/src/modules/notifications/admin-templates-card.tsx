@@ -48,6 +48,13 @@ const SUPPORTED_LOCALES = [
   { code: 'en-US', label: 'English' },
 ] as const;
 
+/**
+ * Idioma de referencia del producto (espejo de `HUB_DEFAULT_LOCALE` en la API).
+ * Es el que se abre por defecto en el editor y el destino de cualquier camino
+ * degradado: nunca un `undefined` implícito.
+ */
+const REFERENCE_LOCALE = 'es-ES';
+
 /** Orden de las secciones del catálogo; el nombre sale de `category.*`. */
 const CATEGORY_ORDER: EmailTemplateCategory[] = [
   'account',
@@ -83,6 +90,14 @@ export function EmailTemplatesManager() {
   const t = useTranslations('modNotifications');
   const tErrors = useTranslations('errors');
   const [catalog, setCatalog] = useState<EmailTemplateCatalogEntry[] | null>(null);
+  /**
+   * Copy por defecto del producto POR IDIOMA. El listado de la pantalla usa el
+   * de referencia (`catalog`); el editor usa el del idioma que se está
+   * personalizando.
+   */
+  const [catalogByLocale, setCatalogByLocale] = useState<
+    Record<string, EmailTemplateCatalogEntry[]>
+  >({});
   const [overrides, setOverrides] = useState<NotificationTemplateOverride[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -93,11 +108,18 @@ export function EmailTemplatesManager() {
 
   async function reload() {
     try {
-      const [cat, list] = await Promise.all([
-        adminNotificationsApi.getCatalog(),
+      // Un catálogo por idioma personalizable (hoy 2). Se piden juntos: el
+      // editor necesita el copy por defecto del idioma que se elija SIN que la
+      // pantalla se quede esperando a mitad de una edición.
+      const [porIdioma, list] = await Promise.all([
+        Promise.all(
+          SUPPORTED_LOCALES.map(async (l) => [l.code, await adminNotificationsApi.getCatalog(l.code)] as const), // prettier-ignore
+        ),
         adminNotificationsApi.listOverrides(),
       ]);
-      setCatalog(cat);
+      const mapa = Object.fromEntries(porIdioma);
+      setCatalogByLocale(mapa);
+      setCatalog(mapa[REFERENCE_LOCALE] ?? null);
       setOverrides(list);
       setError(null);
     } catch (e) {
@@ -117,20 +139,36 @@ export function EmailTemplatesManager() {
     })).filter((g) => g.entries.length > 0);
   }, [catalog]);
 
+  /**
+   * Copy por defecto del producto para (key, idioma). El catálogo se carga una
+   * vez por idioma soportado, así que el prefill de un override `en-US` sale en
+   * inglés: antes salía siempre en español y el admin tenía que borrar un texto
+   * español para escribir el inglés encima.
+   *
+   * CAMINO DEGRADADO: un idioma sin catálogo cargado (fallo de red en su
+   * fetch) cae al del idioma de referencia, que siempre está. Nunca a vacío:
+   * un editor en blanco parece que el email no existe.
+   */
+  function defaultsFor(entry: EmailTemplateCatalogEntry, locale: string) {
+    const porIdioma = catalogByLocale[locale]?.find((e) => e.key === entry.key);
+    return porIdioma ?? entry;
+  }
+
   /** Abre el editor prefilleado con el valor EFECTIVO (override o default). */
   function openEditor(
     entry: EmailTemplateCatalogEntry,
     channel: NotificationChannel = 'EMAIL',
-    locale = 'es-ES',
+    locale = REFERENCE_LOCALE,
   ) {
     const existing = findOverride(overrides, entry.key, channel, locale);
+    const def = defaultsFor(entry, locale);
     setNotice(null);
     setEditor({
       entry,
       channel,
       locale,
-      subject: existing ? (existing.subject ?? '') : (entry.defaultSubject ?? ''),
-      body: existing ? existing.body : entry.defaultBody,
+      subject: existing ? (existing.subject ?? '') : (def.defaultSubject ?? ''),
+      body: existing ? existing.body : def.defaultBody,
       existing,
     });
   }
@@ -139,12 +177,13 @@ export function EmailTemplatesManager() {
   function retarget(channel: NotificationChannel, locale: string) {
     if (!editor) return;
     const existing = findOverride(overrides, editor.entry.key, channel, locale);
+    const def = defaultsFor(editor.entry, locale);
     setEditor({
       ...editor,
       channel,
       locale,
-      subject: existing ? (existing.subject ?? '') : (editor.entry.defaultSubject ?? ''),
-      body: existing ? existing.body : editor.entry.defaultBody,
+      subject: existing ? (existing.subject ?? '') : (def.defaultSubject ?? ''),
+      body: existing ? existing.body : def.defaultBody,
       existing,
     });
   }

@@ -242,6 +242,7 @@ export class AdminUsersService {
       throw new BadRequestException({
         message: `Rol "${dto.role}" no asignable.`,
         code: 'ADMIN_ROLE_NOT_ASSIGNABLE',
+        detail: dto.role,
       });
     }
 
@@ -535,6 +536,7 @@ export class AdminUsersService {
       throw new BadRequestException({
         message: `Rol "${roleName}" no asignable.`,
         code: 'ADMIN_ROLE_NOT_ASSIGNABLE',
+        detail: roleName,
       });
     }
     const user = await this.prisma.user.findFirst({

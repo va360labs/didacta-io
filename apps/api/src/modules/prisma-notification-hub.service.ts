@@ -20,7 +20,9 @@ import {
 import {
   HUB_DEFAULT_LOCALE,
   interpolate,
+  resolveFixedEmailCopy,
   resolveHubDefault,
+  toHubTemplateLang,
 } from './notifications/email-template-catalog';
 
 /**
@@ -154,6 +156,7 @@ export class PrismaNotificationHubService implements NotificationHubService {
         body: rendered.body,
         branding,
         webBaseUrl,
+        locale,
       });
       return;
     }
@@ -174,6 +177,13 @@ export class PrismaNotificationHubService implements NotificationHubService {
     body: string;
     branding: EmailBranding;
     webBaseUrl: string;
+    /**
+     * Idioma con el que se renderizó el cuerpo. OBLIGATORIO: es el mismo que
+     * ya resolvió `dispatch` (`notification.locale` o `user.locale`), y pasarlo
+     * explícito evita que el envoltorio de marca salga en otro idioma que el
+     * texto que envuelve.
+     */
+    locale: string;
   }): Promise<void> {
     if (!this.tenantConfig || !this.smtp) {
       // El hub se construyó en modo legacy (sin TenantConfig) — log y skip.
@@ -234,14 +244,24 @@ export class PrismaNotificationHubService implements NotificationHubService {
 
     // Envuelve el cuerpo renderizado en la plantilla de marca del tenant
     // (logo, color, firma con el nombre del tenant, footer "Powered by Didacta").
+    // El cuerpo ya viene renderizado en el idioma del destinatario; el botón y
+    // la nota del footer son ESTRUCTURALES (un override del tenant no los
+    // puede quitar) y hasta ahora salían cableados en español, así que un
+    // miembro con `locale = en-US` recibía un email inglés con el botón en
+    // español. Mismo `locale` que el cuerpo, mismo catálogo.
+    const copyVars = { tenantName: args.branding.tenantName };
     const { html, text } = renderBrandedEmail(args.branding, {
+      lang: toHubTemplateLang(args.locale),
       title: args.subject,
       bodyHtml: textToHtmlParagraphs(args.body),
       bodyText: args.body,
       cta: args.webBaseUrl
-        ? { url: args.webBaseUrl, label: `Entrar a ${args.branding.tenantName}` }
+        ? {
+            url: args.webBaseUrl,
+            label: interpolate(resolveFixedEmailCopy('cta.hub_enter', args.locale), copyVars),
+          }
         : undefined,
-      footerNote: `Recibiste este correo como miembro de ${args.branding.tenantName}.`,
+      footerNote: interpolate(resolveFixedEmailCopy('footer.hub_member', args.locale), copyVars),
     });
 
     const result = await this.smtp.send(

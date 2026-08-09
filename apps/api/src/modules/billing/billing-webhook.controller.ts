@@ -111,9 +111,14 @@ export class BillingWebhookController {
       // El filter mapea WebhookSignatureInvalidError → 401. Pero el
       // controlador puede recibir otros errores de Stripe (parser SDK).
       if (err instanceof WebhookSignatureInvalidError) throw err;
+      // El motivo lo redacta el SDK de Stripe (timestamp fuera de tolerancia,
+      // secreto que no corresponde…). Va aparte del `message` para que quien
+      // depure el endpoint desde una UI en inglés lo siga viendo entero.
+      const detail = (err as Error).message;
       throw new UnauthorizedException({
-        message: `Firma del webhook inválida: ${(err as Error).message}`,
+        message: `Firma del webhook inválida: ${detail}`,
         code: 'BILLING_WEBHOOK_SIGNATURE_REJECTED',
+        detail,
       });
     }
 

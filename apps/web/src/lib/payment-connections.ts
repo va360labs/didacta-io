@@ -23,6 +23,45 @@ import { formatCurrency } from '@/lib/i18n/format';
 
 export type PaymentConnectionStatus = 'PENDING' | 'VERIFIED' | 'ERROR' | 'DISCONNECTED';
 
+/** Forma con la que la badge de estado se pinta en el panel. */
+export interface ConnectionStatusStyle {
+  /** Sufijo de `adminPagos.connStatus.*`, o `null` si el estado es desconocido. */
+  key: 'verified' | 'error' | 'pending' | 'disconnected' | null;
+  className?: string;
+  variant?: 'outline';
+}
+
+const CONNECTION_STATUS_STYLES: Record<PaymentConnectionStatus, ConnectionStatusStyle> = {
+  VERIFIED: { key: 'verified', className: 'bg-success-600 text-white' },
+  ERROR: { key: 'error', className: 'bg-danger-600 text-white' },
+  PENDING: { key: 'pending', variant: 'outline' },
+  DISCONNECTED: { key: 'disconnected', variant: 'outline' },
+};
+
+/**
+ * Estilo neutro para un estado que este front no conoce. NO es un default
+ * implícito: es el destino deliberado de un enum que crece en la API antes de
+ * que se despliegue el web.
+ */
+const UNKNOWN_CONNECTION_STATUS_STYLE: ConnectionStatusStyle = { key: null, variant: 'outline' };
+
+/**
+ * Estilo de la badge de un estado de conexión.
+ *
+ * CAMINO DEGRADADO: `PaymentConnectionStatus` refleja un enum de Prisma que
+ * puede crecer sin que este front se entere (basta un deploy de API por
+ * delante del de web, o un módulo de terceros). Antes se indexaba el mapa a
+ * pelo y un estado nuevo daba `undefined`: leer `.key` reventaba con un
+ * TypeError que subía al error boundary y dejaba TODA la pantalla de conexiones
+ * de pago en blanco. Con `key: null` el caller pinta el código crudo — feo,
+ * pero la pantalla se ve y el admin puede seguir operando el resto de filas.
+ */
+export function connectionStatusStyle(status: string): ConnectionStatusStyle {
+  return (
+    CONNECTION_STATUS_STYLES[status as PaymentConnectionStatus] ?? UNKNOWN_CONNECTION_STATUS_STYLE
+  );
+}
+
 export interface ConnectionPublicMetadata {
   accountId?: string;
   email?: string | null;

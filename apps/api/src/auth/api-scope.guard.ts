@@ -45,6 +45,7 @@ export class ApiScopeGuard implements CanActivate {
       throw new ForbiddenException({
         message: `La API key no tiene el/los scope(s) requerido(s): ${missing.join(', ')}`,
         code: 'AUTH_API_KEY_MISSING_SCOPES',
+        detail: missing.join(', '),
       });
     }
     return true;

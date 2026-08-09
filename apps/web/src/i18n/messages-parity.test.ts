@@ -39,29 +39,59 @@
  *     crudo y el admin español conserve el detalle. El EN sí lleva una redacción
  *     genérica, porque sin key el anglófono vería el mensaje en español.
  *
- * Son los 174 codes declarados abajo. Van uno a uno y no como un `skip`
+ * Son los 148 codes declarados abajo. Van uno a uno y no como un `skip`
  * sobre `errorsApi*`: un code nuevo que aparezca solo en EN por descuido rompe
  * la CI igual que cualquier otra huérfana, y un code que se declare aquí y luego
  * se arregle (o se borre) también, porque la lista se valida contra los
  * catálogos en los dos sentidos.
  *
- * ── Lo que este test NO valida (y hay que arreglar en otra sesión) ────────────
+ * ── Por qué esa regla ERA un bug y qué la sustituye ───────────────────────────
  *
- * La CALIDAD de esa redacción genérica inglesa. Un barrido de la Sesión I cifra
- * en 32 los codes cuya traducción inglesa se traga el dato interpolado que el
- * español sí enseña (2 cerrados en el PR #34 —`ADMIN_STRIPE_KEY_REJECTED` y
- * `ADMIN_SMTP_TEST_FAILED`, que hoy interpolan `{detail}` y tienen test propio
- * en `lib/i18n/api-error.test.ts`—, 30 pendientes, 7 de ellos perdiendo un
- * diagnóstico de un sistema externo). Esos 30 están DENTRO de la lista de abajo:
- * este test los da por conocidos, no por correctos. El arreglo es mover cada uno
- * al patrón `{detail}` de `CODES_WITH_DETAIL` (backend + las dos traducciones) y
- * sacarlo de aquí — momento en el que este test lo exigirá.
+ * La asimetría dejaba al usuario inglés SIN el dato que el español sí veía: la
+ * pantalla inglesa prometía un diagnóstico («Stripe rejected the key.») y luego
+ * no lo enseñaba. El arreglo NO es borrar la key inglesa (eso pinta el mensaje
+ * crudo del backend, que está en español): es sacar el dato del copy y mandarlo
+ * como campo `detail` aparte, de modo que CADA catálogo escriba su frase e
+ * interpole `{detail}` — incluido el ES, que así rinde byte a byte el `message`
+ * que el backend ya mandaba.
+ *
+ * Ese es el patrón `CODES_WITH_DETAIL` (`lib/i18n/api-error.ts`). Los codes que
+ * ya lo usan NO están en la lista de abajo: tienen key en los dos idiomas y este
+ * test los trata como cualquier par simétrico. Si alguien vuelve a borrar la
+ * key ES de uno de ellos, el test de «entrada declarada» no lo tapa: se cae por
+ * la regla 1.
+ *
+ * ── Lo que este test NO valida (y sigue pendiente) ────────────────────────────
+ *
+ * La CALIDAD de la redacción genérica inglesa de los 148 que quedan. Del barrido
+ * de la Sesión I sobre `apps/api/src` (31 codes con `message` interpolado) se
+ * cerraron 26 con `{detail}`; los 5 que siguen abajo lo son porque arreglarlos
+ * NO es el mismo cambio mecánico:
+ *
+ *   · `ADMIN_ROLE_NOT_FOUND` y `ADMIN_TENANT_HOSTNAME_EXISTS` — el backend manda
+ *     DOS frases españolas distintas para el mismo code (`admin-users.service`
+ *     262 vs 553/596; `admin-tenants.service` 217 vs 394). Una sola key ES no
+ *     puede rendir las dos byte a byte: hay que unificar el copy del backend
+ *     primero, y eso cambia mensajes que hoy asertan tests.
+ *   · `AI_PROVIDERS_PURPOSE_NOT_SUPPORTED` y `COMMUNITY_SPACE_UNKNOWN` —
+ *     interpolan DOS valores con copy español entre medias. `detail` es un campo
+ *     único: soportarlos exige ampliar el contrato del body de error.
+ *   · `ZOOM_LIVE_STAFF_ONLY` — el valor interpolado ES copy español («ver la
+ *     asistencia»), no un dato. Traducirlo exige convertir `action` en un enum
+ *     con frase por idioma: decisión de producto.
+ *
+ * Fuera de `apps/api/src` hay ~45 codes más con el mismo defecto, definidos en
+ * las clases de error de `modules/<mod>/src/errors.ts` (p. ej.
+ * `BILLING_STRIPE_API_ERROR`, `ZOOM_API_ERROR`, `AI_GRADER_PROVIDER_ERROR`).
+ * Ese barrido nunca se hizo: arreglarlos pide `detail` en la clase de error y en
+ * su `ExceptionFilter`, y `modules/**` cae fuera de la frontera de esta sesión.
  */
 
 import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
+import { CODES_WITH_DETAIL } from '@/lib/i18n/api-error';
 
 const MESSAGES_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), 'messages');
 const LOCALES = ['es', 'en'] as const;
@@ -74,25 +104,15 @@ const ASYMMETRY_ALLOWED_PREFIX = 'errorsApi';
  * interpolado y el catálogo ES se calla para que `apiErrorMessage` lo deje
  * pasar entero. Ordenados alfabéticamente por namespace para que el diff de un
  * PR que añada o quite uno sea de una línea.
+ *
+ * Esta lista y `CODES_WITH_DETAIL` son DISJUNTAS por construcción (hay test):
+ * un code o degrada al `message` crudo (aquí) o interpola `{detail}` en los dos
+ * idiomas (allí). Estar en las dos significa que alguien arregló el code y se
+ * olvidó de sacarlo de aquí.
  */
 const EN_ONLY_BY_DESIGN: Readonly<Record<string, readonly string[]>> = {
-  errorsApiAdmin: [
-    'ADMIN_CUSTOM_DOMAIN_EXISTS',
-    'ADMIN_CUSTOM_DOMAIN_NOT_FOUND',
-    'ADMIN_ROLE_NOT_ASSIGNABLE',
-    'ADMIN_ROLE_NOT_FOUND',
-    'ADMIN_SMTP_TEMPLATE_NOT_FOUND',
-    'ADMIN_TENANT_HOSTNAME_EXISTS',
-    'ADMIN_TENANT_SLUG_EXISTS',
-  ],
-  errorsApiAuthSso: [
-    'AUTH_API_KEY_MISSING_SCOPES',
-    'SSO_EMAIL_DOMAIN_NOT_ALLOWED',
-    'SSO_OIDC_IDP_ERROR',
-    'SSO_SAML_RESPONSE_INVALID',
-  ],
+  errorsApiAdmin: ['ADMIN_ROLE_NOT_FOUND', 'ADMIN_TENANT_HOSTNAME_EXISTS'],
   errorsApiModulesA: [
-    'AI_PROVIDERS_PROVIDER_NOT_REGISTERED',
     'AI_PROVIDERS_PURPOSE_NOT_SUPPORTED',
     'CORE_MODULE_NOT_DISABLEABLE',
     'COURSE_ALREADY_PUBLISHED',
@@ -101,15 +121,9 @@ const EN_ONLY_BY_DESIGN: Readonly<Record<string, readonly string[]>> = {
     'COURSE_SLUG_EXISTS',
     'INVITATION_INVALID',
     'LESSON_LOCKED',
-    'MEMBER_REG_EMAIL_SEND_FAILED',
     'MODULE_HAS_ACTIVE_DEPENDENTS',
     'MODULE_NOT_FOUND',
     'SCORM_PACKAGE_INVALID',
-    'STORAGE_FILE_SIZE_OUT_OF_RANGE',
-    'TENANT_MODULES_MODULE_NOT_ACTIVE',
-    'TENANT_SETTINGS_PARAM_INVALID',
-    'TENANT_SETTINGS_SMTP_CONFIG_INVALID',
-    'TENANT_SETTINGS_SMTP_TEST_FAILED',
     'THEMING_CUSTOM_CSS_TOO_LARGE',
     'THEMING_CUSTOM_CSS_UNSAFE',
     'THEMING_FOOTER_HTML_TOO_LARGE',
@@ -126,7 +140,6 @@ const EN_ONLY_BY_DESIGN: Readonly<Record<string, readonly string[]>> = {
     'ZOOM_SESSION_NOT_FOUND',
   ],
   errorsApiModulesB: [
-    'ACCESS_GROUPS_SLUG_TAKEN',
     'AI_CONTENT_DRAFT_NOT_FOUND',
     'AI_CONTENT_DRAFT_NOT_IN_DRAFT',
     'AI_CONTENT_INVALID_JSON',
@@ -161,7 +174,6 @@ const EN_ONLY_BY_DESIGN: Readonly<Record<string, readonly string[]>> = {
     'BILLING_STRIPE_API_ERROR',
     'BILLING_STRIPE_CONFIG_MISSING',
     'BILLING_WEBHOOK_SIGNATURE_INVALID',
-    'BILLING_WEBHOOK_SIGNATURE_REJECTED',
     'COMMUNITY_SPACE_UNKNOWN',
     'FUNDAE_ACTION_NOT_FOUND',
     'FUNDAE_ACTION_WITHOUT_COURSE',
@@ -187,7 +199,6 @@ const EN_ONLY_BY_DESIGN: Readonly<Record<string, readonly string[]>> = {
     'FUNDAE_RLPT_NOTIFICACION_INICIAL_MISSING',
     'FUNDAE_RLPT_NOT_FOUND',
     'FUNDAE_RLPT_PLAZO_NO_CUMPLIDO',
-    'FUNDAE_RLPT_SIZE_INVALID',
     'GAMIFICATION_CHALLENGE_CLOSED',
     'GAMIFICATION_CONFLICT',
     'GAMIFICATION_NOT_FOUND',
@@ -199,8 +210,6 @@ const EN_ONLY_BY_DESIGN: Readonly<Record<string, readonly string[]>> = {
     'MEMBERSHIP_PLAN_INTERVAL_INVALID',
     'MEMBERSHIP_PLAN_NOT_FOUND',
     'MESSAGING_SPACE_NOT_FOUND',
-    'PAYCONN_EMAIL_SEND_FAILED',
-    'PAYCONN_PATTERN_INVALID',
     'PAYMENT_CONNECTIONS_ALREADY_EXISTS',
     'PAYMENT_CONNECTIONS_NOT_FOUND',
     'PAYMENT_CONNECTIONS_PORTAL_UNAVAILABLE',
@@ -223,7 +232,6 @@ const EN_ONLY_BY_DESIGN: Readonly<Record<string, readonly string[]>> = {
     'SUBSCRIPTIONS_STRIPE_API_ERROR',
     'SUBSCRIPTIONS_STRIPE_CONFIG_MISSING',
     'SUBSCRIPTIONS_WEBHOOK_SIGNATURE_INVALID',
-    'SUBS_WEBHOOK_SIGNATURE_REJECTED',
     'SURVEYS_INVALID_ANSWER',
     'TAG_NAME_EXISTS',
     'TAG_NOT_FOUND',
@@ -236,15 +244,11 @@ const EN_ONLY_BY_DESIGN: Readonly<Record<string, readonly string[]>> = {
     'MANIFEST_CONSISTENCY_INVALID',
     'MANIFEST_INVALID_JSON',
     'MANIFEST_SCHEMA_INVALID',
-    'MARKETPLACE_ASSET_SURFACE_INVALID',
-    'MARKETPLACE_DISPATCHER_ROUTE_NOT_FOUND',
     'MARKETPLACE_MODULE_HANDLER_ERROR',
     'MARKETPLACE_MODULE_NOT_AVAILABLE',
     'MARKETPLACE_MODULE_NOT_INSTALLED',
     'MARKETPLACE_PACKAGE_DOWNLOAD_FAILED',
     'MARKETPLACE_SURFACE_UI_MISSING',
-    'MODERATION_REASON_TOO_LONG',
-    'MODERATION_SCOPES_UNKNOWN',
     'MODULE_BOOT_FAILED',
     'MODULE_LINT_FAILED',
     'NAME_RESERVED',
@@ -366,6 +370,20 @@ describe('catálogo i18n · paridad es ↔ en', () => {
   it('todo namespace declarado existe en el disco', () => {
     const fantasma = Object.keys(EN_ONLY_BY_DESIGN).filter((ns) => !NAMESPACES.includes(ns));
     expect(fantasma, `namespaces declarados que ya no existen: ${fantasma.join(', ')}`).toEqual([]);
+  });
+
+  it('ningún code está a la vez declarado asimétrico y en CODES_WITH_DETAIL', () => {
+    // Los dos mecanismos se excluyen: o el ES se calla y degrada al `message`
+    // crudo, o los dos catálogos interpolan `{detail}`. Un code en ambos sitios
+    // es un arreglo a medias que este test no debe dejar pasar.
+    const enLasDos = Object.entries(EN_ONLY_BY_DESIGN).flatMap(([ns, codes]) =>
+      codes.filter((c) => CODES_WITH_DETAIL.has(c)).map((c) => `${ns}.${c}`),
+    );
+    expect(
+      enLasDos,
+      `codes que ya interpolan {detail} pero siguen declarados como asimétricos.\n` +
+        `Bórralos de EN_ONLY_BY_DESIGN:\n  ${enLasDos.join('\n  ')}`,
+    ).toEqual([]);
   });
 });
 
