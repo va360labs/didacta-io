@@ -12,6 +12,7 @@ import {
 } from '@nestjs/common';
 import { LearningError } from '@didacta/mod-learning';
 import type { FastifyReply } from 'fastify';
+import { moduleErrorBody } from '../common/module-error-body';
 
 const STATUS_BY_CODE: Record<string, number> = {
   ALREADY_ENROLLED: HttpStatus.CONFLICT,
@@ -31,7 +32,7 @@ const STATUS_BY_CODE: Record<string, number> = {
 export class LearningErrorFilter implements ExceptionFilter<LearningError> {
   catch(exception: LearningError, host: ArgumentsHost) {
     const status = STATUS_BY_CODE[exception.code] ?? HttpStatus.BAD_REQUEST;
-    const body = { statusCode: status, code: exception.code, message: exception.message };
+    const body = moduleErrorBody(exception, status);
     if (host.getType() === 'http') {
       void host.switchToHttp().getResponse<FastifyReply>().status(status).send(body);
       return;

@@ -12,6 +12,7 @@ import {
 } from '@nestjs/common';
 import { AiGraderError } from '@didacta/mod-ai-grader';
 import type { FastifyReply } from 'fastify';
+import { moduleErrorBody } from '../../common/module-error-body';
 
 const STATUS_BY_CODE: Record<string, number> = {
   AI_GRADER_RUBRIC_NOT_FOUND: HttpStatus.NOT_FOUND,
@@ -28,11 +29,7 @@ export class AiGraderErrorFilter implements ExceptionFilter<AiGraderError> {
   catch(exception: AiGraderError, host: ArgumentsHost) {
     const reply = host.switchToHttp().getResponse<FastifyReply>();
     const status = STATUS_BY_CODE[exception.code] ?? HttpStatus.BAD_REQUEST;
-    const body = {
-      statusCode: status,
-      code: exception.code,
-      message: exception.message,
-    };
+    const body = moduleErrorBody(exception, status);
     if (host.getType() === 'http') {
       void reply.status(status).send(body);
       return;

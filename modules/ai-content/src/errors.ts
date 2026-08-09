@@ -3,19 +3,34 @@
  * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
  */
 
+/**
+ * Opciones de un error de dominio. `detail` es el diagnóstico CRUDO que el
+ * `message` español lleva incrustado (lo que responde el proveedor de IA): viaja
+ * como campo APARTE hasta el front para que el catálogo inglés no se lo trague
+ * al traducir por `code`. Contrato completo en
+ * `apps/api/src/common/module-error-body.ts`.
+ */
+export interface AiContentErrorOptions {
+  readonly detail?: string;
+}
+
 export class AiContentError extends Error {
+  readonly detail?: string;
+
   constructor(
     message: string,
     public readonly code: string,
+    options?: AiContentErrorOptions,
   ) {
     super(message);
     this.name = 'AiContentError';
+    this.detail = options?.detail;
   }
 }
 
 export class DraftNotFoundError extends AiContentError {
   constructor(id: string) {
-    super(`Draft no encontrado: ${id}`, 'AI_CONTENT_DRAFT_NOT_FOUND');
+    super(`Draft no encontrado: ${id}`, 'AI_CONTENT_DRAFT_NOT_FOUND', { detail: id });
     this.name = 'DraftNotFoundError';
   }
 }
@@ -35,6 +50,7 @@ export class LessonTextEmptyError extends AiContentError {
     super(
       `La lección ${lessonId} no tiene texto extraíble. La IA necesita contenido textual para generar.`,
       'AI_CONTENT_LESSON_TEXT_EMPTY',
+      { detail: lessonId },
     );
     this.name = 'LessonTextEmptyError';
   }
@@ -45,6 +61,7 @@ export class AiContentProviderError extends AiContentError {
     super(
       `El proveedor IA falló al generar contenido: ${reason}. Revisa la config del tenant.`,
       'AI_CONTENT_PROVIDER_ERROR',
+      { detail: reason },
     );
     this.name = 'AiContentProviderError';
   }

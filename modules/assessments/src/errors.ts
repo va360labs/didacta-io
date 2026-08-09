@@ -3,13 +3,27 @@
  * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
  */
 
+/**
+ * Opciones de un error de dominio. `detail` es el dato que el `message` español
+ * lleva incrustado y que el catálogo inglés se tragaba al traducir por `code`:
+ * viaja como campo APARTE hasta el front. Contrato completo en
+ * `apps/api/src/common/module-error-body.ts`.
+ */
+export interface AssessmentsErrorOptions {
+  readonly detail?: string;
+}
+
 export class AssessmentsError extends Error {
+  readonly detail?: string;
+
   constructor(
     public readonly code: string,
     message: string,
+    options?: AssessmentsErrorOptions,
   ) {
     super(message);
     this.name = 'AssessmentsError';
+    this.detail = options?.detail;
   }
 }
 
@@ -57,6 +71,9 @@ export class MaxAttemptsReachedError extends AssessmentsError {
     super(
       'MAX_ATTEMPTS_REACHED',
       `El alumno ha alcanzado el máximo de intentos permitidos (${maxAttempts})`,
+      // String() a propósito: si ICU recibiera un number lo formatearía con
+      // separador de miles por idioma y el ES dejaría de rendir byte a byte.
+      { detail: String(maxAttempts) },
     );
   }
 }

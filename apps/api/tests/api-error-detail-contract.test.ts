@@ -21,9 +21,23 @@
  *
  * Este test cierra la primera mitad desde el lado del backend, SIN duplicar
  * ninguna lista: lee los catálogos ES del disco (son datos, no código),
- * deduce qué codes prometen `{detail}` y exige que todos los `throw` de
- * `apps/api/src` que los usen rellenen el campo. La segunda mitad la cubre
+ * deduce qué codes prometen `{detail}` y exige que todos los productores que
+ * los usen rellenen el campo. La segunda mitad la cubre
  * `apps/web/src/lib/i18n/api-error.test.ts`.
+ *
+ * ── Los DOS shapes de productor ───────────────────────────────────────────────
+ *
+ * Un code de error nace en uno de dos sitios, con sintaxis distinta:
+ *
+ *   · `apps/api/src/**` — literal de objeto: `throw new BadRequestException({
+ *     message: '…', code: 'X', detail })`.
+ *   · `modules/<mod>/src/errors.ts` — clase de dominio:
+ *     `super('…', 'X', { detail })` (o `super('X', '…', { detail })`, que el
+ *     orden de argumentos varía por módulo).
+ *
+ * La versión anterior de este test SOLO veía el primero, y por eso ~98 codes de
+ * `modules/**` llevaban invisibles desde el principio: no es que fallaran, es
+ * que nadie los miraba. Ahora se barren los dos.
  */
 
 import { readdirSync, readFileSync, statSync } from 'node:fs';
@@ -34,6 +48,7 @@ import { describe, expect, it } from 'vitest';
 const TESTS_DIR = path.dirname(fileURLToPath(import.meta.url));
 const API_SRC = path.join(TESTS_DIR, '..', 'src');
 const ES_MESSAGES = path.join(TESTS_DIR, '..', '..', 'web', 'src', 'i18n', 'messages', 'es');
+const MODULES = path.join(TESTS_DIR, '..', '..', '..', 'modules');
 
 /** Codes cuyo copy español promete un `{detail}` que el backend debe mandar. */
 function codesThatPromiseDetail(): Set<string> {
@@ -53,9 +68,36 @@ function codesThatPromiseDetail(): Set<string> {
 
 function sourceFiles(dir: string, out: string[] = []): string[] {
   for (const entry of readdirSync(dir)) {
+    if (entry === 'node_modules' || entry === 'dist') continue;
     const full = path.join(dir, entry);
     if (statSync(full).isDirectory()) sourceFiles(full, out);
     else if (entry.endsWith('.ts') && !/\.(spec|test)\.ts$/.test(entry)) out.push(full);
+  }
+  return out;
+}
+
+/** Ficheros de clases de error de los 24 módulos (`modules/<mod>/**\/errors.ts`). */
+function moduleErrorFiles(dir: string, out: string[] = []): string[] {
+  for (const entry of readdirSync(dir)) {
+    if (entry === 'node_modules' || entry === 'dist') continue;
+    const full = path.join(dir, entry);
+    if (statSync(full).isDirectory()) moduleErrorFiles(full, out);
+    else if (entry === 'errors.ts') out.push(full);
+  }
+  return out;
+}
+
+/**
+ * Bloques `super(...)` de un fichero de errores de módulo, con la línea en la
+ * que empiezan. Igual que `literalAround`: no es un parser, y no lo necesita —
+ * son llamadas de 1-6 líneas que terminan en `);`.
+ */
+function superCalls(source: string): Array<{ line: number; body: string }> {
+  const out: Array<{ line: number; body: string }> = [];
+  const re = /super\(([\s\S]*?)\n?\s*\);/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(source)) !== null) {
+    out.push({ line: source.slice(0, m.index).split('\n').length, body: m[1]! });
   }
   return out;
 }
@@ -86,6 +128,7 @@ function literalAround(lines: string[], index: number): string {
 
 const PROMISED = codesThatPromiseDetail();
 const FILES = sourceFiles(API_SRC);
+const MODULE_ERROR_FILES = moduleErrorFiles(MODULES);
 
 describe('contrato `detail` · backend ↔ catálogo', () => {
   it('el barrido encuentra catálogos y fuentes (no valida sobre el vacío)', () => {
@@ -93,6 +136,9 @@ describe('contrato `detail` · backend ↔ catálogo', () => {
     // dos listas vacías.
     expect(PROMISED.size).toBeGreaterThan(20);
     expect(FILES.length).toBeGreaterThan(200);
+    // Y lo mismo para el shape de `modules/**`, que es justo el que se escapó
+    // de los dos barridos anteriores.
+    expect(MODULE_ERROR_FILES.length).toBeGreaterThan(15);
   });
 
   it('todo throw de un code con {detail} rellena el campo', () => {
@@ -118,16 +164,42 @@ describe('contrato `detail` · backend ↔ catálogo', () => {
     ).toEqual([]);
   });
 
-  it('ningún code con {detail} se quedó sin throw en apps/api/src', () => {
+  it('toda clase de error de modules/** con un code {detail} rellena el campo', () => {
+    // El mismo contrato para el OTRO shape. Aquí el `detail` se pasa como
+    // opciones (`super(msg, CODE, { detail })`) precisamente para que sea
+    // visible en el call-site y para que este barrido no dependa de contar
+    // argumentos posicionales.
+    const sinDetalle: string[] = [];
+    for (const file of MODULE_ERROR_FILES) {
+      const source = readFileSync(file, 'utf8');
+      for (const { line, body } of superCalls(source)) {
+        const code = /'([A-Z][A-Z0-9_]*)'/.exec(body)?.[1];
+        if (!code || !PROMISED.has(code)) continue;
+        if (!/\bdetail\b/.test(body)) {
+          sinDetalle.push(`${path.relative(MODULES, file).replace(/\\/g, '/')}:${line} ${code}`);
+        }
+      }
+    }
+    expect(
+      sinDetalle,
+      'clases de error que prometen {detail} en el catálogo pero no lo mandan.\n' +
+        'El front degrada al `message` crudo (español) y el inglés vuelve a\n' +
+        'perder el dato:\n  ' +
+        sinDetalle.join('\n  '),
+    ).toEqual([]);
+  });
+
+  it('ningún code con {detail} se quedó sin productor', () => {
     // Al revés: una key de catálogo con `{detail}` cuyo backend ya no existe es
-    // una promesa muerta. Si algún día el throw se muda a `modules/<mod>/src`
-    // (donde el shape es `super(msg, CODE)` y este barrido no llega), hay que
-    // tocar este test a mano — esa fricción es deliberada.
-    const todoElCodigo = FILES.map((f) => readFileSync(f, 'utf8')).join('\n');
+    // una promesa muerta. El corpus son LOS DOS shapes: `apps/api/src` y las
+    // clases de error de `modules/<mod>`.
+    const todoElCodigo = [...FILES, ...MODULE_ERROR_FILES]
+      .map((f) => readFileSync(f, 'utf8'))
+      .join('\n');
     const huerfanos = [...PROMISED].filter((c) => !todoElCodigo.includes(`'${c}'`)).sort();
     expect(
       huerfanos,
-      `codes con {detail} en el catálogo que ningún throw de la API produce:\n  ${huerfanos.join('\n  ')}`,
+      `codes con {detail} en el catálogo que ningún productor del backend genera:\n  ${huerfanos.join('\n  ')}`,
     ).toEqual([]);
   });
 });

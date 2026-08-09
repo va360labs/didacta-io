@@ -12,6 +12,7 @@ import {
 } from '@nestjs/common';
 import type { FastifyReply } from 'fastify';
 import { MessagingError } from '@didacta/mod-messaging';
+import { moduleErrorBody } from '../../common/module-error-body';
 
 /**
  * Mapea los errores de dominio de mod.messaging a HTTP con código estable.
@@ -31,7 +32,7 @@ const STATUS_BY_CODE: Record<string, number> = {
 export class MessagingErrorFilter implements ExceptionFilter<MessagingError> {
   catch(exception: MessagingError, host: ArgumentsHost) {
     const status = STATUS_BY_CODE[exception.code] ?? HttpStatus.BAD_REQUEST;
-    const body = { statusCode: status, code: exception.code, message: exception.message };
+    const body = moduleErrorBody(exception, status);
     if (host.getType() === 'http') {
       const reply = host.switchToHttp().getResponse<FastifyReply>();
       void reply.status(status).send(body);

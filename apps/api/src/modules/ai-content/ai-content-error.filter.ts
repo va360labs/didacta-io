@@ -12,6 +12,7 @@ import {
 } from '@nestjs/common';
 import { AiContentError } from '@didacta/mod-ai-content';
 import type { FastifyReply } from 'fastify';
+import { moduleErrorBody } from '../../common/module-error-body';
 
 const STATUS_BY_CODE: Record<string, number> = {
   AI_CONTENT_DRAFT_NOT_FOUND: HttpStatus.NOT_FOUND,
@@ -25,11 +26,7 @@ const STATUS_BY_CODE: Record<string, number> = {
 export class AiContentErrorFilter implements ExceptionFilter<AiContentError> {
   catch(exception: AiContentError, host: ArgumentsHost) {
     const status = STATUS_BY_CODE[exception.code] ?? HttpStatus.BAD_REQUEST;
-    const body = {
-      statusCode: status,
-      code: exception.code,
-      message: exception.message,
-    };
+    const body = moduleErrorBody(exception, status);
     if (host.getType() === 'http') {
       const reply = host.switchToHttp().getResponse<FastifyReply>();
       void reply.status(status).send(body);

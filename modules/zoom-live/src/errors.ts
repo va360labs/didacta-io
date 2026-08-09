@@ -3,18 +3,36 @@
  * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
  */
 
+/**
+ * Opciones de un error de dominio. `detail` es el diagnóstico CRUDO que el
+ * `message` español lleva incrustado (lo que responde Zoom): viaja como campo
+ * APARTE hasta el front para que el catálogo inglés no se lo trague al traducir
+ * por `code`. Contrato completo en `apps/api/src/common/module-error-body.ts`.
+ */
+export interface ZoomLiveErrorOptions {
+  readonly detail?: string;
+}
+
 export class ZoomLiveError extends Error {
+  readonly detail?: string;
+
   constructor(
     public readonly code: string,
     message: string,
+    options?: ZoomLiveErrorOptions,
   ) {
     super(message);
     this.name = 'ZoomLiveError';
+    this.detail = options?.detail;
   }
 }
 
 export class SessionNotFoundError extends ZoomLiveError {
   constructor(sessionId: string) {
+    // SIN `detail` a propósito: `zoom-live.controller.ts:67` lanza este MISMO
+    // code con otra frase española («Sesión no encontrada.»). Una sola key ES no
+    // puede rendir las dos byte a byte, así que el code se queda en
+    // `EN_ONLY_BY_DESIGN` — ver la cabecera de `messages-parity.test.ts` ①.
     super('ZOOM_SESSION_NOT_FOUND', `La sesión ${sessionId} no existe en este tenant.`);
   }
 }
@@ -27,7 +45,9 @@ export class SessionAlreadyEndedError extends ZoomLiveError {
 
 export class CourseNotInTenantError extends ZoomLiveError {
   constructor(courseId: string) {
-    super('ZOOM_COURSE_NOT_IN_TENANT', `El curso ${courseId} no pertenece a este tenant.`);
+    super('ZOOM_COURSE_NOT_IN_TENANT', `El curso ${courseId} no pertenece a este tenant.`, {
+      detail: courseId,
+    });
   }
 }
 
@@ -86,7 +106,7 @@ export class ZoomApiError extends ZoomLiveError {
     /** Código de error propio de Zoom (`code` del body JSON). */
     public readonly zoomCode?: number,
   ) {
-    super('ZOOM_API_ERROR', `Error hablando con Zoom: ${reason}`);
+    super('ZOOM_API_ERROR', `Error hablando con Zoom: ${reason}`, { detail: reason });
   }
 }
 
@@ -103,6 +123,7 @@ export class ZoomHostNotFoundError extends ZoomLiveError {
     super(
       'ZOOM_HOST_NOT_FOUND',
       `El email del host (${hostEmail}) no es un usuario de vuestra cuenta de Zoom, así que Zoom no deja crear la reunión a su nombre. Usa el email de alguien que tenga usuario en la cuenta de Zoom, o añádelo primero desde zoom.us → Gestión de usuarios.`,
+      { detail: hostEmail },
     );
   }
 }

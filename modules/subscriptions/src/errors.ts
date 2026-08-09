@@ -12,19 +12,34 @@
  * implementación al cliente.
  */
 
+/**
+ * Opciones de un error de dominio. `detail` es el diagnóstico CRUDO que el
+ * `message` español lleva incrustado (la respuesta de Stripe, la del MTA): viaja
+ * como campo APARTE hasta el front para que el catálogo inglés no se lo trague
+ * al traducir por `code`. Contrato completo en
+ * `apps/api/src/common/module-error-body.ts`.
+ */
+export interface SubscriptionsErrorOptions {
+  readonly detail?: string;
+}
+
 export class SubscriptionsError extends Error {
+  readonly detail?: string;
+
   constructor(
     message: string,
     public readonly code: string,
+    options?: SubscriptionsErrorOptions,
   ) {
     super(message);
     this.name = 'SubscriptionsError';
+    this.detail = options?.detail;
   }
 }
 
 export class SubscriptionNotFoundError extends SubscriptionsError {
   constructor(id: string) {
-    super(`Suscripción no encontrada: ${id}`, 'SUBSCRIPTIONS_NOT_FOUND');
+    super(`Suscripción no encontrada: ${id}`, 'SUBSCRIPTIONS_NOT_FOUND', { detail: id });
     this.name = 'SubscriptionNotFoundError';
   }
 }
@@ -34,6 +49,7 @@ export class SubscriptionAlreadyActiveError extends SubscriptionsError {
     super(
       `Ya tienes una suscripción activa para el curso ${courseId}. Cancela la actual antes de crear otra.`,
       'SUBSCRIPTIONS_ALREADY_ACTIVE',
+      { detail: courseId },
     );
     this.name = 'SubscriptionAlreadyActiveError';
   }
@@ -44,6 +60,7 @@ export class SubscriptionPriceNotRecurringError extends SubscriptionsError {
     super(
       `El price ${priceId} no es recurring. mod.subscriptions sólo acepta prices recurring (interval=month|year). Para pago único usa mod.billing.`,
       'SUBSCRIPTIONS_PRICE_NOT_RECURRING',
+      { detail: priceId },
     );
     this.name = 'SubscriptionPriceNotRecurringError';
   }
@@ -58,18 +75,20 @@ export class SubscriptionAccessDeniedError extends SubscriptionsError {
 
 export class WebhookSignatureInvalidError extends SubscriptionsError {
   constructor(reason: string) {
-    super(`Firma del webhook inválida: ${reason}`, 'SUBSCRIPTIONS_WEBHOOK_SIGNATURE_INVALID');
+    super(`Firma del webhook inválida: ${reason}`, 'SUBSCRIPTIONS_WEBHOOK_SIGNATURE_INVALID', {
+      detail: reason,
+    });
     this.name = 'WebhookSignatureInvalidError';
   }
 }
 
 export class StripeConfigMissingError extends SubscriptionsError {
   constructor(missing: 'secretKey' | 'webhookSecret') {
+    const envVar = missing === 'secretKey' ? 'STRIPE_SECRET_KEY' : 'STRIPE_WEBHOOK_SECRET';
     super(
-      `Configuración Stripe incompleta: falta ${
-        missing === 'secretKey' ? 'STRIPE_SECRET_KEY' : 'STRIPE_WEBHOOK_SECRET'
-      }.`,
+      `Configuración Stripe incompleta: falta ${envVar}.`,
       'SUBSCRIPTIONS_STRIPE_CONFIG_MISSING',
+      { detail: envVar },
     );
     this.name = 'StripeConfigMissingError';
   }
@@ -77,7 +96,9 @@ export class StripeConfigMissingError extends SubscriptionsError {
 
 export class StripeApiError extends SubscriptionsError {
   constructor(message: string) {
-    super(`Error de Stripe API: ${message}`, 'SUBSCRIPTIONS_STRIPE_API_ERROR');
+    super(`Error de Stripe API: ${message}`, 'SUBSCRIPTIONS_STRIPE_API_ERROR', {
+      detail: message,
+    });
     this.name = 'StripeApiError';
   }
 }
@@ -88,6 +109,9 @@ export class MembershipPlanIntervalInvalidError extends SubscriptionsError {
     super(
       `Periodicidad inválida: ${intervalMonths} meses. Usa un entero entre 1 y 12 (Stripe no admite periodos de facturación de más de un año).`,
       'MEMBERSHIP_PLAN_INTERVAL_INVALID',
+      // String() a propósito: si ICU recibiera un number lo formatearía con
+      // separador de miles por idioma y el ES dejaría de rendir byte a byte.
+      { detail: String(intervalMonths) },
     );
     this.name = 'MembershipPlanIntervalInvalidError';
   }
@@ -95,7 +119,9 @@ export class MembershipPlanIntervalInvalidError extends SubscriptionsError {
 
 export class MembershipPlanNotFoundError extends SubscriptionsError {
   constructor(planId: string) {
-    super(`Plan de membresía no encontrado o inactivo: ${planId}`, 'MEMBERSHIP_PLAN_NOT_FOUND');
+    super(`Plan de membresía no encontrado o inactivo: ${planId}`, 'MEMBERSHIP_PLAN_NOT_FOUND', {
+      detail: planId,
+    });
     this.name = 'MembershipPlanNotFoundError';
   }
 }
@@ -112,7 +138,7 @@ export class MembershipPageInactiveError extends SubscriptionsError {
 
 export class MembershipConfigIncompleteError extends SubscriptionsError {
   constructor(detail: string) {
-    super(`Membresía mal configurada: ${detail}`, 'MEMBERSHIP_CONFIG_INCOMPLETE');
+    super(`Membresía mal configurada: ${detail}`, 'MEMBERSHIP_CONFIG_INCOMPLETE', { detail });
     this.name = 'MembershipConfigIncompleteError';
   }
 }

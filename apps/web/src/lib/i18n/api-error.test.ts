@@ -202,6 +202,187 @@ describe('apiErrorMessage con detalle estructurado', () => {
       expect(apiErrorMessage(e, tEn), `${code}: el EN se traga el detalle`).toContain(detail);
     }
   });
+
+  it('el catálogo ES rinde byte a byte el `message` de los errores de modules/**', () => {
+    // Los 75 codes que este PR cierra viven en las clases de error de
+    // `modules/<mod>/src/errors.ts` (shape `super(msg, CODE)`), que ningún
+    // barrido anterior miraba porque solo buscaban `code: 'X'` en
+    // `apps/api/src`.
+    //
+    // Los mensajes de la tabla NO salen del catálogo —eso sería tautológico—:
+    // son el `message` que compone el `super(...)` del backend, con el valor
+    // interpolado sustituido por el centinela. Si alguien cambia el copy español
+    // del backend y no toca el catálogo (o al revés), la igualdad se rompe aquí.
+    const DATO = 'DATO-1';
+    const CASOS: ReadonlyArray<readonly [string, string]> = [
+      ['AI_CONTENT_DRAFT_NOT_FOUND', 'Draft no encontrado: DATO-1'],
+      [
+        'AI_CONTENT_LESSON_TEXT_EMPTY',
+        'La lección DATO-1 no tiene texto extraíble. La IA necesita contenido textual para generar.',
+      ],
+      [
+        'AI_CONTENT_PROVIDER_ERROR',
+        'El proveedor IA falló al generar contenido: DATO-1. Revisa la config del tenant.',
+      ],
+      [
+        'AI_GRADER_ATTEMPT_NOT_PENDING',
+        'El attempt DATO-1 no está en estado PENDING_REVIEW; AI Grader solo sugiere notas para attempts pendientes de corrección.',
+      ],
+      ['AI_GRADER_RESPONSE_PARSE_ERROR', 'No pudimos parsear la respuesta del modelo: DATO-1'],
+      ['AI_GRADER_RUBRIC_INVALID', 'Rúbrica inválida: DATO-1'],
+      [
+        'AI_GRADER_RUBRIC_NOT_FOUND',
+        'No hay rúbrica configurada para la pregunta DATO-1. El formador debe crear una antes de pedir sugerencias IA.',
+      ],
+      ['AI_GRADER_SUGGESTION_NOT_FOUND', 'Sugerencia DATO-1 no encontrada en este tenant.'],
+      ['AI_TUTOR_CORRECTION_NOT_FOUND', 'No existe la corrección DATO-1.'],
+      [
+        'AI_TUTOR_COURSE_ACCESS_DENIED',
+        'Sin acceso al curso DATO-1: el tutor sólo responde sobre cursos en los que estás matriculado.',
+      ],
+      [
+        'AI_TUTOR_COURSE_NOT_INDEXED',
+        'El curso DATO-1 no está indexado todavía. Publica el curso o solicita re-indexación al admin.',
+      ],
+      [
+        'AI_TUTOR_COURSE_NOT_PUBLISHED',
+        'El curso DATO-1 no está publicado; el tutor IA solo opera sobre cursos publicados.',
+      ],
+      ['AI_TUTOR_MESSAGE_NOT_FOUND', 'No existe la respuesta DATO-1 del tutor en este tenant.'],
+      ['BILLING_ORDER_NOT_FOUND', 'Orden no encontrada: DATO-1'],
+      [
+        'BILLING_PRODUCT_ALREADY_EXISTS',
+        'Ya existe un producto activo para el curso DATO-1. Edita el existente o desactívalo antes de crear uno nuevo.',
+      ],
+      ['BILLING_PRODUCT_INACTIVE', 'El producto del curso DATO-1 está desactivado.'],
+      ['BILLING_PRODUCT_NOT_FOUND', 'Producto no encontrado: DATO-1'],
+      ['BILLING_STRIPE_API_ERROR', 'Error de Stripe API: DATO-1'],
+      ['BILLING_STRIPE_CONFIG_MISSING', 'Configuración Stripe incompleta: falta DATO-1.'],
+      ['BILLING_WEBHOOK_SIGNATURE_INVALID', 'Firma del webhook inválida: DATO-1'],
+      ['COURSE_ALREADY_PUBLISHED', 'El curso DATO-1 ya está publicado'],
+      ['COURSE_SLUG_EXISTS', 'Ya existe un curso con slug "DATO-1" en este tenant'],
+      ['FUNDAE_ACTION_NOT_FOUND', 'La acción formativa DATO-1 no existe.'],
+      [
+        'FUNDAE_ACTION_WITHOUT_COURSE',
+        'La acción DATO-1 no tiene curso vinculado; no es posible generar evidencias por participante.',
+      ],
+      ['FUNDAE_BLOCK_NOT_FOUND', 'El módulo formativo DATO-1 no existe.'],
+      ['FUNDAE_BLOCK_ORDINAL_DUPLICADO', 'Ya existe un bloque con ordinal DATO-1 en esta acción.'],
+      [
+        'FUNDAE_CODIGO_DUPLICADO',
+        'Ya existe una acción formativa con código "DATO-1" en este tenant.',
+      ],
+      [
+        'FUNDAE_COMPANY_NIF_DUPLICADO',
+        'Ya existe una empresa bonificada con NIF "DATO-1" en este tenant.',
+      ],
+      ['FUNDAE_COMPANY_NOT_FOUND', 'La empresa bonificada DATO-1 no existe.'],
+      ['FUNDAE_COST_NOT_FOUND', 'El coste DATO-1 no existe.'],
+      ['FUNDAE_COURSE_NOT_IN_TENANT', 'El curso DATO-1 no pertenece a este tenant.'],
+      [
+        'FUNDAE_GROUP_CERRADO',
+        'El grupo DATO-1 está cerrado: no se pueden modificar costes ni metadatos.',
+      ],
+      ['FUNDAE_GROUP_NOT_FOUND', 'El grupo bonificable DATO-1 no existe.'],
+      ['FUNDAE_GROUP_NUMERO_DUPLICADO', 'Ya existe un grupo con número DATO-1 en esta acción.'],
+      ['FUNDAE_GROUP_PARTICIPANT_NOT_FOUND', 'La matriculación DATO-1 no existe.'],
+      [
+        'FUNDAE_GROUP_SIN_CURSO',
+        'El grupo DATO-1 pertenece a una acción sin curso vinculado; no se puede hacer bulk-enroll desde el catálogo. Añade los participantes uno a uno.',
+      ],
+      [
+        'FUNDAE_PARTICIPANT_NOT_IN_ACTION',
+        'El usuario DATO-1 no está matriculado en el curso vinculado a esta acción.',
+      ],
+      [
+        'FUNDAE_RLPT_NOTIFICACION_INICIAL_MISSING',
+        'La empresa DATO-1 no tiene una notificación inicial a la RLPT registrada; no se puede iniciar un grupo bonificable hasta hacerla y subir la evidencia.',
+      ],
+      ['FUNDAE_RLPT_NOT_FOUND', 'La notificación RLPT DATO-1 no existe.'],
+      ['INVITATION_INVALID', 'Invitación inválida: DATO-1'],
+      ['MAX_ATTEMPTS_REACHED', 'El alumno ha alcanzado el máximo de intentos permitidos (DATO-1)'],
+      ['MEMBERSHIP_CONFIG_INCOMPLETE', 'Membresía mal configurada: DATO-1'],
+      [
+        'MEMBERSHIP_PLAN_INTERVAL_INVALID',
+        'Periodicidad inválida: DATO-1 meses. Usa un entero entre 1 y 12 (Stripe no admite periodos de facturación de más de un año).',
+      ],
+      ['MEMBERSHIP_PLAN_NOT_FOUND', 'Plan de membresía no encontrado o inactivo: DATO-1'],
+      ['MESSAGING_SPACE_NOT_FOUND', 'El espacio "DATO-1" no existe.'],
+      [
+        'PAYMENT_CONNECTIONS_ALREADY_EXISTS',
+        'Ya existe una conexión Stripe con el nombre "DATO-1". Usa un nombre distinto.',
+      ],
+      ['PAYMENT_CONNECTIONS_NOT_FOUND', 'Conexión de pago no encontrada: DATO-1'],
+      [
+        'PAYMENT_CONNECTIONS_PORTAL_UNAVAILABLE',
+        'El proveedor "DATO-1" no ofrece un portal de gestión de suscripción integrado.',
+      ],
+      [
+        'PAYMENT_CONNECTIONS_PROVIDER_NOT_SUPPORTED',
+        'Proveedor de pago no soportado: "DATO-1". En esta versión solo se soporta "stripe" (PayPal en roadmap).',
+      ],
+      ['PAYMENT_CONNECTIONS_STRIPE_API_ERROR', 'Error leyendo de la cuenta de pago: DATO-1'],
+      [
+        'PAYMENT_CONNECTIONS_STRIPE_KEY_INVALID',
+        'Credencial de la cuenta de pago inválida o sin permiso de lectura: DATO-1',
+      ],
+      ['PAYMENT_CONNECTIONS_TIER_NAME_CONFLICT', 'Ya existe un tier con el nombre "DATO-1".'],
+      ['PAYMENT_CONNECTIONS_TIER_NOT_FOUND', 'Tier no encontrado: DATO-1'],
+      ['REFERRALS_COMMISSION_NOT_FOUND', 'Comisión no encontrada: DATO-1'],
+      ['SCORM_PACKAGE_INVALID', 'Paquete SCORM inválido: DATO-1'],
+      ['SPACE_EXISTS', "Ya existe un espacio con slug 'DATO-1'."],
+      ['SPACE_NOT_FOUND', "El espacio 'DATO-1' no existe o no pertenece al tenant"],
+      [
+        'SUBSCRIPTIONS_ALREADY_ACTIVE',
+        'Ya tienes una suscripción activa para el curso DATO-1. Cancela la actual antes de crear otra.',
+      ],
+      ['SUBSCRIPTIONS_NOT_FOUND', 'Suscripción no encontrada: DATO-1'],
+      [
+        'SUBSCRIPTIONS_PRICE_NOT_RECURRING',
+        'El price DATO-1 no es recurring. mod.subscriptions sólo acepta prices recurring (interval=month|year). Para pago único usa mod.billing.',
+      ],
+      ['SUBSCRIPTIONS_STRIPE_API_ERROR', 'Error de Stripe API: DATO-1'],
+      ['SUBSCRIPTIONS_STRIPE_CONFIG_MISSING', 'Configuración Stripe incompleta: falta DATO-1.'],
+      ['SUBSCRIPTIONS_WEBHOOK_SIGNATURE_INVALID', 'Firma del webhook inválida: DATO-1'],
+      ['TAG_NAME_EXISTS', 'Ya existe un tag llamado "DATO-1" en este tenant'],
+      ['TAG_NOT_FOUND', 'El tag DATO-1 no existe o no pertenece al tenant'],
+      ['TEMPLATE_IN_USE', 'No se puede eliminar: DATO-1 curso(s) están usando esta plantilla.'],
+      ['TEMPLATE_NAME_TAKEN', 'Ya existe una plantilla con nombre "DATO-1" en este tenant.'],
+      [
+        'THEMING_CUSTOM_CSS_TOO_LARGE',
+        'El CSS personalizado excede el máximo permitido de DATO-1 bytes.',
+      ],
+      ['THEMING_CUSTOM_CSS_UNSAFE', 'El CSS personalizado contiene código no permitido: DATO-1.'],
+      [
+        'THEMING_FOOTER_HTML_TOO_LARGE',
+        'El HTML del footer excede el máximo permitido de DATO-1 bytes.',
+      ],
+      ['THEMING_INVALID_URL', 'La URL de "DATO-1" no es válida o no usa https.'],
+      ['THEMING_LOGO_TOO_LARGE', 'El logo excede el máximo permitido de DATO-1 MB.'],
+      ['ZOOM_API_ERROR', 'Error hablando con Zoom: DATO-1'],
+      ['ZOOM_COURSE_NOT_IN_TENANT', 'El curso DATO-1 no pertenece a este tenant.'],
+      [
+        'ZOOM_HOST_NOT_FOUND',
+        'El email del host (DATO-1) no es un usuario de vuestra cuenta de Zoom, así que Zoom no deja crear la reunión a su nombre. Usa el email de alguien que tenga usuario en la cuenta de Zoom, o añádelo primero desde zoom.us → Gestión de usuarios.',
+      ],
+    ];
+    // Guarda de cobertura: un code nuevo con {detail} en modules/** que no entre
+    // en la tabla no tendría prueba de que el ES no cambia.
+    expect(CASOS.length, 'la tabla dejó de cubrir los codes de modules/**').toBe(75);
+    for (const [code, backendMessage] of CASOS) {
+      expect(CODES_WITH_DETAIL.has(code), `${code} no está en CODES_WITH_DETAIL`).toBe(true);
+      const e = httpError(backendMessage, code, DATO);
+      expect(apiErrorMessage(e, tEs), `${code}: el ES dejó de ser el message crudo`).toBe(
+        backendMessage,
+      );
+      // El bug que cierra el PR: el inglés se tragaba el dato.
+      expect(apiErrorMessage(e, tEn), `${code}: el EN se traga el detalle`).toContain(DATO);
+      // …y la salida fácil (borrar la key EN) pintaría el español crudo.
+      expect(apiErrorMessage(e, tEn), `${code}: el EN sigue pintando el español`).not.toBe(
+        backendMessage,
+      );
+    }
+  });
 });
 
 describe('labelOr', () => {

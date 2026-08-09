@@ -3,13 +3,27 @@
  * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
  */
 
+/**
+ * Opciones de un error de dominio. `detail` es el dato que el `message` español
+ * lleva incrustado y que el catálogo inglés se tragaba al traducir por `code`:
+ * viaja como campo APARTE hasta el front. Contrato completo en
+ * `apps/api/src/common/module-error-body.ts`.
+ */
+export interface ThemingErrorOptions {
+  readonly detail?: string;
+}
+
 export class ThemingError extends Error {
+  readonly detail?: string;
+
   constructor(
     public readonly code: string,
     message: string,
+    options?: ThemingErrorOptions,
   ) {
     super(message);
     this.name = 'ThemingError';
+    this.detail = options?.detail;
   }
 }
 
@@ -42,6 +56,9 @@ export class CustomCssTooLargeError extends ThemingError {
     super(
       'THEMING_CUSTOM_CSS_TOO_LARGE',
       `El CSS personalizado excede el máximo permitido de ${maxBytes} bytes.`,
+      // String() a propósito: si ICU recibiera un number lo formatearía con
+      // separador de miles por idioma y el ES dejaría de rendir byte a byte.
+      { detail: String(maxBytes) },
     );
   }
 }
@@ -51,6 +68,7 @@ export class CustomCssUnsafeError extends ThemingError {
     super(
       'THEMING_CUSTOM_CSS_UNSAFE',
       `El CSS personalizado contiene código no permitido: ${reason}.`,
+      { detail: reason },
     );
   }
 }
@@ -60,6 +78,9 @@ export class FooterHtmlTooLargeError extends ThemingError {
     super(
       'THEMING_FOOTER_HTML_TOO_LARGE',
       `El HTML del footer excede el máximo permitido de ${maxBytes} bytes.`,
+      // String() a propósito: si ICU recibiera un number lo formatearía con
+      // separador de miles por idioma y el ES dejaría de rendir byte a byte.
+      { detail: String(maxBytes) },
     );
   }
 }
@@ -75,16 +96,20 @@ export class SigninCopyTooLongError extends ThemingError {
 
 export class InvalidUrlError extends ThemingError {
   constructor(field: string) {
-    super('THEMING_INVALID_URL', `La URL de "${field}" no es válida o no usa https.`);
+    super('THEMING_INVALID_URL', `La URL de "${field}" no es válida o no usa https.`, {
+      detail: field,
+    });
   }
 }
 
 export class LogoTooLargeError extends ThemingError {
   constructor(maxBytes: number) {
-    super(
-      'THEMING_LOGO_TOO_LARGE',
-      `El logo excede el máximo permitido de ${(maxBytes / 1024 / 1024).toFixed(1)} MB.`,
-    );
+    // El límite ya viaja formateado como texto: ICU no debe reformatearlo (ver
+    // nota de String() en los demás límites numéricos).
+    const maxMb = (maxBytes / 1024 / 1024).toFixed(1);
+    super('THEMING_LOGO_TOO_LARGE', `El logo excede el máximo permitido de ${maxMb} MB.`, {
+      detail: maxMb,
+    });
   }
 }
 
