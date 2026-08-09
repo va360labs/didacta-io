@@ -1,5 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { PersistentEventBus, type OutboxDispatcher } from '../src/modules/persistent-event-bus';
+import {
+  NO_HANDLER_REPLAY_WINDOW_MS,
+  PersistentEventBus,
+  type OutboxDispatcher,
+} from '../src/modules/persistent-event-bus';
 import { tenantContextStorage, type TenantContext } from '../src/tenancy/tenant-context.storage';
 
 interface OutboxRow {
@@ -55,28 +59,45 @@ function makeFakePrisma() {
       async update(args: {
         where: { id: bigint };
         data: {
-          processedAt?: Date;
+          processedAt?: Date | null;
           processingAttempts?: { increment: number };
-          lastError?: string;
+          lastError?: string | null;
         };
       }): Promise<OutboxRow> {
         const row = rows.get(args.where.id);
         if (!row) throw new Error('not found');
-        if (args.data.processedAt) row.processedAt = args.data.processedAt;
+        // `!== undefined` y no truthiness: el bus escribe `null` a propósito
+        // (limpiar el error al procesar, reabrir la fila al re-entregar) y con
+        // un `if (args.data.x)` esos writes se perderían y el fake mentiría.
+        if (args.data.processedAt !== undefined) row.processedAt = args.data.processedAt;
         if (args.data.processingAttempts)
           row.processingAttempts += args.data.processingAttempts.increment;
-        if (typeof args.data.lastError === 'string') row.lastError = args.data.lastError;
+        if (args.data.lastError !== undefined) row.lastError = args.data.lastError;
         return row;
       },
       async findMany(args: {
-        where: { processedAt: null };
+        where: {
+          processedAt?: null | { not: null };
+          eventName?: { in: string[] };
+          lastError?: { startsWith: string };
+          createdAt?: { gte: Date };
+        };
         orderBy: { createdAt: 'asc' };
         take: number;
       }): Promise<OutboxRow[]> {
-        const _ = args;
+        const w = args.where;
         return [...rows.values()]
-          .filter((r) => r.processedAt === null)
-          .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+          .filter((r) => {
+            if (w.processedAt === null && r.processedAt !== null) return false;
+            if (w.processedAt && 'not' in w.processedAt && r.processedAt === null) return false;
+            if (w.eventName && !w.eventName.in.includes(r.eventName)) return false;
+            if (w.lastError && !(r.lastError ?? '').startsWith(w.lastError.startsWith))
+              return false;
+            if (w.createdAt && r.createdAt.getTime() < w.createdAt.gte.getTime()) return false;
+            return true;
+          })
+          .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())
+          .slice(0, args.take);
       },
       async findUnique(args: { where: { id: bigint } }): Promise<OutboxRow | null> {
         return rows.get(args.where.id) ?? null;
@@ -158,11 +179,158 @@ describe('PersistentEventBus', () => {
     expect(seen?.traceId).toMatch(/^outbox-/);
   });
 
-  it('marca processedAt aunque no haya subscribers (no se pierde el evento)', async () => {
+  it('un evento sin subscribers NO queda igual que uno entregado con éxito', async () => {
     const bus = new PersistentEventBus(prisma as never, silentLogger);
-    await bus.publish(makeEvent('algo.suelto'));
-    const row = [...prisma._rows.values()][0];
+    const handler = vi.fn(async () => {});
+    bus.subscribe('con.handler', handler);
+
+    await bus.publish(makeEvent('con.handler', {}, 'idem-ok'));
+    await bus.publish(makeEvent('algo.suelto', {}, 'idem-huerfano'));
+
+    const [entregado, huerfano] = [...prisma._rows.values()];
+
+    // Ésta es LA aserción del arreglo: antes las dos filas eran idénticas
+    // (processedAt puesto, attempts 0, lastError null) y perder un evento era
+    // indistinguible de procesarlo.
+    expect(entregado!.lastError).toBeNull();
+    expect(huerfano!.lastError).toBe('NO_HANDLER: algo.suelto');
+    expect(entregado!.lastError).not.toEqual(huerfano!.lastError);
+  });
+
+  it('el éxito limpia el lastError de un intento anterior (o el estado sería ambiguo)', async () => {
+    const bus = new PersistentEventBus(prisma as never, silentLogger);
+    const off = bus.subscribe('reintento', async () => {
+      throw new Error('boom');
+    });
+    await bus.publish(makeEvent('reintento', {}, 'idem-limpia'));
+    const row = [...prisma._rows.values()][0]!;
+    expect(row.lastError).toContain('boom');
+
+    off();
+    bus.subscribe('reintento', async () => {});
+    await bus.recoverPending();
+
     expect(row.processedAt).toBeInstanceOf(Date);
+    // Sin esta limpieza, «processedAt puesto + lastError no nulo» significaría
+    // a la vez «reintento que acabó bien» y «no llegó a nadie».
+    expect(row.lastError).toBeNull();
+  });
+
+  it('avisa por log y por el observador cuando un evento no llega a nadie', async () => {
+    const warn = vi.fn();
+    const observer = { recordUndelivered: vi.fn() };
+    const bus = new PersistentEventBus(
+      prisma as never,
+      { ...silentLogger, warn },
+      undefined,
+      observer,
+    );
+
+    await bus.publish(makeEvent('nadie.escucha', {}, 'idem-warn'));
+
+    expect(observer.recordUndelivered).toHaveBeenCalledOnce();
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining('sin handlers'),
+      expect.objectContaining({ event: 'nadie.escucha' }),
+    );
+  });
+
+  it('el evento sin handler NO se re-encola en bucle en el barrido de pendientes', async () => {
+    // Marcarlo como pendiente habría sido la otra opción de diseño, y rompía el
+    // recovery: hay ~30 nombres de evento publicados sin ningún consumidor
+    // (fundae.*, messaging.*, courses.course.created…). Con `take: 50` ordenado
+    // por antigüedad, el barrido se quedaría atascado en ellos para siempre.
+    const bus = new PersistentEventBus(prisma as never, silentLogger);
+    await bus.publish(makeEvent('nadie.escucha', {}, 'idem-nobucle'));
+
+    const result = await bus.recoverPending();
+    expect(result.processed).toBe(0);
+    expect(result.failed).toBe(0);
+  });
+
+  describe('replayUndelivered — la parte recuperable', () => {
+    it('re-entrega el evento en cuanto aparece el subscriber que faltaba', async () => {
+      const bus = new PersistentEventBus(prisma as never, silentLogger);
+
+      // Carrera de arranque: el evento se despacha ANTES de que el bridge se
+      // suscriba. Con el comportamiento anterior esto se perdía para siempre.
+      await bus.publish(makeEvent('billing.order.completed', { orderId: 'o1' }, 'idem-replay'));
+      const row = [...prisma._rows.values()][0]!;
+      expect(row.lastError).toBe('NO_HANDLER: billing.order.completed');
+
+      const bridge = vi.fn(async () => {});
+      bus.subscribe('billing.order.completed', bridge);
+
+      const result = await bus.replayUndelivered();
+
+      expect(result.replayed).toBe(1);
+      expect(bridge).toHaveBeenCalledOnce();
+      expect(bridge.mock.calls[0]![0]).toMatchObject({
+        name: 'billing.order.completed',
+        data: { orderId: 'o1' },
+      });
+      expect(row.processedAt).toBeInstanceOf(Date);
+      expect(row.lastError).toBeNull();
+    });
+
+    it('no re-entrega dos veces: tras el replay la fila ya no es elegible', async () => {
+      const bus = new PersistentEventBus(prisma as never, silentLogger);
+      await bus.publish(makeEvent('billing.order.completed', {}, 'idem-once'));
+      const bridge = vi.fn(async () => {});
+      bus.subscribe('billing.order.completed', bridge);
+
+      await bus.replayUndelivered();
+      const second = await bus.replayUndelivered();
+
+      expect(second.replayed).toBe(0);
+      expect(bridge).toHaveBeenCalledOnce();
+    });
+
+    it('deja en paz los eventos que siguen sin tener a nadie suscrito', async () => {
+      const bus = new PersistentEventBus(prisma as never, silentLogger);
+      bus.subscribe('otro.evento', async () => {});
+      await bus.publish(makeEvent('nadie.escucha', {}, 'idem-sigue-solo'));
+
+      const result = await bus.replayUndelivered();
+
+      expect(result.replayed).toBe(0);
+      const row = [...prisma._rows.values()][0]!;
+      expect(row.lastError).toBe('NO_HANDLER: nadie.escucha');
+    });
+
+    it('no re-entrega historia más vieja que la ventana', async () => {
+      const bus = new PersistentEventBus(prisma as never, silentLogger);
+      await bus.publish(makeEvent('billing.order.completed', {}, 'idem-viejo'));
+      const row = [...prisma._rows.values()][0]!;
+      // Envejecemos la fila más allá de la ventana: registrar un bridge nuevo
+      // no puede desencadenar una re-entrega masiva de historia.
+      row.createdAt = new Date(Date.now() - NO_HANDLER_REPLAY_WINDOW_MS - 60_000);
+
+      const bridge = vi.fn(async () => {});
+      bus.subscribe('billing.order.completed', bridge);
+
+      const result = await bus.replayUndelivered();
+      expect(result.replayed).toBe(0);
+      expect(bridge).not.toHaveBeenCalled();
+    });
+
+    it('si el handler del replay falla, la fila queda pendiente y reintentable', async () => {
+      const bus = new PersistentEventBus(prisma as never, silentLogger);
+      await bus.publish(makeEvent('billing.order.completed', {}, 'idem-replay-falla'));
+      bus.subscribe('billing.order.completed', async () => {
+        throw new Error('el bridge revienta');
+      });
+
+      const result = await bus.replayUndelivered();
+
+      expect(result.failed).toBe(1);
+      const row = [...prisma._rows.values()][0]!;
+      // NO vuelve al estado NO_HANDLER: ahora es un fallo de despacho normal,
+      // que `recoverPending` sí reintenta.
+      expect(row.processedAt).toBeNull();
+      expect(row.lastError).toContain('el bridge revienta');
+      expect(row.processingAttempts).toBe(1);
+    });
   });
 
   it('incrementa attempts y guarda lastError si el handler falla', async () => {
@@ -307,6 +475,22 @@ describe('PersistentEventBus', () => {
       await expect(bus.processOutboxId(row.id)).rejects.toThrow(/outbox dispatch falló/);
       expect(row.processedAt).toBeNull();
       expect(row.processingAttempts).toBe(1);
+    });
+
+    it('processOutboxId NO lanza si no hay handlers, pero deja la fila etiquetada', async () => {
+      const dispatcher = makeFakeDispatcher();
+      const bus = new PersistentEventBus(prisma as never, silentLogger, dispatcher);
+
+      await bus.publish(makeEvent('nadie.escucha', {}, 'idem-nohandler-q'));
+      const [row] = [...prisma._rows.values()];
+
+      // Lanzar haría que BullMQ reintentara 5 veces con backoff CADA evento sin
+      // consumidor. Reintentar contra un set de handlers vacío no arregla nada:
+      // lo que lo arregla es que aparezca un subscriber, y de eso se ocupa
+      // replayUndelivered.
+      await expect(bus.processOutboxId(row!.id)).resolves.toBeUndefined();
+      expect(row!.lastError).toBe('NO_HANDLER: nadie.escucha');
+      expect(row!.processingAttempts).toBe(0);
     });
 
     it('recoverPending reencola pendientes a la queue (no despacha local)', async () => {

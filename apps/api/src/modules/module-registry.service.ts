@@ -1100,8 +1100,16 @@ export class ModuleRegistryService implements OnModuleInit {
     return this.messaging;
   }
 
-  async recoverOutbox(): Promise<{ processed: number; failed: number }> {
+  async recoverOutbox(): Promise<{ processed: number; failed: number; undelivered: number }> {
     return this.factory.getEventBus().recoverPending();
+  }
+
+  /**
+   * Re-entrega los eventos que no llegaron a ningún handler y que ahora sí
+   * tienen subscriber. Lo llama el OutboxRecoveryWorker en cada barrido.
+   */
+  async replayUndeliveredOutbox(): Promise<{ replayed: number; failed: number }> {
+    return this.factory.getEventBus().replayUndelivered();
   }
 }
 

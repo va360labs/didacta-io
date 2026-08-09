@@ -83,12 +83,27 @@ export class OutboxRecoveryWorker implements OnApplicationBootstrap, OnModuleDes
       const result = await this.registry.recoverOutbox();
       this.metrics.recordSweep('success');
       this.metrics.recordRecoveryEvents(result.processed, result.failed);
-      if (result.processed > 0 || result.failed > 0) {
+      if (result.processed > 0 || result.failed > 0 || result.undelivered > 0) {
         this.logger.log(result, 'outbox recovery sweep');
       }
     } catch (error) {
       this.metrics.recordSweep('error');
       this.logger.error({ err: error }, 'outbox recovery sweep falló');
+    }
+
+    // Re-entrega de los eventos que no llegaron a ningún handler y cuyo
+    // subscriber ya existe. El barrido de ARRANQUE es el que importa: cubre la
+    // carrera en que un evento se despachó antes de que su bridge llegara a
+    // `onModuleInit`, que es justo el caso que dejaba el evento perdido para
+    // siempre (`recoverPending` sólo mira `processed_at IS NULL`).
+    try {
+      const replay = await this.registry.replayUndeliveredOutbox();
+      this.metrics.recordReplayed(replay.replayed);
+      if (replay.replayed > 0 || replay.failed > 0) {
+        this.logger.log(replay, 'outbox replay de eventos sin handler');
+      }
+    } catch (error) {
+      this.logger.error({ err: error }, 'outbox replay falló');
     }
 
     // Siempre actualizamos los gauges, incluso si el sweep falló: nos interesa

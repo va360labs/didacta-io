@@ -35,9 +35,23 @@ import { PasswordService } from './password.service';
 import type { SessionClaims } from './token.service';
 import { ZodValidationPipe } from './zod-validation.pipe';
 
-const ALLOWED_LOCALES = ['es-ES', 'es-AR', 'en-US', 'pt-BR'] as const;
+/**
+ * Idiomas que el perfil puede GUARDAR. Refleja `SUPPORTED_LOCALES`
+ * (apps/web/src/i18n/config.ts): si la API acepta un tag que la web no sabe
+ * pintar, el usuario acaba con un perfil que la UI no puede representar.
+ *
+ * `pt-BR` estuvo aquí sin tener catálogo de mensajes: se elegía portugués,
+ * esto lo persistía, `/cuenta` confirmaba «Português (Brasil)» y la interfaz
+ * seguía en español. Retirado — se responde 400.
+ *
+ * Los perfiles que YA lo tienen guardado no se tocan: el degradado a español
+ * de `toSupportedLocale()` (web) y de `resolveRecipientLocale()`
+ * (apps/api/src/modules/notifications/email-template-catalog.ts) sigue
+ * cubriéndolos, y siguen pudiendo cambiar de idioma a cualquiera de éstos.
+ */
+export const ALLOWED_LOCALES = ['es-ES', 'es-AR', 'en-US'] as const;
 
-const updateProfileSchema = z.object({
+export const updateProfileSchema = z.object({
   name: z.string().min(1).max(120).optional(),
   /**
    * Biografía corta opcional (máx 280). `''` o `null` la borran; omitir la

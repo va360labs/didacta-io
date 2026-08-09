@@ -5,6 +5,7 @@
  * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
  */
 
+import { SUPPORTED_LOCALES, type SupportedLocale } from '@/i18n/config';
 import { apiFetch } from './api-client';
 
 export interface UserProfile {
@@ -185,9 +186,26 @@ export const TIMEZONE_OPTIONS: Array<{ group: string; values: string[] }> = Obje
   TIMEZONE_GROUPS,
 ).map(([group, values]) => ({ group, values }));
 
-export const LOCALE_OPTIONS = [
-  { value: 'es-AR', label: 'Español (Argentina)' },
-  { value: 'es-ES', label: 'Español (España)' },
-  { value: 'en-US', label: 'English (US)' },
-  { value: 'pt-BR', label: 'Português (Brasil)' },
-];
+/**
+ * Etiqueta de cada idioma elegible. En su propio idioma a propósito: quien
+ * busca «English» no está leyendo la interfaz en español.
+ *
+ * El `Record<SupportedLocale, string>` es lo que impide que el selector y los
+ * idiomas realmente soportados vuelvan a divergir: añadir un tag a
+ * `SUPPORTED_LOCALES` sin etiqueta aquí no compila.
+ */
+const LOCALE_LABELS: Record<SupportedLocale, string> = {
+  'es-AR': 'Español (Argentina)',
+  'es-ES': 'Español (España)',
+  'en-US': 'English (US)',
+};
+
+/**
+ * Opciones del selector de idioma de `/cuenta` y `/onboarding`.
+ *
+ * DERIVADO de `SUPPORTED_LOCALES`, no una lista aparte. Cuando era una lista
+ * suelta ofrecía `pt-BR`, que no tiene catálogo: se elegía portugués, la API lo
+ * guardaba y la UI seguía en español. Retirado — el producto sirve `es` y `en`.
+ */
+export const LOCALE_OPTIONS: Array<{ value: SupportedLocale; label: string }> =
+  SUPPORTED_LOCALES.map((value) => ({ value, label: LOCALE_LABELS[value] }));

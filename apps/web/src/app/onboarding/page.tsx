@@ -20,6 +20,7 @@ import { ApiHttpError } from '@/lib/api-client';
 import { authStorage } from '@/lib/auth-storage';
 import { consumeIntendedPath } from '@/lib/post-login-redirect';
 import { apiErrorMessage } from '@/lib/i18n/api-error';
+import { toSupportedLocale } from '@/i18n/config';
 import { LOCALE_OPTIONS, meApi, TIMEZONE_OPTIONS, type NotificationPreference } from '@/lib/me';
 import { useTenantContext } from '@/lib/tenant-context';
 import { communityApi } from '@/modules/community';
@@ -77,7 +78,10 @@ export default function OnboardingPage() {
         setEmail(p.email);
         setName(p.name ?? '');
         setBio(p.bio ?? '');
-        setLocale(p.locale);
+        // Normalizado: ver el mismo comentario en `/cuenta`. Un locale
+        // guardado que el selector ya no ofrece dejaría el `<select>` sin
+        // opción que casar.
+        setLocale(toSupportedLocale(p.locale));
         setTimezone(p.timezone);
         setDocumentId(p.documentId ?? '');
         setAvatarUrl(p.avatarUrl);
