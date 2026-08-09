@@ -188,13 +188,51 @@ is_alive() {
   kill -0 "$pid" 2>/dev/null
 }
 
+api_responds() { curl -sf -o /dev/null "http://localhost:${PORT}/healthz" 2>/dev/null; }
+web_responds() { curl -sf -o /dev/null "${E2E_BASE_URL}/signin" 2>/dev/null; }
+
+# Segundos que lleva viva la API que está contestando. `/healthz` lo expone.
+api_uptime_seconds() {
+  curl -s "http://localhost:${PORT}/healthz" 2>/dev/null |
+    sed -n 's/.*"uptime":[[:space:]]*\([0-9]*\).*/\1/p'
+}
+
+# Marca de tiempo de nuestro último lanzamiento; vacía si reusamos el proceso
+# que ya teníamos. La usa `wait_healthy` para exigir que quien contesta sea el
+# que acabamos de arrancar y no un superviviente.
+API_LAUNCHED_AT=""
+
+# ── Por qué esto no es paranoia ─────────────────────────────────────────────
+# `node dist/main.js` con el puerto ocupado muere al instante con EADDRINUSE,
+# pero como el proceso de antes SIGUE contestando, las sondas de `wait_healthy`
+# daban verde y la suite entera corría contra el binario viejo, con el registro
+# de módulos y los bridges de OTRA generación de la base. Un worker perdió una
+# sesión así: `stop` no había matado nada, `start` no arrancó nada, y nadie se
+# enteró. Ahora el puerto ocupado por alguien que no somos nosotros ES un
+# fallo, y nunca se mata a ciegas: esta máquina tiene huérfanos de otros
+# proyectos.
 start_api() {
   if is_alive "$API_PID_FILE"; then
     log "API ya viva (pid $(cat "$API_PID_FILE"))."
     return
   fi
+  if api_responds; then
+    die "El puerto $PORT ya lo sirve un proceso que NO arrancamos nosotros (lleva $(api_uptime_seconds)s vivo).
+No se mata nada por tu cuenta y riesgo: localiza al dueño y decide tú.
+  netstat -ano | findstr :$PORT      # Windows
+  ss -tlnp | grep :$PORT             # Linux
+Si es un resto de una sesión anterior de este mismo repo, mátalo y repite."
+  fi
   log "Arrancando la API en :$PORT…"
-  ( cd apps/api && "$NODE_BIN" dist/main.js > "$API_LOG" 2>&1 & echo $! > "$API_PID_FILE" )
+  # El subshell anota su PROPIO pid y se convierte en el proceso (`exec`), así
+  # que el fichero guarda el pid del node de verdad. Con `$!` guardaba el del
+  # job del subshell, que en cuanto ese subshell desaparecía dejaba de
+  # resolverse: `is_alive` decía «no está», `stop` no mataba nada y borraba el
+  # pid file tan contento mientras el proceso seguía sirviendo.
+  ( cd apps/api && exec >"$API_LOG" 2>&1
+    echo "$BASHPID" > "$API_PID_FILE"
+    exec "$NODE_BIN" dist/main.js ) &
+  API_LAUNCHED_AT="$(date +%s)"
 }
 
 start_web() {
@@ -202,10 +240,18 @@ start_web() {
     log "Web ya viva (pid $(cat "$WEB_PID_FILE"))."
     return
   fi
+  if web_responds; then
+    die "El puerto 3010 ya lo sirve un proceso que NO arrancamos nosotros.
+Mismo caso que la API: localiza al dueño antes de matar nada.
+  netstat -ano | findstr :3010       # Windows
+  ss -tlnp | grep :3010              # Linux"
+  fi
   # PORT=4000 es de la API y `next start` lo respeta por encima del -p del
   # script; hay que quitarlo del entorno del proceso web.
   log "Arrancando la web en :3010…"
-  ( cd apps/web && unset PORT && "$NODE_BIN" "$NEXT_CLI" start -p 3010 > "$WEB_LOG" 2>&1 & echo $! > "$WEB_PID_FILE" )
+  ( cd apps/web && unset PORT && exec >"$WEB_LOG" 2>&1
+    echo "$BASHPID" > "$WEB_PID_FILE"
+    exec "$NODE_BIN" "$NEXT_CLI" start -p 3010 ) &
 }
 
 stop_pid_file() {
@@ -221,6 +267,45 @@ stop_pid_file() {
   rm -f "$pid_file"
 }
 
+# `kill` puede no llevarse el proceso por delante (pid de MSYS que ya no mapea,
+# hijo que sobrevive al padre…) y hasta ahora eso se tragaba: `stop` decía que
+# había parado y el proceso seguía sirviendo. Comprobar el puerto convierte ese
+# no-op en un fallo con nombre.
+assert_port_stopped() {
+  local probe="$1" label="$2" port="$3"
+  local i=0
+  while [ "$i" -lt 10 ]; do
+    if ! $probe; then return 0; fi
+    sleep 1
+    i=$((i + 1))
+  done
+  die "$label sigue sirviendo en :$port después de pararla.
+El kill no se la llevó por delante. Localiza el proceso y decide tú:
+  netstat -ano | findstr :$port      # Windows
+  ss -tlnp | grep :$port             # Linux
+Seguir sin esto deja la tanda corriendo contra el binario viejo."
+}
+
+# Tercera red, por si el puerto se liberó y lo recuperó otro entre medias: la
+# API que contesta no puede llevar viva más de lo que hace que la lanzamos.
+# `uptime` sale de `/healthz`. El margen absorbe el redondeo a segundos.
+assert_api_is_the_one_we_launched() {
+  [ -n "$API_LAUNCHED_AT" ] || return 0
+  local up now elapsed
+  up="$(api_uptime_seconds)"
+  [ -n "$up" ] || return 0
+  now="$(date +%s)"
+  elapsed=$((now - API_LAUNCHED_AT + 5))
+  if [ "$up" -gt "$elapsed" ]; then
+    die "La API que contesta en :$PORT lleva ${up}s viva y la nuestra la lanzamos hace ${elapsed}s.
+O sea: quien responde NO es el proceso que acabamos de arrancar, sino otro que
+ya estaba. Corriendo la suite contra él, los bridges y el registro de módulos
+son los de otra generación de la base. Localízalo antes de matar nada:
+  netstat -ano | findstr :$PORT      # Windows
+  ss -tlnp | grep :$PORT             # Linux"
+  fi
+}
+
 wait_healthy() {
   local i=0
   log "Esperando a api :$PORT, web y rewrite (máx ${HEALTH_TIMEOUT_SECONDS}s)…"
@@ -234,6 +319,7 @@ wait_healthy() {
     if curl -sf "http://localhost:${PORT}/healthz" >/dev/null 2>&1 \
        && curl -sf -o /dev/null "${E2E_BASE_URL}/signin" 2>/dev/null \
        && curl -sf -o /dev/null "${E2E_API_URL}/api/v1/setup/status" 2>/dev/null; then
+      assert_api_is_the_one_we_launched
       log "api + web + rewrite arriba."
       return 0
     fi
@@ -253,12 +339,18 @@ cmd_start() { start_api; start_web; wait_healthy; }
 cmd_stop() {
   stop_pid_file "$API_PID_FILE" "la API"
   stop_pid_file "$WEB_PID_FILE" "la web"
+  assert_port_stopped api_responds "La API" "$PORT"
+  assert_port_stopped web_responds "La web" 3010
 }
 
 # ── reset entre tandas ──────────────────────────────────────────────────────
 cmd_reset() {
   log "Reset completo: infra nueva + BD nueva + API reiniciada."
   stop_pid_file "$API_PID_FILE" "la API"
+  # Sin esto el reset seguía adelante con la API vieja viva: `start_api` moría
+  # con EADDRINUSE, `wait_healthy` daba verde contra el superviviente y la
+  # tanda entera corría sobre el registro de módulos de la base ANTERIOR.
+  assert_port_stopped api_responds "La API" "$PORT"
   cmd_down
   cmd_up
   cmd_db
@@ -278,7 +370,14 @@ cmd_check() {
   # El camino por el que habla la suite. Si esta línea no es 200 y la de arriba
   # sí, el problema es el rewrite de Next, no la API.
   printf 'api x rewrite  %s\n' "$(curl -s -o /dev/null -w '%{http_code}' "${E2E_API_URL}/api/v1/setup/status" || echo sin-respuesta)"
-  printf 'tenants        %s\n' "$(psql_query 'SELECT string_agg(slug, ", " ORDER BY slug) FROM tenant;' 2>/dev/null || echo n/d)"
+  # Cuántos procesos están consumiendo la cola del outbox. Debe ser 1: con dos,
+  # BullMQ reparte los eventos entre ellos y los que se lleva el intruso no
+  # llegan a los bridges de la API bajo test — pero la fila vuelve marcada como
+  # procesada. Ver `assertSingleOutboxDispatcher` en apps/e2e/global-setup.ts.
+  printf 'outbox workers %s (debe ser 1)\n' \
+    "$(docker exec -i didacta-redis-test redis-cli client list 2>/dev/null |
+        grep -c "name=bull:$(printf %s 'didacta.outbox' | base64)" || echo n/d)"
+  printf 'tenants        %s\n' "$(psql_query $'SELECT string_agg(slug, \', \' ORDER BY slug) FROM tenant;' 2>/dev/null || echo n/d)"
   printf 'espacios       %s\n' "$(psql_query 'SELECT count(*) FROM mod_community_space;' 2>/dev/null || echo n/d)"
 }
 

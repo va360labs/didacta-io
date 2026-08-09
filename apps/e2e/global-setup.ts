@@ -21,6 +21,8 @@
  *   4. Secretos de webhooks de pago presentes.
  *   5. Espacios de sistema sembrados (`prisma/seed.sql`).
  *   6. Onboarding cerrado para los admins sembrados.
+ *   7. UN SOLO despachador atado a la cola del outbox — ver
+ *      `assertSingleOutboxDispatcher`.
  *
  * Regla que rige todo el fichero: «no he podido comprobarlo» NUNCA se traduce
  * a un estado. Un no-2xx inesperado es un fallo con mensaje, no un estado
@@ -220,6 +222,75 @@ async function assertSystemSpacesSeeded(bearer: string): Promise<void> {
 }
 
 /**
+ * Exige que la cola `didacta.outbox` tenga EXACTAMENTE UN worker atado.
+ *
+ * Esta es la comprobación que le faltaba al arnés y que costó varias sesiones.
+ * BullMQ entrega cada job a **un solo** worker: si otro proceso —un API
+ * huérfano de una sesión anterior, un contenedor viejo, una segunda instancia
+ * arrancada a mano— sigue conectado al MISMO Redis, los eventos del bus se
+ * reparten entre los dos al azar. Los que se lleva el otro proceso no llegan
+ * jamás a los bridges del API bajo test, y sin embargo la fila de
+ * `outbox_event` vuelve marcada `processed_at` y sin error: indistinguible de
+ * una entrega correcta, tanto en la base como en las métricas.
+ *
+ * El síntoma era exactamente el que se ve cuando falla: los specs que afirman
+ * un efecto de bridge (matrícula concedida por membresía, comisión de un
+ * referido, lección marcada al aprobar el quiz) fallaban ~la mitad de las
+ * veces, en una línea distinta cada vez, sin ningún error en los logs.
+ *
+ * Se pregunta al producto (`/admin/system/health-detail` → `outbox.dispatchers`)
+ * porque es el único que puede contarlos sin cooperación del intruso: cada
+ * worker de BullMQ nombra su conexión bloqueante al conectarse, así que hasta
+ * un binario viejo se deja contar.
+ */
+async function assertSingleOutboxDispatcher(bearer: string): Promise<void> {
+  const res = await fetch(`${API_URL}/api/v1/admin/system/health-detail`, {
+    headers: { Authorization: `Bearer ${bearer}` },
+  });
+  if (!res.ok) {
+    fail(
+      `GET /admin/system/health-detail devolvió ${res.status}.`,
+      'Sin él no se puede comprobar cuántos procesos están consumiendo la cola\n' +
+        'del outbox, que es la degradación silenciosa más cara del arnés.',
+    );
+  }
+  const body = (await res.json()) as { checks?: { outbox?: { dispatchers?: unknown } } };
+  const dispatchers = body.checks?.outbox?.dispatchers;
+  if (typeof dispatchers !== 'number') {
+    fail(
+      'El health-detail no trae `checks.outbox.dispatchers` numérico.',
+      `Llegó: ${JSON.stringify(body).slice(0, 300)}\n\n` +
+        'Igual que con el estado de la instancia: "no he podido comprobarlo" no\n' +
+        'se traduce a "está bien".',
+    );
+  }
+  if (dispatchers === 1) return;
+  if (dispatchers === 0) {
+    fail(
+      'La cola del outbox no tiene NINGÚN worker atado.',
+      'El despachador de eventos no está corriendo: todo evento del bus se\n' +
+        'quedará pendiente y ningún bridge se enterará. Comprueba que la API\n' +
+        'arrancó con REDIS_URL y que el log dice "outbox dispatcher activo".',
+    );
+  }
+  fail(
+    `Hay ${dispatchers} procesos consumiendo la cola del outbox y debería haber 1.`,
+    'BullMQ entrega cada job a UN SOLO worker. Con otro proceso atado al mismo\n' +
+      'Redis, los eventos del bus se reparten al azar entre los dos: los que se\n' +
+      'lleva el intruso NO llegan a los bridges de la API bajo test, y la fila de\n' +
+      '`outbox_event` vuelve igualmente marcada como procesada y sin error.\n' +
+      'El resultado son specs que fallan ~la mitad de las veces, en una línea\n' +
+      'distinta cada vez, sin un solo error en los logs.\n\n' +
+      'Casi siempre es un API huérfano de una sesión anterior. Para encontrarlo\n' +
+      '(el puerto de la API no basta: el intruso puede estar en cualquier otro):\n' +
+      '  netstat -ano | findstr 6380          # Windows\n' +
+      '  ss -tnp | grep 6380                  # Linux\n' +
+      'y comprueba antes de matar nada que el PID es tuyo — esta máquina tiene\n' +
+      'huérfanos de otros proyectos.',
+  );
+}
+
+/**
  * Estado de la instancia. Son DOS respuestas válidas, y no hay una tercera:
  * «no he podido preguntar» NO es un estado, es un fallo.
  */
@@ -359,6 +430,7 @@ export default async function globalSetup(): Promise<void> {
 
   const adminToken = await prepareAdmin(tenantSlug, email, password);
   await assertSystemSpacesSeeded(adminToken);
+  await assertSingleOutboxDispatcher(adminToken);
 
   // El tenant de smoke tiene su propio admin sembrado. Se le habla por la API
   // DIRECTA en 127.0.0.1 porque el Host manda sobre el `tenantSlug` del body

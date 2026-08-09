@@ -134,6 +134,34 @@ export class OutboxQueueService implements OnApplicationBootstrap, OnModuleDestr
   }
 
   /**
+   * Cuántos workers hay ENCHUFADOS a esta cola en este Redis, contando los de
+   * otros procesos.
+   *
+   * No es una curiosidad: BullMQ entrega cada job a **un solo** worker. Si dos
+   * procesos distintos se suscriben a `didacta.outbox` sobre el mismo Redis,
+   * los eventos se reparten entre ellos al azar, y los que se lleva el otro
+   * proceso **jamás llegan a los bridges de éste** — pero la fila de
+   * `outbox_event` vuelve marcada `processed_at` sin error, indistinguible de
+   * una entrega correcta. Es exactamente el modo de fallo que dejó tres specs
+   * E2E cayendo de forma intermitente durante varias sesiones: un API huérfano
+   * de otra sesión seguía atado al Redis del arnés y se comía la mitad del
+   * tráfico del bus.
+   *
+   * `getWorkers()` es de BullMQ y no necesita cooperación del otro proceso:
+   * cada worker nombra su conexión bloqueante `bull:<base64(cola)>` al
+   * conectarse, así que un binario viejo también se cuenta.
+   *
+   * En producción con N réplicas el valor esperado es N; el número no es
+   * bueno ni malo por sí solo, por eso se EXPONE (health-detail) en vez de
+   * convertirlo en un error aquí. Quien sabe cuántos debería haber es el
+   * operador — o el arnés E2E, que sabe que debe ser exactamente 1.
+   */
+  async countWorkers(): Promise<number> {
+    if (!this.queue) return 0;
+    return (await this.queue.getWorkers()).length;
+  }
+
+  /**
    * Encola el despacho de un evento ya persistido en outbox_event.
    *
    * El `jobId` sigue derivándose de la fila para que BullMQ deduplique cuando
