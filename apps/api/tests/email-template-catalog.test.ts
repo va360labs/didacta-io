@@ -6,8 +6,10 @@ import {
   emailGreeting,
   fetchEmailOverride,
   interpolate,
+  emailDateLocale,
   resolveFixedEmailCopy,
   resolveHubDefault,
+  resolveInvitationEmailCopy,
   resolveRecipientLocale,
   resolveSmtpSettingsPing,
   resolveTransactionalDefault,
@@ -17,6 +19,7 @@ import {
   HUB_TEMPLATE_DEFAULTS,
   HUB_TEMPLATE_DEFAULTS_EN,
   HUB_TEMPLATE_LANGS,
+  INVITATION_EMAIL_COPY,
   SMTP_SETTINGS_PING,
   TRANSACTIONAL_EMAIL_DEFS,
   TRANSACTIONAL_TEMPLATE_DEFAULTS_EN,
@@ -560,5 +563,209 @@ describe('builders de inscripción con override', () => {
     expect(welcome.subject).toBe('Tu inscripción en Academia Demo ha sido aprobada');
     const rejection = buildRejectionEmail('Ana', branding(), 'es-ES');
     expect(rejection.text).toContain('Gracias por tu interés en Academia Demo');
+  });
+});
+
+// ============================================================================
+// Idioma del destinatario en las plantillas de mod.member-registration. Antes
+// de esto, un miembro con `locale = 'en-US'` recibía el código OTP, la
+// aprobación y el rechazo enteros en español.
+// ============================================================================
+describe('builders de inscripción · idioma del destinatario', () => {
+  it('OTP en-US: cuerpo inglés y el código sigue siendo estructural', () => {
+    const out = buildOtpEmail('482913', branding(), 'en-US');
+    expect(out.subject).toBe('Your access code');
+    expect(out.html).toContain('<html lang="en">');
+    expect(out.html).toContain('Enter it on the verification screen to continue');
+    expect(out.html).toContain('This code expires in 10 minutes');
+    // El bloque grande con el código no depende del idioma: es estructural.
+    expect(out.html).toContain('482913');
+    expect(out.text).toContain('482913');
+    // Y en texto plano va etiquetado en inglés, no como «Código».
+    expect(out.text).toContain('Code: 482913');
+    expect(out.text).not.toContain('Código:');
+    expect(out.html).not.toContain('Introdúcelo en la pantalla');
+  });
+
+  it('OTP es-ES: byte a byte lo que ya recibía', () => {
+    const out = buildOtpEmail('482913', branding(), 'es-ES');
+    expect(out.subject).toBe('Tu código de acceso');
+    expect(out.html).toContain('<html lang="es">');
+    expect(out.html).toContain('Tu código de acceso a Academia Demo es:');
+    expect(out.html).toContain(
+      'Introdúcelo en la pantalla de verificación para continuar. Este código caduca en 10 minutos.',
+    );
+    expect(out.html).toContain('Si no has solicitado este acceso, ignora este mensaje.');
+  });
+
+  it('aprobación en-US: cuerpo inglés y el CTA deja de estar en español', () => {
+    const out = buildWelcomeEmail('Ana', 'https://x/signin', branding(), 'en-US');
+    expect(out.subject).toBe('Your registration at Academia Demo has been approved');
+    expect(out.html).toContain('<html lang="en">');
+    expect(out.text).toContain('Hi Ana,');
+    expect(out.text).toContain('your account is now active');
+    // El síntoma exacto del bug: cuerpo inglés con botón español.
+    expect(out.html).toContain('Sign in');
+    expect(out.html).not.toContain('>Entrar<');
+    expect(out.html).not.toContain('¡Buenas noticias!');
+  });
+
+  it('rechazo en-US: cuerpo y título en inglés', () => {
+    const out = buildRejectionEmail('Ana', branding(), 'en-US');
+    expect(out.subject).toBe('About your registration at Academia Demo');
+    expect(out.html).toContain('<html lang="en">');
+    expect(out.text).toContain('Hi Ana,');
+    expect(out.text).toContain('we have not been able to approve your registration');
+    expect(out.html).not.toContain('Gracias por tu interés');
+  });
+
+  it('aprobación y rechazo es-ES: byte a byte lo que ya recibían', () => {
+    const welcome = buildWelcomeEmail('Ana', 'https://x/signin', branding(), 'es-ES');
+    expect(welcome.subject).toBe('Tu inscripción en Academia Demo ha sido aprobada');
+    expect(welcome.text).toContain('Hola Ana,');
+    expect(welcome.text).toContain(
+      '¡Buenas noticias! Tu inscripción en Academia Demo ha sido aprobada y tu cuenta ya está activa.',
+    );
+    expect(welcome.html).toContain('>Entrar<');
+
+    const rejection = buildRejectionEmail('Ana', branding(), 'es-ES');
+    expect(rejection.subject).toBe('Sobre tu inscripción en Academia Demo');
+    expect(rejection.text).toContain(
+      'Gracias por tu interés en Academia Demo. Tras revisar tu solicitud, no hemos podido aprobar tu inscripción en este momento.',
+    );
+  });
+
+  it('con override, el botón sigue el idioma aunque el texto lo escriba el tenant', () => {
+    // Un tenant que personaliza el copy en inglés no puede quedarse con el
+    // botón en español: el CTA es estructural y lo pone el producto.
+    const out = buildWelcomeEmail('Ana', 'https://x/signin', branding(), 'en-US', {
+      subject: 'You are in, {{name}}!',
+      body: '{{greeting}} Come on in.',
+    });
+    expect(out.subject).toBe('You are in, Ana!');
+    expect(out.html).toContain('Sign in');
+    expect(out.html).not.toContain('>Entrar<');
+  });
+
+  it('CAMINO DEGRADADO: locale sin catálogo (pt-BR) → español en los tres builders', () => {
+    for (const locale of ['pt-BR', 'zz', '', '   ']) {
+      expect(buildOtpEmail('1', branding(), locale).subject, locale).toBe('Tu código de acceso');
+      expect(buildWelcomeEmail('Ana', 'https://x/s', branding(), locale).subject, locale).toBe(
+        'Tu inscripción en Academia Demo ha sido aprobada',
+      );
+      expect(buildRejectionEmail('Ana', branding(), locale).subject, locale).toBe(
+        'Sobre tu inscripción en Academia Demo',
+      );
+    }
+  });
+
+  it('el email de decisión al aprobador sigue monolingüe A PROPÓSITO, y lo declara', () => {
+    // No es un olvido: su cuerpo es casi todo estructura cuyo copy vive en
+    // `modules/payment-connections`. Si alguien lo traduce a medias, este test
+    // le obliga a pasar por `buildDecisionEmail` antes de cambiarlo.
+    const out = buildDecisionEmail({
+      name: 'Ana',
+      email: 'ana@example.test',
+      telegramId: null,
+      inGroup: 'true',
+      isDelinquent: false,
+      approveUrl: 'https://x/a',
+      rejectUrl: 'https://x/r',
+      branding: branding(),
+    });
+    expect(out.html).toContain('<html lang="es">');
+    expect(out.html).toContain('Aprobar');
+    expect(
+      TRANSACTIONAL_TEMPLATE_DEFAULTS_EN['member_registration.approval_request'],
+    ).toBeUndefined();
+  });
+});
+
+describe('copy fijo nuevo · CTA, títulos y valores de relleno', () => {
+  it('las etiquetas estructurales de los emails traducidos existen en los dos idiomas', () => {
+    const nuevas: FixedEmailCopyKey[] = [
+      'cta.manage_subscription',
+      'cta.set_my_password',
+      'cta.signin',
+      'footer.signin_hint',
+      'label.otp_code',
+      'title.member_rejection',
+      'title.member_welcome',
+      'title.otp_code',
+      'title.subscriptions_digest',
+      'value.no_upcoming_renewals',
+      'value.subscription',
+      'value.your_access',
+    ];
+    for (const key of nuevas) {
+      expect(FIXED_EMAIL_COPY.es[key], `${key} sin español`).toBeTruthy();
+      expect(FIXED_EMAIL_COPY.en[key], `${key} sin inglés`).toBeTruthy();
+    }
+  });
+
+  it('el pie con la URL de acceso conserva su placeholder en los dos idiomas', () => {
+    const vars = { signinUrl: 'https://x/signin' };
+    expect(interpolate(resolveFixedEmailCopy('footer.signin_hint', 'es-ES'), vars)).toBe(
+      'Después podrás iniciar sesión desde https://x/signin con tu email.',
+    );
+    expect(interpolate(resolveFixedEmailCopy('footer.signin_hint', 'en-US'), vars)).toContain(
+      'https://x/signin',
+    );
+  });
+});
+
+describe('copy de la invitación al aula', () => {
+  it('los dos idiomas cubren las mismas piezas y ninguna se quedó en español', () => {
+    const esKeys = Object.keys(INVITATION_EMAIL_COPY.es).sort();
+    expect(Object.keys(INVITATION_EMAIL_COPY.en).sort()).toEqual(esKeys);
+    for (const key of esKeys as Array<keyof typeof INVITATION_EMAIL_COPY.es>) {
+      expect(INVITATION_EMAIL_COPY.en[key], `${key} sin traducir`).not.toBe(
+        INVITATION_EMAIL_COPY.es[key],
+      );
+      expect(INVITATION_EMAIL_COPY.en[key].trim().length, `${key} vacío`).toBeGreaterThan(0);
+    }
+  });
+
+  it('los dos idiomas declaran los MISMOS placeholders en cada pieza', () => {
+    // Si la traducción pierde `{{tenantName}}` o `{{validez}}`, el invitado
+    // recibe «has invited you to their classroom» sin saber quién, o una
+    // validez en blanco. Nadie lo ve hasta que llega el email.
+    const vars = (s: string) => [...s.matchAll(/\{\{\s*(\w+)\s*\}\}/g)].map((m) => m[1]).sort();
+    for (const key of Object.keys(INVITATION_EMAIL_COPY.es) as Array<
+      keyof typeof INVITATION_EMAIL_COPY.es
+    >) {
+      expect(vars(INVITATION_EMAIL_COPY.en[key]), `${key}: placeholders distintos`).toEqual(
+        vars(INVITATION_EMAIL_COPY.es[key]),
+      );
+    }
+  });
+
+  it('resolveInvitationEmailCopy degrada al español con constante nombrada', () => {
+    expect(resolveInvitationEmailCopy('en-US')).toEqual(INVITATION_EMAIL_COPY.en);
+    for (const locale of ['pt-BR', '', '  ', null, undefined]) {
+      expect(resolveInvitationEmailCopy(locale)).toEqual(INVITATION_EMAIL_COPY.es);
+    }
+    expect(resolveInvitationEmailCopy(HUB_DEFAULT_LOCALE)).toEqual(INVITATION_EMAIL_COPY.es);
+  });
+});
+
+describe('emailDateLocale', () => {
+  it('las fechas del email se formatean en el idioma del destinatario', () => {
+    const d = new Date('2026-07-24T10:00:00.000Z');
+    const fmt = (locale: string) =>
+      d.toLocaleDateString(emailDateLocale(locale), {
+        day: '2-digit',
+        month: 'long',
+        year: 'numeric',
+      });
+    // El bug: «24 de julio de 2026» en mitad de una frase en inglés.
+    expect(fmt('es-ES')).toContain('julio');
+    expect(fmt('en-US')).toContain('July');
+  });
+
+  it('CAMINO DEGRADADO: idioma sin catálogo → el locale de referencia', () => {
+    for (const locale of ['pt-BR', 'zz', '', null, undefined]) {
+      expect(emailDateLocale(locale)).toBe(HUB_DEFAULT_LOCALE);
+    }
   });
 });
