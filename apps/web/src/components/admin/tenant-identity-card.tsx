@@ -214,8 +214,8 @@ export function TenantIdentityCard({
               {isTooLong ? (
                 <p className="text-xs text-danger-700">
                   {t('identity.tooLong', {
-                    max: String(MAX_NAME_LEN),
-                    current: String(trimmedName.length),
+                    max: MAX_NAME_LEN,
+                    current: trimmedName.length,
                   })}
                 </p>
               ) : null}

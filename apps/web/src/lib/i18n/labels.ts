@@ -34,3 +34,34 @@ export interface TranslatorLike {
 export function labelOr(t: TranslatorLike, key: string, fallback: string): string {
   return t.has(key) ? t(key) : fallback;
 }
+
+/** Forma mínima del `t` con `markup` que aceptan los helpers de esta carpeta. */
+export interface MarkupTranslatorLike {
+  // eslint-disable-next-line no-unused-vars
+  markup(key: any, values?: any): string;
+}
+
+/**
+ * `t.markup` con degradado explícito para copy DECORATIVO (placeholders,
+ * ejemplos): si el mensaje del catálogo trae una etiqueta que el call-site no
+ * declara, o el markup está mal cerrado, `use-intl` NO lanza — llama a `onError`
+ * y devuelve `getMessageFallback`, que sin override es la RUTA DE LA KEY. O sea:
+ * el usuario ve `adminMarca.branding.footerPlaceholder` en pantalla, el mismo
+ * síntoma que arregla `labelOr` para los enums abiertos.
+ *
+ * `fallback` se pinta si el resultado contiene la key (señal inequívoca de que
+ * `use-intl` degradó) o si algo lanza de verdad.
+ */
+export function markupOr(
+  t: MarkupTranslatorLike,
+  key: string,
+  values: Record<string, (chunks: string) => string>,
+  fallback: string,
+): string {
+  try {
+    const result = t.markup(key, values);
+    return result.includes(key) ? fallback : result;
+  } catch {
+    return fallback;
+  }
+}

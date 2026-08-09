@@ -27,6 +27,7 @@ import { authStorage } from '@/lib/auth-storage';
 import { apiErrorMessage } from '@/lib/i18n/api-error';
 import { formatDate } from '@/lib/i18n/format';
 import { labelOr } from '@/lib/i18n/labels';
+import { resolveModuleText, type ModuleLocalizedText } from '@/lib/module-registry';
 import { tenantSettingsApi, type TenantSettingMetadata } from '@/lib/tenant-settings';
 import { flatAdminConfigTabs } from '@/modules';
 
@@ -41,11 +42,13 @@ import { flatAdminConfigTabs } from '@/modules';
 
 interface ConfigTabSpec {
   key: string;
-  /// Solo set para tabs aportados por un módulo: el core traduce sus tabs
-  /// por `key` contra el catálogo (`adminMarca.configTabs`).
-  label?: string;
+  /// Solo set para tabs aportados por un módulo. Los tabs del CORE no lo
+  /// declaran y se traducen por convención con `configTabs.<key>`; los de un
+  /// módulo traen su propio par `{ key, fallback }` porque un módulo de
+  /// terceros puede no estar en el catálogo del core (ver `ModuleLocalizedText`).
+  label?: ModuleLocalizedText;
   /// Solo set para tabs de extensión (metadata del módulo, hoy sin render).
-  description?: string;
+  description?: ModuleLocalizedText;
   /// Solo set para tabs aportados por un módulo. Si el módulo NO está
   /// activo para el tenant, el tab desaparece. Tabs del core NO declaran
   /// `requiresModule`.
@@ -234,7 +237,9 @@ export default function ConfiguracionPage() {
                   : 'relative px-4 py-2.5 text-sm font-medium text-text-muted hover:text-text transition-colors'
               }
             >
-              {spec.label ?? labelOr(t, `configTabs.${spec.key}`, spec.key)}
+              {spec.label
+                ? resolveModuleText(t, spec.label)
+                : labelOr(t, `configTabs.${spec.key}`, spec.key)}
               {isActive ? (
                 <span
                   aria-hidden="true"

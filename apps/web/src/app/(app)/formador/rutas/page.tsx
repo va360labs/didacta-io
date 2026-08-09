@@ -8,6 +8,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
+import { labelOr } from '@/lib/i18n/labels';
 import {
   listPathsFormador,
   publishPath,
@@ -165,7 +166,7 @@ export default function FormadorRutasPage() {
                       <span
                         className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${STATUS_COLORS[path.status]}`}
                       >
-                        {t(`rutaStatus.${path.status}`)}
+                        {labelOr(t, `rutaStatus.${path.status}`, path.status)}
                       </span>
                     </td>
                     <td className="px-4 py-3 text-text-muted">{path.courseCount}</td>

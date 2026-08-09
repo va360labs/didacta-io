@@ -19,6 +19,7 @@ import { Badge } from '@/components/ui/badge';
 import { ApiHttpError } from '@/lib/api-client';
 import { authStorage } from '@/lib/auth-storage';
 import { apiErrorMessage } from '@/lib/i18n/api-error';
+import { markupOr } from '@/lib/i18n/labels';
 import { publishThemeUpdate, themingApi, type TenantTheme } from '@/lib/theming';
 
 const DISPLAY_FONTS = [
@@ -42,6 +43,16 @@ const BODY_FONTS = [
   'Outfit',
   'Nunito Sans',
 ] as const;
+
+/**
+ * Placeholder del textarea del footer si el catálogo degrada.
+ *
+ * `t.markup` NO lanza cuando el mensaje trae una etiqueta que este call-site no
+ * declara: `use-intl` cae en `getMessageFallback`, que sin override devuelve la
+ * RUTA DE LA KEY — el admin vería `adminMarca.branding.footerPlaceholder` dentro
+ * del campo. Constante nombrada, no un default implícito (ver `markupOr`).
+ */
+const FOOTER_PLACEHOLDER_FALLBACK = "<p>© Tu Organización · <a href='...'>Privacidad</a></p>";
 
 interface FormState {
   brandHue: number;
@@ -457,9 +468,9 @@ export default function BrandingPage() {
                 />
                 <p className="mt-2 text-xs text-text-subtle">
                   {t('branding.cssBytes', {
-                    kb: String(
-                      Math.round(new TextEncoder().encode(form.customCss).length / 102.4) / 10,
-                    ),
+                    // Va como NÚMERO: `String(12.3)` pinta "12.3" también en
+                    // español, donde el decimal se escribe con coma.
+                    kb: Math.round(new TextEncoder().encode(form.customCss).length / 102.4) / 10,
                   })}
                 </p>
               </CardContent>
@@ -475,10 +486,15 @@ export default function BrandingPage() {
                   value={form.footerHtml}
                   onChange={(e) => setForm((f) => f && { ...f, footerHtml: e.target.value })}
                   rows={3}
-                  placeholder={t.markup('branding.footerPlaceholder', {
-                    p: (chunks) => `<p>${chunks}</p>`,
-                    a: (chunks) => `<a href='...'>${chunks}</a>`,
-                  })}
+                  placeholder={markupOr(
+                    t,
+                    'branding.footerPlaceholder',
+                    {
+                      p: (chunks) => `<p>${chunks}</p>`,
+                      a: (chunks) => `<a href='...'>${chunks}</a>`,
+                    },
+                    FOOTER_PLACEHOLDER_FALLBACK,
+                  )}
                   className="font-mono text-xs"
                 />
               </CardContent>

@@ -121,7 +121,7 @@
     "payCanceled": "Pago cancelado. Puedes retomarlo cuando quieras — tu selección sigue aquí.",
     "noPlans": "Aún no hay planes disponibles.",
     "plansAriaLabel": "Planes",
-    "planTrialSuffix": " · {days, plural, one {# día} other {# días}} de prueba gratis",
+    "planTrialSuffix": "{days, plural, one {# día} other {# días}} de prueba gratis",
     "bestValue": "Mejor valor",
     "totalToday": "Total hoy",
     "savingsLabel": "Ahorro sobre el precio original",

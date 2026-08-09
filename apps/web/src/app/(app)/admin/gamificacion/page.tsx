@@ -216,7 +216,7 @@ function ChallengesPanel({ onError }: { onError: (m: string | null) => void }) {
                   <div className="flex flex-wrap items-center gap-2">
                     <p className="font-semibold text-text">{c.title}</p>
                     <Badge variant={c.status === 'OPEN' ? 'success' : 'muted'}>
-                      {t(`challengeStatus.${c.status}`)}
+                      {labelOr(t, `challengeStatus.${c.status}`, c.status)}
                     </Badge>
                     <Badge variant="info">
                       {t('challenges.pointsBadge', { points: c.points })}
@@ -884,7 +884,7 @@ function PerkRequestsPanel({ onError }: { onError: (m: string | null) => void })
                           : 'info'
                   }
                 >
-                  {t(`requestStatus.${r.status}`)}
+                  {labelOr(t, `requestStatus.${r.status}`, r.status)}
                 </Badge>
               </div>
 

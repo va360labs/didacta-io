@@ -4,6 +4,7 @@
  */
 
 import type { ComponentType } from 'react';
+import { labelOr, type TranslatorLike } from '@/lib/i18n/labels';
 
 /// Registry de extensiones de UI aportadas por los módulos al core.
 ///
@@ -18,16 +19,45 @@ import type { ComponentType } from 'react';
 /// instalados desde `installed_module` y mounta sus extensions en caliente.
 /// La interfaz queda igual — solo cambia el bus de carga.
 
+/// Texto de PANTALLA aportado por un módulo.
+///
+/// Un módulo no puede llamar a `useTranslations` desde su `index.ts` (es un
+/// objeto a nivel de módulo, sin hooks), así que declara el par
+/// `{ key, fallback }` y el core lo resuelve con `resolveModuleText`. Los
+/// módulos del repo apuntan a una key real del catálogo del core; un módulo
+/// de terceros que no esté en el catálogo pinta su `fallback` — nunca la key.
+///
+/// OJO: esto NO aplica a `ModuleSidebarItem.label`/`group`, que son tokens
+/// canónicos del contrato de navegación (en español, sin traducir) y se
+/// traducen aguas abajo contra `nav.items.*` / `nav.groups.*`.
+export interface ModuleLocalizedText {
+  /// Key del catálogo, relativa al namespace que use el consumidor del core
+  /// (para `adminConfigTabs`, el namespace `adminMarca`).
+  key: string;
+  /// Valor crudo que se pinta si la key no existe en el catálogo activo.
+  fallback: string;
+}
+
 export interface ModuleAdminConfigTab {
   /// Identificador único en el conjunto de tabs del panel
   /// `/admin/configuracion`. Por convención = slug del módulo sin prefijo
   /// `mod.` (ej. `mod.zoom-live` → `zoom-live`).
   key: string;
-  label: string;
-  description: string;
+  label: ModuleLocalizedText;
+  description: ModuleLocalizedText;
   /// Componente React que renderiza el contenido del tab. Se monta solo
   /// cuando el tab está seleccionado (no al render del shell).
   Component: ComponentType;
+}
+
+/// Resuelve un `ModuleLocalizedText` contra el catálogo del core.
+///
+/// CAMINO DEGRADADO (intencionado, con test en `module-registry.test.ts`): si
+/// la key no está en el catálogo del idioma activo se devuelve el `fallback`
+/// declarado por el módulo. Nunca se devuelve la key: un `t()` directo pintaría
+/// `configTabs.lo-que-sea` en pantalla para cualquier módulo de terceros.
+export function resolveModuleText(t: TranslatorLike, text: ModuleLocalizedText): string {
+  return labelOr(t, text.key, text.fallback);
 }
 
 export interface ModuleSidebarItem {

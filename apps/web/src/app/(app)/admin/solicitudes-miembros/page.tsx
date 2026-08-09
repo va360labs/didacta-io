@@ -214,11 +214,11 @@ export default function SolicitudesMiembrosPage() {
                 </div>
                 <CardDescription>
                   {r.email}
-                  {r.telegramId ? t('requests.telegramTag', { id: r.telegramId }) : ''}
+                  {r.telegramId ? ` · ${t('requests.telegramTag', { id: r.telegramId })}` : ''}
                   {r.telegramInGroup === true
-                    ? t('requests.inGroupTag')
+                    ? ` · ${t('requests.inGroupTag')}`
                     : r.telegramInGroup === false
-                      ? t('requests.notInGroupTag')
+                      ? ` · ${t('requests.notInGroupTag')}`
                       : ''}
                 </CardDescription>
               </CardHeader>

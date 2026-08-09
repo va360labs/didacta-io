@@ -20,7 +20,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { ApiHttpError } from '@/lib/api-client';
 import { apiErrorMessage } from '@/lib/i18n/api-error';
-import { formatCents, formatDate } from '@/lib/i18n/format';
+import { formatCents, formatDate, formatNumber } from '@/lib/i18n/format';
 import { labelOr, type TranslatorLike } from '@/lib/i18n/labels';
 import { referralsApi, type MemberReferralStats } from '@/lib/referrals';
 
@@ -187,8 +187,8 @@ export default function ReferidosPage() {
 
       <div className="grid gap-3 sm:grid-cols-3" data-testid="referral-stats">
         {[
-          { label: t('referidos.statClics'), value: String(stats.clicks) },
-          { label: t('referidos.statAltas'), value: String(stats.referrals) },
+          { label: t('referidos.statClics'), value: formatNumber(stats.clicks) },
+          { label: t('referidos.statAltas'), value: formatNumber(stats.referrals) },
           {
             label: t('referidos.statPagado'),
             value: formatCents(stats.totals.paidCents),

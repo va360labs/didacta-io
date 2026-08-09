@@ -19,6 +19,7 @@ import { Select } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { apiErrorMessage } from '@/lib/i18n/api-error';
 import { formatDate } from '@/lib/i18n/format';
+import { labelOr } from '@/lib/i18n/labels';
 import {
   fundaeCompaniesApi,
   fundaeRlptApi,
@@ -73,7 +74,7 @@ export default function FundaeEmpresaDetailPage() {
     if (
       !confirm(
         t('companyDetail.rlptDeleteConfirm', {
-          tipo: t(`rlptTipo.${notice.tipo}`).toLowerCase(),
+          tipo: labelOr(t, `rlptTipo.${notice.tipo}`, notice.tipo).toLowerCase(),
           fecha: formatDate(notice.fechaNotificacionAt, NOTICE_DATE_FORMAT),
         }),
       )
@@ -127,7 +128,7 @@ export default function FundaeEmpresaDetailPage() {
               ) : null}
               {company.plantilla !== null ? (
                 <Badge variant="muted">
-                  {t('companies.employeesBadge', { count: String(company.plantilla) })}
+                  {t('companies.employeesBadge', { count: company.plantilla })}
                 </Badge>
               ) : null}
             </div>
@@ -246,7 +247,9 @@ function RlptSection({
               <CardContent className="flex flex-wrap items-start gap-4 p-5">
                 <div className="min-w-0 flex-1 space-y-1">
                   <div className="flex flex-wrap items-center gap-2">
-                    <Badge variant={TIPO_VARIANT[n.tipo]}>{t(`rlptTipo.${n.tipo}`)}</Badge>
+                    <Badge variant={TIPO_VARIANT[n.tipo]}>
+                      {labelOr(t, `rlptTipo.${n.tipo}`, n.tipo)}
+                    </Badge>
                     <span className="text-sm tabular-nums text-text-muted">
                       {t('companyDetail.noticeDates', {
                         fecha: formatDate(n.fechaNotificacionAt, NOTICE_DATE_FORMAT),

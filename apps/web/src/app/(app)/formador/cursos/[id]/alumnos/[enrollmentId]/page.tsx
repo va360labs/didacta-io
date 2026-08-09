@@ -16,6 +16,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { ApiHttpError } from '@/lib/api-client';
 import { apiErrorMessage } from '@/lib/i18n/api-error';
 import { formatDate } from '@/lib/i18n/format';
+import { labelOr } from '@/lib/i18n/labels';
 import {
   learningApi,
   type EnrollmentProgressDetail,
@@ -151,7 +152,7 @@ export default function AlumnoProgresoPage() {
             </h1>
             {detail ? (
               <Badge variant={STATUS_VARIANT[detail.status]}>
-                {t(`enrollStatus.${detail.status}`)}
+                {labelOr(t, `enrollStatus.${detail.status}`, detail.status)}
               </Badge>
             ) : null}
           </div>

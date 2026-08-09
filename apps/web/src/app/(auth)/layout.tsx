@@ -7,6 +7,7 @@
 
 import type { CSSProperties, ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
+import { formatNumber } from '@/lib/i18n/format';
 import { useTenantContext } from '@/lib/tenant-context';
 
 /**
@@ -106,7 +107,7 @@ export default function AuthLayout({ children }: { children: ReactNode }) {
                   <div>
                     <dt className="sr-only">{t('layout.activeMembersSr')}</dt>
                     <dd className="font-display text-3xl font-extrabold leading-none lg:text-4xl">
-                      {stats.activeMembers}
+                      {formatNumber(stats.activeMembers)}
                     </dd>
                     <p className="mt-1.5 text-sm text-white/65">
                       {t('layout.activeMembersCount', { count: stats.activeMembers })}
@@ -117,7 +118,7 @@ export default function AuthLayout({ children }: { children: ReactNode }) {
                   <div>
                     <dt className="sr-only">{t('layout.publishedCoursesSr')}</dt>
                     <dd className="font-display text-3xl font-extrabold leading-none lg:text-4xl">
-                      {stats.publishedCourses}
+                      {formatNumber(stats.publishedCourses)}
                     </dd>
                     <p className="mt-1.5 text-sm text-white/65">
                       {t('layout.publishedCoursesCount', { count: stats.publishedCourses })}

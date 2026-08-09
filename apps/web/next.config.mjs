@@ -11,7 +11,27 @@
  * Next.js intentaría cargar TypeScript en runtime de producción y fallaría
  * con `Cannot find module 'typescript'` cuando devDeps están purgadas.
  */
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import createNextIntlPlugin from 'next-intl/plugin';
+
+// Versión del producto: se INYECTA en build desde el `version` del package.json
+// RAÍZ, que es la única fuente de verdad viva del repo — es lo que bumpea cada
+// commit `chore(release): corte X` y lo que apunta el tag `vX` que dispara
+// `.github/workflows/release.yml`. Antes era una constante a mano en
+// `src/lib/version.ts` y se quedó 13 releases atrás (alpha.88 vs alpha.101).
+//
+// Los `version` de `apps/*/package.json` NO son fuente de verdad: son manifests
+// privados de workspace que nadie bumpea (siguen en alpha.88 desde hace 13
+// releases). Ver el cuerpo del PR.
+const ROOT_PACKAGE_JSON = path.join(
+  path.dirname(fileURLToPath(import.meta.url)),
+  '..',
+  '..',
+  'package.json',
+);
+const APP_VERSION = JSON.parse(readFileSync(ROOT_PACKAGE_JSON, 'utf8')).version;
 
 // i18n sin routing por URL (cookie `didacta_locale`): el plugin NO añade
 // segmentos de idioma; solo registra `src/i18n/request.ts` para que las APIs
@@ -26,6 +46,8 @@ const SKIP_TYPE_CHECK = process.env.SKIP_TYPE_CHECK === '1';
 const config = {
   reactStrictMode: true,
   poweredByHeader: false,
+  // Inlined en el bundle en build-time (no se lee del entorno en runtime).
+  env: { NEXT_PUBLIC_APP_VERSION: APP_VERSION },
   typescript: {
     // En dev-deploy saltamos el type-check de Next.js para reducir el tiempo
     // de build (~3 min menos). Los types se validan en CI con tsc --noEmit.

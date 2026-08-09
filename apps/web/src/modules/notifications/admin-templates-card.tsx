@@ -29,6 +29,7 @@ import { Select } from '@/components/ui/select';
 import { adminSmtpApi } from '@/lib/admin-smtp';
 import { ApiHttpError } from '@/lib/api-client';
 import { apiErrorMessage } from '@/lib/i18n/api-error';
+import { labelOr } from '@/lib/i18n/labels';
 import {
   adminNotificationsApi,
   type EmailTemplateCatalogEntry,
@@ -205,7 +206,7 @@ export function EmailTemplatesManager() {
       !window.confirm(
         t('confirmRestore', {
           name: entry.name,
-          channel: t(`channel.${o.channel}`),
+          channel: labelOr(t, `channel.${o.channel}`, o.channel),
           locale: o.locale,
         }),
       )
@@ -400,7 +401,7 @@ export function EmailTemplatesManager() {
                         {entry.name}
                         {entry.channels.map((c) => (
                           <Badge key={c} variant="muted">
-                            {t(`channel.${c}`)}
+                            {labelOr(t, `channel.${c}`, c)}
                           </Badge>
                         ))}
                         {customized ? <Badge variant="info">{t('customized')}</Badge> : null}
@@ -417,7 +418,7 @@ export function EmailTemplatesManager() {
                           {entryOverrides.map((o) => (
                             <li key={o.id} className="flex items-center gap-2 text-xs">
                               <Badge variant="info">
-                                {t(`channel.${o.channel}`)} · {o.locale}
+                                {labelOr(t, `channel.${o.channel}`, o.channel)} · {o.locale}
                               </Badge>
                               <button
                                 type="button"

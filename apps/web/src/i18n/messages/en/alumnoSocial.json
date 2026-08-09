@@ -1,10 +1,4 @@
 {
-  "shell": {
-    "abrirMenu": "Open navigation menu",
-    "seccionMiPerfil": "My profile",
-    "seccionGrupos": "Groups",
-    "seccionRutas": "Learning paths"
-  },
   "cuenta": {
     "roleSuperAdmin": "Super admin",
     "roleAdmin": "Admin",

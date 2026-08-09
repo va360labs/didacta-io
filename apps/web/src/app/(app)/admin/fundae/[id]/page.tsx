@@ -19,6 +19,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Textarea } from '@/components/ui/textarea';
 import { authStorage } from '@/lib/auth-storage';
 import { apiErrorMessage } from '@/lib/i18n/api-error';
+import { labelOr } from '@/lib/i18n/labels';
 import {
   fundaeApi,
   type FundaeAction,
@@ -142,7 +143,7 @@ export default function FundaeActionDetailPage() {
           <h1 className="mt-1 font-display text-2xl font-bold tracking-tight">{action.nombre}</h1>
           <div className="mt-2 flex flex-wrap gap-1.5 text-sm text-text-muted">
             <Badge>{action.modalidad}</Badge>
-            <span>· {t('actionDetail.hoursTotal', { horas: String(action.horasFormacion) })}</span>
+            <span>· {t('actionDetail.hoursTotal', { horas: action.horasFormacion })}</span>
             <span>
               · {action.fechaInicio} → {action.fechaFin}
             </span>
@@ -165,11 +166,11 @@ export default function FundaeActionDetailPage() {
           <CardTitle>{t('actionDetail.blocksTitle')}</CardTitle>
           <CardDescription>
             {t('actionDetail.blocksDescription', {
-              total: String(totalBlockHours),
-              max: String(action.horasFormacion),
+              total: totalBlockHours,
+              max: action.horasFormacion,
               estado:
                 remaining > 0
-                  ? t('actionDetail.blocksRemaining', { remaining: String(remaining) })
+                  ? t('actionDetail.blocksRemaining', { remaining: remaining })
                   : t('actionDetail.blocksComplete'),
             })}
           </CardDescription>
@@ -211,7 +212,7 @@ export default function FundaeActionDetailPage() {
         <Card>
           <CardHeader>
             <CardTitle>
-              {t('actionDetail.participantsTitle', { count: String(participants.length) })}
+              {t('actionDetail.participantsTitle', { count: participants.length })}
             </CardTitle>
             <CardDescription>{t('actionDetail.participantsDescription')}</CardDescription>
           </CardHeader>
@@ -238,7 +239,7 @@ export default function FundaeActionDetailPage() {
                             : 'warning'
                       }
                     >
-                      {t(`participantStatus.${p.status}`)}
+                      {labelOr(t, `participantStatus.${p.status}`, p.status)}
                     </Badge>
                     <span className="text-xs text-text-muted tabular-nums">
                       {p.progressPercent}%
@@ -295,7 +296,7 @@ function BlockRow({
       <div className="min-w-0 flex-1">
         <p className="font-medium text-text">{block.title}</p>
         <p className="text-xs text-text-muted">
-          {t('actionDetail.blockHours', { hours: String(block.hours) })} · {block.modalidad}
+          {t('actionDetail.blockHours', { hours: block.hours })} · {block.modalidad}
         </p>
         {block.contenidos ? (
           <p className="mt-1 whitespace-pre-line text-xs text-text-subtle">{block.contenidos}</p>

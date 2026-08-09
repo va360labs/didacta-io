@@ -26,7 +26,7 @@ import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/icon';
 import { ApiHttpError } from '@/lib/api-client';
 import { authStorage } from '@/lib/auth-storage';
-import { formatDate, formatDuration } from '@/lib/i18n/format';
+import { formatDate, formatDuration, formatNumber } from '@/lib/i18n/format';
 import type { TranslatorLike } from '@/lib/i18n/labels';
 import { useTenantContext } from '@/lib/tenant-context';
 import {
@@ -327,7 +327,7 @@ export function UneteView() {
                         <span className="mt-0.5 text-[13px] text-text-muted">
                           {intervalDescriptionLabel(t, plan.intervalMonths)}
                           {plan.trialDays > 0
-                            ? t('unete.planTrialSuffix', { days: plan.trialDays })
+                            ? ` · ${t('unete.planTrialSuffix', { days: plan.trialDays })}`
                             : ''}
                         </span>
                       </span>
@@ -449,7 +449,7 @@ export function UneteView() {
         <div className="my-5 flex flex-wrap gap-3">
           {page.stats.activeMembers > 0 && (
             <div className="min-w-[150px] flex-1 rounded-xl border border-border bg-surface p-4">
-              <div className="text-[26px] font-bold">{page.stats.activeMembers}</div>
+              <div className="text-[26px] font-bold">{formatNumber(page.stats.activeMembers)}</div>
               <div className="mt-0.5 text-[13px] text-text-muted">
                 {t('unete.activeMembers', { count: page.stats.activeMembers })}
               </div>

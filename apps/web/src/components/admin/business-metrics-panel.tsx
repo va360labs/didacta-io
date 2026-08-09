@@ -21,18 +21,12 @@ import { useTranslations } from 'next-intl';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { StatCard } from '@/components/stat-card';
 import { apiErrorMessage } from '@/lib/i18n/api-error';
-import { formatCurrency, formatDate } from '@/lib/i18n/format';
+import { formatCents, formatDate } from '@/lib/i18n/format';
 import {
   adminBusinessMetricsApi,
   type BusinessMetrics,
   type WeeklyPoint,
 } from '@/lib/admin-business-metrics';
-
-function euros(cents: number): string {
-  return formatCurrency(cents / 100, 'EUR', {
-    maximumFractionDigits: cents % 100 === 0 ? 0 : 2,
-  });
-}
 
 function formatWeek(iso: string): string {
   // timeZone UTC deliberada: `weekStart` es una fecha-calendario (lunes) sin
@@ -101,9 +95,9 @@ export function BusinessMetricsPanel() {
           hint={
             nps.responses > 0
               ? t('npsHint', {
-                  responses: String(nps.responses),
-                  promoters: String(nps.promoters),
-                  detractors: String(nps.detractors),
+                  responses: nps.responses,
+                  promoters: nps.promoters,
+                  detractors: nps.detractors,
                 })
               : t('npsEmpty')
           }
@@ -120,7 +114,7 @@ export function BusinessMetricsPanel() {
         />
         <StatCard
           label={t('revenueLabel')}
-          value={euros(revenue.totalCents30d)}
+          value={formatCents(revenue.totalCents30d)}
           hint={t('revenueHint')}
           icon="chart"
           tone="info"
@@ -129,8 +123,8 @@ export function BusinessMetricsPanel() {
           label={t('arrearsLabel')}
           value={arrears.total}
           hint={t('arrearsHint', {
-            subscriptions: String(arrears.subscriptions),
-            external: String(arrears.external),
+            subscriptions: arrears.subscriptions,
+            external: arrears.external,
           })}
           icon="bell"
           tone={arrears.total > 0 ? 'warn' : 'success'}
@@ -139,7 +133,7 @@ export function BusinessMetricsPanel() {
         <StatCard
           label={t('signupsLabel')}
           value={members.newMembers30d}
-          hint={t('signupsHint', { cancellations: String(members.cancellations30d) })}
+          hint={t('signupsHint', { cancellations: members.cancellations30d })}
           icon="users"
           tone="info"
         />
@@ -147,8 +141,8 @@ export function BusinessMetricsPanel() {
           label={t('activeLabel')}
           value={connections.active7d}
           hint={t('activeHint', {
-            active30d: String(connections.active30d),
-            total: String(connections.totalActive),
+            active30d: connections.active30d,
+            total: connections.totalActive,
           })}
           icon="users"
           tone="info"
@@ -157,8 +151,8 @@ export function BusinessMetricsPanel() {
           label={t('aiTutorLabel')}
           value={aiTutor.questions30d}
           hint={t('aiTutorHint', {
-            students: String(aiTutor.activeUsers30d),
-            posts: String(community.posts30d),
+            students: aiTutor.activeUsers30d,
+            posts: community.posts30d,
           })}
           icon="sparkles"
           tone="neutral"
@@ -170,7 +164,7 @@ export function BusinessMetricsPanel() {
           title={t('weeklyRevenueTitle')}
           description={t('weeklyRevenueDescription')}
           points={revenue.weekly}
-          format={euros}
+          format={(v) => formatCents(v)}
         />
         <WeeklyBars
           title={t('weeklySignupsTitle')}

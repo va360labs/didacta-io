@@ -304,7 +304,7 @@ export default function UsuariosPage() {
                     </td>
                     <td className="px-3 py-3">
                       <Badge variant={STATUS_VARIANT[u.status]}>
-                        {t(`userStatus.${u.status}`)}
+                        {labelOr(t, `userStatus.${u.status}`, u.status)}
                       </Badge>
                     </td>
                     {tiersEnabled ? (

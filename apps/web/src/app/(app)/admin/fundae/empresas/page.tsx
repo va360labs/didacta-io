@@ -175,7 +175,7 @@ export default function FundaeEmpresasPage() {
                     ) : null}
                     {c.plantilla !== null ? (
                       <Badge variant="muted">
-                        {t('companies.employeesBadge', { count: String(c.plantilla) })}
+                        {t('companies.employeesBadge', { count: c.plantilla })}
                       </Badge>
                     ) : null}
                   </div>

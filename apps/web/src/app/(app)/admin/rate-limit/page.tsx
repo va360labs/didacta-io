@@ -125,21 +125,21 @@ function RateLimitPanel({ info }: { info: RateLimitInfo }) {
                 <tr className="border-t border-border-soft">
                   <td className="px-4 py-3">{t('rateLimit.rowAuthenticated')}</td>
                   <td className="px-4 py-3 font-mono">
-                    {t('rateLimit.reqCount', { limit: String(info.authenticated.limit) })}
+                    {t('rateLimit.reqCount', { limit: info.authenticated.limit })}
                   </td>
                   <td className="px-4 py-3 font-mono">
                     {t('rateLimit.windowSeconds', {
-                      seconds: String(info.authenticated.windowSeconds),
+                      seconds: info.authenticated.windowSeconds,
                     })}
                   </td>
                 </tr>
                 <tr className="border-t border-border-soft">
                   <td className="px-4 py-3">{t('rateLimit.rowPublic')}</td>
                   <td className="px-4 py-3 font-mono">
-                    {t('rateLimit.reqCount', { limit: String(info.public.limit) })}
+                    {t('rateLimit.reqCount', { limit: info.public.limit })}
                   </td>
                   <td className="px-4 py-3 font-mono">
-                    {t('rateLimit.windowSeconds', { seconds: String(info.public.windowSeconds) })}
+                    {t('rateLimit.windowSeconds', { seconds: info.public.windowSeconds })}
                   </td>
                 </tr>
               </tbody>
@@ -168,19 +168,19 @@ function RateLimitPanel({ info }: { info: RateLimitInfo }) {
                 <tr className="border-t border-border-soft">
                   <td className="px-4 py-3">{t('rateLimit.rowAuth')}</td>
                   <td className="px-4 py-3 font-mono">
-                    {t('rateLimit.reqPerMin', { count: String(info.community.authenticated) })}
+                    {t('rateLimit.reqPerMin', { count: info.community.authenticated })}
                   </td>
                   <td className="px-4 py-3 font-mono">
-                    {t('rateLimit.reqPerMin', { count: String(info.enterprise.authenticated) })}
+                    {t('rateLimit.reqPerMin', { count: info.enterprise.authenticated })}
                   </td>
                 </tr>
                 <tr className="border-t border-border-soft">
                   <td className="px-4 py-3">{t('rateLimit.rowPub')}</td>
                   <td className="px-4 py-3 font-mono">
-                    {t('rateLimit.reqPerMin', { count: String(info.community.public) })}
+                    {t('rateLimit.reqPerMin', { count: info.community.public })}
                   </td>
                   <td className="px-4 py-3 font-mono">
-                    {t('rateLimit.reqPerMin', { count: String(info.enterprise.public) })}
+                    {t('rateLimit.reqPerMin', { count: info.enterprise.public })}
                   </td>
                 </tr>
               </tbody>

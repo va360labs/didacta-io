@@ -276,8 +276,10 @@ function DomainRow({
         </CardTitle>
         <CardDescription>
           {t('dominios.addedAt', { date: formatDateTime(domain.createdAt) })}
+          {/* El separador ` · ` es maquetación, no copy: vive aquí y no dentro del
+              valor del catálogo (un traductor que recorta el valor rompía la frase). */}
           {domain.verifiedAt
-            ? t('dominios.verifiedAtSuffix', { date: formatDateTime(domain.verifiedAt) })
+            ? ` · ${t('dominios.verifiedAtSuffix', { date: formatDateTime(domain.verifiedAt) })}`
             : ''}
         </CardDescription>
       </CardHeader>

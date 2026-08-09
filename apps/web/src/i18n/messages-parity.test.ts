@@ -382,6 +382,28 @@ describe('catálogo i18n · integridad', () => {
     expect(vacias, `valores vacíos o no-string:\n  ${vacias.join('\n  ')}`).toEqual([]);
   });
 
+  it('ningún valor lleva espacios load-bearing al principio o al final', () => {
+    // Un valor como " · validado {date}" depende de un espacio INVISIBLE para
+    // que la frase quede bien pegada a la anterior. Cualquier traductor (o
+    // cualquier herramienta de traducción) que recorte el valor rompe la frase
+    // y nadie lo ve hasta producción. La separación de maquetación va en el
+    // call-site (` · ${t(...)}`), nunca dentro del catálogo.
+    const conEspacios: string[] = [];
+    for (const locale of LOCALES) {
+      for (const ns of NAMESPACES) {
+        for (const [k, v] of entriesOf(locale, ns)) {
+          if (typeof v === 'string' && v !== v.trim()) {
+            conEspacios.push(`${locale}/${ns}.${k} = ${JSON.stringify(v)}`);
+          }
+        }
+      }
+    }
+    expect(
+      conEspacios,
+      `valores con espacio inicial o final (mueve la separación al call-site):\n  ${conEspacios.join('\n  ')}`,
+    ).toEqual([]);
+  });
+
   it('ningún code de error se define en dos errorsApi* a la vez', () => {
     // Los cinco `errorsApi*.json` se funden bajo el namespace `errors` en
     // `messages/<locale>/index.ts`: un code duplicado hace que gane el último

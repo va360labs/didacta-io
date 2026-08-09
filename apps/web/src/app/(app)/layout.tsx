@@ -164,7 +164,10 @@ function Shell({
   children: ReactNode;
 }) {
   const pathname = usePathname();
-  const t = useTranslations('alumnoSocial');
+  // Copy del propio shell (hamburguesa móvil + nombres de sección del
+  // `<title>`). Vivía en `alumnoSocial.shell.*` por un reparto accidental de la
+  // migración i18n: no es copy del área de alumno.
+  const t = useTranslations('shell');
 
   const isAdminOrFormador = session.user.roles.some((r) =>
     ['super_admin', 'tenant_admin', 'formador'].includes(r),
@@ -301,12 +304,12 @@ function Shell({
   const tenantName = hostTenant?.name?.trim() || formatTenantName(session.user.tenantSlug);
   const sectionExtras = useMemo(
     () => [
-      { href: '/cuenta', label: t('shell.seccionMiPerfil') },
+      { href: '/cuenta', label: t('sections.myProfile') },
       // /grupos ya no tiene item en el sidebar (bloque 9) pero la ruta sigue viva.
-      { href: '/grupos', label: t('shell.seccionGrupos') },
+      { href: '/grupos', label: t('sections.groups') },
       // Ídem /rutas: item del alumno retirado del menú, la página sigue accesible
       // por URL y desde el detalle de una ruta.
-      { href: '/rutas', label: t('shell.seccionRutas') },
+      { href: '/rutas', label: t('sections.learningPaths') },
     ],
     [t],
   );
@@ -360,7 +363,7 @@ function Shell({
               <button
                 type="button"
                 onClick={() => setMobileNavOpen(true)}
-                aria-label={t('shell.abrirMenu')}
+                aria-label={t('openMenu')}
                 aria-expanded={mobileNavOpen}
                 className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-border bg-surface text-text-muted transition-colors hover:border-border-strong hover:text-text lg:hidden"
               >

@@ -23,7 +23,7 @@ import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { apiErrorMessage } from '@/lib/i18n/api-error';
-import { formatCurrency, formatDate } from '@/lib/i18n/format';
+import { formatCentsExact, formatDate } from '@/lib/i18n/format';
 import { labelOr } from '@/lib/i18n/labels';
 import {
   referralsAdminApi,
@@ -74,9 +74,15 @@ function dateLabel(iso: string): string {
   });
 }
 
-/** Céntimos → "12,34 €" en el locale activo (antes `formatReferralCents`). */
+/**
+ * Céntimos → "12,34 €" en el locale activo.
+ *
+ * Usa `formatCentsExact` (conserva el céntimo cero), NO el `formatCents`
+ * canónico: son liquidaciones de comisión que el admin cuadra contra el pago
+ * real al prescriptor. Mismo output byte a byte que el wrapper que sustituye.
+ */
 function amountLabel(cents: number, currency = 'eur'): string {
-  return formatCurrency(cents / 100, currency.toUpperCase());
+  return formatCentsExact(cents, currency.toUpperCase());
 }
 
 export default function AdminReferidosPage() {
@@ -384,7 +390,7 @@ export default function AdminReferidosPage() {
                   .map((row) =>
                     t('totalsItem', {
                       status: labelOr(tStatus, row.status, row.status),
-                      count: String(row.count),
+                      count: row.count,
                       amount: amountLabel(row.totalCents),
                     }),
                   )

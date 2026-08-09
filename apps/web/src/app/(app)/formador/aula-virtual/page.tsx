@@ -21,6 +21,7 @@ import { authStorage } from '@/lib/auth-storage';
 import { coursesApi, type Course, type CourseDetail } from '@/lib/courses';
 import { apiErrorMessage } from '@/lib/i18n/api-error';
 import { formatDateTime } from '@/lib/i18n/format';
+import { labelOr } from '@/lib/i18n/labels';
 import { getBrowserTimeZone } from '@/lib/i18n/user-prefs';
 import { zoomLiveApi, type SessionStatus, type ZoomSession } from '@/modules/zoom-live';
 import {
@@ -190,7 +191,7 @@ export default function AulaVirtualPage() {
                       {s.topic}
                     </h3>
                     <Badge variant={STATUS_VARIANT[s.status]} dot>
-                      {t(`sessionStatus.${s.status}`)}
+                      {labelOr(t, `sessionStatus.${s.status}`, s.status)}
                     </Badge>
                   </div>
                   <p className="text-sm text-text-muted">

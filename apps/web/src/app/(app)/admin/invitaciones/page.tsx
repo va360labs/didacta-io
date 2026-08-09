@@ -261,7 +261,7 @@ export default function AdminInvitacionesPage() {
                   ? t('invitations.progressRunning', { sent: envio.enviados, total: envio.total })
                   : t('invitations.progressDone', { sent: envio.enviados })}
                 {envio.fallidos.length > 0
-                  ? t('invitations.failedSuffix', { count: envio.fallidos.length })
+                  ? ` · ${t('invitations.failedSuffix', { count: envio.fallidos.length })}`
                   : ''}
               </p>
               {envio.enCurso ? (
