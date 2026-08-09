@@ -1,25 +1,37 @@
 import { expect, test } from '@playwright/test';
+import { createSmokeStudent } from '../helpers/api';
 import { injectSession } from '../helpers/auth';
 
-const FAKE_SESSION = {
-  accessToken: 'fake-token-smoke',
-  user: {
-    id: 'user-smoke-1',
-    email: 'lucia@acme.com',
-    name: 'Lucía Gómez',
-    tenantId: 'tenant-acme',
-    tenantSlug: 'acme',
-    roles: ['alumno'],
-    mfaEnabled: false,
-    // Sin esto el gate de onboarding secuestra la navegación y TODOS los tests
-    // del spec acaban en /signin (mismo fallo preexistente que enroll-by-code).
-    onboardingCompletedAt: '2026-01-01T00:00:00.000Z',
-  },
-};
+/**
+ * Smoke de las páginas principales con la sesión de un alumno.
+ *
+ * La sesión es REAL: alumno dado de alta por `POST /auth/signup` en el tenant
+ * de smoke, con el onboarding cerrado por el mismo camino que usa la UI.
+ *
+ * Antes se inyectaba `accessToken: 'fake-token-smoke'` con `tenantSlug:
+ * 'acme'` — un tenant que no existe. Con eso el shell pintaba, pero TODAS las
+ * llamadas a la API respondían 401 y las once aserciones caían por falta de
+ * datos. Maquillar los localizadores habría escondido el problema: lo que
+ * faltaba era el usuario.
+ *
+ * El tenant de smoke importa además por otro motivo: varias aserciones son
+ * sobre estados VACÍOS (sin grupos, sin eventos, sin conversaciones), y en el
+ * tenant principal dejan de ser ciertas en cuanto otro spec crea un grupo.
+ */
+
+let session: Awaited<ReturnType<typeof createSmokeStudent>>;
+
+test.beforeAll(async () => {
+  session = await createSmokeStudent('smoke');
+});
 
 async function withSession(page: Parameters<typeof injectSession>[0], url: string) {
   await page.goto('/signin');
-  await injectSession(page, FAKE_SESSION);
+  await injectSession(page, {
+    accessToken: session.tokens.accessToken,
+    refreshToken: session.tokens.refreshToken,
+    user: session.user,
+  });
   await page.goto(url);
 }
 
@@ -108,7 +120,16 @@ test.describe('Redesign smoke — páginas principales', () => {
   test('/mensajes muestra heading y área vacía', async ({ page }) => {
     await withSession(page, '/mensajes');
     await expect(page.getByRole('heading', { name: 'Mensajes' })).toBeVisible();
-    await expect(page.getByText('No tienes conversaciones todavía.')).toBeVisible();
-    await expect(page.getByText('Mensajes directos')).toBeVisible();
+    // El panel derecho sin conversación seleccionada. Antes se afirmaban aquí
+    // "No tienes conversaciones todavía." y "Mensajes directos", copys que
+    // desaparecieron cuando `mod.messaging` v1 (commit 64a93c62) reescribió la
+    // página entera: la lista pasó a agruparse en Salas / Profesores /
+    // Directos y el vacío pasó a ser esta nota. El spec se quedó afirmando
+    // texto de la página anterior.
+    await expect(
+      page.getByText(
+        'Selecciona una sala, tu canal de profesores o un directo — o inicia una conversación nueva.',
+      ),
+    ).toBeVisible();
   });
 });
