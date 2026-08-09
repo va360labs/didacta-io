@@ -67,6 +67,9 @@ apps/api/data/
 # Test artifacts
 apps/e2e/test-results/
 apps/e2e/branding-shots/
+# Capturas de la documentación: se generan con apps/e2e/shots/ y su sitio es el
+# repo didacta-docs, no este. Aquí solo vive el script que las produce.
+apps/e2e/shots-output/
 test-results/
 playwright-report/
 
