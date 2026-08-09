@@ -16,8 +16,10 @@ function makeMocks(opts?: {
   smtpResolved?: boolean;
   smtpOk?: boolean;
   issuedToken?: { rawToken: string } | null;
+  /** Idioma de la fila recién creada del comprador (columna `user.locale`). */
+  createdLocale?: string;
 }) {
-  const created = { id: 'user-nuevo' };
+  const created = { id: 'user-nuevo', locale: opts?.createdLocale };
   const userRoleCreate = vi.fn();
   const tx = {
     user: { create: vi.fn().mockResolvedValue(created) },
@@ -156,5 +158,84 @@ describe('BillingProvisioningService.provision', () => {
       expect.objectContaining({ userId: 'user-nuevo' }),
       expect.stringContaining('sin rol'),
     );
+  });
+});
+
+// ============================================================================
+// Idioma del comprador. La bienvenida de compra salía entera en español
+// (asunto, cuerpo, botón «Definir mi contraseña» y la nota del pie con la URL
+// de acceso) aunque la fila del comprador dijera `locale = 'en-US'`.
+// ============================================================================
+describe('BillingProvisioningService · idioma del comprador', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  /** El email que salió al MTA. */
+  function sent(smtp: unknown): { subject: string; text: string; html: string } {
+    return (smtp as { send: ReturnType<typeof vi.fn> }).send.mock.calls[0][1];
+  }
+
+  it('comprador en-US: asunto, cuerpo, botón y pie en inglés', async () => {
+    const { svc, smtp } = makeMocks({ createdLocale: 'en-US' });
+    await svc.provision(args);
+
+    const mail = sent(smtp);
+    expect(mail.subject).toBe('Your course at Academia Demo');
+    expect(mail.html).toContain('<html lang="en">');
+    expect(mail.text).toContain('Hi Ana,');
+    expect(mail.text).toContain('Your purchase at Academia Demo is confirmed!');
+    // Las dos piezas estructurales que un override no puede quitar.
+    expect(mail.html).toContain('Set my password');
+    expect(mail.html).toContain('you can sign in at');
+    // El síntoma del bug: español dentro de un email inglés.
+    expect(mail.html).not.toContain('Definir mi contraseña');
+    expect(mail.html).not.toContain('Después podrás iniciar sesión');
+  });
+
+  it('comprador es-ES: byte a byte lo que ya recibía', async () => {
+    const { svc, smtp } = makeMocks({ createdLocale: 'es-ES' });
+    await svc.provision(args);
+
+    const mail = sent(smtp);
+    expect(mail.subject).toBe('Tu curso en Academia Demo');
+    expect(mail.html).toContain('<html lang="es">');
+    expect(mail.text).toContain('Hola Ana,');
+    expect(mail.text).toContain(
+      '¡Tu compra en Academia Demo está confirmada! Hemos creado tu cuenta y tu curso ya te espera dentro.',
+    );
+    expect(mail.html).toContain('Definir mi contraseña');
+    expect(mail.html).toContain(
+      'Después podrás iniciar sesión desde https://academia.example.com/signin con tu email.',
+    );
+  });
+
+  it('CAMINO DEGRADADO: fila sin locale o con uno sin catálogo → español, nunca un hueco', async () => {
+    // `undefined` es el caso real de HOY: el checkout todavía no captura el
+    // idioma del comprador, así que la columna toma su default. `pt-BR` es
+    // alcanzable en cuanto alguien lo guarde en su perfil.
+    for (const createdLocale of [undefined, '', '   ', 'pt-BR']) {
+      vi.clearAllMocks();
+      const { svc, smtp } = makeMocks({ createdLocale });
+      await svc.provision(args);
+      const mail = sent(smtp);
+      expect(mail.subject, String(createdLocale)).toBe('Tu curso en Academia Demo');
+      expect(mail.html, String(createdLocale)).toContain('<html lang="es">');
+      expect(mail.html, String(createdLocale)).toContain('Definir mi contraseña');
+    }
+  });
+
+  it('el override del tenant se busca en el idioma del comprador, con caída al de referencia', async () => {
+    const { svc, prisma } = makeMocks({ createdLocale: 'en-US' });
+    await svc.provision(args);
+
+    const locales = (
+      prisma as unknown as {
+        notificationTemplate: { findUnique: ReturnType<typeof vi.fn> };
+      }
+    ).notificationTemplate.findUnique.mock.calls.map(
+      (c: [{ where: { tenantId_key_channel_locale: { locale: string } } }]) =>
+        c[0].where.tenantId_key_channel_locale.locale,
+    );
+    // Misma precedencia que `renderForTenant` del hub: no es una regla nueva.
+    expect(locales).toEqual(['en-US', 'es-ES']);
   });
 });

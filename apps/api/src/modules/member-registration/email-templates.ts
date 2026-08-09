@@ -17,7 +17,15 @@ import {
   escapeHtmlAttr,
   type EmailBranding,
 } from '../../common/branded-email';
-import { applyEmailOverride, type RawEmailOverride } from '../notifications/email-template-catalog';
+import {
+  applyEmailOverride,
+  emailGreeting,
+  interpolate,
+  resolveFixedEmailCopy,
+  resolveTransactionalDefault,
+  toHubTemplateLang,
+  type RawEmailOverride,
+} from '../notifications/email-template-catalog';
 
 // Re-exportado para compatibilidad con call sites/tests que lo importaban de aquí.
 export { escapeHtml };
@@ -42,11 +50,18 @@ export interface EmailContent {
   html: string;
 }
 
+/** Minutos de validez del código OTP (los mismos que aplica el service). */
+const OTP_TTL_MINUTES = 10;
+const OTP_TEMPLATE_KEY = 'member_registration.otp_code';
+const WELCOME_APPROVED_TEMPLATE_KEY = 'member_registration.welcome_approved';
+const REJECTION_TEMPLATE_KEY = 'member_registration.rejection';
+
 // ─── OTP: código de acceso de un solo uso ────────────────────────────────────
 /** Email con el código OTP grande (no es un link). Validez de 10 minutos. */
 export function buildOtpEmail(
   code: string,
   branding: EmailBranding,
+  locale: string,
   override?: RawEmailOverride | null,
 ): EmailContent {
   const codeBlockHtml = `<p style="margin:24px 0;text-align:center;">
@@ -55,22 +70,39 @@ export function buildOtpEmail(
     )}</span>
   </p>`;
 
+  const vars = { code, tenantName: branding.tenantName, ttlMinutes: OTP_TTL_MINUTES };
+  // Copy del catálogo para (key, idioma). Nunca `undefined`: la key la registra
+  // el módulo en `TRANSACTIONAL_EMAIL_DEFS` y un idioma sin traducir cae al ES.
+  const def = resolveTransactionalDefault(OTP_TEMPLATE_KEY, locale)!;
+  const defaultSubject = interpolate(def.subject ?? '', vars);
+  const codeLabel = resolveFixedEmailCopy('label.otp_code', locale);
+  /** El código en grande es estructural; en texto plano solo si no venía ya. */
+  const withCode = (body: string): string =>
+    body.includes(code) ? body : `${body}\n\n${codeLabel}: ${code}`;
+
   if (override) {
-    const vars = { code, tenantName: branding.tenantName, ttlMinutes: 10 };
-    const applied = applyEmailOverride(override, vars, 'Tu código de acceso');
-    // El código en grande es estructural: se muestra siempre. En el texto plano
-    // solo lo añadimos si el admin no lo incluyó ya con {{code}}.
-    const textWithCode = applied.bodyText.includes(code)
-      ? applied.bodyText
-      : `${applied.bodyText}\n\nCódigo: ${code}`;
+    const applied = applyEmailOverride(override, vars, defaultSubject);
     const { html, text } = renderBrandedEmail(branding, {
-      // Monolingüe: este emisor todavía solo redacta español.
-      lang: 'es',
+      lang: toHubTemplateLang(locale),
       title: applied.subject,
       bodyHtml: `${textToHtmlParagraphs(applied.bodyText)}${codeBlockHtml}`,
-      bodyText: textWithCode,
+      bodyText: withCode(applied.bodyText),
     });
     return { subject: applied.subject, text, html };
+  }
+
+  if (toHubTemplateLang(locale) === 'en') {
+    // El inglés se renderiza DESDE el catálogo (misma mecánica que un
+    // override) para que composer y catálogo no puedan divergir. El español
+    // conserva su maqueta HTML propia más abajo, byte a byte.
+    const bodyText = interpolate(def.body, vars);
+    const { html, text } = renderBrandedEmail(branding, {
+      lang: toHubTemplateLang(locale),
+      title: resolveFixedEmailCopy('title.otp_code', locale),
+      bodyHtml: `${textToHtmlParagraphs(bodyText)}${codeBlockHtml}`,
+      bodyText: withCode(bodyText),
+    });
+    return { subject: defaultSubject, text, html };
   }
 
   const subject = 'Tu código de acceso';
@@ -88,9 +120,8 @@ Si no has solicitado este acceso, ignora este mensaje.`;
   <p style="margin:0 0 8px;font-size:14px;color:#5b6b7c;">Introdúcelo en la pantalla de verificación para continuar. Este código caduca en 10 minutos.</p>
   <p style="margin:0;font-size:14px;color:#5b6b7c;">Si no has solicitado este acceso, ignora este mensaje.</p>`;
   const { html, text } = renderBrandedEmail(branding, {
-    // Monolingüe: este emisor todavía solo redacta español.
-    lang: 'es',
-    title: 'Tu código de acceso',
+    lang: toHubTemplateLang(locale),
+    title: resolveFixedEmailCopy('title.otp_code', locale),
     bodyHtml,
     bodyText,
   });
@@ -172,6 +203,15 @@ function describeMatch(m: MemberSubscriptionMatch): string {
  * Email de decisión para el aprobador: muestra los datos del solicitante, un
  * banner rojo si consta como impago, y dos botones (APROBAR / RECHAZAR). Va
  * dentro de la plantilla de marca del tenant.
+ *
+ * SIGUE MONOLINGÜE a propósito, y es la única plantilla transaccional que lo
+ * está. Su cuerpo es en su mayor parte ESTRUCTURAL —estado de pertenencia al
+ * grupo, tabla de datos, bloques de suscripciones y compras, botones de
+ * decisión— y una de esas piezas, la etiqueta del estado de la suscripción,
+ * la redacta `classifySubscriptionStatus` en `modules/payment-connections`
+ * («Activa», «Pago atrasado (impago)», …). Traducir solo lo que se compone
+ * aquí dejaría un email mitad inglés mitad español para el aprobador, que es
+ * peor que el actual: prefiero declararlo a medias hacerlo.
  */
 export function buildDecisionEmail(
   params: DecisionEmailParams,
@@ -319,7 +359,8 @@ Rechazar: ${rejectUrl}`;
   </p>`;
 
   const { html, text } = renderBrandedEmail(branding, {
-    // Monolingüe: este emisor todavía solo redacta español.
+    // Monolingüe DECLARADO: ver el comentario de `buildDecisionEmail`. El
+    // `lang` sigue el copy real del email, que aquí es español.
     lang: 'es',
     title: subject,
     bodyHtml,
@@ -334,26 +375,39 @@ export function buildWelcomeEmail(
   name: string,
   signinUrl: string,
   branding: EmailBranding,
+  locale: string,
   override?: RawEmailOverride | null,
 ): EmailContent {
-  const greeting = name ? `Hola ${name},` : 'Hola,';
+  const greeting = emailGreeting(name, locale);
+  const vars = { greeting, name, tenantName: branding.tenantName, signinUrl };
+  const def = resolveTransactionalDefault(WELCOME_APPROVED_TEMPLATE_KEY, locale)!;
+  const defaultSubject = interpolate(def.subject ?? '', vars);
+  // Estructural: el override del tenant no puede quitar el botón, pero sí
+  // recibe su etiqueta en el idioma del destinatario.
+  const cta = { url: signinUrl, label: resolveFixedEmailCopy('cta.signin', locale) };
 
   if (override) {
-    const vars = { greeting, name, tenantName: branding.tenantName, signinUrl };
-    const applied = applyEmailOverride(
-      override,
-      vars,
-      `Tu inscripción en ${branding.tenantName} ha sido aprobada`,
-    );
+    const applied = applyEmailOverride(override, vars, defaultSubject);
     const { html, text } = renderBrandedEmail(branding, {
-      // Monolingüe: este emisor todavía solo redacta español.
-      lang: 'es',
+      lang: toHubTemplateLang(locale),
       title: applied.subject,
       bodyHtml: textToHtmlParagraphs(applied.bodyText),
       bodyText: applied.bodyText,
-      cta: { url: signinUrl, label: 'Entrar' },
+      cta,
     });
     return { subject: applied.subject, text, html };
+  }
+
+  if (toHubTemplateLang(locale) === 'en') {
+    const bodyText = interpolate(def.body, vars);
+    const { html, text } = renderBrandedEmail(branding, {
+      lang: toHubTemplateLang(locale),
+      title: resolveFixedEmailCopy('title.member_welcome', locale),
+      bodyHtml: textToHtmlParagraphs(bodyText),
+      bodyText,
+      cta,
+    });
+    return { subject: defaultSubject, text, html };
   }
 
   const subject = `Tu inscripción en ${branding.tenantName} ha sido aprobada`;
@@ -365,12 +419,11 @@ export function buildWelcomeEmail(
     branding.tenantName,
   )} ha sido aprobada y tu cuenta ya está activa.</p>`;
   const { html, text } = renderBrandedEmail(branding, {
-    // Monolingüe: este emisor todavía solo redacta español.
-    lang: 'es',
-    title: '¡Bienvenido!',
+    lang: toHubTemplateLang(locale),
+    title: resolveFixedEmailCopy('title.member_welcome', locale),
     bodyHtml,
     bodyText,
-    cta: { url: signinUrl, label: 'Entrar' },
+    cta,
   });
   return { subject, text, html };
 }
@@ -380,25 +433,34 @@ export function buildWelcomeEmail(
 export function buildRejectionEmail(
   name: string,
   branding: EmailBranding,
+  locale: string,
   override?: RawEmailOverride | null,
 ): EmailContent {
-  const greeting = name ? `Hola ${name},` : 'Hola,';
+  const greeting = emailGreeting(name, locale);
+  const vars = { greeting, name, tenantName: branding.tenantName };
+  const def = resolveTransactionalDefault(REJECTION_TEMPLATE_KEY, locale)!;
+  const defaultSubject = interpolate(def.subject ?? '', vars);
 
   if (override) {
-    const vars = { greeting, name, tenantName: branding.tenantName };
-    const applied = applyEmailOverride(
-      override,
-      vars,
-      `Sobre tu inscripción en ${branding.tenantName}`,
-    );
+    const applied = applyEmailOverride(override, vars, defaultSubject);
     const { html, text } = renderBrandedEmail(branding, {
-      // Monolingüe: este emisor todavía solo redacta español.
-      lang: 'es',
+      lang: toHubTemplateLang(locale),
       title: applied.subject,
       bodyHtml: textToHtmlParagraphs(applied.bodyText),
       bodyText: applied.bodyText,
     });
     return { subject: applied.subject, text, html };
+  }
+
+  if (toHubTemplateLang(locale) === 'en') {
+    const bodyText = interpolate(def.body, vars);
+    const { html, text } = renderBrandedEmail(branding, {
+      lang: toHubTemplateLang(locale),
+      title: resolveFixedEmailCopy('title.member_rejection', locale),
+      bodyHtml: textToHtmlParagraphs(bodyText),
+      bodyText,
+    });
+    return { subject: defaultSubject, text, html };
   }
 
   const subject = `Sobre tu inscripción en ${branding.tenantName}`;
@@ -413,9 +475,8 @@ Si crees que se trata de un error, puedes ponerte en contacto con el equipo.`;
   )}. Tras revisar tu solicitud, no hemos podido aprobar tu inscripción en este momento.</p>
   <p style="margin:0;font-size:14px;color:#5b6b7c;">Si crees que se trata de un error, puedes ponerte en contacto con el equipo.</p>`;
   const { html, text } = renderBrandedEmail(branding, {
-    // Monolingüe: este emisor todavía solo redacta español.
-    lang: 'es',
-    title: 'Sobre tu inscripción',
+    lang: toHubTemplateLang(locale),
+    title: resolveFixedEmailCopy('title.member_rejection', locale),
     bodyHtml,
     bodyText,
   });

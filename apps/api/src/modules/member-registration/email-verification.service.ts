@@ -15,6 +15,8 @@ import { buildOtpEmail } from './email-templates';
 import { resolveEmailBranding, type BrandingPrisma } from '../../common/branded-email';
 import {
   fetchEmailOverride,
+  HUB_DEFAULT_LOCALE,
+  resolveRecipientLocale,
   type TemplateOverridePrisma,
 } from '../notifications/email-template-catalog';
 
@@ -173,12 +175,14 @@ export class EmailVerificationService {
       tenantId,
       process.env['WEB_PUBLIC_URL']?.trim() ?? '',
     );
+    const locale = await this.resolveEmailLocale(tenantId, email);
     const override = await fetchEmailOverride(
       this.prisma as unknown as TemplateOverridePrisma,
       tenantId,
       'member_registration.otp_code',
+      locale,
     );
-    const { subject, text, html } = buildOtpEmail(code, branding, override);
+    const { subject, text, html } = buildOtpEmail(code, branding, locale, override);
     const sendResult = await this.smtp.send(
       resolved.config,
       { to: email, subject, text, html },
@@ -190,6 +194,30 @@ export class EmailVerificationService {
         { tenantId, source: resolved.source, error: sendResult.error },
         'member-otp: fallo al enviar el email con el código',
       );
+    }
+  }
+
+  /**
+   * Idioma en el que redactar el email del código.
+   *
+   * CAMINO DEGRADADO NOMBRADO: el OTP verifica un email que a menudo TODAVÍA no
+   * tiene fila en `user` (es el paso previo al alta), y ahí no hay ningún
+   * idioma que leer — se usa `HUB_DEFAULT_LOCALE`, igual que cualquier otro
+   * destinatario desconocido del producto. Quien sí la tiene (reintento de
+   * alta, miembro que vuelve) recibe su idioma. La consulta es best-effort: si
+   * revienta, el código se manda igual, que es lo que el usuario está
+   * esperando en pantalla.
+   */
+  private async resolveEmailLocale(tenantId: string, email: string): Promise<string> {
+    try {
+      const user = await this.prisma.user.findUnique({
+        where: { tenantId_email: { tenantId, email } },
+        select: { locale: true },
+      });
+      return resolveRecipientLocale(user?.locale);
+    } catch (err) {
+      this.logger.warn({ tenantId, err }, 'member-otp: no se pudo leer el idioma del destinatario');
+      return HUB_DEFAULT_LOCALE;
     }
   }
 

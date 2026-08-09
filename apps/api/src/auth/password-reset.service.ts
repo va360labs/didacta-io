@@ -379,12 +379,10 @@ export class PasswordResetService {
     );
     const { subject, html, text } = opts.asInvitation
       ? invitationEmailHtml(branding, {
-          // HALLAZGO (no tocado en este PR): el email de INVITACIÓN sigue
-          // siendo monolingüe — no tiene entrada en el catálogo, así que
-          // traducirlo es otro cambio. Ver el cuerpo del PR.
-          greeting: result.userName ? `Hola ${result.userName},` : 'Hola,',
+          greeting: emailGreeting(result.userName, result.locale),
           resetUrl: `${webBaseUrl.replace(/\/$/, '')}/reset-password?token=${encodeURIComponent(result.rawToken)}`,
           validezDias: Math.max(1, Math.round((opts.ttlMinutes ?? 60) / (60 * 24))),
+          locale: result.locale,
         })
       : this.buildResetEmail(
           result.rawToken,

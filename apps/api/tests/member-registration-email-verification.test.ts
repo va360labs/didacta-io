@@ -311,3 +311,104 @@ describe('EmailVerificationService.verifyCode', () => {
     expect(await service.verifyCode(TENANT_ID, EMAIL, '999999', CTX)).toBe(true);
   });
 });
+
+// ============================================================================
+// Idioma del email del código.
+//
+// El OTP verifica un email que a menudo TODAVÍA no tiene fila en `user` (es el
+// paso previo al alta), así que su idioma se resuelve best-effort contra esa
+// fila y, si no la hay, cae a `HUB_DEFAULT_LOCALE`. Un miembro que vuelve —o
+// que reintenta el alta— sí tiene fila y tiene que recibir SU idioma.
+// ============================================================================
+describe('EmailVerificationService · idioma del email del código', () => {
+  /** Service con modelo `user` consultable y SMTP que captura lo enviado. */
+  function makeServiceConUsuario(
+    user: { locale: string | null } | null,
+    opts?: { throws?: boolean },
+  ) {
+    const prisma = makeFakePrisma() as ReturnType<typeof makeFakePrisma> & {
+      user: unknown;
+      modThemingTenantTheme: unknown;
+      notificationTemplate: unknown;
+    };
+    prisma.user = {
+      async findUnique() {
+        if (opts?.throws) throw new Error('db down');
+        return user;
+      },
+    };
+    prisma.modThemingTenantTheme = {
+      async findUnique() {
+        return null;
+      },
+    };
+    prisma.notificationTemplate = {
+      async findUnique() {
+        return null;
+      },
+    };
+
+    const enviados: Array<{ subject: string; text: string; html: string }> = [];
+    const smtp = {
+      async send(_c: unknown, msg: { subject: string; text: string; html: string }) {
+        enviados.push(msg);
+        return { ok: true, messageId: 'fake' };
+      },
+    };
+    const service = new EmailVerificationService(
+      prisma as never,
+      fakeAuditLog as never,
+      smtp as never,
+      fakeSmtpResolver as never,
+      fakeLogger as never,
+    );
+    return { service, enviados };
+  }
+
+  it('destinatario con fila en-US: el código llega con el cuerpo en inglés', async () => {
+    const { service, enviados } = makeServiceConUsuario({ locale: 'en-US' });
+    await service.requestCode(TENANT_ID, EMAIL, CTX);
+
+    const mail = enviados[0]!;
+    expect(mail.subject).toBe('Your access code');
+    expect(mail.html).toContain('<html lang="en">');
+    expect(mail.text).toContain('Enter it on the verification screen to continue');
+    expect(mail.html).not.toContain('Introdúcelo en la pantalla');
+  });
+
+  it('destinatario con fila es-ES: byte a byte lo que ya recibía', async () => {
+    const { service, enviados } = makeServiceConUsuario({ locale: 'es-ES' });
+    await service.requestCode(TENANT_ID, EMAIL, CTX);
+
+    const mail = enviados[0]!;
+    expect(mail.subject).toBe('Tu código de acceso');
+    expect(mail.html).toContain('<html lang="es">');
+    expect(mail.html).toContain(
+      'Introdúcelo en la pantalla de verificación para continuar. Este código caduca en 10 minutos.',
+    );
+  });
+
+  it('CAMINO DEGRADADO: sin fila en `user` (el caso normal del alta) → idioma de referencia', async () => {
+    const { service, enviados } = makeServiceConUsuario(null);
+    await service.requestCode(TENANT_ID, EMAIL, CTX);
+    expect(enviados[0]!.subject).toBe('Tu código de acceso');
+    expect(enviados[0]!.html).toContain('<html lang="es">');
+  });
+
+  it('CAMINO DEGRADADO: fila con locale en blanco o sin catálogo → idioma de referencia', async () => {
+    for (const locale of [null, '', '   ', 'pt-BR']) {
+      const { service, enviados } = makeServiceConUsuario({ locale });
+      await service.requestCode(TENANT_ID, EMAIL, CTX);
+      expect(enviados[0]!.subject, String(locale)).toBe('Tu código de acceso');
+    }
+  });
+
+  it('CAMINO DEGRADADO: si la consulta del idioma revienta, el código se manda igual', async () => {
+    // El usuario está esperando el código en pantalla: perder el idioma es
+    // aceptable, perder el código no.
+    const { service, enviados } = makeServiceConUsuario({ locale: 'en-US' }, { throws: true });
+    await service.requestCode(TENANT_ID, EMAIL, CTX);
+    expect(enviados).toHaveLength(1);
+    expect(enviados[0]!.html).toContain('<html lang="es">');
+  });
+});
