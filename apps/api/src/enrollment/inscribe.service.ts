@@ -24,7 +24,13 @@ import {
 } from '../common/branded-email';
 import {
   applyEmailOverride,
+  emailGreeting,
   fetchEmailOverride,
+  interpolate,
+  resolveFixedEmailCopy,
+  resolveRecipientLocale,
+  resolveTransactionalDefault,
+  toHubTemplateLang,
   type RawEmailOverride,
   type TemplateOverridePrisma,
 } from '../modules/notifications/email-template-catalog';
@@ -51,6 +57,9 @@ const DEFAULT_ALUMNO_ROLE = 'alumno';
  * bastante después, y un enlace caducado genera soporte.
  */
 const SET_PASSWORD_TTL_MINUTES = 7 * 24 * 60;
+
+/** Key del catálogo de plantillas que corresponde a este email. */
+const WELCOME_TEMPLATE_KEY = 'enrollment.welcome';
 
 /**
  * Orquesta la inscripción programática de un comprador externo:
@@ -141,7 +150,19 @@ export class InscribeService {
     if (created) {
       // Best-effort: si falla el envío, el usuario igual queda creado y
       // matriculado; siempre puede entrar por "¿olvidaste tu contraseña?".
-      await this.sendWelcomeEmail(tenantId, dto.email, dto.name ?? null, webBaseUrl, ctx);
+      //
+      // El idioma es el que `findOrCreateUser` acaba de escribir en la fila:
+      // `dto.locale` si el alta lo trae, y si no el default de la columna, que
+      // ES `HUB_DEFAULT_LOCALE`. `resolveRecipientLocale` deja explícito ese
+      // degradado en vez de dejarlo implícito en el schema.
+      await this.sendWelcomeEmail(
+        tenantId,
+        dto.email,
+        dto.name ?? null,
+        resolveRecipientLocale(dto.locale),
+        webBaseUrl,
+        ctx,
+      );
     }
 
     return { userId, userCreated: created, enrollments, accessGroups };
@@ -397,6 +418,7 @@ export class InscribeService {
     tenantId: string,
     email: string,
     name: string | null,
+    locale: string,
     webBaseUrl: string,
     ctx: ClientContext,
   ): Promise<void> {
@@ -430,16 +452,20 @@ export class InscribeService {
         tenantId,
         webBaseUrl,
       );
+      // Override primero en el idioma del comprador y, si el tenant no lo
+      // personalizó ahí, en el de referencia (misma precedencia que el hub).
       const override = await fetchEmailOverride(
         this.prisma as unknown as TemplateOverridePrisma,
         tenantId,
-        'enrollment.welcome',
+        WELCOME_TEMPLATE_KEY,
+        locale,
       );
       const { subject, text, html } = this.buildWelcomeEmail(
         email,
         name,
         setPasswordUrl,
         branding,
+        locale,
         override,
       );
       const result = await this.smtp.send(
@@ -468,28 +494,50 @@ export class InscribeService {
     name: string | null,
     setPasswordUrl: string,
     branding: EmailBranding,
+    locale: string,
     override?: RawEmailOverride | null,
   ): { subject: string; text: string; html: string } {
-    const greeting = name ? `Hola ${name},` : 'Hola,';
+    const greeting = emailGreeting(name, locale);
+    const vars = {
+      greeting,
+      name: name ?? '',
+      email,
+      tenantName: branding.tenantName,
+      setPasswordUrl,
+    };
+    // Copy del catálogo para (key, idioma). Nunca `undefined`: la key existe en
+    // `TRANSACTIONAL_EMAIL_DEFS` y un idioma sin traducir cae al español.
+    const def = resolveTransactionalDefault(WELCOME_TEMPLATE_KEY, locale)!;
+    const defaultSubject = interpolate(def.subject ?? '', vars);
+    // Estructural: el override del tenant no puede quitar el botón, pero sí
+    // recibe su etiqueta en el idioma del destinatario.
+    const cta = { url: setPasswordUrl, label: resolveFixedEmailCopy('cta.set_password', locale) };
 
     if (override) {
       // Texto editado por el tenant; el botón «Define tu contraseña» con el
       // enlace mágico es estructural y se añade siempre.
-      const vars = {
-        greeting,
-        name: name ?? '',
-        email,
-        tenantName: branding.tenantName,
-        setPasswordUrl,
-      };
-      const applied = applyEmailOverride(override, vars, `Tu acceso a ${branding.tenantName}`);
+      const applied = applyEmailOverride(override, vars, defaultSubject);
       const { html, text } = renderBrandedEmail(branding, {
         title: applied.subject,
         bodyHtml: textToHtmlParagraphs(applied.bodyText),
         bodyText: applied.bodyText,
-        cta: { url: setPasswordUrl, label: 'Define tu contraseña' },
+        cta,
       });
       return { subject: applied.subject, text, html };
+    }
+
+    if (toHubTemplateLang(locale) === 'en') {
+      // El inglés se renderiza DESDE el catálogo (misma mecánica que un
+      // override) para que composer y catálogo no puedan divergir. El español
+      // conserva su maqueta HTML propia más abajo, byte a byte.
+      const bodyText = interpolate(def.body, vars);
+      const { html, text } = renderBrandedEmail(branding, {
+        title: defaultSubject,
+        bodyHtml: textToHtmlParagraphs(bodyText),
+        bodyText,
+        cta,
+      });
+      return { subject: defaultSubject, text, html };
     }
 
     const subject = `Tu acceso a ${branding.tenantName}`;
@@ -514,7 +562,7 @@ Tu usuario es ${email}. Si el enlace caduca, usa "¿Olvidaste tu contraseña?" e
       title: `Tu acceso a ${branding.tenantName}`,
       bodyHtml,
       bodyText,
-      cta: { url: setPasswordUrl, label: 'Define tu contraseña' },
+      cta,
     });
     return { subject, text, html };
   }

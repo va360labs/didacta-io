@@ -3,14 +3,24 @@ import {
   allKnownTemplateKeys,
   applyEmailOverride,
   buildEmailTemplateCatalog,
+  emailGreeting,
   fetchEmailOverride,
   interpolate,
+  resolveFixedEmailCopy,
   resolveHubDefault,
+  resolveRecipientLocale,
+  resolveSmtpSettingsPing,
+  resolveTransactionalDefault,
   toHubTemplateLang,
+  FIXED_EMAIL_COPY,
   HUB_DEFAULT_LOCALE,
   HUB_TEMPLATE_DEFAULTS,
   HUB_TEMPLATE_DEFAULTS_EN,
+  HUB_TEMPLATE_LANGS,
+  SMTP_SETTINGS_PING,
   TRANSACTIONAL_EMAIL_DEFS,
+  TRANSACTIONAL_TEMPLATE_DEFAULTS_EN,
+  type FixedEmailCopyKey,
   type TemplateOverridePrisma,
 } from '../src/modules/notifications/email-template-catalog';
 import {
@@ -148,21 +158,59 @@ describe('fetchEmailOverride', () => {
     });
   });
 
-  it('busca el locale de referencia si el caller no lo pasa, y el pedido si lo pasa', async () => {
-    const seen: Array<{ locale: string }> = [];
-    const prisma: TemplateOverridePrisma = {
-      notificationTemplate: {
-        findUnique: (args: unknown) => {
-          const where = (args as { where: { tenantId_key_channel_locale: { locale: string } } })
-            .where.tenantId_key_channel_locale;
-          seen.push({ locale: where.locale });
-          return Promise.resolve(null);
+  /** Prisma que registra cada locale consultado y devuelve fila solo para `hit`. */
+  function prismaSpy(hit?: string): { prisma: TemplateOverridePrisma; seen: string[] } {
+    const seen: string[] = [];
+    return {
+      seen,
+      prisma: {
+        notificationTemplate: {
+          findUnique: (args: unknown) => {
+            const where = (args as { where: { tenantId_key_channel_locale: { locale: string } } })
+              .where.tenantId_key_channel_locale;
+            seen.push(where.locale);
+            return Promise.resolve(
+              where.locale === hit ? { subject: `S:${hit}`, body: `B:${hit}` } : null,
+            );
+          },
         },
       },
     };
+  }
+
+  it('sin locale busca SOLO el de referencia: una consulta, comportamiento previo', async () => {
+    const { prisma, seen } = prismaSpy();
     await fetchEmailOverride(prisma, 't1', 'auth.password_reset');
+    expect(seen).toEqual([HUB_DEFAULT_LOCALE]);
+  });
+
+  it('con locale busca el pedido y CAE al de referencia, como el hub', async () => {
+    const { prisma, seen } = prismaSpy();
     await fetchEmailOverride(prisma, 't1', 'auth.password_reset', 'en-US');
-    expect(seen.map((s) => s.locale)).toEqual([HUB_DEFAULT_LOCALE, 'en-US']);
+    expect(seen).toEqual(['en-US', HUB_DEFAULT_LOCALE]);
+  });
+
+  it('si el tenant personalizó el idioma pedido, ese gana y no hay 2ª consulta', async () => {
+    const { prisma, seen } = prismaSpy('en-US');
+    await expect(fetchEmailOverride(prisma, 't1', 'auth.password_reset', 'en-US')).resolves.toEqual(
+      {
+        subject: 'S:en-US',
+        body: 'B:en-US',
+      },
+    );
+    expect(seen).toEqual(['en-US']);
+  });
+
+  it('el override en español gana al default inglés del producto (regla del hub)', async () => {
+    // Lo que el tenant escribió a mano pesa más que nuestra traducción: es la
+    // MISMA precedencia que `renderForTenant`, no una regla nueva.
+    const { prisma } = prismaSpy(HUB_DEFAULT_LOCALE);
+    await expect(fetchEmailOverride(prisma, 't1', 'auth.password_reset', 'en-US')).resolves.toEqual(
+      {
+        subject: `S:${HUB_DEFAULT_LOCALE}`,
+        body: `B:${HUB_DEFAULT_LOCALE}`,
+      },
+    );
   });
 
   it('devuelve null si no hay override', async () => {
@@ -205,6 +253,171 @@ describe('buildEmailTemplateCatalog', () => {
       for (const name of used) {
         expect(declared.has(name), `${def.key} usa {{${name}}} sin declararla`).toBe(true);
       }
+    }
+  });
+});
+
+// ============================================================================
+// Copy transaccional por idioma (MUST-FIX 38: composer y catálogo se tocan a
+// la vez). El inglés de un transaccional se RENDERIZA desde el catálogo, así
+// que estos asserts son los que impiden que composer y catálogo divergan.
+// ============================================================================
+describe('catálogo transaccional por idioma', () => {
+  /** Placeholders `{{var}}`, `{{#var}}` y `{{^var}}` que usa una plantilla. */
+  function placeholders(def: { subject: string | null; body: string }): string[] {
+    const text = `${def.subject ?? ''}\n${def.body}`;
+    return [...text.matchAll(/\{\{[#^/]?\s*(\w+)\s*\}\}/g)].map((m) => m[1] as string).sort();
+  }
+
+  const esByKey = new Map(
+    TRANSACTIONAL_EMAIL_DEFS.map((d) => [
+      d.key,
+      { subject: d.defaultSubject, body: d.defaultBody },
+    ]),
+  );
+
+  it('toda key traducida al inglés existe en el catálogo transaccional', () => {
+    for (const key of Object.keys(TRANSACTIONAL_TEMPLATE_DEFAULTS_EN)) {
+      expect(esByKey.has(key), `${key} traducido pero sin entrada transaccional`).toBe(true);
+    }
+  });
+
+  it('cada traducción conserva los placeholders y la presencia de asunto', () => {
+    for (const [key, en] of Object.entries(TRANSACTIONAL_TEMPLATE_DEFAULTS_EN)) {
+      const es = esByKey.get(key)!;
+      expect(placeholders(en), `${key} cambia los placeholders`).toEqual(placeholders(es));
+      expect(en.subject === null, `${key} difiere en si tiene asunto`).toBe(es.subject === null);
+      expect(en.body.length, `${key} tiene cuerpo vacío en inglés`).toBeGreaterThan(0);
+    }
+  });
+
+  it('el inglés declara solo variables que el catálogo documenta', () => {
+    for (const [key, en] of Object.entries(TRANSACTIONAL_TEMPLATE_DEFAULTS_EN)) {
+      const declared = new Set(
+        TRANSACTIONAL_EMAIL_DEFS.find((d) => d.key === key)!.variables.map((v) => v.name),
+      );
+      const used = [...`${en.subject ?? ''}\n${en.body}`.matchAll(/\{\{[#^]?\s*(\w+)\s*\}\}/g)].map(
+        (m) => m[1] as string,
+      );
+      for (const name of used) {
+        expect(declared.has(name), `${key} usa {{${name}}} sin declararla`).toBe(true);
+      }
+    }
+  });
+
+  it('resolveTransactionalDefault devuelve el idioma pedido', () => {
+    expect(resolveTransactionalDefault('auth.password_reset', 'en-US')).toEqual(
+      TRANSACTIONAL_TEMPLATE_DEFAULTS_EN['auth.password_reset'],
+    );
+    expect(resolveTransactionalDefault('auth.password_reset', 'es-ES')).toEqual(
+      esByKey.get('auth.password_reset'),
+    );
+  });
+
+  it('CAMINO DEGRADADO: idioma sin catálogo o key sin traducir → español', () => {
+    // `pt-BR` es alcanzable HOY (ALLOWED_LOCALES en me.controller.ts).
+    for (const locale of ['pt-BR', 'zz', '', '   ', null, undefined]) {
+      expect(resolveTransactionalDefault('auth.password_reset', locale)).toEqual(
+        esByKey.get('auth.password_reset'),
+      );
+    }
+    // Key con composer aún monolingüe: en inglés devuelve el español, nunca
+    // undefined ni un cuerpo vacío.
+    expect(TRANSACTIONAL_TEMPLATE_DEFAULTS_EN['subscriptions.admin_digest']).toBeUndefined();
+    expect(resolveTransactionalDefault('subscriptions.admin_digest', 'en-US')).toEqual(
+      esByKey.get('subscriptions.admin_digest'),
+    );
+  });
+
+  it('una key inexistente sigue devolviendo undefined en los dos idiomas', () => {
+    expect(resolveTransactionalDefault('no.existe', 'en-US')).toBeUndefined();
+    expect(resolveTransactionalDefault('no.existe')).toBeUndefined();
+  });
+});
+
+describe('copy fijo de emails (CTA, títulos, rellenos)', () => {
+  it('los dos idiomas cubren exactamente las mismas keys y ninguna está vacía', () => {
+    const esKeys = Object.keys(FIXED_EMAIL_COPY.es).sort();
+    expect(Object.keys(FIXED_EMAIL_COPY.en).sort()).toEqual(esKeys);
+    for (const lang of HUB_TEMPLATE_LANGS) {
+      for (const [key, value] of Object.entries(FIXED_EMAIL_COPY[lang])) {
+        expect(value.trim().length, `${lang}.${key} vacío`).toBeGreaterThan(0);
+      }
+    }
+  });
+
+  it('ninguna etiqueta inglesa se quedó en español (era el bug: cuerpo EN, botón ES)', () => {
+    for (const key of Object.keys(FIXED_EMAIL_COPY.es) as FixedEmailCopyKey[]) {
+      expect(FIXED_EMAIL_COPY.en[key], `${key} sin traducir`).not.toBe(FIXED_EMAIL_COPY.es[key]);
+    }
+  });
+
+  it('resolveFixedEmailCopy devuelve el idioma pedido y degrada al español', () => {
+    expect(resolveFixedEmailCopy('cta.password_reset', 'en-US')).toBe('Reset password');
+    expect(resolveFixedEmailCopy('cta.password_reset', 'es-ES')).toBe('Restablecer contraseña');
+    for (const locale of ['pt-BR', '', null, undefined]) {
+      expect(resolveFixedEmailCopy('cta.set_password', locale)).toBe('Define tu contraseña');
+    }
+  });
+});
+
+describe('emailGreeting', () => {
+  it('saluda en el idioma del destinatario, con y sin nombre', () => {
+    expect(emailGreeting('Ana', 'es-ES')).toBe('Hola Ana,');
+    expect(emailGreeting(null, 'es-ES')).toBe('Hola,');
+    expect(emailGreeting('Ana', 'en-US')).toBe('Hi Ana,');
+    expect(emailGreeting(null, 'en-US')).toBe('Hi,');
+  });
+
+  it('CAMINO DEGRADADO: idioma sin catálogo → español', () => {
+    for (const locale of ['pt-BR', '', '  ', null, undefined]) {
+      expect(emailGreeting('Ana', locale)).toBe('Hola Ana,');
+    }
+  });
+});
+
+describe('resolveRecipientLocale', () => {
+  it('devuelve el locale guardado tal cual, incluso si no está traducido', () => {
+    expect(resolveRecipientLocale('en-US')).toBe('en-US');
+    expect(resolveRecipientLocale('es-AR')).toBe('es-AR');
+    // pt-BR NO se aplana aquí: así un override per-tenant en pt-BR puede ganar.
+    expect(resolveRecipientLocale('pt-BR')).toBe('pt-BR');
+    expect(toHubTemplateLang(resolveRecipientLocale('pt-BR'))).toBe('es');
+  });
+
+  it('CAMINO DEGRADADO: locale vacío, en blanco, null o undefined → el de referencia', () => {
+    for (const stored of ['', '   ', null, undefined]) {
+      expect(resolveRecipientLocale(stored)).toBe(HUB_DEFAULT_LOCALE);
+    }
+  });
+});
+
+describe('ping de SMTP de /tenant-settings', () => {
+  it('tiene asunto y cuerpo en los dos idiomas, con los mismos placeholders', () => {
+    for (const lang of HUB_TEMPLATE_LANGS) {
+      const def = SMTP_SETTINGS_PING[lang];
+      expect(def.subject?.length, lang).toBeGreaterThan(0);
+      expect(def.body).toContain('{{tenantSlug}}');
+      expect(def.body).toContain('{{timestamp}}');
+    }
+    expect(SMTP_SETTINGS_PING.en.body).not.toBe(SMTP_SETTINGS_PING.es.body);
+  });
+
+  it('el español no cambia byte a byte y el inglés sale en inglés', () => {
+    const vars = { tenantSlug: 'demo', timestamp: '2026-08-09T10:00:00.000Z' };
+    const es = resolveSmtpSettingsPing('es-ES');
+    expect(es.subject).toBe('Prueba de SMTP — Didacta');
+    expect(interpolate(es.body, vars)).toBe(
+      'Si recibiste este correo, la configuración SMTP de tu tenant en Didacta funciona correctamente.\n\nTenant: demo\nFecha: 2026-08-09T10:00:00.000Z',
+    );
+    const en = resolveSmtpSettingsPing('en-US');
+    expect(en.subject).toBe('SMTP test — Didacta');
+    expect(interpolate(en.body, vars)).toContain('is working correctly');
+  });
+
+  it('CAMINO DEGRADADO: idioma sin catálogo → español', () => {
+    for (const locale of ['pt-BR', '', null, undefined]) {
+      expect(resolveSmtpSettingsPing(locale)).toEqual(SMTP_SETTINGS_PING.es);
     }
   });
 });

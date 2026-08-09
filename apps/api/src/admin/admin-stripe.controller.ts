@@ -198,9 +198,17 @@ export class AdminStripeController {
     } catch (err) {
       // El error real de Stripe (clave inválida, revocada, etc.) viaja en
       // la respuesta para que el admin pueda diagnosticar — no es secreto.
+      //
+      // Va DOS veces a propósito: incrustado en `message` (compat con clientes
+      // que solo leen esa frase) y como campo `detail`, que es el que puede
+      // enmarcar cada idioma. Sin el campo aparte, traducir el `code` en el
+      // front borraba el diagnóstico y dejaba al admin anglófono sin saber por
+      // qué Stripe rechazó la clave.
+      const detail = (err as Error).message;
       throw new BadRequestException({
-        message: `Stripe rechazó la clave: ${(err as Error).message}`,
+        message: `Stripe rechazó la clave: ${detail}`,
         code: 'ADMIN_STRIPE_KEY_REJECTED',
+        detail,
       });
     }
 

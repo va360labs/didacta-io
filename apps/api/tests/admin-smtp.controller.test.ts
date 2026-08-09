@@ -51,10 +51,24 @@ function makeFactoryStub(args: {
   };
 }
 
-function makePrismaStub() {
+/**
+ * `actorLocale`:
+ *   - string  → la fila del admin existe con ese `locale`.
+ *   - null    → NO hay fila (admin borrado entre el login y el click).
+ *   - 'throw' → la consulta revienta.
+ * Los dos últimos son los caminos degradados de `resolveActorLocale`.
+ */
+function makePrismaStub(actorLocale: string | null | 'throw' = 'es-ES') {
   return {
     tenant: {
       findUnique: vi.fn().mockResolvedValue({ slug: 'demo', name: 'Demo' }),
+    },
+    user: {
+      findUnique: vi.fn(() => {
+        if (actorLocale === 'throw') return Promise.reject(new Error('db down'));
+        if (actorLocale === null) return Promise.resolve(null);
+        return Promise.resolve({ locale: actorLocale, tenantId: TENANT_A });
+      }),
     },
   };
 }
@@ -187,6 +201,77 @@ describe('AdminSmtpController', () => {
       // verifiedAt sigue null tras fallo.
       const dto = await controller.getCurrent(ADMIN_USER as never);
       expect(dto.verifiedAt).toBeNull();
+    });
+
+    it('el diagnóstico del MTA viaja también como campo `detail`, no solo dentro del texto', async () => {
+      vi.spyOn(smtp, 'send').mockResolvedValue({ ok: false, error: 'auth failed' });
+      await controller.upsert(ADMIN_USER as never, VALID_BODY);
+
+      const err = await controller
+        .test(ADMIN_USER as never, { toEmail: 'qa@test.com' })
+        .catch((e: BadRequestException) => e);
+      const body = (err as BadRequestException).getResponse() as Record<string, unknown>;
+      expect(body['code']).toBe('ADMIN_SMTP_TEST_FAILED');
+      expect(body['detail']).toBe('auth failed');
+      // El `message` sigue igual: los clientes que solo leen esa frase no cambian.
+      expect(body['message']).toBe('SMTP falló: auth failed');
+    });
+
+    it('CAMINO DEGRADADO: MTA sin texto de error → sin `detail` (no hay nada que traducir)', async () => {
+      vi.spyOn(smtp, 'send').mockResolvedValue({ ok: false });
+      await controller.upsert(ADMIN_USER as never, VALID_BODY);
+
+      const err = await controller
+        .test(ADMIN_USER as never, { toEmail: 'qa@test.com' })
+        .catch((e: BadRequestException) => e);
+      const body = (err as BadRequestException).getResponse() as Record<string, unknown>;
+      expect(body).not.toHaveProperty('detail');
+      expect(body['message']).toBe('SMTP falló: sin detalle');
+    });
+  });
+
+  // ==========================================================================
+  // Idioma del email de prueba. Sale en el idioma del ADMIN que lo dispara:
+  // es él quien lo lee para comprobar que el SMTP funciona.
+  // ==========================================================================
+  describe('POST /test — idioma del email', () => {
+    /** Monta un controller con el `locale` indicado en la fila del admin. */
+    function withActorLocale(actorLocale: string | null | 'throw') {
+      const stub = makePrismaStub(actorLocale);
+      const ctrl = new AdminSmtpController(factory as never, stub as never, resolver);
+      return ctrl;
+    }
+
+    async function sentMessage(ctrl: AdminSmtpController) {
+      const send = vi.spyOn(smtp, 'send').mockResolvedValue({ ok: true, messageId: '<id>' });
+      await ctrl.upsert(ADMIN_USER as never, VALID_BODY);
+      await ctrl.test(ADMIN_USER as never, { toEmail: 'qa@test.com' });
+      return send.mock.calls[0]![1] as { subject: string; text: string; html: string };
+    }
+
+    it('es-ES sale byte a byte como siempre', async () => {
+      const msg = await sentMessage(withActorLocale('es-ES'));
+      expect(msg.subject).toBe('Prueba de SMTP — Demo');
+      expect(msg.text).toContain('Si recibiste este correo, la configuración SMTP de Demo');
+      expect(msg.text).toContain('Tenant: demo');
+      expect(msg.text).toContain('Prueba de SMTP');
+    });
+
+    it('en-US: asunto, título y cuerpo en inglés', async () => {
+      const msg = await sentMessage(withActorLocale('en-US'));
+      expect(msg.subject).toBe('SMTP test — Demo');
+      expect(msg.text).toContain('If you received this email, the SMTP configuration for Demo');
+      expect(msg.text).toContain('SMTP test');
+      expect(msg.text).not.toContain('Prueba de SMTP');
+      expect(msg.html).not.toContain('Prueba de SMTP');
+    });
+
+    it('CAMINO DEGRADADO: sin fila de admin, con locale en blanco o con la consulta rota → español', async () => {
+      for (const actorLocale of [null, '   ', 'throw'] as const) {
+        const msg = await sentMessage(withActorLocale(actorLocale));
+        expect(msg.subject, String(actorLocale)).toBe('Prueba de SMTP — Demo');
+        vi.restoreAllMocks();
+      }
     });
   });
 });

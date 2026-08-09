@@ -11,6 +11,12 @@ interface UserRow {
   /** null = invitado que aún no ha definido contraseña (columna nullable). */
   passwordHash: string | null;
   status: 'ACTIVE' | 'PENDING' | 'SUSPENDED' | 'DEACTIVATED';
+  /**
+   * Idioma del destinatario. Se deja OPCIONAL en la fila falsa a propósito:
+   * las filas que no lo declaran ejercitan el camino degradado (columna vacía
+   * o dato legacy) y comprueban que sigue saliendo el español.
+   */
+  locale?: string;
 }
 
 interface TokenRow {
@@ -57,6 +63,34 @@ function makeFakePrisma() {
       name: null,
       passwordHash: 'old-hash',
       status: 'SUSPENDED',
+    },
+    {
+      id: 'user-en',
+      tenantId: 'tenant-1',
+      email: 'john@example.com',
+      name: 'John',
+      passwordHash: 'old-hash',
+      status: 'ACTIVE',
+      locale: 'en-US',
+    },
+    {
+      id: 'user-pt',
+      tenantId: 'tenant-1',
+      email: 'joao@example.com',
+      name: 'Joao',
+      passwordHash: 'old-hash',
+      status: 'ACTIVE',
+      // pt-BR es guardable HOY (ALLOWED_LOCALES) pero no está traducido.
+      locale: 'pt-BR',
+    },
+    {
+      id: 'user-blank-locale',
+      tenantId: 'tenant-1',
+      email: 'blank@example.com',
+      name: 'Blanca',
+      passwordHash: 'old-hash',
+      status: 'ACTIVE',
+      locale: '   ',
     },
   ];
   const tokens: TokenRow[] = [];
@@ -209,6 +243,24 @@ describe('PasswordResetService.request', () => {
     expect(prisma.tokens).toHaveLength(1);
     // El token persistido es el hash, no el raw.
     expect(prisma.tokens[0].tokenHash).toBe(hash(result!.rawToken));
+  });
+
+  it('expone el idioma del DESTINATARIO para que el email salga en su lengua', async () => {
+    const { service } = makeService();
+    const en = await service.request({ tenantSlug: 'demo', email: 'john@example.com' });
+    expect(en?.locale).toBe('en-US');
+    // pt-BR se devuelve TAL CUAL (un override per-tenant en pt-BR podría ganar);
+    // quien lo aplana al español es el catálogo, no esta capa.
+    const pt = await service.request({ tenantSlug: 'demo', email: 'joao@example.com' });
+    expect(pt?.locale).toBe('pt-BR');
+  });
+
+  it('CAMINO DEGRADADO: fila sin locale o con locale en blanco → es-ES explícito', async () => {
+    const { service } = makeService();
+    const legacy = await service.request({ tenantSlug: 'demo', email: 'ana@example.com' });
+    expect(legacy?.locale).toBe('es-ES');
+    const blank = await service.request({ tenantSlug: 'demo', email: 'blank@example.com' });
+    expect(blank?.locale).toBe('es-ES');
   });
 
   it('devuelve null sin crear token si el user no existe (anti user enumeration)', async () => {
@@ -428,9 +480,14 @@ describe('PasswordResetService.buildResetEmail', () => {
     brandColor: '#1E5AA8',
   });
 
+  // El idioma del destinatario es OBLIGATORIO en el composer: sin él no se
+  // podría saber si un `undefined` es "español" o "se me olvidó pasarlo".
+  const ES = 'es-ES';
+  const EN = 'en-US';
+
   it('construye un email con greeting nominal cuando hay name', () => {
     const { service } = makeService();
-    const out = service.buildResetEmail('abc123', 'Ana', 'https://didacta.local', branding());
+    const out = service.buildResetEmail('abc123', 'Ana', 'https://didacta.local', branding(), ES);
     expect(out.subject).toBe('Restablecer tu contraseña en Didacta');
     expect(out.text).toContain('Hola Ana');
     expect(out.html).toContain('Hola Ana');
@@ -443,14 +500,14 @@ describe('PasswordResetService.buildResetEmail', () => {
 
   it('cae a un greeting genérico cuando no hay name', () => {
     const { service } = makeService();
-    const out = service.buildResetEmail('xyz', null, 'https://x.test', branding());
+    const out = service.buildResetEmail('xyz', null, 'https://x.test', branding(), ES);
     expect(out.text).toContain('Hola,');
     expect(out.html).toContain('Hola,');
   });
 
   it('encodeURIComponent del token raro', () => {
     const { service } = makeService();
-    const out = service.buildResetEmail('a/b+c=', null, 'https://x.test', branding());
+    const out = service.buildResetEmail('a/b+c=', null, 'https://x.test', branding(), ES);
     expect(out.text).toContain('token=a%2Fb%2Bc%3D');
   });
 
@@ -461,6 +518,7 @@ describe('PasswordResetService.buildResetEmail', () => {
       'Ana',
       'https://dev.didacta.io',
       branding('Academia Demo'),
+      ES,
     );
     expect(out.subject).toBe('Restablecer tu contraseña en Academia Demo');
     expect(out.text).toContain('— Academia Demo');
@@ -483,6 +541,7 @@ describe('PasswordResetService.buildResetEmail', () => {
       'Ana',
       'https://dev.didacta.io',
       branding('Academia Demo', 'https://cdn.didacta.io/logo.png'),
+      ES,
     );
     expect(out.html).toContain('<img src="https://cdn.didacta.io/logo.png"');
     expect(out.html).toContain('alt="Academia Demo"');
@@ -497,6 +556,7 @@ describe('PasswordResetService.buildResetEmail', () => {
       'Ana',
       'https://x.test',
       branding('Academia Demo', null),
+      ES,
     );
     expect(out.html).not.toContain('<img');
     expect(out.html).toContain('— Academia Demo');
@@ -509,6 +569,7 @@ describe('PasswordResetService.buildResetEmail', () => {
       null,
       'https://x.test',
       branding('Academia Demo', 'javascript:alert(1)'),
+      ES,
     );
     expect(out.html).not.toContain('<img');
     expect(out.html).not.toContain('javascript:');
@@ -521,7 +582,81 @@ describe('PasswordResetService.buildResetEmail', () => {
       null,
       'https://x.test',
       branding('Acme "Corp" <b>', 'https://cdn.test/l.png'),
+      ES,
     );
     expect(out.html).toContain('alt="Acme &quot;Corp&quot; &lt;b&gt;"');
+  });
+
+  // ── Idioma del destinatario ────────────────────────────────────────────────
+  // El bug: el cuerpo se traducía pero el botón seguía diciendo «Restablecer
+  // contraseña». El botón es estructural, así que se le pasaba por alto.
+
+  it('en-US: asunto, cuerpo, título Y BOTÓN en inglés, sin una palabra en español', () => {
+    const { service } = makeService();
+    const out = service.buildResetEmail('abc', 'Ana', 'https://x.test', branding('Academia'), EN);
+    expect(out.subject).toBe('Reset your password at Academia');
+    expect(out.text).toContain('Hi Ana,');
+    expect(out.text).toContain('We received a request to reset the password');
+    // El CTA sale en el texto plano como «label: url» y en el HTML como botón.
+    expect(out.text).toContain('Reset password: https://x.test/reset-password?token=abc');
+    expect(out.html).toContain('Reset password');
+    expect(out.html).toContain('Reset your password');
+    for (const spanish of [
+      'Restablecer contraseña',
+      'Restablecer tu contraseña',
+      'Hola',
+      'Recibimos una solicitud',
+    ]) {
+      expect(out.text, `«${spanish}» se coló en el email inglés`).not.toContain(spanish);
+      expect(out.html, `«${spanish}» se coló en el HTML inglés`).not.toContain(spanish);
+    }
+  });
+
+  it('en-US sin nombre: saludo genérico inglés', () => {
+    const { service } = makeService();
+    const out = service.buildResetEmail('abc', null, 'https://x.test', branding(), EN);
+    expect(out.text).toContain('Hi,');
+    expect(out.text).not.toContain('Hola,');
+  });
+
+  it('el enlace y el token sobreviven igual en inglés', () => {
+    const { service } = makeService();
+    const out = service.buildResetEmail('a/b+c=', null, 'https://x.test', branding(), EN);
+    expect(out.text).toContain('token=a%2Fb%2Bc%3D');
+    expect(out.html).toContain('token=a%2Fb%2Bc%3D');
+  });
+
+  it('CAMINO DEGRADADO: pt-BR (guardable pero sin traducir) y locale vacío → español', () => {
+    const { service } = makeService();
+    for (const locale of ['pt-BR', 'es-AR', '']) {
+      const out = service.buildResetEmail('abc', 'Ana', 'https://x.test', branding(), locale);
+      expect(out.subject, locale).toBe('Restablecer tu contraseña en Didacta');
+      expect(out.text, locale).toContain('Hola Ana,');
+      expect(out.text, locale).toContain('Restablecer contraseña: https://x.test/reset-password');
+    }
+  });
+
+  it('el override del tenant recibe el CTA en el idioma del destinatario', () => {
+    const { service } = makeService();
+    const override = { subject: 'Custom {{tenantName}}', body: '{{greeting}} custom body.' };
+    const en = service.buildResetEmail('abc', 'Ana', 'https://x.test', branding(), EN, override);
+    expect(en.subject).toBe('Custom Didacta');
+    expect(en.text).toContain('Hi Ana, custom body.');
+    expect(en.text).toContain('Reset password: https://x.test/reset-password?token=abc');
+
+    const es = service.buildResetEmail('abc', 'Ana', 'https://x.test', branding(), ES, override);
+    expect(es.text).toContain('Hola Ana, custom body.');
+    expect(es.text).toContain('Restablecer contraseña: https://x.test/reset-password?token=abc');
+  });
+
+  it('un override SIN asunto cae al asunto por defecto del idioma pedido', () => {
+    const { service } = makeService();
+    const override = { subject: null, body: 'Body only.' };
+    expect(
+      service.buildResetEmail('abc', null, 'https://x.test', branding(), EN, override).subject,
+    ).toBe('Reset your password at Didacta');
+    expect(
+      service.buildResetEmail('abc', null, 'https://x.test', branding(), ES, override).subject,
+    ).toBe('Restablecer tu contraseña en Didacta');
   });
 });

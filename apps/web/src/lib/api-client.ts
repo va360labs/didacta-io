@@ -33,17 +33,32 @@ export interface ApiError {
    *   - 'AMBIGUOUS_TENANT': signin con email en >1 tenant → mostrar selector.
    */
   code?: string;
+  /**
+   * Diagnóstico CRUDO de un sistema externo (el mensaje de Stripe al rechazar
+   * una clave, el del MTA al rechazar un envío) que el backend manda como campo
+   * APARTE del `message`.
+   *
+   * Existe porque `message` es una frase en español con el diagnóstico ya
+   * incrustado: al traducir esa frase por `code`, el dato se perdía. Con el
+   * campo separado, cada catálogo escribe su propia frase e interpola
+   * `{detail}` (ver `CODES_WITH_DETAIL` en `lib/i18n/api-error.ts`).
+   *
+   * No es copy: nunca se traduce, viene tal cual del proveedor.
+   */
+  detail?: string;
 }
 
 export class ApiHttpError extends Error implements ApiError {
   status: number;
   issues?: ApiError['issues'];
   code?: string;
+  detail?: string;
   constructor(payload: ApiError) {
     super(payload.message);
     this.status = payload.status;
     this.issues = payload.issues;
     this.code = payload.code;
+    this.detail = payload.detail;
     this.name = 'ApiHttpError';
   }
 }
@@ -177,6 +192,7 @@ export async function apiFetch<T>(
       issues: Array.isArray(payload.issues) ? (payload.issues as ApiError['issues']) : undefined,
       status: response.status,
       code: typeof payload.code === 'string' ? payload.code : undefined,
+      detail: typeof payload.detail === 'string' ? payload.detail : undefined,
     });
 
     // Sesión expirada: el access token (1h) caducó pero el refresh (30d) puede
