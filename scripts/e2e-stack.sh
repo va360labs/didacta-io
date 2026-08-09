@@ -223,11 +223,18 @@ stop_pid_file() {
 
 wait_healthy() {
   local i=0
-  log "Esperando a api :$PORT y web :3010 (máx ${HEALTH_TIMEOUT_SECONDS}s)…"
+  log "Esperando a api :$PORT, web y rewrite (máx ${HEALTH_TIMEOUT_SECONDS}s)…"
   while [ "$i" -lt "$HEALTH_TIMEOUT_SECONDS" ]; do
+    # Las TRES sondas, y la tercera no es redundante: la suite entera habla con
+    # la API a través del rewrite de Next (E2E_API_URL es la web), no por la
+    # API directa. Sin esta comprobación el arnés daba el stack por bueno con
+    # el rewrite todavía sin proxyar, y el primer uso real de ese camino caía
+    # dentro del arranque de Playwright.
+    # `curl -f` falla con >=400, así que un 502 del proxy NO cuenta como arriba.
     if curl -sf "http://localhost:${PORT}/healthz" >/dev/null 2>&1 \
-       && curl -sf -o /dev/null "http://localhost:3010/signin" 2>/dev/null; then
-      log "api + web arriba."
+       && curl -sf -o /dev/null "${E2E_BASE_URL}/signin" 2>/dev/null \
+       && curl -sf -o /dev/null "${E2E_API_URL}/api/v1/setup/status" 2>/dev/null; then
+      log "api + web + rewrite arriba."
       return 0
     fi
     sleep 1
@@ -235,7 +242,10 @@ wait_healthy() {
   done
   log "----- últimas líneas de api.log -----"; tail -n 30 "$API_LOG" 2>/dev/null || true
   log "----- últimas líneas de web.log -----"; tail -n 30 "$WEB_LOG" 2>/dev/null || true
-  die "api/web no respondieron en ${HEALTH_TIMEOUT_SECONDS}s."
+  log "sonda api directa:   $(curl -s -o /dev/null -w '%{http_code}' "http://localhost:${PORT}/healthz" || echo sin-respuesta)"
+  log "sonda web:           $(curl -s -o /dev/null -w '%{http_code}' "${E2E_BASE_URL}/signin" || echo sin-respuesta)"
+  log "sonda por rewrite:   $(curl -s -o /dev/null -w '%{http_code}' "${E2E_API_URL}/api/v1/setup/status" || echo sin-respuesta)"
+  die "api/web/rewrite no respondieron en ${HEALTH_TIMEOUT_SECONDS}s."
 }
 
 cmd_start() { start_api; start_web; wait_healthy; }
@@ -264,7 +274,10 @@ cmd_check() {
   printf 'postgres       %s\n' "$(docker inspect -f '{{.State.Status}}' "$E2E_PG_CONTAINER" 2>/dev/null || echo ausente)"
   printf 'redis          %s\n' "$(docker inspect -f '{{.State.Status}}' didacta-redis-test 2>/dev/null || echo ausente)"
   printf 'api :%s        %s\n' "$PORT" "$(curl -s -o /dev/null -w '%{http_code}' "http://localhost:${PORT}/healthz" || echo sin-respuesta)"
-  printf 'web :3010      %s\n' "$(curl -s -o /dev/null -w '%{http_code}' http://localhost:3010/signin || echo sin-respuesta)"
+  printf 'web :3010      %s\n' "$(curl -s -o /dev/null -w '%{http_code}' "${E2E_BASE_URL}/signin" || echo sin-respuesta)"
+  # El camino por el que habla la suite. Si esta línea no es 200 y la de arriba
+  # sí, el problema es el rewrite de Next, no la API.
+  printf 'api x rewrite  %s\n' "$(curl -s -o /dev/null -w '%{http_code}' "${E2E_API_URL}/api/v1/setup/status" || echo sin-respuesta)"
   printf 'tenants        %s\n' "$(psql_query 'SELECT string_agg(slug, ", " ORDER BY slug) FROM tenant;' 2>/dev/null || echo n/d)"
   printf 'espacios       %s\n' "$(psql_query 'SELECT count(*) FROM mod_community_space;' 2>/dev/null || echo n/d)"
 }
