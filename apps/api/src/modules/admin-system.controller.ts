@@ -50,6 +50,14 @@ interface OutboxCheck {
   pendingEvents: number;
   oldestPendingAgeSeconds: number;
   lagWarningThresholdSeconds: number;
+  /**
+   * Workers de BullMQ atados a la cola `didacta.outbox` en ESTE Redis,
+   * incluidos los de otros procesos. Con N réplicas desplegadas debe valer N:
+   * un número mayor significa que hay un proceso de más comiéndose eventos del
+   * bus, y los que se lleva no llegan a los bridges de nadie más. Ver
+   * `OutboxQueueService.countWorkers()`.
+   */
+  dispatchers: number;
   detail?: string | null;
 }
 
@@ -176,13 +184,17 @@ export class AdminSystemController {
 
   private async checkOutbox(): Promise<OutboxCheck> {
     try {
-      const sample = await this.outboxRecovery.sampleLag();
+      const [sample, dispatchers] = await Promise.all([
+        this.outboxRecovery.sampleLag(),
+        this.outboxQueue.countWorkers(),
+      ]);
       const lagging = sample.oldestAgeSeconds > OUTBOX_LAG_WARNING_SECONDS;
       return {
         status: lagging ? 'lagging' : 'ok',
         pendingEvents: sample.pending,
         oldestPendingAgeSeconds: sample.oldestAgeSeconds,
         lagWarningThresholdSeconds: OUTBOX_LAG_WARNING_SECONDS,
+        dispatchers,
       };
     } catch (e) {
       return {
@@ -190,6 +202,7 @@ export class AdminSystemController {
         pendingEvents: 0,
         oldestPendingAgeSeconds: 0,
         lagWarningThresholdSeconds: OUTBOX_LAG_WARNING_SECONDS,
+        dispatchers: 0,
         detail: e instanceof Error ? e.message : String(e),
       };
     }

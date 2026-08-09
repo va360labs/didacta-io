@@ -17,6 +17,7 @@ function makeController(opts: {
   pending?: number;
   oldestAgeSeconds?: number;
   outboxThrows?: boolean;
+  dispatchers?: number;
 }): AdminSystemController {
   const smtpRows: SmtpRow[] = [];
   for (let i = 0; i < (opts.smtpConfigured ?? 0); i++) {
@@ -40,6 +41,7 @@ function makeController(opts: {
   const outboxQueue = {
     isEnabled: () => opts.redisStatus !== 'disabled',
     ping: async () => opts.redisStatus === 'ok',
+    countWorkers: async () => opts.dispatchers ?? 1,
   };
 
   const outboxRecovery = {
@@ -152,5 +154,23 @@ describe('AdminSystemController.healthDetail', () => {
     const r = await c.healthDetail(ADMIN as never);
     expect(r.checks.outbox.status).toBe('error');
     expect(r.status).toBe('unhealthy');
+  });
+
+  // El número de despachadores atados a la cola del outbox se EXPONE, no se
+  // juzga: con N réplicas desplegadas el valor correcto es N. Quien sabe
+  // cuántos debería haber es el operador — y el arnés E2E, que exige 1.
+  it('expone cuántos procesos consumen la cola del outbox', async () => {
+    const c = makeController({ redisStatus: 'ok', storageKind: 'local', dispatchers: 2 });
+    const r = await c.healthDetail(ADMIN as never);
+    expect(r.checks.outbox.dispatchers).toBe(2);
+    // Dos consumidores no son un error del sistema: es el dato que permite
+    // detectarlo a quien sí sabe cuántos esperaba.
+    expect(r.checks.outbox.status).toBe('ok');
+  });
+
+  it('dispatchers=0 cuando el despachador no está atado', async () => {
+    const c = makeController({ redisStatus: 'disabled', storageKind: 'local', dispatchers: 0 });
+    const r = await c.healthDetail(ADMIN as never);
+    expect(r.checks.outbox.dispatchers).toBe(0);
   });
 });
