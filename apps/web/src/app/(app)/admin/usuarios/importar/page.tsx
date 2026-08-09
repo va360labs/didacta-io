@@ -281,7 +281,7 @@ export default function ImportarUsuariosPage() {
                   ? t('import.progressRunning', { done: estado.creados, total: estado.total })
                   : t('import.progressDone', { done: estado.creados, total: estado.total })}
                 {estado.fallidos.length > 0
-                  ? t('import.failedSuffix', { count: estado.fallidos.length })
+                  ? ` · ${t('import.failedSuffix', { count: estado.fallidos.length })}`
                   : ''}
               </p>
               {estado.enCurso ? (

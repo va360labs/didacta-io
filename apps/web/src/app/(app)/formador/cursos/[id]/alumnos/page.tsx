@@ -18,6 +18,7 @@ import { UserChip } from '@/components/user-chip';
 import { ApiHttpError } from '@/lib/api-client';
 import { apiErrorMessage } from '@/lib/i18n/api-error';
 import { formatDate } from '@/lib/i18n/format';
+import { labelOr } from '@/lib/i18n/labels';
 import {
   enrollmentsToCsv,
   learningApi,
@@ -261,7 +262,7 @@ export default function AlumnosPage() {
                       </td>
                       <td className="px-3 py-3">
                         <Badge variant={STATUS_VARIANT[r.status]}>
-                          {t(`enrollStatus.${r.status}`)}
+                          {labelOr(t, `enrollStatus.${r.status}`, r.status)}
                         </Badge>
                       </td>
                       <td className="px-3 py-3">

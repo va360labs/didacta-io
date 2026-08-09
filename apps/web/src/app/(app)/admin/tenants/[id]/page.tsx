@@ -18,7 +18,8 @@ import { ApiHttpError } from '@/lib/api-client';
 import { adminTenantsApi, type TenantListItem, type TenantStatus } from '@/lib/admin-tenants';
 import { authStorage } from '@/lib/auth-storage';
 import { apiErrorMessage } from '@/lib/i18n/api-error';
-import { formatDate } from '@/lib/i18n/format';
+import { formatDate, formatNumber } from '@/lib/i18n/format';
+import { labelOr } from '@/lib/i18n/labels';
 
 const VARIANT: Record<TenantStatus, 'success' | 'danger' | 'muted'> = {
   ACTIVE: 'success',
@@ -163,7 +164,7 @@ export default function TenantDetailPage() {
             <p className="mt-0.5 font-mono text-sm text-text-muted">/{tenant.slug}</p>
             <div className="mt-3 flex flex-wrap items-center gap-2">
               <Badge variant={VARIANT[tenant.status]} dot>
-                {t(`tenantStatus.${tenant.status}`)}
+                {labelOr(t, `tenantStatus.${tenant.status}`, tenant.status)}
               </Badge>
               <span className="text-xs tabular-nums text-text-subtle">
                 {t('tenantDetail.createdAt', {
@@ -178,13 +179,17 @@ export default function TenantDetailPage() {
           </div>
           <div className="flex shrink-0 gap-5 text-text">
             <div className="text-center">
-              <p className="font-display text-3xl font-bold tabular-nums">{tenant.userCount}</p>
+              <p className="font-display text-3xl font-bold tabular-nums">
+                {formatNumber(tenant.userCount)}
+              </p>
               <p className="label-uppercase text-text-muted">
                 {t('tenantDetail.usersCount', { count: tenant.userCount })}
               </p>
             </div>
             <div className="text-center">
-              <p className="font-display text-3xl font-bold tabular-nums">{tenant.courseCount}</p>
+              <p className="font-display text-3xl font-bold tabular-nums">
+                {formatNumber(tenant.courseCount)}
+              </p>
               <p className="label-uppercase text-text-muted">
                 {t('tenantDetail.coursesCount', { count: tenant.courseCount })}
               </p>

@@ -18,6 +18,7 @@ import { Select } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { authStorage } from '@/lib/auth-storage';
 import { apiErrorMessage } from '@/lib/i18n/api-error';
+import { labelOr } from '@/lib/i18n/labels';
 import { fundaeApi, type ActionStatus, type FundaeAction, type Modalidad } from '@/modules/fundae';
 
 const STATUS_VARIANT: Record<ActionStatus, 'success' | 'warning' | 'muted' | 'danger'> = {
@@ -185,9 +186,11 @@ export default function FundaePage() {
                       {a.codigoAccion}
                     </code>
                     <Badge variant={STATUS_VARIANT[a.status]} dot>
-                      {t(`actionStatus.${a.status}`)}
+                      {labelOr(t, `actionStatus.${a.status}`, a.status)}
                     </Badge>
-                    <Badge variant="muted">{t(`modalidad.${a.modalidad}`)}</Badge>
+                    <Badge variant="muted">
+                      {labelOr(t, `modalidad.${a.modalidad}`, a.modalidad)}
+                    </Badge>
                     {a.courseId ? (
                       participantCounts[a.id] === 'error' ? (
                         <Badge variant="warning" title={t('actions.participantsErrorTitle')}>
@@ -211,7 +214,7 @@ export default function FundaePage() {
                     {t('actions.meta', {
                       inicio: a.fechaInicio,
                       fin: a.fechaFin,
-                      horas: String(a.horasFormacion),
+                      horas: a.horasFormacion,
                     })}
                     {a.lugar ? ` · ${a.lugar}` : ''}
                   </p>

@@ -22,12 +22,23 @@ import {
 } from '@/lib/admin-tenants';
 import { authStorage } from '@/lib/auth-storage';
 import { apiErrorMessage } from '@/lib/i18n/api-error';
+import { formatNumber } from '@/lib/i18n/format';
+import { labelOr } from '@/lib/i18n/labels';
 
 const VARIANT: Record<TenantStatus, 'success' | 'danger' | 'muted'> = {
   ACTIVE: 'success',
   SUSPENDED: 'danger',
   ARCHIVED: 'muted',
 };
+
+/**
+ * `capacity.limit` es `number | null` (null = sin tope, licencia EE). Las dos
+ * tarjetas que lo pintan solo se renderizan en el camino community, donde el
+ * backend siempre manda un número — pero el tipo admite null y antes se pasaba
+ * por `String()`, así que el caso degradado pintaba literalmente `null` en
+ * pantalla. Constante nombrada, no un default implícito.
+ */
+const UNLIMITED_LIMIT_LABEL = '∞';
 
 export default function TenantsPage() {
   const t = useTranslations('adminMarca');
@@ -122,7 +133,9 @@ export default function TenantsPage() {
                       <CardTitle className="text-lg leading-tight">{tn.name}</CardTitle>
                       <CardDescription className="font-mono text-xs">/{tn.slug}</CardDescription>
                     </div>
-                    <Badge variant={VARIANT[tn.status]}>{t(`tenantStatus.${tn.status}`)}</Badge>
+                    <Badge variant={VARIANT[tn.status]}>
+                      {labelOr(t, `tenantStatus.${tn.status}`, tn.status)}
+                    </Badge>
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-3">
@@ -143,11 +156,13 @@ export default function TenantsPage() {
                   <div className="flex gap-5 text-xs text-text-muted tabular-nums">
                     <span className="inline-flex items-center gap-1.5">
                       <Icon name="users" size={14} />
-                      {tn.userCount} {t('tenants.usersCount', { count: tn.userCount })}
+                      {formatNumber(tn.userCount)}{' '}
+                      {t('tenants.usersCount', { count: tn.userCount })}
                     </span>
                     <span className="inline-flex items-center gap-1.5">
                       <Icon name="book" size={14} />
-                      {tn.courseCount} {t('tenants.coursesCount', { count: tn.courseCount })}
+                      {formatNumber(tn.courseCount)}{' '}
+                      {t('tenants.coursesCount', { count: tn.courseCount })}
                     </span>
                   </div>
                 </CardContent>
@@ -173,7 +188,7 @@ function CapacityBanner({ capacity }: { capacity: TenantCapacityInfo }) {
           <Icon name="shield" size={18} aria-hidden="true" />
           <div className="flex-1">
             {t.rich('tenants.capacityEe', {
-              count: String(capacity.tenantCount),
+              count: capacity.tenantCount,
               strong: (chunks) => <strong>{chunks}</strong>,
               nums: (chunks) => <span className="tabular-nums">{chunks}</span>,
             })}
@@ -187,8 +202,8 @@ function CapacityBanner({ capacity }: { capacity: TenantCapacityInfo }) {
       <Card>
         <CardContent className="p-4 text-sm text-text-muted">
           {t.rich('tenants.capacityCe', {
-            count: String(capacity.tenantCount),
-            limit: String(capacity.limit),
+            count: capacity.tenantCount,
+            limit: capacity.limit ?? UNLIMITED_LIMIT_LABEL,
             strong: (chunks) => <strong>{chunks}</strong>,
             nums: (chunks) => <strong className="tabular-nums">{chunks}</strong>,
           })}
@@ -217,8 +232,8 @@ export function MultiTenantUpsellCard({ capacity }: { capacity: TenantCapacityIn
         </CardTitle>
         <CardDescription>
           {t.rich('tenants.upsellDescription', {
-            count: String(capacity.tenantCount),
-            limit: String(capacity.limit),
+            count: capacity.tenantCount,
+            limit: capacity.limit ?? UNLIMITED_LIMIT_LABEL,
             strong: (chunks) => <strong>{chunks}</strong>,
           })}
         </CardDescription>

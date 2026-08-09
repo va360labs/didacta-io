@@ -16,6 +16,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { apiErrorMessage } from '@/lib/i18n/api-error';
 import { formatDate } from '@/lib/i18n/format';
+import { labelOr } from '@/lib/i18n/labels';
 import {
   fundaeGroupParticipantsApi,
   fundaeGroupsApi,
@@ -216,8 +217,12 @@ export default function FundaeGruposPage() {
                     <span className="font-mono text-sm font-semibold text-text">
                       {t('groups.groupNumber', { numero: String(g.numeroGrupo) })}
                     </span>
-                    <Badge variant={STATUS_VARIANT[g.status]}>{t(`groupStatus.${g.status}`)}</Badge>
-                    <Badge variant="muted">{t(`modalidad.${g.modalidad}`)}</Badge>
+                    <Badge variant={STATUS_VARIANT[g.status]}>
+                      {labelOr(t, `groupStatus.${g.status}`, g.status)}
+                    </Badge>
+                    <Badge variant="muted">
+                      {labelOr(t, `modalidad.${g.modalidad}`, g.modalidad)}
+                    </Badge>
                   </div>
                   <p className="text-xs text-text-muted">
                     {formatDate(g.fechaInicioPrevista)} → {formatDate(g.fechaFinPrevista)}
@@ -466,8 +471,8 @@ function GroupDetail({
       const res = await fundaeGroupParticipantsApi.bulkEnroll(group.id);
       alert(
         t('groups.bulkEnrollResult', {
-          enrolled: String(res.enrolled),
-          skipped: String(res.skipped),
+          enrolled: res.enrolled,
+          skipped: res.skipped,
         }),
       );
       await onParticipantsChanged();
@@ -557,11 +562,13 @@ function GroupDetail({
         <div>
           <CardTitle className="flex items-center gap-2 text-base">
             {t('groups.groupNumber', { numero: String(group.numeroGrupo) })}
-            <Badge variant={STATUS_VARIANT[group.status]}>{t(`groupStatus.${group.status}`)}</Badge>
+            <Badge variant={STATUS_VARIANT[group.status]}>
+              {labelOr(t, `groupStatus.${group.status}`, group.status)}
+            </Badge>
           </CardTitle>
           <CardDescription>
-            {t(`modalidad.${group.modalidad}`)} · {formatDate(group.fechaInicioPrevista)} →{' '}
-            {formatDate(group.fechaFinPrevista)}
+            {labelOr(t, `modalidad.${group.modalidad}`, group.modalidad)} ·{' '}
+            {formatDate(group.fechaInicioPrevista)} → {formatDate(group.fechaFinPrevista)}
           </CardDescription>
         </div>
         <Button type="button" size="sm" variant="ghost" onClick={onClose}>
@@ -672,17 +679,17 @@ function GroupDetail({
               </h5>
               <Badge variant="info">
                 {t('groups.thresholdBadge', {
-                  pct: String(completionResult.umbralAplicadoPct),
+                  pct: completionResult.umbralAplicadoPct,
                 })}
               </Badge>
               <Badge variant="success">
-                {t('groups.aptoCount', { count: String(completionResult.aptos) })}
+                {t('groups.aptoCount', { count: completionResult.aptos })}
               </Badge>
               <Badge variant="warning">
-                {t('groups.noAptoCount', { count: String(completionResult.noAptos) })}
+                {t('groups.noAptoCount', { count: completionResult.noAptos })}
               </Badge>
               <Badge variant="muted">
-                {t('groups.enCursoCount', { count: String(completionResult.enCurso) })}
+                {t('groups.enCursoCount', { count: completionResult.enCurso })}
               </Badge>
               <button
                 type="button"
@@ -707,7 +714,7 @@ function GroupDetail({
                     <td className="py-1 pr-2">{p.userName ?? p.userEmail ?? p.userId}</td>
                     <td className="py-1 text-right tabular-nums">{p.progressPercent}%</td>
                     <td className="py-1 text-right tabular-nums">
-                      {t('groups.hoursShort', { hours: String(p.horasAsistidas) })}
+                      {t('groups.hoursShort', { hours: p.horasAsistidas })}
                     </td>
                     <td className="py-1 text-right">
                       <Badge
@@ -772,7 +779,7 @@ function GroupDetail({
                 {costs.map((c) => (
                   <tr key={c.id} className="border-t border-border-soft">
                     <td className="py-1 pr-2">
-                      <Badge variant="muted">{t(`costTipo.${c.tipo}`)}</Badge>
+                      <Badge variant="muted">{labelOr(t, `costTipo.${c.tipo}`, c.tipo)}</Badge>
                     </td>
                     <td className="py-1 pr-2">{c.concepto}</td>
                     <td className="py-1 text-right tabular-nums font-semibold">
@@ -800,7 +807,7 @@ function GroupDetail({
           <div className="flex items-center justify-between">
             <h4 className="text-sm font-semibold">
               {t('groups.participantsTitle', {
-                count: String(participants.filter((p) => p.status === 'ENROLLED').length),
+                count: participants.filter((p) => p.status === 'ENROLLED').length,
               })}
             </h4>
             {isEditable ? (
@@ -862,7 +869,7 @@ function GroupDetail({
                     <td className="py-1 pr-2 font-mono">{p.nifAlumno ?? '—'}</td>
                     <td className="py-1 pr-2">
                       <Badge variant={p.status === 'ENROLLED' ? 'success' : 'muted'}>
-                        {t(`enrollmentStatus.${p.status}`)}
+                        {labelOr(t, `enrollmentStatus.${p.status}`, p.status)}
                       </Badge>
                     </td>
                     {isEditable && p.status === 'ENROLLED' ? (

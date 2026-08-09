@@ -42,6 +42,7 @@ import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
 import { ApiHttpError } from '@/lib/api-client';
 import { apiErrorMessage } from '@/lib/i18n/api-error';
+import { labelOr } from '@/lib/i18n/labels';
 import { certificateTemplatesApi, type CertificateTemplate } from '@/modules/certificates';
 import { sanitizeRichHtml } from '@/lib/sanitize-html';
 import { storageApi } from '@/lib/storage';
@@ -433,7 +434,7 @@ function LessonRow({
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-medium text-text">{lesson.title}</p>
           <p className="text-xs text-text-subtle">
-            {t(`lessonType.${lesson.type}`)}
+            {labelOr(t, `lessonType.${lesson.type}`, lesson.type)}
             {lesson.durationMinutes
               ? ` · ${t('minutesShort', { minutes: lesson.durationMinutes })}`
               : ''}

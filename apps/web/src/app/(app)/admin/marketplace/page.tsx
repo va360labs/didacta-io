@@ -103,7 +103,7 @@ function UploadCard() {
   const handleFiles = async (file: File) => {
     setFeedback(null);
     if (file.size > MAX_BYTES) {
-      setFeedback({ kind: 'error', message: t('packageTooBig', { bytes: String(file.size) }) });
+      setFeedback({ kind: 'error', message: t('packageTooBig', { bytes: file.size }) });
       return;
     }
     setBusy(true);

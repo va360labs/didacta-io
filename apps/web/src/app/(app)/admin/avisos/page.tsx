@@ -252,16 +252,16 @@ function BroadcastRow({ broadcast }: { broadcast: Broadcast }) {
 
       <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-text-muted">
         <span className="tabular-nums">
-          {t('sentProgress', { sent: String(broadcast.sent), total: String(broadcast.total) })}
+          {t('sentProgress', { sent: broadcast.sent, total: broadcast.total })}
         </span>
         {broadcast.skipped > 0 ? (
           <span className="tabular-nums text-text-subtle">
-            {t('skipped', { count: String(broadcast.skipped) })}
+            {t('skipped', { count: broadcast.skipped })}
           </span>
         ) : null}
         {broadcast.failed > 0 ? (
           <span className="tabular-nums text-danger-700">
-            {t('failed', { count: String(broadcast.failed) })}
+            {t('failed', { count: broadcast.failed })}
           </span>
         ) : null}
         <span className="ml-auto text-text-subtle">{createdAt}</span>

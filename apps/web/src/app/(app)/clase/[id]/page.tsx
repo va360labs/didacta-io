@@ -27,6 +27,7 @@ import { ApiHttpError } from '@/lib/api-client';
 import { authStorage } from '@/lib/auth-storage';
 import { apiErrorMessage } from '@/lib/i18n/api-error';
 import { formatDateTime } from '@/lib/i18n/format';
+import { labelOr } from '@/lib/i18n/labels';
 import {
   AddToCalendarDialog,
   zoomLiveApi,
@@ -216,7 +217,7 @@ export default function ClasePage() {
             <div className="min-w-0 space-y-2">
               <div className="flex flex-wrap items-center gap-2">
                 <Badge variant={STATUS_VARIANT[session.status]} dot>
-                  {t(`sessionStatus.${session.status}`)}
+                  {labelOr(t, `sessionStatus.${session.status}`, session.status)}
                 </Badge>
                 {session.isRegistered ? (
                   <Badge variant="success">
@@ -533,7 +534,7 @@ function AttendancePanel({
                       el formador tiene que poder distinguirlo de un vistazo
                       antes de dar una asistencia por buena. Las variantes
                       viven en `attendanceConfidence.*` del catálogo. */}
-                  <span title={t(`attendanceConfidence.${r.confidence}`)}>
+                  <span title={labelOr(t, `attendanceConfidence.${r.confidence}`, r.confidence)}>
                     <Badge variant={r.attended ? 'success' : 'muted'} dot>
                       {r.attended ? t('attended') : t('notAttended')}
                     </Badge>

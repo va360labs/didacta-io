@@ -23,6 +23,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { ApiHttpError } from '@/lib/api-client';
 import { apiErrorMessage } from '@/lib/i18n/api-error';
 import { formatDate } from '@/lib/i18n/format';
+import { labelOr } from '@/lib/i18n/labels';
 import { assessmentsApi } from '@/modules/assessments';
 import { coursesApi, type CourseLesson, type LessonType } from '@/lib/courses';
 import { scormApi, type ScormPackageMetadata } from '@/lib/scorm';
@@ -142,7 +143,7 @@ export function LessonContentEditor({
           <Icon name={TYPE_ICON[lesson.type]} size={14} />
         </span>
         <p className="label-uppercase text-text-muted">
-          {t('editingType', { type: t(`lessonType.${lesson.type}`) })}
+          {t('editingType', { type: labelOr(t, `lessonType.${lesson.type}`, lesson.type) })}
         </p>
       </div>
 
@@ -339,7 +340,7 @@ export function LessonContentEditor({
 
       <div className="flex items-start gap-2 rounded-md bg-surface-2 px-3 py-2 text-xs text-text-muted">
         <Icon name="sparkles" size={14} className="mt-0.5 shrink-0 text-brand-500" />
-        <p>{t(`lessonHelp.${lesson.type}`)}</p>
+        <p>{labelOr(t, `lessonHelp.${lesson.type}`, lesson.type)}</p>
       </div>
 
       {error ? (

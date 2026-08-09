@@ -17,6 +17,7 @@ import { Select } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { ApiHttpError } from '@/lib/api-client';
 import { apiErrorMessage } from '@/lib/i18n/api-error';
+import { labelOr } from '@/lib/i18n/labels';
 import {
   assessmentsApi,
   type FormadorQuestion,
@@ -122,7 +123,7 @@ export function QuizEditor({
             <div className="min-w-0 flex-1">
               <div className="mb-2 flex flex-wrap items-center gap-2">
                 <Badge variant={STATUS_VARIANT[initial.status]} dot>
-                  {t(`quizStatus.${initial.status}`)}
+                  {labelOr(t, `quizStatus.${initial.status}`, initial.status)}
                 </Badge>
                 <span className="rounded-full bg-white/15 px-2.5 py-0.5 text-xs font-semibold text-white">
                   {t('quizEditor.quizBadge')}
@@ -385,7 +386,7 @@ function QuestionRow({
           <div className="mb-1 flex flex-wrap items-center gap-2">
             <Badge variant="info" className="font-mono text-[10px] tracking-wider">
               <Icon name={QTYPE_ICON[question.type]} size={11} />
-              {t(`qtype.${question.type}`)}
+              {labelOr(t, `qtype.${question.type}`, question.type)}
             </Badge>
             <span className="text-xs tabular-nums text-text-muted">
               {t('quizEditor.pointsShort', { points: question.points })}

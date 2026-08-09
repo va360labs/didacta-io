@@ -275,8 +275,8 @@ function EndpointsPanel({
           <CardTitle>{t('webhooks.endpointsTitle')}</CardTitle>
           <CardDescription>
             {t('webhooks.endpointsUsed', {
-              used: String(endpoints.length),
-              max: String(info.limits.maxEndpoints),
+              used: endpoints.length,
+              max: info.limits.maxEndpoints,
             })}
           </CardDescription>
         </div>
@@ -307,7 +307,7 @@ function EndpointsPanel({
 
         {reachedLimit ? (
           <p className="text-sm text-warning-700">
-            {t('webhooks.limitReached', { max: String(info.enterprise.maxEndpoints) })}
+            {t('webhooks.limitReached', { max: info.enterprise.maxEndpoints })}
           </p>
         ) : null}
       </CardContent>
@@ -574,7 +574,7 @@ function DeadLetterPanel() {
                   </Badge>
                   <span className="text-xs text-text-muted">
                     {t('webhooks.attemptsLine', {
-                      attempts: String(it.attempts),
+                      attempts: it.attempts,
                       date: formatDateTime(it.createdAt),
                     })}
                   </span>

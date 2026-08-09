@@ -26,6 +26,7 @@ import {
   type UserCandidate,
 } from '@/lib/access-groups';
 import { apiErrorMessage } from '@/lib/i18n/api-error';
+import { labelOr } from '@/lib/i18n/labels';
 import { paymentTiersApi } from '@/lib/payment-connections';
 import { authStorage } from '@/lib/auth-storage';
 
@@ -343,7 +344,9 @@ export default function GruposAccesoPage() {
                 <div className="flex-1 min-w-[12rem]">
                   <div className="flex items-center gap-2">
                     <span className="font-medium text-text">{g.name}</span>
-                    <Badge variant={KIND_VARIANT[g.kind]}>{t(`groupKind.${g.kind}`)}</Badge>
+                    <Badge variant={KIND_VARIANT[g.kind]}>
+                      {labelOr(t, `groupKind.${g.kind}`, g.kind)}
+                    </Badge>
                     {g.isDefaultForApproval && (
                       <Badge variant="success">{t('groups.defaultBadge')}</Badge>
                     )}
@@ -358,9 +361,11 @@ export default function GruposAccesoPage() {
                   </div>
                   <p className="text-sm text-text-muted">
                     {t('groups.memberCount', { count: g.memberCount })}
-                    {g.courseCount !== null
-                      ? t('groups.courseCountSuffix', { count: g.courseCount })
-                      : t('groups.allCoursesSuffix')}
+                    {` · ${
+                      g.courseCount !== null
+                        ? t('groups.courseCountSuffix', { count: g.courseCount })
+                        : t('groups.allCoursesSuffix')
+                    }`}
                   </p>
                 </div>
                 <div className="flex flex-wrap gap-2">
@@ -397,7 +402,7 @@ export default function GruposAccesoPage() {
           <CardHeader>
             <CardTitle>{t('groups.manageTitle', { name: detail.name })}</CardTitle>
             <CardDescription>
-              {t(`groupKind.${detail.kind}`)} ·{' '}
+              {labelOr(t, `groupKind.${detail.kind}`, detail.kind)} ·{' '}
               {t('groups.memberCount', { count: detail.memberCount })}
             </CardDescription>
           </CardHeader>

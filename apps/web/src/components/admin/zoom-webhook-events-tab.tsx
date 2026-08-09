@@ -15,6 +15,7 @@ import { Select } from '@/components/ui/select';
 import { ApiHttpError } from '@/lib/api-client';
 import { apiErrorMessage } from '@/lib/i18n/api-error';
 import { formatDateTime } from '@/lib/i18n/format';
+import { labelOr } from '@/lib/i18n/labels';
 import {
   zoomLiveApi,
   type PaginatedWebhookEvents,
@@ -144,10 +145,10 @@ export function ZoomWebhookEventsTab() {
         <Card>
           <CardHeader>
             <CardTitle className="text-base">
-              {t('zoom.totalEvents', { total: String(data.total) })}
+              {t('zoom.totalEvents', { total: data.total })}
             </CardTitle>
             <CardDescription>
-              {t('zoom.pageOf', { page: String(data.page), totalPages: String(totalPages) })}
+              {t('zoom.pageOf', { page: data.page, totalPages: totalPages })}
             </CardDescription>
           </CardHeader>
           <div className="overflow-x-auto">
@@ -178,7 +179,7 @@ export function ZoomWebhookEventsTab() {
               {t('zoom.previous')}
             </Button>
             <span className="text-xs text-text-muted">
-              {t('zoom.shownOf', { shown: String(data.items.length), total: String(data.total) })}
+              {t('zoom.shownOf', { shown: data.items.length, total: data.total })}
             </span>
             <Button
               variant="secondary"
@@ -203,7 +204,9 @@ function EventRow({ event }: { event: ZoomWebhookEventItem }) {
       <td className="px-3 py-3 font-mono text-xs text-text">{event.eventType}</td>
       <td className="px-3 py-3 font-mono text-xs text-text-muted">{event.meetingId ?? '—'}</td>
       <td className="px-3 py-3">
-        <Badge variant={RESULT_VARIANT[event.result]}>{t(`zoomResult.${event.result}`)}</Badge>
+        <Badge variant={RESULT_VARIANT[event.result]}>
+          {labelOr(t, `zoomResult.${event.result}`, event.result)}
+        </Badge>
       </td>
       <td className="px-6 py-3 text-xs text-text-muted">
         {event.errorMessage ? (

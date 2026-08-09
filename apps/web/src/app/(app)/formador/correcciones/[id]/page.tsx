@@ -18,6 +18,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { ApiHttpError } from '@/lib/api-client';
 import { apiErrorMessage } from '@/lib/i18n/api-error';
 import { formatDateTime } from '@/lib/i18n/format';
+import { labelOr } from '@/lib/i18n/labels';
 import { assessmentsApi, type AttemptStatus } from '@/modules/assessments';
 import { aiGraderApi, type Suggestion } from '@/modules/ai-grader';
 
@@ -199,7 +200,7 @@ export default function CorreccionDetailPage() {
             <div className="min-w-0 flex-1">
               <div className="mb-2 flex flex-wrap items-center gap-2">
                 <Badge variant={STATUS_VARIANT[data.status]} dot>
-                  {t(`attemptStatus.${data.status}`)}
+                  {labelOr(t, `attemptStatus.${data.status}`, data.status)}
                 </Badge>
                 <span className="rounded-full bg-white/15 px-2.5 py-0.5 text-xs font-mono text-white/85">
                   {data.id.slice(0, 8)}…
@@ -261,7 +262,7 @@ export default function CorreccionDetailPage() {
           <p>
             {t.rich('correccionDetail.notPendingAlert', {
               strong: (chunks) => <strong>{chunks}</strong>,
-              status: t(`attemptStatus.${data.status}`),
+              status: labelOr(t, `attemptStatus.${data.status}`, data.status),
             })}
           </p>
         </div>

@@ -12,6 +12,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { ApiHttpError } from '@/lib/api-client';
 import { authStorage } from '@/lib/auth-storage';
 import { apiErrorMessage } from '@/lib/i18n/api-error';
+import { labelOr } from '@/lib/i18n/labels';
 import {
   adminImagesApi,
   formatBytes,
@@ -257,7 +258,7 @@ export default function AdminImagenesPage() {
                   ? t('imagenes.analyzing')
                   : t('imagenes.inventorySummary', {
                       count: visibles.length,
-                      pending: String(pendientes.length),
+                      pending: pendientes.length,
                     })}
               </CardDescription>
             </div>
@@ -277,7 +278,7 @@ export default function AdminImagenesPage() {
               >
                 {running
                   ? t('imagenes.optimizing')
-                  : t('imagenes.optimizeAll', { count: String(pendientes.length) })}
+                  : t('imagenes.optimizeAll', { count: pendientes.length })}
               </Button>
             </div>
           </div>
@@ -323,7 +324,9 @@ export default function AdminImagenesPage() {
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-medium text-text">{img.label}</p>
                       <p className="truncate text-xs text-text-subtle">
-                        <span className="text-text-muted">{t(`imageSource.${img.source}`)}</span>
+                        <span className="text-text-muted">
+                          {labelOr(t, `imageSource.${img.source}`, img.source)}
+                        </span>
                         {' · '}
                         <Estado img={img} state={st} />
                       </p>
@@ -367,7 +370,7 @@ function Estado({ img, state }: { img: AnalyzedImage; state: RowState }) {
   if (img.skipReason) {
     return (
       <span>
-        {t(`skipReason.${SKIP_KEYS[img.skipReason]}`)}
+        {labelOr(t, `skipReason.${SKIP_KEYS[img.skipReason]}`, img.skipReason)}
         {img.currentSize !== null ? ` · ${formatBytes(img.currentSize)}` : ''}
       </span>
     );
