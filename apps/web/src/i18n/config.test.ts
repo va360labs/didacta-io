@@ -20,7 +20,12 @@ describe('toSupportedLocale', () => {
     expect(toSupportedLocale('EN-gb')).toBe('en-US');
   });
 
-  it('pt-BR (válido en el backend, sin catálogo) → es-ES', () => {
+  it('CAMINO DEGRADADO: pt-BR (retirado, pero guardado en perfiles viejos) → es-ES', () => {
+    // Ya no se puede elegir ni guardar (fuera de LOCALE_OPTIONS y de
+    // ALLOWED_LOCALES), pero sigue existiendo en base de datos: perfiles
+    // anteriores a la retirada y altas por SCIM, que copia el locale del IdP
+    // sin validar (apps/api/src/scim/scim.mapper.ts). Sin este degradado esos
+    // usuarios quedarían con un valor que la UI no sabe pintar.
     expect(toSupportedLocale('pt-BR')).toBe('es-ES');
   });
 

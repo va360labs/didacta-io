@@ -12,9 +12,19 @@
  *
  * `SUPPORTED_LOCALES` son los tags que la UI puede ACTIVAR; los catálogos de
  * mensajes son solo dos (`es`, `en`): es-AR comparte el catálogo español y
- * únicamente cambia el formato de fechas/números. `pt-BR` sigue siendo válido
- * en el backend (ALLOWED_LOCALES de me.controller) pero cae al catálogo `es`
- * hasta que exista traducción portuguesa.
+ * únicamente cambia el formato de fechas/números.
+ *
+ * Esta lista es la ÚNICA fuente de verdad del idioma elegible: `LOCALE_OPTIONS`
+ * (apps/web/src/lib/me.ts) se deriva de ella y `ALLOWED_LOCALES`
+ * (apps/api/src/auth/me.controller.ts) la refleja. Antes eran tres listas
+ * independientes y por eso `pt-BR` llegó a estar en el selector y en la API sin
+ * existir en los catálogos: el usuario elegía portugués, la API lo guardaba,
+ * `/cuenta` le confirmaba «Português (Brasil)» y la UI seguía en español.
+ *
+ * `toSupportedLocale()` sigue degradando cualquier tag ajeno —`pt-BR` incluido—
+ * porque en base de datos quedan valores que la UI ya no ofrece: perfiles
+ * guardados antes de esta retirada y los que entran por SCIM
+ * (apps/api/src/scim/scim.mapper.ts, que copia el locale del IdP sin validar).
  */
 
 export const LOCALE_COOKIE = 'didacta_locale';
