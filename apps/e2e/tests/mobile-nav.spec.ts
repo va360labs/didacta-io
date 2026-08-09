@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { createSmokeStudent } from '../helpers/api';
 import { injectSession } from '../helpers/auth';
 
 /**
@@ -15,21 +16,16 @@ import { injectSession } from '../helpers/auth';
  * así ambos salen del árbol de accesibilidad y no hay coincidencias duplicadas.
  */
 
-// Sesión inyectada (permitido en specs por la regla #3). `onboardingCompletedAt`
-// evita el gate de onboarding de primera vez del layout.
-const SESSION = {
-  accessToken: 'fake-token-mobile-nav',
-  user: {
-    id: 'user-mobile-1',
-    email: 'lucia@acme.com',
-    name: 'Lucía Gómez',
-    tenantId: 'tenant-acme',
-    tenantSlug: 'acme',
-    roles: ['alumno'],
-    mfaEnabled: false,
-    onboardingCompletedAt: '2026-01-01T00:00:00.000Z',
-  },
-};
+// Sesión REAL de alumno (alta por `POST /auth/signup` en el tenant de smoke,
+// con el onboarding cerrado por el mismo camino que la UI). Antes aquí había
+// un `accessToken: 'fake-token-mobile-nav'` contra el tenant inexistente
+// `acme`: el shell pintaba, pero cada llamada a la API respondía 401 y el
+// drawer nunca llegaba a poblarse.
+let session: Awaited<ReturnType<typeof createSmokeStudent>>;
+
+test.beforeAll(async () => {
+  session = await createSmokeStudent('mobile-nav');
+});
 
 const MOBILE = { width: 390, height: 844 }; // iPhone 12/13/14
 const DESKTOP = { width: 1280, height: 900 };
@@ -37,7 +33,11 @@ const DESKTOP = { width: 1280, height: 900 };
 async function withSession(page: Page, url: string, viewport: { width: number; height: number }) {
   await page.setViewportSize(viewport);
   await page.goto('/signin');
-  await injectSession(page, SESSION);
+  await injectSession(page, {
+    accessToken: session.tokens.accessToken,
+    refreshToken: session.tokens.refreshToken,
+    user: session.user,
+  });
   await page.goto(url);
 }
 
@@ -55,7 +55,11 @@ test.describe('Navegación móvil — drawer + bottom nav', () => {
     await expect(hamburger).toBeVisible();
     await expect(tabBar).toBeVisible();
     await expect(tabBar.getByRole('link', { name: 'Feed' })).toBeVisible();
-    await expect(tabBar.getByRole('link', { name: 'Cursos' })).toBeVisible();
+    // `exact` obligatorio: el nombre accesible se compara por subcadena y
+    // "Cursos" también casa con "Recursos", que es un enlace real del menú
+    // (mod.resources). Con la sesión falsa anterior ese enlace no llegaba a
+    // pintarse y la ambigüedad no se veía.
+    await expect(tabBar.getByRole('link', { name: 'Cursos', exact: true })).toBeVisible();
     await expect(tabBar.getByRole('button', { name: 'Menú' })).toBeVisible();
 
     // Drawer cerrado → fuera del árbol de accesibilidad (aria-hidden).
@@ -73,7 +77,7 @@ test.describe('Navegación móvil — drawer + bottom nav', () => {
     // Reabrir por la pestaña "Menú" del bottom-nav y navegar a Cursos.
     await tabBar.getByRole('button', { name: 'Menú' }).click();
     await expect(drawer).toBeVisible();
-    await drawer.getByRole('link', { name: 'Cursos' }).click();
+    await drawer.getByRole('link', { name: 'Cursos', exact: true }).click();
     await expect(page).toHaveURL(/\/cursos/);
     // Al navegar el drawer se cierra solo.
     await expect(drawer).toBeHidden();

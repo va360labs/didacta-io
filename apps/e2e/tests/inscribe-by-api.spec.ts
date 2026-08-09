@@ -7,6 +7,7 @@ import {
   listCoursesViaApi,
   revokeViaApi,
   signup,
+  signupOnboarded,
 } from '../helpers/api';
 import { injectSession } from '../helpers/auth';
 
@@ -168,7 +169,12 @@ test.describe('Inscripción externa por API', () => {
       slug: `sin-matricula-e2e-${stamp}`,
     });
 
-    const alumno = await signup({
+    // `signupOnboarded` y no `signup` a secas: un alumno recién dado de alta
+    // nace con `onboardingCompletedAt` a null y el gate de
+    // `apps/web/src/app/(app)/layout.tsx:92` desvía TODA ruta autenticada al
+    // asistente `/onboarding`. Sin esto la ficha del curso no llega a
+    // renderizarse nunca y el fallo parece de la ficha.
+    const alumno = await signupOnboarded({
       tenantSlug,
       email: `e2e-no-matricula-${stamp}@example.test`,
       password: 'E2eNoMatricula123!',

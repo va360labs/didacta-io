@@ -107,7 +107,8 @@ test.describe('mod.zoom-live · inscripción a clases en directo (ADR-017)', () 
       `${API_URL}/api/v1/modules/zoom-live/sessions/${session.id}/registrations`,
       { headers: alumnoHeaders },
     );
-    expect(rosterForbidden.status).toBe(401);
+    // 403, no 401: el alumno está autenticado, el roster es de staff.
+    expect(rosterForbidden.status).toBe(403);
 
     // 6. Baja: el joinUrl vuelve a estar gateado.
     const unreg = await fetch(

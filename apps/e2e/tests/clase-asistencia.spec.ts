@@ -109,7 +109,9 @@ test.describe('mod.zoom-live · asistencia real (ADR-018)', () => {
       `${API_URL}/api/v1/modules/zoom-live/sessions/${session.id}/attendance`,
       { headers: alumnoHeaders },
     );
-    expect(forbidden.status).toBe(401);
+    // 403, no 401: el alumno está autenticado, sólo que el informe es de
+    // staff. 401 significaría "vuelve a identificarte", que no es el caso.
+    expect(forbidden.status).toBe(403);
 
     // 5. Antes de reconciliar, el click cuenta — pero declarado como PROXY.
     const beforeRes = await fetch(

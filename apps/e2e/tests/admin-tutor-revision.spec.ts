@@ -88,7 +88,12 @@ test.describe('Tutor IA · revisión de respuestas (API)', () => {
     const res = await fetch(`${API_URL}/api/v1/admin/ai-tutor/answers`, {
       headers: { Authorization: `Bearer ${alumno.tokens.accessToken}` },
     });
-    expect(res.status).toBe(401);
+    // 403, no 401: el alumno SÍ está autenticado; lo que le falta es el rol.
+    // El backend lo dice con código propio y devolver 401 sería mentirle al
+    // cliente (reintentaría el login). El test de arriba, "sin sesión", sí
+    // espera 401 y es el que marca la diferencia entre los dos casos.
+    expect(res.status).toBe(403);
+    expect(((await res.json()) as { code?: string }).code).toBe('AI_TUTOR_REVIEW_ADMIN_REQUIRED');
   });
 
   test('revisar una respuesta que no existe devuelve 404 con código propio', async () => {

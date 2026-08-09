@@ -4,6 +4,28 @@ name: E2E
 # E2E con Playwright se corre en local sobre Docker Desktop antes de mergear
 # Este workflow queda como `workflow_dispatch`
 # para poder lanzarlo manualmente si se quiere validar en runner Linux real.
+#
+# ─────────────────────────────────────────────────────────────────────────────
+# El arnés (infra, entorno y preparación de la base) vive en `scripts/`, NO en
+# este fichero:
+#
+#   scripts/e2e-env.sh    → única fuente de verdad de las variables
+#   scripts/e2e-stack.sh  → docker compose, esquema, seeds y arranque
+#   apps/e2e/global-setup → verifica que el producto está entero antes de correr
+#
+# Antes cada job repetía la lista de variables a mano y la receta de arranque
+# estaba duplicada entre aquí y la documentación local. Ninguna de las dos
+# copias levantaba el producto completo: faltaban los espacios de sistema de
+# `prisma/seed.sql`, el onboarding del admin sembrado, Redis (la mensajería
+# realtime degradaba a no-op silencioso) y los secretos de los webhooks de
+# pago. Eso son decenas de tests en rojo que parecen bugs de producto.
+#
+# La infraestructura es `docker-compose.test.yml`, el MISMO compose que en
+# local: mismos puertos, mismo usuario/base y —clave— mismos NOMBRES de
+# contenedor, que es lo que necesita `catalogo-publico.spec.ts` para su
+# `docker exec … psql`. Con los `services:` de Actions ese nombre es
+# autogenerado y el spec no podía funcionar.
+# ─────────────────────────────────────────────────────────────────────────────
 
 on:
   workflow_dispatch:
@@ -19,55 +41,7 @@ jobs:
   e2e:
     name: Playwright golden path
     runs-on: ubuntu-latest
-    timeout-minutes: 25
-
-    services:
-      postgres:
-        # pgvector, no postgres:16 a secas: la migración baseline hace
-        # CREATE EXTENSION vector y falla con P3018 sin ella. Misma imagen
-        # que docker-compose.alpha.yml (instalación de referencia).
-        image: pgvector/pgvector:pg16
-        env:
-          POSTGRES_USER: didacta
-          POSTGRES_PASSWORD: didacta
-          POSTGRES_DB: didacta
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 10
-
-    env:
-      DATABASE_URL: postgresql://didacta:didacta@localhost:5432/didacta?schema=public
-      JWT_SECRET: e2e-test-secret-must-be-at-least-32-chars-long-aaaa
-      JWT_REFRESH_SECRET: e2e-refresh-secret-must-be-32-chars-long-bbbb
-      # AUTH_SECRET es el nombre canónico que lee apps/api/src/auth/auth.config.ts
-      # (mín. 32 caracteres). El api falla a bootear sin esta env.
-      AUTH_SECRET: e2e-auth-secret-must-be-at-least-32-chars-long-cccc
-      AUTH_URL: http://localhost:4000
-      # Master key AES-256-GCM (64 chars hex) para TenantSettings cifrado.
-      # Obligatoria en NODE_ENV=production desde el PR A0; sin ella el api no
-      # bootea. En CI usamos un valor determinístico — no es secreto real.
-      TENANT_SETTINGS_ENC_KEY: '0000000000000000000000000000000000000000000000000000000000000000'
-      NODE_ENV: production
-      # El registro público está cerrado por defecto (ver auth.service). Los
-      # specs E2E lo usan para fabricar usuarios de prueba → se reabre solo aquí.
-      AUTH_SIGNUP_ENABLED: 'true'
-      PORT: 4000
-      API_INTERNAL_URL: http://localhost:4000
-      BOOTSTRAP_PASSWORD: E2eAdminPassword123!
-      BOOTSTRAP_EMAIL: e2e-admin@example.test
-      BOOTSTRAP_TENANT_SLUG: demo
-      # El puerto real de `next start` está fijo en el script (`-p 3010`, ver
-      # apps/web/package.json) — PORT no lo cambia. E2E_BASE_URL/E2E_API_URL
-      # tienen que apuntar ahí (mismo criterio que el job "setup-wizard").
-      E2E_BASE_URL: http://localhost:3010
-      E2E_API_URL: http://localhost:3010
-      E2E_TENANT_SLUG: demo
-      E2E_ADMIN_EMAIL: e2e-admin@example.test
-      E2E_ADMIN_PASSWORD: E2eAdminPassword123!
+    timeout-minutes: 35
 
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
@@ -84,58 +58,26 @@ jobs:
           node-version-file: .nvmrc
           cache: pnpm
 
+      - name: Cargar el entorno canónico del arnés
+        run: bash scripts/e2e-env.sh --github-env >> "$GITHUB_ENV"
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
       - name: Generate Prisma client
         run: pnpm --filter @didacta/database db:generate
 
-      - name: Apply migrations
-        run: pnpm --filter @didacta/database db:migrate:deploy
+      - name: Levantar la infra de test (postgres + redis)
+        run: bash scripts/e2e-stack.sh up
 
-      - name: Aplicar políticas RLS y roles de runtime (didacta_app/didacta_super)
-        run: |
-          # Desde RLS F3 el boot de la API hace `SET LOCAL ROLE didacta_super`
-          # para el acceso global sancionado (ver tenant-context.storage.ts) —
-          # ese rol solo existe tras correr grants.sql. Mismo paso que
-          # infra/docker/entrypoint.sh#run_migrations y que el job
-          # "setup-wizard" de este mismo archivo, sin el cual la API no llega
-          # a levantar (rol inexistente).
-          # psql no acepta `?schema=public` (param propio de Prisma).
-          ADMIN_PSQL_URL="${DATABASE_URL%%\?*}"
-          psql "$ADMIN_PSQL_URL" -v ON_ERROR_STOP=1 -f packages/database/prisma/rls.sql
-          psql "$ADMIN_PSQL_URL" -v ON_ERROR_STOP=1 -f packages/database/prisma/grants.sql
-
-      - name: Seed admin user
-        run: pnpm --filter @didacta/database db:seed
+      - name: Preparar la base (esquema + RLS + grants + seeds + espacios)
+        run: bash scripts/e2e-stack.sh db
 
       - name: Build workspace
         run: pnpm build
 
-      - name: Start API
-        run: pnpm --filter @didacta/api start &
-        env:
-          PORT: 4000
-
-      - name: Start Web
-        run: pnpm --filter @didacta/web start &
-
-      - name: Wait for services
-        run: |
-          # API liveness: el endpoint canónico es /healthz (no /api/v1/health).
-          # Probamos contra el api directamente (4000) y el web (3010, ver
-          # apps/web/package.json#start) en paralelo para no avanzar si
-          # alguno no respondió.
-          for i in {1..60}; do
-            if curl -sf http://localhost:4000/healthz > /dev/null \
-              && curl -sf http://localhost:3010 > /dev/null; then
-              echo "API + Web up"
-              exit 0
-            fi
-            sleep 2
-          done
-          echo "Services no respondieron tras 120s"
-          exit 1
+      - name: Arrancar api y web y esperar a que respondan
+        run: bash scripts/e2e-stack.sh start
 
       - name: Install Playwright browsers
         run: pnpm --filter @didacta/e2e exec playwright install --with-deps chromium
@@ -148,7 +90,16 @@ jobs:
         # (admin-email-templates, clase-en-comunidad, community-api-posts,
         # admin-smtp-settings). Corren en el job "mfa-enforcement" de abajo,
         # con su propio stack.
+        #
+        # setup-wizard.spec.ts no hace falta excluirlo: se auto-skipea cuando
+        # no hay E2E_SETUP_TOKEN, que es justo el caso de este job.
         run: pnpm --filter @didacta/e2e exec playwright test --grep-invert "Auth · MFA"
+
+      - name: Logs del stack si algo falló
+        if: failure()
+        run: |
+          echo '── api ──'; tail -n 200 .e2e-stack/api.log || true
+          echo '── web ──'; tail -n 200 .e2e-stack/web.log || true
 
       - name: Upload Playwright report
         if: always()
@@ -161,45 +112,12 @@ jobs:
   setup-wizard:
     name: Playwright wizard de setup (token de un solo uso)
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
 
     # Job separado del golden path: el wizard de /setup solo se puede
     # completar UNA vez por instancia (el primer tenant la cierra para
-    # siempre), así que necesita su propia base de datos SIN seed — el
-    # golden path arranca con `db:seed`, que ya crea un tenant y deja la
-    # instancia inicializada antes de que la API levante.
-    services:
-      postgres:
-        # pgvector: ver comentario equivalente en el job "e2e" de arriba.
-        image: pgvector/pgvector:pg16
-        env:
-          POSTGRES_USER: didacta
-          POSTGRES_PASSWORD: didacta
-          POSTGRES_DB: didacta
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 10
-
-    env:
-      DATABASE_URL: postgresql://didacta:didacta@localhost:5432/didacta?schema=public
-      JWT_SECRET: e2e-test-secret-must-be-at-least-32-chars-long-aaaa
-      JWT_REFRESH_SECRET: e2e-refresh-secret-must-be-32-chars-long-bbbb
-      AUTH_SECRET: e2e-auth-secret-must-be-at-least-32-chars-long-cccc
-      AUTH_URL: http://localhost:4000
-      TENANT_SETTINGS_ENC_KEY: '0000000000000000000000000000000000000000000000000000000000000000'
-      NODE_ENV: production
-      # El puerto real de `next start` está fijo en el script (`-p 3010`,
-      # ver apps/web/package.json) — PORT no lo cambia. E2E_BASE_URL tiene
-      # que apuntar ahí, no al valor legacy de otros jobs de este workflow.
-      API_PORT: 4000
-      API_INTERNAL_URL: http://localhost:4000
-      E2E_BASE_URL: http://localhost:3010
-      E2E_API_DIRECT_URL: http://localhost:4000
-
+    # siempre), así que necesita su propia base de datos SIN seed. Por eso usa
+    # `e2e-stack.sh schema` en vez de `db`.
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
@@ -215,50 +133,26 @@ jobs:
           node-version-file: .nvmrc
           cache: pnpm
 
+      - name: Cargar el entorno canónico del arnés
+        run: bash scripts/e2e-env.sh --github-env >> "$GITHUB_ENV"
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
       - name: Generate Prisma client
         run: pnpm --filter @didacta/database db:generate
 
-      - name: Apply migrations
-        run: pnpm --filter @didacta/database db:migrate:deploy
+      - name: Levantar la infra de test (postgres + redis)
+        run: bash scripts/e2e-stack.sh up
 
-      - name: Aplicar políticas RLS y roles de runtime (didacta_app/didacta_super)
-        run: |
-          # La app conecta como el rol bootstrap (igual que el job "e2e" de
-          # arriba), pero desde RLS F3 el boot hace `SET LOCAL ROLE
-          # didacta_super` para el acceso global sancionado (ver
-          # tenant-context.storage.ts) — ese rol solo existe tras correr
-          # grants.sql. Mismo paso que infra/docker/entrypoint.sh#run_migrations,
-          # sin el cual la API no llega a levantar (rol inexistente).
-          # psql no acepta `?schema=public` (param propio de Prisma).
-          ADMIN_PSQL_URL="${DATABASE_URL%%\?*}"
-          psql "$ADMIN_PSQL_URL" -v ON_ERROR_STOP=1 -f packages/database/prisma/rls.sql
-          psql "$ADMIN_PSQL_URL" -v ON_ERROR_STOP=1 -f packages/database/prisma/grants.sql
+      - name: Preparar SOLO el esquema (sin seed — la instancia debe estar virgen)
+        run: bash scripts/e2e-stack.sh schema
 
       - name: Build workspace
         run: pnpm build
 
-      - name: Start API (log a fichero para extraer el token de setup)
-        run: pnpm --filter @didacta/api start > /tmp/api.log 2>&1 &
-
-      - name: Start Web
-        run: pnpm --filter @didacta/web start &
-
-      - name: Wait for services
-        run: |
-          for i in {1..60}; do
-            if curl -sf http://localhost:4000/healthz > /dev/null \
-              && curl -sf http://localhost:3010 > /dev/null; then
-              echo "API + Web up"
-              exit 0
-            fi
-            sleep 2
-          done
-          echo "Services no respondieron tras 120s"
-          cat /tmp/api.log
-          exit 1
+      - name: Arrancar api y web y esperar a que respondan
+        run: bash scripts/e2e-stack.sh start
 
       - name: Extraer el token de setup de los logs
         run: |
@@ -268,7 +162,7 @@ jobs:
           # un objeto JSON con el mensaje en `.msg` (posible \n interno escapado).
           TOKEN=$(node -e "
             const fs = require('fs');
-            const lines = fs.readFileSync('/tmp/api.log', 'utf8').split('\n').filter(Boolean);
+            const lines = fs.readFileSync('.e2e-stack/api.log', 'utf8').split('\n').filter(Boolean);
             for (const line of lines) {
               let obj;
               try { obj = JSON.parse(line); } catch { continue; }
@@ -280,8 +174,8 @@ jobs:
             process.exit(1);
           ")
           if [ -z "$TOKEN" ]; then
-            echo "No se encontró el token de setup en /tmp/api.log"
-            cat /tmp/api.log
+            echo "No se encontró el token de setup en .e2e-stack/api.log"
+            cat .e2e-stack/api.log
             exit 1
           fi
           echo "E2E_SETUP_TOKEN=${TOKEN}" >> "$GITHUB_ENV"
@@ -290,6 +184,9 @@ jobs:
         run: pnpm --filter @didacta/e2e exec playwright install --with-deps chromium
 
       - name: Run E2E — wizard de setup
+        # El global-setup detecta solo que la instancia está virgen
+        # (GET /setup/status → initialized:false) y se limita a comprobar el
+        # entorno, sin buscar un admin sembrado que aquí no existe.
         run: pnpm --filter @didacta/e2e exec playwright test tests/setup-wizard.spec.ts
 
       - name: Upload Playwright report
@@ -303,51 +200,16 @@ jobs:
   mfa-enforcement:
     name: Playwright MFA enforcement (LMS-109)
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
 
     # Job separado del golden path: DIDACTA_REQUIRE_MFA_ADMIN=true (política
     # opt-in, default off — ver apps/api/src/auth/mfa-config.ts) bloquearía
     # con 403 mfa_required a varios specs del golden path que hacen signin()
     # de admin sin pasar por el flujo MFA. Mismo esquema que el job "e2e"
-    # (DB seedeada), solo que con la política activa y acotado a los 2 specs
+    # (base sembrada), solo que con la política activa y acotado a los 2 specs
     # que la ejercitan.
-    services:
-      postgres:
-        image: pgvector/pgvector:pg16
-        env:
-          POSTGRES_USER: didacta
-          POSTGRES_PASSWORD: didacta
-          POSTGRES_DB: didacta
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 10
-
     env:
-      DATABASE_URL: postgresql://didacta:didacta@localhost:5432/didacta?schema=public
-      JWT_SECRET: e2e-test-secret-must-be-at-least-32-chars-long-aaaa
-      JWT_REFRESH_SECRET: e2e-refresh-secret-must-be-32-chars-long-bbbb
-      AUTH_SECRET: e2e-auth-secret-must-be-at-least-32-chars-long-cccc
-      AUTH_URL: http://localhost:4000
-      TENANT_SETTINGS_ENC_KEY: '0000000000000000000000000000000000000000000000000000000000000000'
-      NODE_ENV: production
-      AUTH_SIGNUP_ENABLED: 'true'
-      # La única diferencia real con el job "e2e": activa la política de
-      # enforcement que estos 2 specs ejercitan.
       DIDACTA_REQUIRE_MFA_ADMIN: 'true'
-      API_PORT: 4000
-      API_INTERNAL_URL: http://localhost:4000
-      BOOTSTRAP_PASSWORD: E2eAdminPassword123!
-      BOOTSTRAP_EMAIL: e2e-admin@example.test
-      BOOTSTRAP_TENANT_SLUG: demo
-      E2E_BASE_URL: http://localhost:3010
-      E2E_API_URL: http://localhost:3010
-      E2E_TENANT_SLUG: demo
-      E2E_ADMIN_EMAIL: e2e-admin@example.test
-      E2E_ADMIN_PASSWORD: E2eAdminPassword123!
 
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
@@ -364,45 +226,26 @@ jobs:
           node-version-file: .nvmrc
           cache: pnpm
 
+      - name: Cargar el entorno canónico del arnés
+        run: bash scripts/e2e-env.sh --github-env >> "$GITHUB_ENV"
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
       - name: Generate Prisma client
         run: pnpm --filter @didacta/database db:generate
 
-      - name: Apply migrations
-        run: pnpm --filter @didacta/database db:migrate:deploy
+      - name: Levantar la infra de test (postgres + redis)
+        run: bash scripts/e2e-stack.sh up
 
-      - name: Aplicar políticas RLS y roles de runtime (didacta_app/didacta_super)
-        run: |
-          ADMIN_PSQL_URL="${DATABASE_URL%%\?*}"
-          psql "$ADMIN_PSQL_URL" -v ON_ERROR_STOP=1 -f packages/database/prisma/rls.sql
-          psql "$ADMIN_PSQL_URL" -v ON_ERROR_STOP=1 -f packages/database/prisma/grants.sql
-
-      - name: Seed admin user
-        run: pnpm --filter @didacta/database db:seed
+      - name: Preparar la base (esquema + RLS + grants + seeds + espacios)
+        run: bash scripts/e2e-stack.sh db
 
       - name: Build workspace
         run: pnpm build
 
-      - name: Start API
-        run: pnpm --filter @didacta/api start &
-
-      - name: Start Web
-        run: pnpm --filter @didacta/web start &
-
-      - name: Wait for services
-        run: |
-          for i in {1..60}; do
-            if curl -sf http://localhost:4000/healthz > /dev/null \
-              && curl -sf http://localhost:3010 > /dev/null; then
-              echo "API + Web up"
-              exit 0
-            fi
-            sleep 2
-          done
-          echo "Services no respondieron tras 120s"
-          exit 1
+      - name: Arrancar api y web y esperar a que respondan
+        run: bash scripts/e2e-stack.sh start
 
       - name: Install Playwright browsers
         run: pnpm --filter @didacta/e2e exec playwright install --with-deps chromium
@@ -416,6 +259,10 @@ jobs:
         # vez de mostrar el form de alta. Playwright NO respeta el orden de
         # argumentos del CLI (ordena los ficheros alfabéticamente pese al
         # orden dado aquí), así que van en pasos separados para forzarlo.
+        #
+        # El global-setup ve DIDACTA_REQUIRE_MFA_ADMIN y no toca al admin: si
+        # completara el ciclo setup→enable dejaría a mfa-setup.spec.ts sin el
+        # estado inicial que ejercita.
         run: |
           pnpm --filter @didacta/e2e exec playwright test tests/mfa-setup.spec.ts
           pnpm --filter @didacta/e2e exec playwright test tests/mfa-enforcement.spec.ts
