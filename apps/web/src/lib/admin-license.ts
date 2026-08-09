@@ -67,12 +67,3 @@ export const adminLicenseApi = {
     );
   },
 };
-
-export const LICENSE_STATUS_LABEL: Record<AdminLicenseStatusDto['status'], string> = {
-  community: 'Community',
-  active: 'Activa',
-  grace: 'En periodo de gracia',
-  expired: 'Expirada',
-  invalid: 'Inválida',
-  dev: 'Dev bypass',
-};

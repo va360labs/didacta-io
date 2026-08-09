@@ -97,9 +97,3 @@ export const adminTenantsApi = {
     );
   },
 };
-
-export const STATUS_LABELS: Record<TenantStatus, string> = {
-  ACTIVE: 'Activo',
-  SUSPENDED: 'Suspendido',
-  ARCHIVED: 'Archivado',
-};

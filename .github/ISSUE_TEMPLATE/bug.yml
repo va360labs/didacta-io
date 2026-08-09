@@ -1,0 +1,107 @@
+name: 🐛 Bug report
+description: Algo no funciona como debería en Didacta.
+title: '[BUG] '
+labels: ['bug', 'alpha-tester']
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Gracias por reportar. Cuanto más concreto, mejor podemos arreglarlo.
+
+        Guía completa (qué datos recoger y qué anonimizar): **[didacta.io/docs](https://didacta.io/docs)**.
+
+        ⚠️ **Si es una vulnerabilidad de seguridad, no la reportes aquí.** Escribe a `security@didacta.io` — ver [SECURITY.md](https://github.com/va360labs/didacta-io/blob/main/SECURITY.md).
+  - type: input
+    id: version
+    attributes:
+      label: Versión Didacta
+      description: 'Sácala de `curl -fsS http://localhost:4000/healthz`, de `docker compose -f docker-compose.alpha.yml images didacta` o de `DIDACTA_IMAGE_TAG` en tu `.env`.'
+      placeholder: '0.0.1-alpha.101'
+    validations:
+      required: true
+  - type: dropdown
+    id: environment
+    attributes:
+      label: Cómo lo estás corriendo
+      options:
+        - docker compose -f docker-compose.alpha.yml
+        - pnpm dev (desarrollo local)
+        - Otro (especificar abajo)
+    validations:
+      required: true
+  - type: input
+    id: os
+    attributes:
+      label: Sistema operativo
+      placeholder: 'macOS 14, Ubuntu 22.04, Windows 11 Pro...'
+    validations:
+      required: true
+  - type: dropdown
+    id: role
+    attributes:
+      label: ¿Con qué rol ocurre?
+      description: Muchos fallos solo aparecen con un rol concreto.
+      options:
+        - Administrador (super_admin / tenant_admin)
+        - Formador
+        - Alumno
+        - Visitante sin sesión (catálogo público, registro, login)
+        - Varios / no depende del rol
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Pasos para reproducir
+      placeholder: |
+        1. Ir a /admin/courses/new
+        2. Rellenar título, descripción
+        3. Click "Crear"
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Comportamiento esperado
+      placeholder: 'El curso se crea y aparece en el listado.'
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Comportamiento real
+      placeholder: 'Devuelve error 500 con mensaje "Cannot read properties of undefined".'
+    validations:
+      required: true
+  - type: dropdown
+    id: frequency
+    attributes:
+      label: ¿Con qué frecuencia pasa?
+      options:
+        - Siempre que sigo esos pasos
+        - Intermitente (a veces sí, a veces no)
+        - Ocurrió una sola vez
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs relevantes
+      description: 'Recógelos con `docker compose -f docker-compose.alpha.yml logs --no-color --tail 200 didacta`. Anonimiza emails, nombres reales, tokens y credenciales antes de pegarlos.'
+      render: shell
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: Screenshots (opcional)
+      description: Arrastra aquí imágenes si las tienes. Para fallos de interfaz, incluye también el error de la consola del navegador (F12).
+  - type: checkboxes
+    id: confirm
+    attributes:
+      label: Antes de enviar
+      options:
+        - label: He buscado en issues abiertas y no encuentro este bug.
+          required: true
+        - label: He anonimizado emails, nombres reales, tokens y credenciales en logs y capturas.
+          required: true
+        - label: Esto no es una vulnerabilidad de seguridad (esas van a `security@didacta.io`, nunca a una issue pública).
+          required: true

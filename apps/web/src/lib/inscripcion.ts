@@ -18,7 +18,7 @@
  *   3. Crear la solicitud con la evidencia que corresponda.
  */
 
-import { ApiHttpError, apiFetch } from './api-client';
+import { apiFetch } from './api-client';
 import type { RenewalTemplate } from './payment-connections';
 
 // ── Tipos de respuesta (según contrato del backend) ──────────────────────────
@@ -140,14 +140,6 @@ export function createInscripcion(input: CreateInscripcionInput): Promise<Create
     method: 'POST',
     body: JSON.stringify(input),
   });
-}
-
-/**
- * Traduce cualquier error a un mensaje legible para la UI. Centraliza el manejo
- * de `ApiHttpError` para que los componentes no repitan el `instanceof`.
- */
-export function inscripcionErrorMessage(error: unknown, fallback: string): string {
-  return error instanceof ApiHttpError ? error.message : fallback;
 }
 
 // ── Panel ADMIN de solicitudes (autenticado) ─────────────────────────────────

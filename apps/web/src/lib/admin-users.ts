@@ -19,21 +19,6 @@ export const ASSIGNABLE_ROLES = [
 
 export type AssignableRole = (typeof ASSIGNABLE_ROLES)[number];
 
-export const ROLE_LABELS: Record<AssignableRole, string> = {
-  tenant_admin: 'Administrador',
-  formador: 'Formador',
-  alumno: 'Alumno',
-  auditor: 'Auditor',
-  empresa_manager: 'Gerente de empresa',
-};
-
-export const STATUS_LABELS: Record<UserStatus, string> = {
-  ACTIVE: 'Activo',
-  PENDING: 'Pendiente',
-  SUSPENDED: 'Suspendido',
-  DEACTIVATED: 'Desactivado',
-};
-
 export interface UserListItem {
   id: string;
   email: string;

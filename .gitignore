@@ -77,9 +77,13 @@ playwright-report/
 work/
 
 # Documentación y meta de proyecto: fuera del repo por decisión de producto.
-# El repositorio versiona SOLO lo necesario para construir y ejecutar la
-# aplicación (más LICENSE/LICENSE_EE, que son el instrumento legal del
-# modelo fair-code). Todo lo demás vive aquí, en local.
+# El repositorio versiona lo necesario para construir y ejecutar la aplicación
+# MÁS el mínimo que un repo público fair-code tiene que declarar en sí mismo:
+# LICENSE, LICENSE_EE, README, LICENSE_NOTICE, SECURITY, CONTRIBUTING,
+# CODE_OF_CONDUCT, TRADEMARKS, COMMERCIAL_USE y .github/ISSUE_TEMPLATE/.
+# El manual (instalación, actualización, operación, versionado) vive en
+# https://didacta.io/docs, no aquí. Todo lo demás que se sacó del árbol vive
+# en esta carpeta, en local.
 .fueradegit/
 
 # Claude Code: estado local del agente (settings, locks y worktrees). El

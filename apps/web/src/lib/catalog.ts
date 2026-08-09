@@ -42,21 +42,10 @@ export interface CatalogCourse {
   options: CatalogOption[];
 }
 
-export interface PublicOffer {
-  forSale: boolean;
-  options: CatalogOption[];
-}
-
 // ── API ──────────────────────────────────────────────────────────────────────
 
 export async function getPublicCatalog(): Promise<{ courses: CatalogCourse[] }> {
   return apiFetch<{ courses: CatalogCourse[] }>(`${PUBLIC_BASE}/catalog`, { method: 'GET' });
-}
-
-export async function getPublicOffer(courseId: string): Promise<PublicOffer> {
-  return apiFetch<PublicOffer>(`${PUBLIC_BASE}/offer/${encodeURIComponent(courseId)}`, {
-    method: 'GET',
-  });
 }
 
 export async function startPublicCheckout(

@@ -33,23 +33,18 @@ type AttachmentTile =
  * Tiempo relativo corto («ahora», «hace 5m»…); a partir de una semana, fecha.
  *
  * `t` es el `useTranslations('comunidadComponentes')` del componente que la
- * llama. Va OPCIONAL solo por compatibilidad: `modules/messaging` todavía la
- * importa y no ha pasado por su unidad de i18n, así que sin `t` devuelve el
- * español cableado de siempre (nunca una key en pantalla). Cuando messaging
- * migre, `t` pasa a obligatorio y esa rama desaparece.
+ * llama y es OBLIGATORIO: no hay camino degradado. La firma tuvo `t?` mientras
+ * `modules/messaging` la importaba sin haber migrado; messaging estrenó su
+ * propia `relTime` con `t` obligatorio (`modules/messaging/shared.ts`) y esta
+ * ya solo la usan `ThreadCard` y `community-gallery-modal`, los dos con el
+ * mismo namespace.
  */
-export function relTime(iso: string, t?: TranslatorLike): string {
+export function relTime(iso: string, t: TranslatorLike): string {
   const diff = (Date.now() - new Date(iso).getTime()) / 1000;
   if (diff >= 86400 * 7) return formatDate(iso, { day: '2-digit', month: 'short' });
   const minutes = Math.floor(diff / 60);
   const hours = Math.floor(diff / 3600);
   const days = Math.floor(diff / 86400);
-  if (!t) {
-    if (diff < 60) return 'ahora';
-    if (diff < 3600) return `hace ${minutes}m`;
-    if (diff < 86400) return `hace ${hours}h`;
-    return `hace ${days}d`;
-  }
   if (diff < 60) return t('relTimeNow');
   if (diff < 3600) return t('relTimeMinutes', { minutes });
   if (diff < 86400) return t('relTimeHours', { hours });
