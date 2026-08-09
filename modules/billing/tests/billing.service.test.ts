@@ -1052,6 +1052,38 @@ describe('BillingService — checkout PÚBLICO (viaje 2: visitante sin cuenta)',
     expect(publisher.events[0]!.payload.userCreated).toBe(true);
   });
 
+  it('el idioma de la compra viaja en la metadata y llega al provisioner', async () => {
+    // La cuenta del comprador anónimo se crea AQUÍ, después del salto a Stripe:
+    // la metadata de la session es el único canal que lo sobrevive. Sin esto,
+    // un comprador anglófono acaba con el idioma de referencia guardado y
+    // recibe la bienvenida en español.
+    const checkout = await svc.startCheckout({
+      tenantId: 't1',
+      courseId: 'course-1',
+      locale: 'en-US',
+    });
+    expect(stripe.lastCheckout?.metadata.locale).toBe('en-US');
+
+    const provision = vi.fn().mockResolvedValue({ userId: 'u-nueva', created: true });
+    const event = anonymousCompletedEvent(checkout.orderId);
+    (event.data.object as { metadata: Record<string, string> }).metadata.locale = 'en-US';
+    await svc.handleWebhookEvent(event, {}, { provisionUser: provision });
+    expect(provision).toHaveBeenCalledWith(expect.objectContaining({ locale: 'en-US' }));
+  });
+
+  it('sin idioma capturado, la metadata NO lleva la clave y el provisioner recibe undefined', async () => {
+    const checkout = await svc.startCheckout({ tenantId: 't1', courseId: 'course-1' });
+    expect(stripe.lastCheckout?.metadata).not.toHaveProperty('locale');
+
+    const provision = vi.fn().mockResolvedValue({ userId: 'u-nueva', created: true });
+    await svc.handleWebhookEvent(
+      anonymousCompletedEvent(checkout.orderId),
+      {},
+      { provisionUser: provision },
+    );
+    expect(provision.mock.calls[0]![0]).toMatchObject({ locale: undefined });
+  });
+
   it('reentrega del webhook: NO provisiona dos veces ni re-emite el evento', async () => {
     const checkout = await svc.startCheckout({ tenantId: 't1', courseId: 'course-1' });
     publisher.events = [];

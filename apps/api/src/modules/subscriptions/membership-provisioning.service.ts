@@ -26,6 +26,7 @@ import {
   toHubTemplateLang,
   type TemplateOverridePrisma,
 } from '../notifications/email-template-catalog';
+import { sanitizeCheckoutLocale } from '../../common/checkout-locale';
 import { PrismaAuditLogService } from '../prisma-audit-log.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { SmtpAdapterService } from '../smtp-adapter.service';
@@ -71,13 +72,23 @@ export class MembershipProvisioningService {
     name: string | null;
     webBaseUrl: string;
     ctx: ClientContext;
+    /**
+     * Idioma con el que el comprador estaba navegando al pagar (capturado del
+     * checkout y transportado en la metadata de Stripe). Solo se escribe si el
+     * usuario SE CREA aquí: a un comprador que ya existía no se le pisa la
+     * preferencia que guardó en su perfil.
+     */
+    locale?: string;
   }): Promise<{ userId: string; created: boolean }> {
     const { tenantId, email } = args;
     const existing = await this.prisma.user.findUnique({
       where: { tenantId_email: { tenantId, email } },
       select: { id: true },
     });
+    // Comprador que YA existía: ni siquiera se mira `args.locale`. Su idioma es
+    // el de su perfil y una compra no es una señal para cambiarlo.
     if (existing) return { userId: existing.id, created: false };
+    const locale = sanitizeCheckoutLocale(args.locale);
 
     const passwordHash = await this.passwords.hash(randomBytes(16).toString('base64url'));
     const role = await this.prisma.role.findUnique({ where: { name: DEFAULT_ALUMNO_ROLE } });
@@ -93,11 +104,14 @@ export class MembershipProvisioningService {
           // El comprador define su contraseña con el enlace mágico; forzar
           // además el cambio le obligaría a un segundo login.
           mustChangePassword: false,
+          // CAMINO DEGRADADO NOMBRADO: sin locale capturado (visitante que
+          // nunca tocó el selector, o cookie con un tag que la API no
+          // persiste) se OMITE el campo y la columna toma su default de BD,
+          // que es `HUB_DEFAULT_LOCALE`. Escribirlo a mano aquí sería el mismo
+          // valor con más superficie que mantener.
+          ...(locale ? { locale } : {}),
         },
-        // `locale` del comprador: es quien lee la bienvenida. Hoy la columna
-        // toma su default porque el checkout todavía no captura el idioma del
-        // navegador (hallazgo declarado en el PR); leerlo aquí es lo que hace
-        // que el email siga al usuario en cuanto ese hueco se cierre.
+        // `locale` del comprador: es quien lee la bienvenida.
         select: { id: true, locale: true },
       });
       if (role) {

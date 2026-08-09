@@ -144,11 +144,15 @@ export class BillingWebhookController {
       tenantId,
       () =>
         billing.handleWebhookEvent(event, parsedBody, {
-          provisionUser: ({ tenantId: provisionTenantId, email, name }) =>
+          provisionUser: ({ tenantId: provisionTenantId, email, name, locale }) =>
             this.provisioning.provision({
               tenantId: provisionTenantId,
               email,
               name,
+              // Idioma con el que compró, capturado al iniciar el checkout y
+              // transportado en la metadata de la session. El service lo valida
+              // y solo lo escribe si CREA la fila.
+              locale,
               webBaseUrl,
               ctx,
             }),

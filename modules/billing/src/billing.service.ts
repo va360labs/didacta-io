@@ -119,6 +119,13 @@ export interface StartCheckoutInput {
    */
   successUrl?: string;
   cancelUrl?: string;
+  /**
+   * Idioma activo de la UI del comprador. Viaja opaco en la metadata de la
+   * session y vuelve en el webhook, que es lo único que sobrevive al salto a
+   * Stripe: en el checkout PÚBLICO la fila de `user` no existe todavía. Este
+   * módulo NO lo interpreta ni lo valida — lo hace el host.
+   */
+  locale?: string;
 }
 
 /** Una opción de compra del curso, tal y como la ve el alumno. */
@@ -155,6 +162,12 @@ export type BillingUserProvisioner = (args: {
   tenantId: string;
   email: string;
   name: string | null;
+  /**
+   * Idioma con el que el comprador estaba navegando al pagar, capturado en
+   * `startCheckout` y transportado en la metadata de la sesión. Opaco para este
+   * módulo: lo valida y lo persiste el host, y SOLO si crea la fila.
+   */
+  locale?: string;
 }) => Promise<{ userId: string; created: boolean }>;
 
 /**
@@ -522,6 +535,7 @@ export class BillingService {
           // Sin userId en el checkout anónimo: la fila de la order (no la
           // metadata) es la fuente de verdad del comprador en el fulfillment.
           ...(input.userId ? { userId: input.userId } : {}),
+          ...(input.locale ? { locale: input.locale } : {}),
         },
       });
     } catch (err) {
@@ -729,6 +743,10 @@ export class BillingService {
         tenantId,
         email: email.trim().toLowerCase(),
         name: session.customer_details?.name ?? null,
+        // Idioma con el que compró (lo escribió `startCheckout`). Va sin validar
+        // a propósito: quien escribe la fila de `user` es el host y es él quien
+        // decide qué locales acepta.
+        locale: metadata.locale,
       });
       userId = provisioned.userId;
       userCreated = provisioned.created;
