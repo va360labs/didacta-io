@@ -165,4 +165,24 @@ describe('AdminStripeController', () => {
     // no hay mock del SDK, la superficie unit-testeable es hasta la
     // resolución de credenciales.
   });
+
+  describe('POST /test — el diagnóstico de Stripe llega al cliente', () => {
+    it('el motivo del rechazo viaja como campo `detail`, no solo dentro del texto', async () => {
+      // El bug que cierra: el front traducía `ADMIN_STRIPE_KEY_REJECTED` y con
+      // ello BORRABA el motivo, porque el motivo solo existía incrustado en el
+      // `message` español. Con el campo aparte, cada idioma escribe su frase y
+      // el diagnóstico sobrevive.
+      await controller.upsert(ADMIN_USER as never, VALID_BODY);
+
+      const err = await controller.test(ADMIN_USER as never).catch((e: unknown) => e);
+      expect(err).toBeInstanceOf(BadRequestException);
+      const body = (err as BadRequestException).getResponse() as Record<string, unknown>;
+      expect(body['code']).toBe('ADMIN_STRIPE_KEY_REJECTED');
+      expect(typeof body['detail']).toBe('string');
+      expect((body['detail'] as string).length).toBeGreaterThan(0);
+      // `message` conserva el mismo formato de siempre y CONTIENE el detalle:
+      // es el fallback honesto para clientes que no leen el campo nuevo.
+      expect(body['message']).toBe(`Stripe rechazó la clave: ${body['detail'] as string}`);
+    });
+  });
 });
