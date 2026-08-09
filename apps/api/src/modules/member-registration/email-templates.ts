@@ -64,6 +64,8 @@ export function buildOtpEmail(
       ? applied.bodyText
       : `${applied.bodyText}\n\nCódigo: ${code}`;
     const { html, text } = renderBrandedEmail(branding, {
+      // Monolingüe: este emisor todavía solo redacta español.
+      lang: 'es',
       title: applied.subject,
       bodyHtml: `${textToHtmlParagraphs(applied.bodyText)}${codeBlockHtml}`,
       bodyText: textWithCode,
@@ -86,6 +88,8 @@ Si no has solicitado este acceso, ignora este mensaje.`;
   <p style="margin:0 0 8px;font-size:14px;color:#5b6b7c;">Introdúcelo en la pantalla de verificación para continuar. Este código caduca en 10 minutos.</p>
   <p style="margin:0;font-size:14px;color:#5b6b7c;">Si no has solicitado este acceso, ignora este mensaje.</p>`;
   const { html, text } = renderBrandedEmail(branding, {
+    // Monolingüe: este emisor todavía solo redacta español.
+    lang: 'es',
     title: 'Tu código de acceso',
     bodyHtml,
     bodyText,
@@ -315,6 +319,8 @@ Rechazar: ${rejectUrl}`;
   </p>`;
 
   const { html, text } = renderBrandedEmail(branding, {
+    // Monolingüe: este emisor todavía solo redacta español.
+    lang: 'es',
     title: subject,
     bodyHtml,
     bodyText,
@@ -340,6 +346,8 @@ export function buildWelcomeEmail(
       `Tu inscripción en ${branding.tenantName} ha sido aprobada`,
     );
     const { html, text } = renderBrandedEmail(branding, {
+      // Monolingüe: este emisor todavía solo redacta español.
+      lang: 'es',
       title: applied.subject,
       bodyHtml: textToHtmlParagraphs(applied.bodyText),
       bodyText: applied.bodyText,
@@ -357,6 +365,8 @@ export function buildWelcomeEmail(
     branding.tenantName,
   )} ha sido aprobada y tu cuenta ya está activa.</p>`;
   const { html, text } = renderBrandedEmail(branding, {
+    // Monolingüe: este emisor todavía solo redacta español.
+    lang: 'es',
     title: '¡Bienvenido!',
     bodyHtml,
     bodyText,
@@ -382,6 +392,8 @@ export function buildRejectionEmail(
       `Sobre tu inscripción en ${branding.tenantName}`,
     );
     const { html, text } = renderBrandedEmail(branding, {
+      // Monolingüe: este emisor todavía solo redacta español.
+      lang: 'es',
       title: applied.subject,
       bodyHtml: textToHtmlParagraphs(applied.bodyText),
       bodyText: applied.bodyText,
@@ -401,6 +413,8 @@ Si crees que se trata de un error, puedes ponerte en contacto con el equipo.`;
   )}. Tras revisar tu solicitud, no hemos podido aprobar tu inscripción en este momento.</p>
   <p style="margin:0;font-size:14px;color:#5b6b7c;">Si crees que se trata de un error, puedes ponerte en contacto con el equipo.</p>`;
   const { html, text } = renderBrandedEmail(branding, {
+    // Monolingüe: este emisor todavía solo redacta español.
+    lang: 'es',
     title: 'Sobre tu inscripción',
     bodyHtml,
     bodyText,

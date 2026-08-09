@@ -94,6 +94,14 @@ function ensureUuid(id: string): string {
  */
 const ADMIN_ROLES = new Set(['super_admin', 'tenant_admin']);
 
+/**
+ * Relleno del `message` cuando el MTA rechaza el envío SIN devolver texto.
+ * En ese caso NO se manda `detail`: el front detecta su ausencia y pinta el
+ * `message` crudo en vez de una frase traducida con el hueco vacío. Mismo
+ * criterio que `SMTP_NO_DETAIL` en `admin/admin-smtp.controller.ts`.
+ */
+const EMAIL_SEND_NO_DETAIL = 'error SMTP';
+
 @ApiTags('Inscripción de miembros · Admin')
 @ApiBearerAuth()
 @Controller('modules/member-registration/admin')
@@ -317,8 +325,13 @@ export class MemberRegistrationAdminController {
     );
     if (!result.ok) {
       throw new ConflictException({
-        message: `No se pudo enviar el email: ${result.error ?? 'error SMTP'}`,
+        // El error del MTA es lo que le dice al admin si el buzón no existe,
+        // si la cuenta rebotó o si el relay lo bloqueó. Va aparte del
+        // `message` para que el front lo enmarque en su idioma sin borrarlo
+        // (ver `CODES_WITH_DETAIL` en apps/web/src/lib/i18n/api-error.ts).
+        message: `No se pudo enviar el email: ${result.error ?? EMAIL_SEND_NO_DETAIL}`,
         code: 'MEMBER_REG_EMAIL_SEND_FAILED',
+        ...(result.error ? { detail: result.error } : {}),
       });
     }
     return { ok: true, to };

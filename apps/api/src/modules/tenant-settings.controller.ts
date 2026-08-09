@@ -36,6 +36,20 @@ import {
 
 const ADMIN_ROLES = new Set(['super_admin', 'tenant_admin']);
 
+/**
+ * Relleno del `message` cuando el MTA rechaza el envío SIN devolver texto.
+ * En ese caso NO se manda `detail`: el front detecta su ausencia y pinta el
+ * `message` crudo en vez de una frase traducida con el hueco vacío. Mismo
+ * criterio que `SMTP_NO_DETAIL` en `admin/admin-smtp.controller.ts`.
+ */
+const SMTP_NO_DETAIL = 'sin detalle';
+
+/**
+ * Corte del diagnóstico del parser de config SMTP. Es el mismo recorte que ya
+ * hacía el `message`: si cambia, el español dejaría de salir byte a byte igual.
+ */
+const SMTP_CONFIG_DETAIL_MAX = 200;
+
 const ScopeKeyParamSchema = z
   .string()
   .min(1)
@@ -65,6 +79,7 @@ function validateParam(name: string, value: string) {
     throw new NotFoundException({
       message: `Parámetro ${name} inválido`,
       code: 'TENANT_SETTINGS_PARAM_INVALID',
+      detail: name,
     });
   }
   return r.data;
@@ -265,9 +280,14 @@ export class TenantSettingsController {
     try {
       parsed = smtp.parseConfig(raw);
     } catch (err) {
+      // El motivo del rechazo lo redacta el parser de nodemailer (host vacío,
+      // puerto fuera de rango…): viaja aparte del `message` para que el front
+      // lo enmarque en su idioma sin borrarlo al traducir el code.
+      const detail = (err as Error).message.slice(0, SMTP_CONFIG_DETAIL_MAX);
       throw new BadRequestException({
-        message: `Config SMTP inválida: ${(err as Error).message.slice(0, 200)}`,
+        message: `Config SMTP inválida: ${detail}`,
         code: 'TENANT_SETTINGS_SMTP_CONFIG_INVALID',
+        detail,
       });
     }
 
@@ -303,8 +323,9 @@ export class TenantSettingsController {
 
     if (!result.ok) {
       throw new BadRequestException({
-        message: `SMTP falló: ${result.error ?? 'sin detalle'}`,
+        message: `SMTP falló: ${result.error ?? SMTP_NO_DETAIL}`,
         code: 'TENANT_SETTINGS_SMTP_TEST_FAILED',
+        ...(result.error ? { detail: result.error } : {}),
       });
     }
     return { ok: true, sentTo: me.email, messageId: result.messageId };

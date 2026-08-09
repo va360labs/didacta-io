@@ -50,4 +50,24 @@ describe('ApiScopeGuard', () => {
     const guard = makeGuard(['enrollments:write']);
     expect(() => guard.canActivate(makeCtx(undefined))).toThrow(UnauthorizedException);
   });
+
+  it('los scopes que faltan viajan en `detail`, no solo dentro del message', () => {
+    // El catálogo inglés decía «The API key does not have the required
+    // scope(s).» y se tragaba CUÁLES: sin la lista, quien integra por API no
+    // sabe qué marcar al regenerar la key. Ahora la lista va en `detail` y cada
+    // idioma la enmarca; el `message` español no cambia.
+    const guard = makeGuard(['courses:write', 'users:read']);
+    const ctx = makeCtx({ sub: 'u', tenantId: 't', roles: ['courses:write'], mfaVerified: true });
+    try {
+      guard.canActivate(ctx);
+    } catch (err) {
+      const body = (err as { response: { message: string; code: string; detail?: string } })
+        .response;
+      expect(body.code).toBe('AUTH_API_KEY_MISSING_SCOPES');
+      expect(body.message).toBe('La API key no tiene el/los scope(s) requerido(s): users:read');
+      expect(body.detail).toBe('users:read');
+      return;
+    }
+    throw new Error('no lanzó');
+  });
 });

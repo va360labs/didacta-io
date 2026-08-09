@@ -83,6 +83,7 @@ export class ModuleAssetsController {
       throw new NotFoundException({
         message: `Surface "${surface}" no es válida.`,
         code: 'MARKETPLACE_ASSET_SURFACE_INVALID',
+        detail: surface,
       });
     }
 

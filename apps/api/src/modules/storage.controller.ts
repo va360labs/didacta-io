@@ -164,6 +164,10 @@ export class StorageController {
       throw new ForbiddenException({
         message: `El archivo debe pesar entre 1 byte y ${MAX_BYTES} bytes.`,
         code: 'STORAGE_FILE_SIZE_OUT_OF_RANGE',
+        // String, no número: ICU formatearía un `number` con separador de
+        // miles distinto por idioma y el español dejaría de salir byte a byte
+        // como el `message` que ya mandaba el backend.
+        detail: String(MAX_BYTES),
       });
     }
 

@@ -418,15 +418,19 @@ export function resolveHubDefault(key: string, locale?: string | null): Template
  */
 export const FIXED_EMAIL_COPY = {
   es: {
+    'cta.hub_enter': 'Entrar a {{tenantName}}',
     'cta.password_reset': 'Restablecer contraseña',
     'cta.set_password': 'Define tu contraseña',
+    'footer.hub_member': 'Recibiste este correo como miembro de {{tenantName}}.',
     'title.password_reset': 'Restablecer tu contraseña',
     'title.smtp_test': 'Prueba de SMTP',
     'value.unknown_tenant_slug': '(desconocido)',
   },
   en: {
+    'cta.hub_enter': 'Go to {{tenantName}}',
     'cta.password_reset': 'Reset password',
     'cta.set_password': 'Set your password',
+    'footer.hub_member': 'You received this email as a member of {{tenantName}}.',
     'title.password_reset': 'Reset your password',
     'title.smtp_test': 'SMTP test',
     'value.unknown_tenant_slug': '(unknown)',
@@ -993,25 +997,49 @@ export function resolveTransactionalDefault(
   return TRANSACTIONAL_DEFAULTS_ES[key];
 }
 
-/** Catálogo completo (hub + transaccionales) para la UI admin. */
-export function buildEmailTemplateCatalog(): EmailTemplateCatalogEntry[] {
-  const hubEntries: EmailTemplateCatalogEntry[] = Object.entries(HUB_TEMPLATE_DEFAULTS).map(
-    ([key, def]) => {
-      const meta = HUB_TEMPLATE_META[key];
-      return {
-        key,
-        name: meta?.name ?? key,
-        description: meta?.description ?? '',
-        category: meta?.category ?? 'system',
-        source: 'hub',
-        channels: meta?.channels ?? ['IN_APP'],
-        defaultSubject: def.subject,
-        defaultBody: def.body,
-        variables: meta?.variables ?? [],
-      };
-    },
-  );
-  return [...TRANSACTIONAL_EMAIL_DEFS, ...hubEntries];
+/**
+ * Catálogo completo (hub + transaccionales) para la UI admin.
+ *
+ * `locale` es el idioma del OVERRIDE que el admin va a escribir, no el de la
+ * pantalla: `/admin/emails` deja elegir (canal, idioma) y prefillea el editor
+ * con el default del producto para ese par. Sin este parámetro el prefill salía
+ * SIEMPRE en español, así que crear un override `en-US` empezaba copiando y
+ * borrando un texto español.
+ *
+ * CAMINO DEGRADADO: `locale` ausente o sin catálogo cae a `HUB_DEFAULT_LOCALE`
+ * vía `resolveHubDefault` / `resolveTransactionalDefault`. Omitirlo devuelve
+ * byte a byte la respuesta de antes — es el default nombrado del producto, no
+ * un accidente, y por eso los clientes viejos siguen viendo lo mismo.
+ *
+ * `name`, `description` y `category` NO se traducen todavía: son metadatos de
+ * la UI del catálogo (36 entradas) y viven en `HUB_TEMPLATE_META` /
+ * `TRANSACTIONAL_EMAIL_DEFS` solo en español. Es un hueco conocido y aparte.
+ */
+export function buildEmailTemplateCatalog(locale?: string | null): EmailTemplateCatalogEntry[] {
+  const hubEntries: EmailTemplateCatalogEntry[] = Object.keys(HUB_TEMPLATE_DEFAULTS).map((key) => {
+    const meta = HUB_TEMPLATE_META[key];
+    // Nunca `undefined`: la key sale de HUB_TEMPLATE_DEFAULTS, que es el
+    // último fallback de `resolveHubDefault`.
+    const def = resolveHubDefault(key, locale)!;
+    return {
+      key,
+      name: meta?.name ?? key,
+      description: meta?.description ?? '',
+      category: meta?.category ?? 'system',
+      source: 'hub',
+      channels: meta?.channels ?? ['IN_APP'],
+      defaultSubject: def.subject,
+      defaultBody: def.body,
+      variables: meta?.variables ?? [],
+    };
+  });
+  const transactional: EmailTemplateCatalogEntry[] = TRANSACTIONAL_EMAIL_DEFS.map((entry) => {
+    const def = resolveTransactionalDefault(entry.key, locale);
+    // Sin traducción para esa key, `resolveTransactionalDefault` devuelve el
+    // español, que es exactamente lo que ya traía la entrada.
+    return def ? { ...entry, defaultSubject: def.subject, defaultBody: def.body } : entry;
+  });
+  return [...transactional, ...hubEntries];
 }
 
 /** Todas las keys conocidas (hub + transaccionales), para /templates/keys. */

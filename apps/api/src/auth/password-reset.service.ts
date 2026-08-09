@@ -529,6 +529,7 @@ export class PasswordResetService {
       // estructural y se añade siempre (el override no puede romper el reset).
       const applied = applyEmailOverride(override, vars, defaultSubject);
       const { html, text } = renderBrandedEmail(branding, {
+        lang: toHubTemplateLang(locale),
         title: applied.subject,
         bodyHtml: textToHtmlParagraphs(applied.bodyText),
         bodyText: applied.bodyText,
@@ -543,6 +544,7 @@ export class PasswordResetService {
       // conserva su maqueta HTML propia más abajo, byte a byte.
       const bodyText = interpolate(def.body, vars);
       const { html, text } = renderBrandedEmail(branding, {
+        lang: toHubTemplateLang(locale),
         title: resolveFixedEmailCopy('title.password_reset', locale),
         bodyHtml: textToHtmlParagraphs(bodyText),
         bodyText,
@@ -571,6 +573,7 @@ Si no fuiste tú, puedes ignorar este mensaje — tu contraseña actual sigue in
   )}</span></p>
   <p style="margin:12px 0 0;font-size: 14px; color: #5b6b7c;">Si no fuiste tú, puedes ignorar este mensaje — tu contraseña actual sigue intacta.</p>`;
     const { html, text } = renderBrandedEmail(branding, {
+      lang: toHubTemplateLang(locale),
       title: resolveFixedEmailCopy('title.password_reset', locale),
       bodyHtml,
       bodyText,

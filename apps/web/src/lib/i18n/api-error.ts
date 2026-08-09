@@ -16,19 +16,54 @@ import { ApiHttpError } from '@/lib/api-client';
 import type { TranslatorLike } from './labels';
 
 /**
- * Codes cuyo mensaje de catálogo interpola `{detail}` con el diagnóstico crudo
- * de un sistema externo que el backend manda en `ApiError.detail`.
+ * Codes cuyo mensaje de catálogo interpola `{detail}` con el dato que el
+ * backend mandaba incrustado en el `message` y ahora manda además como campo
+ * propio (`ApiError.detail`).
  *
- * La lista es EXPLÍCITA y corta a propósito: es el contrato entre el body de la
- * API y las DOS traducciones. Añadir un code aquí obliga a que el catálogo `es`
- * y el `en` tengan la key con `{detail}` (hay test), y a que el throw del
- * backend rellene el campo. Sin la lista habría que adivinar en runtime si un
- * mensaje lleva placeholder, y un `t(code)` sobre un mensaje con `{detail}` sin
- * valor pinta la key cruda en pantalla.
+ * La lista es EXPLÍCITA a propósito: es el contrato entre el body de la API y
+ * las DOS traducciones. Añadir un code aquí obliga a que el catálogo `es` y el
+ * `en` tengan la key con `{detail}` (lo comprueba `api-error.test.ts`
+ * recorriendo esta misma lista) y a que el throw del backend rellene el campo.
+ * Sin la lista habría que adivinar en runtime si un mensaje lleva placeholder,
+ * y un `t(code)` sobre un mensaje con `{detail}` sin valor pinta la key cruda
+ * en pantalla.
+ *
+ * Se exporta SOLO para que el test la recorra: nadie más debe leerla.
  */
-const CODES_WITH_DETAIL: ReadonlySet<string> = new Set([
+export const CODES_WITH_DETAIL: ReadonlySet<string> = new Set([
+  // ── Diagnóstico de un sistema EXTERNO (proveedor de pago, MTA, IdP) ──────
+  // Es la información con la que un admin resuelve la incidencia sin abrir un
+  // ticket. Perderla al traducir el code era el bug grave.
   'ADMIN_STRIPE_KEY_REJECTED',
   'ADMIN_SMTP_TEST_FAILED',
+  'BILLING_WEBHOOK_SIGNATURE_REJECTED',
+  'MEMBER_REG_EMAIL_SEND_FAILED',
+  'PAYCONN_EMAIL_SEND_FAILED',
+  'SSO_OIDC_IDP_ERROR',
+  'SSO_SAML_RESPONSE_INVALID',
+  'SUBS_WEBHOOK_SIGNATURE_REJECTED',
+  'TENANT_SETTINGS_SMTP_CONFIG_INVALID',
+  'TENANT_SETTINGS_SMTP_TEST_FAILED',
+  // ── Dato del propio producto (identificador, slug, límite) ───────────────
+  // Menos crítico, mismo defecto: el inglés se lo tragaba.
+  'ACCESS_GROUPS_SLUG_TAKEN',
+  'ADMIN_CUSTOM_DOMAIN_EXISTS',
+  'ADMIN_CUSTOM_DOMAIN_NOT_FOUND',
+  'ADMIN_ROLE_NOT_ASSIGNABLE',
+  'ADMIN_SMTP_TEMPLATE_NOT_FOUND',
+  'ADMIN_TENANT_SLUG_EXISTS',
+  'AI_PROVIDERS_PROVIDER_NOT_REGISTERED',
+  'AUTH_API_KEY_MISSING_SCOPES',
+  'FUNDAE_RLPT_SIZE_INVALID',
+  'MARKETPLACE_ASSET_SURFACE_INVALID',
+  'MARKETPLACE_DISPATCHER_ROUTE_NOT_FOUND',
+  'MODERATION_REASON_TOO_LONG',
+  'MODERATION_SCOPES_UNKNOWN',
+  'PAYCONN_PATTERN_INVALID',
+  'SSO_EMAIL_DOMAIN_NOT_ALLOWED',
+  'STORAGE_FILE_SIZE_OUT_OF_RANGE',
+  'TENANT_MODULES_MODULE_NOT_ACTIVE',
+  'TENANT_SETTINGS_PARAM_INVALID',
 ]);
 
 /**

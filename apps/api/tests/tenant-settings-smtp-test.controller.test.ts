@@ -22,8 +22,14 @@ const SMTP_RAW = { host: 'h', port: 587, username: 'u', password: 'p', fromEmail
  * `actorLocale = null` simula que el admin no tiene fila en este tenant (el
  * controller responde 400 sin enviar nada, comportamiento previo).
  */
-function makeHarness(actorLocale: string | null) {
-  const send = vi.fn().mockResolvedValue({ ok: true, messageId: '<id>' });
+function makeHarness(
+  actorLocale: string | null,
+  sendResult: { ok: boolean; messageId?: string; error?: string } = {
+    ok: true,
+    messageId: '<id>',
+  },
+) {
+  const send = vi.fn().mockResolvedValue(sendResult);
   const modules = {
     getTenantConfig: () => ({ get: vi.fn().mockResolvedValue(SMTP_RAW) }),
     getSmtpAdapter: () => ({ parseConfig: (raw: unknown) => raw, send }),
@@ -86,5 +92,40 @@ describe('TenantSettingsController.testSmtp — idioma del ping', () => {
       /No se pudo resolver tu email/,
     );
     expect(send).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * El MTA rechaza: `TENANT_SETTINGS_SMTP_TEST_FAILED`. El motivo del rechazo es
+ * la información con la que el admin arregla la incidencia, y hasta ahora solo
+ * viajaba incrustado en el `message` español — el front lo borraba al traducir
+ * el code y el admin anglófono se quedaba con «SMTP failed.» a secas.
+ */
+describe('TenantSettingsController.testSmtp — diagnóstico del MTA', () => {
+  async function rejectedBody(error?: string) {
+    const { controller } = makeHarness('es-ES', { ok: false, ...(error ? { error } : {}) });
+    try {
+      await controller.testSmtp(ADMIN_USER as never);
+    } catch (err) {
+      return (err as { response: { message: string; code: string; detail?: string } }).response;
+    }
+    throw new Error('no lanzó');
+  }
+
+  it('el motivo del MTA viaja en `detail`, aparte del message (que no cambia)', async () => {
+    const body = await rejectedBody('535 5.7.8 Username and Password not accepted');
+    expect(body.code).toBe('TENANT_SETTINGS_SMTP_TEST_FAILED');
+    expect(body.message).toBe('SMTP falló: 535 5.7.8 Username and Password not accepted');
+    expect(body.detail).toBe('535 5.7.8 Username and Password not accepted');
+  });
+
+  it('CAMINO DEGRADADO: el MTA falla sin texto → NO se manda `detail`', async () => {
+    // Sin `detail`, el front pinta el `message` crudo en vez de una frase
+    // traducida con el hueco vacío. Es el único caso en que un admin anglófono
+    // ve español aquí, y es deliberado: no hay diagnóstico que traducir.
+    const body = await rejectedBody();
+    expect(body.message).toBe('SMTP falló: sin detalle');
+    expect(body.detail).toBeUndefined();
+    expect('detail' in body).toBe(false);
   });
 });

@@ -102,6 +102,9 @@ export class FundaeRlptController {
       throw new ForbiddenException({
         message: `El documento debe pesar entre 1 byte y ${MAX_BYTES} bytes.`,
         code: 'FUNDAE_RLPT_SIZE_INVALID',
+        // String, no número: ICU formatearía un `number` con separador de
+        // miles por idioma y el español dejaría de salir byte a byte igual.
+        detail: String(MAX_BYTES),
       });
     }
 

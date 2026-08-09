@@ -518,6 +518,7 @@ export class InscribeService {
       // enlace mágico es estructural y se añade siempre.
       const applied = applyEmailOverride(override, vars, defaultSubject);
       const { html, text } = renderBrandedEmail(branding, {
+        lang: toHubTemplateLang(locale),
         title: applied.subject,
         bodyHtml: textToHtmlParagraphs(applied.bodyText),
         bodyText: applied.bodyText,
@@ -532,6 +533,7 @@ export class InscribeService {
       // conserva su maqueta HTML propia más abajo, byte a byte.
       const bodyText = interpolate(def.body, vars);
       const { html, text } = renderBrandedEmail(branding, {
+        lang: toHubTemplateLang(locale),
         title: defaultSubject,
         bodyHtml: textToHtmlParagraphs(bodyText),
         bodyText,
@@ -559,6 +561,7 @@ Tu usuario es ${email}. Si el enlace caduca, usa "¿Olvidaste tu contraseña?" e
     email,
   )}</strong>. Si el enlace caduca, usa «¿Olvidaste tu contraseña?» en la pantalla de acceso.</p>`;
     const { html, text } = renderBrandedEmail(branding, {
+      lang: toHubTemplateLang(locale),
       title: `Tu acceso a ${branding.tenantName}`,
       bodyHtml,
       bodyText,

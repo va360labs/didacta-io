@@ -37,7 +37,26 @@ export interface EmailBranding {
   brandColor: string;
 }
 
+/**
+ * Idioma en el que va redactado el email, para el atributo `lang` del `<html>`.
+ *
+ * Es la MISMA lista cerrada que `HUB_TEMPLATE_LANGS`
+ * (`modules/notifications/email-template-catalog.ts`); se redeclara aquí para
+ * que este fichero siga sin dependencias — lo compartimos con 23 emisores y no
+ * queremos arrastrar el catálogo (que a su vez importa un paquete de módulo) a
+ * cada test que renderice un email. Un test aserta que las dos listas coinciden.
+ */
+export type EmailLang = 'es' | 'en';
+
 export interface BrandedEmailContent {
+  /**
+   * Idioma del contenido. OBLIGATORIO a propósito: con un opcional no se
+   * distingue «este email va en español» de «se me olvidó pasarlo», y el
+   * síntoma —un email inglés marcado como español— no lo ve nadie hasta que un
+   * lector de pantalla lo lee con la voz equivocada o Gmail ofrece traducirlo.
+   * Los emisores que todavía solo redactan español lo declaran `'es'`.
+   */
+  lang: EmailLang;
   /** Título destacado (color de marca) arriba del cuerpo. */
   title: string;
   /** Cuerpo ya en HTML (el caller escapa lo que corresponda). */
@@ -160,7 +179,7 @@ export function renderBrandedEmail(
     : '';
 
   const html = `<!DOCTYPE html>
-<html lang="es"><head><meta charset="utf-8" /><meta name="viewport" content="width=device-width,initial-scale=1" /></head>
+<html lang="${content.lang}"><head><meta charset="utf-8" /><meta name="viewport" content="width=device-width,initial-scale=1" /></head>
 <body style="margin:0;padding:0;background:#f1f5f9;">
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f1f5f9;padding:24px 12px;">
     <tr><td align="center">

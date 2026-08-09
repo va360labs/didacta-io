@@ -201,6 +201,7 @@ export class RestrictionService {
       throw new BadRequestException({
         message: `Áreas desconocidas: ${invalid.join(', ')}.`,
         code: 'MODERATION_SCOPES_UNKNOWN',
+        detail: invalid.join(', '),
       });
     }
     // Si viene el comodín, lo demás sobra: guardar ['all'] a secas evita que
@@ -218,6 +219,8 @@ export class RestrictionService {
       throw new BadRequestException({
         message: `El motivo no puede pasar de ${MAX_REASON} caracteres.`,
         code: 'MODERATION_REASON_TOO_LONG',
+        // String, no número: ver la nota de `STORAGE_FILE_SIZE_OUT_OF_RANGE`.
+        detail: String(MAX_REASON),
       });
     }
 

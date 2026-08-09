@@ -133,6 +133,7 @@ export class AiProvidersController {
       throw new UnauthorizedException({
         message: `Provider ${dto.provider} no registrado.`,
         code: 'AI_PROVIDERS_PROVIDER_NOT_REGISTERED',
+        detail: dto.provider,
       });
     }
     if (!adapter.capabilities.includes(purposeParsed)) {

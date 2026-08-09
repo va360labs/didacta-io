@@ -202,6 +202,8 @@ export class SubscriptionsDailyWorker implements OnApplicationBootstrap, OnModul
       title = applied.subject;
     }
     const { html, text } = renderBrandedEmail(branding, {
+      // Monolingüe: este emisor todavía solo redacta español.
+      lang: 'es',
       title,
       bodyHtml: textToHtmlParagraphs(bodyText),
       bodyText,
@@ -256,6 +258,8 @@ export class SubscriptionsDailyWorker implements OnApplicationBootstrap, OnModul
         bodyText = applied.bodyText;
       }
       const { html, text } = renderBrandedEmail(branding, {
+        // Monolingüe: este emisor todavía solo redacta español.
+        lang: 'es',
         title: subject,
         bodyHtml: textToHtmlParagraphs(bodyText),
         bodyText,
@@ -341,6 +345,8 @@ export class SubscriptionsDailyWorker implements OnApplicationBootstrap, OnModul
       }
 
       const { html, text } = renderBrandedEmail(branding, {
+        // Monolingüe: este emisor todavía solo redacta español.
+        lang: 'es',
         title: subject,
         bodyHtml: textToHtmlParagraphs(bodyText),
         bodyText,

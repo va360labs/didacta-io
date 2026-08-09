@@ -54,6 +54,8 @@ Si te atascas en cualquier paso, responde a este correo y te echamos una mano.`;
   <p style="margin:12px 0 0;font-size:14px;color:#5b6b7c;">Si te atascas en cualquier paso, responde a este correo y te echamos una mano.</p>`;
 
   const { html, text } = renderBrandedEmail(branding, {
+    // Monolingüe: este emisor todavía solo redacta español.
+    lang: 'es',
     title: 'Tu cuenta ya está lista',
     bodyHtml,
     bodyText,

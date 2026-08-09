@@ -232,6 +232,45 @@ describe('buildEmailTemplateCatalog', () => {
     for (const hubKey of Object.keys(HUB_TEMPLATE_DEFAULTS)) expect(keys).toContain(hubKey);
   });
 
+  it('sin locale devuelve byte a byte lo de antes (idioma de referencia)', () => {
+    // El endpoint `/catalog` se llamaba sin locale y así lo siguen llamando los
+    // clientes viejos: la respuesta no puede moverse ni un byte.
+    expect(buildEmailTemplateCatalog()).toEqual(buildEmailTemplateCatalog('es-ES'));
+  });
+
+  it('con locale en-US el prefill del editor sale en inglés, no en español', () => {
+    // El bug: `/admin/emails` deja elegir el idioma del override y prefilleaba
+    // SIEMPRE el copy español, así que crear un override en-US empezaba
+    // borrando un texto español.
+    const en = buildEmailTemplateCatalog('en-US');
+    const es = buildEmailTemplateCatalog('es-ES');
+    const distintos = en.filter((e) => {
+      const par = es.find((x) => x.key === e.key)!;
+      return par.defaultBody !== e.defaultBody;
+    });
+    // El hub está traducido entero; los transaccionales, parcialmente.
+    expect(distintos.length).toBeGreaterThan(20);
+    const reset = en.find((e) => e.key === 'auth.password_reset');
+    expect(reset?.defaultBody).not.toBe(
+      es.find((e) => e.key === 'auth.password_reset')?.defaultBody,
+    );
+  });
+
+  it('CAMINO DEGRADADO: locale sin catálogo (pt-BR) devuelve el español, nunca vacío', () => {
+    const pt = buildEmailTemplateCatalog('pt-BR');
+    expect(pt).toEqual(buildEmailTemplateCatalog('es-ES'));
+    for (const entry of pt) expect(entry.defaultBody.length, entry.key).toBeGreaterThan(0);
+  });
+
+  it('el idioma NO cambia el conjunto de keys ni los metadatos', () => {
+    const en = buildEmailTemplateCatalog('en-US');
+    const es = buildEmailTemplateCatalog('es-ES');
+    expect(en.map((e) => e.key)).toEqual(es.map((e) => e.key));
+    // `name`/`description` siguen solo en español a propósito (hueco conocido):
+    // si alguien los traduce, este test le recuerda que hay que revisarlo.
+    expect(en.map((e) => e.name)).toEqual(es.map((e) => e.name));
+  });
+
   it('toda entrada tiene nombre humano, descripción, body por defecto y variables', () => {
     for (const entry of buildEmailTemplateCatalog()) {
       expect(entry.name.length, entry.key).toBeGreaterThan(0);
@@ -349,6 +388,18 @@ describe('copy fijo de emails (CTA, títulos, rellenos)', () => {
   it('ninguna etiqueta inglesa se quedó en español (era el bug: cuerpo EN, botón ES)', () => {
     for (const key of Object.keys(FIXED_EMAIL_COPY.es) as FixedEmailCopyKey[]) {
       expect(FIXED_EMAIL_COPY.en[key], `${key} sin traducir`).not.toBe(FIXED_EMAIL_COPY.es[key]);
+    }
+  });
+
+  it('los dos idiomas declaran los MISMOS placeholders en cada copy fijo', () => {
+    // `cta.hub_enter` y `footer.hub_member` llevan `{{tenantName}}`: si una
+    // traducción lo pierde, el email sale sin el nombre de la plataforma y
+    // nadie lo ve hasta que un miembro anglófono recibe «Go to ».
+    const vars = (s: string) => [...s.matchAll(/\{\{\s*(\w+)\s*\}\}/g)].map((m) => m[1]).sort();
+    for (const key of Object.keys(FIXED_EMAIL_COPY.es) as FixedEmailCopyKey[]) {
+      expect(vars(FIXED_EMAIL_COPY.en[key]), `${key}: placeholders distintos`).toEqual(
+        vars(FIXED_EMAIL_COPY.es[key]),
+      );
     }
   });
 

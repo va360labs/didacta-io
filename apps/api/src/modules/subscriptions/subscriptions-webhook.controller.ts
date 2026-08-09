@@ -111,9 +111,13 @@ export class SubscriptionsWebhookController {
       event = stripe.constructWebhookEvent(rawBody, signature);
     } catch (err) {
       if (err instanceof WebhookSignatureInvalidError) throw err;
+      // Ídem `BILLING_WEBHOOK_SIGNATURE_REJECTED`: el diagnóstico del SDK de
+      // Stripe viaja aparte del `message`.
+      const detail = (err as Error).message;
       throw new UnauthorizedException({
-        message: `Firma del webhook inválida: ${(err as Error).message}`,
+        message: `Firma del webhook inválida: ${detail}`,
         code: 'SUBS_WEBHOOK_SIGNATURE_REJECTED',
+        detail,
       });
     }
 

@@ -71,6 +71,7 @@ export class CustomDomainsService {
       throw new ConflictException({
         message: `El dominio ${dto.hostname} ya está registrado para este tenant.`,
         code: 'ADMIN_CUSTOM_DOMAIN_EXISTS',
+        detail: dto.hostname,
       });
     }
 
@@ -114,6 +115,7 @@ export class CustomDomainsService {
       throw new NotFoundException({
         message: `Dominio ${domainId} no encontrado.`,
         code: 'ADMIN_CUSTOM_DOMAIN_NOT_FOUND',
+        detail: domainId,
       });
     }
     const current = config.domains[idx]!;
@@ -153,6 +155,7 @@ export class CustomDomainsService {
       throw new NotFoundException({
         message: `Dominio ${domainId} no encontrado.`,
         code: 'ADMIN_CUSTOM_DOMAIN_NOT_FOUND',
+        detail: domainId,
       });
     }
     const updated: CustomDomain = {
@@ -180,6 +183,7 @@ export class CustomDomainsService {
       throw new NotFoundException({
         message: `Dominio ${domainId} no encontrado.`,
         code: 'ADMIN_CUSTOM_DOMAIN_NOT_FOUND',
+        detail: domainId,
       });
     }
     const removed = config.domains[idx]!;

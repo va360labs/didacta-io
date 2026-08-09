@@ -23,6 +23,8 @@ export function renewalEmailHtml(body: string, branding?: EmailBranding, title?:
   const linked = linkifyPlainText(body);
   if (branding) {
     return renderBrandedEmail(branding, {
+      // Monolingüe: este emisor todavía solo redacta español.
+      lang: 'es',
       title: title ?? '',
       bodyHtml: linked,
       bodyText: body,

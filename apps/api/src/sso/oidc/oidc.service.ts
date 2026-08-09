@@ -460,9 +460,15 @@ export class OidcService {
     errorDescription?: string;
   }): Promise<CallbackResult> {
     if (params.error) {
+      // El código de error y su descripción los redacta el IdP: es lo único que
+      // le dice al admin si falta un scope, si el client_id está revocado o si
+      // el usuario canceló. Viaja aparte del `message` para que la frase
+      // traducida lo enmarque en vez de tragárselo.
+      const detail = `${params.error}${params.errorDescription ? ` — ${params.errorDescription}` : ''}`;
       throw new UnauthorizedException({
-        message: `IdP devolvió error: ${params.error}${params.errorDescription ? ` — ${params.errorDescription}` : ''}`,
+        message: `IdP devolvió error: ${detail}`,
         code: 'SSO_OIDC_IDP_ERROR',
+        detail,
       });
     }
     if (!params.state || !params.code) {
@@ -566,6 +572,7 @@ export class OidcService {
         throw new UnauthorizedException({
           message: `El email "${email}" no pertenece a los dominios permitidos para SSO en este tenant.`,
           code: 'SSO_EMAIL_DOMAIN_NOT_ALLOWED',
+          detail: email,
         });
       }
     }

@@ -36,6 +36,7 @@ import {
   resolveFixedEmailCopy,
   resolveHubDefault,
   resolveRecipientLocale,
+  toHubTemplateLang,
 } from '../modules/notifications/email-template-catalog';
 
 const ADMIN_ROLES = new Set(['super_admin', 'tenant_admin']);
@@ -280,6 +281,7 @@ export class AdminSmtpController {
     const subject = interpolate(def.subject ?? '', vars);
     const bodyText = interpolate(def.body, vars);
     const { html, text } = renderBrandedEmail(branding, {
+      lang: toHubTemplateLang(locale),
       title: resolveFixedEmailCopy('title.smtp_test', locale),
       bodyHtml: textToHtmlParagraphs(bodyText),
       bodyText,
@@ -380,6 +382,7 @@ export class AdminSmtpController {
       throw new BadRequestException({
         message: `No existe la plantilla "${body.templateKey}".`,
         code: 'ADMIN_SMTP_TEMPLATE_NOT_FOUND',
+        detail: body.templateKey,
       });
     }
 
@@ -398,6 +401,7 @@ export class AdminSmtpController {
     const bodyText = interpolate(rawBody, vars);
 
     const { html, text } = renderBrandedEmail(branding, {
+      lang: toHubTemplateLang(locale),
       title: subject ?? branding.tenantName,
       bodyHtml: textToHtmlParagraphs(bodyText),
       bodyText,
