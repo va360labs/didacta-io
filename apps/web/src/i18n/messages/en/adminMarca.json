@@ -95,7 +95,11 @@
     "pagos": "Payments",
     "modules": "Modules",
     "storage": "Storage",
-    "raw": "Advanced"
+    "raw": "Advanced",
+    "aula-virtual": "Virtual classroom"
+  },
+  "configTabsDesc": {
+    "aula-virtual": "Zoom Server-to-Server credentials for live sessions."
   },
   "modulesTab": {
     "loadError": "We could not load the modules.",
@@ -231,7 +235,7 @@
     "addButton": "Add",
     "empty": "You have not added any custom domain yet.",
     "addedAt": "Added {date}",
-    "verifiedAtSuffix": " · validated {date}",
+    "verifiedAtSuffix": "validated {date}",
     "dnsTitle": "Configure your DNS and press Validate:",
     "dnsCname": "Create a CNAME from <mono>{hostname}</mono> to <mono>{target}</mono>.",
     "dnsTxt": "Add a TXT record at <mono>_didacta-challenge.{hostname}</mono> with the value:<tokenCode>{token}</tokenCode>",

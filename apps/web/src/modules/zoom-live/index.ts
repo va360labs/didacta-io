@@ -19,8 +19,13 @@ export const zoomLiveExtension: ModuleWebExtension = {
   adminConfigTabs: [
     {
       key: 'aula-virtual',
-      label: 'Aula virtual',
-      description: 'Credenciales Zoom Server-to-Server para sesiones síncronas.',
+      // Copy en el catálogo del core (`adminMarca.configTabs*`); el `fallback`
+      // solo se pinta si un fork borra la key. Ver `ModuleLocalizedText`.
+      label: { key: 'configTabs.aula-virtual', fallback: 'Aula virtual' },
+      description: {
+        key: 'configTabsDesc.aula-virtual',
+        fallback: 'Credenciales Zoom Server-to-Server para sesiones síncronas.',
+      },
       Component: ZoomAdminSurface,
     },
   ],

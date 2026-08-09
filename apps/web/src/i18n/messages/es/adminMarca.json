@@ -95,7 +95,11 @@
     "pagos": "Pagos",
     "modules": "Módulos",
     "storage": "Storage",
-    "raw": "Avanzado"
+    "raw": "Avanzado",
+    "aula-virtual": "Aula virtual"
+  },
+  "configTabsDesc": {
+    "aula-virtual": "Credenciales Zoom Server-to-Server para sesiones síncronas."
   },
   "modulesTab": {
     "loadError": "No pudimos cargar los módulos.",
@@ -231,7 +235,7 @@
     "addButton": "Añadir",
     "empty": "Aún no has añadido ningún dominio personalizado.",
     "addedAt": "Añadido {date}",
-    "verifiedAtSuffix": " · validado {date}",
+    "verifiedAtSuffix": "validado {date}",
     "dnsTitle": "Configura tu DNS y pulsa Validar:",
     "dnsCname": "Crea un CNAME desde <mono>{hostname}</mono> hacia <mono>{target}</mono>.",
     "dnsTxt": "Añade un TXT en <mono>_didacta-challenge.{hostname}</mono> con el valor:<tokenCode>{token}</tokenCode>",

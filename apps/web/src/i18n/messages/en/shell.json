@@ -1,5 +1,11 @@
 {
   "closeMenu": "Close menu",
+  "openMenu": "Open navigation menu",
+  "sections": {
+    "myProfile": "My profile",
+    "groups": "Groups",
+    "learningPaths": "Learning paths"
+  },
   "sidebar": {
     "logoAlt": "Logo",
     "expandMenu": "Expand menu",
