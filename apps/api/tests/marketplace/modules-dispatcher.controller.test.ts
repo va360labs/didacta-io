@@ -1,4 +1,4 @@
-import { HttpException, NotFoundException } from '@nestjs/common';
+import { HttpException, Logger, NotFoundException } from '@nestjs/common';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ModuleRouterService } from '../../src/marketplace/module-router.service';
 import { ModulesDispatcherController } from '../../src/marketplace/modules-dispatcher.controller';
@@ -721,5 +721,99 @@ describe('ModulesDispatcherController.dispatch', () => {
       externalSource: 'learndash',
       permissions: ['users.upsertByExternalRef'],
     });
+  });
+});
+
+/// MUST-FIX 26 — el dispatcher deja de reenviar al cliente el `err.message`
+/// crudo del handler de un módulo third-party.
+///
+/// El mensaje lo escribe código que NO es nuestro y que se instala desde el
+/// marketplace: puede llevar SQL, rutas de fichero, la respuesta de una API
+/// externa o un secreto interpolado por descuido del módulo. Como muchas
+/// rutas del dispatcher son anónimas (ver la decodificación opcional del
+/// Bearer arriba), ese detalle no puede viajar en la respuesta.
+///
+/// Un módulo que quiera comunicar algo al usuario final no debe lanzar:
+/// devuelve `{ status, body }` desde el handler, que sí se envía tal cual
+/// (cubierto por los tests de despacho de arriba).
+describe('ModulesDispatcherController · saneado del error del handler', () => {
+  /// Mensaje de un módulo que filtra a la vez red interna, SQL y un secreto.
+  const LEAKY = 'connect ECONNREFUSED 10.0.0.7:5432 — SELECT * FROM wp_users; secret=sk_live_abc';
+
+  function makeDispatcher(handler: () => Promise<never>): ModulesDispatcherController {
+    const router = new ModuleRouterService();
+    router.registerModule('mod.example', '/modules/example', [
+      { method: 'GET', path: '/probe', handler },
+    ]);
+    return new ModulesDispatcherController(
+      router,
+      makeTokens({ [VALID_TOKEN]: claims() }),
+      httpSvc,
+      rateLimiter,
+      dbSvc,
+      didactaFactory,
+      jobsFactory,
+      secretsFactory,
+      moduleRegistry,
+      contextFactory,
+      tenantContext,
+      tenantResolver,
+    );
+  }
+
+  it('el cliente recibe un mensaje genérico con su code y el detalle va al log', async () => {
+    const errorSpy = vi.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
+    const ctrl = makeDispatcher(async () => {
+      throw new Error(LEAKY);
+    });
+    const req = makeReq({
+      url: '/api/v1/modules/example/probe',
+      headers: { authorization: `Bearer ${VALID_TOKEN}` },
+    });
+    const { reply } = makeReply();
+
+    const thrown: unknown = await ctrl.dispatch(req, reply, undefined).catch((e: unknown) => e);
+
+    // (a) el cliente no ve nada del error original
+    expect(thrown).toBeInstanceOf(HttpException);
+    const body = (thrown as HttpException).getResponse();
+    expect((thrown as HttpException).getStatus()).toBe(500);
+    expect(body).toEqual({
+      message: 'El módulo no pudo completar la operación.',
+      code: 'MARKETPLACE_MODULE_HANDLER_ERROR',
+    });
+    const serialized = JSON.stringify(body);
+    expect(serialized).not.toContain('ECONNREFUSED');
+    expect(serialized).not.toContain('10.0.0.7');
+    expect(serialized).not.toContain('wp_users');
+    expect(serialized).not.toContain('sk_live_abc');
+
+    // (b) el detalle sí queda en el log, con módulo, tenant y operación
+    const logged = errorSpy.mock.calls.flat().map(String).join('\n');
+    expect(logged).toContain(LEAKY);
+    expect(logged).toContain('module=mod.example');
+    expect(logged).toContain('tenant=t-1');
+    expect(logged).toContain('operation=GET /modules/example/probe');
+
+    errorSpy.mockRestore();
+  });
+
+  it('un throw que no es Error tampoco filtra su contenido', async () => {
+    const errorSpy = vi.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
+    const ctrl = makeDispatcher(async () => {
+      throw 'DB_PASSWORD=hunter2' as never;
+    });
+    const req = makeReq({ url: '/api/v1/modules/example/probe' });
+    const { reply } = makeReply();
+
+    const thrown: unknown = await ctrl.dispatch(req, reply, undefined).catch((e: unknown) => e);
+
+    expect(JSON.stringify((thrown as HttpException).getResponse())).not.toContain('hunter2');
+    const logged = errorSpy.mock.calls.flat().map(String).join('\n');
+    expect(logged).toContain('hunter2');
+    // Ruta anónima: el log lo deja explícito en lugar de un tenant vacío.
+    expect(logged).toContain('tenant=anónimo');
+
+    errorSpy.mockRestore();
   });
 });

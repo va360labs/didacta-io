@@ -1,5 +1,6 @@
 {
   "ALREADY_INITIALIZED": "La plataforma ya fue inicializada. Inicia sesión con tu cuenta admin.",
+  "MARKETPLACE_ASSET_NOT_FOUND": "El recurso solicitado no está disponible.",
   "MARKETPLACE_DISPATCHER_METHOD_NOT_ALLOWED": "Método no soportado por el dispatcher",
   "MARKETPLACE_SUPER_ADMIN_REQUIRED": "Esta acción requiere rol super_admin.",
   "MODERATION_ADMIN_REQUIRED": "Esta acción requiere rol de administrador.",

@@ -7,6 +7,7 @@ import {
   Controller,
   Get,
   Header,
+  Logger,
   NotFoundException,
   Param,
   Res,
@@ -28,6 +29,22 @@ const bundleCache = new Map<string, { data: Buffer; version: string }>();
 /// lleva la versión del módulo para invalidación automática.
 const CACHE_MAX_AGE = 3600;
 
+/// Respuesta ÚNICA del endpoint público cuando no puede servir un bundle,
+/// sea cual sea el motivo real (módulo no instalado, instalado pero en un
+/// status no servible, fallo del storage, ZIP corrupto o paquete sin ese
+/// bundle). Es deliberadamente vaga.
+///
+/// SEGURIDAD (MUST-FIX 26): este endpoint NO pide autenticación. Antes
+/// devolvía un `code` + `message` distinto por causa, e incluso el status
+/// interno de instalación y el `err.message` crudo del storage (que en
+/// disco local lleva la ruta absoluta del fichero y en S3 el bucket).
+/// Cualquiera podía enumerar qué módulos hay instalados en la instancia y
+/// en qué estado. Ahora las cinco causas son indistinguibles desde fuera:
+/// mismo 404, mismo `code`, mismo `message`. El motivo real va al log del
+/// servidor vía `denyAsset`.
+const ASSET_NOT_FOUND_CODE = 'MARKETPLACE_ASSET_NOT_FOUND';
+const ASSET_NOT_FOUND_MESSAGE = 'El recurso solicitado no está disponible.';
+
 /**
  * Endpoints públicos para servir assets de módulos instalados.
  *
@@ -44,6 +61,8 @@ const CACHE_MAX_AGE = 3600;
 // reales — devolviendo "No hay módulo registrado". Ver bug alpha.60.
 @Controller('modules')
 export class ModuleAssetsController {
+  private readonly logger = new Logger(ModuleAssetsController.name);
+
   constructor(
     private readonly installed: InstalledModuleService,
     private readonly contextFactory: ModuleContextFactory,
@@ -80,18 +99,23 @@ export class ModuleAssetsController {
       return new StreamableFile(cached.data);
     }
 
+    // A partir de aquí toda salida de error usa `denyAsset`: el cliente
+    // anónimo recibe siempre el mismo 404 y el motivo real solo va al log.
+    const bundlePath = `dist/ui/${surface}.js`;
+
     // Buscar módulo instalado
     const module = await this.installed.findByName(moduleName);
     if (!module) {
-      throw new NotFoundException({
-        message: `Módulo "${moduleName}" no está instalado.`,
-        code: 'MARKETPLACE_MODULE_NOT_INSTALLED',
+      throw this.denyAsset('el módulo no está instalado en esta instancia', {
+        module: moduleName,
+        surface,
       });
     }
     if (module.status !== 'INSTALLED') {
-      throw new NotFoundException({
-        message: `Módulo "${moduleName}" no está disponible (status: ${module.status}).`,
-        code: 'MARKETPLACE_MODULE_NOT_AVAILABLE',
+      throw this.denyAsset(`el módulo está en status ${module.status}, no en INSTALLED`, {
+        module: moduleName,
+        surface,
+        version: module.version,
       });
     }
 
@@ -101,24 +125,46 @@ export class ModuleAssetsController {
     try {
       packageBuffer = await storage.download(module.packageStorageKey);
     } catch (err) {
-      throw new NotFoundException({
-        message: `Error descargando paquete del módulo: ${err instanceof Error ? err.message : String(err)}`,
-        code: 'MARKETPLACE_PACKAGE_DOWNLOAD_FAILED',
-      });
+      throw this.denyAsset(
+        'falló la descarga del paquete desde el storage',
+        { module: moduleName, surface, storageKey: module.packageStorageKey },
+        err,
+      );
     }
 
-    // Extraer el bundle UI
-    const zip = new AdmZip(packageBuffer);
-    const bundlePath = `dist/ui/${surface}.js`;
-    const entry = zip.getEntry(bundlePath);
+    // Extraer el bundle UI. `adm-zip` parsea el directorio central de forma
+    // perezosa, así que un paquete corrupto revienta aquí y no en el
+    // constructor — por eso ambos van dentro del mismo try. Sin este try el
+    // fallo escapaba como 500 y volvía a ser un oráculo: solo se llega a
+    // este punto si el módulo existe, está INSTALLED y su blob se descargó.
+    let entry: ReturnType<AdmZip['getEntry']> = null;
+    try {
+      entry = new AdmZip(packageBuffer).getEntry(bundlePath);
+    } catch (err) {
+      throw this.denyAsset(
+        'el paquete descargado no se pudo leer como ZIP',
+        { module: moduleName, surface, storageKey: module.packageStorageKey },
+        err,
+      );
+    }
     if (!entry) {
-      throw new NotFoundException({
-        message: `El módulo "${moduleName}" no tiene UI para surface "${surface}".`,
-        code: 'MARKETPLACE_SURFACE_UI_MISSING',
+      throw this.denyAsset(`el paquete no incluye "${bundlePath}"`, {
+        module: moduleName,
+        surface,
+        version: module.version,
       });
     }
 
-    const bundleData = entry.getData();
+    let bundleData: Buffer;
+    try {
+      bundleData = entry.getData();
+    } catch (err) {
+      throw this.denyAsset(
+        `no se pudo extraer "${bundlePath}" del paquete`,
+        { module: moduleName, surface, storageKey: module.packageStorageKey },
+        err,
+      );
+    }
 
     // Cachear para próximos requests
     bundleCache.set(cacheKey, { data: bundleData, version: module.version });
@@ -129,6 +175,42 @@ export class ModuleAssetsController {
     res.header('X-Module-Version', module.version);
 
     return new StreamableFile(bundleData);
+  }
+
+  /// Única fábrica del 404 del endpoint público (MUST-FIX 26).
+  ///
+  /// Registra en el log del servidor el motivo REAL con contexto suficiente
+  /// para depurar (módulo, surface, versión, storage key y, si lo hay, el
+  /// error original con su stack) y devuelve al cliente un cuerpo idéntico
+  /// para todas las causas. Que exista un solo constructor del error es lo
+  /// que garantiza que las respuestas no puedan divergir en un refactor
+  /// futuro y volver a convertirse en un oráculo de enumeración.
+  ///
+  /// `warn` cuando la causa es esperable (módulo ausente, sin bundle para
+  /// esa surface); `error` cuando hay un fallo real de infraestructura
+  /// (storage caído, paquete corrupto) que el operador debe atender.
+  private denyAsset(
+    reason: string,
+    context: Record<string, string | undefined>,
+    cause?: unknown,
+  ): NotFoundException {
+    const detail = Object.entries(context)
+      .filter(([, value]) => value !== undefined)
+      .map(([key, value]) => `${key}=${value}`)
+      .join(' ');
+    const line = `Assets · no se sirve el bundle: ${reason} — ${detail}`;
+    if (cause === undefined) {
+      this.logger.warn(line);
+    } else {
+      this.logger.error(
+        line,
+        cause instanceof Error ? (cause.stack ?? cause.message) : String(cause),
+      );
+    }
+    return new NotFoundException({
+      message: ASSET_NOT_FOUND_MESSAGE,
+      code: ASSET_NOT_FOUND_CODE,
+    });
   }
 
   /**
