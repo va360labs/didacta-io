@@ -23,7 +23,13 @@ import {
 } from '../common/branded-email';
 import {
   applyEmailOverride,
+  emailGreeting,
   fetchEmailOverride,
+  interpolate,
+  resolveFixedEmailCopy,
+  resolveRecipientLocale,
+  resolveTransactionalDefault,
+  toHubTemplateLang,
   type RawEmailOverride,
   type TemplateOverridePrisma,
 } from '../modules/notifications/email-template-catalog';
@@ -32,6 +38,9 @@ import { PasswordService } from './password.service';
 
 const TOKEN_TTL_MINUTES = 60;
 const TOKEN_RAW_BYTES = 32;
+
+/** Key del catálogo de plantillas que corresponde a este email. */
+const RESET_TEMPLATE_KEY = 'auth.password_reset';
 
 const NO_CLIENT_CONTEXT: ClientContext = { ip: null, userAgent: null };
 
@@ -86,6 +95,8 @@ export class PasswordResetService {
     userName: string | null;
     tenantId: string;
     tenantName: string;
+    /** Idioma del DESTINATARIO — ver `resolveRecipientLocale`. */
+    locale: string;
   } | null> {
     const tenant = await this.resolveTenant(args);
     if (!tenant) return null;
@@ -108,6 +119,8 @@ export class PasswordResetService {
     userName: string | null;
     tenantId: string;
     tenantName: string;
+    /** Idioma del DESTINATARIO — ver `resolveRecipientLocale`. */
+    locale: string;
   } | null> {
     const user = await this.prisma.user.findUnique({
       where: { tenantId_email: { tenantId: tenant.id, email: args.email } },
@@ -162,6 +175,7 @@ export class PasswordResetService {
       // alpha.77 — branding por tenant en emails. Si el tenant no tiene
       // name (caso bordeline en tests fake o data legacy), caemos a 'Didacta'.
       tenantName: (tenant as { name?: string | null }).name ?? 'Didacta',
+      locale: resolveRecipientLocale(user.locale),
     };
   }
 
@@ -291,6 +305,7 @@ export class PasswordResetService {
       userName: string | null;
       tenantId: string;
       tenantName: string;
+      locale: string;
     },
     toEmail: string,
     webBaseUrl: string,
@@ -353,18 +368,32 @@ export class PasswordResetService {
     );
 
     // alpha.83 — subject/cuerpo personalizables per-tenant desde /admin/emails.
+    // El override se busca primero en el idioma del destinatario y, si el
+    // tenant no lo personalizó ahí, en el de referencia (misma precedencia que
+    // el hub).
     const override = await fetchEmailOverride(
       this.prisma as unknown as TemplateOverridePrisma,
       result.tenantId,
-      'auth.password_reset',
+      RESET_TEMPLATE_KEY,
+      result.locale,
     );
     const { subject, html, text } = opts.asInvitation
       ? invitationEmailHtml(branding, {
+          // HALLAZGO (no tocado en este PR): el email de INVITACIÓN sigue
+          // siendo monolingüe — no tiene entrada en el catálogo, así que
+          // traducirlo es otro cambio. Ver el cuerpo del PR.
           greeting: result.userName ? `Hola ${result.userName},` : 'Hola,',
           resetUrl: `${webBaseUrl.replace(/\/$/, '')}/reset-password?token=${encodeURIComponent(result.rawToken)}`,
           validezDias: Math.max(1, Math.round((opts.ttlMinutes ?? 60) / (60 * 24))),
         })
-      : this.buildResetEmail(result.rawToken, result.userName, webBaseUrl, branding, override);
+      : this.buildResetEmail(
+          result.rawToken,
+          result.userName,
+          webBaseUrl,
+          branding,
+          result.locale,
+          override,
+        );
     const sendResult = await this.smtp.send(
       config,
       { to: toEmail, subject, text, html },
@@ -473,35 +502,53 @@ export class PasswordResetService {
     userName: string | null,
     webBaseUrl: string,
     branding: EmailBranding,
+    locale: string,
     override?: RawEmailOverride | null,
   ): { subject: string; html: string; text: string } {
     const link = `${webBaseUrl.replace(/\/$/, '')}/reset-password?token=${encodeURIComponent(
       rawToken,
     )}`;
-    const greeting = userName ? `Hola ${userName},` : 'Hola,';
+    const greeting = emailGreeting(userName, locale);
+    const vars = {
+      greeting,
+      userName: userName ?? '',
+      tenantName: branding.tenantName,
+      resetUrl: link,
+      ttlMinutes: TOKEN_TTL_MINUTES,
+    };
+    // El copy del catálogo para (key, idioma). Nunca `undefined`: la key existe
+    // en `TRANSACTIONAL_EMAIL_DEFS` y un idioma sin traducir cae al español.
+    const def = resolveTransactionalDefault(RESET_TEMPLATE_KEY, locale)!;
+    const defaultSubject = interpolate(def.subject ?? '', vars);
+    // Estructural: el override del tenant no puede quitar el botón, pero sí
+    // recibe su etiqueta en el idioma del destinatario.
+    const cta = { url: link, label: resolveFixedEmailCopy('cta.password_reset', locale) };
 
     if (override) {
       // Texto editado por el tenant; el botón CTA con el enlace seguro es
       // estructural y se añade siempre (el override no puede romper el reset).
-      const vars = {
-        greeting,
-        userName: userName ?? '',
-        tenantName: branding.tenantName,
-        resetUrl: link,
-        ttlMinutes: TOKEN_TTL_MINUTES,
-      };
-      const applied = applyEmailOverride(
-        override,
-        vars,
-        `Restablecer tu contraseña en ${branding.tenantName}`,
-      );
+      const applied = applyEmailOverride(override, vars, defaultSubject);
       const { html, text } = renderBrandedEmail(branding, {
         title: applied.subject,
         bodyHtml: textToHtmlParagraphs(applied.bodyText),
         bodyText: applied.bodyText,
-        cta: { url: link, label: 'Restablecer contraseña' },
+        cta,
       });
       return { subject: applied.subject, html, text };
+    }
+
+    if (toHubTemplateLang(locale) === 'en') {
+      // El inglés se renderiza DESDE el catálogo (misma mecánica que un
+      // override) para que composer y catálogo no puedan divergir. El español
+      // conserva su maqueta HTML propia más abajo, byte a byte.
+      const bodyText = interpolate(def.body, vars);
+      const { html, text } = renderBrandedEmail(branding, {
+        title: resolveFixedEmailCopy('title.password_reset', locale),
+        bodyHtml: textToHtmlParagraphs(bodyText),
+        bodyText,
+        cta,
+      });
+      return { subject: defaultSubject, html, text };
     }
 
     const subject = `Restablecer tu contraseña en ${branding.tenantName}`;
@@ -524,10 +571,10 @@ Si no fuiste tú, puedes ignorar este mensaje — tu contraseña actual sigue in
   )}</span></p>
   <p style="margin:12px 0 0;font-size: 14px; color: #5b6b7c;">Si no fuiste tú, puedes ignorar este mensaje — tu contraseña actual sigue intacta.</p>`;
     const { html, text } = renderBrandedEmail(branding, {
-      title: 'Restablecer tu contraseña',
+      title: resolveFixedEmailCopy('title.password_reset', locale),
       bodyHtml,
       bodyText,
-      cta: { url: link, label: 'Restablecer contraseña' },
+      cta,
     });
     return { subject, html, text };
   }

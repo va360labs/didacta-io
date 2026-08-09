@@ -121,6 +121,26 @@ export function toHubTemplateLang(locale: string | null | undefined): HubTemplat
   return base === 'en' ? 'en' : 'es';
 }
 
+/**
+ * Idioma efectivo de un destinatario a partir del `locale` guardado en su fila
+ * de `user`, para los composers que leen esa columna directamente (reset de
+ * contraseña, alta por API, pruebas de SMTP).
+ *
+ * CAMINO DEGRADADO ÚNICO y deliberado: una fila con `locale` vacío o ausente
+ * cae a `HUB_DEFAULT_LOCALE`. La columna tiene default en BD, así que solo pasa
+ * si alguien la escribió a mano en blanco o si el composer no encontró usuario.
+ *
+ * Un locale guardado pero SIN traducir (`pt-BR` es alcanzable HOY: lo admite
+ * `ALLOWED_LOCALES` en me.controller.ts) NO se resuelve aquí: se devuelve tal
+ * cual para que un override per-tenant en ese locale todavía pueda ganar, y lo
+ * absorbe `toHubTemplateLang` al elegir catálogo. Misma semántica que
+ * `resolveUserLocale` del NotificationHub.
+ */
+export function resolveRecipientLocale(stored: string | null | undefined): string {
+  const trimmed = typeof stored === 'string' ? stored.trim() : '';
+  return trimmed || HUB_DEFAULT_LOCALE;
+}
+
 export const HUB_TEMPLATE_DEFAULTS: Record<string, TemplateDef> = {
   'enrollment.created': {
     subject: 'Te matriculaste en {{course}}',
@@ -378,6 +398,83 @@ export const HUB_TEMPLATE_DEFAULTS_BY_LOCALE: Record<
 export function resolveHubDefault(key: string, locale?: string | null): TemplateDef | undefined {
   const lang = toHubTemplateLang(locale);
   return HUB_TEMPLATE_DEFAULTS_BY_LOCALE[lang][key] ?? HUB_TEMPLATE_DEFAULTS[key];
+}
+
+// ─── Copy FIJO de los emails (no personalizable) por idioma ─────────────────
+
+/**
+ * Copy que se añade SIEMPRE a un email y que un override per-tenant NO puede
+ * editar: etiquetas de botón CTA, títulos del bloque de marca y rellenos.
+ *
+ * Vive aquí —y no incrustado en cada composer— por la misma razón que
+ * `HUB_TEMPLATE_DEFAULTS_EN`: para que traducir un email sea tocar UN fichero y
+ * para que un test pueda comprobar que ningún idioma se queda corto. Antes de
+ * esta tabla, un destinatario con `locale = 'en-US'` recibía un cuerpo en
+ * inglés con un botón en español.
+ *
+ * La lista de idiomas es la MISMA lista cerrada del hub (`HUB_TEMPLATE_LANGS`):
+ * cualquier locale sin catálogo cae a `HUB_DEFAULT_LOCALE` vía
+ * `toHubTemplateLang`.
+ */
+export const FIXED_EMAIL_COPY = {
+  es: {
+    'cta.password_reset': 'Restablecer contraseña',
+    'cta.set_password': 'Define tu contraseña',
+    'title.password_reset': 'Restablecer tu contraseña',
+    'title.smtp_test': 'Prueba de SMTP',
+    'value.unknown_tenant_slug': '(desconocido)',
+  },
+  en: {
+    'cta.password_reset': 'Reset password',
+    'cta.set_password': 'Set your password',
+    'title.password_reset': 'Reset your password',
+    'title.smtp_test': 'SMTP test',
+    'value.unknown_tenant_slug': '(unknown)',
+  },
+} as const satisfies Record<HubTemplateLang, Record<string, string>>;
+
+export type FixedEmailCopyKey = keyof (typeof FIXED_EMAIL_COPY)['es'];
+
+/** Copy fijo en el idioma del destinatario. Nunca `undefined`: la key es cerrada. */
+export function resolveFixedEmailCopy(key: FixedEmailCopyKey, locale?: string | null): string {
+  return FIXED_EMAIL_COPY[toHubTemplateLang(locale)][key];
+}
+
+/**
+ * Saludo de apertura de los emails transaccionales en el idioma del
+ * destinatario. La condición es de VERACIDAD (no `trim()`) a propósito: así el
+ * español sale byte a byte igual que antes de existir esta función.
+ */
+export function emailGreeting(name: string | null | undefined, locale?: string | null): string {
+  if (toHubTemplateLang(locale) === 'en') return name ? `Hi ${name},` : 'Hi,';
+  return name ? `Hola ${name},` : 'Hola,';
+}
+
+/**
+ * Ping de diagnóstico de SMTP de `POST /tenant-settings/notifications/smtp/test`.
+ *
+ * NO está en el catálogo de `/admin/emails` a propósito: no es un email del
+ * producto que un tenant quiera personalizar, es una comprobación técnica que
+ * el admin se manda a sí mismo. Pero sí tiene que salir en SU idioma, así que
+ * el copy vive aquí, con la misma resolución por idioma que el resto.
+ *
+ * (El otro test de SMTP, el de `/admin/tenant-settings/smtp`, sí es del
+ * catálogo: es la key de hub `admin.smtp.test`.)
+ */
+export const SMTP_SETTINGS_PING: Record<HubTemplateLang, TemplateDef> = {
+  es: {
+    subject: 'Prueba de SMTP — Didacta',
+    body: 'Si recibiste este correo, la configuración SMTP de tu tenant en Didacta funciona correctamente.\n\nTenant: {{tenantSlug}}\nFecha: {{timestamp}}',
+  },
+  en: {
+    subject: 'SMTP test — Didacta',
+    body: 'If you received this email, the SMTP configuration of your tenant in Didacta is working correctly.\n\nTenant: {{tenantSlug}}\nDate: {{timestamp}}',
+  },
+};
+
+/** El ping de SMTP en el idioma del admin que lo dispara. */
+export function resolveSmtpSettingsPing(locale?: string | null): TemplateDef {
+  return SMTP_SETTINGS_PING[toHubTemplateLang(locale)];
 }
 
 /** Metadatos de los templates del hub para la UI (nombre humano, trigger, vars). */
@@ -845,6 +942,57 @@ export const TRANSACTIONAL_EMAIL_DEFS: EmailTemplateCatalogEntry[] = [
   },
 ];
 
+/**
+ * Copy en INGLÉS de los transaccionales, indexado por la misma key.
+ *
+ * Es un mapa PARCIAL a propósito y no un espejo completo: una key ausente
+ * significa «el composer de este email todavía solo sabe redactar en español»,
+ * no un olvido. La regla de familia (composer y catálogo se tocan a la vez)
+ * exige que traducir un composer añada aquí su entrada en el mismo commit; el
+ * test de coherencia comprueba que toda key presente aquí existe en
+ * `TRANSACTIONAL_EMAIL_DEFS` y conserva sus mismos placeholders.
+ *
+ * A diferencia del español —cuyo cuerpo lo maqueta cada composer con HTML
+ * propio— el inglés se RENDERIZA desde aquí (`interpolate` + párrafos), igual
+ * que un override de tenant. Así el composer inglés y el catálogo inglés no
+ * pueden divergir: son el mismo texto.
+ *
+ * Composers que ya lo consumen:
+ *  - `auth.password_reset` → apps/api/src/auth/password-reset.service.ts
+ *  - `enrollment.welcome`  → apps/api/src/enrollment/inscribe.service.ts
+ */
+export const TRANSACTIONAL_TEMPLATE_DEFAULTS_EN: Record<string, TemplateDef> = {
+  'auth.password_reset': {
+    subject: 'Reset your password at {{tenantName}}',
+    body: '{{greeting}}\n\nWe received a request to reset the password of your account at {{tenantName}}.\n\nTo set a new password, use the button below (valid for {{ttlMinutes}} minutes).\n\nIf it was not you, you can ignore this message — your current password is still intact.',
+  },
+  'enrollment.welcome': {
+    subject: 'Your access to {{tenantName}}',
+    body: '{{greeting}}\n\nYour account at {{tenantName}} has been created and you already have access to your course(s).\n\nAll that is left is to set your password with the button below (the link is valid for 7 days).\n\nYour username is {{email}}. If the link expires, use "Forgot your password?" on the sign-in screen.',
+  },
+};
+
+/** Los transaccionales indexados por key, para resolver sin recorrer el array. */
+const TRANSACTIONAL_DEFAULTS_ES: Record<string, TemplateDef> = Object.fromEntries(
+  TRANSACTIONAL_EMAIL_DEFS.map((d) => [d.key, { subject: d.defaultSubject, body: d.defaultBody }]),
+);
+
+/**
+ * Copy por defecto de un email transaccional en el idioma pedido. Devuelve
+ * `undefined` SOLO si la key no existe en el catálogo; un idioma sin traducir
+ * cae al español (`HUB_DEFAULT_LOCALE`) de forma deliberada, igual que
+ * `resolveHubDefault`.
+ */
+export function resolveTransactionalDefault(
+  key: string,
+  locale?: string | null,
+): TemplateDef | undefined {
+  if (toHubTemplateLang(locale) === 'en') {
+    return TRANSACTIONAL_TEMPLATE_DEFAULTS_EN[key] ?? TRANSACTIONAL_DEFAULTS_ES[key];
+  }
+  return TRANSACTIONAL_DEFAULTS_ES[key];
+}
+
 /** Catálogo completo (hub + transaccionales) para la UI admin. */
 export function buildEmailTemplateCatalog(): EmailTemplateCatalogEntry[] {
   const hubEntries: EmailTemplateCatalogEntry[] = Object.entries(HUB_TEMPLATE_DEFAULTS).map(
@@ -892,10 +1040,16 @@ export interface TemplateOverridePrisma {
  * el email sale con su copy por defecto — la personalización NUNCA rompe un
  * envío. La interpolación la hace el composer, que conoce las variables.
  *
- * `locale` es opcional y por defecto `HUB_DEFAULT_LOCALE`: los composers
- * transaccionales todavía redactan en español, así que omitirlo mantiene el
- * comportamiento previo byte a byte. Cuando un composer sepa el idioma del
- * destinatario, se lo pasa y busca primero su fila.
+ * `locale` es opcional y por defecto `HUB_DEFAULT_LOCALE`: un composer que
+ * todavía no sepa el idioma del destinatario lo omite y busca exactamente la
+ * misma fila que antes (una sola consulta, comportamiento byte a byte).
+ *
+ * Cuando el composer SÍ sabe el idioma, la precedencia es la MISMA que la de
+ * `renderForTenant` en el hub: primero la fila del idioma pedido y, si no
+ * existe, la del idioma de referencia. Un tenant que solo personalizó el correo
+ * en español no pierde su personalización porque el destinatario esté en
+ * inglés — el copy que el tenant escribió gana al default del producto, igual
+ * que en el hub.
  */
 export async function fetchEmailOverride(
   prisma: TemplateOverridePrisma,
@@ -903,15 +1057,18 @@ export async function fetchEmailOverride(
   key: string,
   locale: string = HUB_DEFAULT_LOCALE,
 ): Promise<RawEmailOverride | null> {
+  const locales = locale === HUB_DEFAULT_LOCALE ? [locale] : [locale, HUB_DEFAULT_LOCALE];
   try {
-    const row = await prisma.notificationTemplate.findUnique({
-      where: {
-        tenantId_key_channel_locale: { tenantId, key, channel: 'EMAIL', locale },
-      },
-      select: { subject: true, body: true },
-    });
-    if (!row) return null;
-    return { subject: row.subject, body: row.body };
+    for (const candidate of locales) {
+      const row = await prisma.notificationTemplate.findUnique({
+        where: {
+          tenantId_key_channel_locale: { tenantId, key, channel: 'EMAIL', locale: candidate },
+        },
+        select: { subject: true, body: true },
+      });
+      if (row) return { subject: row.subject, body: row.body };
+    }
+    return null;
   } catch {
     return null;
   }
