@@ -97,7 +97,7 @@ export class ScimController {
   serviceProviderConfig() {
     return {
       schemas: [SCIM_SCHEMAS.SERVICE_PROVIDER_CONFIG],
-      documentationUri: 'https://didacta.io/docs/scim',
+      documentationUri: 'https://docs.didacta.io/enterprise/',
       patch: { supported: true },
       bulk: { supported: false, maxOperations: 0, maxPayloadSize: 0 },
       filter: { supported: true, maxResults: 200 },
@@ -110,7 +110,7 @@ export class ScimController {
           name: 'OAuth Bearer Token',
           description: 'Static API token issued from /admin/scim panel. Per-tenant.',
           specUri: 'https://www.rfc-editor.org/info/rfc6750',
-          documentationUri: 'https://didacta.io/docs/scim#auth',
+          documentationUri: 'https://docs.didacta.io/api/autenticacion/',
           primary: true,
         },
       ],

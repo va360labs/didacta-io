@@ -15,7 +15,7 @@ producción real a su primer despliegue (congelado en el tag
 `v0.0.1-alpha.88-va360`); desde el 31 de julio de 2026 el repo vuelve a ser el
 producto whitelabel y prepara su primera versión pública. Guías de
 instalación, actualización y versionado en la documentación oficial:
-[didacta.io/docs](https://didacta.io/docs).
+[docs.didacta.io](https://docs.didacta.io).
 
 Imagen oficial publicada en GitHub Container Registry: `ghcr.io/va360labs/didacta-community`. **Pública** — no requiere `docker login`. El espejo en [Docker Hub](https://hub.docker.com/r/didactaio/community) (`didactaio/community`) todavía no está activo.
 
@@ -110,7 +110,7 @@ Después, descomenta las líneas `S3_*` en `docker-compose.alpha.yml`, dentro de
 
 Para producción real, apunta a tu Hetzner Object Storage, AWS S3 u otro proveedor compatible configurando las variables `S3_*` en `.env`.
 
-El quickstart de esta página cubre el arranque; el manual completo de instalación, actualización y operación vive en [didacta.io/docs](https://didacta.io/docs). Para dudas, bugs o feedback, abre una issue en GitHub — hay plantillas de bug, feedback y feature request. Para vulnerabilidades de seguridad, sigue [`SECURITY.md`](SECURITY.md).
+El quickstart de esta página cubre el arranque; el manual completo de instalación, actualización y operación vive en [docs.didacta.io](https://docs.didacta.io). Para dudas, bugs o feedback, abre una issue en GitHub — hay plantillas de bug, feedback y feature request. Para vulnerabilidades de seguridad, sigue [`SECURITY.md`](SECURITY.md).
 
 ## Camino B — Docker pull + run manual
 
@@ -231,7 +231,7 @@ Aparte existe un **registro opt-in** voluntario (Administración → Registro) d
 
 ## Documentación
 
-- 📚 [didacta.io/docs](https://didacta.io/docs) — Documentación oficial (es/en): instalación, actualización, operación y versionado.
+- 📚 [docs.didacta.io](https://docs.didacta.io) — Documentación oficial (es/en): instalación, actualización, operación y versionado.
 - 🤝 [`CONTRIBUTING.md`](CONTRIBUTING.md) — Guía de contribución.
 - 🔒 [`SECURITY.md`](SECURITY.md) — Política de seguridad y reporte responsable.
 - 📋 [Releases](https://github.com/va360labs/didacta-io/releases) — Historial de cambios de cada versión publicada.

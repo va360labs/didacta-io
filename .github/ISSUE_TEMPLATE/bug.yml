@@ -8,7 +8,7 @@ body:
       value: |
         Gracias por reportar. Cuanto más concreto, mejor podemos arreglarlo.
 
-        Guía completa (qué datos recoger y qué anonimizar): **[didacta.io/docs](https://didacta.io/docs)**.
+        Guía completa (qué datos recoger y qué anonimizar): **[docs.didacta.io](https://docs.didacta.io)**.
 
         ⚠️ **Si es una vulnerabilidad de seguridad, no la reportes aquí.** Escribe a `security@didacta.io` — ver [SECURITY.md](https://github.com/va360labs/didacta-io/blob/main/SECURITY.md).
   - type: input

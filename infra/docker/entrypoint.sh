@@ -12,7 +12,7 @@
 # _prisma_migrations): marcar el baseline como aplicado UNA sola vez antes
 # del primer arranque con esta imagen:
 #   prisma migrate resolve --applied 20260731120000_baseline_faircode
-# (procedimiento completo en https://didacta.io/docs).
+# (procedimiento completo en https://docs.didacta.io/instalacion/actualizacion/).
 #
 # ----------------------------------------------------------------------------
 # RLS F3 — flip real a didacta_app (release post-intermedia alpha.95)
@@ -99,7 +99,7 @@ build_didacta_app_url() {
 resolve_runtime_database_url() {
   if [[ -n "${DATABASE_URL:-}" ]]; then
     if [[ "$DATABASE_URL" != postgres*://didacta_app:* ]]; then
-      log "⚠ DEGRADADO: DATABASE_URL no conecta como 'didacta_app' — RLS no aplica de verdad (el rol actual puede hacer bypass). Para aislamiento real, quita DATABASE_URL del entorno y define ADMIN_DATABASE_URL con el usuario bootstrap; este script derivará la conexión de didacta_app automáticamente. Ver https://didacta.io/docs § flip a didacta_app." >&2
+      log "⚠ DEGRADADO: DATABASE_URL no conecta como 'didacta_app' — RLS no aplica de verdad (el rol actual puede hacer bypass). Para aislamiento real, quita DATABASE_URL del entorno y define ADMIN_DATABASE_URL con el usuario bootstrap; este script derivará la conexión de didacta_app automáticamente. Ver https://docs.didacta.io/instalacion/solucion-de-problemas/" >&2
     fi
     printf '%s' "$DATABASE_URL"
     return 0
