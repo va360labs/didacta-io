@@ -170,6 +170,6 @@ jobs:
             docker compose -f docker-compose.alpha.yml up -d
             ```
 
-            Guía de instalación paso a paso y política de versiones: <https://didacta.io/docs>.
+            Guía de instalación paso a paso y política de versiones: <https://docs.didacta.io/instalacion/>.
 
             ${{ steps.version.outputs.is_prerelease == 'true' && '⚠️ **Esta es una pre-release**. No usar en producción con datos reales.' || '' }}
