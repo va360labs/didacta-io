@@ -30,6 +30,7 @@ import { authStorage } from '@/lib/auth-storage';
 import { apiErrorMessage } from '@/lib/i18n/api-error';
 import { formatCurrency, formatDate, formatDateTime } from '@/lib/i18n/format';
 import {
+  subscriptionStatusLabel,
   subscriptionsDashboardApi,
   type DashboardSubscriber,
   type SubscribersSummary,
@@ -75,41 +76,6 @@ const CATEGORY_BADGE: Record<string, string> = {
   unknown: 'border-border bg-surface-2 text-text-muted',
 };
 
-type SubStatusKey =
-  | 'active'
-  | 'trialing'
-  | 'pastDue'
-  | 'unpaid'
-  | 'onHold'
-  | 'paused'
-  | 'pendingCancel'
-  | 'canceled'
-  | 'expired'
-  | 'incomplete'
-  | 'pending';
-
-/**
- * Status crudo del proveedor (normalizado a minúsculas) → key de etiqueta en el
- * catálogo. Espejo del diccionario de `classifySubscriptionStatus` de
- * `lib/payment-connections.ts` (aquí solo la PRESENTACIÓN; la categoría ya
- * viene materializada en `statusCategory` desde el backend).
- */
-const SUB_STATUS_KEYS: Record<string, SubStatusKey> = {
-  active: 'active',
-  trialing: 'trialing',
-  past_due: 'pastDue',
-  unpaid: 'unpaid',
-  'on-hold': 'onHold',
-  paused: 'paused',
-  'pending-cancel': 'pendingCancel',
-  canceled: 'canceled',
-  cancelled: 'canceled',
-  expired: 'expired',
-  incomplete: 'incomplete',
-  incomplete_expired: 'incomplete',
-  pending: 'pending',
-};
-
 function fmtDate(iso: string | null): string {
   if (!iso) return '—';
   const d = new Date(iso);
@@ -141,11 +107,6 @@ export function SubscriptionsDashboard() {
   const [syncing, setSyncing] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [emailFor, setEmailFor] = useState<DashboardSubscriber | null>(null);
-
-  const statusLabel = (status: string): string => {
-    const key = SUB_STATUS_KEYS[(status ?? '').toLowerCase().trim()];
-    return key ? t(`subStatus.${key}`) : status || t('subStatus.unknown');
-  };
 
   const load = useCallback(async () => {
     const tk = authStorage.getAccessToken();
@@ -370,7 +331,7 @@ export function SubscriptionsDashboard() {
                           CATEGORY_BADGE[r.statusCategory] ?? CATEGORY_BADGE['unknown']
                         }`}
                       >
-                        {statusLabel(r.status)}
+                        {subscriptionStatusLabel(r.status, t)}
                       </span>
                     </td>
                     <td className="py-2 pr-3">

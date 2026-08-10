@@ -20,6 +20,7 @@
 
 import { apiFetch } from '@/lib/api-client';
 import { formatCurrency } from '@/lib/i18n/format';
+import type { TranslatorLike } from '@/lib/i18n/labels';
 
 export type PaymentConnectionStatus = 'PENDING' | 'VERIFIED' | 'ERROR' | 'DISCONNECTED';
 
@@ -111,7 +112,12 @@ export type SubscriptionStatusCategory =
 
 export interface SubscriptionStatusInfo {
   category: SubscriptionStatusCategory;
-  /** Etiqueta legible en español (p.ej. "Dada de baja", "En impago"). */
+  /**
+   * Etiqueta legible en español. NO es copy de pantalla: es el espejo del enum
+   * del backend, y existe para que la guardia de paridad con el módulo
+   * (`payment-connections.test.ts`) detecte divergencias. Lo que pinta la UI es
+   * `subscriptionStatusLabel`, que sí resuelve el idioma activo.
+   */
   label: string;
   /** Si el estado concede acceso vigente hoy. */
   entitled: boolean;
@@ -156,6 +162,63 @@ export function classifySubscriptionStatus(status: string): SubscriptionStatusIn
     default:
       return { category: 'unknown', label: status || 'Desconocido', entitled: false };
   }
+}
+
+/** Sufijos de `adminPagos.subStatus.*` con los que la UI nombra cada estado. */
+export type SubscriptionStatusLabelKey =
+  | 'active'
+  | 'trialing'
+  | 'pastDue'
+  | 'unpaid'
+  | 'onHold'
+  | 'paused'
+  | 'pendingCancel'
+  | 'canceled'
+  | 'expired'
+  | 'incomplete'
+  | 'pending'
+  | 'unknown';
+
+/**
+ * Status crudo del proveedor (normalizado a minúsculas) → key de etiqueta en
+ * `adminPagos.subStatus.*`. Espejo de PRESENTACIÓN del diccionario de
+ * `classifySubscriptionStatus`: la categoría y el `entitled` los decide aquella
+ * (y su guardia de paridad con el módulo backend); el texto que ve el admin
+ * sale del catálogo, en el idioma activo.
+ */
+const SUB_STATUS_LABEL_KEYS: Record<string, SubscriptionStatusLabelKey> = {
+  active: 'active',
+  trialing: 'trialing',
+  past_due: 'pastDue',
+  unpaid: 'unpaid',
+  'on-hold': 'onHold',
+  paused: 'paused',
+  'pending-cancel': 'pendingCancel',
+  canceled: 'canceled',
+  cancelled: 'canceled',
+  expired: 'expired',
+  incomplete: 'incomplete',
+  incomplete_expired: 'incomplete',
+  pending: 'pending',
+};
+
+/**
+ * Etiqueta de pantalla del estado de una suscripción, EN EL IDIOMA ACTIVO.
+ *
+ * `t` = `useTranslations('adminPagos')` (los estados de suscripción viven en
+ * ese catálogo aunque los pinte una pantalla de otra sección; duplicar las doce
+ * etiquetas en un segundo namespace solo garantizaría que diverjan).
+ *
+ * CAMINO DEGRADADO: un status que este mapa no conoce devuelve el VALOR CRUDO
+ * del proveedor, nunca la key. Es la misma decisión que la de
+ * `classifySubscriptionStatus` en el módulo backend y se conserva a propósito:
+ * ante un estado nuevo de Stripe, al admin le sirve más «paused_indefinitely»
+ * que «Desconocido», y muchísimo más que ver `subStatus.undefined` en pantalla.
+ * Solo cuando el status llega vacío se cae a la etiqueta de «desconocido».
+ */
+export function subscriptionStatusLabel(status: string, t: TranslatorLike): string {
+  const key = SUB_STATUS_LABEL_KEYS[(status ?? '').toLowerCase().trim()];
+  return key ? t(`subStatus.${key}`) : status || t('subStatus.unknown');
 }
 
 export interface DidactaUserLite {

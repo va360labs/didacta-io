@@ -1,5 +1,12 @@
 import { describe, it, expect } from 'vitest';
-import { classifySubscriptionStatus, connectionStatusStyle } from './payment-connections';
+import { createTranslator } from 'next-intl';
+import es from '@/i18n/messages/es';
+import en from '@/i18n/messages/en';
+import {
+  classifySubscriptionStatus,
+  connectionStatusStyle,
+  subscriptionStatusLabel,
+} from './payment-connections';
 
 /**
  * Guardia de PARIDAD de `classifySubscriptionStatus`.
@@ -42,6 +49,59 @@ describe('classifySubscriptionStatus (web · paridad con el módulo)', () => {
     expect(classifySubscriptionStatus('  ACTIVE ').entitled).toBe(true);
     const unknown = classifySubscriptionStatus('rarísimo');
     expect(unknown).toEqual({ category: 'unknown', label: 'rarísimo', entitled: false });
+  });
+});
+
+/**
+ * Etiqueta de PANTALLA del estado de una suscripción.
+ *
+ * El bug que cierra: `/admin/solicitudes-miembros` pintaba el estado con
+ * `classifySubscriptionStatus(...).label`, que redacta en español fijo porque
+ * es el espejo del enum del backend, no copy. Un admin con la UI en inglés leía
+ * «Activa» / «Dada de baja» en mitad de la frase.
+ */
+describe('subscriptionStatusLabel', () => {
+  const tEs = createTranslator({ locale: 'es-ES', messages: es, namespace: 'adminPagos' });
+  const tEn = createTranslator({ locale: 'en-US', messages: en, namespace: 'adminPagos' });
+
+  it('en español sale BYTE A BYTE lo que ya daba classifySubscriptionStatus', () => {
+    for (const status of Object.keys(SUBSCRIPTION_STATUS_TABLE)) {
+      expect(subscriptionStatusLabel(status, tEs), status).toBe(
+        classifySubscriptionStatus(status).label,
+      );
+    }
+  });
+
+  it('en inglés sale del catálogo inglés, no del español', () => {
+    expect(subscriptionStatusLabel('active', tEn)).toBe('Active');
+    expect(subscriptionStatusLabel('canceled', tEn)).toBe('Canceled');
+    expect(subscriptionStatusLabel('cancelled', tEn)).toBe('Canceled');
+    expect(subscriptionStatusLabel('past_due', tEn)).toBe('Past due (overdue)');
+    // Los 13 estados conocidos tienen etiqueta propia en ambos idiomas y NINGUNA
+    // se queda en español dentro de la UI inglesa.
+    for (const status of Object.keys(SUBSCRIPTION_STATUS_TABLE)) {
+      expect(subscriptionStatusLabel(status, tEn), status).not.toBe(
+        subscriptionStatusLabel(status, tEs),
+      );
+    }
+  });
+
+  it('normaliza mayúsculas y espacios igual que la clasificación', () => {
+    expect(subscriptionStatusLabel('  ACTIVE ', tEs)).toBe('Activa');
+    expect(subscriptionStatusLabel('  ACTIVE ', tEn)).toBe('Active');
+  });
+
+  it('CAMINO DEGRADADO: estado desconocido → valor crudo del proveedor, nunca la key', () => {
+    for (const t of [tEs, tEn]) {
+      const salida = subscriptionStatusLabel('paused_indefinitely', t);
+      expect(salida).toBe('paused_indefinitely');
+      expect(salida).not.toContain('subStatus');
+    }
+  });
+
+  it('CAMINO DEGRADADO: solo un estado VACÍO cae a la etiqueta de desconocido', () => {
+    expect(subscriptionStatusLabel('', tEs)).toBe('Desconocido');
+    expect(subscriptionStatusLabel('', tEn)).toBe('Unknown');
   });
 });
 

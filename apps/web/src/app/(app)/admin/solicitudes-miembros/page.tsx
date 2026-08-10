@@ -32,6 +32,7 @@ import {
   classifySubscriptionStatus,
   formatAmount,
   paymentTiersApi,
+  subscriptionStatusLabel,
   type PaymentTier,
 } from '@/lib/payment-connections';
 import { authStorage } from '@/lib/auth-storage';
@@ -378,6 +379,9 @@ function SubscriptionBlock({
   onEmail: () => void;
 }) {
   const t = useTranslations('adminUsuarios');
+  // Los estados de suscripción son copy de `adminPagos` aunque los pinte esta
+  // pantalla: el catálogo es uno solo (ver `subscriptionStatusLabel`).
+  const tPagos = useTranslations('adminPagos');
   const lookup = request.lookup;
   if (!lookup || lookup.status === 'PENDING') {
     return (
@@ -434,7 +438,7 @@ function SubscriptionBlock({
             key={m.subscriptionId}
             className="flex flex-wrap items-center justify-between gap-2 text-sm text-text"
           >
-            <span>{describeMatch(m, t)}</span>
+            <span>{describeMatch(m, t, tPagos)}</span>
             <Button variant="ghost" onClick={() => onRemind(m)}>
               {t('requests.sendReminder')}
             </Button>
@@ -486,9 +490,23 @@ function describePurchase(p: MemberPurchaseMatch): string {
   return `${head}${products} (${p.connectionName})`;
 }
 
-function describeMatch(m: MemberSubscriptionMatch, t: TranslatorLike): string {
+/**
+ * Describe una suscripción detectada en una línea: plan · estado · importe.
+ *
+ * `t` = `adminUsuarios` (copy de esta pantalla), `tPagos` = `adminPagos` (las
+ * etiquetas de estado, que son el mismo catálogo que usa el dashboard de
+ * suscripciones). El estado NO sale de `classifySubscriptionStatus`: aquella
+ * redacta en español fijo —es el espejo del enum del backend, no copy— y a un
+ * admin anglófono le pintaba «Activa» / «Dada de baja» en mitad de una UI en
+ * inglés.
+ */
+function describeMatch(
+  m: MemberSubscriptionMatch,
+  t: TranslatorLike,
+  tPagos: TranslatorLike,
+): string {
   const plan = m.planName ?? t('requests.planFallback');
-  const { label } = classifySubscriptionStatus(m.status);
+  const label = subscriptionStatusLabel(m.status, tPagos);
   const amount = m.unitAmount !== null ? ` · ${formatAmount(m.unitAmount, m.currency)}` : '';
   return `${plan} — ${label}${amount} (${m.connectionName})`;
 }
