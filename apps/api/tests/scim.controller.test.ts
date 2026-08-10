@@ -24,18 +24,36 @@
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { UnauthorizedException } from '@nestjs/common';
-import { hashScimToken, ScimAuthGuard } from '../src/scim/scim-auth.guard';
+import {
+  hashScimToken,
+  ScimAuthGuard,
+  SCIM_LAST_USED_THROTTLE_MS,
+} from '../src/scim/scim-auth.guard';
 import { ScimController } from '../src/scim/scim.controller';
 import { ScimService } from '../src/scim/scim.service';
-import { SCIM_SCHEMAS, SCIM_TOKEN_KEY, SCIM_TOKEN_MODULE_NAME } from '../src/scim/scim.types';
+import {
+  SCIM_SCHEMAS,
+  SCIM_TOKEN_KEY,
+  SCIM_TOKEN_MODULE_NAME,
+  type ScimApiTokenRecord,
+} from '../src/scim/scim.types';
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
+/** Shape del `prisma.tenantSetting.update` que hace el guard al sellar lastUsedAt. */
+interface ScimSettingUpdateArgs {
+  where: { tenantId_moduleName_key: { tenantId: string; moduleName: string; key: string } };
+  data: { valueJson: ScimApiTokenRecord };
+}
+
 function makePrismaWithTokens(tokens: Array<{ tenantId: string; tokenHash: string }>) {
   return {
     tenantSetting: {
+      // El guard sella `lastUsedAt` con un update tras autenticar. Lo
+      // registramos aquí para poder afirmar sobre él.
+      update: vi.fn(async (_args: ScimSettingUpdateArgs) => ({})),
       findMany: vi.fn(async ({ where }: { where: Record<string, unknown> }) => {
         // Devuelve filas con shape { tenantId, valueJson } como espera el guard.
         // Filtramos por module/key si los pasa.
@@ -154,6 +172,123 @@ describe('ScimAuthGuard', () => {
     };
     await guard.canActivate(makeExecutionContext(reqB));
     expect(reqB['scimTenantId']).toBe('tenant-B');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// ScimAuthGuard · lastUsedAt
+//
+// El panel /admin/scim muestra este campo para responder «¿está sincronizando
+// mi IdP?». Si nadie lo escribe, el panel miente para siempre.
+// ---------------------------------------------------------------------------
+
+describe('ScimAuthGuard · lastUsedAt', () => {
+  const token = 'scim_token_para_last_used';
+
+  function makeGuard(tenantId = 'tenant-1') {
+    const prisma = makePrismaWithTokens([{ tenantId, tokenHash: hashScimToken(token) }]);
+    const guard = new ScimAuthGuard(
+      prisma as unknown as ConstructorParameters<typeof ScimAuthGuard>[0],
+    );
+    return { prisma, guard };
+  }
+
+  function authedCtx() {
+    return makeExecutionContext({ headers: { authorization: `Bearer ${token}` } });
+  }
+
+  it('sella lastUsedAt del token del tenant tras autenticar', async () => {
+    const { prisma, guard } = makeGuard();
+    const before = Date.now();
+
+    await guard.canActivate(authedCtx());
+
+    expect(prisma.tenantSetting.update).toHaveBeenCalledTimes(1);
+    const args = prisma.tenantSetting.update.mock.calls[0]![0];
+    expect(args.where.tenantId_moduleName_key).toEqual({
+      tenantId: 'tenant-1',
+      moduleName: SCIM_TOKEN_MODULE_NAME,
+      key: SCIM_TOKEN_KEY,
+    });
+    // Se sella lastUsedAt SIN perder el resto del registro (si perdiéramos el
+    // tokenHash, el siguiente request del IdP sería un 401).
+    expect(args.data.valueJson.tokenHash).toBe(hashScimToken(token));
+    expect(args.data.valueJson.prefix).toBe('scim_xxxxxxxx');
+    expect(args.data.valueJson.createdAt).toBe('2026-04-01T10:00:00Z');
+    expect(new Date(args.data.valueJson.lastUsedAt ?? '').getTime()).toBeGreaterThanOrEqual(before);
+  });
+
+  it('amortigua: una ráfaga de requests del IdP escribe una sola vez', async () => {
+    const { prisma, guard } = makeGuard();
+
+    for (let i = 0; i < 50; i++) {
+      await guard.canActivate(authedCtx());
+    }
+
+    expect(prisma.tenantSetting.update).toHaveBeenCalledTimes(1);
+  });
+
+  it('vuelve a escribir cuando pasa la ventana de amortiguación', async () => {
+    const { prisma, guard } = makeGuard();
+    await guard.canActivate(authedCtx());
+    expect(prisma.tenantSetting.update).toHaveBeenCalledTimes(1);
+
+    // Avanzamos el reloj más allá de la ventana.
+    const realNow = Date.now;
+    Date.now = () => realNow() + SCIM_LAST_USED_THROTTLE_MS + 1;
+    try {
+      await guard.canActivate(authedCtx());
+    } finally {
+      Date.now = realNow;
+    }
+
+    expect(prisma.tenantSetting.update).toHaveBeenCalledTimes(2);
+  });
+
+  it('la amortiguación es por tenant: dos IdPs distintos escriben cada uno', async () => {
+    const tokenA = 'scim_token_A';
+    const tokenB = 'scim_token_B';
+    const prisma = makePrismaWithTokens([
+      { tenantId: 'tenant-A', tokenHash: hashScimToken(tokenA) },
+      { tenantId: 'tenant-B', tokenHash: hashScimToken(tokenB) },
+    ]);
+    const guard = new ScimAuthGuard(
+      prisma as unknown as ConstructorParameters<typeof ScimAuthGuard>[0],
+    );
+
+    await guard.canActivate(
+      makeExecutionContext({ headers: { authorization: `Bearer ${tokenA}` } }),
+    );
+    await guard.canActivate(
+      makeExecutionContext({ headers: { authorization: `Bearer ${tokenB}` } }),
+    );
+
+    expect(prisma.tenantSetting.update).toHaveBeenCalledTimes(2);
+    const tenants = prisma.tenantSetting.update.mock.calls.map(
+      (c) => c[0].where.tenantId_moduleName_key.tenantId,
+    );
+    expect(tenants).toEqual(['tenant-A', 'tenant-B']);
+  });
+
+  it('un token NO reconocido no escribe nada', async () => {
+    const { prisma, guard } = makeGuard();
+
+    await expect(
+      guard.canActivate(makeExecutionContext({ headers: { authorization: 'Bearer scim_falso' } })),
+    ).rejects.toThrow(UnauthorizedException);
+
+    expect(prisma.tenantSetting.update).not.toHaveBeenCalled();
+  });
+
+  it('si el UPDATE falla, la request del IdP sigue autenticada', async () => {
+    const { prisma, guard } = makeGuard();
+    prisma.tenantSetting.update.mockRejectedValueOnce(new Error('deadlock detected'));
+
+    const req: Record<string, unknown> = {
+      headers: { authorization: `Bearer ${token}` },
+    };
+    await expect(guard.canActivate(makeExecutionContext(req))).resolves.toBe(true);
+    expect(req['scimTenantId']).toBe('tenant-1');
   });
 });
 

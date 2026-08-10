@@ -12,6 +12,13 @@
  *   POST   /scim/v2/Users                   gateado feat:scim
  *   PATCH  /scim/v2/Users/:id               gateado feat:scim
  *   DELETE /scim/v2/Users/:id               gateado feat:scim
+ *   ALL    /scim/v2/Groups[/*]              501 Not Implemented (ver abajo)
+ *   ALL    /scim/v2/*                       404 en formato SCIM
+ *
+ * Formato de salida:
+ *   Todo lo que sale de aquí va como `application/scim+json`, y los errores en
+ *   formato RFC 7644 §3.12 — lo garantizan `ScimContentTypeInterceptor` y
+ *   `ScimExceptionFilter`, montados a nivel de controller.
  *
  * Por qué ServiceProviderConfig / ResourceTypes / Schemas no van gateados:
  *   Los IdPs los consultan ANTES de configurar el connector — RFC 7644 §4
@@ -34,6 +41,7 @@
  */
 
 import {
+  All,
   BadRequestException,
   Body,
   Controller,
@@ -41,19 +49,25 @@ import {
   Get,
   HttpCode,
   HttpStatus,
+  NotFoundException,
+  NotImplementedException,
   Param,
   Patch,
   Post,
   Query,
   Req,
   UnauthorizedException,
+  UseFilters,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
-import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { ApiExcludeEndpoint, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import type { FastifyRequest } from 'fastify';
 import { LICENSE_CAPABILITIES, RequiresCapability } from '@didacta/license-sdk';
 import { ZodValidationPipe } from '../auth/zod-validation.pipe';
 import { ScimAuthGuard } from './scim-auth.guard';
+import { ScimContentTypeInterceptor } from './scim-content-type.interceptor';
+import { ScimExceptionFilter } from './scim-exception.filter';
 import { ScimService, buildListResponse } from './scim.service';
 import {
   scimCreateUserSchema,
@@ -80,6 +94,11 @@ function requireScimTenant(req: FastifyRequest): string {
 @ApiTags('SCIM v2')
 @Controller('scim/v2')
 @UseGuards(ScimAuthGuard)
+// Todo lo que sale por estas rutas habla el dialecto del estándar: los errores
+// en formato RFC 7644 §3.12 (filtro) y el content-type `application/scim+json`
+// tanto en errores como en respuestas correctas (interceptor).
+@UseFilters(ScimExceptionFilter)
+@UseInterceptors(ScimContentTypeInterceptor)
 export class ScimController {
   constructor(private readonly scim: ScimService) {}
 
@@ -97,7 +116,7 @@ export class ScimController {
   serviceProviderConfig() {
     return {
       schemas: [SCIM_SCHEMAS.SERVICE_PROVIDER_CONFIG],
-      documentationUri: 'https://docs.didacta.io/enterprise/',
+      documentationUri: 'https://docs.didacta.io/enterprise/scim/',
       patch: { supported: true },
       bulk: { supported: false, maxOperations: 0, maxPayloadSize: 0 },
       filter: { supported: true, maxResults: 200 },
@@ -276,10 +295,69 @@ export class ScimController {
     await this.scim.deleteUser(tenantId, id, { actorId: null });
     return null;
   }
+
+  // ---------------------------------------------------------------------------
+  // Groups — ruta del estándar que este servidor NO implementa
+  // ---------------------------------------------------------------------------
+
+  /**
+   * `/Groups` existe en RFC 7643 §4.2 y este servidor no la implementa. La
+   * respuesta correcta para "la ruta es del estándar pero el servidor no sabe
+   * hacerlo" es 501, no 404: un 404 le dice al IdP "esa URL no existe", que es
+   * mentira y le hace dudar de si la URL base está mal configurada.
+   *
+   * Deliberadamente NO va gateado con `feat:scim`: que Groups no esté
+   * implementado es una propiedad de este servidor, no de la licencia — como
+   * los endpoints de discovery, que también responden lo mismo con o sin
+   * Enterprise. El `ResourceTypes` ya declara que el único recurso es `User`;
+   * esto es la misma verdad dicha desde la otra punta.
+   */
+  @All('Groups')
+  @ApiOperation({
+    summary:
+      'Groups NO está implementado en este servidor. Responde 501 Not Implemented ' +
+      'con cuerpo de error SCIM. Solo se soporta el recurso User.',
+  })
+  @ApiResponse({ status: 501, description: 'Groups no implementado.' })
+  groupsNotImplemented(): never {
+    throw new NotImplementedException(
+      makeScimError(
+        501,
+        'Group provisioning is not implemented by this server. Only the User resource is supported — ' +
+          'see GET /scim/v2/ResourceTypes.',
+      ),
+    );
+  }
+
+  /** Misma respuesta para cualquier subruta de Groups (`/Groups/:id`, etc.). */
+  @All('Groups/*')
+  @ApiExcludeEndpoint()
+  groupsSubpathNotImplemented(): never {
+    return this.groupsNotImplemented();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Catch-all — cualquier otra ruta bajo /scim/v2
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Sin esto, una ruta desconocida bajo `/scim/v2` la resuelve el 404 genérico
+   * del router, que no pasa por el `ScimExceptionFilter` (no hay controller que
+   * lo monte) y sale como JSON del API. Declarada la última: en el router radix
+   * de Fastify las rutas estáticas ganan al comodín, así que no ensombrece a
+   * `Users` ni a `Groups`.
+   */
+  @All('*')
+  @ApiExcludeEndpoint()
+  unknownScimRoute(@Req() req: FastifyRequest): never {
+    throw new NotFoundException(
+      makeScimError(404, `Unknown SCIM endpoint: ${req.method} ${(req.url ?? '').split('?')[0]}.`),
+    );
+  }
 }
 
-// Helper que el filtro no captura — re-exportamos el shape del error para los
-// tests que verifican el status string en SCIM error responses.
+// Re-export del shape del error para los tests que verifican el status string
+// en las respuestas de error SCIM.
 export type ScimErrorBody = ScimError;
 
 // Captura para el linter: BadRequestException es importada implicitamente vía
