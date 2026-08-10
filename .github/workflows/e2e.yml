@@ -83,17 +83,22 @@ jobs:
         run: pnpm --filter @didacta/e2e exec playwright install --with-deps chromium
 
       - name: Run E2E
-        # mfa-setup.spec.ts y mfa-enforcement.spec.ts quedan fuera: necesitan
+        # `run` es la tanda general: el arnés le aplica el filtro que deja
+        # fuera a mfa-setup.spec.ts y mfa-enforcement.spec.ts, que necesitan
         # DIDACTA_REQUIRE_MFA_ADMIN=true (política opt-in, default off — ver
-        # apps/api/src/auth/mfa-config.ts), y activarlo aquí rompería otros
-        # specs que hacen signin() de admin sin pasar por el flujo MFA
-        # (admin-email-templates, clase-en-comunidad, community-api-posts,
-        # admin-smtp-settings). Corren en el job "mfa-enforcement" de abajo,
-        # con su propio stack.
+        # apps/api/src/auth/mfa-config.ts) y romperían a los specs que hacen
+        # signin() de admin sin pasar por el flujo MFA (admin-email-templates,
+        # clase-en-comunidad, community-api-posts, admin-smtp-settings).
+        # Corren en el job "mfa-enforcement" de abajo, con su propio stack.
+        #
+        # El filtro vive en el script (MFA_GREP) y NO aquí a propósito: escrito
+        # a mano en el workflow era distinto del camino local —que ni existía—
+        # y así es como el job de MFA se pasó meses sin ejecutarse nunca.
+        # Equivalente local exacto:  bash scripts/e2e-stack.sh test
         #
         # setup-wizard.spec.ts no hace falta excluirlo: se auto-skipea cuando
         # no hay E2E_SETUP_TOKEN, que es justo el caso de este job.
-        run: pnpm --filter @didacta/e2e exec playwright test --grep-invert "Auth · MFA"
+        run: bash scripts/e2e-stack.sh run
 
       - name: Logs del stack si algo falló
         if: failure()
@@ -208,9 +213,13 @@ jobs:
     # de admin sin pasar por el flujo MFA. Mismo esquema que el job "e2e"
     # (base sembrada), solo que con la política activa y acotado a los 2 specs
     # que la ejercitan.
-    env:
-      DIDACTA_REQUIRE_MFA_ADMIN: 'true'
-
+    #
+    # La política NO se pone aquí con `env:`, sino dentro del arnés
+    # (`enable_mfa_policy` en scripts/e2e-stack.sh, que usan `mfa-start` y
+    # `mfa-run`). Así el runner y el portátil arrancan la API exactamente
+    # igual, y el equivalente local de este job entero es UN comando:
+    #
+    #   bash scripts/e2e-stack.sh mfa
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
@@ -244,28 +253,22 @@ jobs:
       - name: Build workspace
         run: pnpm build
 
-      - name: Arrancar api y web y esperar a que respondan
-        run: bash scripts/e2e-stack.sh start
+      - name: Arrancar api y web con la política de MFA activa
+        # `mfa-start` = `start` con DIDACTA_REQUIRE_MFA_ADMIN=true. La API sólo
+        # lee la política al arrancar, así que tiene que estar puesta AQUÍ.
+        run: bash scripts/e2e-stack.sh mfa-start
 
       - name: Install Playwright browsers
         run: pnpm --filter @didacta/e2e exec playwright install --with-deps chromium
 
       - name: Run E2E — MFA enforcement
-        # Orden importa: ambos comparten la cuenta admin seedeada (mfaEnabled
-        # es estado real en DB, no por-test). mfa-enforcement completa el
-        # ciclo setup→enable como efecto secundario y lo deja con MFA ya
-        # activado; si corriera primero, mfa-setup.spec.ts navegaría a
-        # /mfa/setup y el FE lo redirige a /mfa/verify (ya configurado) en
-        # vez de mostrar el form de alta. Playwright NO respeta el orden de
-        # argumentos del CLI (ordena los ficheros alfabéticamente pese al
-        # orden dado aquí), así que van en pasos separados para forzarlo.
-        #
-        # El global-setup ve DIDACTA_REQUIRE_MFA_ADMIN y no toca al admin: si
-        # completara el ciclo setup→enable dejaría a mfa-setup.spec.ts sin el
-        # estado inicial que ejercita.
-        run: |
-          pnpm --filter @didacta/e2e exec playwright test tests/mfa-setup.spec.ts
-          pnpm --filter @didacta/e2e exec playwright test tests/mfa-enforcement.spec.ts
+        # `mfa-run` selecciona los specs con el MISMO patrón que la tanda
+        # general invierte (MFA_GREP en scripts/e2e-stack.sh), así que entre
+        # los dos jobs no se puede quedar ninguno sin correr. El global-setup
+        # ve la política, comprueba que la API la lleva de verdad y no toca al
+        # admin: prepararlo obligaría a completar setup→enable y dejaría a
+        # mfa-setup.spec.ts sin el estado inicial que ejercita.
+        run: bash scripts/e2e-stack.sh mfa-run
 
       - name: Upload Playwright report
         if: always()

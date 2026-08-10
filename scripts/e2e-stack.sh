@@ -19,7 +19,11 @@
 #   bash scripts/e2e-stack.sh reset     # BD limpia + REINICIO de la api
 #   bash scripts/e2e-stack.sh check     # diagnóstico del stack
 #   bash scripts/e2e-stack.sh all       # up + db + build + start
-#   bash scripts/e2e-stack.sh test [args…]   # reset + playwright
+#   bash scripts/e2e-stack.sh test [args…]   # reset + tanda general
+#   bash scripts/e2e-stack.sh run  [args…]   # tanda general SIN resetear
+#   bash scripts/e2e-stack.sh mfa            # reset + los 2 specs de MFA
+#   bash scripts/e2e-stack.sh mfa-start      # arranca con la política de MFA
+#   bash scripts/e2e-stack.sh mfa-run        # los 2 specs de MFA, sin tocar el stack
 #
 # `reset` existe porque la suite NO es idempotente: los specs de Fundae usan
 # NIFs fijos y en la segunda pasada devuelven 409. Y reinicia la API a
@@ -57,6 +61,32 @@ TSC_BIN="$REPO_ROOT/node_modules/typescript/bin/tsc"
 NEST_CLI="$REPO_ROOT/node_modules/@nestjs/cli/bin/nest.js"
 NEXT_CLI="$REPO_ROOT/node_modules/next/dist/bin/next"
 PLAYWRIGHT_CLI="$REPO_ROOT/node_modules/@playwright/test/cli.js"
+
+# ── El corte MFA / golden path ──────────────────────────────────────────────
+# Los dos specs de `Auth · MFA` no pueden correr en la tanda general: exigen
+# `DIDACTA_REQUIRE_MFA_ADMIN=true` (política opt-in del producto, default off —
+# apps/api/src/auth/mfa-config.ts) y con ella puesta el guard responde 403
+# `mfa_required` a todo token admin que no venga del flujo MFA. Eso tumba a
+# cuatro specs del golden path (admin-email-templates, clase-en-comunidad,
+# community-api-posts, admin-smtp-settings) y al propio arranque, que cierra el
+# onboarding del admin con `PATCH /me/profile`, que NO está exento.
+#
+# Así que son dos arranques distintos, y los DOS —local y CI— entran por aquí:
+# el filtro y la política se declaran UNA vez, igual que las variables viven
+# una sola vez en `e2e-env.sh`. Antes el filtro estaba escrito a mano en el
+# workflow y no existía en local, que es como el job de MFA se pasó meses sin
+# ejecutarse ni una vez.
+#
+# Un solo patrón para las dos tandas —una lo aplica y la otra lo invierte—, de
+# modo que entre las dos cubren la suite entera y ningún spec se puede quedar
+# sin correr en ninguna: si mañana aparece un tercer `Auth · MFA`, entra solo
+# por los dos lados.
+#
+# El patrón lleva `.` donde el título lleva `·`: es una regex, y así el filtro
+# no depende de que un carácter no-ASCII sobreviva a la línea de comandos de
+# Windows. Verificado con `--list`: 282 tests en total, 280 con el filtro
+# invertido, los 2 de MFA con el filtro directo.
+readonly MFA_GREP='Auth . MFA'
 
 log() { printf '\033[36m[e2e-stack]\033[0m %s\n' "$*"; }
 die() { printf '\033[31m[e2e-stack] ERROR:\033[0m %s\n' "$*" >&2; exit 1; }
@@ -379,14 +409,57 @@ cmd_check() {
         grep -c "name=bull:$(printf %s 'didacta.outbox' | base64)" || echo n/d)"
   printf 'tenants        %s\n' "$(psql_query $'SELECT string_agg(slug, \', \' ORDER BY slug) FROM tenant;' 2>/dev/null || echo n/d)"
   printf 'espacios       %s\n' "$(psql_query 'SELECT count(*) FROM mod_community_space;' 2>/dev/null || echo n/d)"
+  # Qué política de MFA lleva la API QUE ESTÁ CORRIENDO, no la de tu shell: la
+  # lee de su propio entorno al arrancar, así que exportarla ahora no cambia
+  # nada hasta reiniciarla. `mfaRequired` del signin del admin es el reflejo
+  # exacto de `isAdminMfaEnforced()` (auth.service.ts: la decide el flag y el
+  # rol, no el `mfaEnabled` del usuario).
+  printf 'MFA admin      shell=%s · api=%s (mfaRequired del signin del admin)\n' \
+    "${DIDACTA_REQUIRE_MFA_ADMIN:-<sin poner>}" "$(api_says_mfa_required)"
+}
+
+# `true`/`false` según lo que conteste la API, o `n/d` si no contesta.
+api_says_mfa_required() {
+  curl -s -X POST "http://localhost:${PORT}/api/v1/auth/signin" \
+    -H 'Content-Type: application/json' \
+    -d "{\"tenantSlug\":\"${BOOTSTRAP_TENANT_SLUG}\",\"email\":\"${BOOTSTRAP_EMAIL}\",\"password\":\"${BOOTSTRAP_PASSWORD}\"}" \
+    2>/dev/null |
+    sed -n 's/.*"mfaRequired":[[:space:]]*\(true\|false\).*/\1/p' |
+    grep . || echo 'n/d'
 }
 
 cmd_all() { cmd_up; cmd_db; cmd_build; cmd_start; }
 
-cmd_test() {
-  cmd_reset
-  ( cd apps/e2e && "$NODE_BIN" "$PLAYWRIGHT_CLI" test "$@" )
-}
+run_playwright() { ( cd apps/e2e && "$NODE_BIN" "$PLAYWRIGHT_CLI" test "$@" ); }
+
+# ── tandas ──────────────────────────────────────────────────────────────────
+# La tanda general, sobre el stack que ya esté en pie. Excluye los 2 specs de
+# MFA (ver MFA_GREP): con el stack del golden path fallarían siempre, porque su
+# premisa es justo la política que este stack no tiene.
+cmd_run() { run_playwright --grep-invert "$MFA_GREP" "$@"; }
+
+cmd_test() { cmd_reset; cmd_run "$@"; }
+
+# La política la lee el proceso de la API (`isAdminMfaEnforced()` mira el env
+# del proceso), así que hay que ponerla ANTES de arrancarla y también en el
+# proceso de Playwright, porque `global-setup.ts` decide con ella si prepara al
+# admin o no. Una sola función para las dos cosas: si se pusiera a mano en cada
+# sitio, el día que uno se olvide la tanda corre contra una API sin política y
+# los specs fallan afirmando lo contrario de lo que pasa.
+enable_mfa_policy() { export DIDACTA_REQUIRE_MFA_ADMIN=true; }
+
+cmd_mfa_start() { enable_mfa_policy; cmd_start; }
+
+# Los 2 specs de MFA, en una sola invocación. El orden entre ellos da igual
+# aunque compartan la cuenta admin y `mfaEnabled` sea estado real en la base:
+# `mfa-setup.spec.ts` se pone su propio estado inicial (ver `resetAdminMfa`
+# allí), que es también lo que lo hace repetible sin volver a sembrar.
+cmd_mfa_run() { enable_mfa_policy; run_playwright --grep "$MFA_GREP" "$@"; }
+
+# Camino local completo, equivalente exacto del job `mfa-enforcement` de CI.
+# El reset reinicia la API, que es la única forma de que empiece a leer la
+# política: sólo la consulta al arrancar.
+cmd_mfa() { enable_mfa_policy; cmd_reset; cmd_mfa_run; }
 
 case "${1:-}" in
   up)     cmd_up ;;
@@ -399,6 +472,10 @@ case "${1:-}" in
   reset) cmd_reset ;;
   check) cmd_check ;;
   all)   cmd_all ;;
+  run)       shift; cmd_run "$@" ;;
+  mfa)       cmd_mfa ;;
+  mfa-start) cmd_mfa_start ;;
+  mfa-run)   shift; cmd_mfa_run "$@" ;;
   test)  shift; cmd_test "$@" ;;
-  *)     die "uso: e2e-stack.sh {up|down|schema|db|build|start|stop|reset|check|all|test}" ;;
+  *)     die "uso: e2e-stack.sh {up|down|schema|db|build|start|stop|reset|check|all|test|run|mfa|mfa-start|mfa-run}" ;;
 esac

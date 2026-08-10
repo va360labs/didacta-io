@@ -163,6 +163,76 @@ async function assertRateLimitHeadroom(): Promise<void> {
   );
 }
 
+type SesionAdmin = Awaited<ReturnType<typeof signin>>;
+
+/** Inicia sesión con el admin sembrado, o falla diciendo que no está. */
+async function adminSignin(
+  tenantSlug: string,
+  email: string,
+  password: string,
+  baseUrl?: string,
+): Promise<SesionAdmin> {
+  try {
+    return await signin({ tenantSlug, email, password }, baseUrl);
+  } catch (err) {
+    return fail(
+      `No se pudo iniciar sesión como ${email} en el tenant "${tenantSlug}".`,
+      `${(err as Error).message}\n\n` +
+        'La base no está sembrada, o lo está con otras credenciales.\n' +
+        'Siémbrala con:  bash scripts/e2e-stack.sh db',
+    );
+  }
+}
+
+/**
+ * ¿Espera esta tanda la política de MFA obligatoria para admins? Se interpreta
+ * la variable EXACTAMENTE igual que el producto (`isAdminMfaEnforced()` en
+ * apps/api/src/auth/mfa-config.ts) para que un `1`, `yes` u `on` no signifique
+ * una cosa aquí y otra allí.
+ */
+function esperaPoliticaMfaAdmin(): boolean {
+  const raw = (process.env['DIDACTA_REQUIRE_MFA_ADMIN'] ?? '').trim().toLowerCase();
+  return raw === 'true' || raw === '1' || raw === 'yes' || raw === 'on';
+}
+
+/**
+ * Exige que la API que está corriendo lleve la MISMA política de MFA que
+ * espera esta tanda.
+ *
+ * Hace falta porque la política la lee el proceso de la API de su propio
+ * entorno AL ARRANCAR: exportarla en el shell de Playwright no la enciende, y
+ * quitarla del shell no la apaga. Los dos desajustes posibles son caros y
+ * mudos:
+ *
+ *   - API con política + tanda general → este arranque cierra el onboarding
+ *     del admin con `PATCH /me/profile`, que NO está exento, y se come un 403
+ *     `mfa_required` que parece un fallo del endpoint de perfil.
+ *   - API sin política + tanda de MFA → los dos specs afirman `mfaRequired` en
+ *     su primera línea y fallan con "admin debe requerir MFA", que suena a bug
+ *     del producto cuando es un stack mal arrancado.
+ *
+ * `mfaRequired` del signin es el reflejo exacto del flag: `shouldRequireMfa()`
+ * (apps/api/src/auth/auth.service.ts) lo decide con la política y el rol, sin
+ * mirar el `mfaEnabled` del usuario.
+ */
+function assertPoliticaMfaCoincide(session: SesionAdmin, email: string, esperada: boolean): void {
+  if (session.mfaRequired === esperada) return;
+  const [dice, deberia] = esperada
+    ? ['NO exige MFA', 'la tanda de MFA la necesita activa']
+    : ['exige MFA', 'la tanda general la necesita desactivada'];
+  fail(
+    `La API arrancó con otra política de MFA que la de esta tanda: ${dice} a ${email}.`,
+    `DIDACTA_REQUIRE_MFA_ADMIN vale "${process.env['DIDACTA_REQUIRE_MFA_ADMIN'] ?? '(sin poner)'}"` +
+      ` en este proceso y ${deberia}.\n\n` +
+      'La API sólo lee la política al arrancar, así que no basta con exportar la\n' +
+      'variable: hay que relanzarla. Cada tanda tiene su comando y ese comando la\n' +
+      'pone por ti:\n\n' +
+      '  tanda general:  bash scripts/e2e-stack.sh test\n' +
+      '  tanda de MFA:   bash scripts/e2e-stack.sh mfa\n\n' +
+      'Para ver qué política lleva la API viva:  bash scripts/e2e-stack.sh check',
+  );
+}
+
 /** Cierra el onboarding del admin sembrado y devuelve su token. */
 async function prepareAdmin(
   tenantSlug: string,
@@ -170,17 +240,11 @@ async function prepareAdmin(
   password: string,
   baseUrl?: string,
 ): Promise<string> {
-  let session;
-  try {
-    session = await signin({ tenantSlug, email, password }, baseUrl);
-  } catch (err) {
-    fail(
-      `No se pudo iniciar sesión como ${email} en el tenant "${tenantSlug}".`,
-      `${(err as Error).message}\n\n` +
-        'La base no está sembrada, o lo está con otras credenciales.\n' +
-        'Siémbrala con:  bash scripts/e2e-stack.sh db',
-    );
-  }
+  const session = await adminSignin(tenantSlug, email, password, baseUrl);
+  // Antes de tocar nada: `completeOnboarding` habla con endpoints que la
+  // política de MFA bloquea, así que si no coincide se dice aquí y no tres
+  // llamadas más allá con un 403 sin contexto.
+  assertPoliticaMfaCoincide(session, email, false);
   const token = session.tokens.accessToken;
   await completeOnboarding(token, baseUrl);
   return token;
@@ -403,20 +467,6 @@ export default async function globalSetup(): Promise<void> {
     return;
   }
 
-  // La política de MFA obligatoria para admins (opt-in, default off) hace que
-  // el token del signin llegue sin verificar. Preparar el onboarding desde
-  // aquí obligaría a completar el ciclo setup→enable y dejaría a
-  // `mfa-setup.spec.ts` sin el estado inicial que ejercita, así que en ese
-  // stack la preparación la hacen los propios specs.
-  if (process.env['DIDACTA_REQUIRE_MFA_ADMIN'] === 'true') {
-    // eslint-disable-next-line no-console
-    console.info(
-      '[arnés E2E] DIDACTA_REQUIRE_MFA_ADMIN activo: la preparación del admin la\n' +
-        '            hacen los specs de MFA, que son los que ejercitan ese flujo.',
-    );
-    return;
-  }
-
   const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'demo';
   const email = process.env.E2E_ADMIN_EMAIL;
   const password = process.env.E2E_ADMIN_PASSWORD;
@@ -426,6 +476,24 @@ export default async function globalSetup(): Promise<void> {
       'Son las credenciales del admin que siembra `seed.ts`. Sin ellas ningún\n' +
         'spec puede autenticarse.',
     );
+  }
+
+  // La política de MFA obligatoria para admins (opt-in, default off) hace que
+  // el token del signin llegue sin verificar, y con él `completeOnboarding`
+  // choca contra el guard. Completar el ciclo setup→enable desde aquí para
+  // esquivarlo dejaría a `mfa-setup.spec.ts` sin el estado inicial que
+  // ejercita, así que en ese stack la preparación la hacen los propios specs.
+  // Lo único que se comprueba —y no es poco— es que la API lleva de verdad la
+  // política que esta tanda da por supuesta.
+  if (esperaPoliticaMfaAdmin()) {
+    assertPoliticaMfaCoincide(await adminSignin(tenantSlug, email, password), email, true);
+    // eslint-disable-next-line no-console
+    console.info(
+      '[arnés E2E] DIDACTA_REQUIRE_MFA_ADMIN activo y la API lo confirma: la\n' +
+        '            preparación del admin la hacen los specs de MFA, que son los\n' +
+        '            que ejercitan ese flujo.',
+    );
+    return;
   }
 
   const adminToken = await prepareAdmin(tenantSlug, email, password);
