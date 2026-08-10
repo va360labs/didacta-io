@@ -79,8 +79,18 @@ test.describe('/calendario · agenda con pasadas, en curso y próximas', () => {
     await page.goto('/calendario');
     await expect(page.getByText('Agenda · Calendario')).toBeVisible();
 
-    // En la rejilla del mes actual NO están (son de otros meses)…
-    await expect(page.getByText(futura)).toHaveCount(0);
+    // La agenda se pide en una petición APARTE de la rejilla y alimenta la
+    // barra lateral. Esperarla no es cortesía: sin ella el "no está en la
+    // rejilla" de la línea siguiente pasaba por vacío —no es que no
+    // estuviera, es que no había llegado nada todavía— y ese era el único
+    // motivo por el que la comprobación estaba en verde.
+    await expect(page.getByRole('complementary').getByRole('list')).toBeVisible();
+
+    // En la rejilla del mes actual NO están (son de otros meses). Se busca la
+    // píldora de la rejilla, que lleva el nombre en `title`, y no el texto
+    // suelto en toda la página: el nombre sale TAMBIÉN en "Próximas citas" de
+    // la barra lateral, que es justo lo que este mismo spec exige más abajo.
+    await expect(page.locator(`[title="${futura}"]`)).toHaveCount(0);
 
     // …pero la Agenda las encuentra sin navegar de mes, cada una en su
     // sección. (`.first()` porque la próxima sale también en la barra

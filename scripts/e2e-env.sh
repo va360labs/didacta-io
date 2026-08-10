@@ -57,6 +57,21 @@
 : "${API_PORT:=4000}"
 : "${API_INTERNAL_URL:=http://localhost:4000}"
 
+# ── Política de MFA obligatoria para admins (opt-in del producto) ───────────
+# `isAdminMfaEnforced()` en apps/api/src/auth/mfa-config.ts. Default OFF, que
+# es el estado que el golden path da por supuesto: con la política activa el
+# guard responde 403 `mfa_required` a CUALQUIER llamada admin cuyo token no
+# venga del flujo MFA, y eso tumba a los specs que hacen signin() de admin sin
+# pasar por él (admin-email-templates, clase-en-comunidad, community-api-posts,
+# admin-smtp-settings) además del propio arranque, que cierra el onboarding del
+# admin con `PATCH /me/profile` (no exento).
+#
+# Se declara aquí —aunque el valor sea el default del producto— para que el
+# stack la lleve SIEMPRE explícita y se pueda ver en `e2e-stack.sh check`. Los
+# dos specs que sí la ejercitan corren en su propio arranque, que la pone a
+# true: `bash scripts/e2e-stack.sh mfa`.
+: "${DIDACTA_REQUIRE_MFA_ADMIN:=false}"
+
 # ── Rate limit: ver comentario largo abajo ──────────────────────────────────
 # Con REDIS_URL activo el rate limiter global DEJA de fallar abierto y entra en
 # vigor el cupo por defecto del plan community: 100 req/min autenticadas y
@@ -137,6 +152,7 @@ DATABASE_URL REDIS_URL
 E2E_PG_CONTAINER E2E_PG_USER E2E_PG_DB E2E_PG_PORT
 JWT_SECRET JWT_REFRESH_SECRET AUTH_SECRET AUTH_URL TENANT_SETTINGS_ENC_KEY
 NODE_ENV AUTH_SIGNUP_ENABLED PORT API_PORT API_INTERNAL_URL
+DIDACTA_REQUIRE_MFA_ADMIN
 RATE_LIMIT_COMMUNITY_AUTH_PER_MIN RATE_LIMIT_COMMUNITY_PUBLIC_PER_MIN
 BOOTSTRAP_TENANT_SLUG BOOTSTRAP_EMAIL BOOTSTRAP_PASSWORD
 E2E_SMOKE_TENANT_SLUG E2E_SMOKE_TENANT_DOMAIN E2E_SMOKE_ADMIN_EMAIL E2E_SMOKE_API_URL
