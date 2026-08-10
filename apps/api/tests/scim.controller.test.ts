@@ -335,6 +335,20 @@ describe('ScimController · discovery (sin gating de capability)', () => {
     expect(schemes[0]?.primary).toBe(true);
   });
 
+  /**
+   * Los dos `documentationUri` del payload los enseña el IdP al administrador
+   * que configura el aprovisionamiento, así que cada uno tiene que caer en la
+   * guía de lo que documenta —no en un índice— y responder 200. El del cuerpo
+   * apuntaba al índice de Enterprise mientras la página de SCIM no existía;
+   * ya existe.
+   */
+  it('GET /ServiceProviderConfig documenta SCIM y su autenticación, no un índice', () => {
+    const r = controller.serviceProviderConfig() as Record<string, unknown>;
+    expect(r['documentationUri']).toBe('https://docs.didacta.io/enterprise/scim/');
+    const schemes = r['authenticationSchemes'] as Array<{ documentationUri: string }>;
+    expect(schemes[0]?.documentationUri).toBe('https://docs.didacta.io/api/autenticacion/');
+  });
+
   it('GET /ResourceTypes lista solo "User" (sin Groups en este piloto)', () => {
     const r = controller.resourceTypes() as Record<string, unknown>;
     expect(r['totalResults']).toBe(1);

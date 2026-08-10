@@ -23,7 +23,7 @@ import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { apiErrorMessage } from '@/lib/i18n/api-error';
-import { formatCentsExact, formatDate } from '@/lib/i18n/format';
+import { formatCents, formatDate } from '@/lib/i18n/format';
 import { labelOr } from '@/lib/i18n/labels';
 import {
   referralsAdminApi,
@@ -75,14 +75,15 @@ function dateLabel(iso: string): string {
 }
 
 /**
- * Céntimos → "12,34 €" en el locale activo.
+ * Céntimos → "2,97 €" / "19 €" en el locale activo.
  *
- * Usa `formatCentsExact` (conserva el céntimo cero), NO el `formatCents`
- * canónico: son liquidaciones de comisión que el admin cuadra contra el pago
- * real al prescriptor. Mismo output byte a byte que el wrapper que sustituye.
+ * Usa el `formatCents` canónico, que quita el céntimo cero en las cantidades
+ * redondas. Es la misma regla que ya ven `/referidos` (la pantalla del
+ * prescriptor, que lee estas MISMAS comisiones), `/unete` y `/catalogo`: las
+ * dos caras del programa de referidos tienen que escribir el importe igual.
  */
 function amountLabel(cents: number, currency = 'eur'): string {
-  return formatCentsExact(cents, currency.toUpperCase());
+  return formatCents(cents, currency.toUpperCase());
 }
 
 export default function AdminReferidosPage() {
