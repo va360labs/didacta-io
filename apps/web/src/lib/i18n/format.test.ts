@@ -85,6 +85,20 @@ describe('formatCents', () => {
       '$999.00',
     );
   });
+
+  /**
+   * La regla, escrita en el par de importes con el que se decidió: los dos
+   * lados del programa de referidos (`/referidos` y `/admin/referidos`) pintan
+   * la MISMA comisión, así que tienen que escribirla igual. El `amountLabel`
+   * de `/admin/referidos` conservaba el céntimo cero y es el que se unificó.
+   *
+   * NBSP explícito (` `): es lo que mete Intl entre importe y símbolo, y
+   * un espacio normal daría un rojo indistinguible a simple vista.
+   */
+  it('en es-ES: 1900 → "19 €" y 297 → "2,97 €"', () => {
+    expect(formatCents(1900, 'EUR', { locale: 'es-ES' })).toBe('19 €');
+    expect(formatCents(297, 'EUR', { locale: 'es-ES' })).toBe('2,97 €');
+  });
 });
 
 /**

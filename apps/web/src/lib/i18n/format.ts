@@ -189,9 +189,20 @@ export function formatCents(
  * "19,00 €"). Segunda —y última— regla de céntimos del producto.
  *
  * No es una preferencia estética: estas cifras se cuadran a mano contra un
- * sistema de fuera (el dashboard de Stripe, el expediente Fundae, una factura,
- * una liquidación de comisiones) y ahí "19 €" y "19,00 €" no se leen igual de
- * un vistazo. No la unifiques con `formatCents`.
+ * sistema de fuera (el dashboard de Stripe, el expediente Fundae, una factura)
+ * y ahí "19 €" y "19,00 €" no se leen igual de un vistazo. No la unifiques con
+ * `formatCents`.
+ *
+ * OJO: hoy no le queda ningún call-site. El único que tenía —el `amountLabel`
+ * de `/admin/referidos`— pasó al `formatCents` canónico por decisión de
+ * producto: las comisiones son copy de pantalla, no un cuadre contra un
+ * sistema externo, y la otra cara del mismo programa (`/referidos`, la del
+ * prescriptor) ya escribía "19 €". La regla que codifica esta función SIGUE
+ * VIVA, pero escrita a mano en los cuatro formateadores que sí cuadran contra
+ * fuera: `payment-connections.ts` y `modules/subscriptions/client.ts`
+ * (formatAmount), `modules/billing/client.ts` (formatPrice) y
+ * `modules/fundae/companies-client.ts` (formatCents). Es el sitio al que
+ * unificarlos el día que se toquen; por eso no se borra.
  *
  * No fuerza `minimumFractionDigits`: deja que Intl aplique los dígitos propios
  * de la divisa, que es lo que hacían los wrappers que sustituye (idéntico byte
