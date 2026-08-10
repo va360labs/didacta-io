@@ -56,5 +56,10 @@
   "dialog": {
     "close": "Cerrar",
     "fallbackLabel": "Dialog"
+  },
+  "smtpBanner": {
+    "title": "Configura las notificaciones:",
+    "body": "sin servidor SMTP tus usuarios no reciben ningún correo.",
+    "cta": "Configurar"
   }
 }

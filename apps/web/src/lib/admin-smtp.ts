@@ -155,3 +155,22 @@ export function deriveSmtpStatus(dto: AdminSmtpDto): AdminSmtpStatus {
   if (dto.hasGlobalFallback) return 'fallback';
   return 'none';
 }
+
+/**
+ * ¿Hay que enseñar el aviso de "no hay salida de correo" en el shell?
+ *
+ * Vive aquí y no dentro del componente para poder fijarlo con tests: la regla
+ * que más fácil se rompe al retocar el banner es la de a quién se le enseña.
+ *
+ *  - Solo a quien puede arreglarlo (`super_admin` / `tenant_admin`). Un alumno
+ *    no configura un SMTP; enseñárselo solo le diría que la plataforma está
+ *    rota. Y el endpoint que alimenta esto es admin-only, así que consultarlo
+ *    con otro rol sería un 403 por cada carga de página.
+ *  - Solo en el estado `none`. Con `fallback` el correo sale por las env
+ *    globales del despliegue, y con el tenant configurado —aunque no se haya
+ *    verificado aún— hay una salida: avisar ahí sería mentir.
+ */
+export function shouldShowSmtpBanner(roles: readonly string[], status: AdminSmtpStatus): boolean {
+  const puedeArreglarlo = roles.some((r) => r === 'super_admin' || r === 'tenant_admin');
+  return puedeArreglarlo && status === 'none';
+}

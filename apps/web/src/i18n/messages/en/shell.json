@@ -56,5 +56,10 @@
   "dialog": {
     "close": "Close",
     "fallbackLabel": "Dialog"
+  },
+  "smtpBanner": {
+    "title": "Set up notifications:",
+    "body": "without an SMTP server your users get no email at all.",
+    "cta": "Set up"
   }
 }

@@ -13,6 +13,7 @@ import { CommandPalette } from '@/components/command-palette';
 import { Icon } from '@/components/icon';
 import { LicenseProvider } from '@/components/license-provider';
 import { NotificationsBell } from '@/components/notifications-bell';
+import { NotificationsSetupBanner } from '@/components/notifications-setup-banner';
 import { ReferralsPromoButton } from '@/components/referrals-promo-button';
 import { NotificationsProvider } from '@/components/notifications-provider';
 import { NotificationsToaster } from '@/components/notifications-toaster';
@@ -358,32 +359,43 @@ function Shell({
           />
 
           <div className="flex min-w-0 flex-1 flex-col">
-            <header className="sticky top-0 z-(--z-sticky) flex h-14 items-center gap-2 border-b border-border-soft bg-surface/95 px-4 backdrop-blur lg:px-6">
-              {/* Móvil: hamburguesa + marca. En escritorio el rail ya provee ambos. */}
-              <button
-                type="button"
-                onClick={() => setMobileNavOpen(true)}
-                aria-label={t('openMenu')}
-                aria-expanded={mobileNavOpen}
-                className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-border bg-surface text-text-muted transition-colors hover:border-border-strong hover:text-text lg:hidden"
-              >
-                <Icon name="menu" size={18} />
-              </button>
-              <span className="min-w-0 flex-1 truncate text-sm font-bold text-text lg:hidden">
-                {tenantName}
-              </span>
+            {/* El pegado al scroll pasa a este envoltorio para que el aviso de
+                correo quede fijo ARRIBA DEL TODO junto con la cabecera. Si
+                fuese la cabecera la pegada, como antes, el aviso se perdería
+                al primer scroll. Sin aviso, el resultado es idéntico al que
+                había: una cabecera pegada arriba. */}
+            <div className="sticky top-0 z-(--z-sticky)">
+              {/* Solo aparece si no hay ninguna salida de correo: sin SMTP el
+                  producto parece ir bien mientras pierde en silencio las altas
+                  y los restablecimientos de contraseña. */}
+              <NotificationsSetupBanner roles={session.user.roles} />
+              <header className="flex h-14 items-center gap-2 border-b border-border-soft bg-surface/95 px-4 backdrop-blur lg:px-6">
+                {/* Móvil: hamburguesa + marca. En escritorio el rail ya provee ambos. */}
+                <button
+                  type="button"
+                  onClick={() => setMobileNavOpen(true)}
+                  aria-label={t('openMenu')}
+                  aria-expanded={mobileNavOpen}
+                  className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-border bg-surface text-text-muted transition-colors hover:border-border-strong hover:text-text lg:hidden"
+                >
+                  <Icon name="menu" size={18} />
+                </button>
+                <span className="min-w-0 flex-1 truncate text-sm font-bold text-text lg:hidden">
+                  {tenantName}
+                </span>
 
-              {/* Empuja las acciones a la derecha (equivale al justify-end de escritorio). */}
-              <div className="hidden flex-1 lg:block" />
+                {/* Empuja las acciones a la derecha (equivale al justify-end de escritorio). */}
+                <div className="hidden flex-1 lg:block" />
 
-              {/* Promo del programa de referidos — solo si está activo (el % es real). */}
-              <ReferralsPromoButton />
+                {/* Promo del programa de referidos — solo si está activo (el % es real). */}
+                <ReferralsPromoButton />
 
-              {/* El icono de mensajes vivía aquí. Ahora el chat es la píldora
+                {/* El icono de mensajes vivía aquí. Ahora el chat es la píldora
                   flotante de abajo a la derecha: un solo indicador de no-leídos
                   en pantalla (regla #5, PRD chat-flotante UC-CF203). */}
-              <NotificationsBell />
-            </header>
+                <NotificationsBell />
+              </header>
+            </div>
 
             {/* pb-24 en todos los breakpoints (no solo móvil): dejamos hueco bajo
                 el contenido igual de alto que la píldora fija del chat flotante

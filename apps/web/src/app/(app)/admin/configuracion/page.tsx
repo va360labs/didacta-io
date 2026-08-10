@@ -6,6 +6,7 @@
  */
 
 import { useEffect, useState, type FormEvent } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -119,7 +120,14 @@ export default function ConfiguracionPage() {
     const session = authStorage.getSession();
     return session?.user.roles.includes('super_admin') ?? false;
   })();
-  const [tab, setTab] = useState<TabKey>(isSuperAdmin ? 'general' : 'notifications');
+
+  /// El tab inicial se puede fijar por query (`?tab=notifications`) para que
+  /// se pueda enlazar directamente desde fuera — lo usa el aviso de correo
+  /// sin configurar del shell, que si no dejaba al super_admin en "general"
+  /// justo cuando se le acaba de decir dónde tiene que ir.
+  const searchParams = useSearchParams();
+  const tabPedido = searchParams?.get('tab')?.trim() || null;
+  const [tab, setTab] = useState<TabKey>(tabPedido || (isSuperAdmin ? 'general' : 'notifications'));
 
   // Carga la lista de módulos activos del tenant para filtrar tabs cuyo
   // módulo está desactivado (ej. mod.zoom-live → oculta "Aula virtual").

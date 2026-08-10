@@ -10,7 +10,12 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiHttpError } from './api-client';
-import { adminSmtpApi, deriveSmtpStatus, type AdminSmtpDto } from './admin-smtp';
+import {
+  adminSmtpApi,
+  deriveSmtpStatus,
+  shouldShowSmtpBanner,
+  type AdminSmtpDto,
+} from './admin-smtp';
 
 const FAKE_TOKEN = 'fake-bearer-token';
 
@@ -233,5 +238,34 @@ describe('deriveSmtpStatus', () => {
     expect(deriveSmtpStatus({ ...base, hasTenantConfig: false, hasGlobalFallback: false })).toBe(
       'none',
     );
+  });
+});
+
+describe('shouldShowSmtpBanner', () => {
+  it('lo ve el tenant_admin cuando no hay ninguna salida de correo', () => {
+    expect(shouldShowSmtpBanner(['tenant_admin'], 'none')).toBe(true);
+  });
+
+  it('lo ve el super_admin', () => {
+    expect(shouldShowSmtpBanner(['super_admin'], 'none')).toBe(true);
+  });
+
+  it('NO lo ve un alumno aunque el correo esté sin configurar: no puede arreglarlo', () => {
+    expect(shouldShowSmtpBanner(['student'], 'none')).toBe(false);
+    expect(shouldShowSmtpBanner([], 'none')).toBe(false);
+  });
+
+  it('NO lo ve un formador, que tampoco tiene acceso al panel', () => {
+    expect(shouldShowSmtpBanner(['teacher'], 'none')).toBe(false);
+  });
+
+  it('desaparece en cuanto hay salida, sea del tenant o del despliegue', () => {
+    expect(shouldShowSmtpBanner(['tenant_admin'], 'fallback')).toBe(false);
+    expect(shouldShowSmtpBanner(['tenant_admin'], 'configured-unverified')).toBe(false);
+    expect(shouldShowSmtpBanner(['tenant_admin'], 'verified')).toBe(false);
+  });
+
+  it('un admin con varios roles lo sigue viendo', () => {
+    expect(shouldShowSmtpBanner(['student', 'tenant_admin'], 'none')).toBe(true);
   });
 });
