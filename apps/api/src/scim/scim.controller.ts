@@ -97,7 +97,10 @@ export class ScimController {
   serviceProviderConfig() {
     return {
       schemas: [SCIM_SCHEMAS.SERVICE_PROVIDER_CONFIG],
-      documentationUri: 'https://docs.didacta.io/enterprise/',
+      // La página de SCIM, no el índice de Enterprise: es lo que el IdP
+      // (Entra ID, Okta) enseña al administrador que está dando de alta el
+      // aprovisionamiento, así que tiene que caer en la guía de ESTE endpoint.
+      documentationUri: 'https://docs.didacta.io/enterprise/scim/',
       patch: { supported: true },
       bulk: { supported: false, maxOperations: 0, maxPayloadSize: 0 },
       filter: { supported: true, maxResults: 200 },
