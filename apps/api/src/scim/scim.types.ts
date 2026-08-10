@@ -37,6 +37,14 @@ export const SCIM_SCHEMAS = {
   SCHEMA: 'urn:ietf:params:scim:schemas:core:2.0:Schema',
 } as const;
 
+/**
+ * Content-type del protocolo SCIM (RFC 7644 §3.1: "the SCIM protocol uses the
+ * media type `application/scim+json`"). Lo emitimos tanto en las respuestas
+ * correctas como en los errores: un IdP estricto parsea por contrato y
+ * `application/json` no es el contrato que anuncia el estándar.
+ */
+export const SCIM_CONTENT_TYPE = 'application/scim+json';
+
 /** Persistencia del token SCIM dentro de `tenant_setting`. */
 export const SCIM_TOKEN_MODULE_NAME = 'scim';
 export const SCIM_TOKEN_KEY = 'api-token';
@@ -51,8 +59,8 @@ export const SCIM_TOKEN_KEY = 'api-token';
  *   identificar de un vistazo qué token está activo (estilo GitHub PAT).
  * - `createdAt`: ISO timestamp.
  * - `lastUsedAt`: ISO timestamp del último request SCIM autenticado correctamente.
- *   Se actualiza con throttle (1 vez por minuto máximo) para no escribir DB
- *   en cada request — fuera de scope del piloto, queda como TODO.
+ *   Lo escribe `ScimAuthGuard.touchLastUsedAt()` con throttle (ver
+ *   `SCIM_LAST_USED_THROTTLE_MS`) para no meter un UPDATE por request.
  */
 export interface ScimApiTokenRecord {
   tokenHash: string;

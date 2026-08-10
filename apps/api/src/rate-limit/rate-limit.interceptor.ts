@@ -6,9 +6,10 @@
  *
  * Aplicado global vía APP_INTERCEPTOR. Para cada request HTTP:
  *   1. Identifica `tenantId` desde `request.user` (lo setea JwtAuthGuard) o
- *      desde un header `x-tenant-id` ya resuelto por TenantMiddleware. Si no
- *      hay nada, trata la request como pública (bucket `'anonymous'`).
- *   2. Decide `isPublic`: si no hay JWT verificado, es pública.
+ *      desde `request.scimTenantId` (lo setea ScimAuthGuard con el Bearer del
+ *      IdP). Si no hay ninguno, trata la request como pública (bucket
+ *      `'anonymous'`).
+ *   2. Decide `isPublic`: si no hay ninguna identidad resuelta, es pública.
  *   3. Llama `RateLimitService.recordRequest`.
  *   4. Setea SIEMPRE los headers estándar (`X-RateLimit-*`).
  *   5. Si la request fue rechazada, lanza `HttpException(429)` con
@@ -74,12 +75,23 @@ export class RateLimitInterceptor implements NestInterceptor {
       return next.handle();
     }
 
-    // `request.user` lo setea JwtAuthGuard cuando el endpoint pasa por él.
-    // Para públicos (sin JwtAuthGuard) `request.user` queda undefined → el
-    // bucket es público y `tenantId` es 'anonymous'.
+    // Identidad de la request, en orden de confianza:
+    //
+    //   1. `request.user` — lo setea JwtAuthGuard con los claims del JWT.
+    //   2. `request.scimTenantId` — lo setea ScimAuthGuard tras validar el
+    //      Bearer estático del IdP. Es una identidad DISTINTA del JWT (por eso
+    //      no comparten campo: son trust boundaries separados) pero identifica
+    //      un tenant igual de bien, y contarla como tráfico anónimo metía a
+    //      todos los IdPs de la instancia en el mismo bucket `'anonymous'` que
+    //      el tráfico sin autenticar de internet. Un sync inicial se comía los
+    //      429 del cupo público por culpa de visitantes que no tienen nada que
+    //      ver con el tenant.
+    //
+    // Sin ninguna de las dos, la request es pública → bucket `'anonymous'`.
     const user = request.user;
-    const isPublic = !user;
-    const tenantId = user?.tenantId ?? 'anonymous';
+    const identifiedTenantId = user?.tenantId ?? request.scimTenantId;
+    const isPublic = identifiedTenantId === undefined;
+    const tenantId = identifiedTenantId ?? 'anonymous';
 
     return from(this.rateLimit.recordRequest(tenantId, isPublic)).pipe(
       switchMap((decision) => {

@@ -154,7 +154,7 @@
     "step5Title": "5. Probar conexión",
     "step5Description": "El IdP suele tener un botón “Test Connection” — al pulsarlo hace un <code>GET /scim/v2/ServiceProviderConfig</code>. Si responde 200, listo.",
     "usersOnlyTitle": "Nota: solo Users en este piloto",
-    "usersOnlyDescription": "Groups (sincronización de grupos) NO está soportado todavía — los IdPs lo intentarán y recibirán <code>501 Not Implemented</code> o <code>404</code>. Las asignaciones de roles las sigues haciendo desde <usersLink>Usuarios</usersLink>.",
+    "usersOnlyDescription": "Groups (sincronización de grupos) NO está soportado todavía — los IdPs lo intentarán y recibirán <code>501 Not Implemented</code>. Las asignaciones de roles las sigues haciendo desde <usersLink>Usuarios</usersLink>.",
     "revealedAria": "Token SCIM recién generado",
     "revealedTitle": "Token generado — cópialo AHORA",
     "copied": "¡Copiado!",

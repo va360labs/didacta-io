@@ -154,7 +154,7 @@
     "step5Title": "5. Test the connection",
     "step5Description": "The IdP usually has a “Test Connection” button — pressing it makes a <code>GET /scim/v2/ServiceProviderConfig</code>. If it responds 200, you are done.",
     "usersOnlyTitle": "Note: Users only in this pilot",
-    "usersOnlyDescription": "Groups (group sync) is NOT supported yet — IdPs will try it and receive <code>501 Not Implemented</code> or <code>404</code>. Role assignments are still managed from <usersLink>Users</usersLink>.",
+    "usersOnlyDescription": "Groups (group sync) is NOT supported yet — IdPs will try it and receive <code>501 Not Implemented</code>. Role assignments are still managed from <usersLink>Users</usersLink>.",
     "revealedAria": "Newly generated SCIM token",
     "revealedTitle": "Token generated — copy it NOW",
     "copied": "Copied!",

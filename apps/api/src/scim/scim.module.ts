@@ -22,13 +22,19 @@
 import { Module } from '@nestjs/common';
 import { AuthModule } from '../auth/auth.module';
 import { ScimAuthGuard } from './scim-auth.guard';
+import { ScimContentTypeInterceptor } from './scim-content-type.interceptor';
+import { ScimExceptionFilter } from './scim-exception.filter';
 import { ScimController } from './scim.controller';
 import { ScimService } from './scim.service';
 
 @Module({
   imports: [AuthModule],
   controllers: [ScimController],
-  providers: [ScimService, ScimAuthGuard],
+  // El filtro y el interceptor van declarados como providers (no como
+  // instancias en el `@UseFilters` / `@UseInterceptors`) para que Nest los
+  // resuelva por DI: así el filtro puede tener su propio Logger y ambos
+  // participan del ciclo de vida del contenedor.
+  providers: [ScimService, ScimAuthGuard, ScimExceptionFilter, ScimContentTypeInterceptor],
   exports: [ScimService],
 })
 export class ScimModule {}
