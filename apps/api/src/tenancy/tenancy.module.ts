@@ -8,6 +8,7 @@ import { AuthModule } from '../auth/auth.module';
 import { PrismaModule } from '../prisma/prisma.module';
 import { SuperAdminPrismaService } from './super-admin-prisma.service';
 import { TenantContextService } from './tenant-context.service';
+import { TenancyController } from './tenancy.controller';
 import { TenantMiddleware } from './tenant.middleware';
 import { TenantPrismaService } from './tenant-prisma.service';
 import { TenantResolverService } from './tenant-resolver.service';
@@ -15,6 +16,7 @@ import { TenantResolverService } from './tenant-resolver.service';
 @Global()
 @Module({
   imports: [AuthModule, PrismaModule],
+  controllers: [TenancyController],
   providers: [
     TenantContextService,
     TenantMiddleware,

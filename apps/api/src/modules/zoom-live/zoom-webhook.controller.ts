@@ -22,6 +22,7 @@ import {
 } from '../../tenancy/tenant-context.storage';
 import { TenantResolverService } from '../../tenancy/tenant-resolver.service';
 import { ModuleRegistryService } from '../module-registry.service';
+import { resolvePublicHost } from '../../common/resolve-public-host';
 
 /**
  * Endpoint público de webhooks de Zoom. NO usa JwtAuthGuard porque Zoom
@@ -63,8 +64,7 @@ export class ZoomWebhookController {
   async handle(@Req() req: RawBodyRequest<FastifyRequest>) {
     const zoomLive = this.registry.getZoomLiveService();
 
-    const hostHeader = req.headers.host ?? req.headers['x-forwarded-host'];
-    const hostStr = Array.isArray(hostHeader) ? hostHeader[0] : hostHeader;
+    const hostStr = resolvePublicHost(req);
     const tenant = await runSanctionedGlobalAccess(() =>
       this.tenantResolver.resolveByHost(hostStr),
     );

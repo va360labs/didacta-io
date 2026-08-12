@@ -13,6 +13,7 @@ import { runAsTenant } from '../../tenancy/tenant-context.storage';
 import { TenantResolverService } from '../../tenancy/tenant-resolver.service';
 import { ModuleRegistryService } from '../module-registry.service';
 import { membershipCheckoutSchema, type MembershipCheckoutDto } from './membership.dto';
+import { resolvePublicHost } from '../../common/resolve-public-host';
 
 /**
  * Endpoints PÚBLICOS de la página de membresía (/unete).
@@ -77,8 +78,7 @@ export class MembershipPublicController {
 
   /** Tenant por dominio (Host / X-Forwarded-Host), como InscripcionController. */
   private async resolveTenantId(req: FastifyRequest): Promise<string> {
-    const host = req.headers.host ?? req.headers['x-forwarded-host'];
-    const hostStr = Array.isArray(host) ? host[0] : host;
+    const hostStr = resolvePublicHost(req);
     const tenant = await this.tenantResolver.resolveByHost(hostStr);
     if (!tenant) {
       throw new NotFoundException({

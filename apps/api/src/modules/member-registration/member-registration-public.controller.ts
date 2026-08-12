@@ -45,6 +45,7 @@ import { MemberRegistrationService } from './member-registration.service';
 import { TelegramService } from './telegram.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { assertSignupsAllowed } from '../../tenancy/signup-freeze';
+import { resolvePublicHost } from '../../common/resolve-public-host';
 
 // ============================================================================
 // Controller PÚBLICO del flujo de inscripción de miembros con VERIFICADORES
@@ -400,8 +401,7 @@ export class MemberRegistrationPublicController {
    * tenant se infiere por dominio (igual que AuthController).
    */
   private async resolveTenantId(req: FastifyRequest): Promise<string> {
-    const host = req.headers.host ?? req.headers['x-forwarded-host'];
-    const hostStr = Array.isArray(host) ? host[0] : host;
+    const hostStr = resolvePublicHost(req);
     const tenant = await this.tenantResolver.resolveByHost(hostStr);
     if (!tenant) {
       throw new NotFoundException({

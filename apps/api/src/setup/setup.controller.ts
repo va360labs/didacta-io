@@ -10,6 +10,7 @@ import { extractClientContext } from '../auth/client-context';
 import { ZodValidationPipe } from '../auth/zod-validation.pipe';
 import { setupInitSchema, type SetupInitDto } from './dto';
 import { SetupService } from './setup.service';
+import { resolvePublicHost } from '../common/resolve-public-host';
 
 @ApiTags('Setup')
 @Controller('setup')
@@ -44,8 +45,7 @@ export class SetupController {
     @Req() req: FastifyRequest,
     @Body(new ZodValidationPipe(setupInitSchema)) dto: SetupInitDto,
   ) {
-    const host = req.headers.host ?? req.headers['x-forwarded-host'];
-    const hostStr = Array.isArray(host) ? (host[0] ?? null) : (host ?? null);
+    const hostStr = resolvePublicHost(req) ?? null;
     // Quitamos el puerto: el TenantDomain.hostname no incluye `:port`. El
     // request a `localhost:4000` debe persistir como `localhost`.
     const hostNoPort = hostStr ? (hostStr.split(':')[0] ?? null) : null;

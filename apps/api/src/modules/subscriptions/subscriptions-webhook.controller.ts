@@ -32,6 +32,7 @@ import { BillingProvisioningService } from '../billing/billing-provisioning.serv
 import { ModuleRegistryService } from '../module-registry.service';
 import { TenantStripeResolverService } from '../tenant-stripe-resolver.service';
 import { MembershipProvisioningService } from './membership-provisioning.service';
+import { resolvePublicHost } from '../../common/resolve-public-host';
 
 /**
  * Endpoint público de webhooks de Stripe específico de mod.subscriptions.
@@ -64,8 +65,7 @@ export class SubscriptionsWebhookController {
   async handle(@Req() req: RawBodyRequest<FastifyRequest>) {
     const subs = this.registry.getSubscriptionsService();
 
-    const hostHeader = req.headers.host ?? req.headers['x-forwarded-host'];
-    const hostStr = Array.isArray(hostHeader) ? hostHeader[0] : hostHeader;
+    const hostStr = resolvePublicHost(req);
     const tenant = await runSanctionedGlobalAccess(() =>
       this.tenantResolver.resolveByHost(hostStr),
     );

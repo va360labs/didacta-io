@@ -25,6 +25,7 @@ import { TenantResolverService } from '../../tenancy/tenant-resolver.service';
 import { ModuleRegistryService } from '../module-registry.service';
 import { TenantStripeResolverService } from '../tenant-stripe-resolver.service';
 import { BillingProvisioningService } from './billing-provisioning.service';
+import { resolvePublicHost } from '../../common/resolve-public-host';
 
 /**
  * Endpoint público de webhooks de Stripe. NO usa JwtAuthGuard porque Stripe
@@ -62,8 +63,7 @@ export class BillingWebhookController {
   async handle(@Req() req: RawBodyRequest<FastifyRequest>) {
     const billing = this.registry.getBillingService();
 
-    const hostHeader = req.headers.host ?? req.headers['x-forwarded-host'];
-    const hostStr = Array.isArray(hostHeader) ? hostHeader[0] : hostHeader;
+    const hostStr = resolvePublicHost(req);
     const tenant = await runSanctionedGlobalAccess(() =>
       this.tenantResolver.resolveByHost(hostStr),
     );

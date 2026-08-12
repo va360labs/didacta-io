@@ -30,6 +30,7 @@ import { extractClientContext } from '../../auth/client-context';
 import { runAsTenant } from '../../tenancy/tenant-context.storage';
 import { TenantResolverService } from '../../tenancy/tenant-resolver.service';
 import { ModuleRegistryService } from '../module-registry.service';
+import { resolvePublicHost } from '../../common/resolve-public-host';
 
 /**
  * Endpoints del módulo mod.referrals.
@@ -259,8 +260,7 @@ export class ReferralsController {
 
   /** Tenant por dominio (Host / X-Forwarded-Host), como MembershipPublicController. */
   private async resolveTenantId(req: FastifyRequest): Promise<string> {
-    const host = req.headers.host ?? req.headers['x-forwarded-host'];
-    const hostStr = Array.isArray(host) ? host[0] : host;
+    const hostStr = resolvePublicHost(req);
     const tenant = await this.tenantResolver.resolveByHost(hostStr);
     if (!tenant) {
       throw new ForbiddenException({

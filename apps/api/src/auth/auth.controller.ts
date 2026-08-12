@@ -25,6 +25,7 @@ import {
 import { PasswordResetService } from './password-reset.service';
 import { SigninContextService } from './signin-context.service';
 import { ZodValidationPipe } from './zod-validation.pipe';
+import { resolvePublicHost } from '../common/resolve-public-host';
 
 @ApiTags('Auth')
 @Controller('auth')
@@ -55,8 +56,7 @@ export class AuthController {
       'Resuelve el tenant del request por Host header. Devuelve { tenant: { id, slug, name, logoUrl, headline, subheadline, stats } } o { tenant: null }.',
   })
   async tenantContext(@Req() req: FastifyRequest) {
-    const host = req.headers.host ?? req.headers['x-forwarded-host'];
-    const hostStr = Array.isArray(host) ? host[0] : host;
+    const hostStr = resolvePublicHost(req);
     const tenant = await this.tenantResolver.resolveByHost(hostStr);
     if (!tenant) return { tenant: null, host: hostStr ?? null };
     const webBaseUrl = await this.tenantResolver.resolveTenantWebBaseUrl(tenant.id, req);
@@ -163,8 +163,7 @@ export class AuthController {
   // -------------------- helpers --------------------
 
   private async resolveTenantIdFromHost(req: FastifyRequest): Promise<string | undefined> {
-    const host = req.headers.host ?? req.headers['x-forwarded-host'];
-    const hostStr = Array.isArray(host) ? host[0] : host;
+    const hostStr = resolvePublicHost(req);
     const tenant = await this.tenantResolver.resolveByHost(hostStr);
     return tenant?.id;
   }

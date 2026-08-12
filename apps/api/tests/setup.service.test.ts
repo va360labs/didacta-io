@@ -471,6 +471,43 @@ describe('SetupService.init', () => {
     expect(localhostDomains).toHaveLength(1);
     expect(localhostDomains[0]?.isPrimary).toBe(true);
   });
+
+  /**
+   * En producción `localhost` NO se siembra, y no es cosmética: en un pool
+   * multi-tenant ese registro convierte al primer tenant en el comodín de la
+   * instalación entera. Toda petición que llegue con `Host: localhost` —y
+   * llegaban todas mientras el proxy se comía el host real— resolvía a él, y el
+   * aula de un cliente enseñaba los datos de otro. Contestando 200, además, que
+   * es lo que hizo que durase.
+   */
+  it('en producción NO siembra localhost como dominio del primer tenant', async () => {
+    const previo = process.env.NODE_ENV;
+    process.env.NODE_ENV = 'production';
+    try {
+      const { client, state } = makeFakePrisma();
+      const svc = new SetupService(
+        client as never,
+        realPasswords,
+        tokensFake,
+        dummyAuditLog,
+        sessionRegistryStub(tokensFake as never),
+        permissiveSetupTokensStub(),
+      );
+
+      await svc.init(
+        {
+          organization: { name: 'ACME Corp', primaryHostname: 'lms.acme.test' },
+          admin: { name: 'Pat Admin', email: 'pat@acme.test', password: 'super-secure-1234' },
+        },
+        'lms.acme.test',
+        { ip: null, userAgent: null },
+      );
+
+      expect(state.tenantDomains.map((d) => d.hostname)).toEqual(['lms.acme.test']);
+    } finally {
+      process.env.NODE_ENV = previo;
+    }
+  });
 });
 
 describe('SetupService.init — gate del token de setup', () => {

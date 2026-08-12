@@ -25,6 +25,7 @@ import { assertSignupsAllowed } from '../../tenancy/signup-freeze';
 import { runAsTenant } from '../../tenancy/tenant-context.storage';
 import { TenantResolverService } from '../../tenancy/tenant-resolver.service';
 import { ModuleRegistryService } from '../module-registry.service';
+import { resolvePublicHost } from '../../common/resolve-public-host';
 
 const uuidSchema = z.string().uuid();
 
@@ -228,8 +229,7 @@ export class BillingPublicController {
 
   /** Tenant por dominio (Host / X-Forwarded-Host), como MembershipPublicController. */
   private async resolveTenantId(req: FastifyRequest): Promise<string> {
-    const host = req.headers.host ?? req.headers['x-forwarded-host'];
-    const hostStr = Array.isArray(host) ? host[0] : host;
+    const hostStr = resolvePublicHost(req);
     const tenant = await this.tenantResolver.resolveByHost(hostStr);
     if (!tenant) {
       throw new NotFoundException({

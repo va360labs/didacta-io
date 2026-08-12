@@ -191,7 +191,16 @@ export class SetupService {
       // Sembramos también `localhost` para que el operador pueda probar la
       // misma instalación desde el túnel SSH o `docker compose up` local sin
       // tener que añadir un dominio extra desde /admin.
-      if (hostname !== 'localhost') {
+      //
+      // FUERA DE PRODUCCIÓN, y no por pulcritud: en un pool multi-tenant este
+      // registro convierte al PRIMER tenant en el comodín de la instalación
+      // entera. Cualquier petición que llegue con `Host: localhost` —y todas
+      // llegaban así mientras el proxy se comía el host real, ver
+      // `resolvePublicHost`— resolvía a él. El fallo no se veía porque no daba
+      // error: contestaba 200 con los datos del tenant equivocado. Un `null`
+      // ruidoso habría durado horas; este comodín silencioso duró hasta el
+      // primer cliente.
+      if (hostname !== 'localhost' && process.env.NODE_ENV !== 'production') {
         await tx.tenantDomain.upsert({
           where: { hostname: 'localhost' },
           update: {},
