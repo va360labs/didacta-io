@@ -81,7 +81,12 @@ function base64UrlEncode(input: string | Buffer): string {
 
 function awsKmsSign(message: Buffer, region: string, keyAlias: string): Buffer {
   // Llama a AWS KMS Sign. Devuelve la firma en formato DER.
-  const messageB64 = message.toString('base64');
+  //
+  // El mensaje se escribe en BYTES CRUDOS a propósito. `fileb://` lee el
+  // fichero como binario, así que escribir ahí el base64 del mensaje hacía que
+  // KMS firmase el TEXTO "eyJhbGci…" en vez de los bytes de `header.payload`:
+  // la firma salía válida sobre el mensaje equivocado y el verificador del SDK
+  // la rechazaba. Ninguna licencia emitida así llegó a servir nunca.
   const cmd = [
     'aws',
     'kms',
@@ -91,7 +96,7 @@ function awsKmsSign(message: Buffer, region: string, keyAlias: string): Buffer {
     '--key-id',
     keyAlias,
     '--message',
-    `fileb://${writeTempFile(messageB64, '.b64')}`,
+    `fileb://${writeTempFile(message, '.bin')}`,
     '--message-type',
     'RAW',
     '--signing-algorithm',
@@ -128,9 +133,11 @@ function detectAwsExe(): string {
   throw new Error('AWS CLI not found. Install AWS CLI v2 first.');
 }
 
-function writeTempFile(content: string, ext: string): string {
+function writeTempFile(content: Buffer | string, ext: string): string {
   const path = join(tmpdir(), `.kms-sign-input-${Date.now()}${ext}`);
-  writeFileSync(path, content, 'utf8');
+  // Sin encoding: un Buffer se escribe tal cual. Forzar 'utf8' aquí volvería a
+  // meter una conversión de texto entre el mensaje y lo que firma KMS.
+  writeFileSync(path, content);
   return path;
 }
 
