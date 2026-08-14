@@ -9,6 +9,7 @@ import { ModulesModule } from '../modules/modules.module';
 import { SsoOidcModule } from '../sso/oidc/oidc.module';
 import { SsoSamlModule } from '../sso/saml/saml.module';
 import { SsoWpModule } from '../sso/wp/wp-sso.module';
+import { AdminAcademyController } from './admin-academy.controller';
 import { AdminApiKeysController } from './admin-api-keys.controller';
 import { AdminModulesController } from './admin-modules.controller';
 import { AdminProvisioningController } from './admin-provisioning.controller';
@@ -64,6 +65,11 @@ import { SupportAccessService } from './support-access.service';
     // Gestión de API keys del tenant (Administración → Claves API). Reusa
     // ApiKeyService + PrismaAuditLogService de AuthModule (ya importado).
     AdminApiKeysController,
+    // Identidad de la PROPIA academia (nombre + dirección). Existe aparte de
+    // AdminTenantsController porque aquel exige super_admin al recibir un id
+    // ajeno: el dueño de una academia es tenant_admin y no podía ni ponerle
+    // nombre a la suya. Este no acepta id, opera sobre el tenant del token.
+    AdminAcademyController,
     // SMTP per-tenant — GET/PUT/POST test. Wrappea el almacenamiento
     // genérico de tenant_setting con un contrato dedicado (alpha.75).
     AdminSmtpController,

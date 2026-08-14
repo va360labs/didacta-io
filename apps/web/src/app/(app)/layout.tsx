@@ -19,6 +19,7 @@ import { ReferralsPromoButton } from '@/components/referrals-promo-button';
 import { NotificationsProvider } from '@/components/notifications-provider';
 import { NotificationsToaster } from '@/components/notifications-toaster';
 import { FloatingChat, MessagingProvider } from '@/modules/messaging';
+import { onboardingApi } from '@/lib/academy';
 import { authStorage, type StoredSession } from '@/lib/auth-storage';
 import { clearIntendedPath, rememberIntendedPath } from '@/lib/post-login-redirect';
 import { meApi } from '@/lib/me';
@@ -59,6 +60,8 @@ import { MobileTabBar } from '@/components/mobile-tab-bar';
  */
 const ACCOUNT_PATH = '/cuenta';
 const CHANGE_PASSWORD_REDIRECT = '/cuenta?tab=seguridad';
+/** Evita repetir la consulta del asistente de academia en cada navegación. */
+const ACADEMIA_LISTA_KEY = 'didacta:academia-lista';
 
 export default function AppLayout({ children }: { children: ReactNode }) {
   const router = useRouter();
@@ -98,6 +101,25 @@ export default function AppLayout({ children }: { children: ReactNode }) {
       rememberIntendedPath(window.location.pathname + window.location.search);
       router.replace('/onboarding');
       return;
+    }
+    // Puesta en marcha de la ACADEMIA (distinta del onboarding de perfil de
+    // arriba, que es por usuario). Solo para quien la administra: a un alumno
+    // no le corresponde ponerle nombre ni color, y verlo sería desconcertante.
+    //
+    // El estado vive en el servidor, así que hay que preguntarlo — pero solo
+    // una vez por pestaña: si no, cada navegación pagaría una llamada. Se
+    // cachea en `sessionStorage` porque el asistente lo marca al terminar y una
+    // pestaña nueva vuelve a preguntar, que es justo el comportamiento correcto.
+    const administra = current.user.roles.some((r) => ['super_admin', 'tenant_admin'].includes(r));
+    if (administra && window.sessionStorage.getItem(ACADEMIA_LISTA_KEY) !== '1') {
+      void onboardingApi.read().then((prog) => {
+        if (prog.completedAt) {
+          window.sessionStorage.setItem(ACADEMIA_LISTA_KEY, '1');
+          return;
+        }
+        rememberIntendedPath(window.location.pathname + window.location.search);
+        router.replace('/bienvenida');
+      });
     }
     setSession(current);
   }, [router, pathname]);

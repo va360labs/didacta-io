@@ -24,6 +24,7 @@ import adminUsuarios from './adminUsuarios.json';
 import alumnoAprendizaje from './alumnoAprendizaje.json';
 import alumnoSocial from './alumnoSocial.json';
 import auth from './auth.json';
+import bienvenida from './bienvenida.json';
 import common from './common.json';
 import comunidadComponentes from './comunidadComponentes.json';
 import cuentaComponentes from './cuentaComponentes.json';
@@ -70,6 +71,7 @@ export default {
   alumnoAprendizaje,
   alumnoSocial,
   auth,
+  bienvenida,
   common,
   comunidadComponentes,
   cuentaComponentes,
