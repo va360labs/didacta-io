@@ -66,16 +66,33 @@ export function resolveWebBaseUrl(
   req?: RequestLike,
   tenantPrimaryHostname?: string | null,
 ): string {
-  // 1) Env var explícita gana si es válida.
-  const fromEnv = process.env.WEB_PUBLIC_URL?.trim();
-  if (fromEnv && isValidHttpUrl(fromEnv)) {
-    return stripTrailingSlash(fromEnv);
-  }
-
-  // 2) Dominio primario verificado del tenant (TenantDomain.isPrimary).
+  // 1) Dominio primario VERIFICADO del tenant (TenantDomain.isPrimary).
+  //
+  // Va primero, y el orden importa: antes ganaba `WEB_PUBLIC_URL` y este bloque
+  // era código muerto en cuanto la variable estuviera puesta — que es siempre en
+  // un despliegue multi-tenant. Resultado: los correos de TODAS las aulas
+  // (restablecer contraseña, invitaciones, avisos) enlazaban al dominio del
+  // pool, así que el cliente aterrizaba en un aula que no es la suya, ponía la
+  // contraseña y luego el login le decía «credenciales inválidas» porque su
+  // usuario no existe en ese tenant.
+  //
+  // `WEB_PUBLIC_URL` es la dirección del DESPLIEGUE, no la del tenant: sirve
+  // como respaldo cuando no hay dominio de tenant (instalación de un solo
+  // inquilino), no como override de uno que sí lo tiene.
+  //
+  // No abre un vector de suplantación: este hostname no lo elige quien llama,
+  // sale de nuestra base y solo si está marcado primario y verificado. Los
+  // redirects que llevan tokens usan `resolveWebBaseUrlForAuthRedirect`, que
+  // mantiene su propia allowlist y no cambia aquí.
   if (tenantPrimaryHostname) {
     const proto = isLocalHostname(tenantPrimaryHostname) ? 'http' : 'https';
     return `${proto}://${tenantPrimaryHostname}`;
+  }
+
+  // 2) Env var explícita del despliegue.
+  const fromEnv = process.env.WEB_PUBLIC_URL?.trim();
+  if (fromEnv && isValidHttpUrl(fromEnv)) {
+    return stripTrailingSlash(fromEnv);
   }
 
   // 3) Derivar del request (Traefik inyecta X-Forwarded-*).

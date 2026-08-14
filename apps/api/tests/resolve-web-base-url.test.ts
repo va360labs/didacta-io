@@ -110,9 +110,21 @@ describe('resolveWebBaseUrl', () => {
     expect(resolveWebBaseUrl(undefined, 'localhost:3000')).toBe('http://localhost:3000');
   });
 
-  it('env válida gana sobre tenantPrimaryHostname', () => {
+  /**
+   * Este test afirmaba lo contrario —que la env ganaba— y con ello fijaba el
+   * bug: en el pool `WEB_PUBLIC_URL` siempre está puesta, así que el dominio del
+   * tenant no se usaba nunca y los correos de todas las aulas enlazaban al
+   * dominio del pool. El cliente restablecía la contraseña en un aula ajena y
+   * después no podía entrar en la suya.
+   */
+  it('el dominio del tenant gana sobre la env del despliegue', () => {
+    process.env.WEB_PUBLIC_URL = 'https://pool.didacta.io';
+    expect(resolveWebBaseUrl(undefined, 'aula.academia.com')).toBe('https://aula.academia.com');
+  });
+
+  it('sin dominio de tenant, la env del despliegue es el respaldo', () => {
     process.env.WEB_PUBLIC_URL = 'https://app.didacta.io';
-    expect(resolveWebBaseUrl(undefined, 'aula.academia.com')).toBe('https://app.didacta.io');
+    expect(resolveWebBaseUrl(undefined, null)).toBe('https://app.didacta.io');
   });
 
   it('tenantPrimaryHostname null/undefined → cae al comportamiento de siempre (Host del request)', () => {
