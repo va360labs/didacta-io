@@ -124,7 +124,7 @@ export class LearningPathsService {
     }
 
     const updated = await this.prisma.$transaction(async (tx) => {
-      const p = await tx.modLearningPath.update({
+      await tx.modLearningPath.update({
         where: { id: pathId },
         data: {
           ...(dto.title !== undefined && { title: dto.title, slug }),

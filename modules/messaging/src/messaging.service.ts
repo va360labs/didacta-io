@@ -286,7 +286,7 @@ export class MessagingService {
       const lastMessage = lastByConv.get(c.id) ?? null;
       const unreadCount = unreadByConv.get(c.id) ?? 0;
 
-      let title = '';
+      let title: string;
       let space: ConversationView['space'] = null;
       let counterpart: MessagingPublicUser | null = null;
       if (c.type === 'SPACE') {

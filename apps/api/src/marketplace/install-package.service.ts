@@ -8,7 +8,6 @@ import AdmZip from 'adm-zip';
 import type { InstalledModule } from '@didacta/database';
 import { ModuleContextFactory } from '../modules/module-context.factory';
 import { ModuleRegistryService } from '../modules/module-registry.service';
-import { AdminUsersService } from '../admin/admin-users.service';
 import { ModuleJobLifecycleRegistry } from './job-runner/mod-jobs-lifecycle.registry';
 import { InstalledModuleService } from './installed-module.service';
 import type { ModuleDidactaConfig, ModuleManifest } from './module-manifest.schema';

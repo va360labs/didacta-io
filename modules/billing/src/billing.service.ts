@@ -49,7 +49,6 @@ export type StripeAdapterResolver = (tenantId: string) => Promise<StripeAdapter>
  * coherencia si se renombran modelos en `@didacta/database`.
  */
 type BillingProductRow = Awaited<ReturnType<PrismaClient['modBillingProduct']['create']>>;
-type BillingOrderRow = Awaited<ReturnType<PrismaClient['modBillingOrder']['create']>>;
 
 export interface BillingEventPublisher {
   publish(

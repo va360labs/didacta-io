@@ -299,7 +299,7 @@ export class AccessGroupsService {
   }
 
   async deleteGroup(tenantId: string, id: string) {
-    const group = await this.requireGroup(tenantId, id);
+    await this.requireGroup(tenantId, id);
     const members = await this.prisma.modAccessGroupMember.findMany({
       where: { tenantId, groupId: id, status: 'ACTIVE' },
       select: { userId: true },

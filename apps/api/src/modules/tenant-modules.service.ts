@@ -101,7 +101,7 @@ export class TenantModulesService {
     ctx: ClientContext = NO_CTX,
   ): Promise<TenantModuleListItem> {
     await this.ensureTenant(tenantId);
-    const mod = this.requireModule(moduleName);
+    this.requireModule(moduleName);
 
     const moduleRow = await this.prisma.module.findUniqueOrThrow({
       where: { name: moduleName },

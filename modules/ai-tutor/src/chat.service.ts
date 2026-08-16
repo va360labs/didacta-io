@@ -75,13 +75,6 @@ interface ChunkRetrievalRow {
   distance: number;
 }
 
-interface ConversationRow {
-  id: string;
-  tenantId: string;
-  userId: string;
-  courseId: string;
-}
-
 interface MessageRow {
   role: string;
   content: string;
@@ -203,7 +196,7 @@ export class AiTutorChatService {
 
     // 4. Embedding de la pregunta
     let queryEmbedding: number[];
-    let embedTokens = 0;
+    let embedTokens: number;
     try {
       const embedResult = await this.embedFn({
         tenantId,

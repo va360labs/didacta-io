@@ -9,7 +9,6 @@ import {
   type Capability,
   type ChatCompletionInput,
   type ChatCompletionResult,
-  type EmbedInput,
   type EmbedResult,
   type ProviderId,
   type ResolvedProviderConfig,

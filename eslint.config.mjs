@@ -54,6 +54,35 @@ export default [
       'no-unused-vars': ['warn', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
     },
   },
+  // ── TypeScript del backend y de los módulos ──────────────────────────────
+  //
+  // Sin este bloque, eslint IGNORABA todo el `.ts` que no fuera `apps/web/src`:
+  // los bloques de arriba no declaran `files`, así que solo alcanzan a la
+  // extensión por defecto (`.js`), y el único bloque con `.ts` era el
+  // guardarraíl i18n de la web. O sea: la API entera, los 20 módulos y los
+  // paquetes no pasaban por el linter y nadie lo sabía — `pnpm lint` salía
+  // verde porque no miraba. Se ve con `npx eslint <fichero>`: respondía
+  // «File ignored because no matching configuration was supplied».
+  //
+  // `no-unused-vars` va con el mismo `^_` que el bloque de arriba, que es la
+  // convención que ya usa el repo para lo deliberadamente sin usar (los stubs
+  // de las interfaces sandbox están llenos de `_key`, `_opts`…).
+  {
+    files: ['apps/api/src/**/*.ts', 'modules/*/src/**/*.ts', 'packages/*/src/**/*.ts'],
+    languageOptions: { parser: tseslint.parser },
+    plugins: { '@typescript-eslint': tseslint.plugin },
+    rules: {
+      ...tseslint.configs.recommended.reduce((acc, c) => ({ ...acc, ...(c.rules ?? {}) }), {}),
+      '@typescript-eslint/no-unused-vars': [
+        'error',
+        { argsIgnorePattern: '^_', varsIgnorePattern: '^_' },
+      ],
+      // Las cubre tsc con tipos; en `.ts` la versión de espree da falsos positivos.
+      'no-unused-vars': 'off',
+      'no-undef': 'off',
+      'no-redeclare': 'off',
+    },
+  },
   // ── Guardarraíl i18n (apps/web) ──────────────────────────────────────────
   // Prohíbe formateo con locale cableado fuera de los helpers de
   // `apps/web/src/lib/i18n/**` (único sitio permitido para toLocale*/Intl.*).

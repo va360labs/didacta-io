@@ -138,7 +138,7 @@ export class ModuleAssetsController {
     // constructor — por eso ambos van dentro del mismo try. Sin este try el
     // fallo escapaba como 500 y volvía a ser un oráculo: solo se llega a
     // este punto si el módulo existe, está INSTALLED y su blob se descargó.
-    let entry: ReturnType<AdmZip['getEntry']> = null;
+    let entry: ReturnType<AdmZip['getEntry']>;
     try {
       entry = new AdmZip(packageBuffer).getEntry(bundlePath);
     } catch (err) {

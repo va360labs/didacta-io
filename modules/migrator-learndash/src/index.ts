@@ -31,7 +31,6 @@ import {
   mapQuiz,
   mapGroup,
   mapDirectEnrollment,
-  mapGroupEnrollment,
   type MapResult,
 } from './mappers/index.js';
 
@@ -42,15 +41,6 @@ type AllowedMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 /// El host aplica allowlist por host del manifest, rate limit por
 /// (módulo, host), SSRF guard, timeout y body cap. El módulo solo
 /// invoca y maneja errores tipados (`HttpError.code`).
-type HttpErrorCode =
-  | 'HTTP_TIMEOUT'
-  | 'HTTP_BLOCKED_HOST'
-  | 'HTTP_BODY_TOO_LARGE'
-  | 'HTTP_RATE_LIMITED'
-  | 'HTTP_NETWORK'
-  | 'HTTP_ABORTED'
-  | 'HTTP_INVALID_URL';
-
 interface HttpRequestOptions {
   headers?: Record<string, string>;
   body?: string | Uint8Array;
@@ -130,19 +120,6 @@ interface DbError extends Error {
 /// Necesario para ET-001 (extract phase): el worker BullMQ recibe ctx
 /// fresco por cada tick — sin store de secrets no podríamos recordar el
 /// appPassword de WP entre POST /jobs y el primer tick del worker.
-type SecretsErrorCode =
-  | 'SECRETS_NOT_DECLARED'
-  | 'SECRETS_TENANT_REQUIRED'
-  | 'SECRETS_KEY_INVALID'
-  | 'SECRETS_VALUE_TOO_LARGE'
-  | 'SECRETS_QUOTA_EXCEEDED'
-  | 'SECRETS_KEY_PATTERN_MISMATCH'
-  | 'SECRETS_NETWORK';
-
-interface SecretsError extends Error {
-  code: SecretsErrorCode;
-}
-
 interface SetSecretOptions {
   expiresAt?: Date;
 }
@@ -590,7 +567,7 @@ async function fetchOneWpPage<T>(
   try {
     items = JSON.parse(resp.body) as T[];
   } catch (e) {
-    throw new Error(`Respuesta no JSON: ${(e as Error).message}`);
+    throw new Error(`Respuesta no JSON: ${(e as Error).message}`, { cause: e });
   }
   if (!Array.isArray(items)) {
     throw new Error(`Respuesta esperada array, recibido ${typeof items}`);
@@ -1869,7 +1846,9 @@ export async function* paginateWp<T>(
     try {
       items = JSON.parse(resp.body) as T[];
     } catch (e) {
-      throw new Error(`paginateWp: respuesta no JSON en ${pagedUrl}: ${(e as Error).message}`);
+      throw new Error(`paginateWp: respuesta no JSON en ${pagedUrl}: ${(e as Error).message}`, {
+        cause: e,
+      });
     }
     if (!Array.isArray(items)) {
       throw new Error(
@@ -3970,7 +3949,7 @@ async function onJobTick(ctx: ModuleJobTickContext): Promise<JobTickResult> {
                       [tenantId, jobId, courseSourceId],
                     );
                     hasOrphans = parseInt(q.rows[0]?.n ?? '0', 10) > 0;
-                  } catch (e) {
+                  } catch {
                     // Si la query falla, somos conservadores: creamos General
                     // de todas formas (mejor un module extra que perder lessons).
                     hasOrphans = true;

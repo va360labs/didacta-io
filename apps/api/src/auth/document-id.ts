@@ -22,7 +22,7 @@ const DNI_RE = /^\d{8}[A-Z]$/;
 const NIE_RE = /^[XYZ]\d{7}[A-Z]$/;
 
 export function normalizeDocumentId(input: string): string {
-  return input.replace(/[\s.\-]/g, '').toUpperCase();
+  return input.replace(/[\s.-]/g, '').toUpperCase();
 }
 
 /**

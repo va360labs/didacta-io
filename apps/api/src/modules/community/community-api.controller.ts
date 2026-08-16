@@ -199,7 +199,7 @@ export class CommunityApiController {
     // explícito validamos contra los espacios reales; sin él caemos al
     // espacio "general" si el tenant lo tiene (default de la UI).
     const spaces = await svc.listSpaces(user.tenantId);
-    let spaceSlug: string | null = null;
+    let spaceSlug: string | null;
     if (dto.space) {
       const match = spaces.find((s) => s.slug === dto.space);
       if (!match) {

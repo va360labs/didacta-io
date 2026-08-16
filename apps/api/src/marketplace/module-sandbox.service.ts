@@ -285,7 +285,7 @@ export class ModuleSandboxService {
       // como stubs con surface mínima cuando haya un módulo real que los
       // use. Por ahora, devolvemos el módulo real desde el resolver de Node
       // del proceso host — la allowlist ya filtra qué se permite.
-      // eslint-disable-next-line @typescript-eslint/no-require-imports, security/detect-non-literal-require
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
       return require(id);
     };
   }

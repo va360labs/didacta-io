@@ -56,6 +56,7 @@ function timingSafeStringEqual(a: string, b: string): boolean {
   const bb = Buffer.from(b);
   if (ba.length !== bb.length) return false;
   // Imports tardíos para no añadir runtime cost si no se usa.
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { timingSafeEqual } = require('node:crypto') as typeof import('node:crypto');
   try {
     return timingSafeEqual(ba, bb);

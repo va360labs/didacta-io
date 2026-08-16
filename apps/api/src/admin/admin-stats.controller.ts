@@ -21,6 +21,9 @@ import { AdminStatsService, type StatsRange } from './admin-stats.service';
 
 const ADMIN_ROLES = ['super_admin', 'tenant_admin'] as const;
 
+// Falso positivo: el esquema se usa dentro de un decorador (@Query), que el
+// análisis de flujo de la regla no cuenta como «sentencia posterior».
+// eslint-disable-next-line no-useless-assignment
 const querySchema = z.object({
   range: z.enum(['all', '7d', '30d']).default('all'),
 });

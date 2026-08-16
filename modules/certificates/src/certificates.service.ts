@@ -32,7 +32,7 @@ export interface TemplateInput {
   isDefault?: boolean;
 }
 
-export interface TemplateUpdateInput extends Partial<TemplateInput> {}
+export type TemplateUpdateInput = Partial<TemplateInput>;
 
 export class CertificatesService {
   constructor(

@@ -35,7 +35,6 @@ import {
   MembershipPageInactiveError,
   MembershipPlanIntervalInvalidError,
   MembershipPlanNotFoundError,
-  StripeApiError,
 } from './errors.js';
 import type { SubscriptionsStripeAdapter } from './stripe-subscriptions.client.js';
 import type {

@@ -9,7 +9,7 @@ import {
   DIDACTA_PERMISSIONS,
   type DidactaPermission,
 } from './sandboxed-didacta.types.js';
-import { SECRETS_BASE_KEY_REGEX, SECRETS_CAPS } from './sandboxed-secrets.types.js';
+import { SECRETS_CAPS } from './sandboxed-secrets.types.js';
 
 /// Schema Zod del manifest de un módulo `*.zip`.
 ///

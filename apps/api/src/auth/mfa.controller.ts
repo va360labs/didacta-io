@@ -143,7 +143,7 @@ export class MfaController {
     }
 
     const sanitized = body.code.replace(/\s+/g, '');
-    let success = false;
+    let success: boolean;
     let updatedRecoveryCodes: string[] | null = null;
 
     if (/^\d{6}$/.test(sanitized)) {

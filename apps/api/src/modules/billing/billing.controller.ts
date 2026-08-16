@@ -34,6 +34,9 @@ import { ModuleRegistryService } from '../module-registry.service';
  * resolver el producto.
  */
 /** Cuerpo opcional del checkout: qué formato del curso quiere comprar. */
+// Falso positivo: el esquema se usa dentro de un decorador (@Body), que el
+// análisis de flujo de la regla no cuenta como «sentencia posterior».
+// eslint-disable-next-line no-useless-assignment
 const checkoutBodySchema = z
   .object({ optionId: z.string().uuid().optional() })
   .strict()
