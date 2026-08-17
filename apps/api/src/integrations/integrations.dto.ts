@@ -201,6 +201,35 @@ export interface IntegrationLearnerCourseState {
   nextLesson: IntegrationNextLesson | null;
 }
 
+/**
+ * La membresía viva del alumno, si la tiene.
+ *
+ * Existe para una pregunta muy concreta: una tienda externa que también vende
+ * la membresía necesita saber, ANTES de cobrar, si esta persona ya la tiene.
+ * Sin esto la misma persona acaba con dos suscripciones corriendo a la vez y un
+ * solo acceso, y el segundo cobro no lo detecta nadie hasta que llega el recibo.
+ *
+ * Solo aparecen las membresías **vivas** (`TRIALING`, `ACTIVE`, `PAST_DUE`). Una
+ * cancelada o impagada no se devuelve: esa persona sí puede volver a contratar,
+ * y es justo a quien se le quiere vender.
+ */
+export interface IntegrationLearnerMembership {
+  /** `TRIALING` (prueba en curso), `ACTIVE`, o `PAST_DUE` (impago en gracia). */
+  status: string;
+  /** Plan contratado. `null` solo si el plan se borró después de venderse. */
+  planId: string | null;
+  planName: string | null;
+  /** `month` | `year`, como el price de Stripe. */
+  interval: string;
+  /** Importe del periodo actual en céntimos. */
+  amountCents: number;
+  currency: string;
+  /** Cuándo vuelve a cobrarse (o cuándo caduca si está cancelándose). */
+  currentPeriodEnd: string | null;
+  /** Pidió la baja: sigue con acceso hasta `currentPeriodEnd` y no renueva. */
+  cancelAtPeriodEnd: boolean;
+}
+
 /** Respuesta de `GET /integrations/learners/state`. */
 export interface IntegrationLearnerState {
   /**
@@ -212,4 +241,10 @@ export interface IntegrationLearnerState {
   name: string | null;
   enrollments: IntegrationLearnerEnrollment[];
   course: IntegrationLearnerCourseState | null;
+  /**
+   * Membresía viva, o `null`. **`null` no significa "puede comprar sin más"**
+   * si la membresía se vende también fuera de Didacta: aquí solo se ve lo que
+   * se contrató en el aula.
+   */
+  membership: IntegrationLearnerMembership | null;
 }

@@ -28,6 +28,8 @@ const STATUS_BY_CODE: Record<string, number> = {
   MEMBERSHIP_CONFIG_INCOMPLETE: HttpStatus.UNPROCESSABLE_ENTITY,
   // "Pagar ahora" sin membresía en trial que activar.
   MEMBERSHIP_NOT_TRIALING: HttpStatus.CONFLICT,
+  // Ya tiene una membresía viva: no se le abre un segundo checkout.
+  MEMBERSHIP_ALREADY_SUBSCRIBED: HttpStatus.CONFLICT,
 };
 
 @Catch(SubscriptionsError)

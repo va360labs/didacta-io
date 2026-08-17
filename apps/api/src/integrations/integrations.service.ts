@@ -4,6 +4,7 @@
  */
 
 import { Injectable, NotFoundException } from '@nestjs/common';
+import { MEMBERSHIP_LIVE_STATUSES } from '@didacta/mod-subscriptions';
 import { Logger as PinoLogger } from 'nestjs-pino';
 import { ModuleRegistryService } from '../modules/module-registry.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -13,6 +14,7 @@ import type {
   IntegrationEnrollmentTotals,
   IntegrationLearnerCourseState,
   IntegrationLearnerEnrollment,
+  IntegrationLearnerMembership,
   IntegrationLearnerState,
   IntegrationNextLesson,
   IntegrationTenantTotals,
@@ -254,7 +256,14 @@ export class IntegrationsService {
   ): Promise<IntegrationLearnerState> {
     const user = await this.findUserByEmail(tenantId, email);
     if (!user) {
-      return { known: false, userId: null, name: null, enrollments: [], course: null };
+      return {
+        known: false,
+        userId: null,
+        name: null,
+        enrollments: [],
+        course: null,
+        membership: null,
+      };
     }
 
     const rows = await this.prisma.modLearningEnrollment.findMany({
@@ -305,7 +314,68 @@ export class IntegrationsService {
         )
       : null;
 
-    return { known: true, userId: user.id, name: user.name, enrollments, course };
+    return {
+      known: true,
+      userId: user.id,
+      name: user.name,
+      enrollments,
+      course,
+      membership: await this.buildMembershipState(tenantId, user.id),
+    };
+  }
+
+  /**
+   * La membresía viva del alumno, para que quien vende fuera pueda no vendérsela
+   * dos veces. `planId: { not: null }` es lo que separa la membresía de una
+   * suscripción por curso: las dos comparten tabla.
+   *
+   * Los estados que cuentan salen de `MEMBERSHIP_LIVE_STATUSES`, importado del
+   * módulo en vez de reescrito aquí: si esta lista y la del guard del checkout
+   * se separaran, la tienda externa vería «no tiene» justo en el caso en que el
+   * aula le diría «ya tienes» — y el duplicado que esto evita volvería por la
+   * puerta de al lado.
+   */
+  private async buildMembershipState(
+    tenantId: string,
+    userId: string,
+  ): Promise<IntegrationLearnerMembership | null> {
+    const sub = await this.prisma.modSubscriptionsSubscription.findFirst({
+      where: {
+        tenantId,
+        userId,
+        planId: { not: null },
+        status: { in: [...MEMBERSHIP_LIVE_STATUSES] },
+      },
+      orderBy: { createdAt: 'desc' },
+      select: {
+        status: true,
+        planId: true,
+        interval: true,
+        unitAmount: true,
+        currency: true,
+        currentPeriodEnd: true,
+        cancelAtPeriodEnd: true,
+      },
+    });
+    if (!sub) return null;
+
+    const plan = sub.planId
+      ? await this.prisma.modSubscriptionsPlan.findFirst({
+          where: { id: sub.planId, tenantId },
+          select: { name: true },
+        })
+      : null;
+
+    return {
+      status: sub.status,
+      planId: sub.planId,
+      planName: plan?.name ?? null,
+      interval: sub.interval,
+      amountCents: sub.unitAmount,
+      currency: sub.currency,
+      currentPeriodEnd: sub.currentPeriodEnd?.toISOString() ?? null,
+      cancelAtPeriodEnd: sub.cancelAtPeriodEnd,
+    };
   }
 
   // ------------------------------------------------------------------ privados

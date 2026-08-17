@@ -153,7 +153,7 @@ export class SubscriptionsWebhookController {
       // Sin tenantId degrada a sancionado y el service conserva su semántica
       // (no-op si no es membresía; error si es membresía con metadata coja).
       const membershipTenantId = session.metadata?.['tenantId'] ?? null;
-      await runAsTenantOrSanctioned(
+      const fulfilled = await runAsTenantOrSanctioned(
         membershipTenantId,
         () =>
           this.registry
@@ -175,6 +175,25 @@ export class SubscriptionsWebhookController {
             ),
         { traceLabel: 'membership-fulfillment' },
       );
+
+      // Pagó teniendo ya una membresía viva. La venta anónima no permite
+      // evitarlo antes —el correo lo escribe en la pantalla de Stripe—, así que
+      // lo único que se puede hacer es que no pase inadvertido: son dos cobros
+      // recurrentes por el mismo acceso, y nadie se queja de lo que no ve.
+      // No se resuelve solo a propósito: reembolsar la nueva, cancelar la vieja
+      // o dejar las dos es una decisión de negocio, no del webhook.
+      if (fulfilled?.duplicateOf) {
+        this.logger.warn(
+          {
+            tenantId: membershipTenantId,
+            userId: fulfilled.userId,
+            nueva: fulfilled.subscriptionId,
+            existente: fulfilled.duplicateOf,
+            stripeSession: session.id,
+          },
+          'MEMBRESÍA DUPLICADA: este usuario ya tenía una membresía viva y acaba de contratar otra. Hay que decidir cuál se queda.',
+        );
+      }
     }
 
     // FAN-OUT a mod.billing (compra de curso suelto). Una sola cuenta de Stripe

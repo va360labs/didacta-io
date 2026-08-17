@@ -31,6 +31,7 @@ export type {
 export {
   MembershipService,
   MEMBERSHIP_EVENT,
+  MEMBERSHIP_LIVE_STATUSES,
   PLAN_DEFAULT_CURRENCY,
   PLAN_INTERVAL_MAX_MONTHS,
   stripHtmlToExcerpt,
@@ -66,6 +67,7 @@ export {
   MembershipPageInactiveError,
   MembershipConfigIncompleteError,
   MembershipNotTrialingError,
+  MembershipAlreadySubscribedError,
 } from './errors.js';
 
 export function buildSubscriptionsModule(_service: SubscriptionsService): DidactaModule {

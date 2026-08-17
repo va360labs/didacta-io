@@ -30,6 +30,7 @@
 import type { PrismaClient } from '@didacta/database';
 import type Stripe from 'stripe';
 import {
+  MembershipAlreadySubscribedError,
   MembershipConfigIncompleteError,
   MembershipNotTrialingError,
   MembershipPageInactiveError,
@@ -61,6 +62,24 @@ export const PLAN_INTERVAL_MAX_MONTHS = 12;
 
 /** Moneda de un plan si el admin no indica otra (ISO 4217, minúsculas). */
 export const PLAN_DEFAULT_CURRENCY = 'eur';
+
+/**
+ * Estados en los que una membresía **ya existe para su dueño** y no procede
+ * venderle otra. Una sola definición porque la usan dos sitios que tienen que
+ * responder lo mismo: el guard del checkout y `/integrations/learners/state`,
+ * que es donde una tienda externa pregunta antes de vender.
+ *
+ * `PENDING` queda FUERA a propósito, y no es un descuido: es el estado de un
+ * checkout terminado cuyo cobro Stripe aún no ha resuelto (pago diferido) y
+ * también el de una suscripción que nació `incomplete` y no llegó a ninguna
+ * parte. Esa persona **no tiene acceso a nada**; bloquearle la compra la dejaría
+ * sin poder contratar por culpa de un intento fallido suyo.
+ *
+ * `PAST_DUE` sí entra: está en periodo de gracia, conserva el acceso y lo que
+ * necesita es arreglar su método de pago, no una segunda suscripción que le
+ * cobraría dos veces por lo mismo.
+ */
+export const MEMBERSHIP_LIVE_STATUSES = ['TRIALING', 'ACTIVE', 'PAST_DUE'] as const;
 
 /** El DTO del host también valida, pero el módulo no depende de su llamador. */
 function assertPlanInterval(intervalMonths: number): void {
@@ -403,10 +422,60 @@ export class MembershipService {
   // ---------------- Checkout ----------------
 
   /**
+   * ¿Este correo ya tiene una membresía viva en este tenant?
+   *
+   * Lectura cross-module de `user` (permitida: el contrato prohíbe *escribir*,
+   * no leer). El email se compara primero exacto y después sin distinguir
+   * mayúsculas, igual que hace `/inscribe` y `/integrations/learners/state`: si
+   * un tenant arrastra dos filas que solo difieren en la caja, las tres
+   * respuestas tienen que hablar del mismo usuario o el guard sería esquivable
+   * escribiendo el correo en mayúsculas.
+   *
+   * Devuelve la fila viva, o `null`. Nunca lanza: si no hay usuario con ese
+   * correo, es que nunca ha comprado nada.
+   */
+  async findLiveMembershipByEmail(
+    tenantId: string,
+    email: string,
+  ): Promise<{ id: string; status: string; planId: string | null } | null> {
+    const limpio = email.trim();
+    if (!limpio) return null;
+
+    const user =
+      (await this.prisma.user.findFirst({
+        where: { tenantId, email: limpio },
+        select: { id: true },
+      })) ??
+      (await this.prisma.user.findFirst({
+        where: { tenantId, email: { equals: limpio, mode: 'insensitive' } },
+        select: { id: true },
+      }));
+    if (!user) return null;
+
+    return this.prisma.modSubscriptionsSubscription.findFirst({
+      where: {
+        tenantId,
+        userId: user.id,
+        // Membresía, no suscripción por curso: es lo que distingue las dos
+        // clases de fila que comparten esta tabla.
+        planId: { not: null },
+        status: { in: [...MEMBERSHIP_LIVE_STATUSES] },
+      },
+      select: { id: true, status: true, planId: true },
+    });
+  }
+
+  /**
    * Crea la Checkout Session de Stripe para un plan. `email` viene del user
    * logueado si lo hay; anónimo → Stripe lo recoge. No crea fila local: el
    * comprador puede no existir aún como user — la fila se crea en el webhook
    * `checkout.session.completed` (fulfillMembershipCheckout).
+   *
+   * ⚠️ **El guard de duplicados solo alcanza hasta donde llega el email.** Si
+   * el comprador es anónimo, aquí no hay correo que comprobar —lo recoge Stripe
+   * en su propia pantalla— y el duplicado se caza después, en
+   * `fulfillMembershipCheckout`. Son dos redes distintas a propósito: esta
+   * evita el cobro, la otra evita el acceso doble cuando el cobro ya ocurrió.
    */
   async startMembershipCheckout(args: {
     tenantId: string;
@@ -430,6 +499,11 @@ export class MembershipService {
   }): Promise<{ url: string; sessionId: string }> {
     const config = await this.getConfig(args.tenantId);
     if (!config.active) throw new MembershipPageInactiveError();
+
+    if (args.email) {
+      const viva = await this.findLiveMembershipByEmail(args.tenantId, args.email);
+      if (viva) throw new MembershipAlreadySubscribedError(viva.status);
+    }
 
     const plan = await this.prisma.modSubscriptionsPlan.findFirst({
       where: { id: args.planId, tenantId: args.tenantId, active: true },
@@ -510,7 +584,20 @@ export class MembershipService {
   async fulfillMembershipCheckout(
     session: Stripe.Checkout.Session,
     provisionUser: UserProvisioner,
-  ): Promise<{ subscriptionId: string; userId: string; userCreated: boolean } | null> {
+  ): Promise<{
+    subscriptionId: string;
+    userId: string;
+    userCreated: boolean;
+    /**
+     * Id de la membresía que esta persona YA tenía viva cuando llegó este
+     * checkout. Distinto de `null` significa que **ha pagado dos veces**: la
+     * fila se crea igual —si no, tendríamos una suscripción cobrándose en
+     * Stripe que el panel no vería ni podría cancelar— pero quien llama tiene
+     * que dejar constancia. No se resuelve solo: elegir entre reembolsar la
+     * nueva, cancelar la vieja o dejar las dos es una decisión de negocio.
+     */
+    duplicateOf?: string | null;
+  } | null> {
     const meta = (session.metadata ?? {}) as Record<string, string>;
     if (meta['membership'] !== '1') return null;
     const tenantId = meta['tenantId'];
@@ -545,6 +632,21 @@ export class MembershipService {
       // validar a propósito: quien escribe la fila de `user` es el host y es él
       // quien decide qué locales acepta.
       locale: meta['locale'],
+    });
+
+    // La segunda red contra el duplicado. La primera —el guard de
+    // `startMembershipCheckout`— solo actúa si sabíamos el email antes de
+    // saltar a Stripe, y en la venta anónima no lo sabemos: lo escribe el
+    // comprador en la pantalla de Stripe y vuelve aquí. Este es el único punto
+    // del camino en el que el correo y la suscripción existen a la vez.
+    const yaTenia = await this.prisma.modSubscriptionsSubscription.findFirst({
+      where: {
+        tenantId,
+        userId,
+        planId: { not: null },
+        status: { in: [...MEMBERSHIP_LIVE_STATUSES] },
+      },
+      select: { id: true },
     });
 
     // Trial: si el plan tiene días de prueba, la sub nace TRIALING (con
@@ -590,7 +692,12 @@ export class MembershipService {
     });
 
     if (!cobrado) {
-      return { subscriptionId: sub.id, userId, userCreated: created };
+      return {
+        subscriptionId: sub.id,
+        userId,
+        userCreated: created,
+        duplicateOf: yaTenia?.id ?? null,
+      };
     }
 
     // Atribución opaca (p.ej. referidos): si el checkout llevó referralCode,
@@ -606,7 +713,12 @@ export class MembershipService {
       attribution: referralCode ? { referralCode } : null,
     });
 
-    return { subscriptionId: sub.id, userId, userCreated: created };
+    return {
+      subscriptionId: sub.id,
+      userId,
+      userCreated: created,
+      duplicateOf: yaTenia?.id ?? null,
+    };
   }
 
   // ---------------- Pagar ahora (terminar el trial y cobrar ya) ----------------

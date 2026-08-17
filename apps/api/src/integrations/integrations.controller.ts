@@ -123,6 +123,9 @@ export class IntegrationsController {
       'completadas y `nextLesson` con la URL directa a la clase. ' +
       'Ojo con `hasAccess: false` y `status: "PAUSED"`: es un alumno suspendido (típicamente ' +
       'por impago), no alguien que nunca compró. ' +
+      '`membership` trae la membresía viva (TRIALING, ACTIVE o PAST_DUE) o `null`: es la ' +
+      'pregunta que hay que hacer ANTES de vender una membresía desde fuera, para que la ' +
+      'misma persona no acabe con dos suscripciones cobrándose por un solo acceso. ' +
       'Requiere scope `enrollments:read`, separado de los demás precisamente porque permite ' +
       'preguntar por cualquier email del tenant.',
   })

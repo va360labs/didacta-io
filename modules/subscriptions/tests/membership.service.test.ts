@@ -18,6 +18,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import type Stripe from 'stripe';
 import { MembershipService } from '../src/membership.service.js';
 import {
+  MembershipAlreadySubscribedError,
   MembershipNotTrialingError,
   MembershipPageInactiveError,
   MembershipPlanIntervalInvalidError,
@@ -107,6 +108,16 @@ function matches(row: Record<string, unknown>, where: Record<string, unknown>): 
     } else if (v && typeof v === 'object' && 'not' in (v as object)) {
       const notVal = (v as { not: unknown }).not;
       if (notVal === null ? val === null || val === undefined : val === notVal) return false;
+    } else if (v && typeof v === 'object' && 'in' in (v as object)) {
+      if (!(v as { in: unknown[] }).in.includes(val)) return false;
+    } else if (v && typeof v === 'object' && 'equals' in (v as object)) {
+      // `{ equals, mode: 'insensitive' }` — el lookup de email por caja.
+      const { equals, mode } = v as { equals: unknown; mode?: string };
+      if (mode === 'insensitive') {
+        if (String(val).toLowerCase() !== String(equals).toLowerCase()) return false;
+      } else if (val !== equals) {
+        return false;
+      }
     } else if (val !== v) {
       return false;
     }
@@ -235,11 +246,19 @@ class MockPrisma {
       this.courses.filter((c) => matches(c as never, args.where)),
   };
 
-  users: Array<{ id: string; tenantId: string; name: string | null; status: string }> = [];
+  users: Array<{
+    id: string;
+    tenantId: string;
+    name: string | null;
+    status: string;
+    email?: string;
+  }> = [];
 
   user = {
     count: async (args: { where: Record<string, unknown> }) =>
       this.users.filter((u) => matches(u as never, args.where)).length,
+    findFirst: async (args: { where: Record<string, unknown> }) =>
+      this.users.find((u) => matches(u as never, args.where)) ?? null,
     findMany: async (args: { where: { tenantId: string; id: { in: string[] } } }) =>
       this.users.filter(
         (u) => u.tenantId === args.where.tenantId && args.where.id.in.includes(u.id),
@@ -694,6 +713,150 @@ describe('MembershipService · checkout', () => {
     expect(ctx.stripe.createProduct).toHaveBeenCalledTimes(1);
     expect(ctx.stripe.createRecurringPrice).toHaveBeenCalledTimes(1);
     expect(ctx.prisma.plans.get(plan.id)?.stripePriceId).toBe('price_1');
+  });
+
+  /**
+   * El guard de duplicados. La membresía se vende desde más de un escaparate
+   * (la página /unete y una tienda externa por API), así que sin esto la misma
+   * persona acaba con dos suscripciones cobrándose por un solo acceso.
+   */
+  describe('no se le vende dos veces al mismo', () => {
+    /** Siembra un comprador con una membresía en el estado que se le pida. */
+    function conMembresia(email: string, status: string, planId = 'plan_x') {
+      ctx.prisma.users = [
+        { id: 'u_dup', tenantId: TENANT, name: 'Repetidor', status: 'ACTIVE', email },
+      ];
+      ctx.prisma.subs.set('s_dup', {
+        id: 's_dup',
+        tenantId: TENANT,
+        userId: 'u_dup',
+        courseId: null,
+        planId,
+        stripeSubscriptionId: 'sub_dup',
+        stripeCustomerId: 'cus',
+        stripePriceId: 'price',
+        status,
+        unitAmount: 3_990,
+        currency: 'eur',
+        interval: 'month',
+      });
+    }
+
+    async function unPlan() {
+      return ctx.service.createPlan(TENANT, {
+        name: 'Mensual',
+        intervalMonths: 1,
+        amountCents: 3_990,
+      });
+    }
+
+    it.each(['ACTIVE', 'TRIALING', 'PAST_DUE'])(
+      'con una membresía %s no abre checkout y no llama a Stripe',
+      async (status) => {
+        conMembresia('repe@x.com', status);
+        const plan = await unPlan();
+        await expect(
+          ctx.service.startMembershipCheckout({
+            tenantId: TENANT,
+            planId: plan.id,
+            email: 'repe@x.com',
+            successUrl: 'https://x/s',
+            cancelUrl: 'https://x/c',
+          }),
+        ).rejects.toBeInstanceOf(MembershipAlreadySubscribedError);
+        // Lo que de verdad importa: no se ha creado una sesión de pago.
+        expect(ctx.stripe.createCheckoutSession).not.toHaveBeenCalled();
+      },
+    );
+
+    it.each(['CANCELED', 'UNPAID', 'PENDING'])(
+      'con una membresía %s SÍ le deja contratar',
+      async (status) => {
+        conMembresia('vuelve@x.com', status);
+        const plan = await unPlan();
+        const res = await ctx.service.startMembershipCheckout({
+          tenantId: TENANT,
+          planId: plan.id,
+          email: 'vuelve@x.com',
+          successUrl: 'https://x/s',
+          cancelUrl: 'https://x/c',
+        });
+        expect(res.url).toBeTruthy();
+      },
+    );
+
+    it('el correo en MAYÚSCULAS no esquiva el guard', async () => {
+      conMembresia('repe@x.com', 'ACTIVE');
+      const plan = await unPlan();
+      await expect(
+        ctx.service.startMembershipCheckout({
+          tenantId: TENANT,
+          planId: plan.id,
+          email: 'REPE@X.com',
+          successUrl: 'https://x/s',
+          cancelUrl: 'https://x/c',
+        }),
+      ).rejects.toBeInstanceOf(MembershipAlreadySubscribedError);
+    });
+
+    it('una suscripción POR CURSO no cuenta como membresía', async () => {
+      // Las dos clases de fila comparten tabla; lo que las separa es `planId`.
+      ctx.prisma.users = [
+        { id: 'u_c', tenantId: TENANT, name: 'Alumno', status: 'ACTIVE', email: 'curso@x.com' },
+      ];
+      ctx.prisma.subs.set('s_c', {
+        id: 's_c',
+        tenantId: TENANT,
+        userId: 'u_c',
+        courseId: 'curso-1',
+        planId: null,
+        stripeSubscriptionId: 'sub_c',
+        stripeCustomerId: 'cus',
+        stripePriceId: 'price',
+        status: 'ACTIVE',
+        unitAmount: 1_000,
+        currency: 'eur',
+        interval: 'month',
+      });
+      const plan = await unPlan();
+      const res = await ctx.service.startMembershipCheckout({
+        tenantId: TENANT,
+        planId: plan.id,
+        email: 'curso@x.com',
+        successUrl: 'https://x/s',
+        cancelUrl: 'https://x/c',
+      });
+      expect(res.url).toBeTruthy();
+    });
+
+    it('la membresía de OTRO tenant no bloquea', async () => {
+      ctx.prisma.users = [
+        { id: 'u_o', tenantId: 'otro-tenant', name: 'Ajeno', status: 'ACTIVE', email: 'x@x.com' },
+      ];
+      const plan = await unPlan();
+      const res = await ctx.service.startMembershipCheckout({
+        tenantId: TENANT,
+        planId: plan.id,
+        email: 'x@x.com',
+        successUrl: 'https://x/s',
+        cancelUrl: 'https://x/c',
+      });
+      expect(res.url).toBeTruthy();
+    });
+
+    it('sin email (venta anónima) el guard no puede actuar: deja pasar', async () => {
+      conMembresia('repe@x.com', 'ACTIVE');
+      const plan = await unPlan();
+      // No es un descuido: el correo lo escribe el comprador YA en Stripe. El
+      // duplicado se caza después, en fulfillMembershipCheckout.
+      const res = await ctx.service.startMembershipCheckout({
+        tenantId: TENANT,
+        planId: plan.id,
+        successUrl: 'https://x/s',
+        cancelUrl: 'https://x/c',
+      });
+      expect(res.url).toBeTruthy();
+    });
   });
 
   it('el idioma del comprador viaja en la metadata de la session, y sin él NO se inventa la clave', async () => {
