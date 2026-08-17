@@ -34,10 +34,26 @@ function makeHarness(
     offerThrows?: boolean;
     availability?: Record<string, { available: boolean }>;
     availabilityThrows?: boolean;
+    /** Filas del groupBy `(courseId, status)` de matrículas. */
+    enrollmentCounts?: Array<{ courseId: string; status: string; count: number }>;
+    /** Filas del groupBy `(userId)` — una por alumno distinto del tenant. */
+    learnerCounts?: Array<{ userId: string; count: number }>;
   } = {},
 ) {
   const findFirstCourse = vi.fn().mockResolvedValue(opts.course ?? null);
   const findManyCourses = vi.fn().mockResolvedValue(opts.courseRows ?? []);
+
+  // El servicio agrupa matrículas de dos formas distintas sobre la misma
+  // tabla; se distinguen por `by`, igual que en producción.
+  const groupByEnrollments = vi.fn(async (args: { by: string[] }) =>
+    args.by.includes('userId')
+      ? (opts.learnerCounts ?? []).map((r) => ({ userId: r.userId, _count: { _all: r.count } }))
+      : (opts.enrollmentCounts ?? []).map((r) => ({
+          courseId: r.courseId,
+          status: r.status,
+          _count: { _all: r.count },
+        })),
+  );
 
   const prisma = {
     modCoursesCourse: {
@@ -49,6 +65,7 @@ function makeHarness(
     },
     modLearningEnrollment: {
       findMany: vi.fn().mockResolvedValue(opts.enrollments ?? []),
+      groupBy: groupByEnrollments,
     },
     modLearningProgress: {
       findMany: vi
@@ -89,6 +106,7 @@ function makeHarness(
     service: new IntegrationsService(prisma, registry, logger),
     findFirstCourse,
     findManyCourses,
+    groupByEnrollments,
     getCourseOffer,
     getCourseAvailability,
     loggerWarn,
@@ -162,7 +180,13 @@ describe('IntegrationsService · ficha de curso', () => {
     const h = makeHarness({ course: courseFixture() });
     const detail = await h.service.getCourseDetail(TENANT_ID, COURSE_ID);
 
-    expect(detail.totals).toEqual({ modules: 1, lessons: 2, minutes: 20 });
+    expect(detail.totals).toEqual({
+      modules: 1,
+      lessons: 2,
+      minutes: 20,
+      enrollments: 0,
+      enrollmentsActive: 0,
+    });
     // `estimatedMinutes` es lo que anunció el formador y se conserva aparte:
     // no tiene por qué cuadrar con la suma real.
     expect(detail.estimatedMinutes).toBe(600);
@@ -206,6 +230,52 @@ describe('IntegrationsService · ficha de curso', () => {
     await expect(h.service.getCourseDetail(TENANT_ID, COURSE_ID)).rejects.toBeInstanceOf(
       NotFoundException,
     );
+  });
+
+  it('un identificador que no es UUID se busca por slug, no revienta la consulta', async () => {
+    // La columna `id` es uuid en Postgres: pasarle letras lanza un error de
+    // conversión que sale como 500, y un 500 el integrador no lo puede leer
+    // como "no existe".
+    const h = makeHarness({ course: courseFixture() });
+    await h.service.getCourseDetail(TENANT_ID, 'curso-de-claude-code');
+
+    const where = h.findFirstCourse.mock.calls[0]![0].where;
+    expect(where.slug).toBe('curso-de-claude-code');
+    expect(where).not.toHaveProperty('id');
+  });
+
+  it('con UUID sigue buscando por id, no por slug', async () => {
+    const h = makeHarness({ course: courseFixture() });
+    await h.service.getCourseDetail(TENANT_ID, COURSE_ID);
+
+    const where = h.findFirstCourse.mock.calls[0]![0].where;
+    expect(where.id).toBe(COURSE_ID);
+    expect(where).not.toHaveProperty('slug');
+  });
+
+  it('un slug inexistente da 404, que es lo que se puede tratar como ausencia', async () => {
+    const h = makeHarness({ course: null });
+    await expect(h.service.getCourseDetail(TENANT_ID, 'no-existe')).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
+  });
+
+  it('los alumnos del curso van en totals: histórico y con acceso, separados', async () => {
+    const h = makeHarness({
+      course: courseFixture(),
+      enrollmentCounts: [
+        { courseId: COURSE_ID, status: 'ACTIVE', count: 800 },
+        { courseId: COURSE_ID, status: 'COMPLETED', count: 50 },
+        { courseId: COURSE_ID, status: 'PAUSED', count: 7 },
+        { courseId: COURSE_ID, status: 'CANCELLED', count: 3 },
+      ],
+    });
+    const detail = await h.service.getCourseDetail(TENANT_ID, COURSE_ID);
+
+    // El histórico es el que se publica en una ficha de venta ("han pasado por
+    // aquí"): si se publicara el activo, la cifra encogería con cada baja.
+    expect(detail.totals.enrollments).toBe(860);
+    expect(detail.totals.enrollmentsActive).toBe(850);
   });
 });
 
@@ -426,5 +496,50 @@ describe('IntegrationsService · catálogo para mapear', () => {
     });
     expect(where).not.toHaveProperty('slug');
     expect(where).not.toHaveProperty('status');
+  });
+
+  it('cada curso trae sus matriculados y el que no tiene ninguno trae 0, no undefined', async () => {
+    const h = makeHarness({
+      courseRows: [
+        { id: COURSE_ID, title: 'Curso de Claude Code', slug: 'curso' },
+        { id: 'otro-curso', title: 'Curso nuevo', slug: 'nuevo' },
+      ],
+      enrollmentCounts: [
+        { courseId: COURSE_ID, status: 'ACTIVE', count: 12 },
+        { courseId: COURSE_ID, status: 'CANCELLED', count: 2 },
+      ],
+    });
+    const { courses } = await h.service.listCourses(TENANT_ID, {});
+
+    expect(courses[0]!.totals).toEqual({ enrollments: 14, enrollmentsActive: 12 });
+    expect(courses[1]!.totals).toEqual({ enrollments: 0, enrollmentsActive: 0 });
+  });
+
+  it('el total del tenant cuenta personas, no matrículas: quien compró tres cuenta una', async () => {
+    const h = makeHarness({
+      courseRows: [{ id: COURSE_ID, title: 'Curso de Claude Code', slug: 'curso' }],
+      learnerCounts: [
+        { userId: 'u1', count: 3 },
+        { userId: 'u2', count: 1 },
+      ],
+    });
+    const { tenantTotals } = await h.service.listCourses(TENANT_ID, {});
+
+    // Es el número de la portada ("+3.000 alumnos formados"): sumando fichas
+    // saldría 4.
+    expect(tenantTotals.learners).toBe(2);
+    expect(tenantTotals.enrollments).toBe(4);
+  });
+
+  it('sin cursos que contar no pregunta por matrículas de cursos', async () => {
+    const h = makeHarness({ courseRows: [] });
+    await h.service.listCourses(TENANT_ID, { slug: 'no-existe' });
+
+    // El único groupBy que queda es el del total del tenant, que no depende
+    // del filtro.
+    const porCurso = h.groupByEnrollments.mock.calls.filter(
+      (c) => !(c[0] as { by: string[] }).by.includes('userId'),
+    );
+    expect(porCurso).toHaveLength(0);
   });
 });

@@ -39,6 +39,26 @@ export const learnerStateQuerySchema = z.object({
 });
 export type LearnerStateQuery = z.infer<typeof learnerStateQuerySchema>;
 
+/**
+ * Cuántos alumnos han pasado por un curso. Es el dato que una página de venta
+ * enseña como prueba social ("860 alumnos"), y por eso van los dos números:
+ * publicar el activo como si fuera el histórico encoge la cifra cada vez que
+ * alguien cancela.
+ */
+export interface IntegrationEnrollmentTotals {
+  /**
+   * HISTÓRICO: toda matrícula que ha existido en el curso, incluidas las
+   * canceladas y las suspendidas. Es el "han pasado por aquí" de una ficha de
+   * venta.
+   */
+  enrollments: number;
+  /**
+   * Los que pueden entrar a clase hoy (ACTIVE o COMPLETED). Sirve para
+   * informes; para vender, casi siempre se quiere el de arriba.
+   */
+  enrollmentsActive: number;
+}
+
 /** Curso en la lista de mapeo. Lo justo para que el integrador elija y guarde el UUID. */
 export interface IntegrationCourseSummary {
   id: string;
@@ -52,6 +72,27 @@ export interface IntegrationCourseSummary {
   /** Origen de la importación (ej. "learndash") y su id allí. Null si el curso nació en Didacta. */
   externalSource: string | null;
   externalId: string | null;
+  totals: IntegrationEnrollmentTotals;
+}
+
+/**
+ * Totales de TODO el tenant, no de los cursos filtrados. Van en el sobre de la
+ * lista porque no son la suma de los cursos: quien está matriculado en tres
+ * cuenta una vez. Es el número de la portada ("+3.000 alumnos formados"), que
+ * sumando fichas sale inflado.
+ */
+export interface IntegrationTenantTotals {
+  /** Personas distintas con al menos una matrícula, de cualquier estado. */
+  learners: number;
+  /** Matrículas totales del tenant, histórico. `learners` <= `enrollments`. */
+  enrollments: number;
+}
+
+/** Respuesta de `GET /integrations/courses`. */
+export interface IntegrationCourseListResponse {
+  courses: IntegrationCourseSummary[];
+  /** Del tenant entero: NO se ve afectado por los filtros de la query. */
+  tenantTotals: IntegrationTenantTotals;
 }
 
 /** Lección tal y como se muestra en un temario público: sin contenido. */
@@ -97,10 +138,15 @@ export interface IntegrationCourseDetail extends IntegrationCourseSummary {
   /** El curso emite certificado al completarlo. */
   hasCertificate: boolean;
   instructor: IntegrationInstructor | null;
-  totals: {
+  totals: IntegrationEnrollmentTotals & {
     modules: number;
     lessons: number;
-    /** Suma real de las duraciones de las lecciones. 0 si ninguna la declara. */
+    /**
+     * Suma real de las duraciones de las lecciones. **0 si ninguna la
+     * declara**, que es lo normal: `durationMinutes` es un campo opcional que
+     * el formador rellena clase a clase. Un 0 aquí significa "el curso no lo
+     * tiene cargado", no "dura cero" — no lo publiques como dato.
+     */
     minutes: number;
   };
   modules: IntegrationModule[];

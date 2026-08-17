@@ -9,16 +9,32 @@ import { ModuleRegistryService } from '../modules/module-registry.service';
 import { PrismaService } from '../prisma/prisma.service';
 import type {
   IntegrationCourseDetail,
-  IntegrationCourseSummary,
+  IntegrationCourseListResponse,
+  IntegrationEnrollmentTotals,
   IntegrationLearnerCourseState,
   IntegrationLearnerEnrollment,
   IntegrationLearnerState,
   IntegrationNextLesson,
+  IntegrationTenantTotals,
   ListCoursesQuery,
 } from './integrations.dto';
 
 /** Estados de matrícula que dan acceso real a las clases hoy. */
 const ACCESS_STATUSES = new Set(['ACTIVE', 'COMPLETED']);
+
+/**
+ * Un curso sin ninguna matrícula no aparece en el `groupBy`, y ausencia no es
+ * lo mismo que cero para quien pinta la ficha: `undefined` se cuela como "—".
+ */
+const SIN_MATRICULAS: IntegrationEnrollmentTotals = { enrollments: 0, enrollmentsActive: 0 };
+
+/**
+ * Las columnas de id son `uuid` en Postgres: pasarle "curso-de-n8n" a un
+ * `where: { id }` no da 404, revienta con un error de conversión que sale por
+ * la puerta como 500. Y un 500 el integrador no lo puede tratar como "no
+ * existe". Se distingue antes de consultar.
+ */
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
  * Lectura del catálogo y del estado del alumno para integradores externos.
@@ -50,7 +66,7 @@ export class IntegrationsService {
   async listCourses(
     tenantId: string,
     query: ListCoursesQuery,
-  ): Promise<IntegrationCourseSummary[]> {
+  ): Promise<IntegrationCourseListResponse> {
     const courses = await this.prisma.modCoursesCourse.findMany({
       where: {
         tenantId,
@@ -73,27 +89,48 @@ export class IntegrationsService {
         externalId: true,
       },
     });
-    return courses.map((c) => ({
-      id: c.id,
-      slug: c.slug,
-      title: c.title,
-      status: c.status,
-      category: c.category,
-      thumbnailUrl: c.thumbnailUrl,
-      publishedAt: c.publishedAt?.toISOString() ?? null,
-      externalSource: c.externalSource,
-      externalId: c.externalId,
-    }));
+    const [porCurso, tenantTotals] = await Promise.all([
+      this.countEnrollmentsByCourse(
+        tenantId,
+        courses.map((c) => c.id),
+      ),
+      this.countTenantLearners(tenantId),
+    ]);
+
+    return {
+      courses: courses.map((c) => ({
+        id: c.id,
+        slug: c.slug,
+        title: c.title,
+        status: c.status,
+        category: c.category,
+        thumbnailUrl: c.thumbnailUrl,
+        publishedAt: c.publishedAt?.toISOString() ?? null,
+        externalSource: c.externalSource,
+        externalId: c.externalId,
+        totals: porCurso.get(c.id) ?? SIN_MATRICULAS,
+      })),
+      tenantTotals,
+    };
   }
 
   /**
    * Ficha completa: metadatos + temario + oferta. Devuelve el curso en
    * cualquier estado (el integrador ve `status` y decide), porque quien llama
    * es el propio tenant con su API key, igual que en `/inscribe/courses`.
+   *
+   * `courseId` admite el UUID o el slug. El slug no es una comodidad: la ruta
+   * es lo primero que prueba quien tiene la URL del curso delante, y con
+   * `@@unique([tenantId, slug])` resuelve a uno solo. Lo que NO puede pasar es
+   * que un identificador con letras acabe en un 500.
    */
   async getCourseDetail(tenantId: string, courseId: string): Promise<IntegrationCourseDetail> {
     const course = await this.prisma.modCoursesCourse.findFirst({
-      where: { tenantId, id: courseId, deletedAt: null },
+      where: {
+        tenantId,
+        deletedAt: null,
+        ...(UUID_RE.test(courseId) ? { id: courseId } : { slug: courseId }),
+      },
       select: {
         id: true,
         slug: true,
@@ -165,10 +202,11 @@ export class IntegrationsService {
       }),
     }));
 
-    const [instructor, hasCertificate, offer] = await Promise.all([
+    const [instructor, hasCertificate, offer, matriculas] = await Promise.all([
       this.resolveInstructor(tenantId, course.createdById),
       this.resolveHasCertificate(tenantId, course.certificateTemplateId),
       this.resolveOffer(tenantId, course.id),
+      this.countEnrollmentsByCourse(tenantId, [course.id]),
     ]);
 
     return {
@@ -188,7 +226,12 @@ export class IntegrationsService {
       externalPurchaseUrl: course.externalPurchaseUrl,
       hasCertificate,
       instructor,
-      totals: { modules: modules.length, lessons: lessonCount, minutes },
+      totals: {
+        modules: modules.length,
+        lessons: lessonCount,
+        minutes,
+        ...(matriculas.get(course.id) ?? SIN_MATRICULAS),
+      },
       modules,
       offer,
     };
@@ -266,6 +309,58 @@ export class IntegrationsService {
   }
 
   // ------------------------------------------------------------------ privados
+
+  /**
+   * Matrículas por curso, en una sola consulta para toda la lista: contar
+   * curso a curso convertiría un catálogo de quince en quince viajes.
+   * Agrupa por `(courseId, status)` —el índice `[tenantId, courseId, status]`
+   * lo cubre entero— y reparte cada montón en histórico y activo.
+   *
+   * Cuenta filas de matrícula, no personas: la clave `[tenantId, userId,
+   * courseId]` es única, así que dentro de UN curso una fila es una persona.
+   * Entre cursos ya no, y por eso el total del tenant se calcula aparte.
+   */
+  private async countEnrollmentsByCourse(
+    tenantId: string,
+    courseIds: string[],
+  ): Promise<Map<string, IntegrationEnrollmentTotals>> {
+    const porCurso = new Map<string, IntegrationEnrollmentTotals>();
+    if (courseIds.length === 0) return porCurso;
+
+    const grupos = await this.prisma.modLearningEnrollment.groupBy({
+      by: ['courseId', 'status'],
+      where: { tenantId, courseId: { in: courseIds } },
+      _count: { _all: true },
+    });
+
+    for (const grupo of grupos) {
+      const acc = porCurso.get(grupo.courseId) ?? { enrollments: 0, enrollmentsActive: 0 };
+      const n = grupo._count._all;
+      acc.enrollments += n;
+      if (ACCESS_STATUSES.has(grupo.status)) acc.enrollmentsActive += n;
+      porCurso.set(grupo.courseId, acc);
+    }
+    return porCurso;
+  }
+
+  /**
+   * Alumnos distintos del tenant. Es el número de la portada de una web de
+   * venta, y NO es la suma de los cursos: quien compró tres cuenta una vez.
+   *
+   * Se agrupa por `userId` y se cuentan los grupos —la deduplicación la hace
+   * Postgres— en vez de traerse las matrículas para contarlas en memoria.
+   */
+  private async countTenantLearners(tenantId: string): Promise<IntegrationTenantTotals> {
+    const porAlumno = await this.prisma.modLearningEnrollment.groupBy({
+      by: ['userId'],
+      where: { tenantId },
+      _count: { _all: true },
+    });
+    return {
+      learners: porAlumno.length,
+      enrollments: porAlumno.reduce((total, fila) => total + fila._count._all, 0),
+    };
+  }
 
   /**
    * Busca por (tenant, email) exacto —la misma clave única que usa

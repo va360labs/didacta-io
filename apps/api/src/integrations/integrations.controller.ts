@@ -57,12 +57,16 @@ export class IntegrationsController {
   @Get('courses')
   @RequireApiScopes('courses:read')
   @ApiOperation({
-    summary: 'Listar cursos para mapear "página del sitio externo" → "curso de Didacta"',
+    summary: 'Listar cursos (con alumnos matriculados) para mapearlos con el sitio externo',
     description:
       'Devuelve los cursos no borrados con lo justo para elegir uno y guardar su UUID. ' +
       'Filtra por `slug`, por `status`, o por `externalId` + `externalSource` — esto último ' +
       'resuelve el mapeo solo cuando los cursos se importaron de otro LMS (ej. ' +
       '`externalSource=learndash`, `externalId` = el ID del post de WordPress). ' +
+      'Cada curso trae sus `totals` de matrículas (`enrollments` histórico, ' +
+      '`enrollmentsActive` con acceso hoy) y la respuesta añade `tenantTotals` con los ' +
+      'alumnos DISTINTOS de todo el tenant — que no es la suma de los cursos, porque quien ' +
+      'compró tres cuenta una vez, y que NO se ve afectado por los filtros. ' +
       'Requiere scope `courses:read`.',
   })
   @ApiQuery({ name: 'slug', required: false, example: 'curso-de-claude-code' })
@@ -77,19 +81,21 @@ export class IntegrationsController {
     @Query(new ZodValidationPipe(listCoursesQuerySchema)) query: ListCoursesQuery,
   ) {
     if (!user) throw new UnauthorizedException();
-    const courses = await this.service.listCourses(user.tenantId, query);
-    return { courses };
+    return this.service.listCourses(user.tenantId, query);
   }
 
   @Get('courses/:courseId')
   @RequireApiScopes('courses:read')
   @ApiOperation({
-    summary: 'Ficha completa de un curso: metadatos, temario y oferta',
+    summary: 'Ficha completa de un curso: metadatos, temario, alumnos y oferta',
     description:
       'Todo lo necesario para pintar una página de venta fuera de Didacta: descripción, ' +
       'imagen, vídeo destacado, formador, si emite certificado, totales (módulos, clases, ' +
-      'minutos), el temario completo módulo a módulo y —si el curso tiene precio en ' +
-      'mod.billing— sus opciones de compra. ' +
+      'minutos y matriculados), el temario completo módulo a módulo y —si el curso tiene ' +
+      'precio en mod.billing— sus opciones de compra. ' +
+      'El parámetro acepta el **UUID o el slug** del curso. ' +
+      'Ojo con `totals.minutes`: es la suma de las duraciones declaradas clase a clase, así ' +
+      'que un 0 significa "sin cargar", no "dura cero" — no publiques ese dato tal cual. ' +
       'NO devuelve el `content` de las lecciones bajo ninguna circunstancia. ' +
       'Requiere scope `courses:read`.',
   })
