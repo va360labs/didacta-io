@@ -2,7 +2,10 @@ License
 
 Portions of this software are licensed as follows:
 
-- Content of branches other than the main branch (i.e. "main") are not licensed.
+- Content of this repository is licensed as described below regardless of the
+  branch or tag it lives in ("main", "develop", release branches, feature
+  branches and any other ref), subject only to the file-based exceptions
+  listed here.
 - Source code files that contain ".ee." in their filename or ".ee" in their
   dirname are NOT licensed under the Sustainable Use License. To use source
   code files that contain ".ee." in their filename or ".ee" in their dirname
