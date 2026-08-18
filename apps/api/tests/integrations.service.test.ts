@@ -38,10 +38,15 @@ function makeHarness(
     enrollmentCounts?: Array<{ courseId: string; status: string; count: number }>;
     /** Filas del groupBy `(userId)` — una por alumno distinto del tenant. */
     learnerCounts?: Array<{ userId: string; count: number }>;
+    /** Suscripción viva del alumno, o null si no tiene membresía. */
+    membership?: Record<string, unknown> | null;
+    /** Plan al que apunta esa suscripción, de donde sale `planName`. */
+    membershipPlan?: { name: string } | null;
   } = {},
 ) {
   const findFirstCourse = vi.fn().mockResolvedValue(opts.course ?? null);
   const findManyCourses = vi.fn().mockResolvedValue(opts.courseRows ?? []);
+  const findFirstSubscription = vi.fn().mockResolvedValue(opts.membership ?? null);
 
   // El servicio agrupa matrículas de dos formas distintas sobre la misma
   // tabla; se distinguen por `by`, igual que en producción.
@@ -75,6 +80,15 @@ function makeHarness(
     modCertificatesTemplate: {
       findFirst: vi.fn().mockResolvedValue(opts.defaultTemplate ?? null),
     },
+    // La membresía del alumno, que `getLearnerState` consulta SIEMPRE: sin
+    // estas dos el harness devuelve `undefined.findFirst` y se cae la ficha
+    // entera, no solo el bloque de membresía.
+    modSubscriptionsSubscription: {
+      findFirst: findFirstSubscription,
+    },
+    modSubscriptionsPlan: {
+      findFirst: vi.fn().mockResolvedValue(opts.membershipPlan ?? null),
+    },
     user: {
       // El servicio usa `user.findFirst` para dos cosas distintas: resolver al
       // alumno por email y resolver al formador por id. Se distinguen por el
@@ -107,6 +121,7 @@ function makeHarness(
     findFirstCourse,
     findManyCourses,
     groupByEnrollments,
+    findFirstSubscription,
     getCourseOffer,
     getCourseAvailability,
     loggerWarn,
@@ -311,6 +326,10 @@ describe('IntegrationsService · estado del alumno', () => {
       name: null,
       enrollments: [],
       course: null,
+      // A quien no conocemos se le responde con la misma forma que a un
+      // conocido sin membresía: la tienda de fuera lee `membership` siempre,
+      // sin ramificar por `known`.
+      membership: null,
     });
   });
 
@@ -476,6 +495,99 @@ describe('IntegrationsService · estado del alumno', () => {
       `${WEB_BASE}/`,
     );
     expect(state.course?.nextLesson?.url).toBe(`${WEB_BASE}/clase/les-1`);
+  });
+
+  it('devuelve la membresía viva, con el nombre del plan resuelto', async () => {
+    const h = makeHarness({
+      user: { id: 'u1', name: 'Ana' },
+      membership: {
+        status: 'ACTIVE',
+        planId: 'plan-1',
+        interval: 'month',
+        unitAmount: 2900,
+        currency: 'eur',
+        currentPeriodEnd: new Date('2026-09-17T10:00:00.000Z'),
+        cancelAtPeriodEnd: false,
+      },
+      membershipPlan: { name: 'VA360.pro' },
+    });
+    const state = await h.service.getLearnerState(TENANT_ID, 'ana@x.com', undefined, WEB_BASE);
+
+    expect(state.membership).toEqual({
+      status: 'ACTIVE',
+      planId: 'plan-1',
+      planName: 'VA360.pro',
+      interval: 'month',
+      amountCents: 2900,
+      currency: 'eur',
+      currentPeriodEnd: '2026-09-17T10:00:00.000Z',
+      cancelAtPeriodEnd: false,
+    });
+  });
+
+  it('sin membresía devuelve null, no un objeto a medias', async () => {
+    const h = makeHarness({ user: { id: 'u1', name: 'Ana' } });
+    const state = await h.service.getLearnerState(TENANT_ID, 'ana@x.com', undefined, WEB_BASE);
+
+    expect(state.membership).toBeNull();
+  });
+
+  /**
+   * Esta consulta es la que una tienda externa hace ANTES de cobrar. Si los
+   * estados que cuentan como «viva» se separaran de los del guard del checkout,
+   * la tienda vería «no tiene» justo cuando el aula dice «ya tienes» — y el
+   * cobro duplicado que todo esto evita volvería por la puerta de al lado.
+   */
+  it('pregunta exactamente por los estados vivos y por la membresía, no por una suscripción de curso', async () => {
+    const h = makeHarness({ user: { id: 'u1', name: 'Ana' } });
+    await h.service.getLearnerState(TENANT_ID, 'ana@x.com', undefined, WEB_BASE);
+
+    const where = h.findFirstSubscription.mock.calls[0]![0].where;
+    expect(where.status.in).toEqual(['TRIALING', 'ACTIVE', 'PAST_DUE']);
+    expect(where.planId).toEqual({ not: null });
+    expect(where.tenantId).toBe(TENANT_ID);
+    expect(where.userId).toBe('u1');
+  });
+
+  it('una membresía cancelándose sigue siendo viva, con la fecha en que caduca', async () => {
+    const h = makeHarness({
+      user: { id: 'u1', name: 'Ana' },
+      membership: {
+        status: 'ACTIVE',
+        planId: 'plan-1',
+        interval: 'year',
+        unitAmount: 29000,
+        currency: 'eur',
+        currentPeriodEnd: new Date('2027-01-31T23:59:59.000Z'),
+        cancelAtPeriodEnd: true,
+      },
+      membershipPlan: { name: 'VA360.pro anual' },
+    });
+    const state = await h.service.getLearnerState(TENANT_ID, 'ana@x.com', undefined, WEB_BASE);
+
+    expect(state.membership?.cancelAtPeriodEnd).toBe(true);
+    expect(state.membership?.currentPeriodEnd).toBe('2027-01-31T23:59:59.000Z');
+  });
+
+  it('si el plan se borró después de venderse, planName es null y la membresía sigue saliendo', async () => {
+    const h = makeHarness({
+      user: { id: 'u1', name: 'Ana' },
+      membership: {
+        status: 'PAST_DUE',
+        planId: 'plan-borrado',
+        interval: 'month',
+        unitAmount: 2900,
+        currency: 'eur',
+        currentPeriodEnd: null,
+        cancelAtPeriodEnd: false,
+      },
+      membershipPlan: null,
+    });
+    const state = await h.service.getLearnerState(TENANT_ID, 'ana@x.com', undefined, WEB_BASE);
+
+    expect(state.membership?.planName).toBeNull();
+    expect(state.membership?.status).toBe('PAST_DUE');
+    expect(state.membership?.currentPeriodEnd).toBeNull();
   });
 });
 
