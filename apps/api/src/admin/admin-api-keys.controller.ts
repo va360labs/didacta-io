@@ -44,6 +44,8 @@ export const ALLOWED_API_KEY_SCOPES = [
   'enrollments:read',
   'courses:read',
   'community:post',
+  'orders:write',
+  'orders:read',
 ] as const;
 
 const createSchema = z.object({

@@ -4,15 +4,24 @@
  */
 
 import {
+  Body,
   Controller,
   Get,
   Param,
+  Post,
   Query,
   Req,
   UnauthorizedException,
   UseGuards,
 } from '@nestjs/common';
-import { ApiOperation, ApiQuery, ApiResponse, ApiSecurity, ApiTags } from '@nestjs/swagger';
+import {
+  ApiBody,
+  ApiOperation,
+  ApiQuery,
+  ApiResponse,
+  ApiSecurity,
+  ApiTags,
+} from '@nestjs/swagger';
 import type { FastifyRequest } from 'fastify';
 import { JwtOrApiKeyGuard } from '../auth/api-key.guard';
 import { ApiScopeGuard } from '../auth/api-scope.guard';
@@ -22,10 +31,14 @@ import { ZodValidationPipe } from '../auth/zod-validation.pipe';
 import type { SessionClaims } from '../auth/token.service';
 import { TenantResolverService } from '../tenancy/tenant-resolver.service';
 import {
+  learnerOrdersQuerySchema,
   learnerStateQuerySchema,
   listCoursesQuerySchema,
+  upsertExternalOrderSchema,
+  type LearnerOrdersQuery,
   type LearnerStateQuery,
   type ListCoursesQuery,
+  type UpsertExternalOrderDto,
 } from './integrations.dto';
 import { IntegrationsService } from './integrations.service';
 
@@ -43,6 +56,12 @@ import { IntegrationsService } from './integrations.service';
  *
  * Nunca devuelve el contenido de una lección. El temario se enseña para
  * vender; la clase se da en Didacta.
+ *
+ * ⚠️ **Ya no es solo de lectura.** `POST /integrations/orders` escribe: es donde
+ * una tienda externa deja la compra que acaba de cobrar para que viva en el
+ * perfil del alumno y no en una segunda pantalla que hay que mantener aparte.
+ * Sigue sin escribir NADA del aula —matricular es `/inscribe`—: lo que guarda
+ * es el pedido, y solo el pedido.
  */
 @ApiTags('Integraciones (API externa)')
 @ApiSecurity('ApiKey')
@@ -143,5 +162,108 @@ export class IntegrationsController {
     if (!user) throw new UnauthorizedException();
     const webBaseUrl = await this.tenantResolver.resolveTenantWebBaseUrl(user.tenantId, req);
     return this.service.getLearnerState(user.tenantId, query.email, query.courseId, webBaseUrl);
+  }
+
+  // ==========================================================================
+  // Compras hechas fuera — el historial del alumno cuando la tienda no es esta
+  // ==========================================================================
+
+  @Post('orders')
+  @RequireApiScopes('orders:write')
+  @ApiOperation({
+    summary: 'Guardar en el perfil del alumno una compra hecha en una tienda externa',
+    description:
+      'La tienda cobra con su pasarela, da el acceso con `/inscribe` y deja aquí el pedido: ' +
+      'así el historial de compra vive en el perfil del alumno y no en una segunda pantalla ' +
+      'que hay que construir dos veces. **Idempotente por `(source, reference)`** — un webhook ' +
+      'se reintenta, y el reintento no puede duplicarle el historial a nadie. ' +
+      '`invoice`, `orderUrl` y `refundedAt` solo se escriben si vienen: **omitirlos no borra ' +
+      'lo que ya hubiera**, que es lo que permite volver media hora después con el número de ' +
+      'factura sin reenviar el pedido entero. ' +
+      'Didacta NO emite facturas ni numera series fiscales: de la factura se guardan su ' +
+      'número, su fecha y un enlace al PDF que sirve quien la emitió. Conservar los registros ' +
+      'contables sigue siendo cosa de quien vende. Requiere scope `orders:write`.',
+  })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      required: ['email', 'source', 'reference', 'amountCents', 'placedAt'],
+      properties: {
+        email: { type: 'string', format: 'email', example: 'ana@ejemplo.com' },
+        source: { type: 'string', example: 'va360.academy' },
+        reference: { type: 'string', example: 'VA-260818-2PQ9TU' },
+        status: {
+          type: 'string',
+          enum: ['PAID', 'REFUNDED', 'PARTIALLY_REFUNDED', 'CANCELLED'],
+          default: 'PAID',
+        },
+        amountCents: { type: 'integer', example: 4770 },
+        currency: { type: 'string', example: 'eur' },
+        placedAt: { type: 'string', format: 'date-time' },
+        refundedAt: { type: 'string', format: 'date-time' },
+        orderUrl: { type: 'string', example: 'https://va360.academy/cuenta' },
+        lines: {
+          type: 'array',
+          items: {
+            type: 'object',
+            required: ['name', 'amountCents'],
+            properties: {
+              name: { type: 'string', example: 'Curso de n8n de cero a experto' },
+              quantity: { type: 'integer', default: 1 },
+              amountCents: { type: 'integer', example: 4770 },
+              courseId: { type: 'string', format: 'uuid' },
+            },
+          },
+        },
+        invoice: {
+          type: 'object',
+          required: ['number'],
+          properties: {
+            number: { type: 'string', example: 'F-2026-0412' },
+            issuedAt: { type: 'string', format: 'date-time' },
+            url: { type: 'string', example: 'https://va360.academy/cuenta/factura/1234' },
+          },
+        },
+      },
+    },
+  })
+  @ApiResponse({ status: 201, description: 'Pedido guardado o actualizado.' })
+  @ApiResponse({ status: 400, description: 'Cuerpo inválido.' })
+  @ApiResponse({ status: 401, description: 'API key ausente, inválida, expirada o revocada.' })
+  @ApiResponse({ status: 403, description: 'La API key no tiene el scope `orders:write`.' })
+  @ApiResponse({ status: 429, description: 'Límite de peticiones superado.' })
+  async upsertOrder(
+    @CurrentUser() user: SessionClaims | undefined,
+    @Body(new ZodValidationPipe(upsertExternalOrderSchema)) dto: UpsertExternalOrderDto,
+  ) {
+    if (!user) throw new UnauthorizedException();
+    return this.service.upsertExternalOrder(user.tenantId, dto);
+  }
+
+  @Get('learners/orders')
+  @RequireApiScopes('orders:read')
+  @ApiOperation({
+    summary: 'Historial de compra de un alumno, por email',
+    description:
+      'Lo que la tienda dejó en `POST /integrations/orders`, para que su zona de cliente lo ' +
+      'pinte sin consultar su propia base de datos y para que las dos pantallas —la del aula y ' +
+      'la de la tienda— digan lo mismo. Busca por cuenta Y por email: solo por la cuenta se ' +
+      'perderían los pedidos que llegaron antes de que existiera. ' +
+      '**`known: false` no implica lista vacía.** Requiere scope `orders:read`, separado de ' +
+      '`orders:write` porque permite consultar las compras de cualquier email del tenant.',
+  })
+  @ApiQuery({ name: 'email', required: true, example: 'ana@ejemplo.com' })
+  @ApiQuery({ name: 'source', required: false, example: 'va360.academy' })
+  @ApiQuery({ name: 'limit', required: false, example: 50 })
+  @ApiResponse({ status: 200, description: 'Sus compras, de la más reciente a la más antigua.' })
+  @ApiResponse({ status: 400, description: 'Email ausente o malformado.' })
+  @ApiResponse({ status: 401, description: 'API key ausente, inválida, expirada o revocada.' })
+  @ApiResponse({ status: 403, description: 'La API key no tiene el scope `orders:read`.' })
+  async learnerOrders(
+    @CurrentUser() user: SessionClaims | undefined,
+    @Query(new ZodValidationPipe(learnerOrdersQuerySchema)) query: LearnerOrdersQuery,
+  ) {
+    if (!user) throw new UnauthorizedException();
+    return this.service.listLearnerOrders(user.tenantId, query);
   }
 }

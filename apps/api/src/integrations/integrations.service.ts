@@ -17,8 +17,12 @@ import type {
   IntegrationLearnerMembership,
   IntegrationLearnerState,
   IntegrationNextLesson,
+  IntegrationExternalOrder,
+  IntegrationLearnerOrders,
   IntegrationTenantTotals,
+  LearnerOrdersQuery,
   ListCoursesQuery,
+  UpsertExternalOrderDto,
 } from './integrations.dto';
 
 /** Estados de matrícula que dan acceso real a las clases hoy. */
@@ -598,5 +602,203 @@ export class IntegrationsService {
       );
       return { forSale: false, options: [] };
     }
+  }
+
+  // ==========================================================================
+  // Compras hechas fuera
+  // ==========================================================================
+
+  /**
+   * Guarda —o actualiza— una compra hecha en una tienda externa.
+   *
+   * **Idempotente por `(tenant, source, reference)`.** Es el requisito de fondo,
+   * no un detalle: quien llama a esto es un webhook de cobro, y un webhook se
+   * reintenta. Sin esta clave, el reintento de una pasarela le duplicaría el
+   * historial a un alumno que no ha comprado dos veces.
+   *
+   * **Lo que se omite no se borra.** `invoice`, `orderUrl` y `refundedAt` solo
+   * se escriben si vienen en el cuerpo. Es lo que permite el camino normal de
+   * una tienda —cobrar y mandar el pedido; emitir la factura media hora después
+   * y volver con el número— sin que la segunda llamada tenga que reenviar todo
+   * ni la primera pise lo que ya había.
+   *
+   * ⚠️ `userId` se resuelve por email **en el momento de escribir**, y puede
+   * quedarse en `null` para siempre si la tienda manda el pedido antes de
+   * llamar a `/inscribe`. No es un fallo: la lectura busca por `userId` O por
+   * email. Lo que sí se pierde en ese caso es el pedido de quien luego cambie
+   * de correo en el aula — para eso basta con que la tienda lo reenvíe.
+   */
+  async upsertExternalOrder(
+    tenantId: string,
+    dto: UpsertExternalOrderDto,
+  ): Promise<IntegrationExternalOrder> {
+    const email = dto.email.toLowerCase();
+    const user = await this.findUserByEmail(tenantId, dto.email);
+
+    // Campos que siempre viajan y siempre se escriben.
+    const base = {
+      email,
+      status: dto.status,
+      amountCents: dto.amountCents,
+      currency: dto.currency,
+      lines: dto.lines,
+      placedAt: new Date(dto.placedAt),
+    };
+
+    // Los opcionales, solo si vienen. Ver el aviso de arriba.
+    const opcionales = {
+      ...(dto.invoice
+        ? {
+            invoiceNumber: dto.invoice.number,
+            invoiceIssuedAt: dto.invoice.issuedAt ? new Date(dto.invoice.issuedAt) : null,
+            invoiceUrl: dto.invoice.url ?? null,
+          }
+        : {}),
+      ...(dto.orderUrl !== undefined ? { orderUrl: dto.orderUrl } : {}),
+      ...(dto.refundedAt !== undefined ? { refundedAt: new Date(dto.refundedAt) } : {}),
+    };
+
+    const row = await this.prisma.externalOrder.upsert({
+      where: {
+        tenantId_source_reference: { tenantId, source: dto.source, reference: dto.reference },
+      },
+      create: {
+        tenantId,
+        source: dto.source,
+        reference: dto.reference,
+        userId: user?.id ?? null,
+        ...base,
+        ...opcionales,
+      },
+      update: {
+        ...base,
+        ...opcionales,
+        // Solo se ata la cuenta, nunca se desata: si el pedido ya estaba
+        // enlazado y hoy el email no resuelve —porque el alumno lo cambió en el
+        // aula—, mantenerlo es lo correcto.
+        ...(user ? { userId: user.id } : {}),
+      },
+    });
+
+    this.logger.log(
+      { tenantId, source: dto.source, reference: dto.reference, linked: row.userId !== null },
+      'integrations: compra externa guardada',
+    );
+
+    return this.toExternalOrder(row);
+  }
+
+  /**
+   * El historial de compra de un alumno, por email.
+   *
+   * Busca por `userId` **y** por email a propósito. Solo por la cuenta se
+   * perderían los pedidos que llegaron antes de que existiera; solo por el
+   * correo se perderían los de quien lo cambió después. Es el mismo problema
+   * que resuelve la zona de cliente de cualquier tienda que haya sobrevivido a
+   * una migración.
+   */
+  async listLearnerOrders(
+    tenantId: string,
+    query: LearnerOrdersQuery,
+  ): Promise<IntegrationLearnerOrders> {
+    const email = query.email.toLowerCase();
+    const user = await this.findUserByEmail(tenantId, query.email);
+
+    const rows = await this.prisma.externalOrder.findMany({
+      where: {
+        tenantId,
+        ...(query.source ? { source: query.source } : {}),
+        OR: user ? [{ userId: user.id }, { email }] : [{ email }],
+      },
+      orderBy: { placedAt: 'desc' },
+      take: query.limit,
+    });
+
+    return {
+      known: user !== null,
+      userId: user?.id ?? null,
+      orders: rows.map((r) => this.toExternalOrder(r)),
+    };
+  }
+
+  /**
+   * Lo mismo, pero para el alumno que mira su propio perfil en el aula.
+   *
+   * No acepta email por parámetro **a propósito**: el sujeto es el token. Un
+   * endpoint de perfil que reciba de quién quieres ver las compras es un
+   * endpoint que antes o después sirve las de otro.
+   *
+   * Busca por cuenta Y por el correo de esa cuenta, por el mismo motivo que la
+   * versión de la tienda: los pedidos que llegaron antes de que el alumno
+   * existiera en el aula tienen `user_id` a null y solo se localizan por email.
+   */
+  async listOwnOrders(tenantId: string, userId: string): Promise<IntegrationLearnerOrders> {
+    const user = await this.prisma.user.findFirst({
+      where: { id: userId, tenantId },
+      select: { id: true, email: true },
+    });
+    if (!user) return { known: false, userId: null, orders: [] };
+
+    const rows = await this.prisma.externalOrder.findMany({
+      where: {
+        tenantId,
+        OR: [{ userId: user.id }, { email: user.email.toLowerCase() }],
+      },
+      orderBy: { placedAt: 'desc' },
+      take: 200,
+    });
+
+    return {
+      known: true,
+      userId: user.id,
+      orders: rows.map((r) => this.toExternalOrder(r)),
+    };
+  }
+
+  /**
+   * Fila → contrato público.
+   *
+   * `lines` es una columna `Json` y Prisma la tipa como `JsonValue`: lo que
+   * salga de ahí es lo que entró, y entró validado por zod en el controlador.
+   * Se comprueba que sea un array antes de servirlo porque una fila escrita a
+   * mano en la base de datos no ha pasado por esa validación, y un objeto suelto
+   * ahí rompería el `map` de quien pinta la lista.
+   */
+  private toExternalOrder(row: {
+    id: string;
+    source: string;
+    reference: string;
+    status: string;
+    amountCents: number;
+    currency: string;
+    lines: unknown;
+    invoiceNumber: string | null;
+    invoiceIssuedAt: Date | null;
+    invoiceUrl: string | null;
+    orderUrl: string | null;
+    placedAt: Date;
+    refundedAt: Date | null;
+    userId: string | null;
+  }): IntegrationExternalOrder {
+    return {
+      id: row.id,
+      source: row.source,
+      reference: row.reference,
+      status: row.status,
+      amountCents: row.amountCents,
+      currency: row.currency,
+      lines: Array.isArray(row.lines) ? (row.lines as IntegrationExternalOrder['lines']) : [],
+      invoice: row.invoiceNumber
+        ? {
+            number: row.invoiceNumber,
+            issuedAt: row.invoiceIssuedAt?.toISOString() ?? null,
+            url: row.invoiceUrl,
+          }
+        : null,
+      orderUrl: row.orderUrl,
+      placedAt: row.placedAt.toISOString(),
+      refundedAt: row.refundedAt?.toISOString() ?? null,
+      linkedToUser: row.userId !== null,
+    };
   }
 }

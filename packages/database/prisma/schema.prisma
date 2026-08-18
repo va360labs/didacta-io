@@ -63,6 +63,7 @@ model Tenant {
   tenantSettings     TenantSetting[]
   domains            TenantDomain[]
   supportGrants      SupportAccessGrant[]
+  externalOrders     ExternalOrder[]
 
   @@index([slug])
   @@index([status])
@@ -669,6 +670,116 @@ enum NotificationChannel {
 /// El channel IN_APP siempre se persiste y es leído por el alumno desde
 /// /notificaciones. Los demás canales también persisten para auditoría:
 /// el campo `sentAt`/`failedAt` registra el resultado del adapter.
+// ============================================================================
+// COMPRAS HECHAS FUERA — el historial del alumno cuando la tienda no es Didacta
+// ----------------------------------------------------------------------------
+// El caso que la motiva es real y es el normal en cuanto alguien monta su propia
+// tienda: la web del cliente vende con SU pasarela y SU facturación, y llama a
+// `/inscribe` para dar el acceso. A partir de ahí el alumno tiene sus clases en
+// el aula y su historial de compra en otro sitio — que casi siempre es una
+// pantalla que hay que construir dos veces y mantener sincronizada a mano.
+//
+// Esta tabla es el sitio donde ese historial vive UNA vez: la tienda lo empuja
+// por `POST /integrations/orders` y lo leen los dos, el aula en el perfil del
+// alumno y la propia tienda si quiere pintarlo sin consultar su base de datos.
+//
+// **Qué NO es esto.** No es contabilidad ni facturación. Didacta no emite
+// facturas, no numera series fiscales y no captura datos tributarios: de la
+// factura se guarda su NÚMERO, su FECHA y un ENLACE al PDF que sirve quien la
+// emitió. Quien vende sigue siendo el responsable de conservar sus registros
+// —en España, cuatro años— y esta tabla no le sirve para eso.
+//
+// **Por qué no reutiliza `mod_billing_order`.** Esa tabla es del checkout de
+// Didacta: exige `product_id`, `course_id` y un `stripe_session_id` único, y su
+// máquina de estados la mueven los webhooks de Stripe del tenant. Una venta
+// hecha fuera no tiene ninguna de esas tres cosas, y meterla ahí pondría filas
+// que los bridges de matriculación y reembolso creerían suyas.
+// ============================================================================
+
+/// En qué estado está la compra según la tienda que la hizo. Deliberadamente
+/// corto: aquí solo llegan ventas ya cobradas, así que no hay `PENDING` — un
+/// carrito abandonado en la tienda de otro no es asunto del perfil del alumno.
+enum ExternalOrderStatus {
+  /// Cobrada. Es el estado en el que nace toda fila de esta tabla.
+  PAID
+  /// Devuelta entera. El acceso se retira por `/inscribe/revoke`, que es otra
+  /// llamada: esta columna cuenta lo que pasó con el dinero, no con las clases.
+  REFUNDED
+  /// Devuelta en parte (una línea de varias). El total NO se reescribe: un
+  /// pedido dice lo que se cobró aquel día.
+  PARTIALLY_REFUNDED
+  /// Anulada antes de entregar nada.
+  CANCELLED
+}
+
+/// Una compra hecha en una tienda externa, guardada en el perfil de su alumno.
+model ExternalOrder {
+  id       String @id @default(uuid()) @db.Uuid
+  tenantId String @map("tenant_id") @db.Uuid
+
+  /// El alumno, si ya existe en el aula. Se resuelve por email al escribir y
+  /// **puede quedar en null**: una tienda puede mandar la compra antes de que
+  /// `/inscribe` haya creado la cuenta. La lectura busca por las dos cosas, así
+  /// que un null aquí no esconde el pedido de nadie.
+  userId String? @map("user_id") @db.Uuid
+
+  /// El correo con el que se compró, en minúsculas. Se guarda SIEMPRE, incluso
+  /// con `userId` resuelto: es lo único que sobrevive si el alumno cambia de
+  /// correo en el aula, y es la clave con la que la tienda vuelve a preguntar.
+  email String
+
+  /// Quién vendió (`va360.academy`). Un tenant puede tener más de una tienda, y
+  /// dos tiendas pueden numerar sus pedidos igual.
+  source String @db.VarChar(60)
+
+  /// El número de pedido EN LA TIENDA (`VA-260818-2PQ9TU`). No es un número de
+  /// factura: no tiene serie fiscal ni obligación de ser correlativo.
+  reference String @db.VarChar(100)
+
+  status ExternalOrderStatus @default(PAID)
+
+  /// Total cobrado en la unidad mínima de la moneda (céntimos en EUR). Entero
+  /// a propósito: un `float` para dinero acaba en un céntimo que no cuadra.
+  amountCents Int    @map("amount_cents")
+  currency    String @default("eur") @db.VarChar(3)
+
+  /// Las líneas, tal y como se vendieron: `[{ name, quantity, amountCents }]`.
+  /// Copia congelada, no referencias: si el curso sube de precio el año que
+  /// viene, este pedido tiene que seguir diciendo lo que costó.
+  lines Json @default("[]")
+
+  /// La factura, cuando la tienda la ha emitido — que casi nunca es en el mismo
+  /// instante del cobro. Por eso son opcionales y se rellenan en una segunda
+  /// llamada al mismo endpoint.
+  invoiceNumber   String?   @map("invoice_number") @db.VarChar(60)
+  invoiceIssuedAt DateTime? @map("invoice_issued_at")
+  /// URL absoluta al PDF. **Didacta no guarda el documento**, solo por dónde se
+  /// pide; quien lo sirve es quien lo emitió.
+  invoiceUrl String? @map("invoice_url")
+
+  /// El pedido en la tienda, para el botón "verlo allí".
+  orderUrl String? @map("order_url")
+
+  /// Cuándo se compró, según la tienda. NO es `created_at`: una migración de
+  /// histórico trae pedidos de hace tres años y el perfil tiene que ordenarlos
+  /// por cuándo pasaron, no por cuándo se copiaron.
+  placedAt   DateTime  @map("placed_at")
+  refundedAt DateTime? @map("refunded_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  /// La idempotencia del endpoint. La tienda reintenta —un webhook que no
+  /// contestó a tiempo, un reenvío manual— y tiene que poder hacerlo sin
+  /// duplicar el historial de nadie.
+  @@unique([tenantId, source, reference])
+  @@index([tenantId, userId, placedAt])
+  @@index([tenantId, email])
+  @@map("external_order")
+}
+
 // ============================================================================
 // mod.community — Posts, comentarios y reacciones
 // ============================================================================

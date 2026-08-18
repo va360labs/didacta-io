@@ -408,5 +408,21 @@
     "7d": "7 días",
     "30d": "30 días",
     "permanent": "Permanente"
+  },
+  "compras": {
+    "titulo": "Tus compras",
+    "descripcion": "Lo que has comprado en la tienda del centro, con su factura si ya se emitió.",
+    "vacio": "Todavía no hay ninguna compra registrada con esta cuenta.",
+    "errorCarga": "No hemos podido cargar tus compras. Vuelve a intentarlo en un momento.",
+    "pedidoSinDetalle": "Pedido",
+    "factura": "Factura {numero}",
+    "sinFactura": "Factura en curso",
+    "nota": "Las facturas las emite la tienda donde compraste. Aquí se enlazan, no se generan.",
+    "estado": {
+      "PAID": "Pagado",
+      "REFUNDED": "Reembolsado",
+      "PARTIALLY_REFUNDED": "Reembolso parcial",
+      "CANCELLED": "Cancelado"
+    }
   }
 }

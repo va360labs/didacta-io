@@ -13,6 +13,8 @@ export const API_KEY_SCOPES = [
   'enrollments:read',
   'courses:read',
   'community:post',
+  'orders:write',
+  'orders:read',
 ] as const;
 export type ApiKeyScope = (typeof API_KEY_SCOPES)[number];
 

@@ -73,6 +73,18 @@ const ENDPOINTS = [
   },
   {
     method: 'POST',
+    path: '/api/v1/integrations/orders',
+    scope: 'orders:write',
+    whatKey: 'docs.whatUpsertOrder',
+  },
+  {
+    method: 'GET',
+    path: '/api/v1/integrations/learners/orders',
+    scope: 'orders:read',
+    whatKey: 'docs.whatLearnerOrders',
+  },
+  {
+    method: 'POST',
     path: '/api/v1/community-api/posts',
     scope: 'community:post',
     whatKey: 'docs.whatCommunityPost',

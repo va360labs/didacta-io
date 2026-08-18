@@ -20,6 +20,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
 import { AccountSecurityTab } from '@/components/account-security-tab';
+import { PurchasesTab, useMyPurchases } from '@/components/purchases-tab';
 import { SubscriptionTab } from '@/components/subscription-tab';
 import { AvatarUpload } from '@/components/avatar-upload';
 import { CompetencyRadar } from '@/components/competency-radar';
@@ -87,6 +88,14 @@ export default function CuentaPage() {
   const router = useRouter();
   const t = useTranslations('alumnoSocial');
   const tErrors = useTranslations('errors');
+  /**
+   * Las compras se piden aquí arriba y no dentro de su pestaña porque de ellas
+   * depende **si la pestaña existe**: en una instalación sin tienda externa la
+   * lista está vacía para todo el mundo y una pestaña permanentemente vacía es
+   * ruido en el perfil de cada alumno. Es una consulta indexada por usuario y
+   * no bloquea nada: el perfil se pinta con o sin ella.
+   */
+  const compras = useMyPurchases();
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [stats, setStats] = useState<ProfileStats | null>(null);
   const [recentCerts, setRecentCerts] = useState<Certificate[] | null>(null);
@@ -350,6 +359,9 @@ export default function CuentaPage() {
           <TabsTrigger value="datos">{t('cuenta.tabDatos')}</TabsTrigger>
           <TabsTrigger value="notificaciones">{t('cuenta.tabNotificaciones')}</TabsTrigger>
           <TabsTrigger value="suscripcion">{t('cuenta.tabSuscripcion')}</TabsTrigger>
+          {compras.orders.length > 0 && (
+            <TabsTrigger value="compras">{t('cuenta.tabCompras')}</TabsTrigger>
+          )}
           <TabsTrigger value="seguridad">{t('cuenta.tabSeguridad')}</TabsTrigger>
         </TabsList>
 
@@ -450,6 +462,13 @@ export default function CuentaPage() {
         <TabsContent value="suscripcion" className="space-y-6">
           <SubscriptionTab />
         </TabsContent>
+
+        {/* ── Compras ── */}
+        {compras.orders.length > 0 && (
+          <TabsContent value="compras" className="space-y-6">
+            <PurchasesTab state={compras} />
+          </TabsContent>
+        )}
 
         {/* ── Seguridad ── */}
         <TabsContent value="seguridad" className="space-y-6">

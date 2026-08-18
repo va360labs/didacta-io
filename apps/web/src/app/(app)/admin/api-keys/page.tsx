@@ -107,6 +107,10 @@ function KeysTab() {
         return t('keys.scopeCoursesRead');
       case 'community:post':
         return t('keys.scopeCommunityPost');
+      case 'orders:write':
+        return t('keys.scopeOrdersWrite');
+      case 'orders:read':
+        return t('keys.scopeOrdersRead');
       default:
         return scope;
     }

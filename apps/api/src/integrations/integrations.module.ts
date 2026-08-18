@@ -8,6 +8,7 @@ import { AuthModule } from '../auth/auth.module';
 import { ApiScopeGuard } from '../auth/api-scope.guard';
 import { ModulesModule } from '../modules/modules.module';
 import { IntegrationsController } from './integrations.controller';
+import { MePurchasesController } from './me-purchases.controller';
 import { IntegrationsService } from './integrations.service';
 
 /**
@@ -21,10 +22,15 @@ import { IntegrationsService } from './integrations.service';
  * Importa AuthModule por `JwtOrApiKeyGuard` y ModulesModule por el registry
  * (mod.billing, para la oferta). TenantResolverService y PrismaService llegan
  * de módulos globales.
+ *
+ * `MePurchasesController` cuelga de aquí y no de `MeController` porque comparte
+ * el servicio: es la misma tabla vista desde el otro lado del mostrador —el
+ * alumno mirando sus compras en vez de la tienda mirando las de él— y separarla
+ * en otro módulo obligaría a exportar el servicio para nada.
  */
 @Module({
   imports: [AuthModule, ModulesModule],
-  controllers: [IntegrationsController],
+  controllers: [IntegrationsController, MePurchasesController],
   providers: [IntegrationsService, ApiScopeGuard],
 })
 export class IntegrationsModule {}

@@ -408,5 +408,21 @@
     "7d": "7 days",
     "30d": "30 days",
     "permanent": "Permanent"
+  },
+  "compras": {
+    "titulo": "Your purchases",
+    "descripcion": "What you bought in this centre's store, with the invoice once it has been issued.",
+    "vacio": "No purchases recorded for this account yet.",
+    "errorCarga": "We could not load your purchases. Please try again in a moment.",
+    "pedidoSinDetalle": "Order",
+    "factura": "Invoice {numero}",
+    "sinFactura": "Invoice pending",
+    "nota": "Invoices are issued by the store you bought from. They are linked here, not generated.",
+    "estado": {
+      "PAID": "Paid",
+      "REFUNDED": "Refunded",
+      "PARTIALLY_REFUNDED": "Partially refunded",
+      "CANCELLED": "Cancelled"
+    }
   }
 }

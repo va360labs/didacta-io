@@ -248,3 +248,114 @@ export interface IntegrationLearnerState {
    */
   membership: IntegrationLearnerMembership | null;
 }
+
+// ============================================================================
+// Compras hechas fuera (`/integrations/orders`)
+// ----------------------------------------------------------------------------
+// El único trozo de ESCRITURA de esta API. Existe porque una tienda externa que
+// vende cursos deja al alumno con las clases en un sitio y su historial de
+// compra en otro, y esa segunda pantalla acaba construida dos veces.
+//
+// Lo que se guarda es el PEDIDO, no la contabilidad: Didacta no emite facturas
+// ni numera series fiscales. De la factura viajan su número, su fecha y un
+// enlace al PDF que sirve quien la emitió.
+// ============================================================================
+
+/**
+ * Una línea del pedido, tal y como se vendió.
+ *
+ * `courseId` es opcional y suele faltar: un pack, una mentoría o un servicio no
+ * son un curso del aula. Cuando está, el perfil puede enlazar la compra con la
+ * clase.
+ */
+export const externalOrderLineSchema = z.object({
+  name: z.string().trim().min(1).max(300),
+  quantity: z.number().int().min(1).max(1000).default(1),
+  /** En la unidad mínima de la moneda (céntimos en EUR). Puede ser 0: un regalo. */
+  amountCents: z.number().int().min(0).max(100_000_000),
+  courseId: z.string().uuid().optional(),
+});
+export type ExternalOrderLine = z.infer<typeof externalOrderLineSchema>;
+
+/**
+ * La factura, si ya se emitió.
+ *
+ * Va en su propio objeto y es OPCIONAL porque casi nunca se emite en el mismo
+ * instante del cobro: lo normal es cobrar, mandar el pedido, y volver minutos u
+ * horas después con el número. **Omitirla no borra la que ya hubiera** — así el
+ * reintento de un webhook no deja al alumno sin su factura.
+ */
+export const externalOrderInvoiceSchema = z.object({
+  number: z.string().trim().min(1).max(60),
+  issuedAt: z.string().datetime().optional(),
+  /** URL absoluta al PDF. Didacta no guarda el documento, solo por dónde se pide. */
+  url: z.string().url().max(2000).optional(),
+});
+
+/** Cuerpo de `POST /integrations/orders`. */
+export const upsertExternalOrderSchema = z.object({
+  /** El comprador. Si todavía no existe en el aula, el pedido se guarda igual. */
+  email: z.string().trim().email().max(320),
+  /**
+   * Quién vendió (`va360.academy`). Junto con `reference` es la clave de
+   * idempotencia: el mismo par actualiza la fila en vez de duplicarla.
+   */
+  source: z.string().trim().min(1).max(60),
+  /** El número de pedido EN LA TIENDA. No es un número de factura. */
+  reference: z.string().trim().min(1).max(100),
+  status: z.enum(['PAID', 'REFUNDED', 'PARTIALLY_REFUNDED', 'CANCELLED']).default('PAID'),
+  /** Total cobrado en la unidad mínima de la moneda. Entero: el dinero no es un float. */
+  amountCents: z.number().int().min(0).max(100_000_000),
+  currency: z.string().trim().length(3).toLowerCase().default('eur'),
+  /** Cuándo se compró. Sin esto, un histórico migrado se ordenaría por cuándo se copió. */
+  placedAt: z.string().datetime(),
+  refundedAt: z.string().datetime().optional(),
+  lines: z.array(externalOrderLineSchema).max(100).default([]),
+  invoice: externalOrderInvoiceSchema.optional(),
+  /** El pedido en la tienda, para el botón «verlo allí». */
+  orderUrl: z.string().url().max(2000).optional(),
+});
+export type UpsertExternalOrderDto = z.infer<typeof upsertExternalOrderSchema>;
+
+/** Query de `GET /integrations/learners/orders`. */
+export const learnerOrdersQuerySchema = z.object({
+  email: z.string().trim().email().max(320),
+  /** Solo los de una tienda concreta. Un tenant puede tener más de una. */
+  source: z.string().trim().min(1).max(60).optional(),
+  limit: z.coerce.number().int().min(1).max(200).default(50),
+});
+export type LearnerOrdersQuery = z.infer<typeof learnerOrdersQuerySchema>;
+
+/** Un pedido tal y como sale de la API. */
+export interface IntegrationExternalOrder {
+  id: string;
+  source: string;
+  reference: string;
+  /** PAID | REFUNDED | PARTIALLY_REFUNDED | CANCELLED. */
+  status: string;
+  amountCents: number;
+  currency: string;
+  lines: ExternalOrderLine[];
+  invoice: { number: string; issuedAt: string | null; url: string | null } | null;
+  orderUrl: string | null;
+  placedAt: string;
+  refundedAt: string | null;
+  /**
+   * El pedido está atado a una cuenta del aula. `false` = llegó antes de que
+   * existiera y se sigue localizando por el correo. No es un error.
+   */
+  linkedToUser: boolean;
+}
+
+/** Respuesta de `GET /integrations/learners/orders`. */
+export interface IntegrationLearnerOrders {
+  /** Mismo significado que en `learners/state`: ese email existe en el tenant. */
+  known: boolean;
+  userId: string | null;
+  /**
+   * Sus compras, de la más reciente a la más antigua. **`known: false` no
+   * implica lista vacía**: una tienda puede haber mandado el pedido antes de
+   * que `/inscribe` creara la cuenta.
+   */
+  orders: IntegrationExternalOrder[];
+}
