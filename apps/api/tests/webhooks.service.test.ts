@@ -28,7 +28,11 @@ import {
   WebhookLimitExceededError,
   WebhooksService,
 } from '../src/webhooks/webhooks.service';
-import type { WebhooksEEDispatcher } from '../src/webhooks/webhooks.types';
+import {
+  KNOWN_EVENT_TYPES,
+  type WebhookEnvelope,
+  type WebhooksEEDispatcher,
+} from '../src/webhooks/webhooks.types';
 
 // ---------------------------------------------------------------------------
 // Fakes
@@ -48,10 +52,36 @@ interface FakeRow {
 class FakePrisma {
   public webhookEndpoint: FakeEndpointRepo;
   public webhookDeadLetter: FakeDeadLetterRepo;
+  public user: FakeUserRepo;
 
   constructor() {
     this.webhookEndpoint = new FakeEndpointRepo();
     this.webhookDeadLetter = new FakeDeadLetterRepo();
+    this.user = new FakeUserRepo();
+  }
+}
+
+interface FakeUserRow {
+  id: string;
+  tenantId: string;
+  email: string;
+  name: string | null;
+  externalSource: string | null;
+  externalId: string | null;
+}
+
+/**
+ * Repo de usuarios para la resolucion de identidad del sobre. `failWith`
+ * simula que el lookup revienta: el envio tiene que salir igual con
+ * `learner: null`, nunca romperse.
+ */
+class FakeUserRepo {
+  rows: FakeUserRow[] = [];
+  failWith: Error | null = null;
+
+  async findUnique(args: { where: { id: string } }): Promise<FakeUserRow | null> {
+    if (this.failWith) throw this.failWith;
+    return this.rows.find((r) => r.id === args.where.id) ?? null;
   }
 }
 
@@ -455,6 +485,304 @@ describe('WebhooksService · gate feat:api.webhooks.high_throughput', () => {
       const results = await svc.dispatch('tenant-1', 'community.post.created', {});
       expect(results).toEqual([]);
       expect(fetchMock).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('sobre del evento (WebhookEnvelope)', () => {
+    /**
+     * Lee el cuerpo / las cabeceras del POST que recibio el mock de fetch.
+     * El mock se tipa por su forma minima (`mock.calls`) y no con
+     * `ReturnType<typeof vi.spyOn>`: ese generico fija la firma de `fetch` y
+     * no encaja con el spy concreto.
+     */
+    interface CallSpy {
+      mock: { calls: unknown[][] };
+    }
+    function initOf(mock: CallSpy, call: number): RequestInit {
+      return mock.mock.calls[call]?.[1] as RequestInit;
+    }
+    function bodyOf(mock: CallSpy, call = 0): WebhookEnvelope {
+      return JSON.parse(initOf(mock, call).body as string) as WebhookEnvelope;
+    }
+    function headersOf(mock: CallSpy, call = 0): Record<string, string> {
+      return initOf(mock, call).headers as Record<string, string>;
+    }
+
+    async function svcConAlumno() {
+      const license = await makeLicense('community');
+      const prisma = new FakePrisma();
+      prisma.user.rows.push({
+        id: 'user-alumna',
+        tenantId: 'tenant-1',
+        email: 'ana@ejemplo.com',
+        name: 'Ana Ruiz',
+        externalSource: 'learndash',
+        externalId: '4471',
+      });
+      const svc = new WebhooksService(prisma as never, license);
+      await svc.createEndpoint('tenant-1', {
+        url: 'https://hook.example/x',
+        eventTypes: ['*'],
+      });
+      return { svc, prisma };
+    }
+
+    it('el cuerpo lleva event, data, occurredAt, tenantId, deliveryId y learner', async () => {
+      const { svc } = await svcConAlumno();
+      const fetchMock = vi
+        .spyOn(globalThis, 'fetch')
+        .mockResolvedValue(new Response('{}', { status: 200 }));
+
+      await svc.dispatch(
+        'tenant-1',
+        'learning.enrollment.created',
+        { enrollmentId: 'enr-1', userId: 'user-alumna', courseId: 'course-9', source: 'PURCHASE' },
+        {
+          actorUserId: 'user-admin',
+          occurredAt: '2026-08-18T10:00:00.000Z',
+          idempotencyKey: 'learning.enrollment.created:enr-1',
+        },
+      );
+
+      const body = bodyOf(fetchMock);
+      expect(body.event).toBe('learning.enrollment.created');
+      expect(body.data).toMatchObject({ enrollmentId: 'enr-1', courseId: 'course-9' });
+      expect(body.occurredAt).toBe('2026-08-18T10:00:00.000Z');
+      expect(body.tenantId).toBe('tenant-1');
+      expect(body.deliveryId).toMatch(/^wd_[0-9a-f]{32}$/);
+      expect(body.learner).toEqual({
+        id: 'user-alumna',
+        email: 'ana@ejemplo.com',
+        name: 'Ana Ruiz',
+        externalSource: 'learndash',
+        externalId: '4471',
+      });
+    });
+
+    it('el sujeto es data.userId, NO el actor de los metadatos', async () => {
+      const { svc, prisma } = await svcConAlumno();
+      prisma.user.rows.push({
+        id: 'user-admin',
+        tenantId: 'tenant-1',
+        email: 'admin@ejemplo.com',
+        name: 'Admin',
+        externalSource: null,
+        externalId: null,
+      });
+      const fetchMock = vi
+        .spyOn(globalThis, 'fetch')
+        .mockResolvedValue(new Response('{}', { status: 200 }));
+
+      // Es el caso real de enrollLearner: el admin matricula a la alumna.
+      await svc.dispatch(
+        'tenant-1',
+        'learning.enrollment.created',
+        { enrollmentId: 'enr-2', userId: 'user-alumna', courseId: 'c-1' },
+        { actorUserId: 'user-admin' },
+      );
+
+      expect(bodyOf(fetchMock).learner?.email).toBe('ana@ejemplo.com');
+    });
+
+    it('sin userId en el payload cae al actor de los metadatos', async () => {
+      const { svc } = await svcConAlumno();
+      const fetchMock = vi
+        .spyOn(globalThis, 'fetch')
+        .mockResolvedValue(new Response('{}', { status: 200 }));
+
+      // subscriptions.invoice.paid no lleva userId dentro: va en los metadatos.
+      await svc.dispatch(
+        'tenant-1',
+        'subscriptions.invoice.paid',
+        { subscriptionId: 'sub-1', stripeInvoiceId: 'in_1', amount: 4900, currency: 'eur' },
+        { actorUserId: 'user-alumna' },
+      );
+
+      expect(bodyOf(fetchMock).learner?.id).toBe('user-alumna');
+    });
+
+    it('usuario de otro tenant → learner null (no se filtra fuera del tenant)', async () => {
+      const license = await makeLicense('community');
+      const prisma = new FakePrisma();
+      prisma.user.rows.push({
+        id: 'user-ajeno',
+        tenantId: 'tenant-OTRO',
+        email: 'ajeno@ejemplo.com',
+        name: 'Ajeno',
+        externalSource: null,
+        externalId: null,
+      });
+      const svc = new WebhooksService(prisma as never, license);
+      await svc.createEndpoint('tenant-1', { url: 'https://hook.example/x', eventTypes: ['*'] });
+      const fetchMock = vi
+        .spyOn(globalThis, 'fetch')
+        .mockResolvedValue(new Response('{}', { status: 200 }));
+
+      await svc.dispatch('tenant-1', 'learning.course.completed', { userId: 'user-ajeno' });
+      expect(bodyOf(fetchMock).learner).toBeNull();
+    });
+
+    it('si el lookup de identidad revienta, el webhook sale igual con learner null', async () => {
+      const { svc, prisma } = await svcConAlumno();
+      prisma.user.failWith = new Error('conexión perdida');
+      const fetchMock = vi
+        .spyOn(globalThis, 'fetch')
+        .mockResolvedValue(new Response('{}', { status: 200 }));
+
+      const results = await svc.dispatch('tenant-1', 'learning.course.completed', {
+        userId: 'user-alumna',
+      });
+      expect(results[0]?.status).toBe('success');
+      expect(bodyOf(fetchMock).learner).toBeNull();
+    });
+
+    it('evento sin persona (invoice.refunded) → learner null y se envía', async () => {
+      const { svc } = await svcConAlumno();
+      const fetchMock = vi
+        .spyOn(globalThis, 'fetch')
+        .mockResolvedValue(new Response('{}', { status: 200 }));
+
+      await svc.dispatch('tenant-1', 'subscriptions.invoice.refunded', {
+        subscriptionId: 'sub-1',
+        stripeInvoiceId: 'in_2',
+        amountRefunded: 4900,
+        currency: 'eur',
+      });
+      expect(bodyOf(fetchMock).learner).toBeNull();
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+
+    it('el deliveryId NO cambia entre el intento y su reintento', async () => {
+      const { svc } = await svcConAlumno();
+      const fetchMock = vi
+        .spyOn(globalThis, 'fetch')
+        .mockResolvedValue(new Response('boom', { status: 500 }));
+
+      await svc.dispatch(
+        'tenant-1',
+        'learning.course.completed',
+        { userId: 'user-alumna' },
+        { idempotencyKey: 'learning.course.completed:enr-1' },
+      );
+
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      expect(headersOf(fetchMock, 0)['X-Didacta-Delivery']).toBe(
+        headersOf(fetchMock, 1)['X-Didacta-Delivery'],
+      );
+      // El número de intento viaja aparte, no dentro del id de entrega.
+      expect(headersOf(fetchMock, 0)['X-Didacta-Attempt']).toBe('1');
+      expect(headersOf(fetchMock, 1)['X-Didacta-Attempt']).toBe('2');
+    });
+
+    it('la reentrega del mismo evento trae el mismo deliveryId (deduplicable)', async () => {
+      const { svc } = await svcConAlumno();
+      const fetchMock = vi
+        .spyOn(globalThis, 'fetch')
+        .mockResolvedValue(new Response('{}', { status: 200 }));
+
+      const meta = { idempotencyKey: 'learning.course.completed:enr-7' };
+      await svc.dispatch('tenant-1', 'learning.course.completed', { userId: 'user-alumna' }, meta);
+      await svc.dispatch('tenant-1', 'learning.course.completed', { userId: 'user-alumna' }, meta);
+
+      expect(bodyOf(fetchMock, 0).deliveryId).toBe(bodyOf(fetchMock, 1).deliveryId);
+    });
+
+    it('sin idempotencyKey cada envío trae un deliveryId distinto', async () => {
+      const { svc } = await svcConAlumno();
+      const fetchMock = vi
+        .spyOn(globalThis, 'fetch')
+        .mockResolvedValue(new Response('{}', { status: 200 }));
+
+      await svc.dispatch('tenant-1', 'learning.course.completed', { userId: 'user-alumna' });
+      await svc.dispatch('tenant-1', 'learning.course.completed', { userId: 'user-alumna' });
+
+      expect(bodyOf(fetchMock, 0).deliveryId).not.toBe(bodyOf(fetchMock, 1).deliveryId);
+    });
+
+    it('la cabecera de tenant viaja también en community', async () => {
+      const { svc } = await svcConAlumno();
+      const fetchMock = vi
+        .spyOn(globalThis, 'fetch')
+        .mockResolvedValue(new Response('{}', { status: 200 }));
+
+      await svc.dispatch('tenant-1', 'learning.course.completed', { userId: 'user-alumna' });
+      expect(headersOf(fetchMock)['X-Didacta-Tenant']).toBe('tenant-1');
+      expect(headersOf(fetchMock)['X-Didacta-Event']).toBe('learning.course.completed');
+    });
+
+    it('el path EE recibe el sobre ya resuelto', async () => {
+      const license = await makeLicense('dev');
+      const prisma = new FakePrisma();
+      prisma.user.rows.push({
+        id: 'user-alumna',
+        tenantId: 'tenant-1',
+        email: 'ana@ejemplo.com',
+        name: 'Ana Ruiz',
+        externalSource: null,
+        externalId: null,
+      });
+      const recibidos: unknown[] = [];
+      const fake: WebhooksEEDispatcher = {
+        async dispatch(input) {
+          recibidos.push(input.envelope);
+        },
+      };
+      const svc = new WebhooksService(prisma as never, license, fake);
+      await svc.createEndpoint('tenant-1', { url: 'https://hook.example/x', eventTypes: ['*'] });
+
+      await svc.dispatch(
+        'tenant-1',
+        'billing.order.completed',
+        { orderId: 'ord-1', userId: 'user-alumna' },
+        { idempotencyKey: 'billing.order.completed:ord-1' },
+      );
+
+      expect(recibidos).toHaveLength(1);
+      const envelope = recibidos[0] as WebhookEnvelope;
+      expect(envelope.learner?.email).toBe('ana@ejemplo.com');
+      expect(envelope.deliveryId).toMatch(/^wd_[0-9a-f]{32}$/);
+    });
+  });
+
+  describe('catálogo de eventos', () => {
+    it('no tiene entradas repetidas', () => {
+      expect(new Set(KNOWN_EVENT_TYPES).size).toBe(KNOWN_EVENT_TYPES.length);
+    });
+
+    it('no incluye eventos que nadie publica', () => {
+      // Los dos casos reales que hubo en la lista: `learning.lesson.completed`
+      // (jamás publicado por mod.learning) y `subscriptions.membership.revoked`
+      // (declarado en el manifest del módulo, sin un solo publish()).
+      expect(KNOWN_EVENT_TYPES).not.toContain('learning.lesson.completed');
+      expect(KNOWN_EVENT_TYPES).not.toContain('subscriptions.membership.revoked');
+      expect(KNOWN_EVENT_TYPES).not.toContain('billing.subscription.created');
+      expect(KNOWN_EVENT_TYPES).not.toContain('billing.subscription.cancelled');
+    });
+
+    it('cubre el ciclo de vida que necesita quien vende e integra desde fuera', () => {
+      for (const evento of [
+        'learning.enrollment.created',
+        'learning.enrollment.paused',
+        'learning.enrollment.resumed',
+        'learning.enrollment.cancelled',
+        'billing.order.completed',
+        'billing.order.refunded',
+        'billing.order.failed',
+        'subscriptions.invoice.paid',
+        'subscriptions.invoice.payment_failed',
+        'subscriptions.subscription.canceled',
+      ]) {
+        expect(KNOWN_EVENT_TYPES).toContain(evento);
+      }
+    });
+
+    it('un endpoint con ["*"] hace match con todo el catálogo', async () => {
+      const license = await makeLicense('community');
+      const svc = new WebhooksService(new FakePrisma() as never, license);
+      for (const evento of KNOWN_EVENT_TYPES) {
+        if (evento === '*') continue;
+        expect(svc.endpointMatches(['*'], evento)).toBe(true);
+      }
     });
   });
 

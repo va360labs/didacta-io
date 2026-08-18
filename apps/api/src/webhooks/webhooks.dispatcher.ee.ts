@@ -41,7 +41,7 @@ import { Logger as PinoLogger } from 'nestjs-pino';
 import { PrismaService } from '../prisma/prisma.service';
 import { runAsTenant } from '../tenancy/tenant-context.storage';
 import { WebhooksMetricsEE } from './webhooks.metrics.ee';
-import type { WebhooksEEDispatcher } from './webhooks.types';
+import type { WebhookEnvelope, WebhooksEEDispatcher } from './webhooks.types';
 
 const QUEUE_NAME = 'didacta.webhooks.outbound';
 
@@ -52,6 +52,12 @@ interface OutboundJobData {
   secret: string;
   eventType: string;
   payload: unknown;
+  /**
+   * Sobre resuelto por el service (identidad del alumno incluida). Opcional
+   * porque un job encolado por una version anterior sigue en Redis cuando se
+   * despliega esta: sin el, `deliver` reconstruye lo que puede.
+   */
+  envelope?: WebhookEnvelope;
 }
 
 /**
@@ -199,11 +205,17 @@ export class WebhooksDispatcherEE
    */
   private async deliver(data: OutboundJobData, attempt: number): Promise<void> {
     const start = process.hrtime.bigint();
-    const body = JSON.stringify({
+    // El sobre manda; sin el (job viejo en la cola) se reconstruye el minimo
+    // para no romper la entrega, aunque vaya sin identidad ni fecha real.
+    const envelope: WebhookEnvelope = data.envelope ?? {
       event: data.eventType,
       data: data.payload,
-      attempt,
-    });
+      occurredAt: new Date().toISOString(),
+      tenantId: data.tenantId,
+      deliveryId: `${data.endpointId}-legacy`,
+      learner: null,
+    };
+    const body = JSON.stringify({ ...envelope, attempt });
     const signature = signWebhookBody(data.secret, body);
 
     const controller = new AbortController();
@@ -217,7 +229,10 @@ export class WebhooksDispatcherEE
           'Content-Type': 'application/json',
           'X-Didacta-Event': data.eventType,
           'X-Didacta-Signature': signature,
-          'X-Didacta-Delivery': `${data.endpointId}-${attempt}`,
+          // Estable entre reintentos: el numero de intento va aparte, para que
+          // el receptor pueda deduplicar por esta cabecera.
+          'X-Didacta-Delivery': envelope.deliveryId,
+          'X-Didacta-Attempt': String(attempt),
           'X-Didacta-Tenant': data.tenantId,
         },
         body,

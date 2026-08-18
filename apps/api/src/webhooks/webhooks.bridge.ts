@@ -17,8 +17,12 @@
  *
  * Idempotencia: el outbox dedupe por idempotencyKey. Si un evento se
  * reentrega (recovery worker), los webhooks salientes pueden recibir
- * duplicados. El receptor debe deduplicar por `X-Didacta-Delivery` o
- * por idempotencia de su lado.
+ * duplicados. El receptor deduplica por `X-Didacta-Delivery`, y para que eso
+ * sea posible el bridge le pasa al service el `idempotencyKey` del evento:
+ * de ahí sale el `deliveryId`, que es el MISMO en la reentrega. Pasarle
+ * también `metadata.userId` y `metadata.timestamp` es lo que permite al
+ * service resolver la identidad del alumno y fechar el evento por cuándo
+ * ocurrió, no por cuándo se envió.
  */
 
 import { Injectable, type OnModuleInit } from '@nestjs/common';
@@ -47,7 +51,11 @@ export class WebhooksBridge implements OnModuleInit {
         const tenantId = event.metadata.tenantId;
         if (!tenantId) return;
         try {
-          await this.webhooks.dispatch(tenantId, event.name, event.data);
+          await this.webhooks.dispatch(tenantId, event.name, event.data, {
+            actorUserId: event.metadata.userId,
+            occurredAt: event.metadata.timestamp,
+            idempotencyKey: event.metadata.idempotencyKey,
+          });
         } catch (err) {
           this.logger.warn(
             { err: (err as Error).message, eventType: event.name, tenantId },

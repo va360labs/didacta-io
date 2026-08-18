@@ -32,7 +32,7 @@
 import { Inject, Injectable, NotFoundException, Optional } from '@nestjs/common';
 import { LicenseService } from '@didacta/license-sdk';
 import { Logger as PinoLogger } from 'nestjs-pino';
-import { randomBytes } from 'node:crypto';
+import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   KNOWN_EVENT_TYPES,
@@ -42,8 +42,11 @@ import {
   type CreateEndpointDto,
   type UpdateEndpointDto,
   type WebhookDeliveryResult,
+  type WebhookDispatchMeta,
   type WebhookEndpointPublic,
   type WebhookEndpointWithSecret,
+  type WebhookEnvelope,
+  type WebhookLearner,
   type WebhooksConfig,
   type WebhooksEEDispatcher,
   type WebhooksInfoResponse,
@@ -285,6 +288,7 @@ export class WebhooksService {
     tenantId: string,
     eventType: string,
     payload: unknown,
+    meta: WebhookDispatchMeta = {},
   ): Promise<WebhookDeliveryResult[]> {
     const endpoints = await this.prisma.webhookEndpoint.findMany({
       where: { tenantId, active: true },
@@ -297,9 +301,23 @@ export class WebhooksService {
 
     const tier = this.getCurrentTier();
 
+    // La identidad se resuelve UNA vez por evento, no una por endpoint: el
+    // lookup es el mismo para todos los suscritos.
+    const learner = await this.resolveLearner(tenantId, payload, meta.actorUserId);
+    const occurredAt = meta.occurredAt ?? new Date().toISOString();
+
     // Path EE: cola asíncrona. Importante: solo si dispatcher inyectado.
     if (tier === 'enterprise' && this.eeDispatcher) {
       for (const e of matching) {
+        const envelope = this.buildEnvelope({
+          tenantId,
+          endpointId: e.id,
+          eventType,
+          payload,
+          learner,
+          occurredAt,
+          idempotencyKey: meta.idempotencyKey,
+        });
         try {
           await this.eeDispatcher.dispatch({
             tenantId,
@@ -308,6 +326,7 @@ export class WebhooksService {
             secret: e.secret,
             eventType,
             payload,
+            envelope,
           });
         } catch (err) {
           this.logger?.warn(
@@ -316,7 +335,7 @@ export class WebhooksService {
           );
           // Si el dispatcher EE falla al encolar (Redis caído), caemos al
           // path naive para no perder el evento.
-          await this.deliverNaive(e.id, e.url, eventType, payload);
+          await this.deliverNaive(e.id, e.url, eventType, envelope);
         }
       }
       return [];
@@ -325,10 +344,115 @@ export class WebhooksService {
     // Path community: naive síncrono.
     const results: WebhookDeliveryResult[] = [];
     for (const e of matching) {
-      const r = await this.deliverNaive(e.id, e.url, eventType, payload);
+      const envelope = this.buildEnvelope({
+        tenantId,
+        endpointId: e.id,
+        eventType,
+        payload,
+        learner,
+        occurredAt,
+        idempotencyKey: meta.idempotencyKey,
+      });
+      const r = await this.deliverNaive(e.id, e.url, eventType, envelope);
       results.push(r);
     }
     return results;
+  }
+
+  /**
+   * Compone el sobre que viaja por el cable. Igual en los dos tiers — el EE
+   * solo le anade `attempt` al serializar.
+   */
+  private buildEnvelope(input: {
+    tenantId: string;
+    endpointId: string;
+    eventType: string;
+    payload: unknown;
+    learner: WebhookLearner | null;
+    occurredAt: string;
+    idempotencyKey?: string;
+  }): WebhookEnvelope {
+    return {
+      event: input.eventType,
+      data: input.payload,
+      occurredAt: input.occurredAt,
+      tenantId: input.tenantId,
+      deliveryId: this.buildDeliveryId(input.endpointId, input.idempotencyKey),
+      learner: input.learner,
+    };
+  }
+
+  /**
+   * Identificador de entrega, ESTABLE entre reintentos y entre reentregas del
+   * outbox: es lo que permite al receptor deduplicar. Se deriva del
+   * `idempotencyKey` del evento —que el outbox ya usa como clave— acotado al
+   * endpoint, para que dos endpoints suscritos al mismo evento no compartan
+   * id. Sin idempotencyKey (dispatch manual o test) cae a un uuid: no hay
+   * nada de lo que derivar estabilidad.
+   */
+  private buildDeliveryId(endpointId: string, idempotencyKey?: string): string {
+    if (!idempotencyKey) return `wd_${randomUUID().replace(/-/g, '')}`;
+    const hex = createHash('sha256').update(`${endpointId}:${idempotencyKey}`).digest('hex');
+    return `wd_${hex.slice(0, 32)}`;
+  }
+
+  /**
+   * Resuelve la persona del evento a `{id, email, name, externalSource,
+   * externalId}`.
+   *
+   * El sujeto es `data.userId` cuando el payload lo trae, y solo si no,
+   * `metadata.userId`. El orden importa y no es intercambiable: en
+   * `learning.enrollment.created` el publisher pasa el ACTOR en los metadatos
+   * (un admin, o nadie si vino de `/inscribe`) y el ALUMNO dentro del payload.
+   * Al reves se le atribuiria la matricula al administrador que la creo.
+   *
+   * Nunca lanza: un webhook que no puede decir quien es sigue siendo mejor
+   * que un webhook que no sale. `learner: null` es un estado legitimo — hay
+   * eventos sin persona (`subscriptions.invoice.refunded` se publica con
+   * `userId: null`).
+   */
+  private async resolveLearner(
+    tenantId: string,
+    payload: unknown,
+    actorUserId?: string,
+  ): Promise<WebhookLearner | null> {
+    const fromPayload =
+      payload !== null &&
+      typeof payload === 'object' &&
+      typeof (payload as { userId?: unknown }).userId === 'string'
+        ? (payload as { userId: string }).userId
+        : null;
+    const userId = fromPayload ?? actorUserId ?? null;
+    if (!userId) return null;
+
+    try {
+      const user = await this.prisma.user.findUnique({
+        where: { id: userId },
+        select: {
+          id: true,
+          tenantId: true,
+          email: true,
+          name: true,
+          externalSource: true,
+          externalId: true,
+        },
+      });
+      // Fila de otro tenant: no se filtra fuera del tenant que la pidio.
+      if (!user || user.tenantId !== tenantId) return null;
+      return {
+        id: user.id,
+        email: user.email,
+        name: user.name ?? null,
+        externalSource: user.externalSource ?? null,
+        externalId: user.externalId ?? null,
+      };
+    } catch (err) {
+      this.logger?.warn(
+        { err: (err as Error).message, tenantId, userId },
+        'Webhooks: no se pudo resolver la identidad del alumno — se envia learner: null',
+      );
+      return null;
+    }
   }
 
   // -----------------------------------------------------------------------
@@ -339,14 +463,19 @@ export class WebhooksService {
    * Naive sender: POST JSON con timeout 5s y un reintento inmediato. Sin
    * firma HMAC (eso es path EE). Errores se silencian — el caller no
    * debe romper si un endpoint está caído.
+   *
+   * El cuerpo es el sobre completo (`WebhookEnvelope`), idéntico al del path
+   * EE salvo `attempt`: quien integre contra community no tiene que reescribir
+   * el parser al pasar a Enterprise.
    */
   private async deliverNaive(
     endpointId: string,
     url: string,
     eventType: string,
-    payload: unknown,
+    envelope: WebhookEnvelope,
   ): Promise<WebhookDeliveryResult> {
     const start = Date.now();
+    const body = JSON.stringify(envelope);
     const maxAttempts = 1 + this.config.communityRetries;
     let lastError: string | undefined;
     let lastStatus: number | undefined;
@@ -360,9 +489,13 @@ export class WebhooksService {
           headers: {
             'Content-Type': 'application/json',
             'X-Didacta-Event': eventType,
-            'X-Didacta-Delivery': `${endpointId}-${Date.now()}-${attempt}`,
+            // Estable entre reintentos — es la clave de deduplicacion del
+            // receptor. El numero de intento va en su propia cabecera.
+            'X-Didacta-Delivery': envelope.deliveryId,
+            'X-Didacta-Attempt': String(attempt),
+            'X-Didacta-Tenant': envelope.tenantId,
           },
-          body: JSON.stringify({ event: eventType, data: payload }),
+          body,
           signal: controller.signal,
         });
         clearTimeout(timer);

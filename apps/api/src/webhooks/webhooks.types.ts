@@ -235,27 +235,120 @@ export interface WebhooksInfoResponse {
  * (`knownEventTypes` de la respuesta de info). Una entrada de más es un evento
  * al que un admin puede suscribirse y que nunca llegará; una de menos es un
  * evento que se publica y que nadie de fuera puede recibir. Antes de tocarla,
- * comprobar que cada entrada tiene un `publish()` real detrás.
+ * comprobar que cada entrada tiene un `publish()` real detrás — y el
+ * manifiesto de un módulo NO sirve como prueba: `eventsPublished` declara
+ * `subscriptions.membership.revoked`, que no lo publica nadie. Aquí van solo
+ * eventos verificados contra su `publish()`.
+ *
+ * Antes había aquí `billing.subscription.created` y `.cancelled`, que no
+ * existían, y `learning.lesson.completed`, que tampoco: mod.learning publica
+ * el progreso de la lección dentro de `learning.course.completed`, no como
+ * evento propio.
  *
  * `billing.order.*` son las de la compra de un curso suelto (`mod.billing`).
- * Van las dos: quien vende desde fuera necesita `completed` para dar el acceso
- * y `refunded` para quitarlo. Con solo la primera, el cableado queda a medias y
- * el alumno se queda dentro después de que le devuelvan el dinero.
+ * Van las cuatro: quien vende desde fuera necesita `completed` para dar el
+ * acceso y `refunded` para quitarlo (con solo la primera, el alumno se queda
+ * dentro después de que le devuelvan el dinero), `created` para el carrito que
+ * no llegó a pagarse y `failed` para el pago que se cae.
+ *
+ * El ciclo de vida de la suscripción va entero porque los estados intermedios
+ * cambian lo que el alumno puede hacer: `past_due` es que falló un cobro y
+ * sigue dentro (grace), `unpaid` es que el grace se agotó y `canceled` es el
+ * final. Quien solo reciba el final no puede avisar a nadie mientras el cobro
+ * todavía se puede recuperar.
+ *
+ * `subscriptions.invoice.paid` es la renovación: el único evento que distingue
+ * "sigue pagando cada mes" de "se dio de alta una vez".
  */
 export const KNOWN_EVENT_TYPES = [
   '*',
+  // --- Aula: matrícula y progreso -----------------------------------------
   'learning.enrollment.created',
+  'learning.enrollment.paused',
+  'learning.enrollment.resumed',
+  'learning.enrollment.cancelled',
   'learning.course.completed',
-  'learning.lesson.completed',
+  // --- Comunidad ----------------------------------------------------------
   'community.post.created',
   'community.comment.created',
+  // --- Compra de curso suelto (mod.billing) -------------------------------
+  'billing.order.created',
   'billing.order.completed',
+  'billing.order.failed',
   'billing.order.refunded',
+  // --- Suscripción y membresía (mod.subscriptions) ------------------------
+  'subscriptions.subscription.created',
+  'subscriptions.subscription.activated',
+  'subscriptions.subscription.past_due',
+  'subscriptions.subscription.unpaid',
+  'subscriptions.subscription.canceled',
+  'subscriptions.invoice.paid',
+  'subscriptions.invoice.payment_failed',
+  'subscriptions.invoice.refunded',
+  'subscriptions.membership.activated',
+  // --- Fundae y evaluación ------------------------------------------------
   'fundae.group.closed',
   'assessments.attempt.submitted',
 ] as const;
 
 export type KnownEventType = (typeof KNOWN_EVENT_TYPES)[number];
+
+/**
+ * Identidad de la persona a la que se refiere el evento, resuelta por el
+ * servicio de webhooks antes de enviar.
+ *
+ * Existe porque los payloads de dominio llevan `userId` y NADA más: un CRM
+ * que reciba `learning.enrollment.created` se queda con un UUID que no puede
+ * resolver, porque todo `/api/v1/integrations` busca por email y no hay
+ * endpoint que traduzca userId → persona. Sin este bloque, el consumidor
+ * recibe eventos que no sabe a quién atribuir.
+ *
+ * `externalSource`/`externalId` van porque en instalaciones migradas (p.ej.
+ * `learndash`) son la clave con la que el sistema de origen conoce a esa
+ * misma persona.
+ */
+export interface WebhookLearner {
+  id: string;
+  email: string;
+  name: string | null;
+  externalSource: string | null;
+  externalId: string | null;
+}
+
+/**
+ * Cuerpo JSON que recibe el endpoint suscrito. Los dos paths (naive community
+ * y BullMQ enterprise) mandan la MISMA forma; el EE añade `attempt`.
+ *
+ * `deliveryId` se deriva del `idempotencyKey` del evento, así que una
+ * reentrega —reintento del propio envío o reenvío del outbox tras recovery—
+ * llega con el MISMO valor: es la clave con la que el receptor deduplica.
+ * Antes se construía con `Date.now()` y el número de intento, de modo que
+ * cada reintento parecía un evento nuevo y la deduplicación que documentaba
+ * el bridge era imposible.
+ */
+export interface WebhookEnvelope {
+  event: string;
+  data: unknown;
+  /** ISO-8601 del momento en que se publicó el evento (no del envío). */
+  occurredAt: string;
+  tenantId: string;
+  deliveryId: string;
+  learner: WebhookLearner | null;
+  /** Solo lo pone el path EE (número de intento de la cola). */
+  attempt?: number;
+}
+
+/**
+ * Metadatos del evento de dominio que el bridge pasa al servicio. Todos
+ * opcionales: `dispatch()` se puede llamar sin ellos (tests, disparos
+ * manuales) y entonces el sobre se rellena con lo que se puede deducir.
+ */
+export interface WebhookDispatchMeta {
+  /** `metadata.userId` del evento — el ACTOR, que no siempre es el sujeto. */
+  actorUserId?: string;
+  occurredAt?: string;
+  idempotencyKey?: string;
+}
 
 /**
  * Token DI para el dispatcher EE opcional. El community service lo inyecta
@@ -277,5 +370,11 @@ export interface WebhooksEEDispatcher {
     secret: string;
     eventType: string;
     payload: unknown;
+    /**
+     * Sobre ya resuelto (incluida la identidad del alumno). Opcional para no
+     * romper implementaciones antiguas del token DI: si no viene, el
+     * dispatcher lo reconstruye con lo que tiene.
+     */
+    envelope?: WebhookEnvelope;
   }): Promise<void>;
 }
