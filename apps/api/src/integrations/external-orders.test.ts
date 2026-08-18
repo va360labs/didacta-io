@@ -131,6 +131,23 @@ describe('compras hechas fuera — escritura', () => {
     expect(args.update).not.toHaveProperty('invoiceUrl');
   });
 
+  it('`invoice: null` RETIRA la factura del perfil', async () => {
+    const { service, prisma } = setup();
+    await service.upsertExternalOrder(
+      TENANT,
+      upsertExternalOrderSchema.parse({ ...PEDIDO, invoice: null }),
+    );
+
+    // Sin esta salida, «lo que se omite no se borra» no tiene marcha atrás: una
+    // factura anulada o borrada de la contabilidad se quedaría anunciada para
+    // siempre. Pasó de verdad con una factura de prueba borrada en Holded.
+    const args = prisma.externalOrder.upsert.mock.calls[0]![0] as {
+      update: { invoiceNumber: null; invoiceUrl: null };
+    };
+    expect(args.update.invoiceNumber).toBeNull();
+    expect(args.update.invoiceUrl).toBeNull();
+  });
+
   it('con `invoice`, la escribe — y ese es el segundo viaje de la tienda', async () => {
     const { service, prisma } = setup();
     await service.upsertExternalOrder(

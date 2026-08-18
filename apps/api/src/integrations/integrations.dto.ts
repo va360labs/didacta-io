@@ -322,7 +322,14 @@ export const upsertExternalOrderSchema = z.object({
   placedAt: z.string().datetime(),
   refundedAt: z.string().datetime().optional(),
   lines: z.array(externalOrderLineSchema).max(100).default([]),
-  invoice: externalOrderInvoiceSchema.optional(),
+  /**
+   * Omitir = no tocar la que hubiera. **`null` = retirarla**, que es distinto y
+   * hace falta: una factura anulada, rectificada o borrada de la contabilidad
+   * tiene que poder desaparecer del perfil. Sin esta salida, la regla de «lo
+   * que se omite no se borra» dejaba anunciada para siempre una factura que ya
+   * no existe.
+   */
+  invoice: externalOrderInvoiceSchema.nullish(),
   /** El pedido en la tienda, para el botón «verlo allí». */
   orderUrl: z.string().url().max(2000).optional(),
 });

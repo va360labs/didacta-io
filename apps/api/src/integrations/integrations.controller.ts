@@ -179,7 +179,8 @@ export class IntegrationsController {
       'se reintenta, y el reintento no puede duplicarle el historial a nadie. ' +
       '`invoice`, `orderUrl` y `refundedAt` solo se escriben si vienen: **omitirlos no borra ' +
       'lo que ya hubiera**, que es lo que permite volver media hora después con el número de ' +
-      'factura sin reenviar el pedido entero. ' +
+      'factura sin reenviar el pedido entero. Para RETIRAR una factura —anulada, rectificada ' +
+      'o borrada de la contabilidad— hay que mandar `invoice: null` explícitamente. ' +
       'Didacta NO emite facturas ni numera series fiscales: de la factura se guardan su ' +
       'número, su fecha y un enlace al PDF que sirve quien la emitió. Conservar los registros ' +
       'contables sigue siendo cosa de quien vende. Requiere scope `orders:write`.',

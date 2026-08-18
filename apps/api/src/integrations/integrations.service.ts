@@ -647,13 +647,17 @@ export class IntegrationsService {
 
     // Los opcionales, solo si vienen. Ver el aviso de arriba.
     const opcionales = {
-      ...(dto.invoice
-        ? {
-            invoiceNumber: dto.invoice.number ?? null,
-            invoiceIssuedAt: dto.invoice.issuedAt ? new Date(dto.invoice.issuedAt) : null,
-            invoiceUrl: dto.invoice.url ?? null,
-          }
-        : {}),
+      ...(dto.invoice === null
+        ? // Retirada explícita: la factura dejó de existir en la contabilidad de
+          // quien vende, y el perfil no puede seguir anunciándola.
+          { invoiceNumber: null, invoiceIssuedAt: null, invoiceUrl: null }
+        : dto.invoice
+          ? {
+              invoiceNumber: dto.invoice.number ?? null,
+              invoiceIssuedAt: dto.invoice.issuedAt ? new Date(dto.invoice.issuedAt) : null,
+              invoiceUrl: dto.invoice.url ?? null,
+            }
+          : {}),
       ...(dto.orderUrl !== undefined ? { orderUrl: dto.orderUrl } : {}),
       ...(dto.refundedAt !== undefined ? { refundedAt: new Date(dto.refundedAt) } : {}),
     };
