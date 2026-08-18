@@ -202,6 +202,21 @@ describe('compras hechas fuera — el contrato de entrada', () => {
     expect(upsertExternalOrderSchema.parse({ ...PEDIDO, currency: 'EUR' }).currency).toBe('eur');
   });
 
+  it('acepta una factura emitida y SIN numerar, si trae enlace', () => {
+    // Medido contra producción: Holded devuelve `document_number` nulo mientras
+    // el documento no está cerrado. Exigir el número dejaba al perfil diciendo
+    // «factura en curso» sobre una factura que la tienda ya enlazaba.
+    const dto = upsertExternalOrderSchema.parse({
+      ...PEDIDO,
+      invoice: { url: 'https://va360.academy/cuenta/factura/1234' },
+    });
+    expect(dto.invoice?.number).toBeUndefined();
+  });
+
+  it('rechaza una factura que no es ni número ni enlace', () => {
+    expect(() => upsertExternalOrderSchema.parse({ ...PEDIDO, invoice: {} })).toThrow();
+  });
+
   it('da `PAID` por defecto: aquí solo llegan ventas ya cobradas', () => {
     expect(upsertExternalOrderSchema.parse(PEDIDO).status).toBe('PAID');
   });

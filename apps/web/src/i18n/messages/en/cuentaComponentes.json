@@ -416,6 +416,7 @@
     "errorCarga": "We could not load your purchases. Please try again in a moment.",
     "pedidoSinDetalle": "Order",
     "factura": "Invoice {numero}",
+    "facturaSinNumero": "View invoice",
     "sinFactura": "Invoice pending",
     "nota": "Invoices are issued by the store you bought from. They are linked here, not generated.",
     "estado": {

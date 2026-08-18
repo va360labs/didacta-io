@@ -134,11 +134,15 @@ function Linea({ orden }: { orden: Purchase }) {
             rel="noopener noreferrer"
           >
             <Icon name="file" className="size-4" aria-hidden />
-            {t('compras.factura', { numero: orden.invoice.number })}
+            {orden.invoice.number
+              ? t('compras.factura', { numero: orden.invoice.number })
+              : t('compras.facturaSinNumero')}
           </a>
         ) : orden.invoice ? (
           <span className="text-sm text-text-muted">
-            {t('compras.factura', { numero: orden.invoice.number })}
+            {orden.invoice.number
+              ? t('compras.factura', { numero: orden.invoice.number })
+              : t('compras.facturaSinNumero')}
           </span>
         ) : (
           <span className="text-sm text-text-muted">{t('compras.sinFactura')}</span>

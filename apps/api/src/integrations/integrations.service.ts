@@ -649,7 +649,7 @@ export class IntegrationsService {
     const opcionales = {
       ...(dto.invoice
         ? {
-            invoiceNumber: dto.invoice.number,
+            invoiceNumber: dto.invoice.number ?? null,
             invoiceIssuedAt: dto.invoice.issuedAt ? new Date(dto.invoice.issuedAt) : null,
             invoiceUrl: dto.invoice.url ?? null,
           }
@@ -788,13 +788,16 @@ export class IntegrationsService {
       amountCents: row.amountCents,
       currency: row.currency,
       lines: Array.isArray(row.lines) ? (row.lines as IntegrationExternalOrder['lines']) : [],
-      invoice: row.invoiceNumber
-        ? {
-            number: row.invoiceNumber,
-            issuedAt: row.invoiceIssuedAt?.toISOString() ?? null,
-            url: row.invoiceUrl,
-          }
-        : null,
+      // Hay factura si hay número **o** enlace: emitida y sin numerar sigue
+      // siendo una factura que el alumno puede descargar.
+      invoice:
+        (row.invoiceNumber ?? row.invoiceUrl)
+          ? {
+              number: row.invoiceNumber,
+              issuedAt: row.invoiceIssuedAt?.toISOString() ?? null,
+              url: row.invoiceUrl,
+            }
+          : null,
       orderUrl: row.orderUrl,
       placedAt: row.placedAt.toISOString(),
       refundedAt: row.refundedAt?.toISOString() ?? null,

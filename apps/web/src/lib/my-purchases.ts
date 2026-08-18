@@ -40,8 +40,11 @@ export interface Purchase {
   amountCents: number;
   currency: string;
   lines: PurchaseLine[];
-  /** Null mientras la tienda no la haya emitido, que es lo normal al principio. */
-  invoice: { number: string; issuedAt: string | null; url: string | null } | null;
+  /**
+   * Null mientras la tienda no la haya emitido, que es lo normal al principio.
+   * Y con `number` a null cuando la emitió pero todavía no la ha numerado.
+   */
+  invoice: { number: string | null; issuedAt: string | null; url: string | null } | null;
   orderUrl: string | null;
   placedAt: string;
   refundedAt: string | null;

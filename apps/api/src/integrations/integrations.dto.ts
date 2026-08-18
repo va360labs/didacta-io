@@ -285,12 +285,23 @@ export type ExternalOrderLine = z.infer<typeof externalOrderLineSchema>;
  * horas después con el número. **Omitirla no borra la que ya hubiera** — así el
  * reintento de un webhook no deja al alumno sin su factura.
  */
-export const externalOrderInvoiceSchema = z.object({
-  number: z.string().trim().min(1).max(60),
-  issuedAt: z.string().datetime().optional(),
-  /** URL absoluta al PDF. Didacta no guarda el documento, solo por dónde se pide. */
-  url: z.string().url().max(2000).optional(),
-});
+export const externalOrderInvoiceSchema = z
+  .object({
+    /**
+     * ⚠️ **Opcional, y no por comodidad.** Una factura puede estar emitida y
+     * todavía sin numerar: Holded devuelve `document_number` nulo mientras el
+     * documento no está cerrado, y se midió contra pedidos reales. Exigirlo aquí
+     * hacía que el perfil dijera «factura en curso» sobre una factura que la
+     * tienda ya estaba enlazando — la divergencia que esto viene a quitar.
+     */
+    number: z.string().trim().min(1).max(60).optional(),
+    issuedAt: z.string().datetime().optional(),
+    /** URL absoluta al PDF. Didacta no guarda el documento, solo por dónde se pide. */
+    url: z.string().url().max(2000).optional(),
+  })
+  .refine((v) => Boolean(v.number ?? v.url), {
+    message: 'La factura necesita al menos un número o un enlace.',
+  });
 
 /** Cuerpo de `POST /integrations/orders`. */
 export const upsertExternalOrderSchema = z.object({
@@ -336,7 +347,8 @@ export interface IntegrationExternalOrder {
   amountCents: number;
   currency: string;
   lines: ExternalOrderLine[];
-  invoice: { number: string; issuedAt: string | null; url: string | null } | null;
+  /** `number` es null mientras la tienda la haya emitido pero no numerado. */
+  invoice: { number: string | null; issuedAt: string | null; url: string | null } | null;
   orderUrl: string | null;
   placedAt: string;
   refundedAt: string | null;

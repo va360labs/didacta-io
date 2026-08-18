@@ -416,6 +416,7 @@
     "errorCarga": "No hemos podido cargar tus compras. Vuelve a intentarlo en un momento.",
     "pedidoSinDetalle": "Pedido",
     "factura": "Factura {numero}",
+    "facturaSinNumero": "Ver la factura",
     "sinFactura": "Factura en curso",
     "nota": "Las facturas las emite la tienda donde compraste. Aquí se enlazan, no se generan.",
     "estado": {
