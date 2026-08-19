@@ -35,7 +35,7 @@ import {
   type OnModuleDestroy,
 } from '@nestjs/common';
 import { Queue, Worker, type ConnectionOptions } from 'bullmq';
-import { createHmac } from 'node:crypto';
+import { createHmac, randomUUID } from 'node:crypto';
 import IORedis, { type Redis } from 'ioredis';
 import { Logger as PinoLogger } from 'nestjs-pino';
 import { PrismaService } from '../prisma/prisma.service';
@@ -192,11 +192,25 @@ export class WebhooksDispatcherEE
     if (!this.queue) {
       throw new Error('WebhooksDispatcherEE no inicializado (REDIS_URL ausente)');
     }
-    await this.queue.add('deliver', input, {
-      // jobId con timestamp evita colisión: si dos eventos del mismo type
-      // llegan al mismo endpoint en la misma ms, BullMQ los dedupea.
-      jobId: `${input.endpointId}:${input.eventType}:${Date.now()}`,
-    });
+    // El jobId es el `deliveryId` del sobre: ya es único por (endpoint,
+    // evento) y estable entre reentregas del outbox, que es justo el dedupe
+    // que se quiere.
+    //
+    // Antes era `${endpointId}:${eventType}:${Date.now()}` con el comentario
+    // «el timestamp evita colisión». Evitaba lo contrario: BullMQ deduplica
+    // EN SILENCIO un `add` cuyo jobId ya existe (el script Lua
+    // `addStandardJob` hace `if EXISTS(jobIdKey) then handleDuplicatedJob` y
+    // devuelve el mismo id), así que dos eventos DISTINTOS del mismo tipo al
+    // mismo endpoint dentro del mismo milisegundo compartían jobId y el
+    // segundo no se entregaba jamás. En un alta masiva por CSV, decenas de
+    // `learning.enrollment.created` caen en el mismo ms y el integrador
+    // recibía una fracción. `apps/api/src/modules/outbox-enqueue.ts` documenta
+    // este mismo pitfall de BullMQ desde hace versiones.
+    //
+    // Sin sobre (job encolado por una versión anterior) cae a un uuid: no hay
+    // de qué derivar estabilidad, y perder la entrega es peor que repetirla.
+    const jobId = input.envelope?.deliveryId ?? `wd_${randomUUID().replace(/-/g, '')}`;
+    await this.queue.add('deliver', input, { jobId });
   }
 
   /**

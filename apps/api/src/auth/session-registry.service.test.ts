@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, it, vi } from 'vitest';
-import { hashToken, SessionRegistryService } from './session-registry.service';
+import { hashToken, SessionRegistryService, SessionRevokedError } from './session-registry.service';
 import { TokenService } from './token.service';
 
 // `TokenService` firma de verdad, así que necesita un secreto válido. Se firma
@@ -81,19 +81,30 @@ describe('SessionRegistryService.issue', () => {
 });
 
 describe('SessionRegistryService.rotate', () => {
+  const SID = '55555555-5555-5555-5555-555555555555';
+
+  /** Sesión viva cuyo tokenHash corresponde al refresh token que se presenta. */
+  function sesionViva(refreshToken: string) {
+    return { id: SID, tokenHash: hashToken(refreshToken) };
+  }
+
   it('conserva el sid al refrescar, en vez de acumular sesiones fantasma', async () => {
-    const sid = '55555555-5555-5555-5555-555555555555';
-    const { service, prisma, tokens } = setup({ existingSession: { id: sid } });
-    const signed = await service.rotate(sid, CLAIMS);
+    const { service: emisor } = setup();
+    const previo = await emisor.issue(CLAIMS);
+    const { service, prisma, tokens } = setup({
+      existingSession: sesionViva(previo.refreshToken),
+    });
+    const signed = await service.rotate(SID, CLAIMS, previo.refreshToken);
     expect(prisma.session.update).toHaveBeenCalledTimes(1);
     expect(prisma.session.create).not.toHaveBeenCalled();
-    expect((await tokens.verifyAccess(signed.accessToken)).sid).toBe(sid);
+    expect((await tokens.verifyAccess(signed.accessToken)).sid).toBe(SID);
   });
 
   it('refresca el tokenHash y la caducidad de la fila', async () => {
-    const sid = '55555555-5555-5555-5555-555555555555';
-    const { service, prisma } = setup({ existingSession: { id: sid } });
-    const signed = await service.rotate(sid, CLAIMS);
+    const { service: emisor } = setup();
+    const previo = await emisor.issue(CLAIMS);
+    const { service, prisma } = setup({ existingSession: sesionViva(previo.refreshToken) });
+    const signed = await service.rotate(SID, CLAIMS, previo.refreshToken);
     const data = prisma.session.update.mock.calls[0]![0].data;
     expect(data.tokenHash).toBe(hashToken(signed.refreshToken));
     expect(data.expiresAt).toBeInstanceOf(Date);
@@ -101,22 +112,43 @@ describe('SessionRegistryService.rotate', () => {
 
   it('abre sesión nueva si el refresh viene sin sid (token previo al despliegue)', async () => {
     const { service, prisma } = setup();
-    await service.rotate(undefined, CLAIMS);
+    await service.rotate(undefined, CLAIMS, 'lo-que-sea');
     expect(prisma.session.create).toHaveBeenCalledTimes(1);
     expect(prisma.session.update).not.toHaveBeenCalled();
   });
 
-  it('abre sesión nueva si la fila ya no existe, en vez de fallar', async () => {
+  it('cerrar sesión CIERRA la sesión: si la fila ya no está, el refresh no resucita nada (H8)', async () => {
+    // Este test decía antes lo contrario ("abre sesión nueva si la fila ya no
+    // existe, en vez de fallar") y por eso el agujero pasó los tests durante
+    // meses: pulsar "cerrar sesión" borraba la fila y el refresh token, válido
+    // 30 días, seguía acuñando tokens frescos.
     const { service, prisma } = setup({ existingSession: null });
-    await service.rotate('sid-que-ya-no-esta', CLAIMS);
-    expect(prisma.session.create).toHaveBeenCalledTimes(1);
+    await expect(
+      service.rotate(SID, CLAIMS, 'refresh-de-la-sesion-cerrada'),
+    ).rejects.toBeInstanceOf(SessionRevokedError);
+    expect(prisma.session.create).not.toHaveBeenCalled();
+    expect(prisma.session.update).not.toHaveBeenCalled();
+  });
+
+  it('un refresh token ya rotado deja de servir aunque la sesión siga viva (H8)', async () => {
+    const { service: emisor } = setup();
+    const viejo = await emisor.issue(CLAIMS);
+    const nuevo = await emisor.issue(CLAIMS);
+    // La fila guarda el hash del ÚLTIMO emitido; se presenta el anterior.
+    const { service, prisma } = setup({ existingSession: sesionViva(nuevo.refreshToken) });
+
+    await expect(service.rotate(SID, CLAIMS, viejo.refreshToken)).rejects.toBeInstanceOf(
+      SessionRevokedError,
+    );
+    expect(prisma.session.update).not.toHaveBeenCalled();
   });
 
   it('solo rota una sesión no revocada y del propio usuario', async () => {
-    const sid = '55555555-5555-5555-5555-555555555555';
-    const { service, prisma } = setup({ existingSession: { id: sid } });
-    await service.rotate(sid, CLAIMS);
+    const { service: emisor } = setup();
+    const previo = await emisor.issue(CLAIMS);
+    const { service, prisma } = setup({ existingSession: sesionViva(previo.refreshToken) });
+    await service.rotate(SID, CLAIMS, previo.refreshToken);
     const where = prisma.session.findFirst.mock.calls[0]![0].where;
-    expect(where).toEqual({ id: sid, userId: USER, revokedAt: null });
+    expect(where).toEqual({ id: SID, userId: USER, revokedAt: null });
   });
 });

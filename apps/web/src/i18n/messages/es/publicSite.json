@@ -34,7 +34,18 @@
     "invalidTitle": "Enlace inválido",
     "invalidBody": "El enlace no es válido.",
     "expiredTitle": "Enlace expirado",
-    "expiredBody": "El enlace expiró."
+    "expiredBody": "El enlace expiró.",
+    "confirmTitleAPPROVE": "¿Aprobar esta solicitud?",
+    "confirmTitleREJECT": "¿Rechazar esta solicitud?",
+    "confirmBodyAPPROVE": "Vas a dar acceso a {member}. La decisión se aplica al confirmar.",
+    "confirmBodyREJECT": "Vas a denegar el acceso a {member}. La decisión se aplica al confirmar.",
+    "confirmBodyAPPROVENoName": "Vas a dar acceso a esta persona. La decisión se aplica al confirmar.",
+    "confirmBodyREJECTNoName": "Vas a denegar el acceso a esta persona. La decisión se aplica al confirmar.",
+    "confirmActionAPPROVE": "Aprobar",
+    "confirmActionREJECT": "Rechazar",
+    "confirmNote": "Confirmamos antes de aplicar porque los filtros de seguridad del correo abren los enlaces por su cuenta.",
+    "confirmError": "No se pudo aplicar la decisión. Vuelve a intentarlo.",
+    "working": "Aplicando…"
   },
   "ficha": {
     "metaTitle": "Curso",

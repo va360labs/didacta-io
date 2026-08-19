@@ -155,6 +155,15 @@ export class AiTutorReviewService {
       base.push(`a."created_at" < $${params.length}`);
     }
 
+    // Foto de los parámetros que `base` referencia, ANTES de añadir el de
+    // estado. La query de pendientes usa `base` (sin el placeholder del
+    // estado) pero se ejecutaba con `...params`, que sí lo incluía cuando
+    // había filtro: Postgres rechaza el Bind con más parámetros de los que el
+    // statement declara (08P01) y, como las tres van en un `Promise.all`, el
+    // panel entero devolvía 500 en cuanto un admin pulsaba "solo pendientes"
+    // o "solo corregidas".
+    const paramsBase = [...params];
+
     const conEstado = [...base];
     if (filtros.status) {
       params.push(filtros.status);
@@ -205,7 +214,7 @@ export class AiTutorReviewService {
       this.prisma.$queryRawUnsafe(
         `SELECT COUNT(*)::int AS "n" ${FROM}
          WHERE ${base.join(' AND ')} AND a."review_status" = 'PENDING'`,
-        ...params,
+        ...paramsBase,
       ) as Promise<Array<{ n: number }>>,
     ]);
 

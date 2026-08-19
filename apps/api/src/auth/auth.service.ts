@@ -19,7 +19,7 @@ import { isAdminMfaEnforced } from './mfa-config';
 import { MfaPolicyService } from './mfa-policy/mfa-policy.service';
 import { MfaRequiredByTenantPolicyError } from './mfa-policy/mfa-required-by-tenant-policy.error';
 import { PasswordService } from './password.service';
-import { SessionRegistryService } from './session-registry.service';
+import { SessionRegistryService, SessionRevokedError } from './session-registry.service';
 import { TokenService, type SignedTokens } from './token.service';
 import type { SigninDto, SignupDto } from './dto';
 
@@ -462,16 +462,27 @@ export class AuthService {
     return runAsTenant(
       user.tenantId,
       () =>
-        this.sessions.rotate(
-          claims.sid,
-          {
-            sub: user.id,
-            tenantId: user.tenantId,
-            roles,
-            mfaVerified: !this.shouldRequireMfa(roles, user.mfaEnabled),
-          },
-          ctx,
-        ),
+        this.sessions
+          .rotate(
+            claims.sid,
+            {
+              sub: user.id,
+              tenantId: user.tenantId,
+              roles,
+              mfaVerified: !this.shouldRequireMfa(roles, user.mfaEnabled),
+            },
+            refreshToken,
+            ctx,
+          )
+          .catch((err) => {
+            if (err instanceof SessionRevokedError) {
+              throw new UnauthorizedException({
+                message: 'La sesión se ha cerrado. Vuelve a iniciar sesión.',
+                code: 'AUTH_SESSION_REVOKED',
+              });
+            }
+            throw err;
+          }),
       { traceLabel: 'auth-refresh', userId: user.id },
     );
   }

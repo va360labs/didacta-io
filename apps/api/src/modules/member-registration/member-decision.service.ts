@@ -105,6 +105,56 @@ export class MemberDecisionService {
   }
 
   /**
+   * Mira qué haría el token SIN hacerlo. Es lo que consulta la pantalla de
+   * confirmación antes de que el aprobador pulse el botón.
+   *
+   * Existe porque el email lleva dos enlaces (APROBAR y RECHAZAR) y esos
+   * enlaces los abre cualquier escáner de correo corporativo —Outlook
+   * SafeLinks, Mimecast, Proofpoint hacen GET a todos los enlaces de un
+   * mensaje—. Con la decisión colgando de un GET, el robot decidía la
+   * inscripción antes de que el humano abriera el correo, y el desenlace
+   * dependía de cuál de los dos enlaces visitara primero. Ahora el GET solo
+   * lee: mutar exige el POST que dispara el botón.
+   */
+  async previewDecision(rawToken: string): Promise<{
+    outcome: 'confirm' | 'already' | 'invalid' | 'expired';
+    action: 'APPROVE' | 'REJECT' | null;
+    memberName: string | null;
+    tenantId: string | null;
+  }> {
+    const record = await this.prisma.memberRegistrationDecisionToken.findUnique({
+      where: { tokenHash: this.hashToken(rawToken) },
+    });
+    if (!record) return { outcome: 'invalid', action: null, memberName: null, tenantId: null };
+    if (record.decidedAt) {
+      return {
+        outcome: 'already',
+        action: record.action,
+        memberName: null,
+        tenantId: record.tenantId,
+      };
+    }
+    if (record.expiresAt.getTime() < Date.now()) {
+      return {
+        outcome: 'expired',
+        action: record.action,
+        memberName: null,
+        tenantId: record.tenantId,
+      };
+    }
+    const user = await this.prisma.user.findUnique({
+      where: { id: record.userId },
+      select: { name: true, email: true },
+    });
+    return {
+      outcome: 'confirm',
+      action: record.action,
+      memberName: user?.name ?? user?.email ?? null,
+      tenantId: record.tenantId,
+    };
+  }
+
+  /**
    * Consume un token de decisión (raw) desde el email del aprobador.
    *
    * - Token inexistente → 'invalid'.
@@ -134,7 +184,21 @@ export class MemberDecisionService {
     const newStatus = record.action === 'APPROVE' ? 'ACTIVE' : 'DEACTIVATED';
     const decidedAt = new Date();
 
+    // El `decidedAt` se comprobó arriba, FUERA de la transacción: dos
+    // peticiones simultáneas (los dos enlaces del correo abiertos a la vez, o
+    // un doble clic) pasaban las dos el chequeo y las dos escribían. El sellado
+    // es ahora lo primero de la transacción y lleva `decidedAt: null` en el
+    // `where`: quien no selle ninguna fila es que llegó segundo y se retira.
+    let gano = true;
     await this.prisma.$transaction(async (tx) => {
+      const sellados = await tx.memberRegistrationDecisionToken.updateMany({
+        where: { tenantId: record.tenantId, userId: record.userId, decidedAt: null },
+        data: { decidedAt },
+      });
+      if (sellados.count === 0) {
+        gano = false;
+        return;
+      }
       await tx.user.update({
         where: { id: record.userId },
         data: { status: newStatus, approvalDecidedAt: decidedAt },
@@ -145,12 +209,10 @@ export class MemberDecisionService {
         where: { tenantId: record.tenantId, userId: record.userId },
         data: { approvalDecidedAt: decidedAt },
       });
-      // Sella AMBOS tokens (el consumido y su pareja) para inutilizarlos.
-      await tx.memberRegistrationDecisionToken.updateMany({
-        where: { tenantId: record.tenantId, userId: record.userId, decidedAt: null },
-        data: { decidedAt },
-      });
     });
+
+    // Llegó segundo: la decisión ya la tomó la otra petición.
+    if (!gano) return { outcome: 'already', tenantId: record.tenantId };
 
     const user = await this.prisma.user.findUnique({
       where: { id: record.userId },

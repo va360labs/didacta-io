@@ -107,14 +107,31 @@ export class SessionRegistryService {
    * de «sesiones activas» del usuario se llenaría de duplicados fantasma —
    * una fila por hora y dispositivo.
    *
-   * Si el refresh viene sin `sid` (token emitido antes de este cambio) o su
-   * fila ya no existe, se abre una sesión nueva: así los usuarios con sesión
-   * abierta durante el despliegue quedan registrados sin tener que volver a
-   * entrar.
+   * ── Por qué esto es lo que hace que «cerrar sesión» cierre la sesión ──────
+   * El `tokenHash` se escribía en cada emisión pero no se leía en NINGÚN
+   * `where`, y una sesión inexistente o revocada se trataba como «token
+   * legacy» y abría una nueva. El resultado: pulsar «cerrar sesión» (borra la
+   * fila) o cambiar la contraseña (borra todas) no impedía que un
+   * `POST /auth/refresh` con el refresh token —válido 30 días— acuñara tokens
+   * frescos. La sesión revocada resucitaba.
+   *
+   * Ahora la fila manda:
+   *  - `sid` con fila borrada o revocada → 401. Es el caso de logout, cambio
+   *    de contraseña, suspensión y revocación de soporte.
+   *  - `sid` con fila viva pero cuyo `tokenHash` no es el del token
+   *    presentado → 401. Un refresh token ya rotado (o robado y adelantado
+   *    por el legítimo) deja de servir.
+   *  - Sin `sid`: token emitido antes de que existiera el registro de
+   *    sesiones. Se sigue admitiendo para no echar a quien tenía sesión
+   *    abierta durante el despliegue; esos tokens caducan solos a los 30 días
+   *    y desde entonces todo lleva `sid`. Es el único hueco que queda y se
+   *    cierra por caducidad.
    */
   async rotate(
     sid: string | undefined,
     claims: Omit<SessionClaims, 'sid'>,
+    /** El refresh token presentado, para cotejarlo con el `tokenHash` guardado. */
+    presentedRefreshToken: string | null,
     ctx: ClientContext = { ip: null, userAgent: null },
   ): Promise<SignedTokens> {
     if (!sid) return this.issue(claims, ctx);
@@ -122,7 +139,11 @@ export class SessionRegistryService {
     const existing = await this.prisma.session.findFirst({
       where: { id: sid, userId: claims.sub, revokedAt: null },
     });
-    if (!existing) return this.issue(claims, ctx);
+    if (!existing) throw new SessionRevokedError();
+
+    if (presentedRefreshToken !== null && existing.tokenHash !== hashToken(presentedRefreshToken)) {
+      throw new SessionRevokedError();
+    }
 
     const signed = await this.tokens.sign({ ...claims, sid });
     await this.prisma.session.update({
@@ -133,6 +154,17 @@ export class SessionRegistryService {
       },
     });
     return signed;
+  }
+}
+
+/**
+ * La sesión que respalda el refresh token ya no vale: se cerró, se revocó, o
+ * el token presentado no es el último emitido para ella.
+ */
+export class SessionRevokedError extends Error {
+  constructor() {
+    super('La sesión ya no está activa');
+    this.name = 'SessionRevokedError';
   }
 }
 

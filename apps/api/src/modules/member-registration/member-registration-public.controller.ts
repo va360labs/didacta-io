@@ -34,6 +34,7 @@ import {
   type TelegramTicketClaims,
   type VerificationTokenClaims,
 } from '@didacta/mod-member-registration';
+import { z } from 'zod';
 import { extractClientContext } from '../../auth/client-context';
 import { ZodValidationPipe } from '../../auth/zod-validation.pipe';
 import { runAsTenant, runSanctionedGlobalAccess } from '../../tenancy/tenant-context.storage';
@@ -46,6 +47,19 @@ import { TelegramService } from './telegram.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { assertSignupsAllowed } from '../../tenancy/signup-freeze';
 import { resolvePublicHost } from '../../common/resolve-public-host';
+
+/**
+ * El token de decisión que confirma el aprobador. Es opaco y hexadecimal
+ * (`randomBytes(...).toString('hex')`), así que se acota a eso.
+ */
+const decisionConfirmSchema = z
+  .object({
+    token: z
+      .string()
+      .trim()
+      .regex(/^[0-9a-f]{16,128}$/),
+  })
+  .strict();
 
 // ============================================================================
 // Controller PÚBLICO del flujo de inscripción de miembros con VERIFICADORES
@@ -333,12 +347,22 @@ export class MemberRegistrationPublicController {
     });
   }
 
+  /**
+   * El enlace del email. **NO decide nada**: lleva al aprobador a la pantalla
+   * de confirmación, que es la que dispara el POST.
+   *
+   * El correo al aprobador lleva dos enlaces (APROBAR y RECHAZAR) y los
+   * escáneres de seguridad de correo —Outlook SafeLinks, Mimecast,
+   * Proofpoint— hacen GET a todos los enlaces de un mensaje antes de que
+   * nadie lo abra. Con la mutación colgando del GET, el robot decidía la
+   * inscripción por el humano, y qué salía dependía de cuál visitara primero.
+   */
   @Get('decision')
   @ApiOperation({
     summary:
-      'Endpoint que abre el operador desde el email (aprobar/rechazar). Procesa el token y redirige al frontend.',
+      'Enlace del email (aprobar/rechazar). Solo lee: redirige a la pantalla de confirmación.',
   })
-  @ApiResponse({ status: 302, description: 'Redirect a la pantalla de resultado en el frontend.' })
+  @ApiResponse({ status: 302, description: 'Redirect a la pantalla de confirmación.' })
   async decisionEndpoint(
     @Req() req: FastifyRequest,
     @Res({ passthrough: false }) res: FastifyReply,
@@ -347,17 +371,55 @@ export class MemberRegistrationPublicController {
     // El token de decisión es OPACO (aleatorio, solo su hash vive en BD — no es
     // un ticket HMAC con claims): el tenant se conoce recién tras el lookup
     // interno del service, así que la llamada va sancionada completa.
-    const result = await runSanctionedGlobalAccess(() =>
-      this.decision.decide(token, extractClientContext(req)),
-    );
-    // `decide()` devuelve el tenantId de la fila (null solo si el token no
-    // existe) — con eso, la base prefiere el dominio primario del tenant
-    // sobre el Host de este request.
-    const web = (await this.tenantResolver.resolveTenantWebBaseUrl(result.tenantId, req)).replace(
+    const preview = await runSanctionedGlobalAccess(() => this.decision.previewDecision(token));
+    const web = (await this.tenantResolver.resolveTenantWebBaseUrl(preview.tenantId, req)).replace(
       /\/$/,
       '',
     );
-    void res.status(302).redirect(`${web}/inscripcion-miembros/decision?outcome=${result.outcome}`);
+    if (preview.outcome !== 'confirm') {
+      void res
+        .status(302)
+        .redirect(`${web}/inscripcion-miembros/decision?outcome=${preview.outcome}`);
+      return;
+    }
+    const q = new URLSearchParams({
+      token,
+      action: preview.action ?? '',
+      member: preview.memberName ?? '',
+    });
+    void res.status(302).redirect(`${web}/inscripcion-miembros/decision?${q.toString()}`);
+  }
+
+  /**
+   * Lo que consulta la pantalla de confirmación para saber a quién y a qué
+   * está a punto de decir que sí. Solo lee.
+   */
+  @Get('decision/preview')
+  @ApiOperation({ summary: 'Qué haría este token de decisión, sin ejecutarlo.' })
+  async decisionPreview(@Req() req: FastifyRequest) {
+    const token = String((req.query as Record<string, unknown> | undefined)?.['token'] ?? '');
+    const preview = await runSanctionedGlobalAccess(() => this.decision.previewDecision(token));
+    return {
+      outcome: preview.outcome,
+      action: preview.action,
+      memberName: preview.memberName,
+    };
+  }
+
+  /**
+   * La decisión de verdad. Solo llega aquí desde el botón de la pantalla de
+   * confirmación: ningún escáner de correo hace POST.
+   */
+  @Post('decision')
+  @ApiOperation({ summary: 'Ejecuta la decisión (aprobar/rechazar) confirmada por el aprobador.' })
+  async decisionConfirm(
+    @Req() req: FastifyRequest,
+    @Body(new ZodValidationPipe(decisionConfirmSchema)) dto: { token: string },
+  ): Promise<{ outcome: string }> {
+    const result = await runSanctionedGlobalAccess(() =>
+      this.decision.decide(dto.token, extractClientContext(req)),
+    );
+    return { outcome: result.outcome };
   }
 
   // -------------------- helpers --------------------

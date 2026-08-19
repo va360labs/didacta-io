@@ -217,7 +217,18 @@ export async function apiFetch<T>(
 
   const response = await fetch(url, { ...init, headers });
   const text = await response.text();
-  const body = text ? (JSON.parse(text) as unknown) : null;
+  // El body se parsea de forma TOLERANTE. Con `JSON.parse` pelado, un 502/504
+  // en el que el proxy devuelve una pagina HTML lanzaba SyntaxError aqui
+  // mismo: se saltaba el refresh-and-retry del 401 de mas abajo y los callers
+  // recibian un error sin `status` con el que no podian decidir nada.
+  let body: unknown = null;
+  if (text) {
+    try {
+      body = JSON.parse(text) as unknown;
+    } catch {
+      body = null;
+    }
+  }
 
   if (!response.ok) {
     const payload = (body && typeof body === 'object' ? body : {}) as Record<string, unknown>;

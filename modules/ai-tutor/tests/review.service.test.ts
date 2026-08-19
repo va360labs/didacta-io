@@ -426,3 +426,78 @@ describe('listAnswersSchema · el filtro "sin respaldo"', () => {
     expect(parsed.pageSize).toBe(20);
   });
 });
+
+describe('listAnswers · los filtros de estado no revientan el panel (H16)', () => {
+  /**
+   * Doble de `$queryRawUnsafe` que se comporta como Postgres en lo único que
+   * importa aquí: si le pasas más parámetros de los que el statement declara,
+   * rechaza el Bind (08P01). Sin esta comprobación, un doble permisivo se
+   * traga el desajuste y el bug es invisible — que es exactamente lo que
+   * pasaba.
+   */
+  function makePrisma() {
+    const queries: Array<{ sql: string; args: unknown[] }> = [];
+    const queryRawUnsafe = vi.fn(async (sql: string, ...args: unknown[]) => {
+      queries.push({ sql, args });
+      const declarados = new Set([...sql.matchAll(/\$(\d+)/g)].map((m) => Number(m[1])));
+      const maximo = declarados.size === 0 ? 0 : Math.max(...declarados);
+      if (args.length > maximo) {
+        throw Object.assign(
+          new Error(
+            `bind message supplies ${args.length} parameters, but prepared statement requires ${maximo}`,
+          ),
+          { code: '08P01' },
+        );
+      }
+      return sql.includes('COUNT(*)') ? [{ n: 0 }] : [];
+    });
+    return { prisma: { $queryRawUnsafe: queryRawUnsafe }, queries };
+  }
+
+  function servicio(prisma: unknown) {
+    return new AiTutorReviewService(prisma as never, makeContext() as never, embedFake);
+  }
+
+  it.each(['PENDING', 'CORRECTED'] as const)(
+    'filtrar por estado %s no desajusta los parámetros de la query de pendientes',
+    async (status) => {
+      const { prisma } = makePrisma();
+      const filtros = listAnswersSchema.parse({ status, page: 1, pageSize: 20 });
+
+      await expect(servicio(prisma).listAnswers('t-1', filtros)).resolves.toBeTruthy();
+    },
+  );
+
+  it('sin filtro de estado sigue funcionando igual', async () => {
+    const { prisma } = makePrisma();
+    const filtros = listAnswersSchema.parse({ page: 1, pageSize: 20 });
+
+    await expect(servicio(prisma).listAnswers('t-1', filtros)).resolves.toBeTruthy();
+  });
+
+  it('el contador de pendientes ignora el filtro de estado (si no, saldría siempre 0)', async () => {
+    const { prisma, queries } = makePrisma();
+    const filtros = listAnswersSchema.parse({ status: 'CORRECTED', page: 1, pageSize: 20 });
+
+    await servicio(prisma).listAnswers('t-1', filtros);
+
+    const pendientes = queries.find((q) => q.sql.includes("'PENDING'"));
+    expect(pendientes).toBeDefined();
+    expect(pendientes!.sql).not.toContain('review_status" = $');
+  });
+
+  it('los filtros combinados tampoco desajustan (curso + búsqueda + fechas + estado)', async () => {
+    const { prisma } = makePrisma();
+    const filtros = listAnswersSchema.parse({
+      courseId: '11111111-1111-1111-1111-111111111111',
+      q: 'temario',
+      desde: '2026-01-01T00:00:00.000Z',
+      hasta: '2026-02-01T00:00:00.000Z',
+      status: 'PENDING',
+      page: 2,
+      pageSize: 10,
+    });
+
+    await expect(servicio(prisma).listAnswers('t-1', filtros)).resolves.toBeTruthy();
+  });
+});

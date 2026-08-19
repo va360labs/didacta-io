@@ -34,7 +34,18 @@
     "invalidTitle": "Invalid link",
     "invalidBody": "The link is not valid.",
     "expiredTitle": "Link expired",
-    "expiredBody": "The link has expired."
+    "expiredBody": "The link has expired.",
+    "confirmTitleAPPROVE": "Approve this request?",
+    "confirmTitleREJECT": "Reject this request?",
+    "confirmBodyAPPROVE": "You are about to grant access to {member}. The decision applies once you confirm.",
+    "confirmBodyREJECT": "You are about to deny access to {member}. The decision applies once you confirm.",
+    "confirmBodyAPPROVENoName": "You are about to grant access to this person. The decision applies once you confirm.",
+    "confirmBodyREJECTNoName": "You are about to deny access to this person. The decision applies once you confirm.",
+    "confirmActionAPPROVE": "Approve",
+    "confirmActionREJECT": "Reject",
+    "confirmNote": "We confirm before applying because email security filters open links on their own.",
+    "confirmError": "The decision could not be applied. Please try again.",
+    "working": "Applying…"
   },
   "ficha": {
     "metaTitle": "Course",
