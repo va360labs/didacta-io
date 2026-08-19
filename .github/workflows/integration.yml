@@ -53,6 +53,16 @@ jobs:
       - name: Generate Prisma client
         run: pnpm --filter @didacta/database db:generate
 
+      # Compilar NO es opcional aquí. El paso de abajo llama a la suite con
+      # `pnpm --filter`, que se salta turbo y por tanto no construye las
+      # dependencias: `@didacta/database` publica `./dist/index.js` en su
+      # `exports`, ese dist no existe, y la suite moría con
+      #   Error: Failed to resolve entry for package "@didacta/database".
+      # Los tests unitarios de ci.yml no lo sufren porque van por `pnpm test`
+      # (turbo, con `dependsOn: ["^build"]`).
+      - name: Build
+        run: pnpm build
+
       - name: Run integration suite (LicenseGuard + Postgres real)
         # El orquestador arranca docker-compose.test.yml, espera Postgres ready,
         # corre vitest contra él y baja el compose. En GitHub-hosted Linux runners

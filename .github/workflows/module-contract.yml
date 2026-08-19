@@ -3,12 +3,20 @@ name: Module Contract
 # Lint del contrato de módulo Didacta. Bloquea PRs que rompan las 10 reglas
 # auto-detectables (ver didacta-skills/scripts/README.md).
 #
-# Pasado a workflow_dispatch only (2026-05-01): el job depende del checkout de
-# va360labs/didacta-skills, que requiere `DIDACTA_SKILLS_PAT` con scope `repo`
-# (privado). Sin PAT vigente, el checkout falla con "Not Found" y bloquea el
-# merge. Se ejecuta manualmente cuando el PAT esté configurado, o en local con
-# `node scripts/audit-modules.mjs --json` (mismo comando, pero sin checkout
-# remoto del linter).
+# Pasado a workflow_dispatch only (2026-05-01) porque el checkout del linter
+# fallaba con "Not Found". Se atribuyó a que faltaba el PAT, pero la causa
+# principal era otra: el repositorio `va360labs/didacta-skills` NO EXISTE. El
+# linter vive en `va360labs/didacta-modules-skill` (privado), en la misma ruta
+# `scripts/audit-module-contract.mjs`. Con el nombre equivocado, ningún PAT
+# habría arreglado nunca este workflow.
+#
+# Corregido el nombre, sigue haciendo falta `DIDACTA_SKILLS_PAT` (scope `repo`)
+# porque el repo es privado y `GITHUB_TOKEN` no alcanza otro repositorio. Sin
+# el secret el job ya NO revienta: avisa y termina en verde, para que un fallo
+# rojo signifique de verdad que el contrato de módulo está roto.
+#
+# Alternativa local, sin checkout remoto:
+#   node scripts/audit-modules.mjs --json
 
 on:
   workflow_dispatch:
@@ -33,23 +41,46 @@ jobs:
           path: didacta-community
           persist-credentials: false
 
-      # didacta-skills se checkoutea como sibling para que el wrapper script
-      # de didacta-community/scripts/audit-modules.mjs lo encuentre.
-      - name: Checkout didacta-skills
+      # El PAT se comprueba ANTES de intentar el checkout: un `secrets.X` no se
+      # puede usar en un `if:` de job, pero sí a través de un output.
+      - name: ¿Está configurado DIDACTA_SKILLS_PAT?
+        id: pat
+        env:
+          PAT: ${{ secrets.DIDACTA_SKILLS_PAT }}
+        run: |
+          if [ -n "$PAT" ]; then
+            echo 'hay=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'hay=false' >> "$GITHUB_OUTPUT"
+          fi
+
+      # El linter se checkoutea como sibling con el nombre de carpeta
+      # `didacta-skills` porque es donde lo busca el wrapper
+      # `scripts/audit-modules.mjs`. El REPOSITORIO, en cambio, se llama
+      # `didacta-modules-skill`; no son lo mismo y confundirlos es lo que tuvo
+      # este workflow roto desde mayo.
+      - name: Checkout del linter (didacta-modules-skill)
+        if: steps.pat.outputs.hay == 'true'
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
-          repository: va360labs/didacta-skills
+          repository: va360labs/didacta-modules-skill
           path: didacta-skills
-          # Si el repo es privado, requiere PAT con scope `repo` configurado
-          # como secret. Si es público, basta GITHUB_TOKEN.
-          token: ${{ secrets.DIDACTA_SKILLS_PAT || github.token }}
+          token: ${{ secrets.DIDACTA_SKILLS_PAT }}
           persist-credentials: false
 
       - name: Setup Node.js 22
+        if: steps.pat.outputs.hay == 'true'
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version-file: didacta-community/.nvmrc
 
       - name: Audit module contract
+        if: steps.pat.outputs.hay == 'true'
         working-directory: didacta-community
         run: node scripts/audit-modules.mjs --json
+
+      - name: Sin PAT no se puede auditar
+        if: steps.pat.outputs.hay != 'true'
+        run: |
+          echo "::warning title=Contrato de módulo sin auditar::Falta el secret DIDACTA_SKILLS_PAT (scope repo) para leer va360labs/didacta-modules-skill. El linter NO se ha ejecutado."
+          echo 'Mientras tanto, en local: node scripts/audit-modules.mjs --json'

@@ -11,7 +11,11 @@ on:
       - '**/ee/**'
       - 'scripts/ee-fence.ts'
   push:
-    branches: [main]
+    # `develop` también, y no es un detalle: las releases se cortan de develop,
+    # así que con solo `main` este check no miraba NUNCA el código que acaba en
+    # una imagen publicada. Es la misma corrección que ci.yml recibió en
+    # alpha.108 y que a este workflow no se le aplicó.
+    branches: [main, develop]
 
 permissions:
   contents: read
