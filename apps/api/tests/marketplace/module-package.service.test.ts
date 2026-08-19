@@ -223,8 +223,38 @@ describe('isCoreVersionCompatible', () => {
       expect(isCoreVersionCompatible('^0.0.1', '0.0.1-alpha.41')).toBe(true);
     });
 
-    it('caret: pre-release con mayor minor es compatible', () => {
-      expect(isCoreVersionCompatible('^0.0.1-alpha.0', '0.0.2')).toBe(true);
+    it('caret en 0.0.x NO abre el rango hacia arriba (M15)', () => {
+      // npm trata `^0.0.1` como "exactamente 0.0.1": en 0.0.x cada patch puede
+      // romper. Este test decía lo contrario, y esa lectura era fail-open: un
+      // módulo empaquetado contra `^0.0.1` se instalaba en un core 0.9.0 pese a
+      // que entre esos dos minors el contrato pudo cambiar entero. Y el core
+      // lleva toda su vida en 0.x, así que este es el caso normal.
+      expect(isCoreVersionCompatible('^0.0.1-alpha.0', '0.0.2')).toBe(false);
+      expect(isCoreVersionCompatible('^0.0.1', '0.9.0')).toBe(false);
+      expect(isCoreVersionCompatible('^0.0.1', '0.1.0')).toBe(false);
+    });
+
+    it('caret en 0.x.y admite patches pero no el salto de minor', () => {
+      // `^0.1.2` = >=0.1.2 <0.2.0. En 0.x el minor hace de major.
+      expect(isCoreVersionCompatible('^0.1.2', '0.1.2')).toBe(true);
+      expect(isCoreVersionCompatible('^0.1.2', '0.1.9')).toBe(true);
+      expect(isCoreVersionCompatible('^0.1.2', '0.2.0')).toBe(false);
+      expect(isCoreVersionCompatible('^0.1.2', '0.1.1')).toBe(false);
+    });
+
+    it('en 1.x el caret sigue abriendo minor y patch, como siempre', () => {
+      expect(isCoreVersionCompatible('^1.2.0', '1.5.0')).toBe(true);
+      expect(isCoreVersionCompatible('^1.2.0', '1.2.9')).toBe(true);
+      expect(isCoreVersionCompatible('^1.2.0', '2.0.0')).toBe(false);
+      expect(isCoreVersionCompatible('^1.2.0', '1.1.9')).toBe(false);
+    });
+
+    it('los módulos que se distribuyen siguen instalándose en el core actual', () => {
+      // Es la mitad que faltaba: arreglar el comparador sin mover los
+      // manifiestos habría dejado fuera a TODOS los módulos, que declaraban
+      // `^0.0.1` mientras el core ya iba por 0.1.0.
+      expect(isCoreVersionCompatible('^0.1.0', '0.1.0-beta.5')).toBe(true);
+      expect(isCoreVersionCompatible('^0.1.0', '0.1.3')).toBe(true);
     });
 
     it('tilde con pre-release: ~0.0.1-alpha.0 matchea 0.0.1-alpha.41', () => {

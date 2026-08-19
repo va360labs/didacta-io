@@ -227,6 +227,11 @@ export class ModulePackageService {
 /// PRE-RELEASE SUPPORT (alpha.X, beta.X, rc.X):
 /// - `^0.0.1-alpha.0` matchea `0.0.1-alpha.41` (same base, prerelease >= required)
 /// - `^0.0.1` matchea `0.0.1-alpha.41` (base version compatible, prerelease ignored)
+///
+/// SEMVER 0.x: el caret NO abre el rango hacia arriba, igual que en npm.
+/// `^0.0.1` solo acepta 0.0.1, y `^0.1.2` acepta >=0.1.2 <0.2.0. Importa
+/// porque el core lleva toda su vida en 0.x: tratarlo como 1.x dejaba instalar
+/// un módulo empaquetado contra `^0.0.1` sobre un core 0.9.0.
 export function isCoreVersionCompatible(required: string, actual: string): boolean {
   const r = required.trim();
   const a = actual.trim();
@@ -258,8 +263,22 @@ export function isCoreVersionCompatible(required: string, actual: string): boole
     const rPatch = Number(rPatchStr);
 
     if (aMajor !== rMajor) return false;
-    if (aMinor < rMinor) return false;
-    if (aMinor === rMinor && aPatch < rPatch) return false;
+
+    // SemVer 0.x: NO hay compatibilidad hacia arriba, y el caret lo respeta.
+    //   `^0.0.1` → solo 0.0.1 (en 0.0.x cada patch puede romper)
+    //   `^0.1.2` → >=0.1.2 <0.2.0 (en 0.x.y el minor hace de major)
+    // Tratarlo como en 1.x era fail-open: un módulo empaquetado contra
+    // `^0.0.1` se instalaba en un core 0.9.0 pese a que entre esos dos minors
+    // el contrato pudo cambiar entero. Y el core lleva TODA su vida en 0.x, o
+    // sea que este es el caso normal, no el raro.
+    if (rMajor === 0) {
+      if (aMinor !== rMinor) return false;
+      if (rMinor === 0 && aPatch !== rPatch) return false;
+      if (aPatch < rPatch) return false;
+    } else {
+      if (aMinor < rMinor) return false;
+      if (aMinor === rMinor && aPatch < rPatch) return false;
+    }
 
     // Si base versions iguales y ambos tienen prerelease, comparar prereleases
     if (aMinor === rMinor && aPatch === rPatch && rPrerelease && aPrerelease) {

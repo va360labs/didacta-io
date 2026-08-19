@@ -317,7 +317,11 @@ export class FundaeService {
     });
     if (u?.documentId) return `evidencia-${u.documentId}.pdf`;
     const slug = (u?.email ?? userId).split('@')[0]!.replace(/[^a-zA-Z0-9._-]/g, '_');
-    return `evidencia-${slug}.pdf`;
+    // El local-part del email NO es único: `ana@empresa-a.com` y
+    // `ana@empresa-b.com` daban el mismo nombre y una de las dos evidencias
+    // desaparecía del ZIP que se le manda a Fundae. Se desempata con el
+    // principio del id, que sigue siendo legible para el revisor.
+    return `evidencia-${slug}-${userId.slice(0, 8)}.pdf`;
   }
 
   /**

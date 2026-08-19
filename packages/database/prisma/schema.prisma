@@ -1877,7 +1877,9 @@ model ModZoomWebhookEvent {
   sessionId    String?  @map("session_id") @db.Uuid
   tenantId     String?  @map("tenant_id") @db.Uuid
   receivedAt   DateTime @default(now()) @map("received_at")
-  result       String   @default("OK") /// OK | IGNORED | ERROR
+  /// PENDING mientras se procesa (la fila se crea al reclamar el evento, que
+  /// es lo que impide procesarlo dos veces), luego OK | IGNORED | ERROR.
+  result       String   @default("OK")
   errorMessage String?  @map("error_message")
 
   @@index([meetingId], map: "mod_zoom_live_webhook_event_meeting_idx")

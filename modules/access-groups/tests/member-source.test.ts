@@ -16,16 +16,33 @@ describe('planMemberActivation', () => {
     });
   });
 
-  it('reactivar una MANUAL revocada conserva MANUAL aunque reactive un bridge (sticky)', () => {
+  it('reactivar una MANUAL revocada la entrega a quien la reactiva (M10)', () => {
+    // Antes MANUAL era sticky también aquí, y ese "sticky" producía un acceso
+    // IRREVOCABLE: membresía manual revocada → un pago la reactiva → sigue
+    // marcada MANUAL → cuando el pago deja de entrar, `bridgeMayRevoke` dice
+    // que no y nadie se la quita. Un acceso concedido por dinero sobrevivía al
+    // impago. Y no había nada del admin que proteger: la membresía estaba
+    // REVOCADA, o sea que su decisión ya se había deshecho.
     const revokedManual = { status: 'REVOKED', source: 'MANUAL' };
     expect(planMemberActivation(revokedManual, 'TIER')).toEqual({
       action: 'reactivate',
-      source: 'MANUAL',
+      source: 'TIER',
     });
     expect(planMemberActivation(revokedManual, 'MEMBERSHIP')).toEqual({
       action: 'reactivate',
-      source: 'MANUAL',
+      source: 'MEMBERSHIP',
     });
+    // El bridge que la reactivó SÍ puede retirarla cuando deje de aplicar.
+    expect(bridgeMayRevoke('TIER', 'TIER')).toBe(true);
+  });
+
+  it('sobre una membresía ACTIVA, MANUAL sigue siendo intocable para un bridge', () => {
+    // La regla sticky no desaparece: donde tiene sentido es aquí, sobre una
+    // membresía viva, para que un tier-down no borre la decisión del admin.
+    expect(planMemberActivation({ status: 'ACTIVE', source: 'MANUAL' }, 'TIER')).toEqual({
+      action: 'none',
+    });
+    expect(bridgeMayRevoke('MANUAL', 'TIER')).toBe(false);
   });
 
   it('reactivar una no-MANUAL revocada la entrega al nuevo concedente', () => {

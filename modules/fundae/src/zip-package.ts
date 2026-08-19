@@ -52,8 +52,23 @@ export async function buildPresentationZip(input: ZipPackageInput): Promise<Buff
     });
 
     archive.append(input.xmlContent, { name: input.xmlFilename });
+    // Red de seguridad contra nombres repetidos: dos entradas con el mismo
+    // nombre dentro del ZIP hacen que el revisor de Fundae solo vea una, sin
+    // que nada avise. Puede pasar por datos del origen (dos participantes con
+    // el mismo DNI mal tecleado) además de por el nombre que compone el
+    // service. Se desempata en vez de perder la evidencia.
+    const usados = new Set<string>();
     for (const evidence of input.evidences) {
-      archive.append(evidence.pdfData, { name: `evidencias/${evidence.filename}` });
+      let nombre = evidence.filename;
+      for (let n = 2; usados.has(nombre); n++) {
+        const punto = evidence.filename.lastIndexOf('.');
+        nombre =
+          punto > 0
+            ? `${evidence.filename.slice(0, punto)}-${n}${evidence.filename.slice(punto)}`
+            : `${evidence.filename}-${n}`;
+      }
+      usados.add(nombre);
+      archive.append(evidence.pdfData, { name: `evidencias/${nombre}` });
     }
 
     void archive.finalize();

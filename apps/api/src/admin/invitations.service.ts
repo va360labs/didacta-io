@@ -315,21 +315,48 @@ export class InvitationsService {
       return { aceptado: false, yaEnCurso: true, total: enCurso.total };
     }
 
+    // El candado se echa AQUÍ, antes de cualquier `await`.
+    //
+    // Antes se echaba después de validar el grupo y de seleccionar los
+    // pendientes: dos `await` de ventana entre el chequeo y el `set`, más que
+    // suficiente para que dos POST concurrentes pasaran los dos y
+    // seleccionaran los mismos destinatarios. Con doscientos pendientes, eran
+    // hasta doscientas invitaciones duplicadas. En JavaScript no hay
+    // reentrada entre awaits, así que reservar el hueco de forma síncrona es
+    // un candado de verdad para este proceso.
+    const iniciado = new Date().toISOString();
+    this.envios.set(tenantId, {
+      enCurso: true,
+      total: 0,
+      enviados: 0,
+      fallidos: [],
+      iniciadoEn: iniciado,
+      terminadoEn: null,
+    });
+
     // Un grupo inválido (o de otro tenant) aborta ANTES de seleccionar
     // destinatarios, no a mitad del lote. Mismo criterio fail-closed que
     // `AdminUsersService.invite()`.
-    if (opts.accessGroupId) {
-      await this.accessGroups.getGroup(tenantId, opts.accessGroupId);
+    let destinatarios;
+    try {
+      if (opts.accessGroupId) {
+        await this.accessGroups.getGroup(tenantId, opts.accessGroupId);
+      }
+      destinatarios = await this.seleccionarPendientes(tenantId, opts);
+    } catch (err) {
+      // Si no llegamos a arrancar, se suelta el candado: si no, el panel se
+      // queda con un envío "en curso" que no existe y no deja reintentar.
+      this.envios.delete(tenantId);
+      throw err;
     }
 
-    const destinatarios = await this.seleccionarPendientes(tenantId, opts);
     const ahora = new Date().toISOString();
     this.envios.set(tenantId, {
       enCurso: destinatarios.length > 0,
       total: destinatarios.length,
       enviados: 0,
       fallidos: [],
-      iniciadoEn: ahora,
+      iniciadoEn: iniciado,
       terminadoEn: destinatarios.length > 0 ? null : ahora,
     });
 

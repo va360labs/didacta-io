@@ -2,7 +2,7 @@
   "name": "messaging",
   "version": "1.0.0",
   "edition": "community",
-  "coreVersionRequired": "^0.0.1",
+  "coreVersionRequired": "^0.1.0",
   "displayName": "Mensajería · salas, directos y canal de profesores",
   "category": "community",
   "tablePrefix": "mod_messaging_",

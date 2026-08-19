@@ -2,7 +2,7 @@
   "name": "resources",
   "version": "1.0.0",
   "edition": "community",
-  "coreVersionRequired": "^0.0.1",
+  "coreVersionRequired": "^0.1.0",
   "displayName": "Biblioteca de recursos",
   "category": "engagement",
   "tablePrefix": "mod_resources_",

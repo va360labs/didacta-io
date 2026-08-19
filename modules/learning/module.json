@@ -2,7 +2,7 @@
   "name": "learning",
   "version": "1.0.0",
   "edition": "community",
-  "coreVersionRequired": "^0.0.1",
+  "coreVersionRequired": "^0.1.0",
   "displayName": "Player + matrícula + progreso",
   "category": "core",
   "tablePrefix": "mod_learning_",

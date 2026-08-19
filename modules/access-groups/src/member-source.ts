@@ -36,7 +36,7 @@ export interface ExistingMembership {
 export type MemberActivationPlan =
   /** No existe fila: crear con el source solicitado. */
   | { action: 'create'; source: AccessGroupMemberSource }
-  /** Fila revocada: reactivar. MANUAL es sticky — se conserva aunque reactive un bridge. */
+  /** Fila revocada: reactivar. La membresía pasa a ser de quien la reactiva. */
   | { action: 'reactivate'; source: AccessGroupMemberSource }
   /** Activa no-MANUAL + alta manual del admin: promocionar a MANUAL. */
   | { action: 'promote'; source: 'MANUAL' }
@@ -48,8 +48,10 @@ export type MemberActivationPlan =
  *
  * Reglas (las mismas que aplicaba el host para MANUAL/TIER, generalizadas):
  *  - Sin fila previa → crear con el source del que concede.
- *  - Revocada → reactivar; si era MANUAL se queda MANUAL (sticky), si no,
- *    pasa a ser del que la reactiva (el nuevo concedente es su dueño).
+ *  - Revocada → reactivar, y pasa a ser del que la reactiva. Sin excepción
+ *    para MANUAL: una membresía revocada ya no conserva la decisión del admin,
+ *    y mantenerla marcada MANUAL hacía irrevocable un acceso que había
+ *    concedido un pago (ver `planMemberActivation`).
  *  - Activa y el admin la asserta a mano → promocionar a MANUAL (un tier-down
  *    o un impago posteriores ya no la retiran).
  *  - Activa y la asserta un bridge → no tocar: el source existente conserva la
@@ -61,10 +63,20 @@ export function planMemberActivation(
 ): MemberActivationPlan {
   if (!existing) return { action: 'create', source: requested };
   if (existing.status !== 'ACTIVE') {
-    return {
-      action: 'reactivate',
-      source: existing.source === 'MANUAL' ? 'MANUAL' : requested,
-    };
+    // La reactivación pertenece a QUIEN la reactiva, incluso si la membresía
+    // revocada era MANUAL.
+    //
+    // Antes MANUAL era sticky también aquí, y eso producía un acceso
+    // irrevocable: membresía manual revocada → un pago la reactiva → sigue
+    // marcada MANUAL → cuando el pago deja de entrar,
+    // `bridgeMayRevoke('MANUAL','TIER')` es false y nadie se la quita. Un
+    // acceso concedido por dinero sobrevivía al impago.
+    //
+    // Y no hay nada del admin que proteger: la membresía estaba REVOCADA, o
+    // sea que su decisión manual ya se había deshecho. La regla sticky sigue
+    // viva donde sí tiene sentido, sobre una membresía ACTIVA: ahí un bridge
+    // no le roba la propiedad a nadie.
+    return { action: 'reactivate', source: requested };
   }
   if (requested === 'MANUAL' && existing.source !== 'MANUAL') {
     return { action: 'promote', source: 'MANUAL' };

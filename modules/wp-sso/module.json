@@ -6,7 +6,7 @@
   "description": "Permite que los usuarios autenticados en WordPress entren a Didacta sin volver a iniciar sesión. WordPress firma un token corto (HMAC) y Didacta lo verifica y emite la sesión.",
   "author": "VA360 LABS",
   "category": "integration",
-  "coreVersionRequired": "^0.0.1",
+  "coreVersionRequired": "^0.1.0",
   "tablePrefix": "mod_wp_sso_",
   "apiNamespace": "/modules/wp-sso",
   "permissions": [

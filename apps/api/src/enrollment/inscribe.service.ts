@@ -363,23 +363,39 @@ export class InscribeService {
     const passwordHash = await this.passwords.hash(this.generateTempPassword());
     const role = await this.prisma.role.findUnique({ where: { name: DEFAULT_ALUMNO_ROLE } });
 
-    const user = await this.prisma.$transaction(async (tx) => {
-      const created = await tx.user.create({
-        data: {
-          tenantId,
-          email: dto.email,
-          name: dto.name ?? null,
-          status: 'ACTIVE',
-          passwordHash,
-          mustChangePassword: false,
-          ...(dto.locale ? { locale: dto.locale } : {}),
-        },
+    let user;
+    try {
+      user = await this.prisma.$transaction(async (tx) => {
+        const created = await tx.user.create({
+          data: {
+            tenantId,
+            email: dto.email,
+            name: dto.name ?? null,
+            status: 'ACTIVE',
+            passwordHash,
+            mustChangePassword: false,
+            ...(dto.locale ? { locale: dto.locale } : {}),
+          },
+        });
+        if (role) {
+          await tx.userRole.create({ data: { userId: created.id, roleId: role.id } });
+        }
+        return created;
       });
-      if (role) {
-        await tx.userRole.create({ data: { userId: created.id, roleId: role.id } });
-      }
-      return created;
-    });
+    } catch (err) {
+      // Otro lo creó entre el `findUnique` de arriba y este `create`: dos
+      // `POST /inscribe` en paralelo para un email nuevo (o un webhook de
+      // Stripe entregado dos veces) chocaban aquí con un P2002 sin capturar y
+      // uno de los dos se llevaba un 500 en un endpoint que se anuncia como
+      // idempotente. Se relee y se sigue como si ya existiera.
+      if ((err as { code?: string }).code !== 'P2002') throw err;
+      const existente = await this.prisma.user.findUnique({
+        where: { tenantId_email: { tenantId, email: dto.email } },
+        select: { id: true },
+      });
+      if (!existente) throw err;
+      return { userId: existente.id, created: false };
+    }
 
     if (!role) {
       this.logger.warn(
