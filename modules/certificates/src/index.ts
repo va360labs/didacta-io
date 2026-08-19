@@ -14,6 +14,7 @@ export {
   CertificatesError,
   CertificateNotFoundError,
   CertificateAlreadyIssuedError,
+  CertificateNumberExhaustedError,
   TemplateNotFoundError,
   TemplateNameTakenError,
   TemplateInUseError,
@@ -57,6 +58,13 @@ export function buildCertificatesModule(service: CertificatesService): DidactaMo
               enrollmentId: event.data.enrollmentId,
               error: (error as Error).message,
             });
+            // Relanzar, no tragar. `learning.course.completed` se emite UNA vez
+            // (el bloque de finalización mira `completedAt`), así que tragarse
+            // el fallo dejaba al alumno sin certificado para siempre y sin
+            // rastro de error. El outbox marca el despacho como fallido y
+            // reintenta con backoff (5 intentos); la emisión es idempotente por
+            // @@unique([tenantId, enrollmentId]), así que reintentar es seguro.
+            throw error;
           }
         },
       );

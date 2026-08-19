@@ -9,6 +9,7 @@ import type { PrismaClient } from '@didacta/database';
 import { renderCertificatePdf } from './pdf-renderer.js';
 import {
   CertificateNotFoundError,
+  CertificateNumberExhaustedError,
   TemplateInUseError,
   TemplateIsDefaultError,
   TemplateNameTakenError,
@@ -33,6 +34,20 @@ export interface TemplateInput {
 }
 
 export type TemplateUpdateInput = Partial<TemplateInput>;
+
+/**
+ * Que unique violo un P2002 de Prisma. `meta.target` llega unas veces como
+ * lista de columnas y otras como nombre del indice, asi que se mira el texto.
+ * Devuelve null si el error no es una violacion de unicidad.
+ */
+function uniqueViolationTarget(err: unknown): 'number' | 'enrollment' | 'otro' | null {
+  const e = err as { code?: string; meta?: { target?: unknown } };
+  if (e?.code !== 'P2002') return null;
+  const target = JSON.stringify(e.meta?.target ?? '');
+  if (target.includes('enrollment')) return 'enrollment';
+  if (target.includes('number')) return 'number';
+  return 'otro';
+}
 
 export class CertificatesService {
   constructor(
@@ -69,46 +84,101 @@ export class CertificatesService {
 
     const template = await this.getEffectiveTemplate(input.tenantId, course.certificateTemplateId);
 
-    const number = await this.allocateNumber(input.tenantId);
     const issuedAt = new Date();
-
     const logoData = template?.logoUrl ? await this.fetchLogo(template.logoUrl) : undefined;
+    const studentName = user.name ?? user.email;
 
-    const pdf = await renderCertificatePdf({
-      number,
-      studentName: user.name ?? user.email,
-      courseTitle: course.title,
-      issuedAt,
-      body: template?.body,
-      primaryColor: template?.primaryColor,
-      signerName: template?.signerName,
-      signerTitle: template?.signerTitle,
-      tenantName: tenant.name,
-      logoData,
-    });
+    // La clave de storage cuelga del ID del certificado, NO de su numero. Con
+    // la clave por numero, dos emisiones simultaneas calculaban el mismo
+    // numero, subian al mismo objeto, y segun el entrelazado la fila
+    // superviviente (con su hash SHA-256) acababa apuntando al PDF de OTRO
+    // alumno. Con la clave por id, dos emisiones no se pisan jamas.
+    const certId = randomUUID();
+    const storageKey = `certificates/${input.tenantId}/${certId}.pdf`;
 
-    const hash = createHash('sha256').update(pdf).digest('hex');
-    const storageKey = `certificates/${input.tenantId}/${number}.pdf`;
-    await this.ctx.storage.upload(storageKey, pdf, 'application/pdf');
+    // El numero se asigna con `count()+1`, que no es atomico: dos emisiones a
+    // la vez calculan el mismo y la segunda choca contra
+    // @@unique([tenantId, number]). Antes la colision escapaba hacia arriba,
+    // el handler del modulo la tragaba, y como `completedAt` ya estaba sellado
+    // el evento no volvia a dispararse: ese alumno se quedaba SIN certificado
+    // para siempre. Ahora la colision se reintenta aqui con un numero fresco.
+    const MAX_INTENTOS = 5;
+    let created: Awaited<ReturnType<typeof this.prisma.modCertificatesIssued.create>> | null = null;
+    let number = '';
+    let hash = '';
+    let pdf: Buffer = Buffer.alloc(0);
 
-    const created = await this.prisma.modCertificatesIssued.create({
-      data: {
-        tenantId: input.tenantId,
-        userId: input.userId,
-        courseId: input.courseId,
-        enrollmentId: input.enrollmentId,
-        templateId: template?.id ?? null,
+    for (let intento = 0; intento < MAX_INTENTOS; intento++) {
+      number = await this.allocateNumber(input.tenantId);
+      pdf = await renderCertificatePdf({
         number,
-        hash,
-        storageKey,
-        size: pdf.length,
-        snapshot: {
-          studentName: user.name ?? user.email,
-          courseTitle: course.title,
-          issuedAt: issuedAt.toISOString(),
-        } as never,
-      },
-    });
+        studentName,
+        courseTitle: course.title,
+        issuedAt,
+        body: template?.body,
+        primaryColor: template?.primaryColor,
+        signerName: template?.signerName,
+        signerTitle: template?.signerTitle,
+        tenantName: tenant.name,
+        logoData,
+      });
+      hash = createHash('sha256').update(pdf).digest('hex');
+      await this.ctx.storage.upload(storageKey, pdf, 'application/pdf');
+
+      try {
+        created = await this.prisma.modCertificatesIssued.create({
+          data: {
+            id: certId,
+            tenantId: input.tenantId,
+            userId: input.userId,
+            courseId: input.courseId,
+            enrollmentId: input.enrollmentId,
+            templateId: template?.id ?? null,
+            number,
+            hash,
+            storageKey,
+            size: pdf.length,
+            // El snapshot congela TODO lo que hizo falta para dibujar el PDF,
+            // no solo cuatro campos. Con los cuatro, la descarga re-renderizaba
+            // un certificado sin plantilla, sin logo y sin firmante: distinto
+            // byte a byte (y a la vista) del que se emitio y se hasheo.
+            snapshot: {
+              studentName,
+              courseTitle: course.title,
+              issuedAt: issuedAt.toISOString(),
+              body: template?.body ?? null,
+              primaryColor: template?.primaryColor ?? null,
+              signerName: template?.signerName ?? null,
+              signerTitle: template?.signerTitle ?? null,
+              tenantName: tenant.name,
+              logoUrl: template?.logoUrl ?? null,
+            } as never,
+          },
+        });
+        break;
+      } catch (err) {
+        const choque = uniqueViolationTarget(err);
+        if (choque === 'enrollment') {
+          // Otro worker emitio ESTE mismo certificado mientras renderizabamos.
+          // Es el camino idempotente, no un error.
+          const ya = await this.prisma.modCertificatesIssued.findUnique({
+            where: {
+              tenantId_enrollmentId: {
+                tenantId: input.tenantId,
+                enrollmentId: input.enrollmentId,
+              },
+            },
+          });
+          if (ya) return ya;
+        }
+        if (choque === 'number' && intento < MAX_INTENTOS - 1) continue;
+        throw err;
+      }
+    }
+
+    if (!created) {
+      throw new CertificateNumberExhaustedError(MAX_INTENTOS);
+    }
 
     // Vault: el PDF inmutable queda con su hash referenciado en evidence_vault_entry.
     // Si el snapshot del cert se corrompe en el futuro, el original se reconstruye
@@ -163,21 +233,54 @@ export class CertificatesService {
 
   /**
    * Devuelve el PDF bruto. El caller decide si servir como Buffer o stream.
-   * Por simplicidad regeneramos el PDF on-demand desde el snapshot.
-   * Cuando tengamos storage real, podemos servir desde ahí en vez de regenerar.
+   *
+   * Sirve EL PDF EMITIDO, el que esta en storage y cuyo SHA-256 vive en la
+   * fila. Antes se re-renderizaba siempre desde un snapshot de cuatro campos
+   * —sin plantilla, sin logo, sin firmante—, asi que cada descarga entregaba un
+   * documento con el estilo por defecto que no coincidia ni visualmente ni byte
+   * a byte con el original hasheado, debajo de un sello que dice "certificado
+   * verificable". Si el objeto ya no esta en storage se re-renderiza desde el
+   * snapshot completo, que hoy si guarda todo lo que hizo falta para dibujarlo.
    */
   async renderCertificatePdf(tenantId: string, certId: string): Promise<Buffer> {
     const cert = await this.getById(tenantId, certId);
+
+    if (cert.storageKey) {
+      try {
+        const guardado = await this.ctx.storage.download(cert.storageKey);
+        if (guardado?.length) return guardado;
+      } catch (err) {
+        this.ctx.logger.warn('mod.certificates: PDF ausente en storage, se re-renderiza', {
+          certId,
+          storageKey: cert.storageKey,
+          error: (err as Error).message,
+        });
+      }
+    }
+
     const snapshot = (cert.snapshot ?? {}) as {
       studentName?: string;
       courseTitle?: string;
       issuedAt?: string;
+      body?: string | null;
+      primaryColor?: string | null;
+      signerName?: string | null;
+      signerTitle?: string | null;
+      tenantName?: string | null;
+      logoUrl?: string | null;
     };
+    const logoData = snapshot.logoUrl ? await this.fetchLogo(snapshot.logoUrl) : undefined;
     return renderCertificatePdf({
       number: cert.number,
       studentName: snapshot.studentName ?? 'Alumno',
       courseTitle: snapshot.courseTitle ?? 'Curso',
       issuedAt: snapshot.issuedAt ? new Date(snapshot.issuedAt) : cert.issuedAt,
+      body: snapshot.body ?? undefined,
+      primaryColor: snapshot.primaryColor ?? undefined,
+      signerName: snapshot.signerName ?? undefined,
+      signerTitle: snapshot.signerTitle ?? undefined,
+      tenantName: snapshot.tenantName ?? undefined,
+      logoData,
     });
   }
 

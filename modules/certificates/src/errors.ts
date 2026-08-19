@@ -73,3 +73,17 @@ export class TemplateIsDefaultError extends CertificatesError {
     );
   }
 }
+
+/**
+ * No se pudo reservar un numero correlativo libre en varios intentos. Solo
+ * ocurre bajo contencion extrema; se lanza para que el outbox reintente el
+ * evento en vez de dejar al alumno sin certificado.
+ */
+export class CertificateNumberExhaustedError extends CertificatesError {
+  constructor(intentos: number) {
+    super(
+      'CERTIFICATE_NUMBER_EXHAUSTED',
+      `No se pudo asignar numero de certificado tras ${intentos} intentos`,
+    );
+  }
+}
