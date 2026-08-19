@@ -157,19 +157,14 @@ export class ModuleMigrationService {
             await tx.$executeRawUnsafe(stmt);
           }
         }
-        if (conEscalada) {
-          // Lo que acaba de crear `didacta_super` lo tiene que poder usar el
-          // rol con el que corre la aplicación; si no, el módulo se instala y
-          // luego no puede leer sus propias tablas. `ON ALL TABLES` se salta
-          // en silencio aquello sobre lo que no hay derecho a conceder, así
-          // que solo alcanza a lo recién creado.
-          await tx.$executeRawUnsafe(
-            'GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO didacta_app',
-          );
-          await tx.$executeRawUnsafe(
-            'GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO didacta_app',
-          );
-        }
+        // Los permisos de `didacta_app` sobre lo que acaba de crearse NO se
+        // conceden aquí: los da `ALTER DEFAULT PRIVILEGES FOR ROLE
+        // didacta_super` en `grants.sql`, que aplica solo a los objetos que
+        // crea ese rol. Se probó primero con un `GRANT ... ON ALL TABLES IN
+        // SCHEMA public` dentro de esta transacción y NO vale: al contrario de
+        // lo que parece, Postgres no se salta en silencio las tablas ajenas —
+        // lanza "permission denied for table" sobre la primera que no es suya
+        // y tumba la transacción entera, con las migraciones dentro.
       });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);

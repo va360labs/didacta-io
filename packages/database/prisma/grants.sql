@@ -86,3 +86,24 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA public
 -- `SET LOCAL ROLE didacta_super` solo mientras aplica el SQL del módulo
 -- (ver `apps/api/src/marketplace/module-migration.service.ts`).
 GRANT CREATE ON SCHEMA public TO didacta_super;
+
+-- Y lo que cree `didacta_super` (las tablas de los módulos del marketplace)
+-- tiene que poder usarlo el rol con el que corre la aplicación: si no, el
+-- módulo se instala y acto seguido no puede leer sus propias tablas.
+-- `ALTER DEFAULT PRIVILEGES FOR ROLE` es la vía correcta — alcanza solo a los
+-- objetos que crea ese rol, sin tocar los del resto.
+ALTER DEFAULT PRIVILEGES FOR ROLE didacta_super IN SCHEMA public
+  GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO didacta_app;
+ALTER DEFAULT PRIVILEGES FOR ROLE didacta_super IN SCHEMA public
+  GRANT USAGE, SELECT ON SEQUENCES TO didacta_app;
+
+-- El usuario que aplica los scripts tiene que poder asumir `didacta_super`
+-- para que los `ALTER DEFAULT PRIVILEGES FOR ROLE` de arriba se acepten. En el
+-- compose por defecto es el superuser del contenedor y le sobra. Si falla, se
+-- avisa y se sigue: el resto de los grants no dependen de esto.
+DO $$
+BEGIN
+  EXECUTE format('GRANT didacta_super TO %I', current_user);
+EXCEPTION WHEN OTHERS THEN
+  RAISE NOTICE 'No se pudo conceder didacta_super a %: %', current_user, SQLERRM;
+END $$;

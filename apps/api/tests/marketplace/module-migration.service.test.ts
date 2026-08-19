@@ -200,20 +200,20 @@ describe('ModuleMigrationService.applyMigrations · privilegios (H18)', () => {
     expect(mock.executed.some((sql) => sql.includes('CREATE TABLE mod_example_a'))).toBe(true);
   });
 
-  it('devuelve los permisos al rol de runtime sobre lo recién creado', async () => {
-    // Si no, el módulo se instala y luego no puede leer sus propias tablas.
+  it('NO reparte grants a mano: eso tumbaba la transacción entera', async () => {
+    // Medido contra un Postgres 16 real: un `GRANT ... ON ALL TABLES IN SCHEMA
+    // public` ejecutado como `didacta_super` NO se salta en silencio las tablas
+    // ajenas — lanza "permission denied for table" sobre la primera que no es
+    // suya y se lleva por delante las migraciones de la misma transacción. Los
+    // permisos del rol de runtime sobre lo recién creado los da
+    // `ALTER DEFAULT PRIVILEGES FOR ROLE didacta_super` en `grants.sql`.
     const mock = makePrismaMock({ superRoleExists: true });
     const svc = new ModuleMigrationService(mock.prisma);
     const files = [{ path: '', filename: '01_a.sql', sql: 'CREATE TABLE mod_example_a (id INT);' }];
 
     await svc.applyMigrations(files, PREFIX, []);
 
-    expect(mock.executed.some((sql) => /GRANT .*ON ALL TABLES .*TO didacta_app/.test(sql))).toBe(
-      true,
-    );
-    expect(mock.executed.some((sql) => /GRANT .*ON ALL SEQUENCES .*TO didacta_app/.test(sql))).toBe(
-      true,
-    );
+    expect(mock.executed.some((sql) => /GRANT .*ON ALL TABLES/.test(sql))).toBe(false);
   });
 
   it('sin el rol creado (cluster de test) se aplica sin escalada, sin reventar', async () => {
