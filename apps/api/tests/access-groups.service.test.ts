@@ -822,7 +822,12 @@ describe('AccessGroupsService.activateMembership (MANUAL sticky)', () => {
     expect(h.unenrollFromGroup).not.toHaveBeenCalled();
   });
 
-  it('reactivar una MANUAL revocada NO la degrada a TIER aunque la reactive el bridge', async () => {
+  it('reactivar una MANUAL revocada la entrega al bridge que la reactiva (M10)', async () => {
+    // Este test decía lo contrario ("NO la degrada a TIER... sticky") y esa
+    // regla producía un acceso IRREVOCABLE: al quedarse marcada MANUAL, cuando
+    // el tier deja de aplicar `bridgeMayRevoke('MANUAL','TIER')` dice que no y
+    // nadie se la quita. No hay nada del admin que proteger, porque la
+    // membresía estaba REVOCADA: su decisión ya se había deshecho.
     const h = makeHarness();
     const g = await h.service.createGroup(TENANT, {
       name: 'Gold',
@@ -836,9 +841,32 @@ describe('AccessGroupsService.activateMembership (MANUAL sticky)', () => {
     expect(member(h, g.id, 'u1')?.status).toBe('REVOKED');
     expect(member(h, g.id, 'u1')?.source).toBe('MANUAL');
 
-    // El bridge de tier reactiva (source=TIER) → debe conservar MANUAL (sticky).
     await h.service.reconcileTierMembership(TENANT, 'u1', 'gold');
     expect(member(h, g.id, 'u1')?.status).toBe('ACTIVE');
+    expect(member(h, g.id, 'u1')?.source).toBe('TIER');
+
+    // Y lo que importa: al perder el tier, el acceso se retira de verdad.
+    await h.service.reconcileTierMembership(TENANT, 'u1', null);
+    expect(member(h, g.id, 'u1')?.status).toBe('REVOKED');
+  });
+
+  it('sobre una membresía ACTIVA, MANUAL sigue siendo intocable para el bridge', async () => {
+    // La regla sticky no desaparece: donde tiene sentido es sobre una
+    // membresía viva, para que un tier-down no borre la decisión del admin.
+    const h = makeHarness();
+    const g = await h.service.createGroup(TENANT, {
+      name: 'Gold',
+      kind: 'COURSE',
+      courseIds: ['c1'],
+    } as never);
+    await h.service.updateGroup(TENANT, g.id, { linkedTierName: 'gold' });
+    await h.service.assignMembers(TENANT, g.id, ['u1']); // MANUAL y ACTIVA
+
+    await h.service.reconcileTierMembership(TENANT, 'u1', 'gold');
+    expect(member(h, g.id, 'u1')?.source).toBe('MANUAL');
+
+    await h.service.reconcileTierMembership(TENANT, 'u1', null);
+    expect(member(h, g.id, 'u1')?.status).toBe('ACTIVE'); // el bridge no la toca
     expect(member(h, g.id, 'u1')?.source).toBe('MANUAL');
   });
 });
@@ -920,7 +948,9 @@ describe('AccessGroupsService source=MEMBERSHIP (bridge de membresía, F6)', () 
     expect(member(h, g.id, 'u1')?.status).toBe('ACTIVE');
   });
 
-  it('reactivar una MANUAL revocada vía bridge de membresía conserva MANUAL', async () => {
+  it('reactivar una MANUAL revocada vía membresía la entrega a la membresía (M10)', async () => {
+    // Mismo caso que el de TIER, por el otro bridge: si se quedara MANUAL, el
+    // acceso que ha concedido un pago sobreviviría al impago.
     const h = makeHarness();
     const g = await h.service.createGroup(TENANT, {
       name: 'Pro',
@@ -931,10 +961,9 @@ describe('AccessGroupsService source=MEMBERSHIP (bridge de membresía, F6)', () 
     await h.service.revokeMember(TENANT, g.id, 'u1');
     expect(member(h, g.id, 'u1')?.status).toBe('REVOKED');
 
-    // Recovery de la membresía: reactiva, pero sigue siendo del admin.
     await h.service.assignMembers(TENANT, g.id, ['u1'], 'MEMBERSHIP');
     expect(member(h, g.id, 'u1')?.status).toBe('ACTIVE');
-    expect(member(h, g.id, 'u1')?.source).toBe('MANUAL');
+    expect(member(h, g.id, 'u1')?.source).toBe('MEMBERSHIP');
   });
 
   it('una MEMBERSHIP revocada que vuelve por membresía se reactiva como MEMBERSHIP', async () => {
