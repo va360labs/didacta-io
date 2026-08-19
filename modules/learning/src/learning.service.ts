@@ -1112,21 +1112,50 @@ export class LearningService {
   private async createFromInvitation(
     tenantId: string,
     userId: string,
-    invitation: { id: string; courseId: string; usedCount: number },
+    invitation: { id: string; courseId: string; usedCount: number; maxUses: number | null },
     source: 'CODE' | 'INVITATION_LINK',
   ) {
-    const enrollment = await this.createEnrollment({
-      tenantId,
-      actorId: userId,
-      userId,
-      courseId: invitation.courseId,
-      source,
-    });
-    await this.prisma.modLearningInvitation.update({
-      where: { id: invitation.id },
-      data: { usedCount: invitation.usedCount + 1 },
-    });
-    return enrollment;
+    // El asiento se RESERVA antes de matricular, y con un compare-and-swap.
+    //
+    // Antes se hacía al revés y con `usedCount: invitation.usedCount + 1`, que
+    // es un lost update de manual: dos personas canjeando el último asiento a
+    // la vez leían el mismo contador, las dos entraban y el contador quedaba en
+    // uno menos de lo real. La capacidad de la invitación se excedía en
+    // silencio. Con `increment` y `usedCount` en el `where`, quien no consiga
+    // reservar es que no quedaban asientos.
+    if (invitation.maxUses !== null) {
+      const { count } = await this.prisma.modLearningInvitation.updateMany({
+        where: {
+          id: invitation.id,
+          revokedAt: null,
+          usedCount: { lt: invitation.maxUses },
+        },
+        data: { usedCount: { increment: 1 } },
+      });
+      if (count === 0) throw new InvitationInvalidError('agotada');
+    } else {
+      await this.prisma.modLearningInvitation.update({
+        where: { id: invitation.id },
+        data: { usedCount: { increment: 1 } },
+      });
+    }
+
+    try {
+      return await this.createEnrollment({
+        tenantId,
+        actorId: userId,
+        userId,
+        courseId: invitation.courseId,
+        source,
+      });
+    } catch (err) {
+      // La matrícula no salió: se devuelve el asiento para no dejarlo
+      // consumido por una inscripción que no llegó a existir.
+      await this.prisma.modLearningInvitation
+        .update({ where: { id: invitation.id }, data: { usedCount: { decrement: 1 } } })
+        .catch(() => undefined);
+      throw err;
+    }
   }
 
   private async requirePublishedCourse(tenantId: string, courseId: string) {

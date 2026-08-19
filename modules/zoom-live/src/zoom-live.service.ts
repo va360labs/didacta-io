@@ -919,19 +919,35 @@ export class ZoomLiveService {
   async handleWebhookEvent(
     event: ZoomWebhookEvent,
   ): Promise<{ result: 'OK' | 'IGNORED' | 'DUPLICATE' | 'ERROR'; sessionId?: string }> {
-    // Idempotencia: el unique index en event_id rechaza duplicados.
-    const existing = await this.prisma.modZoomWebhookEvent.findUnique({
-      where: { eventId: event.event_id },
-    });
-    if (existing) {
+    // El evento se RECLAMA antes de hacer nada, con el unique index de
+    // `event_id` como cerrojo.
+    //
+    // Antes era un check-then-act: `findUnique` al entrar y `create` al final.
+    // Dos entregas concurrentes del mismo `event_id` —Zoom reintenta— pasaban
+    // las dos el chequeo, las dos hacían el trabajo (doble publicación del
+    // evento de dominio) y la perdedora reventaba con un P2002 sin capturar al
+    // llegar al `create`: 5xx a Zoom, que volvía a reintentar.
+    const meetingId = event.payload?.object?.id ? String(event.payload.object.id) : null;
+    try {
+      await this.prisma.modZoomWebhookEvent.create({
+        data: {
+          id: randomUUID(),
+          eventId: event.event_id,
+          eventType: event.event,
+          meetingId,
+          result: 'PENDING',
+        },
+      });
+    } catch (e) {
+      // Ya lo tiene otro (o ya se procesó en una entrega anterior).
       this.ctx.logger.info('mod.zoom-live: webhook duplicado, ignorado', {
         eventId: event.event_id,
         eventType: event.event,
+        error: e instanceof Error ? e.message : String(e),
       });
       return { result: 'DUPLICATE' };
     }
 
-    const meetingId = event.payload?.object?.id ? String(event.payload.object.id) : null;
     const meetingUuid = event.payload?.object?.uuid ?? null;
     const session = meetingId
       ? await this.prisma.modZoomSession.findFirst({
@@ -1017,12 +1033,10 @@ export class ZoomLiveService {
       result = 'IGNORED';
     }
 
-    await this.prisma.modZoomWebhookEvent.create({
+    // Cierra la reclamación con el desenlace real.
+    await this.prisma.modZoomWebhookEvent.update({
+      where: { eventId: event.event_id },
       data: {
-        id: randomUUID(),
-        eventId: event.event_id,
-        eventType: event.event,
-        meetingId,
         sessionId: session?.id ?? null,
         tenantId: session?.tenantId ?? null,
         result,

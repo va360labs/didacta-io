@@ -289,20 +289,31 @@ export class FundaeGroupService {
 
     const totalCents = existing.costs.reduce((acc, c) => acc + c.amountCents, 0);
 
-    const [updated] = await this.prisma.$transaction([
-      this.prisma.modFundaeGroup.update({
-        where: { id },
-        data: {
-          status: 'CLOSED',
-          fechaFinReal: referenceDate,
-        },
-        include: { costs: true },
-      }),
-      this.prisma.modFundaeCompany.update({
+    // El cierre lleva su propio compare-and-swap: `assertTransition` de arriba
+    // decide en MEMORIA sobre una lectura anterior, así que un doble clic en
+    // "cerrar" pasaba las dos veces y las dos hacían `increment` del crédito
+    // consumido de la empresa — doble débito de dinero real de la bonificación.
+    // El `status: 'ABIERTO'` en el `where` hace que solo una gane.
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const { count } = await tx.modFundaeGroup.updateMany({
+        where: { id, tenantId, status: existing.status },
+        data: { status: 'CLOSED', fechaFinReal: referenceDate },
+      });
+      // Otro lo cerró entre medias: se reusa el error de transición inválida,
+      // que es exactamente lo que ha pasado (CLOSED → CLOSED no vale).
+      if (count === 0)
+        throw new GroupTransicionInvalidaError(existing.status as GroupStatus, 'CLOSED');
+
+      await tx.modFundaeCompany.update({
         where: { id: existing.companyId },
         data: { creditoUsadoCents: { increment: totalCents } },
-      }),
-    ]);
+      });
+
+      return tx.modFundaeGroup.findFirstOrThrow({
+        where: { id, tenantId },
+        include: { costs: true },
+      });
+    });
 
     await this.publish(tenantId, actorId, 'fundae.group.closed', {
       groupId: id,

@@ -310,11 +310,46 @@ function makeFakePrisma() {
             return inv;
           },
         ),
+        // CAS de reserva de asiento: solo cuenta si aún queda capacidad.
+        updateMany: vi.fn(
+          async ({
+            where,
+            data,
+          }: {
+            where: { id: string; revokedAt?: Date | null; usedCount?: { lt: number } };
+            data: { usedCount?: { increment: number } };
+          }) => {
+            const i = invitations.get(where.id);
+            if (!i) return { count: 0 };
+            if (where.revokedAt === null && i.revokedAt !== null) return { count: 0 };
+            if (where.usedCount?.lt !== undefined && !(i.usedCount < where.usedCount.lt)) {
+              return { count: 0 };
+            }
+            i.usedCount += data.usedCount?.increment ?? 0;
+            return { count: 1 };
+          },
+        ),
         update: vi.fn(
-          async ({ where, data }: { where: { id: string }; data: Partial<FakeInvitation> }) => {
+          async ({
+            where,
+            data,
+          }: {
+            where: { id: string };
+            // `Omit` y no interseccion: `Partial<FakeInvitation> & { usedCount:
+            // number | {...} }` colapsa el campo a `never`.
+            data: Omit<Partial<FakeInvitation>, 'usedCount'> & {
+              usedCount?: number | { increment?: number; decrement?: number };
+            };
+          }) => {
             const i = invitations.get(where.id);
             if (!i) throw new Error('not found');
-            const merged = { ...i, ...data };
+            const { usedCount, ...resto } = data;
+            const merged = { ...i, ...(resto as Partial<FakeInvitation>) };
+            if (typeof usedCount === 'number') merged.usedCount = usedCount;
+            else if (usedCount && typeof usedCount === 'object') {
+              merged.usedCount =
+                i.usedCount + (usedCount.increment ?? 0) - (usedCount.decrement ?? 0);
+            }
             invitations.set(where.id, merged);
             return merged;
           },
@@ -1091,6 +1126,56 @@ describe('LearningService', () => {
 
       const porCompra = await service.enrollFromPurchase('t-1', 'u-1', 'c-1');
       expect(porCompra?.status).toBe('ACTIVE');
+    });
+  });
+
+  describe('invitaciones — el ultimo asiento no se reparte dos veces (M11)', () => {
+    function seed(fake: ReturnType<typeof makeFakePrisma>, maxUses: number) {
+      fake.courses.set('c-1', { id: 'c-1', tenantId: 't-1', status: 'PUBLISHED', deletedAt: null });
+      fake.invitations.set('inv-1', {
+        id: 'inv-1',
+        tenantId: 't-1',
+        courseId: 'c-1',
+        code: 'AAAA-BBBB',
+        token: 'tok',
+        maxUses,
+        usedCount: maxUses - 1, // queda UNO
+        expiresAt: null,
+        revokedAt: null,
+      });
+    }
+
+    it('dos canjes simultaneos del ultimo asiento: entra uno, el otro recibe agotada', async () => {
+      const fake = makeFakePrisma();
+      seed(fake, 3);
+      const service = new LearningService(fake.prisma as never, makeContext() as never);
+
+      const [a, b] = await Promise.allSettled([
+        service.enrollByCode('t-1', 'u-1', { code: 'AAAA-BBBB' }),
+        service.enrollByCode('t-1', 'u-2', { code: 'AAAA-BBBB' }),
+      ]);
+
+      const ok = [a, b].filter((r) => r.status === 'fulfilled');
+      const ko = [a, b].filter((r) => r.status === 'rejected');
+      expect(ok).toHaveLength(1);
+      expect(ko).toHaveLength(1);
+      expect((ko[0] as PromiseRejectedResult).reason).toBeInstanceOf(InvitationInvalidError);
+
+      // El contador no se pasa de la capacidad.
+      expect(fake.invitations.get('inv-1')!.usedCount).toBe(3);
+      expect(fake.enrollments.size).toBe(1);
+    });
+
+    it('si la matricula falla, el asiento se devuelve', async () => {
+      const fake = makeFakePrisma();
+      seed(fake, 3);
+      // Curso sin publicar: createEnrollment lanza despues de reservar.
+      fake.courses.set('c-1', { id: 'c-1', tenantId: 't-1', status: 'DRAFT', deletedAt: null });
+      const service = new LearningService(fake.prisma as never, makeContext() as never);
+
+      await expect(service.enrollByCode('t-1', 'u-1', { code: 'AAAA-BBBB' })).rejects.toBeTruthy();
+
+      expect(fake.invitations.get('inv-1')!.usedCount).toBe(2); // como estaba
     });
   });
 });

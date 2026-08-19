@@ -28,24 +28,29 @@ interface FakeRows {
 function makeFakePrisma(opts: FakeRows) {
   const inserts: unknown[][] = [];
   const deletes: unknown[][] = [];
-  return {
+  const ejecutar = vi.fn(async (sql: string, ...params: unknown[]) => {
+    if (sql.startsWith('DELETE')) {
+      deletes.push(params);
+      return 0;
+    }
+    if (sql.startsWith('INSERT')) {
+      inserts.push(params);
+      return 1;
+    }
+    return 0;
+  });
+  const cliente = {
     inserts,
     deletes,
     modCoursesCourse: { findFirst: vi.fn(async () => opts.course ?? null) },
     modCoursesModule: { findMany: vi.fn(async () => opts.modules ?? []) },
     modCoursesLesson: { findMany: vi.fn(async () => opts.lessons ?? []) },
-    $executeRawUnsafe: vi.fn(async (sql: string, ...params: unknown[]) => {
-      if (sql.startsWith('DELETE')) {
-        deletes.push(params);
-        return 0;
-      }
-      if (sql.startsWith('INSERT')) {
-        inserts.push(params);
-        return 1;
-      }
-      return 0;
-    }),
+    $executeRawUnsafe: ejecutar,
+    // El borrado del indice viejo y el alta del nuevo van en la MISMA
+    // transaccion: si los embeddings fallan, el indice anterior sigue en pie.
+    $transaction: vi.fn(async (cb: (tx: unknown) => Promise<unknown>) => cb(cliente)),
   };
+  return cliente;
 }
 
 const fakeEmbed =
@@ -251,6 +256,36 @@ describe('AiTutorIndexerService (LMS-90.C)', () => {
     // Segunda invocación: nuevo delete + nuevo insert
     await svc.indexCourse('t1', 'c1');
     expect(prisma.deletes).toHaveLength(2);
+  });
+
+  it('si los embeddings fallan, el índice VIEJO no se borra (M9)', async () => {
+    // El borrado estaba antes de pedir los embeddings: un fallo del proveedor
+    // a mitad dejaba el curso sin índice y el tutor devolvía
+    // CourseNotIndexedError a todos sus alumnos hasta que alguien re-lanzara
+    // la indexación a mano.
+    const prisma = makeFakePrisma({
+      course: { id: 'c1', tenantId: 't1', status: 'PUBLISHED' },
+      modules: [{ id: 'm1', title: 'M', position: 0 }],
+      lessons: [
+        {
+          id: 'l1',
+          moduleId: 'm1',
+          type: 'TEXT',
+          title: 'T',
+          content: { text: 'contenido' },
+          position: 0,
+        },
+      ],
+    });
+    const embedRoto: EmbedFn = async () => {
+      throw new Error('el proveedor de embeddings esta caido');
+    };
+    const svc = new AiTutorIndexerService(prisma as never, makeContext() as never, embedRoto);
+
+    await expect(svc.indexCourse('t1', 'c1')).rejects.toBeTruthy();
+
+    expect(prisma.deletes).toHaveLength(0);
+    expect(prisma.inserts).toHaveLength(0);
   });
 
   it('unindexCourse() borra chunks y emite evento', async () => {

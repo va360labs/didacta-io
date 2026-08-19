@@ -59,6 +59,8 @@ export function SubscriptionTab() {
   const tErrors = useTranslations('errors');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  /** Las dos fuentes fallaron: no sabemos si tiene suscripciones o no. */
+  const [sinRespuesta, setSinRespuesta] = useState(false);
   const [subs, setSubs] = useState<SubscriptionRow[]>([]);
   const [external, setExternal] = useState<MySubscriptionItem[]>([]);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -90,6 +92,11 @@ export function SubscriptionTab() {
       if (ext.status === 'fulfilled') {
         setExternal(ext.value.subscriptions);
       }
+      // Si NINGUNA de las dos fuentes contestó, no sabemos nada: no es que el
+      // alumno no tenga suscripciones, es que no hemos podido preguntarlo. Sin
+      // esta distinción, `isEmpty` pintaba "no tienes ninguna suscripción" en
+      // una pantalla de dinero cada vez que la API se caía.
+      setSinRespuesta(inPlatform.status === 'rejected' && ext.status === 'rejected');
       setLoading(false);
     })();
   }, []);
@@ -212,7 +219,7 @@ export function SubscriptionTab() {
     );
   }
 
-  const isEmpty = external.length === 0 && subs.length === 0;
+  const isEmpty = external.length === 0 && subs.length === 0 && !sinRespuesta;
 
   return (
     <div className="flex flex-col gap-4">
@@ -247,6 +254,15 @@ export function SubscriptionTab() {
         >
           {actionSuccess}
         </div>
+      ) : null}
+
+      {sinRespuesta ? (
+        <Card>
+          <CardContent className="p-6 text-center text-text-muted">
+            <p className="mb-2 font-semibold">{t('subscription.unavailableTitle')}</p>
+            <p className="text-sm">{t('subscription.unavailableDesc')}</p>
+          </CardContent>
+        </Card>
       ) : null}
 
       {isEmpty ? (

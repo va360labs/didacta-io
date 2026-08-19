@@ -360,7 +360,23 @@ function makeFakePrisma(
       async findUnique(args: { where: { eventId: string } }) {
         return webhookEvents.find((e) => e.eventId === args.where.eventId) ?? null;
       },
-      async create(args: { data: Omit<WebhookEventRow, 'receivedAt'> }) {
+      // El unique de `event_id` es lo que reclama el evento: sin el, dos
+      // entregas concurrentes hacian el trabajo las dos.
+      async update(args: { where: { eventId: string }; data: Partial<WebhookEventRow> }) {
+        const row = webhookEvents.find((e) => e.eventId === args.where.eventId);
+        if (!row) throw new Error('not found');
+        Object.assign(row, args.data);
+        return row;
+      },
+      async create(args: {
+        data: Omit<WebhookEventRow, 'receivedAt' | 'sessionId' | 'tenantId' | 'errorMessage'> &
+          Partial<WebhookEventRow>;
+      }) {
+        if (webhookEvents.some((e) => e.eventId === args.data.eventId)) {
+          throw Object.assign(new Error('Unique constraint failed on the fields: (`event_id`)'), {
+            code: 'P2002',
+          });
+        }
         // En CI los inserts caen dentro del mismo milisegundo y un sort
         // por receivedAt no es determinístico. Garantizamos +1ms por
         // cada insert para reproducir el orden estable que Prisma+
@@ -368,7 +384,13 @@ function makeFakePrisma(
         const lastTs = webhookEvents.length
           ? webhookEvents[webhookEvents.length - 1]!.receivedAt.getTime()
           : Date.now();
-        const row: WebhookEventRow = { ...args.data, receivedAt: new Date(lastTs + 1) };
+        const row: WebhookEventRow = {
+          sessionId: null,
+          tenantId: null,
+          errorMessage: null,
+          ...args.data,
+          receivedAt: new Date(lastTs + 1),
+        } as WebhookEventRow;
         webhookEvents.push(row);
         return row;
       },

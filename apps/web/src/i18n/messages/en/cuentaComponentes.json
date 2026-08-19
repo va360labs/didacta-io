@@ -179,7 +179,9 @@
     "viewPayInvoice": "View / pay invoice ↗",
     "contactAcademy": "To manage this subscription, contact your academy team.",
     "noInvoices": "No invoices yet.",
-    "downloadPdf": "View / download PDF ↗"
+    "downloadPdf": "View / download PDF ↗",
+    "unavailableTitle": "We couldn't load your subscriptions",
+    "unavailableDesc": "Please reload in a few minutes. This does not affect your payments or your access."
   },
   "security": {
     "sessionsLoadError": "We could not load your sessions.",

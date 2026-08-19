@@ -6,7 +6,7 @@
  */
 
 import { useTranslations } from 'next-intl';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { CommunityGalleryModal } from '@/components/community-gallery-modal';
 import { CommunityTagChip } from '@/components/community-tag-chip';
 import { ThreadCard, TAG_COLORS } from '@/components/community-thread-card';
@@ -69,17 +69,25 @@ export function CommunityFeed({
     fallbackPath: '/comunidad',
   });
 
+  // Contador de peticiones: solo pinta la ÚLTIMA que se pidió. Cambiar de tag
+  // A a B rápido lanza dos `listPosts` y las respuestas pueden volver
+  // desordenadas: si la de A llegaba después, el feed mostraba los posts de A
+  // con el tag B marcado. Era el único listado sin bandera de cancelación.
+  const peticionVigente = useRef(0);
+
   async function reload(opts: { sort?: PostSort; tag?: string } = {}) {
+    const miTurno = ++peticionVigente.current;
     try {
       const tagFilter = opts.tag ?? activeTag;
-      setPosts(
-        await communityApi.listPosts({
-          sort: opts.sort ?? sort,
-          tag: tagFilter === ALL_TAGS ? undefined : tagFilter,
-        }),
-      );
+      const resultado = await communityApi.listPosts({
+        sort: opts.sort ?? sort,
+        tag: tagFilter === ALL_TAGS ? undefined : tagFilter,
+      });
+      if (miTurno !== peticionVigente.current) return; // llegó tarde: se descarta
+      setPosts(resultado);
       setError(null);
     } catch (e) {
+      if (miTurno !== peticionVigente.current) return;
       setError(apiErrorMessage(e, tErrors));
     }
   }

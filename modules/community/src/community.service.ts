@@ -119,10 +119,27 @@ export class CommunityService {
       },
     });
     if (patch.body !== undefined) {
+      // A quién ya se avisó antes de reescribir las menciones. Sin esto, cada
+      // edición del post volvía a notificar a TODOS los mencionados: corregir
+      // tres erratas en un post que menciona a cinco personas les mandaba
+      // quince avisos.
+      const yaAvisados = new Set(
+        (
+          await this.prisma.modCommunityMention.findMany({
+            where: { tenantId, postId },
+            select: { mentionedUserId: true },
+          })
+        ).map((m) => m.mentionedUserId),
+      );
       await this.prisma.modCommunityMention.deleteMany({ where: { tenantId, postId } });
-      await this.persistMentions(tenantId, post.authorId, post.authorDisplayName, patch.body, {
-        postId,
-      });
+      await this.persistMentions(
+        tenantId,
+        post.authorId,
+        post.authorDisplayName,
+        patch.body,
+        { postId },
+        yaAvisados,
+      );
     }
     return updated;
   }
@@ -911,6 +928,12 @@ export class CommunityService {
     authorDisplayName: string | null,
     body: string,
     target: { postId?: string; commentId?: string },
+    /**
+     * Mencionados a los que ya se avisó en una versión anterior del texto. Se
+     * les vuelve a crear la fila (la mención sigue existiendo) pero NO se les
+     * vuelve a notificar.
+     */
+    yaAvisados: Set<string> = new Set(),
   ): Promise<Set<string>> {
     const handles = parseMentionHandles(body);
     if (handles.length === 0) return new Set();
@@ -957,6 +980,7 @@ export class CommunityService {
 
     // Notifica vía NotificationHub al mencionado (in-app + email si está configurado).
     for (const m of rowsToCreate) {
+      if (yaAvisados.has(m.mentionedUserId)) continue; // ya se le avisó de esta mención
       await this.ctx.notificationHub
         .send({
           tenantId,

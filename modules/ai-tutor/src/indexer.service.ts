@@ -171,14 +171,15 @@ export class AiTutorIndexerService {
       }
     }
 
-    // Limpia chunks previos del curso (siempre — re-indexación idempotente).
-    await this.prisma.$executeRawUnsafe(
-      'DELETE FROM "mod_ai_tutor_chunk" WHERE "tenant_id" = $1::uuid AND "course_id" = $2::uuid',
-      tenantId,
-      courseId,
-    );
-
     if (prepared.length === 0) {
+      // Curso sin contenido indexable: aquí sí toca borrar el índice viejo,
+      // porque el resultado correcto es "no hay nada".
+      await this.prisma.$executeRawUnsafe(
+        'DELETE FROM "mod_ai_tutor_chunk" WHERE "tenant_id" = $1::uuid AND "course_id" = $2::uuid',
+        tenantId,
+        courseId,
+      );
+
       this.ctx.logger.warn(
         'mod.ai-tutor: curso sin chunks indexables (todas las lecciones omitidas)',
         { tenantId, courseId },
@@ -246,25 +247,40 @@ export class AiTutorIndexerService {
       );
     }
 
-    // Insert en lote vía $queryRaw para poder pasar el array como vector.
-    // pgvector acepta string '[a,b,c]' como input para columna vector(N).
-    for (let i = 0; i < prepared.length; i++) {
-      const chunk = prepared[i]!;
-      const embStr = '[' + embeddings[i]!.join(',') + ']';
-      await this.prisma.$executeRawUnsafe(
-        `INSERT INTO "mod_ai_tutor_chunk"
-         ("id", "tenant_id", "course_id", "lesson_id", "ordinal", "content", "embedding", "tokens_count", "created_at")
-         VALUES ($1::uuid, $2::uuid, $3::uuid, $4::uuid, $5, $6, $7::vector, $8, NOW())`,
-        randomUUID(),
+    // Borrar e insertar, en ESE orden y dentro de la misma transacción.
+    //
+    // El borrado estaba mucho más arriba, antes de pedir los embeddings: si el
+    // proveedor fallaba en el lote 3, el índice viejo ya no existía y el nuevo
+    // no llegaba a escribirse, así que el tutor devolvía `CourseNotIndexedError`
+    // a TODOS los alumnos de ese curso hasta que alguien re-lanzara la
+    // indexación a mano. Ahora el índice antiguo sigue sirviendo hasta el
+    // segundo en que hay uno nuevo completo con el que sustituirlo.
+    await this.prisma.$transaction(async (tx) => {
+      await tx.$executeRawUnsafe(
+        'DELETE FROM "mod_ai_tutor_chunk" WHERE "tenant_id" = $1::uuid AND "course_id" = $2::uuid',
         tenantId,
         courseId,
-        chunk.lessonId,
-        chunk.ordinal,
-        chunk.content,
-        embStr,
-        chunk.tokensCount,
       );
-    }
+      // Insert vía raw para poder pasar el array como vector: pgvector acepta
+      // el string '[a,b,c]' como input de una columna vector(N).
+      for (let i = 0; i < prepared.length; i++) {
+        const chunk = prepared[i]!;
+        const embStr = '[' + embeddings[i]!.join(',') + ']';
+        await tx.$executeRawUnsafe(
+          `INSERT INTO "mod_ai_tutor_chunk"
+         ("id", "tenant_id", "course_id", "lesson_id", "ordinal", "content", "embedding", "tokens_count", "created_at")
+         VALUES ($1::uuid, $2::uuid, $3::uuid, $4::uuid, $5, $6, $7::vector, $8, NOW())`,
+          randomUUID(),
+          tenantId,
+          courseId,
+          chunk.lessonId,
+          chunk.ordinal,
+          chunk.content,
+          embStr,
+          chunk.tokensCount,
+        );
+      }
+    });
 
     await this.publish(tenantId, 'ai-tutor.course.indexed', {
       courseId,

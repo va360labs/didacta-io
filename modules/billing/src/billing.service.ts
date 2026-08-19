@@ -728,9 +728,31 @@ export class BillingService {
     const order = await this.prisma.modBillingOrder.findUnique({ where: { id: orderId } });
     if (!order) throw new OrderNotFoundError(orderId);
 
-    // Idempotencia adicional: si la order ya está COMPLETED (por reentrega),
-    // no re-emitimos evento ni re-actualizamos.
-    if (order.status === 'COMPLETED') return;
+    // Order ya COMPLETED (reentrega de Stripe, o reintento tras una caída).
+    //
+    // Antes se salía en seco. El problema es que escribir la fila y publicar el
+    // evento son DOS pasos sin transacción común: si el proceso moría entre el
+    // `update` a COMPLETED y el `publish`, el reintento veía la order completa
+    // y se retiraba — dinero cobrado, matrícula jamás concedida, y ni un error
+    // en ningún sitio.
+    //
+    // Ahora se re-publica. Es seguro porque el outbox dedupea por
+    // `idempotencyKey` = `billing.order.completed:<orderId>`: si el evento SÍ
+    // llegó a salir, este publish es un no-op; si no llegó, esta es la única
+    // forma de que salga.
+    if (order.status === 'COMPLETED') {
+      await this.publisher.publish(tenantId, order.userId, EVENT.ORDER_COMPLETED, {
+        orderId: order.id,
+        productId: order.productId,
+        courseId,
+        userId: order.userId,
+        userCreated: false,
+        amountPaid: order.amountPaid,
+        currency: order.currency,
+        customerEmail: order.customerEmail,
+      });
+      return;
+    }
 
     // EL DINERO PRIMERO. `checkout.session.completed` significa que la persona
     // terminó el formulario, NO que hayamos cobrado: con un método de

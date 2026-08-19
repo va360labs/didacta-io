@@ -179,7 +179,9 @@
     "viewPayInvoice": "Ver / pagar factura ↗",
     "contactAcademy": "Para gestionar esta suscripción, contacta con el equipo de tu academia.",
     "noInvoices": "Sin facturas todavía.",
-    "downloadPdf": "Ver / descargar PDF ↗"
+    "downloadPdf": "Ver / descargar PDF ↗",
+    "unavailableTitle": "No hemos podido consultar tus suscripciones",
+    "unavailableDesc": "Vuelve a cargar la página en unos minutos. Esto no afecta a tus pagos ni a tu acceso."
   },
   "security": {
     "sessionsLoadError": "No pudimos cargar tus sesiones.",
