@@ -250,7 +250,11 @@ function ResumenTab({ d }: { d: UserDossier }) {
         <Stat label={t('dossier.statSeniority')} value={formatMembership(antiguedadDias(d), t)} />
         <Stat
           label={t('dossier.statTotalPaid')}
-          value={formatMoney(d.commerce.totalPaidCents + d.commerce.totalPaidExternalCents)}
+          value={formatMoney(
+            d.commerce.totalPaidCents +
+              d.commerce.totalPaidExternalCents +
+              d.commerce.totalStoreCents,
+          )}
         />
         <Stat label={t('dossier.statCourses')} value={d.learning.enrollments.length} />
         <Stat label={t('dossier.statLastLogin')} value={formatDate(d.identity.lastLoginAt)} />
@@ -398,10 +402,80 @@ function TiendaExterna({ d }: { d: UserDossier }) {
   );
 }
 
+/**
+ * Compras que la tienda del centro empuja por API.
+ *
+ * Van ARRIBA y separadas de `TiendaExterna` a propósito: son dos historiales
+ * distintos —esta tienda y el espejo de WooCommerce— y en una ficha de atención
+ * al cliente mezclarlos sin decir de dónde sale cada fila es peor que enseñar
+ * uno solo. Por eso cada bloque dice su origen.
+ *
+ * Es también el único sitio de la ficha donde hay una factura que abrir: el
+ * documento lo sirve quien lo emitió, aquí solo se enlaza.
+ */
+function TiendaPropia({ d }: { d: UserDossier }) {
+  const t = useTranslations('cuentaComponentes');
+  const pedidos = d.commerce.storeOrders;
+  if (pedidos.length === 0) return null;
+
+  const origenes = [...new Set(pedidos.map((o) => o.source))].join(', ');
+
+  return (
+    <div>
+      <h3 className="mb-2 text-sm font-semibold text-text">
+        {t('dossier.ownStorePurchases', {
+          count: pedidos.length,
+          amount: formatMoney(d.commerce.totalStoreCents),
+          source: origenes,
+        })}
+      </h3>
+      <div className="space-y-2">
+        {pedidos.map((o) => (
+          <Card key={o.id}>
+            <CardContent className="p-3 text-sm">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="font-semibold text-text">
+                    {o.lines.join(' · ') || t('dossier.orderFallback', { id: o.reference })}
+                  </p>
+                  <p className="text-xs text-text-muted">
+                    {formatDate(o.placedAt)} · {o.source} #{o.reference} ·{' '}
+                    {labelOr(t, `compras.estado.${o.status}`, o.status)}
+                  </p>
+                </div>
+                <div className="flex shrink-0 items-center gap-2">
+                  {o.invoiceUrl ? (
+                    <a
+                      href={o.invoiceUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs font-semibold text-brand-700 underline"
+                    >
+                      {o.invoiceNumber
+                        ? t('compras.factura', { numero: o.invoiceNumber })
+                        : t('compras.facturaSinNumero')}
+                    </a>
+                  ) : (
+                    <span className="text-xs text-text-muted">{t('compras.sinFactura')}</span>
+                  )}
+                  <span className="font-semibold text-text">
+                    {formatMoney(o.amountCents, o.currency)}
+                  </span>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function ComprasTab({ d }: { d: UserDossier }) {
   const t = useTranslations('cuentaComponentes');
   return (
     <div className="space-y-4">
+      <TiendaPropia d={d} />
       <TiendaExterna d={d} />
       <div>
         <h3 className="mb-2 text-sm font-semibold text-text">

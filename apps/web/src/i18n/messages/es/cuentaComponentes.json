@@ -48,6 +48,7 @@
     "membershipYears": "{years, plural, one {# año} other {# años}}",
     "membershipYearsMonths": "{years, plural, one {# año} other {# años}} y {months, plural, one {# mes} other {# meses}}",
     "storePurchases": "Compras en la tienda ({count}) · {amount} cobrado",
+    "ownStorePurchases": "{count} compras en {source} · {amount}",
     "customerSince": "cliente desde {date}",
     "orderFallback": "Pedido {id}",
     "accessExpired": "Acceso caducado el {date}",

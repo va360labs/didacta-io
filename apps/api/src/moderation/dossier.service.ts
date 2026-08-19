@@ -123,6 +123,37 @@ export interface UserDossier {
       daysToExpiry: number | null;
       products: string[];
     }>;
+    /**
+     * Compras que la tienda del centro empuja por API (`POST /integrations/orders`).
+     *
+     * ⚠️ **No confundir con `externalOrders`**, que es el espejo de WooCommerce
+     * y se llena solo por sincronización. Estas las manda la tienda cuando cobra,
+     * y son las únicas que traen la referencia de su factura. Las dos pueden
+     * convivir —una tienda vieja y una nueva— y por eso cada fila lleva su
+     * `source` a la vista: en una ficha de atención al cliente, dos historiales
+     * mezclados sin decir de dónde sale cada uno son peor que uno solo.
+     */
+    storeOrders: Array<{
+      id: string;
+      /** Quién vendió: `va360.academy`. */
+      source: string;
+      /** El número de pedido EN LA TIENDA. No es un número de factura. */
+      reference: string;
+      /** PAID | REFUNDED | PARTIALLY_REFUNDED | CANCELLED */
+      status: string;
+      amountCents: number;
+      currency: string;
+      /** Lo que se vendió, tal y como se vendió. */
+      lines: string[];
+      /** Null si la tienda la emitió sin numerar, o si todavía no la ha emitido. */
+      invoiceNumber: string | null;
+      /** A dónde va quien quiera el PDF. Lo sirve quien la emitió, no Didacta. */
+      invoiceUrl: string | null;
+      placedAt: string;
+      refundedAt: string | null;
+    }>;
+    /** Lo cobrado por la tienda y no devuelto, en céntimos. */
+    totalStoreCents: number;
     /** Suma de TODO lo cobrado y no devuelto, dentro y fuera de Didacta. */
     totalPaidExternalCents: number;
     /** Fecha de la primera compra: la antigüedad real como cliente. */
@@ -296,6 +327,7 @@ export class DossierService {
       subscriptions,
       externalSubs,
       externalOrders,
+      storeOrders,
       enrollments,
       certificates,
       quizAttempts,
@@ -329,6 +361,13 @@ export class DossierService {
       this.prisma.modPaymentConnectionsOrder.findMany({
         where: { tenantId, userId },
         orderBy: { placedAt: 'desc' },
+      }),
+      // Por cuenta Y por correo: un pedido que llegó antes de que existiera la
+      // cuenta tiene `user_id` a null y solo se localiza por el email.
+      this.prisma.externalOrder.findMany({
+        where: { tenantId, OR: [{ userId }, { email: user.email.toLowerCase() }] },
+        orderBy: { placedAt: 'desc' },
+        take: RECENT,
       }),
       this.prisma.modLearningEnrollment.findMany({
         where: { tenantId, userId },
@@ -427,6 +466,11 @@ export class DossierService {
 
     // Lo cobrado en la tienda externa. El espejo ya normalizó `paid`, así que
     // aquí no hay que volver a interpretar estados de WooCommerce.
+    // Solo lo que sigue cobrado: un pedido devuelto no cuenta como facturado.
+    const totalStoreCents = storeOrders
+      .filter((o) => o.status === 'PAID')
+      .reduce((suma, o) => suma + o.amountCents, 0);
+
     const totalPaidExternalCents = externalOrders
       .filter((o) => o.paid)
       .reduce((sum, o) => sum + o.totalAmount, 0);
@@ -525,6 +569,24 @@ export class DossierService {
           daysToExpiry: o.accessEndsAt ? daysBetween(now, o.accessEndsAt) : null,
           products: productNamesOf(o.items),
         })),
+        storeOrders: storeOrders.map((o) => ({
+          id: o.id,
+          source: o.source,
+          reference: o.reference,
+          status: o.status,
+          amountCents: o.amountCents,
+          currency: o.currency,
+          lines: Array.isArray(o.lines)
+            ? (o.lines as { name?: unknown }[])
+                .map((l) => (typeof l?.name === 'string' ? l.name : ''))
+                .filter(Boolean)
+            : [],
+          invoiceNumber: o.invoiceNumber,
+          invoiceUrl: o.invoiceUrl,
+          placedAt: o.placedAt.toISOString(),
+          refundedAt: o.refundedAt?.toISOString() ?? null,
+        })),
+        totalStoreCents,
         totalPaidExternalCents,
         customerSince: primeraCompra?.toISOString() ?? null,
       },

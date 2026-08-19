@@ -48,6 +48,7 @@
     "membershipYears": "{years, plural, one {# year} other {# years}}",
     "membershipYearsMonths": "{years, plural, one {# year} other {# years}} and {months, plural, one {# month} other {# months}}",
     "storePurchases": "Store purchases ({count}) · {amount} collected",
+    "ownStorePurchases": "{count} purchases at {source} · {amount}",
     "customerSince": "customer since {date}",
     "orderFallback": "Order {id}",
     "accessExpired": "Access expired on {date}",

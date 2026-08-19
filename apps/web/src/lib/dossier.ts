@@ -61,6 +61,26 @@ export interface DossierExternalOrder {
   products: string[];
 }
 
+/**
+ * Compra que la tienda del centro empujó por API.
+ *
+ * ⚠️ Distinta de `DossierExternalOrder`, que es el espejo de WooCommerce. Estas
+ * las manda la tienda al cobrar y son las únicas que traen su factura.
+ */
+export interface DossierStoreOrder {
+  id: string;
+  source: string;
+  reference: string;
+  status: string;
+  amountCents: number;
+  currency: string;
+  lines: string[];
+  invoiceNumber: string | null;
+  invoiceUrl: string | null;
+  placedAt: string;
+  refundedAt: string | null;
+}
+
 export interface UserDossier {
   identity: {
     id: string;
@@ -97,6 +117,8 @@ export interface UserDossier {
       currentPeriodEnd: string | null;
     }>;
     externalOrders: DossierExternalOrder[];
+    storeOrders: DossierStoreOrder[];
+    totalStoreCents: number;
     totalPaidExternalCents: number;
     customerSince: string | null;
   };
