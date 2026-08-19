@@ -27,6 +27,7 @@ export type {
   StartSubscriptionInput,
   StartSubscriptionResult,
   SubscriptionsStripeAdapterResolver,
+  CoursePriceCatalog,
 } from './subscriptions.service.js';
 export {
   MembershipService,
@@ -57,6 +58,8 @@ export {
   SubscriptionsError,
   SubscriptionNotFoundError,
   SubscriptionAlreadyActiveError,
+  SubscriptionPriceNotForCourseError,
+  WebhookOutOfOrderError,
   SubscriptionPriceNotRecurringError,
   SubscriptionAccessDeniedError,
   WebhookSignatureInvalidError,

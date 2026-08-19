@@ -171,3 +171,31 @@ export class MembershipNotTrialingError extends SubscriptionsError {
     this.name = 'MembershipNotTrialingError';
   }
 }
+
+/**
+ * El price pedido no es uno de los que el tenant ha vinculado a ese curso.
+ * Antes no se comprobaba y el importe lo elegia el cliente.
+ */
+export class SubscriptionPriceNotForCourseError extends SubscriptionsError {
+  constructor(priceId: string, courseId: string) {
+    super(
+      `El price ${priceId} no esta vinculado al curso ${courseId}`,
+      'SUBSCRIPTIONS_PRICE_NOT_FOR_COURSE',
+    );
+  }
+}
+
+/**
+ * El webhook llego antes que la fila local a la que se engancha (Stripe no
+ * garantiza orden). Se lanza para que el reintento lo vuelva a traer; antes
+ * estos eventos se descartaban y se perdian para siempre.
+ */
+export class WebhookOutOfOrderError extends SubscriptionsError {
+  constructor(que: string) {
+    super(
+      `${que} llego antes que su suscripcion local; se reintentara`,
+      'SUBSCRIPTIONS_WEBHOOK_OUT_OF_ORDER',
+      { detail: que },
+    );
+  }
+}

@@ -30,8 +30,10 @@ import {
 import {
   SubscriptionAlreadyActiveError,
   SubscriptionAccessDeniedError,
+  SubscriptionPriceNotForCourseError,
   SubscriptionPriceNotRecurringError,
   StripeApiError,
+  WebhookOutOfOrderError,
 } from '../src/errors.js';
 import type {
   SubscriptionsStripeAdapter,
@@ -170,6 +172,19 @@ class MockPrisma {
       Object.assign(row, args.data, { updatedAt: new Date() });
       return row;
     },
+    // CAS del barrido de grace: si el estado ya no es el esperado, 0 filas.
+    updateMany: async (args: {
+      where: { id: string; status?: string; gracePeriodEndsAt?: { lte: Date } };
+      data: Partial<SubRow>;
+    }) => {
+      const row = this.subs.get(args.where.id);
+      if (!row) return { count: 0 };
+      if (args.where.status && row.status !== args.where.status) return { count: 0 };
+      const lte = args.where.gracePeriodEndsAt?.lte;
+      if (lte && !(row.gracePeriodEndsAt && row.gracePeriodEndsAt <= lte)) return { count: 0 };
+      Object.assign(row, args.data, { updatedAt: new Date() });
+      return { count: 1 };
+    },
     delete: async (args: { where: { id: string } }) => {
       this.subs.delete(args.where.id);
     },
@@ -248,6 +263,8 @@ class MockPrisma {
       this.webhookEvents.set(args.data.stripeEventId, row);
       return row;
     },
+    findUnique: async (args: { where: { stripeEventId: string } }) =>
+      this.webhookEvents.get(args.where.stripeEventId) ?? null,
     update: async (args: { where: { stripeEventId: string }; data: Partial<WebhookEventRow> }) => {
       const row = this.webhookEvents.get(args.where.stripeEventId);
       if (!row) throw new Error('not found');
@@ -370,7 +387,10 @@ const URLS: CheckoutUrlBuilder = {
 
 // ---------- Helpers de fixtures ----------
 
-function buildSystem(opts?: { gracePeriodDays?: number }) {
+function buildSystem(opts?: {
+  gracePeriodDays?: number;
+  coursePrices?: (tenantId: string, courseId: string) => Promise<string[]>;
+}) {
   const prisma = new MockPrisma();
   const stripe = new StripeStub();
   const publisher = new PublisherStub();
@@ -378,12 +398,18 @@ function buildSystem(opts?: { gracePeriodDays?: number }) {
   stripe.setPrice('price_recurring', 'month');
   stripe.setPrice('price_oneshot', null);
   stripe.setPrice('price_inactive', 'month', false);
+  // Catalogo curso -> precios. Por defecto, los tres prices del stub estan
+  // vinculados al curso de los tests; los casos que prueban el binding pasan
+  // el suyo.
+  const coursePrices =
+    opts?.coursePrices ?? (async () => ['price_recurring', 'price_oneshot', 'price_inactive']);
   const service = new SubscriptionsService(
     prisma as never,
     async () => stripe,
     publisher,
     URLS,
     opts?.gracePeriodDays ?? 3,
+    coursePrices,
   );
   return { prisma, stripe, publisher, service };
 }
@@ -617,6 +643,47 @@ describe('SubscriptionsService.cancelSubscription', () => {
   });
 });
 
+describe('SubscriptionsService.startSubscription — el precio no lo elige el cliente (C4)', () => {
+  const input = {
+    tenantId: 't',
+    userId: 'u',
+    userEmail: 'a@b.c',
+    courseId: 'curso-caro',
+    stripePriceId: 'price_recurring',
+  };
+
+  it('rechaza un price recurrente que no esta vinculado a ESE curso', async () => {
+    // El precio de la membresia mas barata: existe, esta activo y es
+    // recurrente. Antes bastaba con eso para suscribirse al curso caro a ese
+    // importe.
+    const { service, prisma } = buildSystem({
+      coursePrices: async () => ['price_del_curso_caro'],
+    });
+
+    await expect(service.startSubscription(input)).rejects.toBeInstanceOf(
+      SubscriptionPriceNotForCourseError,
+    );
+    // Y no deja fila local a medias.
+    expect(prisma.subs.size).toBe(0);
+  });
+
+  it('sin catalogo configurado no se vende (falla del lado seguro)', async () => {
+    const { service } = buildSystem({ coursePrices: async () => [] });
+
+    await expect(service.startSubscription(input)).rejects.toBeInstanceOf(
+      SubscriptionPriceNotForCourseError,
+    );
+  });
+
+  it('acepta el price que si esta vinculado al curso', async () => {
+    const { service } = buildSystem({ coursePrices: async () => ['price_recurring'] });
+
+    await expect(service.startSubscription(input)).resolves.toMatchObject({
+      url: expect.any(String),
+    });
+  });
+});
+
 describe('SubscriptionsService.handleWebhookEvent', () => {
   it('idempotencia: segundo evento con mismo id no procesa', async () => {
     const { service, prisma } = buildSystem();
@@ -628,6 +695,76 @@ describe('SubscriptionsService.handleWebhookEvent', () => {
     await service.handleWebhookEvent(event, {});
     await service.handleWebhookEvent(event, {});
     expect(prisma.webhookEvents.size).toBe(1);
+  });
+
+  it('un evento que fallo a medias SI se reintenta: no se quema (C3)', async () => {
+    const { service, prisma } = buildSystem();
+    prisma.subs.set('s1', {
+      id: 's1',
+      tenantId: 't',
+      userId: 'u',
+      courseId: 'c1',
+      stripeSubscriptionId: 'sub_stripe_1',
+      stripeCustomerId: 'cus_test',
+      stripePriceId: 'price_recurring',
+      status: 'ACTIVE',
+      unitAmount: 1999,
+      currency: 'eur',
+      interval: 'month',
+      currentPeriodEnd: null,
+      cancelAtPeriodEnd: false,
+      gracePeriodEndsAt: null,
+      canceledAt: null,
+      canceledReason: null,
+      planId: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+
+    const event = {
+      id: 'evt_deleted',
+      type: 'customer.subscription.deleted',
+      data: { object: makeStripeSub({ status: 'canceled' }) },
+    } as unknown as Stripe.Event;
+
+    // Primer intento: la fila del evento se inserta y el trabajo de dominio
+    // revienta con un fallo transitorio. Queda `processedAt: null`.
+    const romper = new Error('conexion caida');
+    const original = prisma.subs.get('s1')!;
+    let fallar = true;
+    const updateOriginal = prisma.modSubscriptionsSubscription.update;
+    prisma.modSubscriptionsSubscription.update = (async (args: never) => {
+      if (fallar) throw romper;
+      return updateOriginal.call(prisma.modSubscriptionsSubscription, args);
+    }) as typeof updateOriginal;
+
+    await expect(service.handleWebhookEvent(event, {})).rejects.toThrow('conexion caida');
+    expect(prisma.webhookEvents.get('evt_deleted')!.processedAt).toBeNull();
+    expect(prisma.subs.get('s1')!.status).toBe('ACTIVE'); // sigue viva en local
+
+    // Stripe reintenta. Antes, el choque con la PK devolvia 200 en silencio y
+    // la sub se quedaba ACTIVE para siempre con la sub muerta en Stripe.
+    fallar = false;
+    await service.handleWebhookEvent(event, {});
+
+    expect(prisma.subs.get('s1')!.status).toBe('CANCELED');
+    expect(prisma.webhookEvents.get('evt_deleted')!.processedAt).not.toBeNull();
+    expect(original).toBeTruthy();
+  });
+
+  it('un evento ya procesado con exito no se vuelve a procesar', async () => {
+    const { service, prisma, publisher } = buildSystem();
+    const event = {
+      id: 'evt_ok',
+      type: 'customer.subscription.created',
+      data: { object: makeStripeSub() },
+    } as unknown as Stripe.Event;
+
+    await service.handleWebhookEvent(event, {});
+    const publicadosTrasElPrimero = publisher.events.length;
+    await service.handleWebhookEvent(event, {});
+
+    expect(publisher.events.length).toBe(publicadosTrasElPrimero);
   });
 
   it('customer.subscription.created en estado active → ACTIVE + emite activated', async () => {
@@ -1469,5 +1606,249 @@ describe('SubscriptionsService — split F3 del barrido de grace periods', () =>
     const unpaid = publisher.events.filter((e) => e.name === 'subscriptions.subscription.unpaid');
     expect(unpaid).toHaveLength(1);
     expect(unpaid[0]!.tenantId).toBe('t1');
+  });
+});
+
+describe('SubscriptionsService — el webhook desordenado no se pierde (H11)', () => {
+  it('invoice.paid de una sub que aun no existe en local pide reintento', async () => {
+    const { service } = buildSystem();
+    const event = {
+      id: 'evt_early',
+      type: 'invoice.paid',
+      data: {
+        object: {
+          id: 'in_1',
+          subscription: 'sub_stripe_1',
+          amount_paid: 1999,
+          currency: 'eur',
+          created: Math.floor(Date.now() / 1000),
+          billing_reason: 'subscription_create',
+        },
+      },
+    } as unknown as Stripe.Event;
+
+    await expect(service.handleWebhookEvent(event, {})).rejects.toBeInstanceOf(
+      WebhookOutOfOrderError,
+    );
+  });
+
+  it('una factura vieja de otro producto de la misma cuenta se deja pasar', async () => {
+    const { service, prisma } = buildSystem();
+    const haceTresDias = Math.floor(Date.now() / 1000) - 3 * 24 * 60 * 60;
+    const event = {
+      id: 'evt_ajeno',
+      type: 'invoice.paid',
+      data: {
+        object: {
+          id: 'in_2',
+          subscription: 'sub_de_otro_producto',
+          amount_paid: 500,
+          currency: 'eur',
+          created: haceTresDias,
+          billing_reason: 'subscription_cycle',
+        },
+      },
+    } as unknown as Stripe.Event;
+
+    await expect(service.handleWebhookEvent(event, {})).resolves.toBeUndefined();
+    expect(prisma.webhookEvents.get('evt_ajeno')!.processedAt).not.toBeNull();
+  });
+});
+
+describe('SubscriptionsService — un checkout abandonado no bloquea la compra (H12)', () => {
+  const input = {
+    tenantId: 't',
+    userId: 'u',
+    userEmail: 'a@b.c',
+    courseId: 'c1',
+    stripePriceId: 'price_recurring',
+  };
+
+  function pendiente(prisma: MockPrisma, createdAt: Date) {
+    prisma.subs.set('vieja', {
+      id: 'vieja',
+      tenantId: 't',
+      userId: 'u',
+      courseId: 'c1',
+      stripeSubscriptionId: null,
+      stripeCustomerId: '',
+      stripePriceId: 'price_recurring',
+      status: 'PENDING',
+      unitAmount: 1999,
+      currency: 'eur',
+      interval: 'month',
+      currentPeriodEnd: null,
+      cancelAtPeriodEnd: false,
+      gracePeriodEndsAt: null,
+      canceledAt: null,
+      canceledReason: null,
+      planId: null,
+      createdAt,
+      updatedAt: createdAt,
+    });
+  }
+
+  it('una PENDING de hace dos dias se caduca y deja comprar', async () => {
+    const { service, prisma } = buildSystem();
+    pendiente(prisma, new Date(Date.now() - 48 * 60 * 60 * 1000));
+
+    await expect(service.startSubscription(input)).resolves.toMatchObject({
+      url: expect.any(String),
+    });
+    expect(prisma.subs.get('vieja')!.status).toBe('CANCELED');
+    expect(prisma.subs.get('vieja')!.canceledReason).toBe('checkout_abandonado');
+  });
+
+  it('una PENDING recien creada SI bloquea (el alumno tiene el checkout abierto)', async () => {
+    const { service, prisma } = buildSystem();
+    pendiente(prisma, new Date());
+
+    await expect(service.startSubscription(input)).rejects.toBeInstanceOf(
+      SubscriptionAlreadyActiveError,
+    );
+  });
+
+  it('checkout.session.expired caduca la fila PENDING', async () => {
+    const { service, prisma } = buildSystem();
+    pendiente(prisma, new Date());
+    const event = {
+      id: 'evt_exp',
+      type: 'checkout.session.expired',
+      data: { object: { id: 'cs_1', metadata: { subscriptionLocalId: 'vieja' } } },
+    } as unknown as Stripe.Event;
+
+    await service.handleWebhookEvent(event, {});
+
+    expect(prisma.subs.get('vieja')!.status).toBe('CANCELED');
+    expect(prisma.subs.get('vieja')!.canceledReason).toBe('checkout_caducado');
+  });
+
+  it('checkout.session.expired NO degrada una sub que ya se activo', async () => {
+    const { service, prisma } = buildSystem();
+    pendiente(prisma, new Date());
+    prisma.subs.get('vieja')!.status = 'ACTIVE';
+    const event = {
+      id: 'evt_exp2',
+      type: 'checkout.session.expired',
+      data: { object: { id: 'cs_2', metadata: { subscriptionLocalId: 'vieja' } } },
+    } as unknown as Stripe.Event;
+
+    await service.handleWebhookEvent(event, {});
+
+    expect(prisma.subs.get('vieja')!.status).toBe('ACTIVE');
+  });
+});
+
+describe('SubscriptionsService — reembolsos y barrido de gracia', () => {
+  function subActiva(prisma: MockPrisma) {
+    prisma.subs.set('s1', {
+      id: 's1',
+      tenantId: 't',
+      userId: 'u',
+      courseId: 'c1',
+      stripeSubscriptionId: 'sub_stripe_1',
+      stripeCustomerId: 'cus_test',
+      stripePriceId: 'price_recurring',
+      status: 'PAST_DUE',
+      unitAmount: 1999,
+      currency: 'eur',
+      interval: 'month',
+      currentPeriodEnd: null,
+      cancelAtPeriodEnd: false,
+      gracePeriodEndsAt: new Date(Date.now() - 60_000),
+      canceledAt: null,
+      canceledReason: null,
+      planId: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+  }
+
+  function facturaDe(prisma: MockPrisma) {
+    prisma.invoices.set('inv1', {
+      id: 'inv1',
+      tenantId: 't',
+      subscriptionId: 's1',
+      stripeInvoiceId: 'in_1',
+      amount: 1999,
+      currency: 'eur',
+      status: 'PAID',
+      periodStart: new Date(),
+      periodEnd: new Date(),
+      hostedInvoiceUrl: null,
+      paidAt: new Date(),
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+  }
+
+  it('un reembolso PARCIAL no revoca la comision del referidor (L9)', async () => {
+    const { service, prisma, publisher } = buildSystem();
+    subActiva(prisma);
+    facturaDe(prisma);
+    const event = {
+      id: 'evt_ref_parcial',
+      type: 'charge.refunded',
+      data: {
+        object: {
+          id: 'ch_1',
+          invoice: 'in_1',
+          amount: 1999,
+          amount_refunded: 100,
+          currency: 'eur',
+        },
+      },
+    } as unknown as Stripe.Event;
+
+    await service.handleWebhookEvent(event, {});
+
+    expect(publisher.events.some((e) => e.name.includes('refunded'))).toBe(false);
+  });
+
+  it('un reembolso TOTAL si la revoca', async () => {
+    const { service, prisma, publisher } = buildSystem();
+    subActiva(prisma);
+    facturaDe(prisma);
+    const event = {
+      id: 'evt_ref_total',
+      type: 'charge.refunded',
+      data: {
+        object: {
+          id: 'ch_2',
+          invoice: 'in_1',
+          amount: 1999,
+          amount_refunded: 1999,
+          currency: 'eur',
+        },
+      },
+    } as unknown as Stripe.Event;
+
+    await service.handleWebhookEvent(event, {});
+
+    expect(publisher.events.some((e) => e.name.includes('refunded'))).toBe(true);
+  });
+
+  it('el barrido no pisa a quien acaba de pagar entre el findMany y el update (M5)', async () => {
+    const { service, prisma, publisher } = buildSystem();
+    subActiva(prisma);
+
+    // Simula el `invoice.paid` que entra despues del findMany: la sub vuelve a
+    // ACTIVE justo antes de que el worker la marque UNPAID.
+    const findManyOriginal = prisma.modSubscriptionsSubscription.findMany;
+    prisma.modSubscriptionsSubscription.findMany = (async (args: never) => {
+      const res = await findManyOriginal.call(prisma.modSubscriptionsSubscription, args);
+      const s1 = prisma.subs.get('s1');
+      if (s1 && s1.status === 'PAST_DUE') {
+        s1.status = 'ACTIVE';
+        s1.gracePeriodEndsAt = null;
+      }
+      return res;
+    }) as typeof findManyOriginal;
+
+    const procesadas = await service.expireGracePeriodsForTenant('t');
+
+    expect(prisma.subs.get('s1')!.status).toBe('ACTIVE'); // no lo machaca
+    expect(procesadas).toHaveLength(0);
+    expect(publisher.events.some((e) => e.name.includes('unpaid'))).toBe(false);
   });
 });

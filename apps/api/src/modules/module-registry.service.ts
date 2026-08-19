@@ -31,6 +31,7 @@ import {
   buildSubscriptionsModule,
   DEFAULT_GRACE_PERIOD_DAYS,
   type CheckoutUrlBuilder as SubsCheckoutUrlBuilder,
+  type CoursePriceCatalog as SubsCoursePriceCatalog,
   type SubscriptionsEventPublisher,
   type SubscriptionsStripeAdapter,
   type SubscriptionsStripeAdapterResolver,
@@ -450,6 +451,21 @@ export class ModuleRegistryService implements OnModuleInit {
     );
     const subscriptionsStripeFor: SubscriptionsStripeAdapterResolver = (tenantId) =>
       this.resolveSubscriptionsStripeAdapter(tenantId);
+    // Catálogo curso → precios. mod.subscriptions no puede leer las tablas de
+    // mod.billing (contrato modular), pero esta capa sí: es la que compone los
+    // dos. Sin esto, el `stripePriceId` del body del alumno se aceptaba con
+    // solo comprobar que existiera y fuera recurrente, así que cualquiera podía
+    // suscribirse a un curso caro al precio de la membresía más barata.
+    const subsCoursePrices: SubsCoursePriceCatalog = async (tenantId, courseId) => {
+      // `prisma` de arriba viaja como `never` hacia los services de módulo;
+      // aquí hace falta el cliente tipado de verdad para leer el catálogo.
+      const productos = await this.factory.getPrisma().modBillingProduct.findMany({
+        where: { tenantId, courseId, active: true },
+        select: { stripePriceId: true },
+      });
+      return productos.map((producto) => producto.stripePriceId);
+    };
+
     this.subscriptions = new SubscriptionsService(
       prisma,
       subscriptionsStripeFor,
@@ -458,6 +474,7 @@ export class ModuleRegistryService implements OnModuleInit {
       Number.isFinite(gracePeriodDays) && gracePeriodDays > 0
         ? gracePeriodDays
         : DEFAULT_GRACE_PERIOD_DAYS,
+      subsCoursePrices,
     );
     const subscriptionsModule = buildSubscriptionsModule(this.subscriptions);
 

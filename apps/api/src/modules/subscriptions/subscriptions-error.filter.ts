@@ -18,6 +18,12 @@ const STATUS_BY_CODE: Record<string, number> = {
   SUBSCRIPTIONS_NOT_FOUND: HttpStatus.NOT_FOUND,
   SUBSCRIPTIONS_ALREADY_ACTIVE: HttpStatus.CONFLICT,
   SUBSCRIPTIONS_PRICE_NOT_RECURRING: HttpStatus.UNPROCESSABLE_ENTITY,
+  // El price pedido no es de ese curso. 422 y no 403: no es un problema de
+  // permisos del alumno, es que la peticion no cuadra con el catalogo.
+  SUBSCRIPTIONS_PRICE_NOT_FOR_COURSE: HttpStatus.UNPROCESSABLE_ENTITY,
+  // Webhook adelantado a su fila local: 409 para que Stripe reintente. Un 2xx
+  // aqui le diria que ya esta hecho y el evento se perderia.
+  SUBSCRIPTIONS_WEBHOOK_OUT_OF_ORDER: HttpStatus.CONFLICT,
   SUBSCRIPTIONS_ACCESS_DENIED: HttpStatus.FORBIDDEN,
   SUBSCRIPTIONS_WEBHOOK_SIGNATURE_INVALID: HttpStatus.UNAUTHORIZED,
   SUBSCRIPTIONS_STRIPE_CONFIG_MISSING: HttpStatus.SERVICE_UNAVAILABLE,

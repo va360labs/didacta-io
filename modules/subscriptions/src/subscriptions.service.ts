@@ -47,6 +47,8 @@ import {
   SubscriptionAccessDeniedError,
   SubscriptionNotFoundError,
   SubscriptionAlreadyActiveError,
+  SubscriptionPriceNotForCourseError,
+  WebhookOutOfOrderError,
   SubscriptionPriceNotRecurringError,
   StripeApiError,
 } from './errors.js';
@@ -73,6 +75,14 @@ export interface SubscriptionsEventPublisher {
     payload: Record<string, unknown>,
   ): Promise<void>;
 }
+
+/**
+ * Precios recurrentes que el TENANT ha vinculado a un curso. Lo resuelve la
+ * capa de composicion (apps/api), que si puede leer el catalogo de mod.billing
+ * sin romper el contrato modular. Devolver lista vacia = ese curso no se vende
+ * por suscripcion, y el checkout se rechaza: se falla del lado seguro.
+ */
+export type CoursePriceCatalog = (tenantId: string, courseId: string) => Promise<string[]>;
 
 export interface CheckoutUrlBuilder {
   successUrl(courseId: string): string;
@@ -113,6 +123,19 @@ const EVENT = {
  */
 export const DEFAULT_GRACE_PERIOD_DAYS = 3;
 
+/**
+ * Vida de una sesion de Checkout de Stripe (24 h). Pasado ese margen, una fila
+ * local PENDING es de un checkout abandonado y no debe bloquear una compra.
+ */
+const STALE_PENDING_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Cuanto tiempo se acepta que un webhook llegue antes que la fila local a la
+ * que se engancha. Dentro de la ventana se pide reintento; fuera, se asume que
+ * el objeto es de otro producto de la misma cuenta de Stripe.
+ */
+const OUT_OF_ORDER_WINDOW_MS = 24 * 60 * 60 * 1000;
+
 export class SubscriptionsService {
   constructor(
     private readonly prisma: PrismaClient,
@@ -120,6 +143,12 @@ export class SubscriptionsService {
     private readonly publisher: SubscriptionsEventPublisher,
     private readonly urls: CheckoutUrlBuilder,
     private readonly gracePeriodDays: number = DEFAULT_GRACE_PERIOD_DAYS,
+    /**
+     * Sin catalogo inyectado no se puede saber que precio es de que curso, asi
+     * que no se vende: mejor un checkout que no arranca que uno que cobra el
+     * importe equivocado.
+     */
+    private readonly coursePrices: CoursePriceCatalog = async () => [],
   ) {}
 
   // ---------------- Checkout (alumno) ----------------
@@ -130,6 +159,20 @@ export class SubscriptionsService {
    * (customer.subscription.created → status=trialing/active).
    */
   async startSubscription(input: StartSubscriptionInput): Promise<StartSubscriptionResult> {
+    // El precio lo mandaba el CLIENTE en el body y solo se comprobaba que
+    // existiera en la cuenta Stripe del tenant, estuviera activo y fuera
+    // recurrente — nunca que fuera el precio DE ESTE CURSO. Un alumno
+    // autenticado podia pasar cualquier price recurrente del catalogo (el de
+    // la membresia mas barata, por ejemplo) y suscribirse al curso caro a ese
+    // precio: el webhook lo activaba y el bridge lo matriculaba igual. Cobro
+    // incorrecto directo. El catalogo de precios del curso lo resuelve el
+    // caller (que si puede mirar los dos modulos); aqui solo se exige que el
+    // price pedido este en el.
+    const permitidos = await this.coursePrices(input.tenantId, input.courseId);
+    if (!permitidos.includes(input.stripePriceId)) {
+      throw new SubscriptionPriceNotForCourseError(input.stripePriceId, input.courseId);
+    }
+
     const stripe = await this.stripeFor(input.tenantId);
     // Validación: el price debe ser recurring antes de crear nada local.
     const price = await stripe.retrievePrice(input.stripePriceId);
@@ -150,7 +193,20 @@ export class SubscriptionsService {
       },
     });
     if (existing) {
-      throw new SubscriptionAlreadyActiveError(input.courseId);
+      // Una PENDING vieja NO bloquea. En `mode='subscription'` Stripe no crea
+      // la subscription hasta que el checkout se completa: de un abandono no
+      // llega ningun webhook de suscripcion, asi que la fila PENDING se
+      // quedaba ahi para siempre y a partir de entonces TODO reintento de
+      // compra daba SubscriptionAlreadyActiveError. El alumno cerraba la
+      // pestana y la venta quedaba bloqueada. Las sesiones de Checkout de
+      // Stripe caducan a las 24 h: pasado ese margen la PENDING esta muerta.
+      const muerta =
+        existing.status === 'PENDING' &&
+        Date.now() - existing.createdAt.getTime() > STALE_PENDING_MS;
+      if (!muerta) {
+        throw new SubscriptionAlreadyActiveError(input.courseId);
+      }
+      await this.expirarPendiente(existing.id, 'checkout_abandonado');
     }
 
     // Customer ID: lo recibimos en el webhook customer.subscription.created.
@@ -373,9 +429,28 @@ export class SubscriptionsService {
         message.includes('Unique constraint') ||
         message.includes('mod_subscriptions_webhook_event')
       ) {
-        return;
+        // El evento ya se RECIBIO antes. Eso no significa que se procesara con
+        // exito: si el intento anterior murio a mitad, la fila quedo con
+        // `processedAt` a null. Dedupear por recibido QUEMABA el evento — ni el
+        // reintento de Stripe ni un reenvio manual volvian a intentarlo, y el
+        // 200 silencioso hacia creer a Stripe que todo habia ido bien. Un
+        // `customer.subscription.deleted` perdido asi dejaba la sub ACTIVE en
+        // local para siempre (acceso gratis indefinido); un `invoice.paid`
+        // perdido, a un miembro que paga marcado como impago.
+        //
+        // Dedupeamos por PROCESADO. Es exactamente el arreglo que mod.billing
+        // ya llevaba (billing.service.ts, mismo bloque) y que este modulo
+        // gemelo nunca replico.
+        const previo = await this.prisma.modSubscriptionsWebhookEvent.findUnique({
+          where: { stripeEventId: event.id },
+          select: { processedAt: true },
+        });
+        if (previo?.processedAt) return; // ya procesado con exito; idempotente.
+        // Si no, seguimos y reintentamos el trabajo de dominio, que es
+        // idempotente por su cuenta (los handlers no retroceden estado).
+      } else {
+        throw err;
       }
-      throw err;
     }
 
     try {
@@ -397,6 +472,11 @@ export class SubscriptionsService {
           break;
         case 'charge.refunded':
           await this.onChargeRefunded(event.data.object as Stripe.Charge);
+          break;
+        // Checkout abandonado: Stripe caduca la sesion y avisa. Sin este caso
+        // la fila PENDING se quedaba viva y bloqueaba la compra para siempre.
+        case 'checkout.session.expired':
+          await this.onCheckoutExpired(event.data.object as Stripe.Checkout.Session);
           break;
         default:
           // Otros eventos (invoice.created, etc.) los persistimos para audit
@@ -449,11 +529,20 @@ export class SubscriptionsService {
         gracePeriodEndsAt: { lte: now },
       },
     });
+    const procesadas: SubscriptionRow[] = [];
     for (const sub of expired) {
-      await this.prisma.modSubscriptionsSubscription.update({
-        where: { id: sub.id },
+      // El update lleva su propia guarda de estado. Entre el `findMany` de
+      // arriba y este update cabe un `invoice.paid`: sin la guarda, el worker
+      // machacaba a UNPAID a quien acababa de pagar y el bridge le quitaba el
+      // acceso por una deuda que ya no existia. `updateMany` con el estado en
+      // el `where` es un compare-and-swap: si otro lo movio, afecta 0 filas.
+      const { count } = await this.prisma.modSubscriptionsSubscription.updateMany({
+        where: { id: sub.id, status: 'PAST_DUE', gracePeriodEndsAt: { lte: now } },
         data: { status: 'UNPAID' },
       });
+      if (count === 0) continue; // se recupero mientras tanto: no se toca.
+
+      procesadas.push(sub);
       await this.publisher.publish(sub.tenantId, null, EVENT.UNPAID, {
         subscriptionId: sub.id,
         courseId: sub.courseId,
@@ -461,7 +550,7 @@ export class SubscriptionsService {
         userId: sub.userId,
       });
     }
-    return expired;
+    return procesadas;
   }
 
   /**
@@ -657,7 +746,18 @@ export class SubscriptionsService {
     const sub = await this.prisma.modSubscriptionsSubscription.findUnique({
       where: { stripeSubscriptionId: stripeSubId },
     });
-    if (!sub) return;
+    if (!sub) {
+      // Stripe no garantiza orden de entrega. En un checkout de membresia la
+      // fila local solo la crea `checkout.session.completed`: si `invoice.paid`
+      // llega antes, aqui no hay a que engancharla. Salir marcando el evento
+      // como procesado lo perdia PARA SIEMPRE — la primera factura no existia
+      // en el historial local y, con `scope: 'FIRST_PAYMENT'`, el referidor no
+      // cobraba jamas esa venta. Se pide reintento mientras la factura sea
+      // joven; pasado ese margen se asume que la suscripcion es de otro
+      // producto de la misma cuenta de Stripe y se deja pasar.
+      this.exigirReintentoSiEsJoven(invoice.created, `invoice.paid ${invoice.id}`);
+      return;
+    }
 
     await this.upsertInvoice(sub.id, sub.tenantId, invoice, 'PAID');
 
@@ -705,6 +805,43 @@ export class SubscriptionsService {
   }
 
   /**
+   * Caduca una fila PENDING abandonada. No se borra: queda CANCELED con su
+   * motivo, que no bloquea una compra nueva y deja rastro de que paso.
+   */
+  private async expirarPendiente(subscriptionId: string, motivo: string): Promise<void> {
+    await this.prisma.modSubscriptionsSubscription.update({
+      where: { id: subscriptionId },
+      data: { status: 'CANCELED', canceledAt: new Date(), canceledReason: motivo },
+    });
+  }
+
+  /**
+   * El objeto al que apunta el webhook todavia no existe en local. Si el
+   * evento es reciente, casi seguro es un desorden de entrega: se lanza para
+   * que el reintento de Stripe lo vuelva a traer cuando la fila ya exista. Si
+   * es viejo, no era nuestro y se deja pasar.
+   */
+  private exigirReintentoSiEsJoven(createdUnixSec: number | null | undefined, que: string): void {
+    const creado = (createdUnixSec ?? 0) * 1000;
+    if (creado && Date.now() - creado > OUT_OF_ORDER_WINDOW_MS) return;
+    throw new WebhookOutOfOrderError(que);
+  }
+
+  /**
+   * Checkout caducado sin completar. Solo toca la fila si sigue PENDING: si ya
+   * se activo por otra via, no se degrada nada.
+   */
+  private async onCheckoutExpired(session: Stripe.Checkout.Session): Promise<void> {
+    const localId = session.metadata?.['subscriptionLocalId'];
+    if (!localId) return;
+    const sub = await this.prisma.modSubscriptionsSubscription.findUnique({
+      where: { id: localId },
+    });
+    if (!sub || sub.status !== 'PENDING') return;
+    await this.expirarPendiente(sub.id, 'checkout_caducado');
+  }
+
+  /**
    * Reembolso (total o parcial) de un cargo. Publicamos el evento de dominio
    * para que los consumidores reaccionen (p.ej. mod.referrals revoca la
    * comisión devengada por esa invoice). NO tocamos el estado de la sub ni de
@@ -720,10 +857,18 @@ export class SubscriptionsService {
     });
     if (!invoice) return;
 
+    // Solo un reembolso TOTAL revoca. Uno parcial (un descuento a posteriori,
+    // una devolucion de gastos de 1 €) dejaba sin comision ENTERA al referidor
+    // de una venta que sigue cobrada. mod.billing ya ignoraba los parciales;
+    // este modulo gemelo no.
+    const total = charge.amount ?? 0;
+    const devuelto = charge.amount_refunded ?? 0;
+    if (!(devuelto > 0 && devuelto >= total)) return;
+
     await this.publisher.publish(invoice.tenantId, null, EVENT.INVOICE_REFUNDED, {
       subscriptionId: invoice.subscriptionId,
       stripeInvoiceId,
-      amountRefunded: charge.amount_refunded,
+      amountRefunded: devuelto,
       currency: charge.currency,
     });
   }
