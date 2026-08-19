@@ -55,10 +55,12 @@ export {
 export {
   LearningError,
   AlreadyEnrolledError,
+  EnrollmentNotActiveError,
   EnrollmentNotFoundError,
   InvitationInvalidError,
   CourseNotPublishedError,
   LessonLockedError,
+  LessonNotInCourseError,
   TrialContentLockedError,
   ScormLessonTypeMismatchError,
   ScormPackageInvalidError,

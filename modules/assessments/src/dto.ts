@@ -112,6 +112,12 @@ export type CreateQuestionDto = z.infer<typeof createQuestionSchema>;
 export const startAttemptSchema = z.object({
   quizId: z.string().uuid(),
   enrollmentId: z.string().uuid().optional(),
+  /**
+   * Se acepta por compatibilidad con clientes antiguos pero **se ignora**: la
+   * leccion del intento sale de `quiz.lessonId`. Cuando la mandaba el cliente,
+   * aprobar cualquier quiz facil apuntando aqui al examen final daba el examen
+   * final por completado.
+   */
   lessonId: z.string().uuid().optional(),
 });
 export type StartAttemptDto = z.infer<typeof startAttemptSchema>;

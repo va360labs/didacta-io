@@ -204,15 +204,22 @@ export class AssessmentsService {
     if (quiz.status !== 'PUBLISHED') throw new QuizNotPublishedError();
 
     if (quiz.maxAttempts !== null) {
-      const submittedCount = await this.prisma.modAssessmentsAttempt.count({
+      // Cuenta TODO intento gastado, no solo `SUBMITTED`/`EXPIRED`. La maquina
+      // de estados tambien produce `PENDING_REVIEW` (enviado, pendiente de
+      // correccion manual) y `GRADED` (ya corregido): cualquier quiz con una
+      // pregunta abierta termina ahi, esos dos estados no se contaban, y un
+      // alumno con `maxAttempts: 1` que suspendia un examen corregido a mano
+      // podia repetirlo indefinidamente. Se expresa por exclusion para que un
+      // estado terminal nuevo cuente por defecto en vez de abrir el limite.
+      const gastados = await this.prisma.modAssessmentsAttempt.count({
         where: {
           tenantId,
           quizId: dto.quizId,
           userId,
-          status: { in: ['SUBMITTED', 'EXPIRED'] },
+          status: { notIn: ['IN_PROGRESS', 'ABANDONED'] },
         },
       });
-      if (submittedCount >= quiz.maxAttempts) {
+      if (gastados >= quiz.maxAttempts) {
         throw new MaxAttemptsReachedError(quiz.maxAttempts);
       }
     }
@@ -222,13 +229,20 @@ export class AssessmentsService {
       ? new Date(startedAt.getTime() + quiz.timeLimitMinutes * 60_000)
       : null;
 
+    // La leccion del intento la manda el QUIZ, no el cliente. El body traia un
+    // `lessonId` que se guardaba tal cual y que el puente a mod.learning usaba
+    // luego para marcar esa leccion como completada: aprobar cualquier quiz
+    // facil publicado apuntando el `lessonId` al examen final daba el examen
+    // final por hecho. Un quiz pertenece a una leccion (`quiz.lessonId`) y esa
+    // es la unica que su aprobado puede cerrar; si el quiz no cuelga de ninguna
+    // (intento ad-hoc), el intento queda sin leccion y el puente no hace nada.
     const attempt = await this.prisma.modAssessmentsAttempt.create({
       data: {
         tenantId,
         quizId: dto.quizId,
         userId,
         enrollmentId: dto.enrollmentId ?? null,
-        lessonId: dto.lessonId ?? null,
+        lessonId: quiz.lessonId,
         status: 'IN_PROGRESS',
         startedAt,
         expiresAt,

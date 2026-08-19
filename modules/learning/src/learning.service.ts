@@ -9,9 +9,11 @@ import type { PrismaClient } from '@didacta/database';
 import {
   AlreadyEnrolledError,
   CourseNotPublishedError,
+  EnrollmentNotActiveError,
   EnrollmentNotFoundError,
   InvitationInvalidError,
   LessonLockedError,
+  LessonNotInCourseError,
   TrialContentLockedError,
 } from './errors.js';
 import {
@@ -427,6 +429,24 @@ export class LearningService {
       where: { tenantId, userId, id: dto.enrollmentId },
     });
     if (!enrollment) throw new EnrollmentNotFoundError();
+
+    // La matrícula tiene que estar VIVA. Antes se leía sin mirar el estado y el
+    // bloque de finalización ponía COMPLETED incondicionalmente: un alumno
+    // reembolsado (CANCELLED) o cortado por impago (PAUSED) seguía enviando
+    // progreso con su enrollmentId viejo hasta cruzar el umbral, y se llevaba
+    // curso completado, evento, certificado y puntos después de recuperar su
+    // dinero. COMPLETED sí sigue admitiendo progreso: repasar lo ya terminado
+    // es legítimo y el bloque de abajo no reabre la finalización.
+    if (enrollment.status !== 'ACTIVE' && enrollment.status !== 'COMPLETED') {
+      throw new EnrollmentNotActiveError(enrollment.status);
+    }
+
+    // La lección tiene que ser DE ESTE CURSO. `mod_learning_progress.lesson_id`
+    // es un id lógico sin FK (cross-module), así que nada en la base ataba la
+    // fila a una lección del curso: bastaba con enviar UUID cualesquiera con
+    // `completed:true` para que el recálculo los contase contra el total del
+    // curso y disparara finalización + certificado sin abrir una sola lección.
+    await this.requireLessonOfCourse(tenantId, enrollment.courseId, dto.lessonId);
 
     // DRIP/TRIAL: no permitir registrar progreso en una lección aún no liberada.
     // Ancla = enrolledAt (mismo criterio que getCourseAvailability; estable).
@@ -1121,18 +1141,40 @@ export class LearningService {
     return invitation;
   }
 
+  /**
+   * Recalcula el porcentaje de una matrícula.
+   *
+   * Numerador y denominador se sacan del MISMO conjunto: las lecciones vivas
+   * del curso. Antes el total excluía las lecciones borradas pero el contador
+   * de completadas no, y las dos mitades se desalineaban en los dos sentidos:
+   * un alumno al 10/10 pasaba a `10/5 = 200 %` cuando el formador borraba cinco
+   * lecciones, y las filas de progreso de lecciones ajenas (ver
+   * `requireLessonOfCourse`) sumaban como si fueran del curso. El `Math.min`
+   * es cinturón además de tirantes: con el filtro por lección viva el
+   * numerador ya no puede pasar del denominador.
+   */
   private async recalcEnrollmentProgress(enrollmentId: string, tenantId: string) {
     const enrollment = await this.prisma.modLearningEnrollment.findUniqueOrThrow({
       where: { id: enrollmentId },
     });
-    const totalLessons = await this.prisma.modCoursesLesson.count({
+    const lessons = await this.prisma.modCoursesLesson.findMany({
       where: { tenantId, module: { courseId: enrollment.courseId }, deletedAt: null },
+      select: { id: true },
     });
-    const completedLessons = await this.prisma.modLearningProgress.count({
-      where: { tenantId, enrollmentId, completed: true },
-    });
+    const totalLessons = lessons.length;
+    const completedLessons =
+      totalLessons === 0
+        ? 0
+        : await this.prisma.modLearningProgress.count({
+            where: {
+              tenantId,
+              enrollmentId,
+              completed: true,
+              lessonId: { in: lessons.map((l) => l.id) },
+            },
+          });
     const progressPercent =
-      totalLessons === 0 ? 0 : Math.round((completedLessons / totalLessons) * 100);
+      totalLessons === 0 ? 0 : Math.min(100, Math.round((completedLessons / totalLessons) * 100));
     await this.prisma.modLearningEnrollment.update({
       where: { id: enrollmentId },
       data: { progressPercent, startedAt: enrollment.startedAt ?? new Date() },
@@ -1491,6 +1533,26 @@ export class LearningService {
   }
 
   /**
+   * Devuelve la lección solo si vive dentro de ESE curso (y su sección no está
+   * borrada). Es la comprobación que faltaba en toda la cadena de progreso: el
+   * `lessonId` viaja en el body del alumno y no hay FK que lo ate al curso,
+   * así que sin esto cualquier UUID valía.
+   */
+  private async requireLessonOfCourse(tenantId: string, courseId: string, lessonId: string) {
+    const lesson = await this.prisma.modCoursesLesson.findFirst({
+      where: {
+        tenantId,
+        id: lessonId,
+        deletedAt: null,
+        module: { courseId, deletedAt: null },
+      },
+      select: { id: true, publishAt: true },
+    });
+    if (!lesson) throw new LessonNotInCourseError();
+    return lesson;
+  }
+
+  /**
    * ¿Puede el alumno acceder a esta lección ahora? True si no hay gating
    * aplicable o si la lección ya está liberada. Lo usa `trackProgress` para
    * bloquear el registro de progreso en lecciones aún no disponibles, y los
@@ -1506,8 +1568,11 @@ export class LearningService {
   ): Promise<void> {
     const now = new Date();
     // Fecha de publicación ABSOLUTA: si es futura, la lección está bloqueada.
+    // El filtro por `module.courseId` no es decorativo: sin él una lección de
+    // otro curso no aparecía aquí, `map.get(lessonId)` devolvía undefined en el
+    // drip y el gate entero se dejaba pasar en silencio.
     const lesson = await this.prisma.modCoursesLesson.findFirst({
-      where: { tenantId, id: lessonId, deletedAt: null },
+      where: { tenantId, id: lessonId, deletedAt: null, module: { courseId, deletedAt: null } },
       select: { publishAt: true },
     });
     if (lesson?.publishAt && lesson.publishAt > now) {

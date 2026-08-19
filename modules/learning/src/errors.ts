@@ -130,3 +130,30 @@ export class LearningPathNoCourseError extends LearningError {
     super('LEARNING_PATH_NO_COURSE', 'La ruta debe tener al menos un curso para publicarse');
   }
 }
+
+/**
+ * La lección que se quiere marcar no pertenece al curso de la matrícula (o ya
+ * no existe). Antes no se comprobaba: `trackProgress` aceptaba cualquier UUID
+ * con `completed:true` y `recalcEnrollmentProgress` lo contaba contra el total
+ * del curso, así que ocho UUID inventados bastaban para cruzar el umbral,
+ * cerrar la matrícula y auto-emitirse el certificado sin abrir una lección.
+ */
+export class LessonNotInCourseError extends LearningError {
+  constructor() {
+    super('LESSON_NOT_IN_COURSE', 'Esa lección no pertenece al curso de tu matrícula');
+  }
+}
+
+/**
+ * La matrícula existe pero no está viva (CANCELLED tras un reembolso, PAUSED
+ * por impago). No se registra progreso: sin esto, un alumno reembolsado seguía
+ * enviando progreso con su `enrollmentId` viejo hasta cruzar el umbral y
+ * llevarse curso completado, evento, certificado y puntos.
+ */
+export class EnrollmentNotActiveError extends LearningError {
+  constructor(status: string) {
+    super('ENROLLMENT_NOT_ACTIVE', `Tu matrícula está ${status} y no admite progreso`, {
+      detail: status,
+    });
+  }
+}

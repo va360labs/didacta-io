@@ -4,8 +4,10 @@ import { LearningService } from '../src/learning.service';
 import {
   AlreadyEnrolledError,
   CourseNotPublishedError,
+  EnrollmentNotActiveError,
   EnrollmentNotFoundError,
   InvitationInvalidError,
+  LessonNotInCourseError,
 } from '../src/errors';
 
 interface FakeCourse {
@@ -131,11 +133,26 @@ function makeFakePrisma() {
             (l) => l.courseId === where.module.courseId && l.deletedAt === null,
           ).length;
         }),
-        // Usado por assertLessonUnlocked para leer publishAt de la lección.
-        findFirst: vi.fn(async ({ where }: { where: { id?: string } }) => {
-          const l = where.id ? lessons.get(where.id) : undefined;
-          return l ? { publishAt: (l as { publishAt?: Date | null }).publishAt ?? null } : null;
-        }),
+        // Usado por requireLessonOfCourse y assertLessonUnlocked. Honra el
+        // filtro `module.courseId`: sin él, el fake dejaba pasar lecciones de
+        // otro curso y ningún test podía ver el agujero.
+        findFirst: vi.fn(
+          async ({
+            where,
+          }: {
+            where: {
+              id?: string;
+              deletedAt?: Date | null;
+              module?: { courseId?: string };
+            };
+          }) => {
+            const l = where.id ? lessons.get(where.id) : undefined;
+            if (!l) return null;
+            if (where.deletedAt === null && l.deletedAt !== null) return null;
+            if (where.module?.courseId && l.courseId !== where.module.courseId) return null;
+            return { id: l.id, publishAt: (l as { publishAt?: Date | null }).publishAt ?? null };
+          },
+        ),
         // Soporta la query por módulo (drip) y la nueva por courseId+publishAt.
         findMany: vi.fn(
           async ({
@@ -311,11 +328,24 @@ function makeFakePrisma() {
         findUnique: vi.fn(async () => null),
       },
       modLearningProgress: {
-        count: vi.fn(async ({ where }: { where: { enrollmentId: string; completed: boolean } }) => {
-          return [...progress.values()].filter(
-            (p) => p.enrollmentId === where.enrollmentId && p.completed === where.completed,
-          ).length;
-        }),
+        count: vi.fn(
+          async ({
+            where,
+          }: {
+            where: {
+              enrollmentId: string;
+              completed: boolean;
+              lessonId?: { in: string[] };
+            };
+          }) => {
+            return [...progress.values()].filter(
+              (p) =>
+                p.enrollmentId === where.enrollmentId &&
+                p.completed === where.completed &&
+                (!where.lessonId?.in || where.lessonId.in.includes(p.lessonId)),
+            ).length;
+          },
+        ),
         findMany: vi.fn(async ({ where }: { where: { tenantId: string; enrollmentId: string } }) =>
           [...progress.values()].filter(
             (p) => p.tenantId === where.tenantId && p.enrollmentId === where.enrollmentId,
@@ -803,6 +833,197 @@ describe('LearningService', () => {
         service.rejectLessonComment('t-1', 'rev-1', 'cm-1', 'spam'),
       ).rejects.toBeInstanceOf(EnrollmentNotFoundError);
       expect(fake.lessonComments.get('cm-1')!['status']).toBe('PENDING');
+    });
+  });
+
+  describe('trackProgress — la cadena progreso → finalización no se fía del cliente', () => {
+    /**
+     * Curso publicado con `totalLessons` lecciones vivas y una matrícula del
+     * alumno u-1 en el estado que se pida.
+     */
+    function seedCurso(
+      fake: ReturnType<typeof makeFakePrisma>,
+      opts: { totalLessons: number; status?: 'ACTIVE' | 'COMPLETED' | 'CANCELLED' },
+    ) {
+      fake.courses.set('c-1', { id: 'c-1', tenantId: 't-1', status: 'PUBLISHED', deletedAt: null });
+      fake.modules.set('m-1', {
+        id: 'm-1',
+        tenantId: 't-1',
+        courseId: 'c-1',
+        title: 'Modulo 1',
+        position: 1,
+        deletedAt: null,
+      });
+      for (let i = 0; i < opts.totalLessons; i++) {
+        fake.lessons.set(`l-${i}`, {
+          id: `l-${i}`,
+          tenantId: 't-1',
+          moduleId: 'm-1',
+          courseId: 'c-1',
+          deletedAt: null,
+          position: i,
+        });
+      }
+      fake.enrollments.set('en-1', {
+        id: 'en-1',
+        tenantId: 't-1',
+        userId: 'u-1',
+        courseId: 'c-1',
+        status: opts.status ?? 'ACTIVE',
+        source: 'ADMIN',
+        completionThreshold: 75,
+        progressPercent: 0,
+        enrolledAt: new Date('2026-01-01'),
+        startedAt: null,
+        completedAt: null,
+        cancelledAt: null,
+      });
+    }
+
+    it('rechaza una leccion que no es del curso de la matricula (C1)', async () => {
+      const fake = makeFakePrisma();
+      seedCurso(fake, { totalLessons: 10 });
+      // Curso ajeno con su propia leccion: el UUID existe, pero no en este curso.
+      fake.modules.set('m-otro', {
+        id: 'm-otro',
+        tenantId: 't-1',
+        courseId: 'c-otro',
+        title: 'Otro',
+        position: 1,
+        deletedAt: null,
+      });
+      fake.lessons.set('l-ajena', {
+        id: 'l-ajena',
+        tenantId: 't-1',
+        moduleId: 'm-otro',
+        courseId: 'c-otro',
+        deletedAt: null,
+        position: 0,
+      });
+      const service = new LearningService(fake.prisma as never, makeContext() as never);
+
+      await expect(
+        service.trackProgress('t-1', 'u-1', {
+          enrollmentId: 'en-1',
+          lessonId: 'l-ajena',
+          watchedSeconds: 0,
+          completed: true,
+        }),
+      ).rejects.toBeInstanceOf(LessonNotInCourseError);
+
+      expect(fake.progress.size).toBe(0);
+      expect(fake.enrollments.get('en-1')!.status).toBe('ACTIVE');
+    });
+
+    it('ocho UUID inventados no completan un curso de 10 lecciones (C1)', async () => {
+      const fake = makeFakePrisma();
+      seedCurso(fake, { totalLessons: 10 });
+      const ctx = makeContext();
+      const service = new LearningService(fake.prisma as never, ctx as never);
+
+      for (let i = 0; i < 8; i++) {
+        await expect(
+          service.trackProgress('t-1', 'u-1', {
+            enrollmentId: 'en-1',
+            lessonId: `inventada-${i}`,
+            watchedSeconds: 0,
+            completed: true,
+          }),
+        ).rejects.toBeInstanceOf(LessonNotInCourseError);
+      }
+
+      expect(fake.enrollments.get('en-1')!.status).toBe('ACTIVE');
+      expect(fake.enrollments.get('en-1')!.completedAt).toBeNull();
+      expect(ctx.eventBus.publish).not.toHaveBeenCalledWith(
+        expect.objectContaining({ name: 'learning.course.completed' }),
+      );
+    });
+
+    it('una leccion real del curso si cuenta y llega a la finalizacion', async () => {
+      const fake = makeFakePrisma();
+      seedCurso(fake, { totalLessons: 4 }); // umbral 75 % = 3 de 4
+      const ctx = makeContext();
+      const service = new LearningService(fake.prisma as never, ctx as never);
+
+      for (const id of ['l-0', 'l-1', 'l-2']) {
+        await service.trackProgress('t-1', 'u-1', {
+          enrollmentId: 'en-1',
+          lessonId: id,
+          watchedSeconds: 60,
+          completed: true,
+        });
+      }
+
+      expect(fake.enrollments.get('en-1')!.status).toBe('COMPLETED');
+      expect(ctx.eventBus.publish).toHaveBeenCalledWith(
+        expect.objectContaining({ name: 'learning.course.completed' }),
+      );
+    });
+
+    it('una matricula CANCELLED (reembolsada) no registra progreso ni se autocompleta (H1)', async () => {
+      const fake = makeFakePrisma();
+      seedCurso(fake, { totalLessons: 4, status: 'CANCELLED' });
+      const service = new LearningService(fake.prisma as never, makeContext() as never);
+
+      await expect(
+        service.trackProgress('t-1', 'u-1', {
+          enrollmentId: 'en-1',
+          lessonId: 'l-0',
+          watchedSeconds: 60,
+          completed: true,
+        }),
+      ).rejects.toBeInstanceOf(EnrollmentNotActiveError);
+
+      expect(fake.progress.size).toBe(0);
+      expect(fake.enrollments.get('en-1')!.status).toBe('CANCELLED');
+    });
+
+    it('una matricula COMPLETED sigue admitiendo progreso (repaso) sin reabrir la finalizacion', async () => {
+      const fake = makeFakePrisma();
+      seedCurso(fake, { totalLessons: 4, status: 'COMPLETED' });
+      const yaCompletada = new Date('2026-02-01');
+      fake.enrollments.get('en-1')!.completedAt = yaCompletada;
+      const service = new LearningService(fake.prisma as never, makeContext() as never);
+
+      await service.trackProgress('t-1', 'u-1', {
+        enrollmentId: 'en-1',
+        lessonId: 'l-0',
+        watchedSeconds: 30,
+        completed: true,
+      });
+
+      expect(fake.progress.size).toBe(1);
+      expect(fake.enrollments.get('en-1')!.completedAt).toBe(yaCompletada);
+    });
+
+    it('borrar lecciones no dispara porcentajes por encima de 100 (H3)', async () => {
+      const fake = makeFakePrisma();
+      seedCurso(fake, { totalLessons: 10 });
+      const service = new LearningService(fake.prisma as never, makeContext() as never);
+
+      for (let i = 0; i < 10; i++) {
+        await service.trackProgress('t-1', 'u-1', {
+          enrollmentId: 'en-1',
+          lessonId: `l-${i}`,
+          watchedSeconds: 10,
+          completed: true,
+        });
+      }
+      expect(fake.enrollments.get('en-1')!.progressPercent).toBe(100);
+
+      // El formador borra 5 (soft-delete): el progreso historico se conserva.
+      for (let i = 5; i < 10; i++) fake.lessons.get(`l-${i}`)!.deletedAt = new Date();
+
+      // Siguiente ping sobre una leccion viva: 5/5, no 10/5 = 200 %.
+      const res = await service.trackProgress('t-1', 'u-1', {
+        enrollmentId: 'en-1',
+        lessonId: 'l-0',
+        watchedSeconds: 10,
+        completed: true,
+      });
+      expect(res.totalLessons).toBe(5);
+      expect(res.completedLessons).toBe(5);
+      expect(res.progressPercent).toBe(100);
     });
   });
 });

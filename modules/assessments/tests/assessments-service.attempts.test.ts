@@ -40,7 +40,10 @@ interface AttemptRow {
   userId: string;
   enrollmentId: string | null;
   lessonId: string | null;
-  status: 'IN_PROGRESS' | 'SUBMITTED' | 'EXPIRED' | 'ABANDONED';
+  // El enum real tambien tiene PENDING_REVIEW y GRADED (correccion manual).
+  // Faltaban aqui, y por eso ningun test podia sembrarlos ni ver que no
+  // contaban contra maxAttempts.
+  status: 'IN_PROGRESS' | 'SUBMITTED' | 'PENDING_REVIEW' | 'GRADED' | 'EXPIRED' | 'ABANDONED';
   scoreEarned: number | null;
   scoreMax: number | null;
   scorePercent: number | null;
@@ -88,14 +91,21 @@ function makeFakePrisma(
     },
     modAssessmentsAttempt: {
       async count(args: {
-        where: { tenantId: string; quizId: string; userId: string; status: { in: string[] } };
+        where: {
+          tenantId: string;
+          quizId: string;
+          userId: string;
+          status: { in?: string[]; notIn?: string[] };
+        };
       }) {
+        const { status } = args.where;
         return attempts.filter(
           (a) =>
             a.tenantId === args.where.tenantId &&
             a.quizId === args.where.quizId &&
             a.userId === args.where.userId &&
-            args.where.status.in.includes(a.status),
+            (status.in ? status.in.includes(a.status) : true) &&
+            (status.notIn ? !status.notIn.includes(a.status) : true),
         ).length;
       },
       async create(args: { data: Omit<AttemptRow, 'id'> }): Promise<AttemptRow> {
@@ -204,15 +214,41 @@ describe('AssessmentsService.startAttempt', () => {
   });
 
   it('crea el intento y emite assessments.attempt.started', async () => {
-    const prisma = makeFakePrisma({ quizzes: [publishedQuiz()] });
+    const prisma = makeFakePrisma({ quizzes: [publishedQuiz({ lessonId: 'l1' })] });
     const events: { name: string; data: unknown }[] = [];
     const svc = new AssessmentsService(prisma as never, trackingCtx(events));
 
-    const attempt = await svc.startAttempt('t1', 'u1', { quizId: 'q1', lessonId: 'l1' });
+    const attempt = await svc.startAttempt('t1', 'u1', { quizId: 'q1' });
     expect(attempt.status).toBe('IN_PROGRESS');
     expect(attempt.userId).toBe('u1');
     expect(attempt.lessonId).toBe('l1');
     expect(events[0]?.name).toBe('assessments.attempt.started');
+  });
+
+  it('la leccion del intento la manda el quiz, no el cliente (H2)', async () => {
+    // El quiz cuelga de la leccion facil; el cliente apunta al examen final.
+    const prisma = makeFakePrisma({ quizzes: [publishedQuiz({ lessonId: 'leccion-facil' })] });
+    const svc = new AssessmentsService(prisma as never, trackingCtx([]));
+
+    const attempt = await svc.startAttempt('t1', 'u1', {
+      quizId: 'q1',
+      lessonId: 'examen-final',
+    });
+
+    // Aprobar este quiz solo puede cerrar SU leccion.
+    expect(attempt.lessonId).toBe('leccion-facil');
+  });
+
+  it('un quiz sin leccion deja el intento sin leccion (el puente no hace nada)', async () => {
+    const prisma = makeFakePrisma({ quizzes: [publishedQuiz({ lessonId: null })] });
+    const svc = new AssessmentsService(prisma as never, trackingCtx([]));
+
+    const attempt = await svc.startAttempt('t1', 'u1', {
+      quizId: 'q1',
+      lessonId: 'examen-final',
+    });
+
+    expect(attempt.lessonId).toBeNull();
   });
 
   it('rellena expiresAt cuando el quiz tiene timeLimitMinutes', async () => {
@@ -255,6 +291,70 @@ describe('AssessmentsService.startAttempt', () => {
     await expect(svc.startAttempt('t1', 'u1', { quizId: 'q1' })).rejects.toBeInstanceOf(
       MaxAttemptsReachedError,
     );
+  });
+
+  it.each(['PENDING_REVIEW', 'GRADED'] as const)(
+    'un intento %s tambien gasta intento (H7: examen con correccion manual)',
+    async (status) => {
+      // Cualquier quiz con una pregunta abierta acaba en PENDING_REVIEW y luego
+      // en GRADED. Ninguno de los dos se contaba: con maxAttempts 1, suspender
+      // un examen corregido a mano se podia repetir sin limite.
+      const previous: AttemptRow[] = [
+        {
+          id: 'old-1',
+          tenantId: 't1',
+          quizId: 'q1',
+          userId: 'u1',
+          enrollmentId: null,
+          lessonId: null,
+          status,
+          scoreEarned: 0,
+          scoreMax: 1,
+          scorePercent: 0,
+          passed: false,
+          startedAt: new Date(),
+          expiresAt: null,
+          submittedAt: new Date(),
+        },
+      ];
+      const prisma = makeFakePrisma({
+        quizzes: [publishedQuiz({ maxAttempts: 1 })],
+        attempts: previous,
+      });
+      const svc = new AssessmentsService(prisma as never, trackingCtx([]));
+
+      await expect(svc.startAttempt('t1', 'u1', { quizId: 'q1' })).rejects.toBeInstanceOf(
+        MaxAttemptsReachedError,
+      );
+    },
+  );
+
+  it('un intento IN_PROGRESS no gasta intento', async () => {
+    const previous: AttemptRow[] = [
+      {
+        id: 'old-1',
+        tenantId: 't1',
+        quizId: 'q1',
+        userId: 'u1',
+        enrollmentId: null,
+        lessonId: null,
+        status: 'IN_PROGRESS',
+        scoreEarned: 0,
+        scoreMax: 1,
+        scorePercent: 0,
+        passed: false,
+        startedAt: new Date(),
+        expiresAt: null,
+        submittedAt: null,
+      },
+    ];
+    const prisma = makeFakePrisma({
+      quizzes: [publishedQuiz({ maxAttempts: 1 })],
+      attempts: previous,
+    });
+    const svc = new AssessmentsService(prisma as never, trackingCtx([]));
+
+    await expect(svc.startAttempt('t1', 'u1', { quizId: 'q1' })).resolves.toBeTruthy();
   });
 });
 
