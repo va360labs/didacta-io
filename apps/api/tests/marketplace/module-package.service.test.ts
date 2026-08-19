@@ -256,12 +256,18 @@ describe('isCoreVersionCompatible', () => {
       expect(isCoreVersionCompatible('^0.0.1', '0.0.1')).toBe(true);
 
       // ⚠️ El instalador del marketplace, en cambio, compara contra
-      // `DIDACTA_CORE_VERSION`, que el compose cablea al TAG DE LA IMAGEN
-      // (0.1.0-beta.5). Son dos fuentes de verdad distintas para el mismo
-      // campo y no coinciden: contra el tag, el mismo módulo se rechaza.
-      // Queda fijado aquí para que el desacuerdo sea visible en vez de
-      // depender de que el comparador fuera permisivo.
-      expect(isCoreVersionCompatible('^0.0.1', '0.1.0-beta.5')).toBe(false);
+      // `DIDACTA_CORE_VERSION`, que el compose cablea al TAG DE LA IMAGEN. Son
+      // dos fuentes de verdad distintas para el mismo campo y no coinciden:
+      // contra el tag, el mismo módulo se rechaza. Queda fijado aquí para que
+      // el desacuerdo sea visible en vez de depender de que el comparador
+      // fuera permisivo.
+      //
+      // El literal NO es una versión real del producto a propósito:
+      // `scripts/release-bump.sh` reescribe la versión vieja en todo el repo,
+      // y una que lo parezca se fosilizaría aquí en el siguiente corte (este
+      // mismo test lo destapó cortando la beta.6).
+      const TAG_DE_IMAGEN_POSTERIOR = '0.4.7';
+      expect(isCoreVersionCompatible('^0.0.1', TAG_DE_IMAGEN_POSTERIOR)).toBe(false);
     });
 
     it('tilde con pre-release: ~0.0.1-alpha.0 matchea 0.0.1-alpha.41', () => {
