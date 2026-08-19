@@ -447,6 +447,56 @@ async function setJobProgress(
   return result.rowCount;
 }
 
+/// Escribe la columna `error` del job. Sin esto, un job que moría por un fallo
+/// permanente del origen (Application Password revocada, endpoint retirado) se
+/// quedaba en `extracting` re-encolando cada 30 s y el operador solo veía un
+/// job que no avanza, sin ningún motivo apuntado en ningún sitio.
+async function setJobError(
+  db: SandboxedDb,
+  tenantId: string,
+  jobId: string,
+  error: { code: string; message: string },
+): Promise<number> {
+  const result = await db.execute(
+    `UPDATE mod_migrator_learndash_jobs
+        SET error = $3::jsonb
+      WHERE tenant_id = $1::uuid AND id = $2::uuid`,
+    [tenantId, jobId, JSON.stringify({ ...error, at: nowIso() })],
+  );
+  return result.rowCount;
+}
+
+/// Deja en `validation_reports` cuantos registros devolvio el ORIGEN por
+/// entidad, tal como los conto la paginacion. Se llama al terminar el extract
+/// porque despues el cursor cambia de fase y el dato se pierde.
+async function recordSourceCounts(
+  db: SandboxedDb,
+  tenantId: string,
+  jobId: string,
+  totals: Record<string, number>,
+  log: (level: 'log' | 'warn' | 'error', msg: string) => void,
+): Promise<void> {
+  for (const [entity, total] of Object.entries(totals)) {
+    try {
+      await db.execute(
+        `INSERT INTO mod_migrator_learndash_validation_reports
+           (tenant_id, job_id, entity_type, source_count, staged_count, valid_count,
+            loaded_count, skipped_count, failed_count)
+         VALUES ($1::uuid, $2::uuid, $3, $4, 0, 0, 0, 0, 0)
+         ON CONFLICT (tenant_id, job_id, entity_type) DO UPDATE
+           SET source_count = EXCLUDED.source_count`,
+        [tenantId, jobId, entity, total],
+      );
+    } catch (e) {
+      // Que el informe no cuadre no puede tumbar la migracion.
+      log(
+        'warn',
+        `source_count de ${entity} no se pudo grabar: ${e instanceof Error ? e.message : e}`,
+      );
+    }
+  }
+}
+
 /// Transición atómica vía CAS (compare-and-set). Solo aplica el UPDATE si
 /// el status actual del job es exactamente `from`. Si otro tick (o el
 /// endpoint de cancelación) cambió el status entre el read y el write,
@@ -524,6 +574,31 @@ function basicAuthHeader(username: string, appPassword: string): string {
 /// credential tenga capability suficiente (list_users para /users;
 /// edit_posts para CPTs). Application Passwords de admin las tienen.
 /// Para `users` específicamente sin esto el migrator es 100% inútil.
+/**
+ * Fallo HTTP del origen WordPress, con el status a mano. Antes era un `Error`
+ * pelado: el caller no podia distinguir un 500 transitorio de un 401 por
+ * Application Password revocada, y reintentaba los dos igual — para siempre.
+ */
+class WpHttpError extends Error {
+  constructor(
+    readonly status: number,
+    url: string,
+  ) {
+    super(`HTTP ${status} fetching ${url}`);
+    this.name = 'WpHttpError';
+  }
+}
+
+/**
+ * Un 4xx de estos no se arregla esperando: credencial revocada, permisos
+ * retirados, endpoint que ya no existe. Reintentarlos deja el job girando en
+ * `extracting` sin avanzar y sin decir nada.
+ */
+const PERMANENT_WP_STATUSES = new Set([400, 401, 403, 404, 405, 410, 451]);
+
+/** Reintentos de una misma pagina antes de dar el job por fallido. */
+const PAGE_MAX_ATTEMPTS = 5;
+
 async function fetchOneWpPage<T>(
   http: SandboxedHttp,
   baseUrl: string,
@@ -561,7 +636,7 @@ async function fetchOneWpPage<T>(
     return { items: [], totalPages: page - 1, status: 200 };
   }
   if (resp.status >= 400) {
-    throw new Error(`HTTP ${resp.status} fetching ${url}`);
+    throw new WpHttpError(resp.status, url);
   }
   let items: T[];
   try {
@@ -867,7 +942,19 @@ interface ExtractCursor {
   /// Source ID del curso elegido por sample-pick (solo en sample mode).
   /// Útil para logging y verificación.
   sampleCourseId?: string;
+  /// Intentos consumidos por curso en la extracción de matrículas. Sin este
+  /// contador, un corte a mitad de paginación se tragaba las páginas que
+  /// faltaban y el cursor avanzaba como si el curso estuviera completo.
+  enrollAttempts?: Record<string, number>;
+  /// Intentos consumidos por (entity, page, course) en la paginación. Sin el
+  /// contador, un error se reintentaba indefinidamente y el job nunca fallaba.
+  pageAttempts?: Record<string, number>;
 }
+
+/// Intentos por curso antes de rendirse y mandar la extracción de matrículas
+/// a la DLQ. Tres cubre un 5xx transitorio sin dejar el job atascado.
+const ENROLL_MAX_ATTEMPTS = 3;
+const ENROLL_RETRY_DELAY_SEC = 15;
 
 function emptyExtractCursor(): ExtractCursor {
   return {
@@ -3193,6 +3280,12 @@ async function onJobTick(ctx: ModuleJobTickContext): Promise<JobTickResult> {
           }
           const courseSourceId = courseIds[idx]!;
           let enrolledCount = 0;
+          // Un corte a mitad de paginación NO es el final de la lista. Antes
+          // cualquier 5xx o JSON roto hacía `break` y el cursor avanzaba igual
+          // (`courseIdx: idx + 1`): un 500 transitorio en la página 3 de un
+          // curso de 900 alumnos perdía las páginas 3+ para siempre, sin DLQ,
+          // sin reintento y sin que el informe pudiera notarlo.
+          let truncado: string | null = null;
           try {
             const PER_PAGE = 100;
             const MAX_PAGES = 200; // defensa: hasta 20k alumnos/curso en un tick
@@ -3209,12 +3302,14 @@ async function onJobTick(ctx: ModuleJobTickContext): Promise<JobTickResult> {
                   'warn',
                   `tick ${tickIndex}: enroll curso ${courseSourceId} page=${page} HTTP ${r.status}: ${r.body.slice(0, 200)}.`,
                 );
+                truncado = `HTTP ${r.status} en page=${page}`;
                 break;
               }
               let arr: unknown;
               try {
                 arr = JSON.parse(r.body);
               } catch {
+                truncado = `respuesta no-JSON en page=${page}`;
                 break;
               }
               if (!Array.isArray(arr) || arr.length === 0) break;
@@ -3246,11 +3341,47 @@ async function onJobTick(ctx: ModuleJobTickContext): Promise<JobTickResult> {
               page += 1;
             }
           } catch (e) {
+            truncado = e instanceof Error ? e.message : String(e);
             ctx.log(
               'warn',
-              `tick ${tickIndex}: enroll curso ${courseSourceId} excepción: ${e instanceof Error ? e.message : e}. Sigue al siguiente.`,
+              `tick ${tickIndex}: enroll curso ${courseSourceId} excepción: ${truncado}.`,
             );
           }
+
+          if (truncado) {
+            // El curso se reintenta ENTERO en el próximo tick (el upsert de
+            // matrículas es idempotente por (job, source_id, course)). Tras
+            // agotar los intentos se manda a la DLQ y se avanza: así el
+            // operador ve la pérdida en vez de recibir un informe perfecto.
+            const intentos = (cursor.enrollAttempts?.[courseSourceId] ?? 0) + 1;
+            if (intentos < ENROLL_MAX_ATTEMPTS) {
+              ctx.log(
+                'warn',
+                `tick ${tickIndex}: enroll curso ${courseSourceId} truncado (${truncado}). Reintento ${intentos}/${ENROLL_MAX_ATTEMPTS}.`,
+              );
+              await setJobProgress(db, tenantId, jobId, {
+                ...cursor,
+                enrollAttempts: { ...(cursor.enrollAttempts ?? {}), [courseSourceId]: intentos },
+              } as unknown as Record<string, unknown>);
+              return { status: 'continue', delaySec: ENROLL_RETRY_DELAY_SEC };
+            }
+            await appendDlq(
+              db,
+              tenantId,
+              jobId,
+              'enrollments',
+              courseSourceId,
+              'extract',
+              'EXTRACT_TRUNCATED',
+              `matrículas del curso ${courseSourceId} incompletas tras ${ENROLL_MAX_ATTEMPTS} intentos: ${truncado}`,
+              null,
+            );
+            ctx.log(
+              'error',
+              `tick ${tickIndex}: enroll curso ${courseSourceId} ABANDONADO tras ${ENROLL_MAX_ATTEMPTS} intentos (${truncado}). Va a DLQ.`,
+            );
+          }
+
           ctx.log(
             'log',
             `tick ${tickIndex}: enroll curso #${idx + 1}/${courseIds.length} (${courseSourceId}) — ${enrolledCount} matrículas.`,
@@ -3342,10 +3473,49 @@ async function onJobTick(ctx: ModuleJobTickContext): Promise<JobTickResult> {
           );
         } catch (e) {
           const msg = e instanceof Error ? e.message : String(e);
+          const status = e instanceof WpHttpError ? e.status : null;
+          const donde = `${entity.name}#${cursor.page}${perCourseFilter ? `(course=${perCourseFilter.courseSourceId})` : ''}`;
+
+          // Permanente: la credencial se revocó a mitad, el endpoint ya no
+          // existe, el rol perdió permisos. Esperar no lo arregla y el job se
+          // quedaba girando en `extracting` re-encolando un tick fallido cada
+          // 30 s para siempre — el operador solo veía un job que no avanza.
+          if (status !== null && PERMANENT_WP_STATUSES.has(status)) {
+            await setJobError(db, tenantId, jobId, {
+              code: 'SOURCE_PERMANENT_ERROR',
+              message: `extract ${donde}: ${msg}`,
+            });
+            await setJobStatus(db, tenantId, jobId, 'failed', nowIso());
+            ctx.log(
+              'error',
+              `tick ${tickIndex}: extract ${donde} falló de forma permanente: ${msg}.`,
+            );
+            return { status: 'failed', reason: `SOURCE_PERMANENT_ERROR:${status}` };
+          }
+
+          const clave = `${entity.name}:${cursor.page}:${perCourseFilter?.courseSourceId ?? '-'}`;
+          const intentos = (cursor.pageAttempts?.[clave] ?? 0) + 1;
+          if (intentos >= PAGE_MAX_ATTEMPTS) {
+            await setJobError(db, tenantId, jobId, {
+              code: 'SOURCE_UNREACHABLE',
+              message: `extract ${donde}: ${msg} (tras ${PAGE_MAX_ATTEMPTS} intentos)`,
+            });
+            await setJobStatus(db, tenantId, jobId, 'failed', nowIso());
+            ctx.log(
+              'error',
+              `tick ${tickIndex}: extract ${donde} agotó ${PAGE_MAX_ATTEMPTS} intentos: ${msg}.`,
+            );
+            return { status: 'failed', reason: 'SOURCE_UNREACHABLE' };
+          }
+
           ctx.log(
             'warn',
-            `tick ${tickIndex}: extract page ${entity.name}#${cursor.page}${perCourseFilter ? `(course=${perCourseFilter.courseSourceId})` : ''} falló: ${msg}. Re-encolando con backoff.`,
+            `tick ${tickIndex}: extract page ${donde} falló: ${msg}. Reintento ${intentos}/${PAGE_MAX_ATTEMPTS}.`,
           );
+          await setJobProgress(db, tenantId, jobId, {
+            ...cursor,
+            pageAttempts: { ...(cursor.pageAttempts ?? {}), [clave]: intentos },
+          } as unknown as Record<string, unknown>);
           return { status: 'continue', delaySec: 30 };
         }
 
@@ -3478,6 +3648,13 @@ async function onJobTick(ctx: ModuleJobTickContext): Promise<JobTickResult> {
               jobId,
               newCursor as unknown as Record<string, unknown>,
             );
+            // Congela lo que el ORIGEN devolvió, entity a entity, antes de que
+            // el cursor cambie de fase y se pierda. Es el único numero que
+            // permite al informe de validación detectar registros perdidos: el
+            // reconcile cableaba `source_count = staged_count`, asi que solo
+            // podía darse la razon a si mismo. Su `ON CONFLICT DO UPDATE` no
+            // toca `source_count`, de modo que este valor sobrevive.
+            await recordSourceCounts(db, tenantId, jobId, newTotals, ctx.log);
             ctx.log(
               'log',
               `tick ${tickIndex}: paginate completed (${Object.entries(newTotals)
@@ -3941,11 +4118,21 @@ async function onJobTick(ctx: ModuleJobTickContext): Promise<JobTickResult> {
                   // lessons están agrupadas en sections explícitas.
                   let hasOrphans = false;
                   try {
+                    // Cuenta lessons huérfanas Y TEMAS. Los temas SIEMPRE se
+                    // adaptan con `moduleExternalRef = courseId` pelado, así
+                    // que siempre necesitan "General"; mirar solo las lessons
+                    // hacía que en un curso 100 % seccionado con temas el
+                    // module nunca se creara y cada upsert de tema acabara en
+                    // la DLQ.
                     const q = await db.query<{ n: string }>(
-                      `SELECT COUNT(*)::text AS n
-                         FROM mod_migrator_learndash_stg_lessons
-                        WHERE tenant_id = $1::uuid AND job_id = $2::uuid
-                          AND parent_course_id = $3`,
+                      `SELECT (
+                            (SELECT COUNT(*) FROM mod_migrator_learndash_stg_lessons
+                              WHERE tenant_id = $1::uuid AND job_id = $2::uuid
+                                AND parent_course_id = $3)
+                          + (SELECT COUNT(*) FROM mod_migrator_learndash_stg_topics
+                              WHERE tenant_id = $1::uuid AND job_id = $2::uuid
+                                AND parent_course_id = $3)
+                         )::text AS n`,
                       [tenantId, jobId, courseSourceId],
                     );
                     hasOrphans = parseInt(q.rows[0]?.n ?? '0', 10) > 0;
@@ -4116,6 +4303,12 @@ async function onJobTick(ctx: ModuleJobTickContext): Promise<JobTickResult> {
                    skipped_count = EXCLUDED.skipped_count,
                    failed_count = EXCLUDED.failed_count,
                    generated_at = CURRENT_TIMESTAMP`,
+            // `source_count` solo se escribe si la fila NO existía: la de
+            // verdad la deja el final del extract con lo que el origen
+            // devolvió. Cablearlo a `staged` hacía que el informe de
+            // validación no pudiera detectar registros perdidos — solo podía
+            // darse la razón a sí mismo. Si el extract no llegó a escribirla
+            // (job antiguo), `staged` sigue siendo el mejor valor disponible.
             [tenantId, jobId, entity, staged, staged, valid, loaded, skipped, failed],
           );
         }

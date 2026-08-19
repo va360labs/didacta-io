@@ -5,7 +5,13 @@
 
 import type { LdLesson, LdTopic } from '../connector/index.js';
 import type { CanonicalLearningUnit, MapResult } from './canonical.js';
-import { externalId, unwrapTitle, decodeHtmlEntities, asNumber } from './helpers.js';
+import {
+  externalId,
+  unwrapTitle,
+  decodeHtmlEntities,
+  asNumber,
+  extractWpContentHtml,
+} from './helpers.js';
 
 export function mapLesson(raw: LdLesson, orderHint = 0): MapResult<CanonicalLearningUnit> {
   const warnings: string[] = [];
@@ -27,13 +33,9 @@ export function mapLesson(raw: LdLesson, orderHint = 0): MapResult<CanonicalLear
   // WP REST emite `content` como `{ rendered: '<html>...', protected: bool }`
   // (mismo shape que `title`). El mapper anterior NO lo extraía → todas las
   // lessons llegaban al adapter con `contentHtml=''` y se cargaban vacías.
-  const contentObj = (raw as unknown as { content?: { rendered?: string } | string }).content;
-  const contentHtml =
-    typeof contentObj === 'string'
-      ? contentObj
-      : contentObj && typeof contentObj === 'object' && typeof contentObj.rendered === 'string'
-        ? contentObj.rendered
-        : '';
+  // Ahora la extracción es compartida con `mapTopic`, que padecía exactamente
+  // el mismo defecto sin que nadie lo notara.
+  const contentHtml = extractWpContentHtml(raw);
 
   const visibleAfterDays = asNumber(raw.visible_after);
   return {
@@ -74,6 +76,13 @@ export function mapTopic(raw: LdTopic, orderHint = 0): MapResult<CanonicalLearni
   }
   const title = decodeHtmlEntities(unwrapTitle(raw.title));
 
+  // El texto del tema. `mapTopic` nunca leía `content`, así que el adaptador
+  // caía a `content: { html: '' }` y todos los temas de LearnDash aterrizaban
+  // como lecciones VACÍAS, en silencio: el `loaded_count` salía perfecto y el
+  // operador recibía una migración "correcta" con el contenido hueco.
+  const contentHtml = extractWpContentHtml(raw);
+  if (!contentHtml) warnings.push(`tema ${raw.id} sin contenido en el origen`);
+
   return {
     ok: true,
     warnings,
@@ -85,6 +94,7 @@ export function mapTopic(raw: LdTopic, orderHint = 0): MapResult<CanonicalLearni
       parentLessonSourceId: lessonId ? String(lessonId) : undefined,
       title: title || `Tema ${raw.id}`,
       orderIdx: orderHint,
+      contentHtml,
     },
   };
 }

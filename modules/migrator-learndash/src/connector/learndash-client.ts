@@ -62,6 +62,8 @@ export interface LdTopic {
   id: number;
   slug: string;
   title?: { rendered: string } | string;
+  /** El HTML del tema. Faltaba en el tipo, y por eso nadie lo echó de menos. */
+  content?: { rendered?: string; protected?: boolean } | string;
   status?: string;
   course?: number;
   lesson?: number;

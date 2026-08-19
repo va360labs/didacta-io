@@ -18,7 +18,14 @@ export type {
   MapResult,
 } from './canonical.js';
 
-export { externalId, mapWpRoles, mapWpStatus, mapLdQuestionType } from './helpers.js';
+export {
+  externalId,
+  mapWpRoles,
+  mapWpStatus,
+  mapLdQuestionType,
+  decodeHtmlEntities,
+  extractWpContentHtml,
+} from './helpers.js';
 export { mapUser } from './users.js';
 export { mapCourse } from './courses.js';
 export { mapLesson, mapTopic } from './learning-units.js';

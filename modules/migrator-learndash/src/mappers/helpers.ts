@@ -51,6 +51,37 @@ const NAMED_HTML_ENTITIES: Record<string, string> = {
   trade: '™',
   iexcl: '¡',
   iquest: '¿',
+  // Acentuadas y ene. WordPress las emite con nombre en cuanto el editor las
+  // escribe asi, y sin ellas `España` se migraba literalmente como
+  // `Espa&ntilde;a` al titulo del curso.
+  ntilde: 'ñ',
+  Ntilde: 'Ñ',
+  aacute: 'á',
+  eacute: 'é',
+  iacute: 'í',
+  oacute: 'ó',
+  uacute: 'ú',
+  Aacute: 'Á',
+  Eacute: 'É',
+  Iacute: 'Í',
+  Oacute: 'Ó',
+  Uacute: 'Ú',
+  uuml: 'ü',
+  Uuml: 'Ü',
+  ccedil: 'ç',
+  Ccedil: 'Ç',
+  agrave: 'à',
+  egrave: 'è',
+  ograve: 'ò',
+  deg: '°',
+  euro: '€',
+  middot: '·',
+  bull: '•',
+  sup2: '²',
+  sup3: '³',
+  frac12: '½',
+  ordm: 'º',
+  ordf: 'ª',
 };
 
 /// Decodifica HTML entities en un string. Maneja:
@@ -73,7 +104,9 @@ export function decodeHtmlEntities(html: string): string {
         return match;
       }
     }
-    return NAMED_HTML_ENTITIES[ent.toLowerCase()] ?? match;
+    // Primero exacto (Ntilde y ntilde son entidades DISTINTAS), luego en
+    // minusculas para los que solo existen en una forma (&AMP; = &amp;).
+    return NAMED_HTML_ENTITIES[ent] ?? NAMED_HTML_ENTITIES[ent.toLowerCase()] ?? match;
   });
 }
 
@@ -208,4 +241,23 @@ export function isLdQuestion(v: unknown): v is LdQuestion {
 }
 export function isWpUser(v: unknown): v is WpUser {
   return typeof v === 'object' && v !== null && 'id' in (v as Record<string, unknown>);
+}
+
+/**
+ * Extrae el HTML de un campo `content` de WP REST, que llega como
+ * `{ rendered: '<html>', protected: bool }` o, en algunas versiones, como
+ * string pelado.
+ *
+ * Vive aqui y no dentro de un mapper a proposito: `mapLesson` lo llevaba
+ * inline y `mapTopic` —su gemelo— nunca lo copio, asi que TODOS los temas de
+ * LearnDash se cargaban vacios en silencio y el `loaded_count` salia perfecto.
+ * Compartir la funcion es lo que impide que la pareja vuelva a separarse.
+ */
+export function extractWpContentHtml(raw: unknown): string {
+  const contentObj = (raw as { content?: { rendered?: string } | string } | undefined)?.content;
+  if (typeof contentObj === 'string') return contentObj;
+  if (contentObj && typeof contentObj === 'object' && typeof contentObj.rendered === 'string') {
+    return contentObj.rendered;
+  }
+  return '';
 }

@@ -3,6 +3,7 @@ import {
   mapCourse,
   mapLesson,
   mapTopic,
+  decodeHtmlEntities,
   mapQuiz,
   mapQuestion,
   mapUser,
@@ -103,6 +104,52 @@ describe('mapLesson / mapTopic', () => {
       expect(r.canonical.parentLessonSourceId).toBeUndefined();
       expect(r.warnings.length).toBeGreaterThan(0);
     }
+  });
+
+  it('el tema se lleva su HTML, igual que la leccion (C5)', () => {
+    // mapLesson extraia `content.rendered` y mapTopic no: todos los temas
+    // llegaban vacios en silencio, con el loaded_count perfecto.
+    const html = '<p>El temario de verdad</p>';
+    const r = mapTopic({
+      id: 201,
+      slug: 't',
+      course: 24,
+      lesson: 100,
+      content: { rendered: html },
+    });
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.canonical.contentHtml).toBe(html);
+  });
+
+  it('la leccion y el tema extraen el contenido igual (mismo helper)', () => {
+    const html = '<p>x</p>';
+    const l = mapLesson({ id: 100, slug: 'l', course: 24, content: { rendered: html } });
+    const t = mapTopic({ id: 200, slug: 't', course: 24, content: { rendered: html } });
+    expect(l.ok && t.ok).toBe(true);
+    if (l.ok && t.ok) expect(l.canonical.contentHtml).toBe(t.canonical.contentHtml);
+  });
+
+  it('un tema sin contenido en el origen avisa en vez de callar', () => {
+    const r = mapTopic({ id: 202, slug: 't', course: 24, lesson: 100 });
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.warnings.some((w) => w.includes('sin contenido'))).toBe(true);
+  });
+});
+
+describe('decodeHtmlEntities — entidades espanolas (L10)', () => {
+  it('decodifica ntilde y acentuadas con nombre', () => {
+    expect(decodeHtmlEntities('Espa&ntilde;a')).toBe('España');
+    expect(decodeHtmlEntities('Dise&ntilde;o Gr&aacute;fico')).toBe('Diseño Gráfico');
+    expect(decodeHtmlEntities('&Ntilde;')).toBe('Ñ');
+  });
+
+  it('sigue decodificando numericas y las de siempre', () => {
+    expect(decodeHtmlEntities('a&#8211;b')).toBe('a–b');
+    expect(decodeHtmlEntities('a&amp;b')).toBe('a&b');
+  });
+
+  it('una entidad que no conoce se deja cruda en vez de romper', () => {
+    expect(decodeHtmlEntities('&noexiste;')).toBe('&noexiste;');
   });
 });
 
