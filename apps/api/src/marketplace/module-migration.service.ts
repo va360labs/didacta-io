@@ -132,12 +132,43 @@ export class ModuleMigrationService {
       return { applied: [], skipped };
     }
 
+    // ¿Existe el escape auditado? En el compose estándar sí; en un cluster de
+    // test donde solo corrió `db push` (sin rls.sql/grants.sql), no. Se
+    // comprueba ANTES de abrir la transacción: un `SET LOCAL ROLE` que falla
+    // aborta la transacción entera en Postgres, y no hay forma de recuperarse
+    // desde dentro.
+    const conEscalada = await this.superRoleExists();
+
     try {
       await this.prisma.$transaction(async (tx) => {
+        if (conEscalada) {
+          // Las migraciones del módulo crean tablas, y la DATABASE_URL de
+          // runtime es `didacta_app`: NOSUPERUSER, NOBYPASSRLS, solo USAGE +
+          // DML sobre `public`. Desde Postgres 15 `public` ya no concede
+          // CREATE a los no-owner, así que cualquier módulo con un
+          // `CREATE TABLE` fallaba con "permission denied for schema public"
+          // → MODULE_BOOT_FAILED → instalación FAILED, siempre, en el
+          // despliegue por defecto. La escalada dura lo que dura esta
+          // transacción.
+          await tx.$executeRawUnsafe('SET LOCAL ROLE didacta_super');
+        }
         for (const file of pending) {
           for (const stmt of splitStatements(file.sql)) {
             await tx.$executeRawUnsafe(stmt);
           }
+        }
+        if (conEscalada) {
+          // Lo que acaba de crear `didacta_super` lo tiene que poder usar el
+          // rol con el que corre la aplicación; si no, el módulo se instala y
+          // luego no puede leer sus propias tablas. `ON ALL TABLES` se salta
+          // en silencio aquello sobre lo que no hay derecho a conceder, así
+          // que solo alcanza a lo recién creado.
+          await tx.$executeRawUnsafe(
+            'GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO didacta_app',
+          );
+          await tx.$executeRawUnsafe(
+            'GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO didacta_app',
+          );
         }
       });
     } catch (err) {
@@ -150,5 +181,25 @@ export class ModuleMigrationService {
     }
 
     return { applied: pending.map((f) => f.filename), skipped };
+  }
+
+  /**
+   * ¿Está creado el rol `didacta_super`? Solo lo está donde se aplicaron
+   * `rls.sql` + `grants.sql`, que es todo despliegue real. Donde no (un
+   * cluster de test levantado con `db push` a secas), se aplica sin escalada:
+   * ahí el usuario de la conexión suele ser el superuser y no hace falta.
+   */
+  private async superRoleExists(): Promise<boolean> {
+    try {
+      const rows = await this.prisma.$queryRawUnsafe<Array<{ exists: boolean }>>(
+        `SELECT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'didacta_super') AS "exists"`,
+      );
+      return rows[0]?.exists === true;
+    } catch (err) {
+      this.logger.warn(
+        `No se pudo comprobar el rol didacta_super (${err instanceof Error ? err.message : String(err)}); se aplican las migraciones sin escalada.`,
+      );
+      return false;
+    }
   }
 }

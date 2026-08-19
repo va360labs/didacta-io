@@ -19,6 +19,8 @@ const STATUS_BY_CODE: Record<string, number> = {
   ENROLLMENT_NOT_FOUND: HttpStatus.NOT_FOUND,
   INVITATION_INVALID: HttpStatus.BAD_REQUEST,
   COURSE_NOT_PUBLISHED: HttpStatus.UNPROCESSABLE_ENTITY,
+  // El curso se vende: la automatrícula no aplica, hay que pasar por caja.
+  COURSE_NOT_FREE: HttpStatus.FORBIDDEN,
   LESSON_LOCKED: HttpStatus.FORBIDDEN,
   // La lección no es del curso de la matrícula: 404 y no 403, para no confirmar
   // al que prueba UUID que ese id existe en otro curso del aula.

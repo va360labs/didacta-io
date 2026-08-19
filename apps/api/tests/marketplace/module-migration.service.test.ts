@@ -9,6 +9,8 @@ interface PrismaMockOptions {
   /// Si lanza, simula fallo en `$executeRawUnsafe`. Útil para test de
   /// rollback transaccional.
   failOnStatement?: number;
+  /** Simula un despliegue real, donde rls.sql/grants.sql sí crearon el rol. */
+  superRoleExists?: boolean;
 }
 
 interface PrismaMock {
@@ -36,6 +38,11 @@ function makePrismaMock(opts: PrismaMockOptions = {}): PrismaMock {
   };
 
   const prisma = {
+    // Detección del rol `didacta_super`. Por defecto el cluster de test NO lo
+    // tiene, que es lo que hacía que estos tests no vieran nunca el problema
+    // real: en el despliegue estándar la conexión es `didacta_app`, que no
+    // puede hacer CREATE en `public` desde Postgres 15.
+    $queryRawUnsafe: vi.fn(async () => [{ exists: opts.superRoleExists ?? false }]),
     $transaction: vi.fn(async (cb: (tx: unknown) => Promise<void>) => {
       const buffer = [...executed];
       try {
@@ -173,5 +180,50 @@ describe('ModuleMigrationService.applyMigrations', () => {
       code: 'MODULE_LINT_FAILED',
       message: expect.stringMatching(/^broken\.sql:/),
     });
+  });
+});
+
+describe('ModuleMigrationService.applyMigrations · privilegios (H18)', () => {
+  it('en un despliegue real escala a didacta_super para poder CREATE', async () => {
+    // `didacta_app` (la DATABASE_URL de runtime) es NOSUPERUSER NOBYPASSRLS
+    // con solo USAGE + DML sobre `public`, y desde Postgres 15 `public` ya no
+    // concede CREATE a los no-owner: sin la escalada, TODO módulo con un
+    // `CREATE TABLE` moría con "permission denied for schema public" y la
+    // instalación quedaba FAILED. Siempre. En el despliegue por defecto.
+    const mock = makePrismaMock({ superRoleExists: true });
+    const svc = new ModuleMigrationService(mock.prisma);
+    const files = [{ path: '', filename: '01_a.sql', sql: 'CREATE TABLE mod_example_a (id INT);' }];
+
+    await svc.applyMigrations(files, PREFIX, []);
+
+    expect(mock.executed[0]).toBe('SET LOCAL ROLE didacta_super');
+    expect(mock.executed.some((sql) => sql.includes('CREATE TABLE mod_example_a'))).toBe(true);
+  });
+
+  it('devuelve los permisos al rol de runtime sobre lo recién creado', async () => {
+    // Si no, el módulo se instala y luego no puede leer sus propias tablas.
+    const mock = makePrismaMock({ superRoleExists: true });
+    const svc = new ModuleMigrationService(mock.prisma);
+    const files = [{ path: '', filename: '01_a.sql', sql: 'CREATE TABLE mod_example_a (id INT);' }];
+
+    await svc.applyMigrations(files, PREFIX, []);
+
+    expect(mock.executed.some((sql) => /GRANT .*ON ALL TABLES .*TO didacta_app/.test(sql))).toBe(
+      true,
+    );
+    expect(mock.executed.some((sql) => /GRANT .*ON ALL SEQUENCES .*TO didacta_app/.test(sql))).toBe(
+      true,
+    );
+  });
+
+  it('sin el rol creado (cluster de test) se aplica sin escalada, sin reventar', async () => {
+    const mock = makePrismaMock({ superRoleExists: false });
+    const svc = new ModuleMigrationService(mock.prisma);
+    const files = [{ path: '', filename: '01_a.sql', sql: 'CREATE TABLE mod_example_a (id INT);' }];
+
+    const res = await svc.applyMigrations(files, PREFIX, []);
+
+    expect(res.applied).toEqual(['01_a.sql']);
+    expect(mock.executed).not.toContain('SET LOCAL ROLE didacta_super');
   });
 });

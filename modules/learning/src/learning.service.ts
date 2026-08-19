@@ -9,6 +9,7 @@ import type { PrismaClient } from '@didacta/database';
 import {
   AlreadyEnrolledError,
   CourseNotPublishedError,
+  CourseNotFreeError,
   EnrollmentNotActiveError,
   EnrollmentNotFoundError,
   InvitationInvalidError,
@@ -126,10 +127,25 @@ export interface EnrollmentProgressDetail {
   }>;
 }
 
+/**
+ * ¿El tenant ha puesto precio a este curso dentro del aula? Lo implementa
+ * apps/api, la única capa que puede mirar los catálogos de los dos módulos de
+ * cobro sin saltarse el contrato modular.
+ */
+export type CourseSaleChecker = (tenantId: string, courseId: string) => Promise<boolean>;
+
 export class LearningService {
   constructor(
     private readonly prisma: PrismaClient,
     private readonly ctx: ModuleContext,
+    /**
+     * ¿Este curso está a la venta dentro del aula? Lo resuelve la capa de
+     * composición leyendo los catálogos de mod.billing / mod.subscriptions.
+     * Por defecto responde que no: sin catálogo cableado, el único gate que
+     * queda es `externalPurchaseUrl`, y un despliegue que no vende cursos
+     * (el caso de la mayoría) sigue permitiendo la automatrícula.
+     */
+    private readonly courseIsSold: CourseSaleChecker = async () => false,
   ) {}
 
   /**
@@ -158,9 +174,24 @@ export class LearningService {
 
   /**
    * El alumno se matricula a sí mismo en un curso PUBLISHED del tenant.
-   * No requiere código ni link — útil cuando el formador deja el curso open-enrollment.
+   *
+   * Solo vale para cursos que NO se venden. Antes la única condición era estar
+   * publicado, así que el CTA de compra se saltaba con una llamada a la API:
+   * cualquier usuario autenticado se matriculaba gratis en un curso de pago.
+   * Un curso está en venta si tiene página de compra externa
+   * (`externalPurchaseUrl`, cuya sola presencia hace que la ficha pinte
+   * "Comprar") o si el tenant le ha puesto precio dentro del aula — eso último
+   * lo resuelve la capa de composición, que sí puede mirar mod.billing y
+   * mod.subscriptions sin romper el contrato modular.
    */
   async enrollSelf(tenantId: string, userId: string, courseId: string) {
+    const course = await this.prisma.modCoursesCourse.findFirst({
+      where: { tenantId, id: courseId, deletedAt: null },
+      select: { externalPurchaseUrl: true },
+    });
+    if (course?.externalPurchaseUrl) throw new CourseNotFreeError();
+    if (await this.courseIsSold(tenantId, courseId)) throw new CourseNotFreeError();
+
     return this.createEnrollment({
       tenantId,
       actorId: userId,

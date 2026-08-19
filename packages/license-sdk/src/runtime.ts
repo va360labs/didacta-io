@@ -80,7 +80,12 @@ export class LicenseService {
     // Verificación criptográfica.
     let payload: LicensePayload;
     try {
-      payload = await verifyLicense(options.key);
+      // `ignoreExpiration`: la firma la valida jose, el vencimiento lo decide
+      // el bloque de abajo con `expiresAt` + `gracePeriodDays`. Sin esto,
+      // `jwtVerify` lanzaba `JWTExpired` en cuanto la licencia vencía y el
+      // periodo de gracia era código muerto: se caía a `invalid` y el cliente
+      // perdía las capabilities EE en el segundo exacto del vencimiento.
+      payload = await verifyLicense(options.key, { ignoreExpiration: true });
     } catch (err) {
       this.state = {
         status: 'invalid',

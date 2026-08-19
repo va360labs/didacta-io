@@ -3,6 +3,7 @@ import type { ModuleContext } from '@didacta/core-kernel';
 import { LearningService } from '../src/learning.service';
 import {
   AlreadyEnrolledError,
+  CourseNotFreeError,
   CourseNotPublishedError,
   EnrollmentNotActiveError,
   EnrollmentNotFoundError,
@@ -1024,6 +1025,72 @@ describe('LearningService', () => {
       expect(res.totalLessons).toBe(5);
       expect(res.completedLessons).toBe(5);
       expect(res.progressPercent).toBe(100);
+    });
+  });
+
+  describe('enrollSelf — un curso a la venta no se matricula gratis (H6)', () => {
+    function cursoPublicado(
+      fake: ReturnType<typeof makeFakePrisma>,
+      over: { externalPurchaseUrl?: string | null } = {},
+    ) {
+      fake.courses.set('c-1', {
+        id: 'c-1',
+        tenantId: 't-1',
+        status: 'PUBLISHED',
+        deletedAt: null,
+        ...over,
+      } as never);
+    }
+
+    it('un curso gratis sigue admitiendo automatricula', async () => {
+      const fake = makeFakePrisma();
+      cursoPublicado(fake);
+      const service = new LearningService(fake.prisma as never, makeContext() as never);
+
+      const e = await service.enrollSelf('t-1', 'u-1', 'c-1');
+
+      expect(e.status).toBe('ACTIVE');
+    });
+
+    it('un curso con pagina de compra externa NO', async () => {
+      // Es el CTA "Comprar" de la ficha: bastaba una llamada a la API para
+      // saltarselo y entrar gratis.
+      const fake = makeFakePrisma();
+      cursoPublicado(fake, { externalPurchaseUrl: 'https://academia.ejemplo.com/curso' });
+      const service = new LearningService(fake.prisma as never, makeContext() as never);
+
+      await expect(service.enrollSelf('t-1', 'u-1', 'c-1')).rejects.toBeInstanceOf(
+        CourseNotFreeError,
+      );
+      expect(fake.enrollments.size).toBe(0);
+    });
+
+    it('un curso con precio dentro del aula tampoco', async () => {
+      const fake = makeFakePrisma();
+      cursoPublicado(fake);
+      const service = new LearningService(
+        fake.prisma as never,
+        makeContext() as never,
+        async () => true, // el catalogo dice que ese curso se vende
+      );
+
+      await expect(service.enrollSelf('t-1', 'u-1', 'c-1')).rejects.toBeInstanceOf(
+        CourseNotFreeError,
+      );
+      expect(fake.enrollments.size).toBe(0);
+    });
+
+    it('el gate es solo de enrollSelf: matricular por compra o por admin sigue igual', async () => {
+      const fake = makeFakePrisma();
+      cursoPublicado(fake, { externalPurchaseUrl: 'https://academia.ejemplo.com/curso' });
+      const service = new LearningService(
+        fake.prisma as never,
+        makeContext() as never,
+        async () => true,
+      );
+
+      const porCompra = await service.enrollFromPurchase('t-1', 'u-1', 'c-1');
+      expect(porCompra?.status).toBe('ACTIVE');
     });
   });
 });

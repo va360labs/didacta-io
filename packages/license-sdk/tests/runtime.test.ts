@@ -73,6 +73,53 @@ describe('LicenseService', () => {
       expect(svc.isCapabilityEnabled(LICENSE_CAPABILITIES.SCIM)).toBe(true);
       expect(state.warnings.length).toBeGreaterThan(0);
     });
+
+    /**
+     * Los dos tests de arriba pasaban con el bug: mockean `now`, pero jose
+     * validaba `exp` contra el reloj REAL y su fecha (2027-04-15) todavía era
+     * futura. El día que llegara, habrían empezado a fallar solos y con ellos
+     * se habría destapado que un cliente Enterprise perdía todas sus
+     * capabilities en el segundo exacto del vencimiento.
+     *
+     * Estos usan fechas relativas al reloj de verdad, así que ejercen el
+     * camino real: licencia YA vencida, dentro de su gracia.
+     */
+    it('una licencia vencida DE VERDAD entra en gracia, no en invalid (H17)', async () => {
+      const hace5Dias = new Date(Date.now() - 5 * 86_400_000);
+      const token = await issueTestLicense(
+        { gracePeriodDays: 30, capabilities: [LICENSE_CAPABILITIES.SCIM] },
+        { expiresAt: hace5Dias },
+      );
+
+      const state = await svc.load({ key: token });
+
+      expect(state.status).toBe('grace');
+      expect(svc.isCapabilityEnabled(LICENSE_CAPABILITIES.SCIM)).toBe(true);
+    });
+
+    it('vencida de verdad y pasada la gracia: expired, no invalid (H17)', async () => {
+      const hace90Dias = new Date(Date.now() - 90 * 86_400_000);
+      const token = await issueTestLicense(
+        { gracePeriodDays: 30, capabilities: [LICENSE_CAPABILITIES.SCIM] },
+        { expiresAt: hace90Dias },
+      );
+
+      const state = await svc.load({ key: token });
+
+      expect(state.status).toBe('expired');
+      expect(svc.isCapabilityEnabled(LICENSE_CAPABILITIES.SCIM)).toBe(false);
+    });
+
+    it('ceder el control de `exp` NO cede el de la firma: un issuer ajeno sigue siendo invalid', async () => {
+      const token = await issueTestLicense(
+        { gracePeriodDays: 30 },
+        { expiresAt: new Date(Date.now() - 86_400_000), issuer: 'evil.example.com' },
+      );
+
+      const state = await svc.load({ key: token });
+
+      expect(state.status).toBe('invalid');
+    });
   });
 
   describe('expired state', () => {

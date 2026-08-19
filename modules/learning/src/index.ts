@@ -15,6 +15,7 @@ export {
   type CreateDripScheduleInput,
   type UpdateDripScheduleInput,
   type CourseDripAvailability,
+  type CourseSaleChecker,
 } from './learning.service.js';
 export {
   computeDripAvailability,
@@ -55,6 +56,7 @@ export {
 export {
   LearningError,
   AlreadyEnrolledError,
+  CourseNotFreeError,
   EnrollmentNotActiveError,
   EnrollmentNotFoundError,
   InvitationInvalidError,

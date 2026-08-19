@@ -94,7 +94,32 @@ interface VerifyOptions {
   issuer?: string;
   /** Override expected audience (for tests). */
   audience?: string;
+  /**
+   * No rechazar el token por `exp`. La firma, el issuer y la audiencia se
+   * siguen exigiendo — lo único que se cede es QUIÉN decide sobre el
+   * vencimiento.
+   *
+   * Existe porque el emisor pone `exp = expiresAt` y `jwtVerify` valida `exp`
+   * contra el reloj real: en cuanto la licencia vencía, jose lanzaba
+   * `JWTExpired`, `load()` fijaba `status: 'invalid'` y las ramas `grace` /
+   * `expired` no se alcanzaban NUNCA con un token real. Un cliente Enterprise
+   * perdía todas sus capabilities EE en el segundo exacto del vencimiento,
+   * pese a los 30 días de gracia prometidos. La política de vencimiento vive
+   * en el runtime (`expiresAt` + `gracePeriodDays`), que es quien sabe de
+   * gracia; aquí solo se comprueba criptografía.
+   *
+   * Los tests de gracia pasaban solo porque mockean `now` mientras jose usaba
+   * el reloj real y su fecha (2027-04-15) aún era futura: habrían empezado a
+   * fallar solos ese día.
+   */
+  ignoreExpiration?: boolean;
 }
+
+/**
+ * Tolerancia con la que jose deja pasar cualquier `exp` cuando la decisión de
+ * vencimiento la toma el runtime. Cien años en segundos.
+ */
+const IGNORE_EXP_TOLERANCE_SECONDS = 100 * 365 * 24 * 60 * 60;
 
 /**
  * Verifica un JWT y devuelve el payload tipado.
@@ -136,7 +161,9 @@ export async function verifyLicense(
       algorithms: [ALG],
       issuer: options.issuer ?? EXPECTED_ISSUER,
       audience: options.audience ?? EXPECTED_AUDIENCE,
-      clockTolerance: `${options.clockToleranceSeconds ?? 30}s`,
+      clockTolerance: options.ignoreExpiration
+        ? `${IGNORE_EXP_TOLERANCE_SECONDS}s`
+        : `${options.clockToleranceSeconds ?? 30}s`,
     });
     payload = result.payload;
   } catch (err) {

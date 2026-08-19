@@ -157,3 +157,14 @@ export class EnrollmentNotActiveError extends LearningError {
     });
   }
 }
+
+/**
+ * El curso está a la venta, así que no se puede uno automatricular. Antes
+ * `enrollSelf` solo comprobaba que estuviera PUBLISHED y el CTA de compra se
+ * saltaba con una llamada a la API.
+ */
+export class CourseNotFreeError extends LearningError {
+  constructor() {
+    super('COURSE_NOT_FREE', 'Este curso no permite matriculación libre: hay que adquirirlo');
+  }
+}

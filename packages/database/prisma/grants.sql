@@ -69,3 +69,20 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA public
   GRANT USAGE, SELECT ON SEQUENCES TO didacta_super;
 ALTER DEFAULT PRIVILEGES IN SCHEMA public
   GRANT EXECUTE ON FUNCTIONS TO didacta_super;
+
+-- CREATE en `public` para el escape auditado, NO para el rol de runtime.
+--
+-- Las migraciones de los módulos del marketplace (`.didactamod`) se aplican
+-- desde la API, con la `DATABASE_URL` de runtime, que en el compose estándar
+-- es `didacta_app` (NOSUPERUSER NOBYPASSRLS, solo USAGE + DML). Desde
+-- Postgres 15 el esquema `public` ya NO concede CREATE a los no-owner, así
+-- que cualquier módulo con un `CREATE TABLE` moría con "permission denied for
+-- schema public" → MODULE_BOOT_FAILED → instalación FAILED, siempre, en el
+-- despliegue por defecto. Los tests no lo veían porque corren como superuser
+-- del cluster de test.
+--
+-- El permiso va a `didacta_super` y no a `didacta_app` para no ensanchar el
+-- rol con el que corre todo el día la aplicación: el instalador hace
+-- `SET LOCAL ROLE didacta_super` solo mientras aplica el SQL del módulo
+-- (ver `apps/api/src/marketplace/module-migration.service.ts`).
+GRANT CREATE ON SCHEMA public TO didacta_super;

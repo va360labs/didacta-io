@@ -296,12 +296,18 @@ export class LearningPathsService {
       });
 
       const courseIds = allCourses.map((c) => c.courseId);
+      // Cuenta los cursos DADOS POR TERMINADOS, no los que llegan al 100 %.
+      // Una matrícula pasa a COMPLETED al cruzar su `completionThreshold`, que
+      // por defecto es 75: exigir `progressPercent >= 100` hacía que un alumno
+      // con todos los cursos de la ruta terminados al 80-99 % viera cada curso
+      // como completado y la ruta clavada en ACTIVE para siempre, con
+      // `nextStep` apuntando a un curso que ya había acabado.
       const completedEnrollments = await this.prisma.modLearningEnrollment.count({
         where: {
           tenantId,
           userId,
           courseId: { in: courseIds },
-          progressPercent: { gte: 100 },
+          status: 'COMPLETED',
         },
       });
 
@@ -332,12 +338,15 @@ export class LearningPathsService {
     const courseIds = courses.map((c) => c.courseId);
     const enrollments = await this.prisma.modLearningEnrollment.findMany({
       where: { tenantId, userId, courseId: { in: courseIds } },
-      select: { courseId: true, progressPercent: true },
+      select: { courseId: true, status: true },
     });
     const byCourse = new Map(enrollments.map((e) => [e.courseId, e]));
     for (const { courseId } of courses) {
       const courseEnrollment = byCourse.get(courseId);
-      if (!courseEnrollment || (courseEnrollment.progressPercent ?? 0) < 100) {
+      // Mismo criterio que el porcentaje de la ruta: terminado es COMPLETED,
+      // no 100 %. Con el umbral por defecto (75) un curso acabado al 90 %
+      // seguía saliendo aquí como "siguiente paso" para siempre.
+      if (!courseEnrollment || courseEnrollment.status !== 'COMPLETED') {
         return { courseId, lessonId: null, courseUrl: `/cursos/${courseId}` };
       }
     }

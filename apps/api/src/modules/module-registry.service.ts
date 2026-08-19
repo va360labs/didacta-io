@@ -97,6 +97,7 @@ import {
   LearningService,
   LearningPathsService,
   ScormService,
+  type CourseSaleChecker as LearningCourseSaleChecker,
 } from '@didacta/mod-learning';
 import { themingModule, ThemingService } from '@didacta/mod-theming';
 import { zoomLiveModule, ZoomLiveService } from '@didacta/mod-zoom-live';
@@ -187,7 +188,25 @@ export class ModuleRegistryService implements OnModuleInit {
 
     const prisma = this.factory.getPrisma() as never;
     this.courses = new CoursesService(prisma, context);
-    this.learning = new LearningService(prisma, context);
+    // ¿El tenant vende este curso? Un curso a la venta no admite
+    // automatrícula: sin esto, el CTA de compra se saltaba con una llamada a
+    // `POST /modules/learning/enroll`. Solo esta capa puede mirar los
+    // catálogos de mod.billing y mod.subscriptions a la vez.
+    const cursoALaVenta: LearningCourseSaleChecker = async (tenantId, courseId) => {
+      const db = this.factory.getPrisma();
+      const [producto, suscripcion] = await Promise.all([
+        db.modBillingProduct.findFirst({
+          where: { tenantId, courseId, active: true },
+          select: { id: true },
+        }),
+        db.modSubscriptionsSubscription.findFirst({
+          where: { tenantId, courseId },
+          select: { id: true },
+        }),
+      ]);
+      return producto !== null || suscripcion !== null;
+    };
+    this.learning = new LearningService(prisma, context, cursoALaVenta);
     this.learningPaths = new LearningPathsService(prisma, context);
     this.certificates = new CertificatesService(prisma, context);
     this.assessments = new AssessmentsService(prisma, context);
