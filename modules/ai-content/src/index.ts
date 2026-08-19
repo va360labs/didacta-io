@@ -29,6 +29,7 @@ export {
   DraftNotInDraftStateError,
   LessonTextEmptyError,
   AiContentProviderError,
+  AiContentTruncatedError,
   InvalidContentJsonError,
 } from './errors.js';
 

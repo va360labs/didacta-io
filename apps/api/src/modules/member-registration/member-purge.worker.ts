@@ -127,7 +127,18 @@ export class MemberPurgeWorker implements OnApplicationBootstrap, OnModuleDestro
    * resultado y audita por tenant.
    */
   private async processJob(): Promise<void> {
-    const retentionDays = Number(process.env['MEMBER_RETENTION_DAYS'] ?? '90');
+    // Con la env malformada, `Number('x')` es NaN, el `cutoff` sale Invalid
+    // Date y TODA comparación contra él da falso: la purga corría cada día sin
+    // borrar nada, sin error y sin rastro. En una purga de RGPD eso es
+    // exactamente lo que no se puede permitir fallar en silencio.
+    const retencionRaw = Number(process.env['MEMBER_RETENTION_DAYS'] ?? '90');
+    const retentionDays = Number.isFinite(retencionRaw) && retencionRaw > 0 ? retencionRaw : 90;
+    if (retentionDays !== retencionRaw) {
+      this.logger.warn(
+        { raw: process.env['MEMBER_RETENTION_DAYS'] },
+        'MEMBER_RETENTION_DAYS no es un número válido; se usa el default de 90 días',
+      );
+    }
     const cutoff = new Date(Date.now() - retentionDays * 24 * 3600 * 1000);
 
     const startedAt = Date.now();

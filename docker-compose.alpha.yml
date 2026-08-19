@@ -23,7 +23,13 @@
 services:
   postgres:
     image: pgvector/pgvector:pg16
-    container_name: didacta-postgres
+    # Los `container_name` son GLOBALES del host: no los escopa el nombre de
+    # proyecto de compose. Con el nombre fijo, una segunda instalación en la
+    # misma máquina chocaba con la primera pese a que `install.sh` anuncia
+    # `DIDACTA_PROJECT` y `DIDACTA_COMPOSE_EXTRA` justamente para eso. El
+    # sufijo va vacío por defecto: la instalación de siempre no cambia de
+    # nombre, y la segunda se levanta con `DIDACTA_NAME_SUFFIX=-2`.
+    container_name: didacta-postgres${DIDACTA_NAME_SUFFIX:-}
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-didacta}
@@ -51,7 +57,7 @@ services:
 
   redis:
     image: redis:7-alpine
-    container_name: didacta-redis
+    container_name: didacta-redis${DIDACTA_NAME_SUFFIX:-}
     restart: unless-stopped
     command: redis-server --appendonly yes
     ports:
@@ -70,7 +76,7 @@ services:
   # Activar con: `docker compose -f docker-compose.alpha.yml --profile s3 up -d`.
   minio:
     image: minio/minio:latest
-    container_name: didacta-minio
+    container_name: didacta-minio${DIDACTA_NAME_SUFFIX:-}
     profiles: ['s3']
     restart: unless-stopped
     command: server /data --console-address ":9001"
@@ -92,7 +98,7 @@ services:
 
   minio-init:
     image: minio/mc:latest
-    container_name: didacta-minio-init
+    container_name: didacta-minio-init${DIDACTA_NAME_SUFFIX:-}
     profiles: ['s3']
     depends_on:
       minio:
@@ -107,7 +113,7 @@ services:
 
   mailpit:
     image: axllent/mailpit:latest
-    container_name: didacta-mailpit
+    container_name: didacta-mailpit${DIDACTA_NAME_SUFFIX:-}
     restart: unless-stopped
     ports:
       # Solo loopback: la UI de Mailpit muestra TODOS los correos (resets de
@@ -121,7 +127,7 @@ services:
 
   didacta:
     image: ${DIDACTA_IMAGE:-ghcr.io/va360labs/didacta-community}:${DIDACTA_IMAGE_TAG:-0.1.0-beta.5}
-    container_name: didacta-app
+    container_name: didacta-app${DIDACTA_NAME_SUFFIX:-}
     restart: unless-stopped
     depends_on:
       postgres:

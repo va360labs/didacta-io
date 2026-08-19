@@ -67,10 +67,6 @@ export interface InstallResult {
 ///   13.  Marcado a INSTALLED (o FAILED si algún paso 10-12 explotó).
 ///
 /// Out of scope todavía:
-///   - Aplicación de las migraciones Prisma `prisma/migrations/` del paquete.
-///     Hoy ignoramos ese subdir; un módulo que necesite tablas propias se
-///     limita a las que ya estén en BD. Esto se aborda en un PR siguiente
-///     junto con el linter SQL `tablePrefix`.
 ///   - Registro `DynamicModule` para que el módulo responda a HTTP — un PR
 ///     más adelante. La VM ya ejecuta el código pero los exports quedan en
 ///     memoria sin enrutar.

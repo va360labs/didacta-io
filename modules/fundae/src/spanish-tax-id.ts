@@ -108,6 +108,25 @@ export function validateSpanishTaxId(input: string): TaxIdValidation {
     return { ok: true, kind: 'NIE', normalized: value };
   }
 
+  // NIF de persona física que NO es DNI: K (menores de 14 sin DNI), L
+  // (españoles no residentes) y M (extranjeros sin NIE). Misma estructura que
+  // el DNI y misma letra de control (mod 23 sobre los 7 dígitos). Caían en la
+  // rama de CIF y se rechazaban: un autónomo extranjero con NIF-M no podía
+  // registrarse como empresa bonificada.
+  if (/^[KLM]\d{7}[A-Z]$/.test(value)) {
+    const number = Number.parseInt(value.slice(1, 8), 10);
+    const expected = DNI_LETTERS[number % 23];
+    if (value[8] !== expected) {
+      return {
+        ok: false,
+        kind: 'DNI',
+        normalized: value,
+        reason: `Letra de control NIF inválida (esperada ${expected}).`,
+      };
+    }
+    return { ok: true, kind: 'DNI', normalized: value };
+  }
+
   // CIF / NIF entidad: letra + 7 dígitos + control (letra o dígito)
   if (/^[A-Z]\d{7}[0-9A-J]$/.test(value)) {
     const initial = value[0]!;

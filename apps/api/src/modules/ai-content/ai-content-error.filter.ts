@@ -19,6 +19,9 @@ const STATUS_BY_CODE: Record<string, number> = {
   AI_CONTENT_DRAFT_NOT_IN_DRAFT: HttpStatus.CONFLICT,
   AI_CONTENT_LESSON_TEXT_EMPTY: HttpStatus.UNPROCESSABLE_ENTITY,
   AI_CONTENT_PROVIDER_ERROR: HttpStatus.SERVICE_UNAVAILABLE,
+  // La respuesta del modelo se cortó por el techo de tokens: no es culpa del
+  // proveedor ni del cliente, es contenido demasiado largo para el límite.
+  AI_CONTENT_TRUNCATED: HttpStatus.UNPROCESSABLE_ENTITY,
   AI_CONTENT_INVALID_JSON: HttpStatus.UNPROCESSABLE_ENTITY,
 };
 

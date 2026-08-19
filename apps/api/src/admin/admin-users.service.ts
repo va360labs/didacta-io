@@ -118,10 +118,14 @@ export class AdminUsersService {
    * desde LearnDash. Ahora aplica `skip` + `take` de Prisma y reporta `total` +
    * `hasMore` para que el frontend pueda renderizar paginación real.
    *
-   * El filtro por `role` se sigue aplicando in-memory porque vive en la tabla
-   * `user_role` y exigirlo en SQL implicaría un join + `distinct` que no
-   * mejoraría el plan a este orden de magnitud (un tenant rara vez supera 50k
-   * users). Si en el futuro hay tenants gigantes, mover a un sub-select.
+   * El filtro por `role` va en el WHERE, no in-memory.
+   *
+   * Aplicarlo después de paginar producía páginas vacías con `hasMore: true` y
+   * un `total` que contaba usuarios que la pantalla nunca iba a enseñar: pedir
+   * "formadores" en un tenant con miles de alumnos devolvía la página 1 vacía
+   * —los cien primeros por fecha son alumnos— sobre un contador de miles. El
+   * `some` de Prisma resuelve el join sin `distinct` y deja `total` y
+   * `hasMore` diciendo la verdad.
    */
   async list(tenantId: string, options: ListUsersOptions): Promise<PaginatedUsers> {
     const page = options.page && options.page > 0 ? options.page : 1;
@@ -130,6 +134,7 @@ export class AdminUsersService {
     const where: Record<string, unknown> = { tenantId, deletedAt: null };
     if (options.status) where.status = options.status;
     if (options.externalSource) where.externalSource = options.externalSource;
+    if (options.role) where.roles = { some: { role: { name: options.role } } };
     if (options.search) {
       const q = options.search.trim();
       if (q) {
@@ -151,16 +156,7 @@ export class AdminUsersService {
       }),
     ]);
 
-    let items = users.map((u) => this.toListItem(u));
-
-    // El filtro por `role` se aplica post-fetch (ver doc del método). Si se
-    // usa, el `total` ya no es exacto para la página filtrada — devolvemos el
-    // count de items efectivamente devueltos para que la UI no muestre páginas
-    // fantasma. Es un compromiso conocido; el caso real (filtro por role)
-    // suele ser sobre datasets chicos.
-    if (options.role) {
-      items = items.filter((u) => u.roles.includes(options.role!));
-    }
+    const items = users.map((u) => this.toListItem(u));
 
     return {
       items,

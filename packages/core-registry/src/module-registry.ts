@@ -43,6 +43,23 @@ interface TenantModuleState {
  */
 export class ModuleRegistry {
   private readonly modules = new Map<string, DidactaModule>();
+  /**
+   * Estado enable/disable por tenant.
+   *
+   * ⚠️ Vive SOLO en memoria y muere con el proceso. La consecuencia práctica
+   * es que `onDisable` no se ejecuta para un módulo que se activó en un
+   * proceso anterior: tras un reinicio, este mapa arranca vacío,
+   * `getTenantState` devuelve undefined y `disableForTenant` sale por el
+   * `if (currentState !== 'enabled') return` sin llamar al hook. Un módulo
+   * cuyo `onDisable` libere algo (un worker, una suscripción externa) se
+   * queda con eso colgando.
+   *
+   * La fuente de verdad persistente es la tabla del marketplace
+   * (`installed_module`), que sí sobrevive; este mapa es solo la vista del
+   * proceso. Unificar los dos es un cambio de diseño con su propia decisión,
+   * no un parche: hasta entonces, esto queda escrito para que nadie dé por
+   * hecho que el estado persiste.
+   */
   private readonly tenantState = new Map<string, TenantModuleState>();
   private readonly context: ModuleContext;
   private readonly coreVersion: string;

@@ -86,3 +86,18 @@ export class InvalidContentJsonError extends AiContentError {
     this.name = 'InvalidContentJsonError';
   }
 }
+
+/**
+ * El modelo agotó el techo de tokens y devolvió la respuesta a medias. Se
+ * distingue del JSON inválido a propósito: el JSON está mal porque está
+ * CORTADO, y lo que hay que hacer es subir el techo o acortar la lección.
+ */
+export class AiContentTruncatedError extends AiContentError {
+  constructor(type: string, maxTokens: number) {
+    super(
+      `La respuesta del modelo para ${type} se cortó al llegar al límite de ${maxTokens} tokens. Prueba con una lección más corta.`,
+      'AI_CONTENT_TRUNCATED',
+      { detail: type },
+    );
+  }
+}

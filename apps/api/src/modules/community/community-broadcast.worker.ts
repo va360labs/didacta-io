@@ -18,13 +18,26 @@ import { ModuleContextFactory } from '../module-context.factory';
 import { ModuleRegistryService } from '../module-registry.service';
 import { signUnsubscribeToken } from './broadcast-unsubscribe';
 
+/**
+ * Entero positivo de una env var, con default si falta o no es un número.
+ *
+ * `Math.max(1, Number(env))` NO protege de una env malformada: `Number('x')`
+ * es NaN y `Math.max(1, NaN)` es NaN. Con la ventana en NaN la comparación
+ * de fechas siempre daba falso y el worker corría sin enviar nada, sin error
+ * y sin dejar rastro de por qué.
+ */
+function enteroPositivo(raw: string | undefined, porDefecto: number): number {
+  const n = Number(raw);
+  return Number.isFinite(n) && n >= 1 ? Math.floor(n) : porDefecto;
+}
+
 const QUEUE_NAME = 'didacta.community.broadcast';
 // Ritmo conservador por defecto: BATCH_SIZE emails y luego pausa BATCH_INTERVAL_MS.
 // 5 cada 10s ≈ 30/min. Configurable por env según el proveedor SMTP del tenant.
-const BATCH_SIZE = Math.max(1, Number(process.env['COMMUNITY_BROADCAST_BATCH_SIZE'] ?? 5));
+const BATCH_SIZE = enteroPositivo(process.env['COMMUNITY_BROADCAST_BATCH_SIZE'], 5);
 const BATCH_INTERVAL_MS = Math.max(
   1000,
-  Number(process.env['COMMUNITY_BROADCAST_INTERVAL_MS'] ?? 10_000),
+  enteroPositivo(process.env['COMMUNITY_BROADCAST_INTERVAL_MS'], 10_000),
 );
 
 interface BroadcastJobData {
@@ -141,11 +154,24 @@ export class CommunityBroadcastWorker implements OnApplicationBootstrap, OnModul
     let lastUserId = broadcast.cursorUserId ?? '';
 
     // Envíos y commit del cursor bajo el tenant del aviso (scope RLS).
+    //
+    // El cursor se confirma DESPUÉS DE CADA destinatario, no al final del
+    // lote. Con el commit por lote, un crash a mitad reenviaba hasta un lote
+    // entero de correos al reanudar; ahora el peor caso es un único correo
+    // repetido, que es el mínimo inevitable de un at-least-once sin
+    // transacción con el proveedor SMTP. El coste es un UPDATE por email, y a
+    // este ritmo (cinco cada diez segundos) no se nota.
     await runAsTenant(broadcast.tenantId, async () => {
       for (const r of recipients) {
         lastUserId = r.userId;
         if (r.optedOut && !broadcast.important) {
           skipped++;
+          await community.commitBroadcastBatch(broadcastId, {
+            sent: 0,
+            failed: 0,
+            skipped: 1,
+            lastUserId,
+          });
           continue;
         }
         const unsubUrl = `${webBase}/api/v1/modules/community/unsubscribe?token=${signUnsubscribeToken(
@@ -171,6 +197,12 @@ export class CommunityBroadcastWorker implements OnApplicationBootstrap, OnModul
             variables: { subject: broadcast.subject, body: broadcast.bodyText, postUrl },
           });
           sent++;
+          await community.commitBroadcastBatch(broadcastId, {
+            sent: 1,
+            failed: 0,
+            skipped: 0,
+            lastUserId,
+          });
         } catch (err) {
           failed++;
           this.logger.warn(
@@ -181,11 +213,24 @@ export class CommunityBroadcastWorker implements OnApplicationBootstrap, OnModul
             },
             'broadcast: envío falló',
           );
+          // El cursor avanza también cuando el envío falla: si no, el lote se
+          // repetiría entero en el siguiente tick por culpa de un solo
+          // destinatario con el email roto, y los demás recibirían duplicados
+          // en bucle. El fallo queda contado en `failed`.
+          await community.commitBroadcastBatch(broadcastId, {
+            sent: 0,
+            failed: 1,
+            skipped: 0,
+            lastUserId,
+          });
         }
       }
-
-      await community.commitBroadcastBatch(broadcastId, { sent, failed, skipped, lastUserId });
     });
+
+    this.logger.debug(
+      { broadcastId, sent, failed, skipped, lastUserId },
+      'broadcast: lote procesado',
+    );
 
     if (this.queue) {
       // Siguiente lote con delay = rate-limit.

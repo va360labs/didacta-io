@@ -44,9 +44,22 @@ const QUEUE_NAME = 'didacta.payment-connections.daily';
 // 9:00 UTC por defecto. Cada instalación ajusta su zona con
 // SUBSCRIPTIONS_DAILY_TZ (identificador IANA, ej. Europe/Madrid).
 const REPEAT_PATTERN = process.env['SUBSCRIPTIONS_DAILY_CRON'] ?? '0 9 * * *';
+/**
+ * Entero positivo de una env var, con default si falta o no es un número.
+ *
+ * `Math.max(1, Number(env))` NO protege de una env malformada: `Number('x')`
+ * es NaN y `Math.max(1, NaN)` es NaN. Con la ventana en NaN la comparación
+ * de fechas siempre daba falso y el worker corría sin enviar nada, sin error
+ * y sin dejar rastro de por qué.
+ */
+function enteroPositivo(raw: string | undefined, porDefecto: number): number {
+  const n = Number(raw);
+  return Number.isFinite(n) && n >= 1 ? Math.floor(n) : porDefecto;
+}
+
 const REPEAT_TZ = process.env['SUBSCRIPTIONS_DAILY_TZ'] ?? 'UTC';
 /** Ventana del resumen + del aviso previo (días antes de la renovación/caducidad). */
-const WINDOW_DAYS = Math.max(1, Number(process.env['SUBSCRIPTIONS_RENEWAL_WINDOW_DAYS'] ?? 7));
+const WINDOW_DAYS = enteroPositivo(process.env['SUBSCRIPTIONS_RENEWAL_WINDOW_DAYS'], 7);
 /** Keys de este worker en el catálogo de plantillas del producto. */
 const DIGEST_TEMPLATE_KEY = 'subscriptions.admin_digest';
 const RENEWAL_TEMPLATE_KEY = 'subscriptions.renewal_warning';

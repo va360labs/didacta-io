@@ -280,8 +280,18 @@ export function rangeStartUtc(range: LeaderboardRange, now: Date): Date | undefi
   if (range === 'week') {
     return new Date(now.getTime() - 7 * 24 * 3_600_000);
   }
+  // Un mes atrás, sin que el día se desborde. `setUTCMonth(m - 1)` sobre un 31
+  // de marzo pide "31 de febrero" y JavaScript lo normaliza al 3 de marzo: la
+  // ventana del ranking mensual encogía a ~28 días varias veces al año, y el
+  // leaderboard salía distinto según el día en que se mirara.
+  const dia = now.getUTCDate();
   const d = new Date(now.getTime());
+  d.setUTCDate(1);
   d.setUTCMonth(d.getUTCMonth() - 1);
+  const ultimoDiaDelMes = new Date(
+    Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0),
+  ).getUTCDate();
+  d.setUTCDate(Math.min(dia, ultimoDiaDelMes));
   return d;
 }
 

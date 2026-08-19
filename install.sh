@@ -25,6 +25,9 @@
 #   DIDACTA_COMPOSE_EXTRA Fichero extra de compose (override), para convivir con
 #                         otra instalación en la misma máquina
 #   DIDACTA_PROJECT       Nombre del proyecto de compose
+#   DIDACTA_NAME_SUFFIX   Sufijo de los nombres de contenedor. Hace falta para
+#                         convivir: los `container_name` son globales del host
+#                         y NO los escopa el nombre de proyecto (ej. "-2")
 #   WEB_PORT / API_PORT / MAILPIT_UI_PORT …    Puertos publicados
 set -euo pipefail
 

@@ -332,16 +332,18 @@ export class SurveysService {
       responseCount: survey._count.responses,
       questions: survey.questions.map((q) => {
         if (q.type === 'TEXT') {
-          const texts = q.answers
-            .map((a) => a.valueText)
-            .filter((t): t is string => Boolean(t))
-            .slice(0, TEXT_RESULTS_LIMIT);
+          const todas = q.answers.map((a) => a.valueText).filter((t): t is string => Boolean(t));
+          // `answerCount` es el TOTAL, no lo que cabe en la muestra. Contando
+          // sobre la lista ya recortada, cualquier pregunta con más de 200
+          // respuestas informaba exactamente 200 y el formador leía menos
+          // participación de la que hubo.
+          const texts = todas.slice(0, TEXT_RESULTS_LIMIT);
           return {
             id: q.id,
             position: q.position,
             type: q.type,
             label: q.label,
-            answerCount: texts.length,
+            answerCount: todas.length,
             nps: null,
             average: null,
             texts,

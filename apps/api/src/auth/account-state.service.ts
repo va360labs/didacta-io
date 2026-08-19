@@ -37,12 +37,49 @@ interface SessionEntry {
   expiresAt: number;
 }
 
+/**
+ * Tope de entradas por caché. No es una política de memoria fina: es el techo
+ * que impedía que estos dos mapas crecieran de forma monótona durante toda la
+ * vida del proceso — una entrada por usuario y por sesión vistos, sin borrar
+ * nunca las caducadas. En un aula con decenas de miles de alumnos, un proceso
+ * de larga vida acababa reteniendo todas.
+ *
+ * 20.000 entradas son de sobra para el pico de concurrencia de cualquier aula
+ * y siguen siendo unos pocos MB.
+ */
+const MAX_ENTRIES = 20_000;
+
 @Injectable()
 export class AccountStateService {
   private readonly users = new Map<string, UserEntry>();
   private readonly sessions = new Map<string, SessionEntry>();
 
   constructor(private readonly prisma: PrismaService) {}
+
+  /**
+   * Guarda una entrada aplicando el techo. Primero barre lo caducado (que es
+   * lo que en la práctica libera casi todo, con un TTL de 30 s) y, si aun así
+   * se llega al tope, tira la entrada más vieja: `Map` conserva el orden de
+   * inserción, así que la primera clave es la que lleva más tiempo dentro.
+   */
+  private guardar<T extends { expiresAt: number }>(
+    cache: Map<string, T>,
+    key: string,
+    entry: T,
+  ): void {
+    if (cache.size >= MAX_ENTRIES) {
+      const now = Date.now();
+      for (const [k, v] of cache) {
+        if (v.expiresAt <= now) cache.delete(k);
+      }
+      while (cache.size >= MAX_ENTRIES) {
+        const primera = cache.keys().next();
+        if (primera.done) break;
+        cache.delete(primera.value);
+      }
+    }
+    cache.set(key, entry);
+  }
 
   /**
    * Devuelve el motivo de rechazo, o null si la credencial sigue siendo buena.
@@ -84,7 +121,7 @@ export class AccountStateService {
       };
     }
 
-    this.users.set(userId, {
+    this.guardar(this.users, userId, {
       ok: rejection === null,
       rejection,
       expiresAt: now + CACHE_TTL_MS,
@@ -103,7 +140,7 @@ export class AccountStateService {
     });
 
     const ok = session !== null;
-    this.sessions.set(sid, { ok, expiresAt: now + CACHE_TTL_MS });
+    this.guardar(this.sessions, sid, { ok, expiresAt: now + CACHE_TTL_MS });
     return ok;
   }
 

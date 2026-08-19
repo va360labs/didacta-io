@@ -22,6 +22,7 @@
 import type { PrismaClient } from '@didacta/database';
 import {
   AiContentProviderError,
+  AiContentTruncatedError,
   DraftNotFoundError,
   DraftNotInDraftStateError,
   InvalidContentJsonError,
@@ -155,6 +156,15 @@ export class AiContentService {
       });
     } catch (err) {
       throw new AiContentProviderError((err as Error).message);
+    }
+
+    // Respuesta CORTADA por el techo de tokens. Con `maxTokens` justo, el
+    // modelo devuelve un JSON a medias: el parseo fallaba con un
+    // "JSON inválido" que no dice nada del problema real, los tokens ya se
+    // habían facturado y no había reintento. El diagnóstico correcto es que
+    // hay que subir el techo o acortar la lección, y eso es lo que se dice.
+    if (chatResult.outputTokens >= MAX_TOKENS_BY_TYPE[input.type]) {
+      throw new AiContentTruncatedError(input.type, MAX_TOKENS_BY_TYPE[input.type]);
     }
 
     const parsed = parseModelJson<DraftContent>(chatResult.content, input.type);

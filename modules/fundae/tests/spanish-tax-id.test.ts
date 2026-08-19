@@ -129,3 +129,26 @@ describe('isValidSpanishTaxId', () => {
     expect(isValidSpanishTaxId('00000000A')).toBe(false);
   });
 });
+
+describe('validateSpanishTaxId — NIF K/L/M (L2)', () => {
+  // K (menores de 14 sin DNI), L (espanoles no residentes) y M (extranjeros
+  // sin NIE) son NIF de PERSONA FISICA con la misma estructura y la misma
+  // letra de control que el DNI. Caian en la rama de CIF y se rechazaban: un
+  // autonomo extranjero con NIF-M no podia registrarse como empresa
+  // bonificada.
+  it.each(['K1234567L', 'L1234567L', 'M1234567L'])('acepta %s', (nif) => {
+    const r = validateSpanishTaxId(nif);
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.kind).toBe('DNI');
+  });
+
+  it('rechaza la letra de control equivocada', () => {
+    const r = validateSpanishTaxId('M1234567A');
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.reason).toMatch(/letra de control/i);
+  });
+
+  it('normaliza antes de validar, como el resto', () => {
+    expect(validateSpanishTaxId(normalizeSpanishTaxId(' m-1234567 l ')).ok).toBe(true);
+  });
+});

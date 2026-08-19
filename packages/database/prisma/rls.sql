@@ -93,7 +93,9 @@ END $$;
 
 -- ----------------------------------------------------------------------------
 -- Índices únicos parciales (Prisma no expresa @@unique con WHERE)
--- Se aplican aquí porque el deploy usa `prisma db push` + este script (psql).
+-- Se aplican aquí porque Prisma no los expresa; el deploy los aplica con psql
+-- justo después de `prisma migrate deploy` (el `db push` que decía este
+-- comentario dejó de ser el camino hace versiones — ver infra/docker/entrypoint.sh).
 -- Idempotentes (IF NOT EXISTS).
 -- ----------------------------------------------------------------------------
 -- Inscripción de miembros: telegram_id único por tenant cuando está presente.

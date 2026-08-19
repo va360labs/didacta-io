@@ -80,12 +80,29 @@ resolve_app_password() {
 # una URL admin, preservando host/puerto/db/query string. Solo entiende el
 # formato user:pass@host — si no matchea, falla ruidosamente (mejor abortar
 # que arrancar con una URL mal formada).
+# Percent-encoding de la parte userinfo de una URL. Una contrasena con `@`,
+# `/`, `#`, `?` o `%` rompe el parseo de la connection string y el arranque se
+# cae con un error que no menciona la contrasena por ningun lado. La
+# autogenerada es segura por casualidad (hex), pero la que pone el operador en
+# POSTGRES_APP_PASSWORD puede llevar cualquier cosa.
+urlencode_userinfo() {
+  local raw="$1" out="" c i
+  for (( i = 0; i < ${#raw}; i++ )); do
+    c="${raw:i:1}"
+    case "$c" in
+      [a-zA-Z0-9.~_-]) out+="$c" ;;
+      *) out+="$(printf '%%%02X' "'$c")" ;;
+    esac
+  done
+  printf '%s' "$out"
+}
+
 build_didacta_app_url() {
   local admin_url="$1" password="$2"
   if [[ "$admin_url" =~ ^postgres(ql)?://[^:@/]+(:[^@/]*)?@([^/]+)(/.*)?$ ]]; then
     local hostport="${BASH_REMATCH[3]}"
     local rest="${BASH_REMATCH[4]:-}"
-    printf 'postgresql://didacta_app:%s@%s%s' "$password" "$hostport" "$rest"
+    printf 'postgresql://didacta_app:%s@%s%s' "$(urlencode_userinfo "$password")" "$hostport" "$rest"
   else
     return 1
   fi
