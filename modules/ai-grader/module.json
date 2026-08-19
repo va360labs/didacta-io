@@ -2,7 +2,7 @@
   "name": "ai-grader",
   "version": "0.1.0",
   "edition": "community",
-  "coreVersionRequired": "^0.1.0",
+  "coreVersionRequired": "^0.0.1",
   "displayName": "Corrección IA con rúbrica",
   "category": "ai",
   "tablePrefix": "mod_ai_grader_",

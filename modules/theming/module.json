@@ -6,7 +6,7 @@
   "displayName": "Personalización visual",
   "description": "Branding y theming per-tenant: logo, favicon, color primario (hue HSL), fuentes y custom CSS sanitizado. Override de los design tokens del sistema.",
   "category": "core",
-  "coreVersionRequired": "^0.1.0",
+  "coreVersionRequired": "^0.0.1",
   "tablePrefix": "mod_theming_",
   "permissions": ["theming.read", "theming.write"],
   "events": [

@@ -2,7 +2,7 @@
   "name": "billing",
   "version": "1.0.0",
   "edition": "community",
-  "coreVersionRequired": "^0.1.0",
+  "coreVersionRequired": "^0.0.1",
   "displayName": "Stripe Checkout (pago único de cursos)",
   "category": "core",
   "tablePrefix": "mod_billing_",

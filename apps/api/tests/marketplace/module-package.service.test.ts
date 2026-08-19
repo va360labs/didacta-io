@@ -249,12 +249,19 @@ describe('isCoreVersionCompatible', () => {
       expect(isCoreVersionCompatible('^1.2.0', '1.1.9')).toBe(false);
     });
 
-    it('los módulos que se distribuyen siguen instalándose en el core actual', () => {
-      // Es la mitad que faltaba: arreglar el comparador sin mover los
-      // manifiestos habría dejado fuera a TODOS los módulos, que declaraban
-      // `^0.0.1` mientras el core ya iba por 0.1.0.
-      expect(isCoreVersionCompatible('^0.1.0', '0.1.0-beta.5')).toBe(true);
-      expect(isCoreVersionCompatible('^0.1.0', '0.1.3')).toBe(true);
+    it('un módulo satisface la versión de CONTRATO del core, no la de la imagen', () => {
+      // Los módulos declaran `^0.0.1` porque se validan contra CORE_VERSION,
+      // la versión de CONTRATO del core (`module-registry.service.ts`), que es
+      // deliberadamente estable y NO sigue al número de producto.
+      expect(isCoreVersionCompatible('^0.0.1', '0.0.1')).toBe(true);
+
+      // ⚠️ El instalador del marketplace, en cambio, compara contra
+      // `DIDACTA_CORE_VERSION`, que el compose cablea al TAG DE LA IMAGEN
+      // (0.1.0-beta.5). Son dos fuentes de verdad distintas para el mismo
+      // campo y no coinciden: contra el tag, el mismo módulo se rechaza.
+      // Queda fijado aquí para que el desacuerdo sea visible en vez de
+      // depender de que el comparador fuera permisivo.
+      expect(isCoreVersionCompatible('^0.0.1', '0.1.0-beta.5')).toBe(false);
     });
 
     it('tilde con pre-release: ~0.0.1-alpha.0 matchea 0.0.1-alpha.41', () => {

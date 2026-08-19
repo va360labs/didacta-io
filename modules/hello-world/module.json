@@ -2,7 +2,7 @@
   "name": "hello-world",
   "version": "1.0.0",
   "edition": "community",
-  "coreVersionRequired": "^0.1.0",
+  "coreVersionRequired": "^0.0.1",
   "displayName": "Hello World — módulo de referencia",
   "description": "Módulo mínimo de demostración del contrato. Útil para el linter audit-module-contract y como skeleton de nuevos módulos.",
   "category": "demo",

@@ -2,7 +2,7 @@
   "name": "gamification",
   "version": "1.0.0",
   "edition": "community",
-  "coreVersionRequired": "^0.1.0",
+  "coreVersionRequired": "^0.0.1",
   "displayName": "Puntos y retos",
   "category": "engagement",
   "tablePrefix": "mod_gamification_",

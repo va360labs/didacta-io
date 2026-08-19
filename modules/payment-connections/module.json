@@ -2,7 +2,7 @@
   "name": "payment-connections",
   "version": "1.0.0",
   "edition": "community",
-  "coreVersionRequired": "^0.1.0",
+  "coreVersionRequired": "^0.0.1",
   "displayName": "Conexiones de pago (Stripe)",
   "category": "core",
   "tablePrefix": "mod_payment_connections_",

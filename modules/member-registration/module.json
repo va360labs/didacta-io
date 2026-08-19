@@ -2,7 +2,7 @@
   "name": "member-registration",
   "version": "1.0.0",
   "edition": "community",
-  "coreVersionRequired": "^0.1.0",
+  "coreVersionRequired": "^0.0.1",
   "displayName": "Inscripción de miembros",
   "category": "core",
   "tablePrefix": "mod_member_registration_",
