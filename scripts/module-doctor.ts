@@ -7,6 +7,7 @@
  *   - Campos obligatorios presentes (name, version, edition, tablePrefix, apiNamespace, ...).
  *   - Si edition === 'enterprise': requiredLicenseFeature presente.
  *   - tablePrefix con formato correcto (`mod_<nombre>_`).
+ *   - surfaces solo contiene superficies del contrato (@didacta/module-package-spec).
  *   - apiNamespace con formato correcto (`/modules/<nombre>`).
  *   - prisma/schema.prisma con todas las tablas con prefijo correcto (best-effort regex).
  *   - module.json COHERENTE con src/manifest.ts (el manifest runtime que parsea
@@ -22,6 +23,7 @@
  */
 
 import { readFileSync, existsSync, readdirSync, statSync } from 'node:fs';
+import { MODULE_SURFACES, isModuleSurface } from '../packages/module-package-spec/src/surfaces';
 import { resolve, join } from 'node:path';
 import semver from 'semver';
 
@@ -204,6 +206,48 @@ function validateModule(moduleDir: string): Issue[] {
         field: 'apiNamespace',
         message: `apiNamespace "${manifest.apiNamespace}" does not match conventional "${expected}".`,
       });
+    }
+  }
+
+  // surfaces: cada entrada debe ser una superficie REAL del contrato.
+  //
+  // Este check existe porque no existía: `modules/theming/module.json` declaró
+  // durante meses la superficie `student`, que no está en MODULE_SURFACES, y
+  // nadie se enteró — los module.json internos no pasan por el esquema Zod del
+  // marketplace, y module-doctor no miraba este campo. El manifiesto de un
+  // módulo no prueba nada si nadie lo valida.
+  //
+  // Hay DOS grafías vivas y las dos son legítimas, así que se validan las dos:
+  //   - array  → `["admin", "alumno"]`: declara en qué superficies hay UI.
+  //   - objeto → `{"admin": {entry, roles, routes}}`: la del esquema del
+  //     marketplace, con la configuración completa por superficie.
+  if (manifest.surfaces !== undefined && manifest.surfaces !== null) {
+    const declared: unknown[] = Array.isArray(manifest.surfaces)
+      ? manifest.surfaces
+      : typeof manifest.surfaces === 'object'
+        ? Object.keys(manifest.surfaces as Record<string, unknown>)
+        : [];
+
+    if (!Array.isArray(manifest.surfaces) && typeof manifest.surfaces !== 'object') {
+      issues.push({
+        module: name,
+        severity: 'error',
+        field: 'surfaces',
+        message: `"surfaces" must be an array or an object, got ${typeof manifest.surfaces}.`,
+      });
+    }
+
+    for (const surface of declared) {
+      if (!isModuleSurface(surface)) {
+        issues.push({
+          module: name,
+          severity: 'error',
+          field: 'surfaces',
+          message:
+            `Unknown surface ${JSON.stringify(surface)}. ` +
+            `Valid surfaces: ${MODULE_SURFACES.join(', ')}.`,
+        });
+      }
     }
   }
 

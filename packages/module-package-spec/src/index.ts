@@ -15,6 +15,12 @@
 ///   - SPEC_VERSION, MAX_PACKAGE_BYTES, REQUIRED_FILES → constantes compartidas
 ///   - Tipos: PackageEntries, ValidationResult, NormalizationResult, etc.
 
+export {
+  MODULE_SURFACES,
+  AUTHENTICATED_MODULE_SURFACES,
+  isModuleSurface,
+  type ModuleSurface,
+} from './surfaces';
 export { validatePackageLayout } from './validator';
 export { normalizeMigrations } from './normalizer';
 export type { PackageSpecError, PackageSpecErrorCode, PackageSpecWarning } from './errors';

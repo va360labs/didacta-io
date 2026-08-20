@@ -4,6 +4,7 @@
  */
 
 import { z } from 'zod';
+import { MODULE_SURFACES } from '@didacta/module-package-spec';
 import {
   DIDACTA_EXTERNAL_SOURCE_REGEX,
   DIDACTA_PERMISSIONS,
@@ -36,17 +37,14 @@ export const SEMVER_RANGE_REGEX = /^[\^~>=<]?\s?\d+\.\d+\.\d+/;
 export const MODULE_VENDOR = ['didacta', 'community'] as const;
 export const MODULE_ISOLATION = ['vm', 'worker_thread'] as const;
 
-/// Surfaces donde un módulo puede exponer UI. Cada surface corresponde a un
-/// rol/contexto del sistema: admin (backoffice), formador (instructor view),
-/// alumno (student view), auditor (reporting), empresa_manager (B2B).
-export const MODULE_SURFACES = [
-  'admin',
-  'formador',
-  'alumno',
-  'auditor',
-  'empresa_manager',
-] as const;
-export type ModuleSurface = (typeof MODULE_SURFACES)[number];
+/// Surfaces donde un módulo puede exponer UI.
+///
+/// La lista NO vive aquí: vive en `@didacta/module-package-spec`, que es el
+/// contrato que importan también `module-doctor` y los packagers de terceros.
+/// Tenerla solo aquí fue lo que permitió que `modules/theming` declarase
+/// durante meses una superficie inexistente (`student`) sin que fallara nada:
+/// los `module.json` internos no pasan por este esquema.
+export { MODULE_SURFACES, type ModuleSurface } from '@didacta/module-package-spec';
 
 /// Tipos de campos soportados en config.schema para generación de forms.
 export const CONFIG_FIELD_TYPES = [
@@ -515,6 +513,18 @@ export const moduleManifestSchema = z
       'secretsLifecycle declarado sin requiresSecrets=true. Si tu módulo necesita secrets, ' +
       'añadí "requiresSecrets": true al manifest; si no, eliminá el bloque secretsLifecycle.',
     path: ['secretsLifecycle'],
+  })
+  .refine((m) => m.surfaces?.publico === undefined || m.surfaces.publico === null, {
+    // La superficie `publico` se renderiza en servidor desde el registro
+    // ESTÁTICO del web (`apps/web/src/modules/*`), no desde el bundle IIFE que
+    // se evalúa en el navegador. Un módulo instalado como ZIP no participa en
+    // ese registro, así que declararla aquí no renderizaría nada: mejor
+    // rechazarlo que aceptar un no-op silencioso.
+    message:
+      'La superficie "publico" no está soportada en módulos instalados desde el marketplace: ' +
+      'requiere renderizado en servidor, que hoy solo tienen los módulos internos del monorepo. ' +
+      'Quitá el bloque surfaces.publico del manifest.',
+    path: ['surfaces', 'publico'],
   });
 
 export type ModuleManifest = z.infer<typeof moduleManifestSchema>;

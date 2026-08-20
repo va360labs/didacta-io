@@ -21,5 +21,5 @@
   "lifecycle": {
     "install": "src/index.ts:onRegister"
   },
-  "surfaces": ["admin", "student"]
+  "surfaces": ["admin", "alumno"]
 }
