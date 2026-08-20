@@ -4,6 +4,7 @@
  */
 
 import { NextResponse, type NextRequest } from 'next/server';
+import { SITE_PATH_PREFIX } from './lib/site-routing';
 
 /**
  * Dos puertas, en este orden.
@@ -44,7 +45,11 @@ const ALLOW_UNKNOWN_HOSTS = process.env['DIDACTA_ALLOW_UNKNOWN_HOSTS'] === 'true
 let initializedCache = false;
 
 /** host → (¿es de algún tenant?, cuándo caduca la respuesta). */
-const hostCache = new Map<string, { known: boolean; expiresAt: number }>();
+const hostCache = new Map<string, { known: boolean; surface: HostSurface; expiresAt: number }>();
+
+/// Qué sirve un dominio. `null` = no lo sabemos (host siempre válido, o la
+/// API no contestó): en ese caso se sirve el aula, que es lo que ya había.
+type HostSurface = 'APP' | 'SITE' | null;
 
 /**
  * Un «sí» se cachea cinco minutos y un «no» solo treinta segundos.
@@ -91,10 +96,12 @@ function esHostSiempreValido(hostname: string): boolean {
   return false;
 }
 
-async function hostConocido(host: string): Promise<boolean> {
+async function resolverHost(host: string): Promise<{ known: boolean; surface: HostSurface }> {
   const ahora = Date.now();
   const cacheado = hostCache.get(host);
-  if (cacheado && cacheado.expiresAt > ahora) return cacheado.known;
+  if (cacheado && cacheado.expiresAt > ahora) {
+    return { known: cacheado.known, surface: cacheado.surface };
+  }
 
   try {
     const res = await fetch(`${API_INTERNAL_URL}/api/v1/tenancy/resolve`, {
@@ -108,16 +115,18 @@ async function hostConocido(host: string): Promise<boolean> {
     // La API no contesta lo que esperábamos: dejar pasar. Un fallo de la API no
     // debe convertirse en un 404 global — el modo degradado tiene que ser
     // «como antes», no «el producto no existe».
-    if (!res.ok) return true;
-    const data = (await res.json()) as { known?: boolean };
+    if (!res.ok) return { known: true, surface: null };
+    const data = (await res.json()) as { known?: boolean; surface?: HostSurface };
     const known = data.known === true;
+    const surface = data.surface === 'SITE' ? 'SITE' : data.surface === 'APP' ? 'APP' : null;
     hostCache.set(host, {
       known,
+      surface,
       expiresAt: ahora + (known ? TTL_CONOCIDO_MS : TTL_DESCONOCIDO_MS),
     });
-    return known;
+    return { known, surface };
   } catch {
-    return true;
+    return { known: true, surface: null };
   }
 }
 
@@ -130,6 +139,20 @@ export async function middleware(req: NextRequest) {
     return NextResponse.redirect(url);
   }
 
+  // El prefijo interno del sitio NO es una URL pública: solo existe como
+  // destino de la reescritura de más abajo. Una petición que lo pida
+  // directamente viene de fuera. La reescritura interna no vuelve a pasar por
+  // el middleware, así que este corte no toca el tráfico legítimo.
+  if (
+    req.nextUrl.pathname === SITE_PATH_PREFIX ||
+    req.nextUrl.pathname.startsWith(`${SITE_PATH_PREFIX}/`)
+  ) {
+    return new NextResponse('Not Found', {
+      status: 404,
+      headers: { 'content-type': 'text/plain; charset=utf-8' },
+    });
+  }
+
   if (ALLOW_UNKNOWN_HOSTS) return NextResponse.next();
 
   const rawHost = req.headers.get('x-forwarded-host') ?? req.headers.get('host');
@@ -138,7 +161,19 @@ export async function middleware(req: NextRequest) {
   const hostname = host.startsWith('[') ? host : (host.split(':')[0] ?? host);
   if (esHostSiempreValido(hostname)) return NextResponse.next();
 
-  if (await hostConocido(host)) return NextResponse.next();
+  const { known, surface } = await resolverHost(host);
+  if (known) {
+    // Reparto por dominio: el mismo despliegue sirve el aula y el sitio
+    // público, y lo único que los distingue es por dónde entró la petición.
+    if (surface === 'SITE') {
+      const url = req.nextUrl.clone();
+      url.pathname = `${SITE_PATH_PREFIX}${
+        req.nextUrl.pathname === '/' ? '' : req.nextUrl.pathname
+      }`;
+      return NextResponse.rewrite(url);
+    }
+    return NextResponse.next();
+  }
 
   // 404 pelado, sin marca: si este nombre no es de nadie, no hay nada que
   // contar sobre qué corre por debajo.

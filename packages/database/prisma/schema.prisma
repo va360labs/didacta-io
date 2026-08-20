@@ -78,6 +78,23 @@ model Tenant {
 // el slug en signin/signup — la URL le dice todo.
 // Ver HU-SA-001 + LMS-110 (Notion).
 // ============================================================================
+/// Qué sirve un dominio del tenant.
+///
+/// Un mismo tenant puede tener varios dominios con propósitos distintos: el
+/// aula (la app del alumno, con sesión) y el sitio público (contenido
+/// indexable, sin sesión, servido por un módulo con superficie `publico`).
+/// Sin este campo no hay forma de distinguirlos y ambos servirían lo mismo
+/// en `/`.
+///
+/// Mover el sitio de un dominio a otro es cambiar la fila, no desplegar.
+enum TenantDomainSurface {
+  /// App del alumno y administración. Es el valor por defecto: un dominio que
+  /// existía antes de esta distinción seguía sirviendo el aula.
+  APP
+  /// Sitio público servido por un módulo con superficie `publico`.
+  SITE
+}
+
 model TenantDomain {
   id         String   @id @default(uuid()) @db.Uuid
   tenantId   String   @map("tenant_id") @db.Uuid
@@ -90,6 +107,8 @@ model TenantDomain {
   /// Para custom domains de clientes: requiere validación DNS antes de activar.
   /// `localhost` y dominios default del seed nacen verified=true.
   isVerified Boolean  @default(false) @map("is_verified")
+  /// Qué superficie sirve este dominio. Ver `TenantDomainSurface`.
+  surface    TenantDomainSurface @default(APP)
   createdAt  DateTime @default(now()) @map("created_at")
   updatedAt  DateTime @updatedAt @map("updated_at")
 
