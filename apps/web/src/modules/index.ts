@@ -15,7 +15,8 @@
 /// y el catálogo runtime (loader del marketplace) reemplaza este import
 /// estático.
 
-import type { ModuleWebExtension } from '@/lib/module-registry';
+import type { ModulePublicRoute, ModuleWebExtension } from '@/lib/module-registry';
+import { assertNoPublicRouteCollisions } from '@/lib/public-route-match';
 import { aiContentExtension } from './ai-content';
 import { aiGraderExtension } from './ai-grader';
 import { aiTutorExtension } from './ai-tutor';
@@ -25,6 +26,7 @@ import { certificatesExtension } from './certificates';
 import { communityExtension } from './community';
 import { fundaeExtension } from './fundae';
 import { gamificationExtension } from './gamification';
+import { helloWorldExtension } from './hello-world';
 import { migratorLearndashExtension } from './migrator-learndash';
 import { notificationsExtension } from './notifications';
 import { paymentConnectionsExtension } from './payment-connections';
@@ -43,6 +45,7 @@ export const moduleExtensions: readonly ModuleWebExtension[] = [
   communityExtension,
   fundaeExtension,
   gamificationExtension,
+  helloWorldExtension,
   migratorLearndashExtension,
   notificationsExtension,
   paymentConnectionsExtension,
@@ -65,3 +68,25 @@ export function flatAdminConfigTabs(
     (ext.adminConfigTabs ?? []).map((tab) => ({ moduleName: ext.name, tab })),
   );
 }
+
+/// Devuelve todas las rutas públicas declaradas por el conjunto de
+/// extensions, con el módulo que las trae. El caller filtra por módulos
+/// activos del tenant antes de renderizar nada.
+export function flatPublicRoutes(
+  extensions: readonly ModuleWebExtension[] = moduleExtensions,
+): Array<{ moduleName: string; route: ModulePublicRoute }> {
+  return extensions.flatMap((ext) =>
+    (ext.publicRoutes ?? []).map((route) => ({ moduleName: ext.name, route })),
+  );
+}
+
+/// Dos módulos no pueden reclamar la misma ruta pública.
+///
+/// La comprobación se hace AQUÍ, al construir el catálogo, y no al servir una
+/// petición: este módulo se importa estáticamente en el build, así que una
+/// colisión rompe la compilación. Resolverla por orden de import sería elegir
+/// ganador en función de cómo estén escritas las líneas de arriba, que es
+/// exactamente el tipo de dependencia invisible que luego nadie encuentra.
+assertNoPublicRouteCollisions(
+  flatPublicRoutes().map(({ moduleName, route }) => ({ moduleName, pattern: route.pattern })),
+);

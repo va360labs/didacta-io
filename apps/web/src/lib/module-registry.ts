@@ -98,6 +98,50 @@ export interface ModuleSidebarItem {
   exactMatch?: boolean;
 }
 
+/// Props que recibe el componente de una ruta pública.
+export interface ModulePublicRouteProps {
+  /// Ruta pedida, ya normalizada (siempre empieza por `/`, sin barra final).
+  pathname: string;
+  /// Parámetros capturados por el patrón (`/blog/:slug` → `{ slug: '...' }`).
+  /// Un patrón catch-all (`/:resto*`) deja el resto en un solo valor.
+  params: Readonly<Record<string, string>>;
+  /// Contexto del sitio resuelto por dominio, SIN sesión.
+  site: PublicSiteContext;
+}
+
+/// Lo que el core sabe del sitio antes de renderizar nada de un módulo.
+/// Sale de `GET /api/v1/public/site-context`, que resuelve por dominio.
+export interface PublicSiteContext {
+  tenantId: string;
+  tenantSlug: string;
+  tenantName: string;
+  hostname: string;
+  /// Origen canónico del sitio, derivado del dominio de entrada. TODA URL
+  /// absoluta que emita el sitio (canonical, Open Graph, sitemap, enlaces de
+  /// correo) sale de aquí. Nunca de una variable de entorno global: es un
+  /// único valor por instancia y mentiría en cuanto haya dos dominios.
+  origin: string;
+  activeModules: readonly string[];
+}
+
+/// Una ruta pública aportada por un módulo.
+///
+/// Se renderiza en SERVIDOR, sin sesión y bajo un dominio del tenant marcado
+/// como sitio (`TenantDomainSurface.SITE`). Es la única superficie que ve un
+/// visitante anónimo, así que su componente no puede depender de un usuario
+/// autenticado.
+export interface ModulePublicRoute {
+  /// Patrón de ruta. Formas admitidas:
+  ///   - estático:   `/`, `/precios`
+  ///   - parámetro:  `/blog/:slug`
+  ///   - catch-all:  `/:ruta*`  (captura el resto, incluidas las barras)
+  /// El orden de declaración NO decide: siempre gana el patrón más
+  /// específico (ver `selectPublicRoute`).
+  pattern: string;
+  /// Componente de servidor que renderiza la ruta.
+  Component: ComponentType<ModulePublicRouteProps>;
+}
+
 export interface ModuleWebExtension {
   /// Slug exacto del módulo (`mod.<slug>`). El core consulta este valor
   /// contra `activeModules` del tenant para decidir si renderizar las
@@ -107,6 +151,9 @@ export interface ModuleWebExtension {
   adminConfigTabs?: ModuleAdminConfigTab[];
   /// Items adicionales en el sidebar.
   sidebarItems?: ModuleSidebarItem[];
+  /// Rutas del sitio público (superficie `publico`). Solo se montan si el
+  /// dominio de entrada sirve el sitio y el módulo está activo en el tenant.
+  publicRoutes?: ModulePublicRoute[];
 }
 
 /// Helper de filtrado: devuelve solo las extensions cuyos módulos están

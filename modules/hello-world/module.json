@@ -14,5 +14,5 @@
     }
   ],
   "apiNamespace": "/modules/hello-world",
-  "surfaces": []
+  "surfaces": ["publico"]
 }

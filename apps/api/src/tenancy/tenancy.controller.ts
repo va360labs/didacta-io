@@ -32,13 +32,18 @@ export class TenancyController {
 
   @Get('resolve')
   @ApiOperation({
-    summary: 'Resuelve el host público del request a un tenant. { known, slug, host }.',
+    summary: 'Resuelve el host público del request a un tenant. { known, slug, host, surface }.',
     description:
-      'El host sale de `X-Forwarded-Host` y, si no viene, de `Host`. El middleware del web reenvía el suyo en `X-Forwarded-Host` para preguntar por el dominio del visitante y no por el del salto interno.',
+      'El host sale de `X-Forwarded-Host` y, si no viene, de `Host`. El middleware del web reenvía el suyo en `X-Forwarded-Host` para preguntar por el dominio del visitante y no por el del salto interno. `surface` dice si ese dominio sirve la app del aula (`APP`) o el sitio público (`SITE`), para que el middleware reparta sin una segunda llamada por navegación.',
   })
   async resolve(@Req() req: FastifyRequest) {
     const host = resolvePublicHost(req);
-    const tenant = await this.tenantResolver.resolveByHost(host);
-    return { known: tenant !== null, slug: tenant?.slug ?? null, host: host ?? null };
+    const tenant = await this.tenantResolver.resolveByRequest(req);
+    return {
+      known: tenant !== null,
+      slug: tenant?.slug ?? null,
+      host: host ?? null,
+      surface: tenant?.surface ?? null,
+    };
   }
 }

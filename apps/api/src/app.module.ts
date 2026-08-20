@@ -28,6 +28,7 @@ import { PrismaModule } from './prisma/prisma.module';
 import { RateLimitModule } from './rate-limit/rate-limit.module';
 import { RegistryModule } from './registry/registry.module';
 import { ScimModule } from './scim/scim.module';
+import { PublicModule } from './public/public.module';
 import { SetupModule } from './setup/setup.module';
 import { SystemModule } from './system/system.module';
 import { SsoOidcModule } from './sso/oidc/oidc.module';
@@ -101,6 +102,7 @@ import { WebhooksModule } from './webhooks/webhooks.module';
     // Bootstrap del primer arranque. Endpoints públicos /setup/status + /setup/init.
     // Va después de AuthModule porque reusa PasswordService + TokenService.
     SetupModule,
+    PublicModule,
     // Endpoints transversales (proxy a Docker Hub para "versión nueva", etc.).
     SystemModule,
     AdminModule,
