@@ -9,6 +9,15 @@ import { isCoreVersionCompatible } from '../src/marketplace/module-package.servi
 
 const ENV = 'DIDACTA_CORE_VERSION';
 
+/**
+ * Versiones DELIBERADAMENTE imposibles. Al cortar release, `release-bump.sh`
+ * reescribe la versión vieja en todo el repo y falla si queda alguna: un
+ * número que parezca real se fosilizaría aquí y saldría en esa lista como si
+ * fuera un sitio que hay que subir. Ya pasó dos veces.
+ */
+const VERSION_DE_PRUEBA = '7.8.9-solo-para-este-test';
+const BASE_DE_PRUEBA = '7.8.9';
+
 function conVersion<T>(valor: string | undefined, fn: () => T): T {
   const previo = process.env[ENV];
   if (valor === undefined) delete process.env[ENV];
@@ -27,8 +36,8 @@ afterEach(() => resetCoreVersionCache());
 
 describe('core-version — una sola versión para todo', () => {
   it('manda DIDACTA_CORE_VERSION, que la imagen cablea a su propio tag', () => {
-    conVersion('0.1.0-beta.6', () => {
-      expect(resolveCoreVersion()).toBe('0.1.0-beta.6');
+    conVersion(VERSION_DE_PRUEBA, () => {
+      expect(resolveCoreVersion()).toBe(VERSION_DE_PRUEBA);
     });
   });
 
@@ -42,9 +51,9 @@ describe('core-version — una sola versión para todo', () => {
   });
 
   it('la versión de contrato recorta el prerelease', () => {
-    conVersion('0.1.0-beta.6', () => {
-      expect(resolveCoreVersion()).toBe('0.1.0-beta.6');
-      expect(resolveCoreContractVersion()).toBe('0.1.0');
+    conVersion(VERSION_DE_PRUEBA, () => {
+      expect(resolveCoreVersion()).toBe(VERSION_DE_PRUEBA);
+      expect(resolveCoreContractVersion()).toBe(BASE_DE_PRUEBA);
     });
   });
 
@@ -52,27 +61,27 @@ describe('core-version — una sola versión para todo', () => {
     // La regresión concreta: `^0.1.0` contra un core en beta pasaba por el
     // comparador del instalador y fallaba por el semver del arranque, porque
     // cada uno miraba una versión distinta.
-    conVersion('0.1.0-beta.6', () => {
+    conVersion(VERSION_DE_PRUEBA, () => {
       const contrato = resolveCoreContractVersion();
-      expect(isCoreVersionCompatible('^0.1.0', contrato)).toBe(true);
-      expect(semver.satisfies(contrato, '^0.1.0')).toBe(true);
+      expect(isCoreVersionCompatible(`^${BASE_DE_PRUEBA}`, contrato)).toBe(true);
+      expect(semver.satisfies(contrato, `^${BASE_DE_PRUEBA}`)).toBe(true);
     });
   });
 
   it('sin recortar el prerelease, el arranque rechazaría al módulo', () => {
     // Deja constancia de por qué existe `resolveCoreContractVersion`: es la
     // comprobación que cae en rojo si alguien decide usar la versión a pelo.
-    expect(semver.satisfies('0.1.0-beta.6', '^0.1.0')).toBe(false);
+    expect(semver.satisfies(VERSION_DE_PRUEBA, `^${BASE_DE_PRUEBA}`)).toBe(false);
   });
 
   it('recortar el prerelease no abre la mano hacia arriba', () => {
-    // Un core 0.2.0-alpha.1 es MÁS nuevo, y un módulo de la 0.1.x sigue fuera:
-    // en 0.x el minor hace de major.
-    conVersion('0.2.0-alpha.1', () => {
+    // Un core más nuevo sigue dejando fuera al módulo: recortar el prerelease
+    // sólo iguala `X.Y.Z-pre` con `X.Y.Z`, no ensancha el rango.
+    conVersion('8.0.0-alpha.1', () => {
       const contrato = resolveCoreContractVersion();
-      expect(contrato).toBe('0.2.0');
-      expect(isCoreVersionCompatible('^0.1.0', contrato)).toBe(false);
-      expect(semver.satisfies(contrato, '^0.1.0')).toBe(false);
+      expect(contrato).toBe('8.0.0');
+      expect(isCoreVersionCompatible(`^${BASE_DE_PRUEBA}`, contrato)).toBe(false);
+      expect(semver.satisfies(contrato, `^${BASE_DE_PRUEBA}`)).toBe(false);
     });
   });
 });

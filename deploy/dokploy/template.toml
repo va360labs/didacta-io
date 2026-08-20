@@ -25,7 +25,7 @@ host = "${main_domain}"
 [config.env]
 NODE_ENV = "production"
 # Debe coincidir SIEMPRE con el tag de la imagen del docker-compose.yml.
-DIDACTA_CORE_VERSION = "0.1.0-beta.6"
+DIDACTA_CORE_VERSION = "0.1.0-beta.7"
 
 # Base absoluta de los enlaces que salen por correo (verificación de email,
 # invitaciones, recordatorios). Sin esto los correos llevan enlaces rotos.

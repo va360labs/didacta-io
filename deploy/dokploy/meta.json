@@ -1,7 +1,7 @@
 {
   "id": "didacta",
   "name": "Didacta",
-  "version": "0.1.0-beta.6",
+  "version": "0.1.0-beta.7",
   "description": "Didacta is a fair-code, self-hosted learning platform (LMS) with multi-tenant isolation, a public course catalog, enrollment flows, gamification and a module marketplace.",
   "logo": "logo.svg",
   "links": {

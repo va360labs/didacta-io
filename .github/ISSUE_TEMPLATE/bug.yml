@@ -16,7 +16,7 @@ body:
     attributes:
       label: Versión Didacta
       description: 'Sácala de `curl -fsS http://localhost:4000/healthz`, de `docker compose -f docker-compose.alpha.yml images didacta` o de `DIDACTA_IMAGE_TAG` en tu `.env`.'
-      placeholder: '0.1.0-beta.6'
+      placeholder: '0.1.0-beta.7'
     validations:
       required: true
   - type: dropdown

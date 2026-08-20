@@ -279,9 +279,9 @@ describe('isCoreVersionCompatible', () => {
     it('la versión de contrato no arrastra el prerelease', () => {
       // Es la razón de que exista `resolveCoreContractVersion` y no se use la
       // versión a pelo: semver ordena TODO prerelease por debajo de su versión
-      // final, así que `0.1.0-beta.6` no satisface `^0.1.0` y durante la beta
+      // final, así que `7.8.9-beta.1` no satisface `^7.8.9` y durante la beta
       // entera no cargaría ni un módulo. Medido, no supuesto.
-      expect(semver.satisfies('0.1.0-beta.6', '^0.1.0')).toBe(false);
+      expect(semver.satisfies('7.8.9-beta.1', '^7.8.9')).toBe(false);
       expect(resolveCoreContractVersion()).not.toContain('-');
     });
 

@@ -67,7 +67,7 @@ function buscarVersionEnLaRaiz(): string | undefined {
 
 /**
  * Versión que corre AHORA, tal cual, con su prerelease si lo tiene
- * (`0.1.0-beta.6`). Es la que se REPORTA: health, panel de administración y
+ * (`7.8.9-solo-para-este-test`). Es la que se REPORTA: health, panel de administración y
  * telemetría. `DIDACTA_CORE_VERSION` la inyecta la imagen desde su propio tag;
  * fuera del contenedor cae al `package.json` de la raíz.
  *
@@ -79,11 +79,12 @@ export function resolveCoreVersion(): string {
 }
 
 /**
- * La misma versión, sin el prerelease (`0.1.0-beta.6` → `0.1.0`). Es la que se
+ * La misma versión, sin el prerelease (`7.8.9-solo-para-este-test` → `7.8.9`).
+ * Es la que se
  * COMPARA contra el `coreVersionRequired` de los módulos.
  *
  * Hace falta porque semver ordena todo prerelease POR DEBAJO de su versión
- * final: `0.1.0-beta.6 < 0.1.0`, así que un módulo que declara `^0.1.0` no lo
+ * final: `7.8.9-beta.1 < 7.8.9`, así que un módulo que declara `^7.8.9` no lo
  * satisfaría y ningún módulo cargaría durante toda la fase beta. Medido, no
  * supuesto. Recortar el prerelease es lo que ya se pretendía con la «versión
  * de contrato» congelada en 0.0.1; la diferencia es que ahora se DERIVA de la
