@@ -31,7 +31,7 @@ export const manifest: ModuleManifest = parseModuleManifest({
   author: 'VA360 LABS',
   license: 'Proprietary',
   category: 'core',
-  coreVersionRequired: '^0.0.1',
+  coreVersionRequired: '^0.1.0',
   tablePrefix: 'mod_payment_connections_',
   permissions: [
     'payment_connections.connection.read',

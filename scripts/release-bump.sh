@@ -63,4 +63,27 @@ if [[ -n "$LEFTOVERS" ]]; then
   exit 1
 fi
 
+# ...y además TODOS los de la lista tienen que llevar ya la NUEVA.
+#
+# Esto no es redundante con la comprobación de arriba, es la mitad que faltaba:
+# aquella solo busca la versión VIEJA, así que un fichero que se quedó atrás en
+# un bump anterior es invisible para siempre. Con OLD=beta.5, un fichero
+# fosilizado en beta.4 no contiene beta.5 (el sed no lo toca), no contiene
+# beta.5 (la comprobación no lo ve) y se queda en beta.4 release tras release.
+# Pasó de verdad: cortando la beta.6, `deploy/coolify/docker-compose.yaml`,
+# `deploy/dokploy/template.toml` y `deploy/easypanel/meta.yaml` llevaban dos
+# releases anunciando una imagen vieja, y las plantillas de PaaS son
+# justamente lo que instala gente de fuera.
+MISSING=()
+for f in "${FILES[@]}"; do
+  grep -q "$NEW" "$f" || MISSING+=("$f")
+done
+if [[ ${#MISSING[@]} -gt 0 ]]; then
+  echo "ERROR: estos ficheros de la lista NO llevan la versión nueva ${NEW}:" >&2
+  printf '  · %s
+' "${MISSING[@]}" >&2
+  echo "Si alguno se quedó fosilizado en una versión anterior, ponlo a mano." >&2
+  exit 1
+fi
+
 echo "Hecho. Revisa el diff, commitea 'chore(release): ${NEW}' y tagea v${NEW}."

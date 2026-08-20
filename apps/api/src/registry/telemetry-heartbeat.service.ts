@@ -24,6 +24,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { LicenseService, RegistryClient, type Heartbeat } from '@didacta/license-sdk';
 import { resolvePersistentDataRoot } from '../modules/persistent-data-root';
+import { resolveCoreVersion } from '../core-version';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const INITIAL_DELAY_MS = 60_000;
@@ -65,8 +66,7 @@ export class TelemetryHeartbeatService implements OnApplicationBootstrap {
       state.status === 'community' ? 'community' : (state.subject?.plan ?? state.status);
     return {
       instanceId: this.instanceId(),
-      version:
-        process.env['DIDACTA_CORE_VERSION'] ?? process.env['npm_package_version'] ?? 'unknown',
+      version: resolveCoreVersion(),
       edition,
       node: process.version,
       os: `${process.platform}/${process.arch}`,

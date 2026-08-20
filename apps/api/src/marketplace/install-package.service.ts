@@ -24,15 +24,15 @@ import { BlockedSandboxedDb, type SandboxedDb } from './sandboxed-db.types';
 import { SandboxedHttpService } from './sandboxed-http.service';
 import { BlockedSandboxedHttp, type SandboxedHttp } from './sandboxed-http.types';
 import { TenantContextService } from '../tenancy/tenant-context.service';
+import { resolveCoreContractVersion } from '../core-version';
 import { TenantResolverService } from '../tenancy/tenant-resolver.service';
 
-/// Versión del core a la que apunta esta instancia. Inyectada en runtime,
-/// no en build time, para permitir overrides en tests sin recompilar. Si
-/// `DIDACTA_CORE_VERSION` no está set, asumimos `0.0.0` — eso fuerza a que
-/// solo módulos con `coreVersionRequired: ^0.0.0` o exact match se acepten,
-/// que es el comportamiento conservador para entornos sin metadata clara.
+/// Versión del core contra la que se valida el `coreVersionRequired` de un
+/// paquete. Es EXACTAMENTE la misma que usa el registry al arrancar
+/// (`apps/api/src/core-version.ts`): tenerlas separadas es lo que permitió que
+/// un módulo pasara una validación y fallara la otra.
 function resolveCoreVersion(): string {
-  return process.env['DIDACTA_CORE_VERSION'] ?? '0.0.0';
+  return resolveCoreContractVersion();
 }
 
 /// Origen de instalación (DISC-002). Exportado para uso en controller.

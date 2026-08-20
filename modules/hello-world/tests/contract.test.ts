@@ -25,6 +25,16 @@ function mockContext(): ModuleContext {
   };
 }
 
+/**
+ * La versión de core con la que se monta el registry en estos tests sale del
+ * PROPIO manifiesto del módulo, no de un literal. Estaba escrita a mano
+ * (`'0.0.1'`) y se quedó desfasada en cuanto el core pasó a validar contra la
+ * versión real del producto: dos tests en rojo que no tenían nada que ver con
+ * lo que dicen probar. Derivándola, el día que el manifiesto suba a `^0.2.0`
+ * esto sigue valiendo solo.
+ */
+const CORE_VERSION_DEL_MANIFIESTO = manifest.coreVersionRequired.replace(/^[\^~]/, '');
+
 describe('hello-world: contrato de módulo', () => {
   let ctx: ModuleContext;
 
@@ -40,7 +50,7 @@ describe('hello-world: contrato de módulo', () => {
   });
 
   it('se registra correctamente en un ModuleRegistry', async () => {
-    const registry = new ModuleRegistry({ coreVersion: '0.0.1', context: ctx });
+    const registry = new ModuleRegistry({ coreVersion: CORE_VERSION_DEL_MANIFIESTO, context: ctx });
     await registry.register([helloWorldModule]);
 
     expect(registry.getModule('mod.hello-world')).toBe(helloWorldModule);
@@ -50,7 +60,7 @@ describe('hello-world: contrato de módulo', () => {
   });
 
   it('activa y desactiva en un tenant respetando idempotencia', async () => {
-    const registry = new ModuleRegistry({ coreVersion: '0.0.1', context: ctx });
+    const registry = new ModuleRegistry({ coreVersion: CORE_VERSION_DEL_MANIFIESTO, context: ctx });
     await registry.register([helloWorldModule]);
 
     await registry.enableForTenant('tenant-1', 'mod.hello-world');

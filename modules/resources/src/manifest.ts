@@ -15,7 +15,7 @@ export const manifest: ModuleManifest = parseModuleManifest({
   license: 'Proprietary',
   // No es 'core' a propósito: un tenant puede desactivar la biblioteca.
   category: 'engagement',
-  coreVersionRequired: '^0.0.1',
+  coreVersionRequired: '^0.1.0',
   tablePrefix: 'mod_resources_',
   permissions: ['resources.read', 'resources.manage'],
   dependencies: { modules: [], optionalModules: [] },

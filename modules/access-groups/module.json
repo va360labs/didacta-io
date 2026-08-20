@@ -2,7 +2,7 @@
   "name": "access-groups",
   "version": "1.0.0",
   "edition": "community",
-  "coreVersionRequired": "^0.0.1",
+  "coreVersionRequired": "^0.1.0",
   "displayName": "Grupos de acceso",
   "category": "core",
   "tablePrefix": "mod_access_groups_",

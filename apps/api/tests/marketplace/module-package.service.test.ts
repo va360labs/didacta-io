@@ -1,4 +1,13 @@
 import { describe, expect, it } from 'vitest';
+import semver from 'semver';
+import { resolveCoreContractVersion } from '../../src/core-version';
+
+/**
+ * El rango que declaran los 24 módulos first-party en su `module.json` y su
+ * `src/manifest.ts`. Si esto cambia, cambia en los 48 sitios a la vez y
+ * `module-doctor` lo caza.
+ */
+const RANGO_FIRST_PARTY = '^0.1.0';
 import { MarketplacePackageError } from '../../src/marketplace/module-package.errors';
 import {
   isCoreVersionCompatible,
@@ -249,25 +258,31 @@ describe('isCoreVersionCompatible', () => {
       expect(isCoreVersionCompatible('^1.2.0', '1.1.9')).toBe(false);
     });
 
-    it('un módulo satisface la versión de CONTRATO del core, no la de la imagen', () => {
-      // Los módulos declaran `^0.0.1` porque se validan contra CORE_VERSION,
-      // la versión de CONTRATO del core (`module-registry.service.ts`), que es
-      // deliberadamente estable y NO sigue al número de producto.
-      expect(isCoreVersionCompatible('^0.0.1', '0.0.1')).toBe(true);
-
-      // ⚠️ El instalador del marketplace, en cambio, compara contra
-      // `DIDACTA_CORE_VERSION`, que el compose cablea al TAG DE LA IMAGEN. Son
-      // dos fuentes de verdad distintas para el mismo campo y no coinciden:
-      // contra el tag, el mismo módulo se rechaza. Queda fijado aquí para que
-      // el desacuerdo sea visible en vez de depender de que el comparador
-      // fuera permisivo.
+    it('el arranque y el instalador validan contra LA MISMA versión', () => {
+      // Antes había dos fuentes de verdad para el mismo campo: el arranque
+      // comparaba contra un `CORE_VERSION = '0.0.1'` escrito a mano, y el
+      // instalador contra `DIDACTA_CORE_VERSION`, el tag de la imagen. Un
+      // módulo que declaraba `^0.0.1` pasaba una y fallaba la otra; sólo lo
+      // tapaba que el comparador fuese permisivo. Ahora las dos salen de
+      // `resolveCoreContractVersion()`.
       //
-      // El literal NO es una versión real del producto a propósito:
-      // `scripts/release-bump.sh` reescribe la versión vieja en todo el repo,
-      // y una que lo parezca se fosilizaría aquí en el siguiente corte (este
-      // mismo test lo destapó cortando la beta.6).
-      const TAG_DE_IMAGEN_POSTERIOR = '0.4.7';
-      expect(isCoreVersionCompatible('^0.0.1', TAG_DE_IMAGEN_POSTERIOR)).toBe(false);
+      // La versión se LEE, no se escribe: un literal aquí se fosilizaría en el
+      // siguiente corte de release (ya pasó una vez, cortando la beta.6).
+      const contrato = resolveCoreContractVersion();
+
+      // Camino del instalador (comparador propio de este fichero).
+      expect(isCoreVersionCompatible(RANGO_FIRST_PARTY, contrato)).toBe(true);
+      // Camino del arranque (semver de verdad, en core-registry).
+      expect(semver.satisfies(contrato, RANGO_FIRST_PARTY)).toBe(true);
+    });
+
+    it('la versión de contrato no arrastra el prerelease', () => {
+      // Es la razón de que exista `resolveCoreContractVersion` y no se use la
+      // versión a pelo: semver ordena TODO prerelease por debajo de su versión
+      // final, así que `0.1.0-beta.6` no satisface `^0.1.0` y durante la beta
+      // entera no cargaría ni un módulo. Medido, no supuesto.
+      expect(semver.satisfies('0.1.0-beta.6', '^0.1.0')).toBe(false);
+      expect(resolveCoreContractVersion()).not.toContain('-');
     });
 
     it('tilde con pre-release: ~0.0.1-alpha.0 matchea 0.0.1-alpha.41', () => {

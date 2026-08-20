@@ -14,6 +14,7 @@ import type { FastifyReply } from 'fastify';
 import { ModuleContextFactory } from '../modules/module-context.factory';
 import { OutboxQueueService } from '../modules/outbox-queue.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { resolveCoreVersion } from '../core-version';
 
 interface LivenessResponse {
   status: 'ok';
@@ -95,7 +96,7 @@ export class HealthController {
       // `npm_package_version` no existe y daba siempre '0.0.0'. DIDACTA_CORE_VERSION
       // lo fija el deploy (release.yml) a la versión del build,
       // así healthz reporta la versión real desplegada.
-      version: process.env['DIDACTA_CORE_VERSION'] ?? process.env['npm_package_version'] ?? '0.0.0',
+      version: resolveCoreVersion(),
       uptime: Math.floor((Date.now() - this.startedAt) / 1000),
       timestamp: new Date().toISOString(),
     };

@@ -29,20 +29,41 @@ const ROOT = resolve(process.cwd());
 const MODULES_DIR = resolve(ROOT, 'modules');
 
 /**
- * CORE_VERSION real del runtime (module-registry.service.ts). Es lo que el
- * registry pasa a `new ModuleRegistry({ coreVersion })` y contra lo que valida
+ * Versión de contrato del core: lo que el registry pasa a
+ * `new ModuleRegistry({ coreVersion })` y contra lo que valida el
  * `coreVersionRequired` de cada módulo al boot. El doctor lo lee para cazar el
  * mismatch en CI en vez de que reviente el arranque del API (F2 dejó
  * CORE_VERSION en 0.0.1 y 5 módulos requerían ^1.0.0 → boot muerto).
+ *
+ * Sale del MISMO sitio que en runtime (`apps/api/src/core-version.ts`): la
+ * versión real del producto sin su prerelease. Antes se sacaba raspando con
+ * una regex el literal `const CORE_VERSION = '...'` de un fichero .ts, y eso
+ * tenía dos problemas: se rompía en cuanto la constante dejaba de ser un
+ * literal, y al romperse devolvía `null`, que aguas abajo se leía como «no hay
+ * nada que comprobar». O sea que el doctor se quedaba ciego SIN DECIRLO.
  */
-function readCoreVersion(): string | null {
-  const p = resolve(ROOT, 'apps', 'api', 'src', 'modules', 'module-registry.service.ts');
-  if (!existsSync(p)) return null;
-  const m = readFileSync(p, 'utf8').match(/const\s+CORE_VERSION\s*=\s*'([^']+)'/);
-  return m ? m[1] : null;
+function readCoreContractVersion(): string {
+  const fromEnv = process.env['DIDACTA_CORE_VERSION'];
+  const full = fromEnv ?? readRootPackageVersion();
+  const base = /^(\d+\.\d+\.\d+)/.exec(full);
+  return base ? base[1]! : full;
 }
 
-const CORE_VERSION = readCoreVersion();
+function readRootPackageVersion(): string {
+  const p = resolve(ROOT, 'package.json');
+  if (!existsSync(p)) {
+    throw new Error(
+      `module-doctor: no encuentro ${p}. Córrelo desde la raíz del repo: sin la versión del core no puede validar coreVersionRequired, y seguir sin ella sería quedarse ciego en silencio.`,
+    );
+  }
+  const pkg = JSON.parse(readFileSync(p, 'utf8')) as { version?: string };
+  if (!pkg.version) {
+    throw new Error('module-doctor: el package.json de la raíz no declara "version".');
+  }
+  return pkg.version;
+}
+
+const CORE_VERSION = readCoreContractVersion();
 
 type Severity = 'error' | 'warning';
 type Issue = { module: string; severity: Severity; field?: string; message: string };
@@ -208,7 +229,11 @@ function validateModule(moduleDir: string): Issue[] {
 
   // coreVersionRequired satisfecho por el CORE_VERSION real del registry: si no,
   // el módulo tira CoreVersionMismatchError al registrarse y el API no arranca.
-  if (CORE_VERSION && manifest.coreVersionRequired) {
+  // CORE_VERSION ya no puede faltar (readCoreContractVersion lanza si no la
+  // encuentra), así que aquí no se le pone guarda: una guarda que se evalúa a
+  // falso es indistinguible de «todo correcto», y así fue como esta
+  // comprobación pasó tiempo sin ejecutarse.
+  if (manifest.coreVersionRequired) {
     const range = String(manifest.coreVersionRequired);
     if (!semver.satisfies(CORE_VERSION, range, { includePrerelease: false })) {
       issues.push({

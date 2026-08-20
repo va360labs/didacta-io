@@ -15,7 +15,7 @@ export const manifest: ModuleManifest = parseModuleManifest({
   license: 'Proprietary',
   // A propósito NO es 'core': un tenant puede desactivar los puntos.
   category: 'engagement',
-  coreVersionRequired: '^0.0.1',
+  coreVersionRequired: '^0.1.0',
   tablePrefix: 'mod_gamification_',
   permissions: ['gamification.read', 'gamification.submit', 'gamification.manage'],
   dependencies: {

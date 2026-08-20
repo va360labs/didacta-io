@@ -16,7 +16,7 @@ export const manifest: ModuleManifest = parseModuleManifest({
   // A propósito NO es 'core': un tenant puede desactivar las encuestas
   // (los módulos core son indesactivables y se re-habilitan en cada boot).
   category: 'engagement',
-  coreVersionRequired: '^0.0.1',
+  coreVersionRequired: '^0.1.0',
   tablePrefix: 'mod_surveys_',
   permissions: ['surveys.response.write', 'surveys.results.read', 'surveys.manage'],
   dependencies: {

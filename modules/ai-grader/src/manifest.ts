@@ -16,7 +16,7 @@ export const manifest: ModuleManifest = parseModuleManifest({
   author: 'VA360 LABS',
   license: 'Proprietary',
   category: 'ai',
-  coreVersionRequired: '^0.0.1',
+  coreVersionRequired: '^0.1.0',
   tablePrefix: 'mod_ai_grader_',
   permissions: [
     'ai-grader.rubric.read',

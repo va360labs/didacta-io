@@ -21,6 +21,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { ModuleContextFactory } from './module-context.factory';
 import { OutboxQueueService } from './outbox-queue.service';
 import { OutboxRecoveryWorker } from './outbox-recovery.worker';
+import { resolveCoreVersion } from '../core-version';
 
 const ADMIN_ROLES = new Set(['super_admin', 'tenant_admin']);
 
@@ -203,7 +204,7 @@ export class AdminSystemController {
       generatedAt: new Date().toISOString(),
       // Mismo origen que `/healthz` y que el heartbeat de telemetría: la
       // etiqueta con la que se construyó la imagen.
-      version: process.env['DIDACTA_CORE_VERSION'] ?? process.env['npm_package_version'] ?? '0.0.0',
+      version: resolveCoreVersion(),
       checks: { db, redis, storage, smtp, outbox, modJobs },
     };
   }

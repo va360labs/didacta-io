@@ -17,7 +17,7 @@ export const manifest: ModuleManifest = parseModuleManifest({
   author: 'VA360 LABS',
   license: 'Proprietary',
   category: 'example',
-  coreVersionRequired: '^0.0.1',
+  coreVersionRequired: '^0.1.0',
   tablePrefix: 'mod_hello_world_',
   permissions: ['hello-world.greeting.read'],
   eventsEmitted: ['hello-world.greeting.requested'],

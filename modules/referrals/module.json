@@ -2,7 +2,7 @@
   "name": "referrals",
   "version": "1.0.0",
   "edition": "community",
-  "coreVersionRequired": "^0.0.1",
+  "coreVersionRequired": "^0.1.0",
   "displayName": "Programa de referidos",
   "category": "core",
   "tablePrefix": "mod_referrals_",

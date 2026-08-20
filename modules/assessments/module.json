@@ -2,7 +2,7 @@
   "name": "assessments",
   "version": "0.1.0",
   "edition": "community",
-  "coreVersionRequired": "^0.0.1",
+  "coreVersionRequired": "^0.1.0",
   "displayName": "Quizzes y exámenes",
   "category": "core",
   "tablePrefix": "mod_assessments_",

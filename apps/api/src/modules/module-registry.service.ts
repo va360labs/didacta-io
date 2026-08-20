@@ -115,6 +115,7 @@ import {
 import { Logger as PinoLogger } from 'nestjs-pino';
 import { AiGatewayService } from '../ai/ai-gateway.service';
 import { runSanctionedGlobalAccess } from '../tenancy/tenant-context.storage';
+import { resolveCoreContractVersion } from '../core-version';
 import { ModuleContextFactory } from './module-context.factory';
 import {
   TenantStripeResolverService,
@@ -123,10 +124,11 @@ import {
 
 /**
  * Versión de contrato del core contra la que se valida el `coreVersionRequired`
- * (`^0.0.1`) de los módulos first-party. El producto versiona 0.0.1-alpha.N;
- * se usa la base estable porque semver excluye prereleases de los rangos caret.
+ * de los módulos first-party. Sale de `resolveCoreContractVersion()`, que es
+ * la versión REAL del producto sin su prerelease — la misma que usa el
+ * instalador del marketplace. Antes era un `'0.0.1'` escrito a mano aquí, y
+ * discrepaba de la del instalador (ver apps/api/src/core-version.ts).
  */
-const CORE_VERSION = '0.0.1';
 /** Mismo TTL que el cache del ModuleAccessInterceptor, por coherencia. */
 const MODULE_ENABLED_CACHE_TTL_MS = 30_000;
 
@@ -184,7 +186,7 @@ export class ModuleRegistryService implements OnModuleInit {
 
   async onModuleInit() {
     const context = this.factory.build();
-    this.registry = new ModuleRegistry({ coreVersion: CORE_VERSION, context });
+    this.registry = new ModuleRegistry({ coreVersion: resolveCoreContractVersion(), context });
 
     const prisma = this.factory.getPrisma() as never;
     this.courses = new CoursesService(prisma, context);
