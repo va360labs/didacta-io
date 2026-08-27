@@ -17,6 +17,7 @@
   "MODERATION_SCOPES_REQUIRED": "Indica al menos un área a sancionar.",
   "MODERATION_SCOPES_UNKNOWN": "Áreas desconocidas: {detail}.",
   "MODERATION_USER_NOT_FOUND": "Usuario no encontrado.",
+  "MODULE_SIGNATURE_REQUIRED": "El paquete no trae una firma verificable. Un módulo se ejecuta dentro del proceso de la API y con sus mismos permisos, así que esta instancia no ejecuta código sin firmar. Instala el paquete firmado desde el marketplace, o arranca la API con DIDACTA_ALLOW_UNVERIFIED_MODULES=true si es un módulo tuyo y aceptas el riesgo.",
   "SETUP_HOSTNAME_INVALID": "Hostname inválido.",
   "SETUP_SLUG_INVALID": "No pudimos generar un slug válido a partir del nombre. Indica uno manualmente (minúsculas, números, guiones).",
   "SETUP_TOKEN_INVALID": "Token de setup inválido o ya usado.",

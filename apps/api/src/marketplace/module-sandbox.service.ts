@@ -99,6 +99,16 @@ export class ModuleSandboxService {
       codeGeneration: { strings: false, wasm: false },
     });
 
+    // `module` y `exports` se crean DENTRO del contexto, no en el host. Un
+    // objeto creado aquí fuera lleva de vuelta al realm anfitrión por
+    // `module.constructor.constructor` (== `Function` del host), que
+    // `codeGeneration` no alcanza. Ver la nota de `buildSandbox`.
+    runInContext(
+      'globalThis.module = { exports: {} }; globalThis.exports = globalThis.module.exports;',
+      context,
+      { filename: 'didacta:sandbox-bootstrap' },
+    );
+
     try {
       runInContext(distSource, context, {
         filename: `${moduleName}.zip/dist/index.js`,
@@ -109,7 +119,9 @@ export class ModuleSandboxService {
       throw wrapBootError(err);
     }
 
-    const moduleExports = (sandbox.module as { exports: unknown }).exports;
+    const moduleExports = runInContext('module.exports', context, {
+      filename: 'didacta:sandbox-bootstrap',
+    }) as unknown;
     if (!moduleExports || typeof moduleExports !== 'object') {
       throw new MarketplacePackageError(
         'MODULE_BOOT_FAILED',
@@ -193,8 +205,33 @@ export class ModuleSandboxService {
   /// `globalThis`, `eval`, `Function`, `fs`, `child_process`, ni timers
   /// que permitan I/O. `Buffer` y `URL` se exponen porque son CPU-only y
   /// muchos módulos legítimos los usan.
+  ///
+  /// ⚠️ ESTO NO ES UNA FRONTERA DE SEGURIDAD. `node:vm` no aísla realms: la
+  /// propia documentación de Node lo dice explícitamente. Cualquier objeto o
+  /// función del proceso anfitrión que llegue hasta aquí devuelve el control
+  /// al host por su cadena de prototipos —
+  /// `<algo del host>.constructor.constructor('return process')()` da el
+  /// `Function` del anfitrión, que `codeGeneration: { strings: false }` NO
+  /// alcanza porque esa opción sólo restringe la generación de código DENTRO
+  /// del contexto—. Siguen siendo puentes vivos `Buffer`, `console`, `URL`,
+  /// los timers y, sobre todo, lo que devuelve `require()`.
+  ///
+  /// Lo que sí hacemos aquí es no regalar el realm: ya NO se inyectan los
+  /// intrínsecos del host (`Object`, `Array`, `Promise`, `Reflect`, `Proxy`,
+  /// `JSON`, `Math`, `Date`, los `Error`, los TypedArray…). El contexto de la
+  /// VM trae los suyos propios, así que el módulo funciona igual, y el camino
+  /// corto `Object.constructor('return process')()` deja de existir. Es
+  /// reducción de superficie, no aislamiento.
+  ///
+  /// La frontera real es que NO se ejecuta código sin firma verificada
+  /// (`InstallPackageService.assertExecutionAllowed`). El aislamiento de
+  /// verdad —proceso aparte, usuario sin privilegios, entorno sin
+  /// credenciales, IPC explícito— es trabajo pendiente; `worker_threads` no
+  /// vale para esto: es el mismo proceso, comparte memoria y hereda una copia
+  /// de `process.env`.
+  ///
+  /// Reportado por Bruno (ingenierosindustriales.com), ver SECURITY-CREDITS.md.
   private buildSandbox(moduleName: string): Context {
-    const moduleObj = { exports: {} as Record<string, unknown> };
     const sandboxConsole = {
       log: (...args: unknown[]) => this.logger.log(`[mod:${moduleName}] ${formatLogArgs(args)}`),
       info: (...args: unknown[]) => this.logger.log(`[mod:${moduleName}] ${formatLogArgs(args)}`),
@@ -206,8 +243,8 @@ export class ModuleSandboxService {
     };
 
     return {
-      module: moduleObj,
-      exports: moduleObj.exports,
+      // `module` / `exports` NO van aquí: los crea el bootstrap dentro del
+      // contexto para que no sean objetos del realm anfitrión.
       require: this.buildRequireProxy(moduleName),
       console: sandboxConsole,
       Buffer,
@@ -230,38 +267,10 @@ export class ModuleSandboxService {
       // 'undefined'). La generación de código en runtime queda además bloqueada
       // vía `codeGeneration` en createContext (defensa en profundidad).
       eval: undefined,
-      // Globals JS estándar (no inyectables).
-      JSON,
-      Math,
-      Date,
-      Error,
-      TypeError,
-      RangeError,
-      SyntaxError,
-      ReferenceError,
-      Promise,
-      Object,
-      Array,
-      String,
-      Number,
-      Boolean,
-      Symbol,
-      Map,
-      Set,
-      WeakMap,
-      WeakSet,
-      Reflect,
-      Proxy,
-      ArrayBuffer,
-      Uint8Array,
-      Int8Array,
-      Uint16Array,
-      Int16Array,
-      Uint32Array,
-      Int32Array,
-      Float32Array,
-      Float64Array,
-      DataView,
+      // Los intrínsecos JS (`Object`, `Array`, `Promise`, `JSON`, `Math`,
+      // `Date`, los `Error`, `Reflect`, `Proxy`, los TypedArray…) NO se
+      // inyectan: el contexto de la VM ya tiene los suyos. Inyectar los del
+      // host era regalar `Function` del anfitrión vía `.constructor`.
     };
   }
 

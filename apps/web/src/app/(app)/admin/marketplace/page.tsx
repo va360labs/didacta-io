@@ -9,18 +9,24 @@
  * Panel super_admin · Marketplace de módulos (ADR-009 PR F + DISC-002).
  *
  * Permite al operador self-host:
- *   1. Subir un paquete `*.zip` vía drag&drop o file picker. Acepta tanto
- *      paquetes firmados por Didacta como uploads directos sin firma
- *      (DISC-002). El paquete viaja como body `application/zip` directo
- *      al endpoint `POST /admin/modules/install`.
+ *   1. Subir un paquete `*.zip` vía drag&drop o file picker. El paquete
+ *      viaja como body `application/zip` directo al endpoint
+ *      `POST /admin/modules/install`.
+ *      Sólo se aceptan paquetes con firma verificable: el código de un
+ *      módulo se ejecuta dentro del proceso de la API y con sus mismos
+ *      permisos. Un ZIP sin firma válida se rechaza con 403
+ *      (`MODULE_SIGNATURE_REQUIRED`) ANTES de instalar nada, salvo que el
+ *      operador haya arrancado la API con
+ *      `DIDACTA_ALLOW_UNVERIFIED_MODULES=true`.
  *   2. Ver los módulos instalados con su estado (INSTALLING, INSTALLED,
  *      FAILED, DEPRECATED) y badges de origen (Oficial, Comunidad, No
  *      verificado) según DISC-002.
  *   3. Desinstalar un módulo (borra row + invalida runtime router; NO
  *      borra el blob en object storage para diagnóstico postmortem).
  *
- * Cuando se sube un módulo sin firma válida, se muestra un AlertDialog de
- * advertencia para que el operador sea consciente del nivel de confianza.
+ * El AlertDialog de advertencia sólo llega a verse en instalaciones que han
+ * activado `DIDACTA_ALLOW_UNVERIFIED_MODULES`: en el resto, el módulo sin
+ * firma ni siquiera se instala y el operador ve el error del endpoint.
  *
  * Tab "Desde marketplace web" es informativo: el flujo push install vive
  * en didacta.io y aún no está construido.

@@ -39,7 +39,13 @@ export type MarketplaceErrorCode =
   | 'MODULE_LINT_FAILED'
   /// Fallo al bootear el módulo en la VM aislada (sintaxis, throw inicial,
   /// `module.exports` con shape inválida, timeout). 422.
-  | 'MODULE_BOOT_FAILED';
+  | 'MODULE_BOOT_FAILED'
+  /// El paquete no trae una firma verificable y la instancia no permite
+  /// ejecutar código sin firmar. El código de un módulo corre con los
+  /// permisos del proceso de la API —`node:vm` no aísla—, así que sin firma
+  /// no se ejecuta. Se levanta ANTES de tocar storage, migraciones o VM.
+  /// 403 al cliente.
+  | 'MODULE_SIGNATURE_REQUIRED';
 
 export class MarketplacePackageError extends Error {
   readonly code: MarketplaceErrorCode;

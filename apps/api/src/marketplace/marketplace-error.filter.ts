@@ -30,6 +30,7 @@ const STATUS_BY_CODE: Record<MarketplaceErrorCode, number> = {
   MODULE_LINT_FAILED: HttpStatus.UNPROCESSABLE_ENTITY, // 422
   MODULE_BOOT_FAILED: HttpStatus.UNPROCESSABLE_ENTITY, // 422
   SURFACE_BUNDLE_MISSING: HttpStatus.UNPROCESSABLE_ENTITY, // 422
+  MODULE_SIGNATURE_REQUIRED: HttpStatus.FORBIDDEN, // 403
 };
 
 @Catch(MarketplacePackageError)
@@ -44,7 +45,11 @@ export class MarketplaceErrorFilter implements ExceptionFilter<MarketplacePackag
     // Eventos de seguridad merecen log explícito: el operador necesita verlos
     // en el dashboard para detectar intentos repetidos de subida con firma
     // mala (posible compromiso de la clave del vendor).
-    if (exception.code === 'SIGNATURE_VERIFY_FAILED' || exception.code === 'VENDOR_NOT_TRUSTED') {
+    if (
+      exception.code === 'SIGNATURE_VERIFY_FAILED' ||
+      exception.code === 'VENDOR_NOT_TRUSTED' ||
+      exception.code === 'MODULE_SIGNATURE_REQUIRED'
+    ) {
       this.logger.warn(
         `Marketplace · evento de seguridad: ${exception.code} — ${exception.message}`,
       );

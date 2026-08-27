@@ -29,6 +29,7 @@
   "MODERATION_USER_NOT_FOUND": "User not found.",
   "MODULE_BOOT_FAILED": "The module failed to boot in the isolated sandbox.",
   "MODULE_LINT_FAILED": "The module code was rejected by the static lint.",
+  "MODULE_SIGNATURE_REQUIRED": "The package has no verifiable signature. A module runs inside the API process with its permissions, so this instance does not execute unsigned code. Install the signed package from the marketplace, or start the API with DIDACTA_ALLOW_UNVERIFIED_MODULES=true if it is your own module and you accept the risk.",
   "NAME_RESERVED": "That module name is reserved.",
   "NOT_FOUND": "Not found.",
   "PACKAGE_INVALID_ZIP": "The package is not a valid ZIP file.",

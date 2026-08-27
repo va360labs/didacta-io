@@ -35,6 +35,20 @@ function resolveCoreVersion(): string {
   return resolveCoreContractVersion();
 }
 
+/// Variable de escape para ejecutar módulos SIN firma verificada.
+///
+/// Existe porque durante el desarrollo de un módulo propio se instala el ZIP
+/// recién construido, que todavía no ha pasado por el firmador. Fuera de ese
+/// caso NO debe activarse: el código de un módulo corre dentro del proceso de
+/// la API con sus mismos permisos.
+const ALLOW_UNVERIFIED_ENV = 'DIDACTA_ALLOW_UNVERIFIED_MODULES';
+
+/// `true` sólo si el operador lo pidió explícitamente. Cualquier otro valor
+/// (incluida la ausencia) es `false`: la política por defecto es denegar.
+function unverifiedModulesAllowed(): boolean {
+  return (process.env[ALLOW_UNVERIFIED_ENV] ?? '').trim().toLowerCase() === 'true';
+}
+
 /// Origen de instalación (DISC-002). Exportado para uso en controller.
 export type { ModuleSource } from './module-package.service';
 
@@ -124,8 +138,33 @@ export class InstallPackageService implements OnApplicationBootstrap {
     this.logger.log(`Boot: re-booteando ${installed.length} módulo(s) instalado(s)...`);
 
     const storage = this.contextFactory.getStorage();
+    let skippedUnverified = 0;
     for (const row of installed) {
       const manifest = row.manifestJson as unknown as ModuleManifest;
+
+      // `manifestJwt` es NULL exactamente cuando la firma no se verificó al
+      // instalar (`ModulePackageService` sólo lo persiste si `signatureVerified`).
+      // Los módulos instalados ANTES de la puerta de firma siguen en BD como
+      // INSTALLED; no los re-ejecutamos al arrancar. Quedan inalcanzables y el
+      // log dice por qué — preferimos eso a seguir corriendo código sin firmar
+      // en cada reinicio.
+      if (row.manifestJwt === null) {
+        if (unverifiedModulesAllowed()) {
+          this.logger.warn(
+            `⚠️ Boot: "${row.name}@${row.version}" no tiene firma verificada; se carga ` +
+              `porque ${ALLOW_UNVERIFIED_ENV}=true.`,
+          );
+        } else {
+          skippedUnverified += 1;
+          this.logger.error(
+            `Boot: "${row.name}@${row.version}" NO se carga — se instaló sin firma ` +
+              `verificada y esta instancia no ejecuta código sin firmar. Reinstálalo ` +
+              `firmado, o arranca con ${ALLOW_UNVERIFIED_ENV}=true si aceptas el riesgo.`,
+          );
+          continue;
+        }
+      }
+
       try {
         const packageBuffer = await storage.download(row.packageStorageKey);
         const distSource = extractDistSource(packageBuffer);
@@ -167,12 +206,75 @@ export class InstallPackageService implements OnApplicationBootstrap {
         );
       }
     }
+
+    if (skippedUnverified > 0) {
+      this.logger.error(
+        `Boot: ${skippedUnverified} módulo(s) omitido(s) por falta de firma verificada. ` +
+          `Ver ${ALLOW_UNVERIFIED_ENV} en la documentación de seguridad.`,
+      );
+    }
+  }
+
+  /// Decide si el código de un paquete puede EJECUTARSE en esta instancia.
+  ///
+  /// Hasta beta.7, `signatureVerified` se calculaba y se guardaba, pero no
+  /// gobernaba nada: un ZIP con `manifest.jwt` inválido —o firmado por
+  /// cualquiera— se clasificaba como `DIRECT_UPLOAD` y se booteaba igual. Y
+  /// como `node:vm` no es una frontera de seguridad (ver la nota larga en
+  /// `module-sandbox.service.ts`), ese código obtenía los permisos del
+  /// proceso de la API: `process.env` con `AUTH_SECRET` y
+  /// `ADMIN_DATABASE_URL`, el disco, la clave de cifrado de secretos de
+  /// tenant del volumen persistente y una conexión cuyo rol es miembro de
+  /// `didacta_super`, con lo que RLS deja de ser un límite.
+  ///
+  /// La política ahora es denegar por defecto. El aviso de riesgo deja de
+  /// llegar tarde: aquí se corta ANTES de escribir el row, subir el blob,
+  /// aplicar migraciones o cargar nada en la VM.
+  ///
+  /// Reportado por Bruno (ingenierosindustriales.com), ver SECURITY-CREDITS.md.
+  private assertExecutionAllowed(opts: {
+    name: string;
+    version: string;
+    signatureVerified: boolean;
+    signatureError?: string;
+  }): void {
+    if (opts.signatureVerified) return;
+
+    if (unverifiedModulesAllowed()) {
+      this.logger.warn(
+        `⚠️ Ejecutando "${opts.name}@${opts.version}" SIN firma verificada porque ` +
+          `${ALLOW_UNVERIFIED_ENV}=true. El código del módulo corre con los permisos del ` +
+          `proceso de la API (env, disco, base de datos). No dejes esta variable activa ` +
+          `en producción.`,
+      );
+      return;
+    }
+
+    throw new MarketplacePackageError(
+      'MODULE_SIGNATURE_REQUIRED',
+      `El paquete "${opts.name}@${opts.version}" no trae una firma verificable` +
+        `${opts.signatureError ? ` (${opts.signatureError})` : ''}. ` +
+        `Un módulo se ejecuta dentro del proceso de la API y con sus mismos permisos, ` +
+        `así que esta instancia no ejecuta código sin firmar. Instala el paquete firmado ` +
+        `desde el marketplace o, si es un módulo tuyo y aceptas el riesgo, arranca la API ` +
+        `con ${ALLOW_UNVERIFIED_ENV}=true.`,
+      { name: opts.name, version: opts.version, signatureError: opts.signatureError },
+    );
   }
 
   async install(packageBuffer: Buffer, installedById: string): Promise<InstallResult> {
     // 1-8. Validación end-to-end (PR A).
     const validated = await this.packageService.validatePackage(packageBuffer, {
       coreVersion: resolveCoreVersion(),
+    });
+
+    // 8b. Puerta de firma. Va lo más arriba posible: si el paquete no puede
+    // ejecutarse, no dejamos rastro suyo en BD ni en object storage.
+    this.assertExecutionAllowed({
+      name: validated.manifest.name,
+      version: validated.manifest.version,
+      signatureVerified: validated.signatureVerified,
+      signatureError: validated.signatureError,
     });
 
     const previous = await this.installedModules.findByName(validated.manifest.name);
