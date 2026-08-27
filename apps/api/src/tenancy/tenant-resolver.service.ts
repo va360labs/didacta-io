@@ -4,7 +4,7 @@
  */
 
 import { Injectable } from '@nestjs/common';
-import type { TenantDomainSurface } from '@prisma/client';
+import type { TenantDomainSurface } from '@didacta/database';
 import { PrismaService } from '../prisma/prisma.service';
 import { resolvePublicHost } from '../common/resolve-public-host';
 import { runAsTenant, runSanctionedGlobalAccess } from './tenant-context.storage';

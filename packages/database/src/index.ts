@@ -9,5 +9,6 @@ export type {
   InstalledModuleSource,
   InstalledModuleStatus,
   InstalledModuleVendor,
+  TenantDomainSurface,
 } from './client.js';
 export { withTenantContext } from './tenant-context.js';

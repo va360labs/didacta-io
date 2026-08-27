@@ -29,3 +29,9 @@ export type {
   InstalledModuleStatus,
   InstalledModuleVendor,
 } from '@prisma/client';
+/// Que un dominio de tenant sirva el aula o el sitio publico. Lo consume
+/// `apps/api` al resolver el host; llego importandolo de `@prisma/client` a
+/// pelo, y ahi `@prisma/client` es una dependencia FANTASMA -no la declara
+/// nadie salvo este package-, asi que compilaba en local y en CI por el
+/// hoisting y reventaba dentro de la imagen. Por eso la regla de arriba.
+export type { TenantDomainSurface } from '@prisma/client';
