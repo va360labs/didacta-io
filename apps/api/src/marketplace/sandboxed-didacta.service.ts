@@ -149,7 +149,9 @@ const upsertUserSchema = z
     ...externalRefShape,
     email: z.string().email().max(254),
     name: z.string().min(1).max(160).optional(),
-    role: z.enum(['tenant_admin', 'formador', 'alumno', 'auditor', 'empresa_manager']).optional(),
+    role: z
+      .enum(['tenant_admin', 'formador', 'alumno', 'auditor', 'inspector', 'empresa_manager'])
+      .optional(),
     locale: z.string().min(2).max(10).optional(),
     documentId: z.string().min(1).max(20).optional(),
     // alpha.81: si true, el user se crea SIN enviar email de invitación. El
@@ -1570,7 +1572,8 @@ interface PrismaEnrollmentRow {
     | 'IMPORT'
     | 'SUBSCRIPTION'
     | 'API'
-    | 'GROUP';
+    | 'GROUP'
+    | 'INSPECTION';
   progressPercent: number;
   externalSource: string | null;
   externalId: string | null;

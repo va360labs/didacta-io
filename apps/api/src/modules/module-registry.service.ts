@@ -89,6 +89,7 @@ import {
   FundaeCompanyService,
   FundaeGroupParticipantService,
   FundaeGroupService,
+  FundaeInspectorService,
   FundaeRlptService,
   FundaeService,
 } from '@didacta/mod-fundae';
@@ -148,6 +149,7 @@ export class ModuleRegistryService implements OnModuleInit {
   private fundaeRlpt?: FundaeRlptService;
   private fundaeGroups?: FundaeGroupService;
   private fundaeGroupParticipants?: FundaeGroupParticipantService;
+  private fundaeInspectors?: FundaeInspectorService;
   private scorm?: ScormService;
   private aiTutorIndexer?: AiTutorIndexerService;
   private aiTutorChat?: AiTutorChatService;
@@ -220,6 +222,7 @@ export class ModuleRegistryService implements OnModuleInit {
     this.fundaeRlpt = new FundaeRlptService(prisma, context);
     this.fundaeGroups = new FundaeGroupService(prisma, context, this.fundaeRlpt);
     this.fundaeGroupParticipants = new FundaeGroupParticipantService(prisma, context);
+    this.fundaeInspectors = new FundaeInspectorService(prisma, context);
     this.scorm = new ScormService(prisma, context);
 
     // mod.ai-tutor: indexer + chat reciben embedFn/chatFn que delegan al
@@ -996,6 +999,11 @@ export class ModuleRegistryService implements OnModuleInit {
   getFundaeGroupParticipantService(): FundaeGroupParticipantService {
     if (!this.fundaeGroupParticipants) throw new Error('ModuleRegistry no está inicializado');
     return this.fundaeGroupParticipants;
+  }
+
+  getFundaeInspectorService(): FundaeInspectorService {
+    if (!this.fundaeInspectors) throw new Error('ModuleRegistry no está inicializado');
+    return this.fundaeInspectors;
   }
 
   getScormService(): ScormService {

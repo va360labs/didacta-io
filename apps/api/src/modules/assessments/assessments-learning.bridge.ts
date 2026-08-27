@@ -62,12 +62,21 @@ export class AssessmentsLearningBridge implements OnModuleInit {
     }
 
     try {
-      await this.registry.getLearningService().trackProgress(tenantId, userId, {
-        enrollmentId,
-        lessonId,
-        watchedSeconds: 0,
-        completed: true,
-      });
+      await this.registry.getLearningService().trackProgress(
+        tenantId,
+        userId,
+        {
+          enrollmentId,
+          lessonId,
+          watchedSeconds: 0,
+          completed: true,
+        },
+        // Este puente es la ÚNICA vía legítima para cerrar una lección QUIZ:
+        // `trackProgress` rechaza el `completed:true` que llegue por la ruta
+        // pública para ese tipo. Declarar el origen sella la fila como
+        // ASSESSMENT y la convierte en evidencia exportable.
+        { source: 'ASSESSMENT' },
+      );
       this.logger.log(
         { attemptId, quizId, enrollmentId, lessonId, userId, tenantId },
         'mod.assessments → mod.learning: QUIZ lesson marcada como completada',

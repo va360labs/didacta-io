@@ -1263,6 +1263,13 @@ enum EnrollmentSource {
   /// la revocación segura por refcount: al salir de todos los grupos que lo
   /// otorgaban, `unenrollFromGroup` lo cancela — sin tocar PURCHASE/SUBSCRIPTION.
   GROUP
+  /// Acceso de SEGUIMIENTO de una acción bonificada: la cuenta que el centro
+  /// comunica a Fundae al inicio para que la inspección pueda recorrer el
+  /// curso. Es una matrícula de verdad —el contenido se gatea por matrícula, no
+  /// por rol— pero NO es un alumno: `mod.fundae` la excluye de los listados
+  /// nominales, del XML y de los CSV, para que el inspector no aparezca como
+  /// participante de la acción que viene a inspeccionar.
+  INSPECTION
 }
 
 model ModLearningEnrollment {
@@ -1293,6 +1300,25 @@ model ModLearningEnrollment {
   @@map("mod_learning_enrollment")
 }
 
+/// Qué respalda el `completed=true` de una fila de progreso. Es la diferencia
+/// entre "el alumno dijo que la había hecho" y "el servidor lo comprobó", y es
+/// lo único que permite construir evidencia defendible ante una auditoría
+/// (Fundae exige registros de interacción, no autodeclaraciones).
+///
+/// - SELF:       el alumno pulsó «marcar como completada». Sin más respaldo.
+/// - TIME:       lo anterior, pero con tiempo de permanencia suficiente
+///               registrado por el servidor (ver `learning.minWatchFraction`).
+/// - ASSESSMENT: lo cerró el motor de evaluaciones al aprobar el cuestionario.
+/// - SCORM:      lo cerró el runtime SCORM vía `cmi.completion_status`.
+/// - INSTRUCTOR: lo marcó un formador/admin en nombre del alumno.
+enum LessonCompletionSource {
+  SELF
+  TIME
+  ASSESSMENT
+  SCORM
+  INSTRUCTOR
+}
+
 model ModLearningProgress {
   id                String    @id @default(uuid()) @db.Uuid
   tenantId          String    @map("tenant_id") @db.Uuid
@@ -1304,6 +1330,10 @@ model ModLearningProgress {
   /// Posición exacta para reanudación (segundo dentro del vídeo, scroll en HTML, etc.)
   resumePositionSec Int       @default(0) @map("resume_position_sec")
   completed         Boolean   @default(false)
+  /// Qué respalda el `completed`. NULL en las filas anteriores a LMS-121: no
+  /// sabemos cómo se cerraron, y decir SELF sería inventarse una evidencia que
+  /// nadie registró. El exportador Fundae las trata como no verificadas.
+  completionSource  LessonCompletionSource? @map("completion_source")
   firstAccessedAt   DateTime  @default(now()) @map("first_accessed_at")
   lastAccessedAt    DateTime  @updatedAt @map("last_accessed_at")
   completedAt       DateTime? @map("completed_at")
@@ -1939,6 +1969,22 @@ model ModFundaeBlock {
 // preservar el formato del input sin convertir a UTC. El XML de export
 // se genera on-demand desde estas filas.
 // ============================================================================
+/// Con qué regla se decide si un participante queda APTO (LMS-124).
+///
+/// - UMBRAL_PROGRESO: la de siempre — porcentaje de lecciones marcadas contra el
+///   umbral del grupo. Sigue siendo el valor por defecto **a propósito**: cambiar
+///   el criterio altera el veredicto de participantes de grupos que quizá ya se
+///   comunicaron a Fundae, y esa no es una decisión que se pueda tomar por cada
+///   academia desde una migración.
+/// - INSTRUCCION_75: el de la instrucción de seguimiento — exige a la vez el
+///   umbral de HORAS (reconstruidas desde el rastro de interacción), el de
+///   ACTIVIDADES de aprendizaje y el de CONTROLES periódicos, contando solo lo
+///   que verificó un tercero.
+enum FundaeCriterioFinalizacion {
+  UMBRAL_PROGRESO
+  INSTRUCCION_75
+}
+
 model ModFundaeAction {
   id             String   @id @default(uuid()) @db.Uuid
   tenantId       String   @map("tenant_id") @db.Uuid
@@ -1953,6 +1999,8 @@ model ModFundaeAction {
   cifCentro      String?  @map("cif_centro")
   notas          String?
   status         String   @default("DRAFT") /// DRAFT | ACTIVE | CLOSED | ARCHIVED
+  /// Regla de finalización de esta acción. Ver el enum.
+  criterioFinalizacion FundaeCriterioFinalizacion @default(UMBRAL_PROGRESO) @map("criterio_finalizacion")
   createdAt      DateTime @default(now()) @map("created_at")
   updatedAt      DateTime @updatedAt @map("updated_at")
 
@@ -2112,6 +2160,7 @@ model ModFundaeGroup {
 
   costs        ModFundaeCost[]
   participants ModFundaeGroupParticipant[]
+  inspectors   ModFundaeInspectorAccess[]
 
   @@unique([tenantId, actionId, numeroGrupo], map: "mod_fundae_group_action_numero_key")
   @@index([tenantId, companyId, status], map: "mod_fundae_group_tenant_company_status_idx")
@@ -2207,6 +2256,44 @@ model ModFundaeGroupParticipant {
   @@index([tenantId, companyId, status], map: "mod_fundae_group_participant_company_status_idx")
   @@index([tenantId, userId], map: "mod_fundae_group_participant_tenant_user_idx")
   @@map("mod_fundae_group_participant")
+}
+
+/// mod.fundae — Acceso de SEGUIMIENTO de una acción bonificada (LMS-123).
+///
+/// La instrucción de seguimiento de Fundae dice que el seguimiento se hace
+/// accediendo al curso con las claves comunicadas al inicio de la acción. Hasta
+/// ahora no había forma limpia de prepararlas: el rol `auditor` abre el registro
+/// de auditoría de TODA la academia pero no deja recorrer el curso ni ver el
+/// progreso, así que la única salida era entregar una cuenta de administración
+/// —que puede escribir, borrar y ver el resto de las acciones—.
+///
+/// Esta tabla ata a una persona con UN grupo concreto. Concede exactamente dos
+/// cosas y ninguna más: recorrer el curso de la acción (vía una matrícula
+/// `source = INSPECTION`, que es como se gatea el contenido) y leer el
+/// seguimiento de los participantes DE ESE GRUPO. Ni escribe, ni ve los demás
+/// grupos, ni cuenta como participante en lo que se comunica a Fundae.
+model ModFundaeInspectorAccess {
+  id        String    @id @default(uuid()) @db.Uuid
+  tenantId  String    @map("tenant_id") @db.Uuid
+  groupId   String    @map("group_id") @db.Uuid
+  /// FK lógica a `app_user.id`. La cuenta cuyas claves se comunican a Fundae.
+  userId    String    @map("user_id") @db.Uuid
+  /// Quién concedió el acceso. Lo pide cualquier auditoría del propio acceso.
+  grantedBy String?   @map("granted_by") @db.Uuid
+  grantedAt DateTime  @default(now()) @map("granted_at")
+  /// Caducidad opcional. Un acceso de seguimiento no tiene por qué durar para
+  /// siempre; pasada la fecha, el acceso deja de resolver aunque nadie lo revoque.
+  expiresAt DateTime? @map("expires_at")
+  /// Revocación explícita. No se borra la fila: el rastro de quién pudo mirar
+  /// el expediente, y cuándo, es parte de lo que sostiene la propia auditoría.
+  revokedAt DateTime? @map("revoked_at")
+  notas     String?
+
+  group ModFundaeGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, groupId, userId], map: "mod_fundae_inspector_access_group_user_key")
+  @@index([tenantId, userId, revokedAt], map: "mod_fundae_inspector_access_user_idx")
+  @@map("mod_fundae_inspector_access")
 }
 
 // ============================================================================

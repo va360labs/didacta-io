@@ -298,6 +298,7 @@ describe('SetupService.init', () => {
       'auditor',
       'empresa_manager',
       'formador',
+      'inspector',
       'super_admin',
       'tenant_admin',
     ]);

@@ -13,6 +13,19 @@ export const modalidadSchema = z.enum(['PRESENCIAL', 'TELEFORMACION', 'MIXTA']);
 export type Modalidad = z.infer<typeof modalidadSchema>;
 
 export const actionStatusSchema = z.enum(['DRAFT', 'ACTIVE', 'CLOSED', 'ARCHIVED']);
+
+/**
+ * Con qué regla se decide el APTO de un participante (LMS-124).
+ *
+ * - `UMBRAL_PROGRESO` (por defecto): porcentaje de lecciones marcadas contra el
+ *   umbral del grupo. Es lo que había, y sigue siendo el defecto porque cambiar
+ *   la regla altera el veredicto de grupos que quizá ya se comunicaron.
+ * - `INSTRUCCION_75`: exige a la vez el umbral de HORAS, el de ACTIVIDADES de
+ *   aprendizaje y el de CONTROLES periódicos, contando solo lo que verificó un
+ *   tercero. Es el criterio de la instrucción de seguimiento de Fundae.
+ */
+export const criterioFinalizacionSchema = z.enum(['UMBRAL_PROGRESO', 'INSTRUCCION_75']);
+export type CriterioFinalizacion = z.infer<typeof criterioFinalizacionSchema>;
 export type ActionStatus = z.infer<typeof actionStatusSchema>;
 
 export const createActionSchema = z.object({
@@ -37,6 +50,8 @@ export const createActionSchema = z.object({
   cifCentro: z.string().max(20).optional(),
   /** Notas internas del admin. No van al XML. */
   notas: z.string().max(2000).optional(),
+  /** Regla con la que se decide el APTO. Ver `criterioFinalizacionSchema`. */
+  criterioFinalizacion: criterioFinalizacionSchema.optional(),
 });
 export type CreateActionDto = z.infer<typeof createActionSchema>;
 
@@ -58,6 +73,7 @@ export interface ActionView {
   lugar: string | null;
   cifCentro: string | null;
   notas: string | null;
+  criterioFinalizacion: CriterioFinalizacion;
   status: ActionStatus;
   createdAt: string;
   updatedAt: string;

@@ -25,6 +25,12 @@ const STATUS_BY_CODE: Record<string, number> = {
   // La lección no es del curso de la matrícula: 404 y no 403, para no confirmar
   // al que prueba UUID que ese id existe en otro curso del aula.
   LESSON_NOT_IN_COURSE: HttpStatus.NOT_FOUND,
+  // El veredicto de esa lección lo emite otro sistema (el motor de
+  // evaluaciones, el runtime SCORM): la vía pública no puede autodeclararlo.
+  LESSON_COMPLETION_NOT_SELF_REPORTABLE: HttpStatus.UNPROCESSABLE_ENTITY,
+  // Falta permanencia mínima (la academia exige `minWatchFraction`). 409: el
+  // estado del recurso todavía no admite la transición, se reintenta más tarde.
+  LESSON_COMPLETION_EVIDENCE_MISSING: HttpStatus.CONFLICT,
   // Matrícula cancelada (reembolso) o pausada (impago): no admite progreso.
   ENROLLMENT_NOT_ACTIVE: HttpStatus.FORBIDDEN,
   // Lección fuera del límite del periodo de prueba de la membresía: se

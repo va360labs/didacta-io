@@ -11,6 +11,7 @@ const ACTION: ActionView = {
   codigoAccion: 'ACC-FIN-001',
   nombre: 'Curso final',
   modalidad: 'PRESENCIAL',
+  criterioFinalizacion: 'UMBRAL_PROGRESO',
   horasFormacion: 20,
   fechaInicio: '2026-09-01',
   fechaFin: '2026-09-30',

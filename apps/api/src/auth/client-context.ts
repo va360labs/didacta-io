@@ -8,21 +8,33 @@ import type { FastifyRequest } from 'fastify';
 /**
  * Datos del cliente HTTP que enriquecen los registros de audit log.
  *
- * - `ip`: IP del cliente. Si la request llegó a través de un proxy reverso
- *   (Nginx, Traefik, Cloudflare), se respeta el primer valor de
- *   `x-forwarded-for` antes de caer al socket. Truncamos a 64 chars para
- *   acotar el tamaño del campo en DB.
- * - `userAgent`: header `user-agent` tal cual llega del cliente, truncado a
- *   500 chars (UA strings de bots y navegadores legacy pueden ser absurdamente
- *   largas).
+ * - `ip`: la IP que resuelve Fastify (`request.ip`), truncada a 64 chars para
+ *   acotar el campo en DB.
+ * - `userAgent`: header `user-agent` tal cual llega, truncado a 500 chars (las
+ *   UA de bots y navegadores legacy pueden ser absurdamente largas).
  *
- * Si la cabecera `x-forwarded-for` trae varios valores separados por coma
- * (`client, proxy1, proxy2`), nos quedamos con el PRIMERO — la IP original
- * del cliente. El resto son saltos intermedios.
+ * ── Por qué NO se lee `x-forwarded-for` ─────────────────────────────────────
  *
- * Devuelve null en cada campo si la información no está disponible (tests
- * sin Fastify, requests internas, etc.). El caller decide si propaga null
- * o lo convierte en undefined.
+ * Antes esta función leía el header crudo y se quedaba con su primera entrada,
+ * cayendo a `request.ip` solo si no había header. Eso significaba que **la IP
+ * del registro de auditoría la elegía quien hacía la petición**: basta con
+ * mandar `X-Forwarded-For: 1.2.3.4` para que el rastro diga 1.2.3.4. Un log de
+ * auditoría cuyo contenido escribe el auditado no es un log de auditoría.
+ *
+ * `request.ip` no es lo mismo: Fastify lo deriva del XFF **solo hasta donde
+ * `trustProxy` le autoriza**, y ese valor se declara en `main.ts` con
+ * `TRUSTED_PROXY_HOPS` / `TRUSTED_PROXY_IPS` según cuántos proxies propios haya
+ * delante. Con la configuración correcta, las entradas que añade un cliente
+ * quedan fuera; sin proxy declarado, se usa la IP del socket, que no se puede
+ * falsificar en una conexión TCP establecida.
+ *
+ * Es el mismo defecto que se corrigió en el cubo del rate limit, en otro
+ * sumidero: allí la IP falseada dejaba elegir cubo, aquí deja firmar el rastro
+ * con el nombre de otro. Si alguna vez hace falta el XFF crudo para diagnóstico,
+ * va a un campo APARTE y marcado como no fiable — nunca al que se audita.
+ *
+ * Devuelve null si la información no está disponible (tests sin Fastify,
+ * llamadas internas). El caller decide si propaga null o lo pasa a undefined.
  */
 export interface ClientContext {
   ip: string | null;
@@ -34,20 +46,9 @@ const UA_MAX = 500;
 
 export function extractClientContext(req: Pick<FastifyRequest, 'headers' | 'ip'>): ClientContext {
   const headers = req.headers ?? {};
-  const xff = headers['x-forwarded-for'];
-  let ip: string | null = null;
 
-  if (typeof xff === 'string' && xff.length > 0) {
-    const first = xff.split(',')[0]?.trim();
-    if (first) ip = first;
-  } else if (Array.isArray(xff) && xff.length > 0) {
-    const first = xff[0]?.split(',')[0]?.trim();
-    if (first) ip = first;
-  }
-
-  if (!ip && typeof req.ip === 'string' && req.ip.length > 0) {
-    ip = req.ip;
-  }
+  // Solo `request.ip`. El header crudo NO se mira: ver la nota de arriba.
+  let ip: string | null = typeof req.ip === 'string' && req.ip.length > 0 ? req.ip : null;
 
   if (ip && ip.length > IP_MAX) ip = ip.slice(0, IP_MAX);
 

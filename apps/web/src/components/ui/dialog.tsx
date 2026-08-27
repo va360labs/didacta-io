@@ -10,6 +10,7 @@ import { useCallback, useEffect, useRef, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslations } from 'next-intl';
 import { cn } from '@/lib/utils';
+import { useFocusTrap } from '@/lib/use-focus-trap';
 
 interface DialogContextValue {
   open: boolean;
@@ -111,6 +112,11 @@ export function DialogContent({ children, className }: DialogContentProps) {
   const panelRef = useRef<HTMLDivElement>(null);
   const close = useCallback(() => ctx?.onOpenChange(false), [ctx]);
 
+  // Foco dentro al abrir, atrapado mientras está abierto y devuelto al cerrar.
+  // `panelRef` existía desde siempre pero no lo leía nadie: el diálogo se
+  // anunciaba como modal y dejaba el foco detrás. Ver `use-focus-trap.ts`.
+  useFocusTrap(panelRef, ctx?.open ?? false);
+
   useEffect(() => {
     if (!ctx?.open) return;
     const onKey = (e: KeyboardEvent) => {
@@ -132,19 +138,30 @@ export function DialogContent({ children, className }: DialogContentProps) {
   if (typeof document === 'undefined') return null;
 
   return createPortal(
-    <div
-      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/50 p-4 sm:items-center"
-      onClick={close}
-    >
+    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto p-4 sm:items-center">
+      {/* Fondo. Es un <button> y no un <div onClick> porque cerrar pulsando
+          fuera ES una acción, y como <div> ni se anunciaba ni tenía etiqueta.
+          Vive fuera del panel, así que la trampa de foco lo deja fuera del
+          recorrido del tabulador — igual que hace cualquier modal: una zona de
+          cierre a pantalla completa en medio del ciclo confunde más que ayuda.
+          A quien navega con teclado le quedan Escape y la X de la esquina. */}
+      <button
+        type="button"
+        aria-label={t('dialog.close')}
+        onClick={close}
+        className="fixed inset-0 -z-10 cursor-default bg-black/50"
+      />
       <div
         ref={panelRef}
         role="dialog"
         aria-modal="true"
+        // Enfocable por programa: es el destino de respaldo cuando el diálogo
+        // no tiene ningún control dentro. Fuera del recorrido del tabulador.
+        tabIndex={-1}
         className={cn(
           'relative w-full max-w-lg rounded-lg border border-border bg-surface shadow-2xl outline-none',
           className,
         )}
-        onClick={(e) => e.stopPropagation()}
       >
         <button
           type="button"
@@ -221,6 +238,8 @@ function DialogLegacy({
   const panelRef = useRef<HTMLDivElement>(null);
   const close = useCallback(() => onOpenChange(false), [onOpenChange]);
 
+  useFocusTrap(panelRef, open);
+
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
@@ -242,20 +261,25 @@ function DialogLegacy({
   if (typeof document === 'undefined') return null;
 
   return createPortal(
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
-      onClick={close}
-    >
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      {/* Ver DialogContent: fondo como <button>, fuera del recorrido del
+          tabulador; con teclado se cierra con Escape o con la X. */}
+      <button
+        type="button"
+        aria-label={t('dialog.close')}
+        onClick={close}
+        className="fixed inset-0 -z-10 cursor-default bg-black/50"
+      />
       <div
         ref={panelRef}
         role="dialog"
         aria-modal="true"
+        tabIndex={-1}
         aria-label={ariaLabel ?? t('dialog.fallbackLabel')}
         className={cn(
           'relative flex max-h-[85vh] w-full flex-col overflow-hidden rounded-lg border bg-surface shadow-2xl',
           maxWidthClass,
         )}
-        onClick={(e) => e.stopPropagation()}
       >
         {title && (
           <div className="shrink-0 border-b p-5">

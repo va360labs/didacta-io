@@ -31,6 +31,10 @@ const SYSTEM_ROLES = [
   { name: 'formador', description: 'Crea y mantiene cursos' },
   { name: 'alumno', description: 'Consume cursos y se matricula' },
   { name: 'auditor', description: 'Acceso de solo lectura para auditoría' },
+  {
+    name: 'inspector',
+    description: 'Seguimiento Fundae: solo lectura, acotado a los grupos concedidos',
+  },
   { name: 'empresa_manager', description: 'RRHH de empresa bonificada' },
 ];
 

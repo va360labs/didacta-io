@@ -52,6 +52,7 @@ const ROLE_KEYS: Record<string, string> = {
   formador: 'cuenta.roleFormador',
   alumno: 'cuenta.roleAlumno',
   auditor: 'cuenta.roleAuditor',
+  inspector: 'cuenta.roleInspector',
   empresa_manager: 'cuenta.roleManager',
 };
 

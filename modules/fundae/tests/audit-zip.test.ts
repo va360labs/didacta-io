@@ -22,6 +22,7 @@ describe('buildAuditZip (LMS-86)', () => {
       startXml: '<?xml version="1.0"?><inicio/>',
       endXml: '<?xml version="1.0"?><fin/>',
       participantsCsv: 'userId,nif\nu1,12345678Z\n',
+      seguimientoCsv: 'nif,email,orden\n12345678Z,u1@x.com,1\n',
       costsCsv: 'tipo,importe_eur\nDIRECTO,100.00\n',
       rlptAttachments: [
         {
@@ -44,6 +45,7 @@ describe('buildAuditZip (LMS-86)', () => {
       'manifest.json',
       'participantes.csv',
       'rlpt/notificacion-r1.pdf',
+      'seguimiento.csv',
     ]);
 
     const manifestRaw = adm.readAsText('manifest.json');
@@ -52,7 +54,7 @@ describe('buildAuditZip (LMS-86)', () => {
     expect(manifest.grupo.numeroGrupo).toBe(1);
     expect(manifest.grupo.codigoAccion).toBe('ACC-001');
     expect(manifest.grupo.empresaNif).toBe('P1234567D');
-    expect(manifest.artefactos).toHaveLength(4);
+    expect(manifest.artefactos).toHaveLength(5);
     expect(manifest.rlpt).toHaveLength(1);
     expect(manifest.rlpt[0].tipo).toBe('NOTIFICACION_INICIAL');
   });
@@ -67,6 +69,7 @@ describe('buildAuditZip (LMS-86)', () => {
       startXml: '<?xml version="1.0"?><inicio/>',
       endXml: '<?xml version="1.0"?><fin/>',
       participantsCsv: 'header\nrow1\n',
+      seguimientoCsv: 'header\nrow1\n',
       costsCsv: 'header\nrow1\n',
       rlptAttachments: [],
     });
@@ -94,6 +97,7 @@ describe('buildAuditZip (LMS-86)', () => {
       startXml: '<a/>',
       endXml: '<b/>',
       participantsCsv: '',
+      seguimientoCsv: '',
       costsCsv: '',
       rlptAttachments: [],
     });
@@ -118,6 +122,11 @@ describe('buildParticipantsCsv', () => {
         horasAsistidas: 18,
         progressPercent: 90,
         resultado: 'APTO',
+        horasSinVerificar: 2,
+        primerAccesoAt: '2026-04-28T08:00:00.000Z',
+        ultimoAccesoAt: '2026-04-29T20:00:00.000Z',
+        actividadesSuperadas: 3,
+        actividadesTotales: 4,
       },
       {
         userId: 'u2',
@@ -129,15 +138,20 @@ describe('buildParticipantsCsv', () => {
         horasAsistidas: null,
         progressPercent: null,
         resultado: null,
+        horasSinVerificar: null,
+        primerAccesoAt: null,
+        ultimoAccesoAt: null,
+        actividadesSuperadas: null,
+        actividadesTotales: null,
       },
     ]);
     expect(csv).toContain(
-      'userId,nif,nombre,email,fecha_matricula,status,horas_asistidas,progreso_pct,resultado',
+      'userId,nif,nombre,email,fecha_matricula,status,horas_asistidas,horas_sin_verificar,progreso_pct,resultado,primer_acceso,ultimo_acceso,actividades_superadas,actividades_totales',
     );
     expect(csv).toContain(
-      'u1,12345678Z,Juan,juan@x.com,2026-04-28T00:00:00.000Z,ENROLLED,18,90,APTO',
+      'u1,12345678Z,Juan,juan@x.com,2026-04-28T00:00:00.000Z,ENROLLED,18,2,90,APTO,2026-04-28T08:00:00.000Z,2026-04-29T20:00:00.000Z,3,4',
     );
-    expect(csv).toContain('u2,,,maria@x.com,2026-04-28T00:00:00.000Z,REMOVED,,,');
+    expect(csv).toContain('u2,,,maria@x.com,2026-04-28T00:00:00.000Z,REMOVED,,,,,,,,');
   });
 
   it('escapa comas y comillas en el nombre', () => {
@@ -152,6 +166,11 @@ describe('buildParticipantsCsv', () => {
         horasAsistidas: 10,
         progressPercent: 50,
         resultado: 'NO_APTO',
+        horasSinVerificar: 10,
+        primerAccesoAt: null,
+        ultimoAccesoAt: null,
+        actividadesSuperadas: 0,
+        actividadesTotales: 0,
       },
     ]);
     expect(csv).toContain('"Juan, ""El de Madrid"""');

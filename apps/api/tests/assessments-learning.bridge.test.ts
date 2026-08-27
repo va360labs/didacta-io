@@ -67,12 +67,21 @@ describe('AssessmentsLearningBridge.handleAttemptPassed', () => {
     await bridge.handleAttemptPassed(event());
 
     expect(trackProgress).toHaveBeenCalledTimes(1);
-    expect(trackProgress).toHaveBeenCalledWith('tenant-1', 'user-1', {
-      enrollmentId: 'enr-1',
-      lessonId: 'lesson-1',
-      watchedSeconds: 0,
-      completed: true,
-    });
+    // El cuarto argumento no es decorativo: desde LMS-121 `trackProgress`
+    // RECHAZA el completado de una lección QUIZ que llegue por la vía pública.
+    // Sin declarar el origen, este puente —la única vía legítima para cerrarla—
+    // se rompería, y la lección quedaría sin marcar tras aprobar el examen.
+    expect(trackProgress).toHaveBeenCalledWith(
+      'tenant-1',
+      'user-1',
+      {
+        enrollmentId: 'enr-1',
+        lessonId: 'lesson-1',
+        watchedSeconds: 0,
+        completed: true,
+      },
+      { source: 'ASSESSMENT' },
+    );
   });
 
   it('no hace nada si falta enrollmentId', async () => {
@@ -143,6 +152,7 @@ describe('AssessmentsLearningBridge.handleAttemptPassed', () => {
     expect(trackProgress).toHaveBeenCalledWith(
       'tenant-otro',
       expect.any(String),
+      expect.any(Object),
       expect.any(Object),
     );
   });

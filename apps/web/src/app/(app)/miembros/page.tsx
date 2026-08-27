@@ -19,6 +19,7 @@ const ROLE_STYLE: Record<string, string> = {
   formador: 'bg-(--didacta-growth)/10 text-(--didacta-growth)',
   alumno: 'bg-(--didacta-trust)/10 text-(--didacta-trust)',
   auditor: 'bg-(--didacta-balance)/10 text-(--didacta-balance)',
+  inspector: 'bg-(--didacta-balance)/10 text-(--didacta-balance)',
   empresa_manager: 'bg-bg-subtle text-text-muted',
 };
 
@@ -28,6 +29,7 @@ function primaryRole(roles: string[]): string {
     'tenant_admin',
     'formador',
     'auditor',
+    'inspector',
     'empresa_manager',
     'alumno',
   ];
@@ -41,6 +43,7 @@ const ROLE_LABELS: Record<string, string> = {
   formador: 'miembros.rolFormador',
   alumno: 'miembros.rolAlumno',
   auditor: 'miembros.rolAuditor',
+  inspector: 'miembros.rolInspector',
   empresa_manager: 'miembros.rolEmpresa',
 };
 

@@ -1,6 +1,6 @@
 {
   "name": "mod.fundae",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "edition": "community",
   "coreVersionRequired": "^0.1.0",
   "displayName": "Fundae — cumplimiento regulatorio España",
@@ -19,7 +19,9 @@
     "fundae.cost.read",
     "fundae.cost.write",
     "fundae.group.participant.read",
-    "fundae.group.participant.write"
+    "fundae.group.participant.write",
+    "fundae.inspector.read",
+    "fundae.inspector.write"
   ],
   "events": [
     {
@@ -96,6 +98,12 @@
     },
     {
       "name": "fundae.group.audit-zip.generated"
+    },
+    {
+      "name": "fundae.inspector.granted"
+    },
+    {
+      "name": "fundae.inspector.revoked"
     }
   ],
   "apiNamespace": "/modules/fundae",

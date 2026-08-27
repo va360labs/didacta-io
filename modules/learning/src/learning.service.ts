@@ -13,6 +13,8 @@ import {
   EnrollmentNotActiveError,
   EnrollmentNotFoundError,
   InvitationInvalidError,
+  LessonCompletionEvidenceMissingError,
+  LessonCompletionNotSelfReportableError,
   LessonLockedError,
   LessonNotInCourseError,
   TrialContentLockedError,
@@ -93,6 +95,30 @@ const CODE_GROUP_LEN = 4;
  * directamente (la dependencia de Prisma vive encapsulada en `@didacta/database`).
  */
 export type LessonType = 'VIDEO' | 'HTML' | 'PDF' | 'TEXT' | 'QUIZ' | 'SCORM';
+
+/**
+ * Qué respalda un `completed=true` (espejo del enum `LessonCompletionSource`
+ * de Prisma, declarado aquí por la misma razón que `LessonType`).
+ */
+export type LessonCompletionSource = 'SELF' | 'TIME' | 'ASSESSMENT' | 'SCORM' | 'INSTRUCTOR';
+
+/**
+ * Quién llama a `trackProgress`. STUDENT es la vía pública (el reproductor); el
+ * resto son puentes internos o acciones de staff que sí pueden dar fe.
+ */
+export type ProgressSource = 'STUDENT' | 'ASSESSMENT' | 'SCORM' | 'INSTRUCTOR';
+
+/**
+ * Tipos de lección que un alumno puede dar por vistos él mismo. Los que faltan
+ * (QUIZ, SCORM) tienen un veredicto objetivo que emite otro sistema, así que
+ * aceptar la palabra del alumno equivaldría a dejar que se apruebe solo.
+ */
+const SELF_COMPLETABLE_TYPES: ReadonlySet<LessonType> = new Set<LessonType>([
+  'VIDEO',
+  'HTML',
+  'PDF',
+  'TEXT',
+]);
 
 /**
  * Detalle del progreso de UN alumno en UN curso, lección a lección. Es la vista
@@ -305,6 +331,51 @@ export class LearningService {
   }
 
   /**
+   * Matrícula de SEGUIMIENTO Fundae (LMS-123): la cuenta cuyas claves el centro
+   * comunica a la Fundación al inicio de la acción, para que la inspección
+   * pueda recorrer el curso.
+   *
+   * Es una matrícula de verdad porque el contenido del curso se gatea por
+   * matrícula viva y no por rol (ver `courses.controller.ts`): sin ella el
+   * inspector vería el currículo pero no el contenido, y la única alternativa
+   * era entregarle una cuenta de administración. Lo que la distingue es la
+   * fuente: `mod.fundae` excluye `INSPECTION` de los listados nominales, del
+   * XML y de los CSV, así que el inspector nunca aparece como participante de
+   * la acción que viene a inspeccionar.
+   *
+   * No la concede este método por su cuenta: la compone `mod.fundae` junto con
+   * el registro del acceso, que es donde vive la caducidad y la revocación.
+   */
+  async enrollForInspection(tenantId: string, userId: string, courseId: string) {
+    return this.createEnrollment({
+      tenantId,
+      actorId: null,
+      userId,
+      courseId,
+      source: 'INSPECTION',
+    });
+  }
+
+  /**
+   * Retira el acceso de seguimiento. Igual que sus hermanas, SOLO toca la
+   * matrícula de su propia fuente: si la persona resultara estar además
+   * matriculada como alumna del curso, ese acceso no se le quita aquí.
+   */
+  async unenrollFromInspection(tenantId: string, userId: string, courseId: string): Promise<void> {
+    await this.prisma.modLearningEnrollment.updateMany({
+      where: {
+        tenantId,
+        userId,
+        courseId,
+        status: { in: ['ACTIVE', 'PAUSED'] },
+        source: 'INSPECTION',
+      },
+      data: { status: 'CANCELLED', cancelledAt: new Date() },
+    });
+    await this.publish(tenantId, userId, 'learning.enrollment.cancelled', { courseId, userId });
+  }
+
+  /**
    * Cancela el enrollment de un grupo de acceso cuando el refcount de grants
    * vivos para (user, course) llega a 0. SOLO toca enrollments con
    * `source = 'GROUP'`: un curso obtenido además por PURCHASE/SUBSCRIPTION/API
@@ -455,7 +526,23 @@ export class LearningService {
     });
   }
 
-  async trackProgress(tenantId: string, userId: string, dto: TrackProgressDto) {
+  /**
+   * Registra progreso en una lección.
+   *
+   * `opts.source` dice QUIÉN afirma la finalización, y no es cosmético: es lo
+   * único que separa "el alumno pulsó el botón" de "el servidor lo comprobó".
+   * Por defecto STUDENT — el valor seguro: todo el que llame sin declararse
+   * queda tratado como autodeclaración, incluida la ruta HTTP pública. Los
+   * puentes internos (evaluaciones, SCORM) y las acciones de formador tienen
+   * que pedir explícitamente su origen.
+   */
+  async trackProgress(
+    tenantId: string,
+    userId: string,
+    dto: TrackProgressDto,
+    opts: { source?: ProgressSource } = {},
+  ) {
+    const source: ProgressSource = opts.source ?? 'STUDENT';
     const enrollment = await this.prisma.modLearningEnrollment.findFirst({
       where: { tenantId, userId, id: dto.enrollmentId },
     });
@@ -477,7 +564,7 @@ export class LearningService {
     // fila a una lección del curso: bastaba con enviar UUID cualesquiera con
     // `completed:true` para que el recálculo los contase contra el total del
     // curso y disparara finalización + certificado sin abrir una sola lección.
-    await this.requireLessonOfCourse(tenantId, enrollment.courseId, dto.lessonId);
+    const lesson = await this.requireLessonOfCourse(tenantId, enrollment.courseId, dto.lessonId);
 
     // DRIP/TRIAL: no permitir registrar progreso en una lección aún no liberada.
     // Ancla = enrolledAt (mismo criterio que getCourseAvailability; estable).
@@ -490,6 +577,26 @@ export class LearningService {
       enrollment.source,
     );
 
+    // Estado previo: hace falta ANTES del upsert para saber cuántos segundos
+    // acumula ya la lección (el `increment` de abajo no nos deja leerlo después
+    // sin restar) y para no re-sellar el origen de una finalización ya cerrada.
+    const existing = await this.prisma.modLearningProgress.findUnique({
+      where: {
+        enrollmentId_lessonId: { enrollmentId: dto.enrollmentId, lessonId: dto.lessonId },
+      },
+      select: { watchedSeconds: true, completed: true, completionSource: true },
+    });
+
+    const completionSource = dto.completed
+      ? await this.resolveCompletionSource({
+          tenantId,
+          source,
+          lesson,
+          accumulatedSeconds: (existing?.watchedSeconds ?? 0) + Math.max(0, dto.watchedSeconds),
+          alreadyCompletedAs: existing?.completed ? (existing.completionSource ?? null) : null,
+        })
+      : null;
+
     const updated = await this.prisma.modLearningProgress.upsert({
       where: {
         enrollmentId_lessonId: { enrollmentId: dto.enrollmentId, lessonId: dto.lessonId },
@@ -501,12 +608,14 @@ export class LearningService {
         watchedSeconds: dto.watchedSeconds,
         resumePositionSec: dto.resumePositionSec ?? 0,
         completed: dto.completed ?? false,
+        completionSource,
         completedAt: dto.completed ? new Date() : null,
       },
       update: {
         watchedSeconds: { increment: Math.max(0, dto.watchedSeconds) },
         resumePositionSec: dto.resumePositionSec ?? undefined,
         completed: dto.completed ?? undefined,
+        completionSource: completionSource ?? undefined,
         completedAt: dto.completed ? new Date() : undefined,
       },
     });
@@ -1052,7 +1161,8 @@ export class LearningService {
       | 'IMPORT'
       | 'SUBSCRIPTION'
       | 'API'
-      | 'GROUP';
+      | 'GROUP'
+      | 'INSPECTION';
   }) {
     await this.requirePublishedCourse(params.tenantId, params.courseId);
 
@@ -1469,6 +1579,9 @@ export class LearningService {
     'CODE',
     'INVITATION_LINK',
     'IMPORT',
+    // El acceso de seguimiento Fundae no es una membresía en prueba: recortarle
+    // el itinerario dejaría al inspector viendo media acción formativa.
+    'INSPECTION',
   ]);
 
   /**
@@ -1606,10 +1719,75 @@ export class LearningService {
         deletedAt: null,
         module: { courseId, deletedAt: null },
       },
-      select: { id: true, publishAt: true },
+      select: { id: true, publishAt: true, type: true, durationMinutes: true },
     });
     if (!lesson) throw new LessonNotInCourseError();
     return lesson;
+  }
+
+  /**
+   * ¿Con qué respaldo se cierra esta lección?
+   *
+   * Dos reglas, y las dos existen porque el porcentaje de progreso alimenta las
+   * horas que se exportan a Fundae:
+   *
+   * 1. Hay tipos de lección que el alumno NO puede cerrar por su cuenta. Un
+   *    cuestionario se aprueba o no se aprueba, y quien lo dictamina es el
+   *    motor de evaluaciones; un SCORM lo cierra su runtime. El reproductor ya
+   *    escondía el botón para esos tipos, pero era decoración: la API aceptaba
+   *    igual el `completed:true`, así que recorrer los ids de las lecciones
+   *    bastaba para llegar al 100 % sin responder una sola pregunta.
+   *
+   * 2. Cuando el tenant exige permanencia mínima (`minWatchFraction` > 0), una
+   *    lección con duración declarada no se cierra sin haberla tenido abierta
+   *    esa fracción. Por defecto va a 0 — apagado —: es un endurecimiento que
+   *    cambia lo que un alumno puede hacer, y esa decisión es de cada academia,
+   *    no nuestra. Con la marca apagada la finalización se sigue admitiendo,
+   *    pero queda sellada como SELF y el paquete Fundae la declara sin verificar.
+   */
+  private async resolveCompletionSource(params: {
+    tenantId: string;
+    source: ProgressSource;
+    lesson: { type: LessonType; durationMinutes: number | null };
+    accumulatedSeconds: number;
+    alreadyCompletedAs: LessonCompletionSource | null;
+  }): Promise<LessonCompletionSource> {
+    const { tenantId, source, lesson, accumulatedSeconds, alreadyCompletedAs } = params;
+
+    if (source === 'ASSESSMENT') return 'ASSESSMENT';
+    if (source === 'SCORM') return 'SCORM';
+    if (source === 'INSTRUCTOR') return 'INSTRUCTOR';
+
+    if (SELF_COMPLETABLE_TYPES.has(lesson.type) === false) {
+      throw new LessonCompletionNotSelfReportableError(lesson.type);
+    }
+
+    // Una finalización ya respaldada no se degrada porque el reproductor vuelva
+    // a mandar el ping de rigor al reabrir la lección.
+    if (alreadyCompletedAs !== null && alreadyCompletedAs !== 'SELF') {
+      return alreadyCompletedAs;
+    }
+
+    const requiredSeconds = await this.requiredWatchSeconds(tenantId, lesson.durationMinutes);
+    if (requiredSeconds === null) return 'SELF';
+    if (accumulatedSeconds >= requiredSeconds) return 'TIME';
+    throw new LessonCompletionEvidenceMissingError(requiredSeconds, accumulatedSeconds);
+  }
+
+  /**
+   * Segundos de permanencia que el tenant exige para dar una lección por vista,
+   * o null si no aplica (marca apagada, o lección sin duración declarada — sin
+   * duración no hay contra qué medir y exigir un absoluto sería inventárselo).
+   */
+  private async requiredWatchSeconds(
+    tenantId: string,
+    durationMinutes: number | null,
+  ): Promise<number | null> {
+    if (durationMinutes === null || durationMinutes <= 0) return null;
+    const raw = await this.ctx.config.get<number>(tenantId, 'mod.learning', 'minWatchFraction');
+    const fraction = typeof raw === 'number' && Number.isFinite(raw) ? raw : 0;
+    if (fraction <= 0) return null;
+    return Math.ceil(durationMinutes * 60 * Math.min(fraction, 1));
   }
 
   /**

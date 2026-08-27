@@ -6,6 +6,7 @@
  */
 
 import { useTranslations } from 'next-intl';
+import { useFocusTrap } from '@/lib/use-focus-trap';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { ColorField, SUGGESTED_COLORS } from '@/components/color-field';
@@ -48,8 +49,11 @@ export function CreateSpaceModal({ open, onClose }: Props) {
   const [color, setColor] = useState<string>(SUGGESTED_COLORS[0]!);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
-  const titleRef = useRef<HTMLInputElement>(null);
   const emojiRef = useRef<HTMLInputElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+
+  // Foco dentro al abrir, atrapado, y devuelto al disparador al cerrar (LMS-122).
+  useFocusTrap(panelRef, open);
 
   const currentIcon = iconMode === 'emoji' ? emojiValue || '✦' : selectedIcon;
 
@@ -63,7 +67,7 @@ export function CreateSpaceModal({ open, onClose }: Props) {
       setColor(SUGGESTED_COLORS[0]!);
       setError(null);
       setPending(false);
-      setTimeout(() => titleRef.current?.focus(), 50);
+      // El foco inicial lo pone `useFocusTrap` sobre `[data-autofocus]`.
     }
   }, [open]);
 
@@ -107,16 +111,22 @@ export function CreateSpaceModal({ open, onClose }: Props) {
   if (!open || typeof document === 'undefined') return null;
 
   return createPortal(
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
-      onClick={onClose}
-    >
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      {/* Ver `ui/dialog.tsx`: el fondo es un <button> para que la zona de cierre
+          esté anunciada y etiquetada, no un <div> mudo que solo entiende el ratón. */}
+      <button
+        type="button"
+        aria-label={t('cancel')}
+        onClick={onClose}
+        className="fixed inset-0 -z-10 cursor-default bg-black/50"
+      />
       <div
+        ref={panelRef}
         role="dialog"
         aria-modal="true"
+        tabIndex={-1}
         aria-label={t('newSpaceTitle')}
         className="relative w-full max-w-sm rounded-xl border border-border bg-surface shadow-2xl"
-        onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
         <div className="border-b border-border-soft px-5 py-4">
@@ -138,7 +148,7 @@ export function CreateSpaceModal({ open, onClose }: Props) {
           <div className="space-y-1.5">
             <Label htmlFor="cs-title">{t('nameLabel')}</Label>
             <Input
-              ref={titleRef}
+              data-autofocus
               id="cs-title"
               value={title}
               onChange={(e) => {

@@ -137,6 +137,20 @@ function makeFakePrisma(seed: FakePrismaSeed = {}) {
           .length;
       },
     },
+    // Desde LMS-121 las horas salen del rastro de interacción. Estos fixtures
+    // describen cursos sin lecciones cargadas, así que el cálculo conserva la
+    // estimación por porcentaje y las aserciones de horas de abajo siguen
+    // valiendo; la regla nueva tiene sus propios tests en `tracking-evidence`.
+    modCoursesLesson: {
+      async findMany() {
+        return [];
+      },
+    },
+    modLearningProgress: {
+      async findMany() {
+        return [];
+      },
+    },
     user: {
       async findMany(args: { where: { id: { in: string[] } }; select?: unknown }) {
         return users.filter((u) => args.where.id.in.includes(u.id));
@@ -241,6 +255,7 @@ describe('FundaeService', () => {
       codigoAccion: 'AF-2026-001',
       nombre: 'Curso de n8n',
       modalidad: 'TELEFORMACION',
+      criterioFinalizacion: 'UMBRAL_PROGRESO',
       horasFormacion: 12,
       fechaInicio: '2026-05-01',
       fechaFin: '2026-05-15',
@@ -260,6 +275,7 @@ describe('FundaeService', () => {
         codigoAccion: 'X',
         nombre: 'X',
         modalidad: 'PRESENCIAL',
+        criterioFinalizacion: 'UMBRAL_PROGRESO',
         horasFormacion: 5,
         fechaInicio: '2026-06-01',
         fechaFin: '2026-05-15',
@@ -275,6 +291,7 @@ describe('FundaeService', () => {
       codigoAccion: 'DUP',
       nombre: 'A',
       modalidad: 'MIXTA',
+      criterioFinalizacion: 'UMBRAL_PROGRESO',
       horasFormacion: 5,
       fechaInicio: '2026-01-01',
       fechaFin: '2026-01-10',
@@ -284,6 +301,7 @@ describe('FundaeService', () => {
         codigoAccion: 'DUP',
         nombre: 'B',
         modalidad: 'MIXTA',
+        criterioFinalizacion: 'UMBRAL_PROGRESO',
         horasFormacion: 5,
         fechaInicio: '2026-02-01',
         fechaFin: '2026-02-10',
@@ -306,6 +324,7 @@ describe('FundaeService', () => {
       codigoAccion: 'A1',
       nombre: 'A',
       modalidad: 'MIXTA',
+      criterioFinalizacion: 'UMBRAL_PROGRESO',
       horasFormacion: 5,
       fechaInicio: '2026-01-01',
       fechaFin: '2026-01-10',
@@ -324,6 +343,7 @@ describe('FundaeService', () => {
       codigoAccion: 'X<2026>',
       nombre: 'Curso "Especial"',
       modalidad: 'TELEFORMACION',
+      criterioFinalizacion: 'UMBRAL_PROGRESO',
       horasFormacion: 8,
       fechaInicio: '2026-05-01',
       fechaFin: '2026-05-15',
@@ -346,6 +366,7 @@ describe('buildActionXml', () => {
       codigoAccion: 'A<&>"\'B',
       nombre: 'N',
       modalidad: 'PRESENCIAL',
+      criterioFinalizacion: 'UMBRAL_PROGRESO',
       horasFormacion: 5,
       fechaInicio: '2026-01-01',
       fechaFin: '2026-01-02',
@@ -368,6 +389,7 @@ describe('buildActionXml', () => {
         codigoAccion: 'A1',
         nombre: 'N',
         modalidad: 'TELEFORMACION',
+        criterioFinalizacion: 'UMBRAL_PROGRESO',
         horasFormacion: 10,
         fechaInicio: '2026-01-01',
         fechaFin: '2026-01-10',
@@ -422,6 +444,7 @@ describe('FundaeService participantes', () => {
       codigoAccion: 'NOC',
       nombre: 'Sin curso',
       modalidad: 'PRESENCIAL',
+      criterioFinalizacion: 'UMBRAL_PROGRESO',
       horasFormacion: 5,
       fechaInicio: '2026-01-01',
       fechaFin: '2026-01-10',
@@ -475,6 +498,7 @@ describe('FundaeService participantes', () => {
       codigoAccion: 'CONC',
       nombre: 'Con curso',
       modalidad: 'TELEFORMACION',
+      criterioFinalizacion: 'UMBRAL_PROGRESO',
       horasFormacion: 10,
       fechaInicio: '2026-01-01',
       fechaFin: '2026-01-10',
@@ -522,6 +546,7 @@ describe('FundaeService participantes', () => {
       codigoAccion: 'XML-PART',
       nombre: 'Curso con participantes',
       modalidad: 'TELEFORMACION',
+      criterioFinalizacion: 'UMBRAL_PROGRESO',
       horasFormacion: 10,
       fechaInicio: '2026-01-01',
       fechaFin: '2026-01-10',
@@ -547,6 +572,7 @@ describe('FundaeService participantes', () => {
       codigoAccion: 'XML-NOC',
       nombre: 'Sin curso',
       modalidad: 'PRESENCIAL',
+      criterioFinalizacion: 'UMBRAL_PROGRESO',
       horasFormacion: 5,
       fechaInicio: '2026-01-01',
       fechaFin: '2026-01-10',
@@ -563,6 +589,7 @@ describe('FundaeService participantes', () => {
       codigoAccion: 'BLK-1',
       nombre: 'Acción con bloques',
       modalidad: 'MIXTA',
+      criterioFinalizacion: 'UMBRAL_PROGRESO',
       horasFormacion: 10,
       fechaInicio: '2026-01-01',
       fechaFin: '2026-01-10',
@@ -606,6 +633,7 @@ describe('FundaeService participantes', () => {
       codigoAccion: 'BLK-CAP',
       nombre: 'Acción con tope 10h',
       modalidad: 'PRESENCIAL',
+      criterioFinalizacion: 'UMBRAL_PROGRESO',
       horasFormacion: 10,
       fechaInicio: '2026-01-01',
       fechaFin: '2026-01-10',
@@ -632,6 +660,7 @@ describe('FundaeService participantes', () => {
       codigoAccion: 'BLK-ORD',
       nombre: 'X',
       modalidad: 'PRESENCIAL',
+      criterioFinalizacion: 'UMBRAL_PROGRESO',
       horasFormacion: 10,
       fechaInicio: '2026-01-01',
       fechaFin: '2026-01-10',
@@ -660,6 +689,7 @@ describe('FundaeService participantes', () => {
       codigoAccion: 'BLK-UPD',
       nombre: 'X',
       modalidad: 'PRESENCIAL',
+      criterioFinalizacion: 'UMBRAL_PROGRESO',
       horasFormacion: 10,
       fechaInicio: '2026-01-01',
       fechaFin: '2026-01-10',
@@ -690,6 +720,7 @@ describe('FundaeService participantes', () => {
       codigoAccion: 'BLK-DEL',
       nombre: 'X',
       modalidad: 'PRESENCIAL',
+      criterioFinalizacion: 'UMBRAL_PROGRESO',
       horasFormacion: 10,
       fechaInicio: '2026-01-01',
       fechaFin: '2026-01-10',
@@ -720,6 +751,7 @@ describe('FundaeService participantes', () => {
       codigoAccion: 'BLK-NF',
       nombre: 'X',
       modalidad: 'PRESENCIAL',
+      criterioFinalizacion: 'UMBRAL_PROGRESO',
       horasFormacion: 10,
       fechaInicio: '2026-01-01',
       fechaFin: '2026-01-10',
@@ -768,6 +800,7 @@ describe('FundaeService participantes', () => {
       codigoAccion: 'XML-DNI',
       nombre: 'Curso con DNI',
       modalidad: 'TELEFORMACION',
+      criterioFinalizacion: 'UMBRAL_PROGRESO',
       horasFormacion: 10,
       fechaInicio: '2026-01-01',
       fechaFin: '2026-01-10',

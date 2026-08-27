@@ -37,6 +37,9 @@ import {
   type CostCsvRow,
   type ParticipantCsvRow,
 } from './audit-zip.js';
+import { computeParticipantEvidence, type ParticipantEvidence } from './tracking-evidence.js';
+import { loadLessonEvidence } from './evidence-loader.js';
+import { buildSeguimientoCsv, type SeguimientoCsvRow } from './seguimiento-csv.js';
 import { datosContactoSchema } from './company.dto.js';
 import type { ActionView, Modalidad } from './dto.js';
 import type { CompanyView } from './company.dto.js';
@@ -376,7 +379,7 @@ export class FundaeGroupService {
 
     const action = await this.prisma.modFundaeAction.findFirst({
       where: { tenantId, id: groupRow.actionId },
-      select: { courseId: true, horasFormacion: true },
+      select: { courseId: true, horasFormacion: true, criterioFinalizacion: true },
     });
     if (!action) throw new ActionNotFoundError(groupRow.actionId);
 
@@ -421,18 +424,61 @@ export class FundaeGroupService {
     const userById = new Map(users.map((u) => [u.id, u]));
     const enrollByUser = new Map(enrollments.map((e) => [e.userId, e]));
 
+    // Horas desde el rastro de interacción, no desde la casilla que marca el
+    // alumno. Antes salían de `horasFormacion × progressPercent / 100`, y
+    // `progressPercent` es el % de lecciones con la casilla puesta: las horas
+    // que se bonificaban eran, en el fondo, una autodeclaración. Ver
+    // `tracking-evidence.ts` para la regla y para por qué las autodeclaradas
+    // siguen sumando pero viajan contadas aparte.
+    const { lessonsByUser } = await loadLessonEvidence(
+      this.prisma,
+      tenantId,
+      action.courseId,
+      userIds,
+    );
+
     const groupClosed = groupRow.status === 'CLOSED' || groupRow.status === 'CANCELLED';
 
     const computed = participants.map((p) => {
       const u = userById.get(p.userId);
       const enrollment = enrollByUser.get(p.userId);
       const progress = enrollment?.progressPercent ?? 0;
-      const horas = (action.horasFormacion * progress) / 100;
+      const evidence = computeParticipantEvidence(
+        lessonsByUser.get(p.userId) ?? [],
+        action.horasFormacion,
+        progress,
+      );
+      // Sin itinerario que recorrer (acción sin curso asociado) no hay evidencia
+      // que reconstruir: se conserva la estimación vieja para no dejar el grupo
+      // sin horas por un motivo que no es del alumno.
+      const horas =
+        evidence.leccionesTotales === 0
+          ? evidence.horasDeclaradasPorProgreso
+          : evidence.horasAsistidas;
+
+      // ¿Con qué regla se decide el APTO? Ver `FundaeCriterioFinalizacion`.
+      //
+      // INSTRUCCION_75 exige los TRES numeradores a la vez —horas, actividades
+      // y controles periódicos—, y los tres se calculan solo con lo que verificó
+      // un tercero. Es más exigente que el umbral de siempre a propósito: un
+      // participante que marcó todas las casillas sin abrir nada da 100 % de
+      // progreso y 0 % de horas, y eso es justo lo que no debe salir APTO.
+      //
+      // Sin itinerario que recorrer (acción sin curso asociado) no hay nada que
+      // medir: se cae al criterio de siempre en vez de suspender a todo el mundo
+      // por un dato que no depende del alumno.
+      const usaInstruccion =
+        action.criterioFinalizacion === 'INSTRUCCION_75' && evidence.leccionesTotales > 0;
+      const cumpleCriterio = usaInstruccion
+        ? evidence.pctHoras >= umbralAplicadoPct &&
+          evidence.pctActividades >= umbralAplicadoPct &&
+          evidence.pctControles >= umbralAplicadoPct
+        : progress >= umbralAplicadoPct;
 
       let resultado: 'APTO' | 'NO_APTO' | 'EN_CURSO';
       if (p.status === 'REMOVED') {
         resultado = 'NO_APTO';
-      } else if (progress >= umbralAplicadoPct) {
+      } else if (cumpleCriterio) {
         resultado = 'APTO';
       } else if (groupClosed || enrollment?.completedAt) {
         resultado = 'NO_APTO';
@@ -449,6 +495,7 @@ export class FundaeGroupService {
         horasAsistidas: roundTwo(horas),
         progressPercent: progress,
         resultado,
+        ...(evidence.leccionesTotales === 0 ? {} : { evidencia: toEvidenceView(evidence) }),
       };
     });
 
@@ -530,6 +577,8 @@ export class FundaeGroupService {
       codigoAccion: actionRow.codigoAccion,
       nombre: actionRow.nombre,
       modalidad: actionRow.modalidad as Modalidad,
+      criterioFinalizacion:
+        actionRow.criterioFinalizacion as import('./dto.js').CriterioFinalizacion,
       horasFormacion: actionRow.horasFormacion,
       fechaInicio: actionRow.fechaInicio,
       fechaFin: actionRow.fechaFin,
@@ -636,6 +685,8 @@ export class FundaeGroupService {
       codigoAccion: actionRow.codigoAccion,
       nombre: actionRow.nombre,
       modalidad: actionRow.modalidad as Modalidad,
+      criterioFinalizacion:
+        actionRow.criterioFinalizacion as import('./dto.js').CriterioFinalizacion,
       horasFormacion: actionRow.horasFormacion,
       fechaInicio: actionRow.fechaInicio,
       fechaFin: actionRow.fechaFin,
@@ -781,6 +832,29 @@ export class FundaeGroupService {
           });
     const userById = new Map(users.map((u) => [u.id, u]));
 
+    // Rastro de interacción del grupo. Alimenta a la vez el detalle de
+    // `participantes.csv` y el `seguimiento.csv` completo: una sola lectura para
+    // que el agregado y el detalle no puedan contradecirse ante un inspector.
+    const { lessonsByUser, progressByUser } = await loadLessonEvidence(
+      this.prisma,
+      tenantId,
+      actionRow.courseId,
+      userIds,
+    );
+    const evidenceByUser = new Map<string, ParticipantEvidence>();
+    for (const p of participantRows) {
+      const lessons = lessonsByUser.get(p.userId) ?? [];
+      if (lessons.length === 0) continue;
+      evidenceByUser.set(
+        p.userId,
+        computeParticipantEvidence(
+          lessons,
+          actionRow.horasFormacion,
+          progressByUser.get(p.userId) ?? 0,
+        ),
+      );
+    }
+
     const participantsCsv = buildParticipantsCsv(
       participantRows.map<ParticipantCsvRow>((p) => {
         const u = userById.get(p.userId);
@@ -788,6 +862,7 @@ export class FundaeGroupService {
           p.horasAsistidas === null || p.horasAsistidas === undefined
             ? null
             : Number(p.horasAsistidas);
+        const ev = evidenceByUser.get(p.userId) ?? null;
         return {
           userId: p.userId,
           nifAlumno: p.nifAlumno,
@@ -798,9 +873,42 @@ export class FundaeGroupService {
           horasAsistidas: horas,
           progressPercent: p.progressPercent ?? null,
           resultado: p.resultado,
+          horasSinVerificar: ev?.horasSinVerificar ?? null,
+          primerAccesoAt: ev?.primerAccesoAt?.toISOString() ?? null,
+          ultimoAccesoAt: ev?.ultimoAccesoAt?.toISOString() ?? null,
+          actividadesSuperadas: ev?.actividadesSuperadas ?? null,
+          actividadesTotales: ev?.actividadesTotales ?? null,
         };
       }),
     );
+
+    const seguimientoRows: SeguimientoCsvRow[] = [];
+    for (const p of participantRows) {
+      const u = userById.get(p.userId);
+      for (const lesson of lessonsByUser.get(p.userId) ?? []) {
+        seguimientoRows.push({
+          nifAlumno: p.nifAlumno,
+          email: u?.email ?? '',
+          nombre: u?.name ?? null,
+          orden: lesson.position,
+          moduloTitulo: lesson.moduleTitle,
+          leccionTitulo: lesson.lessonTitle,
+          tipo: lesson.type,
+          duracionMinutos: lesson.durationMinutes,
+          primerAccesoAt: lesson.firstAccessedAt,
+          ultimoAccesoAt: lesson.lastAccessedAt,
+          segundosRegistrados: lesson.watchedSeconds,
+          completada: lesson.completed,
+          completadaAt: lesson.completedAt,
+          origenCompletado: lesson.completionSource,
+          verificada:
+            lesson.completed &&
+            lesson.completionSource !== null &&
+            lesson.completionSource !== 'SELF',
+        });
+      }
+    }
+    const seguimientoCsv = buildSeguimientoCsv(seguimientoRows);
 
     const costsCsv = buildCostsCsv(
       groupRow.costs.map<CostCsvRow>((c) => ({
@@ -854,6 +962,7 @@ export class FundaeGroupService {
       startXml,
       endXml,
       participantsCsv,
+      seguimientoCsv,
       costsCsv,
       rlptAttachments,
     });
@@ -861,6 +970,7 @@ export class FundaeGroupService {
     await this.publish(tenantId, null, 'fundae.group.audit-zip.generated', {
       groupId,
       participantsCount: participantRows.length,
+      seguimientoRowsCount: seguimientoRows.length,
       rlptAttachmentsCount: rlptAttachments.length,
       bytes: zip.length,
     });
@@ -1075,4 +1185,31 @@ function mimeToExt(contentType: string): string {
   if (ct.includes('jpeg') || ct.includes('jpg')) return 'jpg';
   if (ct.includes('webp')) return 'webp';
   return 'bin';
+}
+
+/**
+ * `ParticipantEvidence` (fechas como Date, dominio del módulo) → la vista que
+ * cruza la frontera HTTP (fechas ISO). Misma frontera que el resto de DTOs.
+ */
+function toEvidenceView(
+  evidence: ParticipantEvidence,
+): import('./group.dto.js').ParticipantEvidenceView {
+  return {
+    horasSinVerificar: evidence.horasSinVerificar,
+    horasDeclaradasPorProgreso: evidence.horasDeclaradasPorProgreso,
+    segundosRegistrados: evidence.segundosRegistrados,
+    leccionesTotales: evidence.leccionesTotales,
+    leccionesIniciadas: evidence.leccionesIniciadas,
+    leccionesCompletadas: evidence.leccionesCompletadas,
+    leccionesVerificadas: evidence.leccionesVerificadas,
+    actividadesTotales: evidence.actividadesTotales,
+    actividadesSuperadas: evidence.actividadesSuperadas,
+    controlesTotales: evidence.controlesTotales,
+    controlesSuperados: evidence.controlesSuperados,
+    pctHoras: evidence.pctHoras,
+    pctActividades: evidence.pctActividades,
+    pctControles: evidence.pctControles,
+    primerAccesoAt: evidence.primerAccesoAt?.toISOString() ?? null,
+    ultimoAccesoAt: evidence.ultimoAccesoAt?.toISOString() ?? null,
+  };
 }

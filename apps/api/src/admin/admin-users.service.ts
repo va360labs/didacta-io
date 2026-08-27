@@ -33,6 +33,9 @@ export const TENANT_ASSIGNABLE_ROLES = [
   'formador',
   'alumno',
   'auditor',
+  // Seguimiento Fundae (LMS-123): solo lectura y acotado a los grupos que se le
+  // concedan. Por sí solo no abre nada — el rol sin concesión no ve un grupo.
+  'inspector',
   'empresa_manager',
 ] as const;
 
