@@ -7,6 +7,7 @@ import { createHash } from 'node:crypto';
 import { Injectable, Logger } from '@nestjs/common';
 import { z, type ZodIssue } from 'zod';
 import type { StorageService } from '@didacta/core-kernel';
+import { sanitizeLessonContent } from '@didacta/core-kernel';
 import {
   AlreadyEnrolledError,
   CourseNotPublishedError,
@@ -978,7 +979,10 @@ class ScopedDidactaApi implements DidactaApi {
           // position: solo se setea acá si NO hubo move (el move ya la
           // posicionó en el target module).
           ...(existing.moduleId === section.id ? { position: input.position } : {}),
-          content: input.content as never,
+          // Este UPDATE es crudo (no pasa por CoursesService.updateLesson, que
+          // es donde vive el saneado), así que sanea aquí: el `content` viene
+          // de un módulo instalado y acaba en `dangerouslySetInnerHTML`.
+          content: sanitizeLessonContent(input.content) as never,
           ...(input.durationMinutes !== undefined
             ? { durationMinutes: input.durationMinutes }
             : {}),

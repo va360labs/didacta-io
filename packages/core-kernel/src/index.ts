@@ -45,3 +45,14 @@ export type {
   I18nService,
   TenantConfigService,
 } from './module/module.js';
+
+export {
+  sanitizeRichText,
+  sanitizeLessonHtml,
+  sanitizeLessonContent,
+  sanitizeExternalUrl,
+  RICH_TEXT_ALLOWED_TAGS,
+  LESSON_ALLOWED_IFRAME_HOSTNAMES,
+} from './html/sanitize.js';
+
+export type { SanitizeHtmlOptions } from './html/sanitize.js';

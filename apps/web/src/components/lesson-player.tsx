@@ -16,7 +16,7 @@ import type { CourseLesson } from '@/lib/courses';
 import { apiErrorMessage } from '@/lib/i18n/api-error';
 import { labelOr } from '@/lib/i18n/labels';
 import { learningApi } from '@/lib/learning';
-import { sanitizeRichHtml } from '@/lib/sanitize-html';
+import { safeExternalUrl, sanitizeLessonHtml, sanitizeRichHtml } from '@/lib/sanitize-html';
 import { parseBunny } from '@/lib/video';
 import type { WatchReport } from '@/lib/use-bunny-watch';
 
@@ -291,18 +291,23 @@ function LessonContent({
   }
 
   if (lesson.type === 'HTML') {
-    const html = typeof content['html'] === 'string' ? content['html'] : '';
+    const raw = typeof content['html'] === 'string' ? content['html'] : '';
+    if (!raw) return <Empty hint={t('lesson.emptyHtml')} />;
+    // Se sanea con la whitelist de lección, que SÍ conserva `<iframe>` pero
+    // sólo de proveedores de vídeo autorizados: las lecciones HTML heredadas
+    // llevan el vídeo embebido a mano y seguirían funcionando. Antes esto se
+    // pintaba crudo, lo que convertía a cualquier formador en dueño del
+    // navegador de sus alumnos (XSS almacenado). El memo evita que el iframe
+    // se recree en cada reporte de progreso (ver LessonRichHtml).
+    const html = sanitizeLessonHtml(raw);
     if (!html) return <Empty hint={t('lesson.emptyHtml')} />;
-    // Se renderiza CRUDO (sin sanitizar) a propósito: las lecciones HTML legacy
-    // llevan el vídeo embebido como `<iframe>`, que la whitelist de DOMPurify
-    // eliminaría. El memo evita que el iframe se recree en cada reporte de
-    // progreso (ver LessonRichHtml). Al migrar el vídeo a tipo VIDEO, el HTML
-    // deja de necesitar iframe y puede sanitizarse.
     return <LessonRichHtml html={html} />;
   }
 
   if (lesson.type === 'PDF') {
-    const url = typeof content['pdfUrl'] === 'string' ? content['pdfUrl'] : '';
+    // `safeExternalUrl` deja fuera los `javascript:` que pudieran haber quedado
+    // guardados antes de que el servidor saneara el `content`.
+    const url = safeExternalUrl(typeof content['pdfUrl'] === 'string' ? content['pdfUrl'] : '');
     if (!url) return <Empty hint={t('lesson.emptyPdf')} />;
     return (
       <iframe

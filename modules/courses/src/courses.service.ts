@@ -4,6 +4,7 @@
  */
 
 import type { ModuleContext } from '@didacta/core-kernel';
+import { sanitizeLessonContent, sanitizeRichText } from '@didacta/core-kernel';
 import type { PrismaClient } from '@didacta/database';
 import { randomUUID } from 'node:crypto';
 import {
@@ -38,7 +39,9 @@ export class CoursesService {
         tenantId,
         slug: dto.slug,
         title: dto.title,
-        description: dto.description ?? null,
+        // La descripción se pinta con `dangerouslySetInnerHTML` en la ficha de
+        // venta y en el catálogo: se sanea AQUÍ, al guardar, no sólo al pintar.
+        description: dto.description ? sanitizeRichText(dto.description) : null,
         thumbnailUrl: dto.thumbnailUrl ?? null,
         featuredVideoUrl: dto.featuredVideoUrl ?? null,
         language: dto.language,
@@ -81,7 +84,9 @@ export class CoursesService {
       where: { id: courseId },
       data: {
         ...(dto.title !== undefined ? { title: dto.title } : {}),
-        ...(dto.description !== undefined ? { description: dto.description } : {}),
+        ...(dto.description !== undefined
+          ? { description: dto.description ? sanitizeRichText(dto.description) : null }
+          : {}),
         ...(dto.thumbnailUrl !== undefined ? { thumbnailUrl: dto.thumbnailUrl } : {}),
         ...(dto.featuredVideoUrl !== undefined ? { featuredVideoUrl: dto.featuredVideoUrl } : {}),
         ...(dto.estimatedMinutes !== undefined ? { estimatedMinutes: dto.estimatedMinutes } : {}),
@@ -329,7 +334,10 @@ export class CoursesService {
         type: dto.type,
         title: dto.title,
         position,
-        content: (dto.content ?? {}) as never,
+        // El `content` llega como registro arbitrario desde el editor y acaba
+        // en `dangerouslySetInnerHTML`. Se sanea en el servidor al guardar:
+        // el saneado del cliente es defensa en profundidad, no la frontera.
+        content: sanitizeLessonContent(dto.content ?? {}) as never,
         durationMinutes: dto.durationMinutes ?? null,
         publishAt: dto.publishAt ? new Date(dto.publishAt) : null,
       },
@@ -717,7 +725,9 @@ export class CoursesService {
       where: { id: lessonId },
       data: {
         ...(dto.title !== undefined ? { title: dto.title } : {}),
-        ...(dto.content !== undefined ? { content: dto.content as never } : {}),
+        ...(dto.content !== undefined
+          ? { content: sanitizeLessonContent(dto.content) as never }
+          : {}),
         ...(dto.durationMinutes !== undefined ? { durationMinutes: dto.durationMinutes } : {}),
         ...(dto.publishAt !== undefined
           ? { publishAt: dto.publishAt ? new Date(dto.publishAt) : null }
