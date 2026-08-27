@@ -12,6 +12,7 @@ import { MentionTextarea } from '@/components/mention-textarea';
 import { authStorage } from '@/lib/auth-storage';
 import { uploadCommunityFile, uploadCommunityImage } from '@/lib/community-upload';
 import { apiErrorMessage } from '@/lib/i18n/api-error';
+import { useFocusTrap } from '@/lib/use-focus-trap';
 import {
   buildBodyWithAttachments,
   communityApi,
@@ -79,10 +80,13 @@ export function PostComposerModal({ open, onClose, spaceSlug, onSuccess, editPos
   const [notifyAll, setNotifyAll] = useState(false);
   const [important, setImportant] = useState(false);
 
-  const titleRef = useRef<HTMLInputElement>(null);
   const bodyRef = useRef<HTMLTextAreaElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+
+  // Foco dentro al abrir, atrapado, y devuelto al cerrar (LMS-122).
+  useFocusTrap(panelRef, open);
 
   useEffect(() => {
     if (!open) return;
@@ -122,7 +126,7 @@ export function PostComposerModal({ open, onClose, spaceSlug, onSuccess, editPos
       setImages([]);
       setFiles([]);
     }
-    setTimeout(() => titleRef.current?.focus(), 50);
+    // El foco inicial lo pone `useFocusTrap` sobre `[data-autofocus]`.
   }, [open, spaceSlug, editPost]);
 
   useEffect(() => {
@@ -296,8 +300,10 @@ export function PostComposerModal({ open, onClose, spaceSlug, onSuccess, editPos
       <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px]" />
 
       <div
+        ref={panelRef}
         role="dialog"
         aria-modal="true"
+        tabIndex={-1}
         aria-label={t('newPostAria')}
         className="relative z-10 w-full max-w-2xl rounded-2xl bg-white shadow-2xl max-h-[90vh] overflow-y-auto"
       >
@@ -369,7 +375,7 @@ export function PostComposerModal({ open, onClose, spaceSlug, onSuccess, editPos
         {/* Body */}
         <div className="px-5 pt-4 space-y-3">
           <input
-            ref={titleRef}
+            data-autofocus
             type="text"
             value={title}
             onChange={(e) => setTitle(e.target.value)}

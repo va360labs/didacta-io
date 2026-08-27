@@ -5,10 +5,11 @@
  * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
  */
 
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useTranslations } from 'next-intl';
 import { SIDEBAR_BG_STYLE, SidebarContent, type SidebarGroup } from '@/components/app-sidebar';
 import type { StoredSession } from '@/lib/auth-storage';
+import { useFocusTrap } from '@/lib/use-focus-trap';
 
 interface Props {
   open: boolean;
@@ -45,6 +46,12 @@ export function MobileNavDrawer({
   backLink,
 }: Props) {
   const t = useTranslations('shell');
+  const panelRef = useRef<HTMLElement>(null);
+
+  // Foco dentro del panel mientras el drawer está abierto (LMS-122). Sin esto,
+  // en móvil con teclado o lector el menú se abría y el foco seguía en la
+  // página de detrás, que el scrim acaba de tapar.
+  useFocusTrap(panelRef, open);
 
   // Bloqueo de scroll del body + cierre con Escape mientras el drawer está abierto.
   useEffect(() => {
@@ -79,8 +86,10 @@ export function MobileNavDrawer({
 
       {/* Panel deslizante — mismo contenido que el rail de escritorio. */}
       <aside
+        ref={panelRef}
         role="dialog"
         aria-modal="true"
+        tabIndex={-1}
         aria-label={t('drawer.ariaLabel')}
         className={`absolute inset-y-0 left-0 flex w-71 max-w-[85vw] flex-col overflow-hidden text-white shadow-xl transition-transform duration-300 ease-out ${
           open ? 'translate-x-0' : '-translate-x-full'
