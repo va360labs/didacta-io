@@ -343,8 +343,7 @@ export class FundaeInspectorService {
             completada: l.completed,
             completadaAt: l.completedAt?.toISOString() ?? null,
             origenCompletado: l.completionSource,
-            verificada:
-              l.completed && l.completionSource !== null && l.completionSource !== 'SELF',
+            verificada: l.completed && l.completionSource !== null && l.completionSource !== 'SELF',
           })),
         };
       }),

@@ -198,7 +198,11 @@ describe('computeParticipantEvidence (LMS-121)', () => {
   });
 
   it('conserva la fórmula antigua en un campo aparte, para poder explicar el salto', () => {
-    const ev = computeParticipantEvidence([lesson({ lessonId: 'l-0', durationMinutes: 60 })], 10, 90);
+    const ev = computeParticipantEvidence(
+      [lesson({ lessonId: 'l-0', durationMinutes: 60 })],
+      10,
+      90,
+    );
     expect(ev.horasDeclaradasPorProgreso).toBe(9);
     expect(ev.horasAsistidas).toBe(0);
   });

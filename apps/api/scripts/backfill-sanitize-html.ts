@@ -236,9 +236,7 @@ async function main(): Promise<void> {
         // Un tenant que falla no aborta el resto: en una instalación con muchos,
         // parar en el primero dejaría el trabajo a medias y sin saber dónde.
         fallos += 1;
-        console.error(
-          `  ✗ ${tenant.slug}: ${err instanceof Error ? err.message : String(err)}`,
-        );
+        console.error(`  ✗ ${tenant.slug}: ${err instanceof Error ? err.message : String(err)}`);
       }
     }
   } finally {

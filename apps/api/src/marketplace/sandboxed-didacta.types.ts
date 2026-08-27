@@ -301,13 +301,7 @@ export interface DidactaUpsertUserInput extends DidactaExternalRef {
   email: string;
   name?: string;
   /// Rol asignado en el tenant. Default: 'alumno'.
-  role?:
-    | 'tenant_admin'
-    | 'formador'
-    | 'alumno'
-    | 'auditor'
-    | 'inspector'
-    | 'empresa_manager';
+  role?: 'tenant_admin' | 'formador' | 'alumno' | 'auditor' | 'inspector' | 'empresa_manager';
   locale?: string;
   /// DNI/NIE en mayúsculas y sin separadores (Fundae). Validado por el core.
   documentId?: string;

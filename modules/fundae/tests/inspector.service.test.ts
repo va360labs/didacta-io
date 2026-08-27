@@ -137,7 +137,11 @@ describe('FundaeInspectorService — la puerta', () => {
 
     const view = await svc.grant('t1', 'admin-1', 'g1', 'u-insp');
 
-    expect(prisma.upserts[0]).toMatchObject({ grantedBy: 'admin-1', groupId: 'g1', userId: 'u-insp' });
+    expect(prisma.upserts[0]).toMatchObject({
+      grantedBy: 'admin-1',
+      groupId: 'g1',
+      userId: 'u-insp',
+    });
     expect(view.activo).toBe(true);
     expect(view.userEmail).toBe('i@x.com');
     expect(

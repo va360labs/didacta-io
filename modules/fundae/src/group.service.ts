@@ -577,7 +577,8 @@ export class FundaeGroupService {
       codigoAccion: actionRow.codigoAccion,
       nombre: actionRow.nombre,
       modalidad: actionRow.modalidad as Modalidad,
-      criterioFinalizacion: actionRow.criterioFinalizacion as import('./dto.js').CriterioFinalizacion,
+      criterioFinalizacion:
+        actionRow.criterioFinalizacion as import('./dto.js').CriterioFinalizacion,
       horasFormacion: actionRow.horasFormacion,
       fechaInicio: actionRow.fechaInicio,
       fechaFin: actionRow.fechaFin,
@@ -684,7 +685,8 @@ export class FundaeGroupService {
       codigoAccion: actionRow.codigoAccion,
       nombre: actionRow.nombre,
       modalidad: actionRow.modalidad as Modalidad,
-      criterioFinalizacion: actionRow.criterioFinalizacion as import('./dto.js').CriterioFinalizacion,
+      criterioFinalizacion:
+        actionRow.criterioFinalizacion as import('./dto.js').CriterioFinalizacion,
       horasFormacion: actionRow.horasFormacion,
       fechaInicio: actionRow.fechaInicio,
       fechaFin: actionRow.fechaFin,

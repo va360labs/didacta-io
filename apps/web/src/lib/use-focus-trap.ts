@@ -83,7 +83,8 @@ function focusableWithin(container: HTMLElement): HTMLElement[] {
   return Array.from(container.querySelectorAll<HTMLElement>(FOCUSABLE)).filter(
     // `offsetParent === null` descarta lo oculto con display:none y lo que está
     // dentro de una sección colapsada; comprobar `hidden` cubre el resto.
-    (el) => !el.hasAttribute('hidden') && (el.offsetParent !== null || el === document.activeElement),
+    (el) =>
+      !el.hasAttribute('hidden') && (el.offsetParent !== null || el === document.activeElement),
   );
 }
 

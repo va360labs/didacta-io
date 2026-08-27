@@ -1,34 +1,54 @@
 import { describe, expect, it } from 'vitest';
 import { extractClientContext } from '../src/auth/client-context';
 
+/**
+ * La IP que acaba en el registro de auditoría.
+ *
+ * Estos tests cambiaron de sentido a propósito. Tres de ellos afirmaban que
+ * `x-forwarded-for` gana sobre `req.ip` — que era justo el defecto: la IP del
+ * rastro la elegía quien hacía la petición, mandando el header que quisiera. Un
+ * log de auditoría cuyo contenido escribe el auditado no es un log de auditoría.
+ *
+ * Ahora la única fuente es `req.ip`, que Fastify deriva del XFF solo hasta donde
+ * `trustProxy` le autoriza (`TRUSTED_PROXY_HOPS` / `TRUSTED_PROXY_IPS`).
+ */
+
 const req = (headers: Record<string, string | string[] | undefined>, ip = '127.0.0.1') =>
   ({ headers, ip }) as never;
 
 describe('extractClientContext', () => {
-  it('usa req.ip cuando no hay x-forwarded-for', () => {
+  it('usa req.ip', () => {
     expect(extractClientContext(req({}, '203.0.113.10'))).toEqual({
       ip: '203.0.113.10',
       userAgent: null,
     });
   });
 
-  it('respeta el primer valor de x-forwarded-for por encima del socket ip', () => {
-    expect(extractClientContext(req({ 'x-forwarded-for': '198.51.100.7' }, '127.0.0.1'))).toEqual({
-      ip: '198.51.100.7',
-      userAgent: null,
-    });
+  it('un x-forwarded-for inventado NO pisa la ip resuelta', () => {
+    // El caso del defecto: antes esto devolvía 198.51.100.7 y el rastro quedaba
+    // firmado con la dirección que el cliente había elegido.
+    const ctx = extractClientContext(req({ 'x-forwarded-for': '198.51.100.7' }, '203.0.113.10'));
+    expect(ctx.ip).toBe('203.0.113.10');
   });
 
-  it('cadena x-forwarded-for: usa el PRIMERO (la ip del cliente, no los proxies)', () => {
+  it('una CADENA de x-forwarded-for tampoco: el primero es el mas facil de falsear', () => {
     const ctx = extractClientContext(
-      req({ 'x-forwarded-for': '198.51.100.7, 203.0.113.5, 10.0.0.1' }),
+      req({ 'x-forwarded-for': '198.51.100.7, 203.0.113.5, 10.0.0.1' }, '203.0.113.10'),
     );
-    expect(ctx.ip).toBe('198.51.100.7');
+    expect(ctx.ip).toBe('203.0.113.10');
   });
 
-  it('x-forwarded-for como array (Fastify lo entrega así si vienen varios headers)', () => {
-    const ctx = extractClientContext(req({ 'x-forwarded-for': ['198.51.100.42, 10.0.0.1'] }));
-    expect(ctx.ip).toBe('198.51.100.42');
+  it('x-forwarded-for como array (varios headers) tampoco cuela', () => {
+    const ctx = extractClientContext(
+      req({ 'x-forwarded-for': ['198.51.100.42, 10.0.0.1'] }, '203.0.113.10'),
+    );
+    expect(ctx.ip).toBe('203.0.113.10');
+  });
+
+  it('sin req.ip no se inventa una desde el header: null', () => {
+    // Preferimos NO saber la IP a registrar una que dijo el propio auditado.
+    const ctx = extractClientContext(req({ 'x-forwarded-for': '198.51.100.7' }, ''));
+    expect(ctx.ip).toBeNull();
   });
 
   it('extrae user-agent y lo pasa tal cual', () => {
@@ -44,7 +64,8 @@ describe('extractClientContext', () => {
   });
 
   it('trunca ip si llega absurdamente larga (>64 chars)', () => {
-    const ctx = extractClientContext(req({ 'x-forwarded-for': 'X'.repeat(200) }));
+    // IPv6 con zona, o un proxy mal configurado. El campo en DB es acotado.
+    const ctx = extractClientContext(req({}, 'X'.repeat(200)));
     expect(ctx.ip?.length).toBe(64);
   });
 
@@ -55,10 +76,5 @@ describe('extractClientContext', () => {
   it('user-agent vacío string → null (no string vacío)', () => {
     const ctx = extractClientContext(req({ 'user-agent': '' }));
     expect(ctx.userAgent).toBeNull();
-  });
-
-  it('x-forwarded-for vacío → cae a req.ip', () => {
-    const ctx = extractClientContext(req({ 'x-forwarded-for': '' }, '10.0.0.5'));
-    expect(ctx.ip).toBe('10.0.0.5');
   });
 });

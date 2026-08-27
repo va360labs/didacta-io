@@ -107,9 +107,5 @@
     }
   ],
   "apiNamespace": "/modules/fundae",
-  "surfaces": [
-    "admin",
-    "auditor",
-    "empresa_manager"
-  ]
+  "surfaces": ["admin", "auditor", "empresa_manager"]
 }

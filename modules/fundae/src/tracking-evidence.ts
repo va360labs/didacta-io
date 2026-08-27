@@ -44,7 +44,12 @@
  */
 
 /** Finalizaciones que un tercero verificó. `SELF` y `null` quedan fuera a propósito. */
-const VERIFIED_SOURCES: ReadonlySet<string> = new Set(['TIME', 'ASSESSMENT', 'SCORM', 'INSTRUCTOR']);
+const VERIFIED_SOURCES: ReadonlySet<string> = new Set([
+  'TIME',
+  'ASSESSMENT',
+  'SCORM',
+  'INSTRUCTOR',
+]);
 
 /** Tipos de lección que la instrucción de seguimiento cuenta como «actividad de aprendizaje». */
 const ACTIVITY_TYPES: ReadonlySet<string> = new Set(['QUIZ', 'SCORM']);
@@ -161,9 +166,10 @@ export function computeParticipantEvidence(
     if (watched > 0 || lesson.firstAccessedAt !== null) started += 1;
     if (lesson.completed) completed += 1;
 
-    const isVerified = lesson.completed && lesson.completionSource !== null
-      ? VERIFIED_SOURCES.has(lesson.completionSource)
-      : false;
+    const isVerified =
+      lesson.completed && lesson.completionSource !== null
+        ? VERIFIED_SOURCES.has(lesson.completionSource)
+        : false;
     if (isVerified) verified += 1;
 
     if (ACTIVITY_TYPES.has(lesson.type)) {
@@ -192,7 +198,8 @@ export function computeParticipantEvidence(
 
   // El tope global es innegociable: nunca se declaran más horas de las que la
   // acción formativa comunicó a Fundae, por mucho que el alumno acumulara.
-  const cappedSeconds = totalSeconds > 0 ? Math.min(creditedSeconds, totalSeconds) : creditedSeconds;
+  const cappedSeconds =
+    totalSeconds > 0 ? Math.min(creditedSeconds, totalSeconds) : creditedSeconds;
   const scale = creditedSeconds > 0 ? cappedSeconds / creditedSeconds : 1;
 
   return {

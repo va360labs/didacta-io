@@ -245,9 +245,7 @@ export class FundaeService {
       enrollment.progressPercent ?? 0,
     );
     const horasAsistidas = roundHours(
-      pdfLessons.length === 0
-        ? pdfEvidence.horasDeclaradasPorProgreso
-        : pdfEvidence.horasAsistidas,
+      pdfLessons.length === 0 ? pdfEvidence.horasDeclaradasPorProgreso : pdfEvidence.horasAsistidas,
     );
     const passed =
       enrollment.completedAt !== null &&
@@ -608,11 +606,7 @@ export class FundaeService {
     return enrollments.map((e) => {
       const user = userById.get(e.userId);
       const lessons = lessonsByUser.get(e.userId) ?? [];
-      const evidence = computeParticipantEvidence(
-        lessons,
-        totalHours,
-        e.progressPercent ?? 0,
-      );
+      const evidence = computeParticipantEvidence(lessons, totalHours, e.progressPercent ?? 0);
       const horasAsistidas = roundHours(
         lessons.length === 0 ? evidence.horasDeclaradasPorProgreso : evidence.horasAsistidas,
       );
