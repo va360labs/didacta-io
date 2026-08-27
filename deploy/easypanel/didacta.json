@@ -5,10 +5,10 @@
       "type": "app",
       "data": {
         "serviceName": "didacta",
-        "env": "NODE_ENV=production\nDIDACTA_CORE_VERSION=0.1.0-beta.7\nWEB_PUBLIC_URL=https://$(PRIMARY_DOMAIN)\nWEB_PUBLIC_ALLOWED_HOSTS=$(PRIMARY_DOMAIN)\nADMIN_DATABASE_URL=postgresql://postgres:REEMPLAZA_PASSWORD_POSTGRES@$(PROJECT_NAME)_didacta-db:5432/didacta?schema=public\nREDIS_URL=redis://default:REEMPLAZA_PASSWORD_REDIS@$(PROJECT_NAME)_didacta-redis:6379\nAUTH_SECRET=REEMPLAZA_AUTH_SECRET\nDIDACTA_SETUP_TOKEN=REEMPLAZA_SETUP_TOKEN\nAPI_PORT=4000\nWEB_PORT=3000\nSTORAGE_DRIVER=local\nSTORAGE_ROOT=/app/data/storage\nSMTP_HOST=\nSMTP_PORT=587\nSMTP_USER=\nSMTP_PASS=\nSMTP_SECURE=false\nSMTP_FROM=\nDIDACTA_LICENSE_KEY=",
+        "env": "NODE_ENV=production\nDIDACTA_CORE_VERSION=0.1.0-beta.8\nWEB_PUBLIC_URL=https://$(PRIMARY_DOMAIN)\nWEB_PUBLIC_ALLOWED_HOSTS=$(PRIMARY_DOMAIN)\nADMIN_DATABASE_URL=postgresql://postgres:REEMPLAZA_PASSWORD_POSTGRES@$(PROJECT_NAME)_didacta-db:5432/didacta?schema=public\nREDIS_URL=redis://default:REEMPLAZA_PASSWORD_REDIS@$(PROJECT_NAME)_didacta-redis:6379\nAUTH_SECRET=REEMPLAZA_AUTH_SECRET\nDIDACTA_SETUP_TOKEN=REEMPLAZA_SETUP_TOKEN\nAPI_PORT=4000\nWEB_PORT=3000\nSTORAGE_DRIVER=local\nSTORAGE_ROOT=/app/data/storage\nSMTP_HOST=\nSMTP_PORT=587\nSMTP_USER=\nSMTP_PASS=\nSMTP_SECURE=false\nSMTP_FROM=\nDIDACTA_LICENSE_KEY=",
         "source": {
           "type": "image",
-          "image": "ghcr.io/va360labs/didacta-community:0.1.0-beta.7"
+          "image": "ghcr.io/va360labs/didacta-community:0.1.0-beta.8"
         },
         "domains": [
           {

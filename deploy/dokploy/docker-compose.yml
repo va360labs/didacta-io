@@ -18,7 +18,7 @@
 
 services:
   didacta:
-    image: ghcr.io/va360labs/didacta-community:0.1.0-beta.7
+    image: ghcr.io/va360labs/didacta-community:0.1.0-beta.8
     restart: unless-stopped
     env_file:
       - .env

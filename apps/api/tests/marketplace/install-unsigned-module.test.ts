@@ -3,7 +3,8 @@
  * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
  *
  * Regresión del hallazgo crítico reportado por Bruno
- * (ingenierosindustriales.com) sobre v0.1.0-beta.7. Ver SECURITY-CREDITS.md.
+ * (ingenierosindustriales.com) Ver SECURITY-CREDITS.md,
+ * donde consta la version afectada.
  *
  * QUÉ se prueba aquí, y por qué NO se prueba lo otro:
  *

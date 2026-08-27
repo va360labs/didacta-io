@@ -3,7 +3,8 @@
  * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
  *
  * Regresión del rate limit anónimo global reportado por Bruno
- * (ingenierosindustriales.com) sobre v0.1.0-beta.7. Ver SECURITY-CREDITS.md.
+ * (ingenierosindustriales.com) Ver SECURITY-CREDITS.md,
+ * donde consta la version afectada.
  *
  * El defecto: toda petición sin identidad resuelta usaba la clave literal
  * `'anonymous'`, así que los 30 req/min del plan Community eran un ÚNICO cubo

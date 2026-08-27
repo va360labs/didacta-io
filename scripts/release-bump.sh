@@ -56,7 +56,14 @@ done
 
 # Ningún fichero versionado puede quedarse con la versión vieja — tampoco los
 # que NO están en la lista (así se detecta un sitio nuevo que alguien añadió).
-LEFTOVERS="$(git grep -l "$OLD" -- ':!pnpm-lock.yaml' ':!CHANGELOG.md' || true)"
+#
+# `SECURITY-CREDITS.md` queda fuera porque ahí la versión NO es la que se
+# publica, es la **afectada** por un hallazgo: un hecho histórico que no se mueve
+# con el bump. Subirla convertiría el registro en falso y, de paso, atribuiría a
+# la versión parcheada una vulnerabilidad que no tiene. Es la única excepción de
+# este tipo: los tests de regresión de seguridad NO citan la versión, apuntan a
+# este fichero, para que el dato viva en un solo sitio.
+LEFTOVERS="$(git grep -l "$OLD" -- ':!pnpm-lock.yaml' ':!CHANGELOG.md' ':!SECURITY-CREDITS.md' || true)"
 if [[ -n "$LEFTOVERS" ]]; then
   echo "ERROR: la versión vieja ${OLD} sigue apareciendo en:" >&2
   echo "$LEFTOVERS" >&2
