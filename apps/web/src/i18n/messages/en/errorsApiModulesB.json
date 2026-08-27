@@ -95,6 +95,7 @@
   "FUNDAE_GROUP_SIN_CURSO": "Group {detail} belongs to an action with no linked course; bulk-enroll from the catalog is not possible. Add the participants one by one.",
   "FUNDAE_GROUP_TRANSICION_INVALIDA": "That group status transition is not allowed.",
   "FUNDAE_GROUPS_ADMIN_REQUIRED": "Only super_admin and tenant_admin can manage subsidizable groups.",
+  "FUNDAE_INSPECTION_FORBIDDEN": "You do not have monitoring access to this group. The access may have expired or been revoked by the training centre.",
   "FUNDAE_PARTICIPANT_NOT_IN_ACTION": "User {detail} is not enrolled in the course linked to this action.",
   "FUNDAE_RLPT_ADMIN_REQUIRED": "Only super_admin and tenant_admin can manage RLPT notices.",
   "FUNDAE_RLPT_BASE64_INVALID": "Invalid Base64.",

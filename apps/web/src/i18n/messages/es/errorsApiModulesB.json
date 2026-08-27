@@ -79,6 +79,7 @@
   "FUNDAE_GROUP_PARTICIPANTS_ADMIN_REQUIRED": "Solo super_admin y tenant_admin pueden gestionar participantes de grupos.",
   "FUNDAE_GROUP_SIN_CURSO": "El grupo {detail} pertenece a una acción sin curso vinculado; no se puede hacer bulk-enroll desde el catálogo. Añade los participantes uno a uno.",
   "FUNDAE_GROUPS_ADMIN_REQUIRED": "Solo super_admin y tenant_admin pueden gestionar grupos bonificables.",
+  "FUNDAE_INSPECTION_FORBIDDEN": "No tienes acceso de seguimiento a este grupo. El acceso puede haber caducado o haber sido retirado por el centro.",
   "FUNDAE_PARTICIPANT_NOT_IN_ACTION": "El usuario {detail} no está matriculado en el curso vinculado a esta acción.",
   "FUNDAE_RLPT_ADMIN_REQUIRED": "Solo super_admin y tenant_admin pueden gestionar notificaciones RLPT.",
   "FUNDAE_RLPT_BASE64_INVALID": "Base64 inválido.",

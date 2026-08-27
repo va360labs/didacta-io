@@ -74,7 +74,8 @@
     "Recursos": "Resources",
     "Encuestas": "Surveys",
     "Aula virtual": "Virtual classroom",
-    "Volver a la app": "Back to the app"
+    "Volver a la app": "Back to the app",
+    "Seguimiento Fundae": "Fundae monitoring"
   },
   "addToGroup": "Add to {group}"
 }

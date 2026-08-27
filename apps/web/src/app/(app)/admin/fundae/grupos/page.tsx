@@ -6,6 +6,7 @@
  */
 
 import { useTranslations } from 'next-intl';
+import Link from 'next/link';
 import { useEffect, useState, type FormEvent } from 'react';
 import { Icon } from '@/components/icon';
 import { Badge } from '@/components/ui/badge';
@@ -20,12 +21,14 @@ import { labelOr } from '@/lib/i18n/labels';
 import {
   fundaeGroupParticipantsApi,
   fundaeGroupsApi,
+  fundaeInspectorsApi,
   formatCents,
   type CreateCostInput,
   type CreateGroupInput,
   type FundaeCost,
   type FundaeGroup,
   type FundaeGroupParticipant,
+  type FundaeInspectorAccess,
   type GroupCompletionResult,
   type GroupStatus,
   type Modalidad,
@@ -891,8 +894,228 @@ function GroupDetail({
             </table>
           )}
         </div>
+
+        <InspectorsPanel groupId={group.id} />
       </CardContent>
     </Card>
+  );
+}
+
+// ──────────────────── ACCESO DE SEGUIMIENTO (INSPECCIÓN) ────────────────────
+
+/**
+ * Las claves que el centro comunica a Fundae al inicio de la acción (LMS-123).
+ *
+ * Conceder matricula esa cuenta en el curso con fuente `INSPECTION` — excluida
+ * del listado nominal, del XML y de los CSV—, así que el inspector recorre el
+ * contenido sin colarse en el expediente que viene a inspeccionar.
+ *
+ * La lista incluye los accesos RETIRADOS y no se filtran: quién pudo mirar el
+ * expediente, y cuándo, es parte de lo que sostiene la propia auditoría.
+ */
+function InspectorsPanel({ groupId }: { groupId: string }) {
+  const t = useTranslations('adminFundae');
+  const tErrors = useTranslations('errors');
+  const [accesses, setAccesses] = useState<FundaeInspectorAccess[] | null>(null);
+  const [showForm, setShowForm] = useState(false);
+  const [userId, setUserId] = useState('');
+  const [expiresAt, setExpiresAt] = useState('');
+  const [notas, setNotas] = useState('');
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function reload() {
+    try {
+      setError(null);
+      setAccesses(await fundaeInspectorsApi.list(groupId));
+    } catch (e) {
+      setError(apiErrorMessage(e, tErrors));
+    }
+  }
+
+  useEffect(() => {
+    void reload();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [groupId]);
+
+  async function handleGrant(e: FormEvent) {
+    e.preventDefault();
+    if (!userId) return;
+    setPending(true);
+    setError(null);
+    try {
+      await fundaeInspectorsApi.grant(groupId, {
+        userId,
+        // `<input type="date">` da un día suelto; el acceso caduca al final de
+        // ese día, no a las 00:00 (que sería el día anterior para quien mira).
+        expiresAt: expiresAt ? new Date(`${expiresAt}T23:59:59`).toISOString() : undefined,
+        notas: notas.trim() || undefined,
+      });
+      setUserId('');
+      setExpiresAt('');
+      setNotas('');
+      setShowForm(false);
+      await reload();
+    } catch (e) {
+      setError(apiErrorMessage(e, tErrors));
+    } finally {
+      setPending(false);
+    }
+  }
+
+  async function handleRevoke(targetUserId: string) {
+    if (!confirm(t('inspectors.revokeConfirm'))) return;
+    setError(null);
+    try {
+      await fundaeInspectorsApi.revoke(groupId, targetUserId);
+      await reload();
+    } catch (e) {
+      setError(apiErrorMessage(e, tErrors));
+    }
+  }
+
+  const activos = accesses?.filter((a) => a.activo).length ?? 0;
+
+  return (
+    <div className="space-y-2 border-t border-border-soft pt-3">
+      <div className="flex items-center justify-between">
+        <h4 className="text-sm font-semibold">{t('inspectors.title', { count: activos })}</h4>
+        <div className="flex gap-2">
+          <Link
+            href={`/seguimiento?grupo=${groupId}`}
+            className="inline-flex items-center gap-1 text-xs text-brand-700 underline"
+          >
+            <Icon name="eye" size={12} />
+            {t('inspectors.previewExpediente')}
+          </Link>
+          <Button type="button" size="sm" variant="ghost" onClick={() => setShowForm((v) => !v)}>
+            <Icon name="plus" size={13} />
+            {t('inspectors.grant')}
+          </Button>
+        </div>
+      </div>
+
+      <p className="text-xs text-text-muted">{t('inspectors.description')}</p>
+
+      {showForm ? (
+        <form onSubmit={handleGrant} className="rounded-lg border border-border-soft p-3 space-y-3">
+          <div className="grid gap-3 sm:grid-cols-3">
+            <div className="space-y-1">
+              <Label htmlFor="inspectorUserId" className="text-xs">
+                {t('inspectors.userIdLabel')} <span className="text-danger-700">*</span>
+              </Label>
+              <Input
+                id="inspectorUserId"
+                value={userId}
+                onChange={(e) => setUserId(e.target.value)}
+                placeholder={t('inspectors.userIdPlaceholder')}
+                className="h-8 font-mono text-xs"
+                required
+              />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="inspectorExpiresAt" className="text-xs">
+                {t('inspectors.expiresAtLabel')}
+              </Label>
+              <Input
+                id="inspectorExpiresAt"
+                type="date"
+                value={expiresAt}
+                onChange={(e) => setExpiresAt(e.target.value)}
+                className="h-8 text-xs"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="inspectorNotas" className="text-xs">
+                {t('inspectors.notasLabel')}
+              </Label>
+              <Input
+                id="inspectorNotas"
+                value={notas}
+                onChange={(e) => setNotas(e.target.value)}
+                maxLength={2000}
+                className="h-8 text-xs"
+              />
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <Button type="submit" size="sm" disabled={pending || !userId}>
+              {pending ? t('groups.adding') : t('inspectors.grant')}
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              onClick={() => setShowForm(false)}
+              disabled={pending}
+            >
+              {t('shared.cancel')}
+            </Button>
+          </div>
+        </form>
+      ) : null}
+
+      {error ? (
+        <div
+          role="alert"
+          className="rounded-lg border border-danger-100 bg-danger-50 p-2 text-xs text-danger-700"
+        >
+          {error}
+        </div>
+      ) : null}
+
+      {accesses === null ? null : accesses.length === 0 ? (
+        <p className="text-xs text-text-muted">{t('inspectors.empty')}</p>
+      ) : (
+        <table className="w-full text-xs">
+          <thead>
+            <tr className="text-left text-text-subtle">
+              <th className="pb-1 font-medium">{t('inspectors.colCuenta')}</th>
+              <th className="pb-1 font-medium">{t('inspectors.colConcedido')}</th>
+              <th className="pb-1 font-medium">{t('inspectors.colCaduca')}</th>
+              <th className="pb-1 font-medium">{t('inspectors.colEstado')}</th>
+              <th />
+            </tr>
+          </thead>
+          <tbody>
+            {accesses.map((a) => (
+              <tr key={a.id} className="border-t border-border-soft">
+                <td className="py-1 pr-2">
+                  <div className="font-medium">{a.userName ?? '—'}</div>
+                  <div className="text-text-subtle">{a.userEmail ?? a.userId}</div>
+                  {a.notas ? <div className="text-text-subtle">{a.notas}</div> : null}
+                </td>
+                <td className="py-1 pr-2">{formatDate(a.grantedAt)}</td>
+                <td className="py-1 pr-2">
+                  {a.expiresAt ? formatDate(a.expiresAt) : t('inspectors.noExpiry')}
+                </td>
+                <td className="py-1 pr-2">
+                  <Badge variant={a.activo ? 'success' : 'muted'}>
+                    {a.activo
+                      ? t('inspectors.active')
+                      : a.revokedAt
+                        ? t('inspectors.revoked')
+                        : t('inspectors.expired')}
+                  </Badge>
+                </td>
+                <td className="py-1 pl-2">
+                  {a.activo ? (
+                    <button
+                      type="button"
+                      onClick={() => void handleRevoke(a.userId)}
+                      className="text-danger-600 hover:text-danger-800"
+                      aria-label={t('inspectors.revoke')}
+                    >
+                      <Icon name="trash" size={12} />
+                    </button>
+                  ) : null}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </div>
   );
 }
 

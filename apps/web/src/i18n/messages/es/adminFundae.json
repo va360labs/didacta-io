@@ -301,5 +301,26 @@
     "entriesCount": "{count} entradas",
     "entriesDescription": "Ordenadas por fecha descendente. Cada fila muestra el actor, la acción y el recurso afectado.",
     "by": "por"
+  },
+  "inspectors": {
+    "title": "Acceso de seguimiento ({count} activos)",
+    "description": "Las claves que el centro comunica a Fundae al inicio de la acción. Quien las recibe recorre el curso y consulta el seguimiento de ESTE grupo, sin poder modificar nada ni ver otros grupos. No aparece en el listado nominal ni en el XML.",
+    "grant": "Conceder acceso",
+    "previewExpediente": "Ver el expediente",
+    "userIdLabel": "ID de la cuenta",
+    "userIdPlaceholder": "UUID del usuario",
+    "expiresAtLabel": "Caduca el (opcional)",
+    "notasLabel": "Notas",
+    "empty": "Sin accesos de seguimiento concedidos.",
+    "colCuenta": "Cuenta",
+    "colConcedido": "Concedido",
+    "colCaduca": "Caduca",
+    "colEstado": "Estado",
+    "noExpiry": "Sin caducidad",
+    "active": "Activo",
+    "revoked": "Retirado",
+    "expired": "Caducado",
+    "revoke": "Retirar acceso",
+    "revokeConfirm": "¿Retirar el acceso de seguimiento? La cuenta dejará de entrar al curso y al expediente; el registro de que lo tuvo se conserva."
   }
 }

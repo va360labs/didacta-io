@@ -37,6 +37,7 @@ import {
 import { useAdminPendingCounts } from '@/lib/admin-pending-counts';
 import { moduleExtensions } from '@/modules';
 import { useCommunitySpaces, invalidateCommunitySpacesCache } from '@/modules/community';
+import { useFundaeInspectionGroups } from '@/modules/fundae';
 import { themeCache, requestThemeRefresh } from '@/lib/theming';
 import { isIconName } from '@/components/space-icon';
 import type { IconName } from '@/components/icon';
@@ -325,6 +326,14 @@ function Shell({
     })),
   };
 
+  // Acceso de seguimiento Fundae (LMS-123). Quien inspecciona una acción
+  // bonificada no es admin ni formador: su permiso es una CONCESIÓN sobre un
+  // grupo — un dato, no un rol —, así que el item no puede declararse en los
+  // `sidebarItems` del módulo, que se resuelven en build y solo saben gatear
+  // por rol. Se pregunta por los grupos concedidos (solo si el módulo está
+  // activo en el tenant) y la entrada aparece únicamente si hay alguno.
+  const inspectionGroups = useFundaeInspectionGroups(activeModules?.has('mod.fundae') ?? false);
+
   // Área de admin: cuando el admin está en /admin o /super, el sidebar cambia a
   // las sub-secciones de administración (buildAdminGroups). Fuera de ahí, el
   // menú principal (con una sola entrada "Administración").
@@ -340,6 +349,17 @@ function Shell({
       });
   const userRoles = new Set(session.user.roles);
   const mergedGroups = mergeExtensionSidebarItems(baseGroups, moduleExtensions, userRoles);
+  if (!isAdminArea && inspectionGroups.length > 0) {
+    const aprendizaje = mergedGroups.find((g) => g.label === 'Aprendizaje');
+    if (aprendizaje && !aprendizaje.items.some((i) => i.href === '/seguimiento')) {
+      aprendizaje.items.push({
+        href: '/seguimiento',
+        label: 'Seguimiento Fundae',
+        icon: 'eye',
+        requiresModule: 'mod.fundae',
+      });
+    }
+  }
   const filteredGroups = filterByActiveModules(mergedGroups, activeModules);
   // Badges de trabajo pendiente (solicitudes de inscripción, impagos). Se
   // aplican al final para que alcancen también a items aportados por módulos.

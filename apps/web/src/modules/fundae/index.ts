@@ -76,3 +76,16 @@ export {
   type EnrollParticipantInput,
   type BulkEnrollResult,
 } from './groups-client';
+
+export {
+  fundaeInspectorsApi,
+  fundaeInspectionApi,
+  useFundaeInspectionGroups,
+  invalidateFundaeInspectionCache,
+  type FundaeInspectorAccess,
+  type GrantInspectorInput,
+  type InspectionView,
+  type InspectionParticipant,
+  type InspectionLesson,
+  type InspectorGroupRef,
+} from './inspection-client';

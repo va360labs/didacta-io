@@ -301,5 +301,26 @@
     "entriesCount": "{count} entries",
     "entriesDescription": "Sorted by date, descending. Each row shows the actor, the action and the affected resource.",
     "by": "by"
+  },
+  "inspectors": {
+    "title": "Monitoring access ({count} active)",
+    "description": "The credentials the training centre reports to Fundae when the action starts. Whoever receives them can browse the course and review the monitoring data for THIS group, without changing anything or seeing other groups. They do not appear in the nominal list or in the XML.",
+    "grant": "Grant access",
+    "previewExpediente": "View the record",
+    "userIdLabel": "Account ID",
+    "userIdPlaceholder": "User UUID",
+    "expiresAtLabel": "Expires on (optional)",
+    "notasLabel": "Notes",
+    "empty": "No monitoring access granted.",
+    "colCuenta": "Account",
+    "colConcedido": "Granted",
+    "colCaduca": "Expires",
+    "colEstado": "Status",
+    "noExpiry": "No expiry",
+    "active": "Active",
+    "revoked": "Revoked",
+    "expired": "Expired",
+    "revoke": "Revoke access",
+    "revokeConfirm": "Revoke monitoring access? The account will no longer reach the course or the record; the log of it having had access is kept."
   }
 }
