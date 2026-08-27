@@ -23,8 +23,12 @@
  *     escenario hay (mejor que mentir con un X-RateLimit-Limit:Infinity).
  *
  * Decisiones explícitas:
- *   - `tenantId === 'anonymous'` → bucket público. El interceptor pasa
- *     `'anonymous'` cuando el JWT está ausente o falla.
+ *   - El primer argumento es un IDENTIFICADOR de cubo, no siempre un tenant:
+ *     para tráfico autenticado es el `tenantId`, y para tráfico público el
+ *     interceptor pasa `anon:<hash de la IP>` (antes era el literal
+ *     `'anonymous'` para todo el mundo, lo que hacía del límite público un
+ *     único cubo global de la instancia). El service no necesita saber cuál
+ *     de los dos es: sólo lo usa para construir la clave.
  *   - Sliding window simple (ventana fija de 1 minuto natural). Ver design
  *     note en `rate-limit.types.ts`.
  *   - El service NO conoce HTTP — eso vive en el interceptor. Esto facilita
@@ -102,8 +106,12 @@ export class RateLimitService {
   /**
    * Registra una request contra el bucket apropiado y devuelve la decisión.
    *
+   * `tenantId` es el identificador del cubo: el tenant en tráfico autenticado,
+   * o `anon:<hash de IP>` en tráfico público (lo decide el interceptor).
+   *
    * Reglas:
-   *  - Si `tenantId` es vacío/null/undefined, lo tratamos como `'anonymous'`.
+   *  - Si el identificador es vacío/null/undefined, lo tratamos como
+   *    `'anonymous'` (cubo compartido — último recurso).
    *  - El bucket lo decide el caller con `isPublic`.
    *  - Si el INCR devuelve un valor > limit, la request se rechaza.
    *  - Failsafe: si Redis lanza o no está inyectado → devolvemos

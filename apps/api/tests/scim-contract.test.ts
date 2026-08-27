@@ -194,7 +194,12 @@ describe('Contrato HTTP de /scim/v2', () => {
       const res = await app.inject({ method: 'GET', url: '/api/v1/sonda' });
 
       expect(res.statusCode).toBe(200);
-      expect(rateLimitCalls).toEqual([{ tenantId: 'anonymous', isPublic: true }]);
+      expect(rateLimitCalls).toHaveLength(1);
+      expect(rateLimitCalls[0]?.isPublic).toBe(true);
+      // El identificador del cubo público se deriva de la IP del cliente
+      // (`anon:<hash>`). Antes era el literal `'anonymous'` para TODO el
+      // tráfico público de la instancia, que es el defecto que se corrigió.
+      expect(rateLimitCalls[0]?.tenantId).toMatch(/^anon:[0-9a-f]{16}$/);
     });
 
     it('el bucket del IdP es el del tenant que emitió su token, no uno compartido', async () => {
@@ -204,7 +209,10 @@ describe('Contrato HTTP de /scim/v2', () => {
       await app.inject({ method: 'GET', url: '/scim/v2/ServiceProviderConfig', headers: authed });
       await app.inject({ method: 'GET', url: '/api/v1/sonda' });
 
-      expect(rateLimitCalls.map((c) => c.tenantId)).toEqual([TENANT_A, TENANT_A, 'anonymous']);
+      const buckets = rateLimitCalls.map((c) => c.tenantId);
+      expect(buckets.slice(0, 2)).toEqual([TENANT_A, TENANT_A]);
+      expect(buckets[2]).not.toBe(TENANT_A);
+      expect(buckets[2]).toMatch(/^anon:[0-9a-f]{16}$/);
     });
   });
 

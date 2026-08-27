@@ -42,6 +42,72 @@ const API_INTERNAL_URL = process.env.API_INTERNAL_URL ?? 'http://localhost:4000'
 
 const SKIP_TYPE_CHECK = process.env.SKIP_TYPE_CHECK === '1';
 
+/**
+ * Cabeceras de seguridad servidas por la PROPIA aplicación.
+ *
+ * Antes no se emitía ninguna globalmente y se daban por delegadas al reverse
+ * proxy. El problema de delegar es que un self-host que no las configure se
+ * queda sin ellas y no se entera. Que el proxy las ponga encima no molesta:
+ * si las duplica, gana la suya.
+ *
+ * Qué compra y qué no, sin adornos:
+ *
+ *  · `object-src 'none'`, `base-uri 'self'` y `form-action 'self'` cortan las
+ *    vías con las que un XSS escala a robo de datos (inyectar un `<base>` para
+ *    secuestrar rutas relativas, o un `<form>` que postea la sesión fuera).
+ *  · `frame-ancestors` corta el clickjacking; `X-Frame-Options` repite lo
+ *    mismo para navegadores viejos.
+ *  · `script-src` lleva `'unsafe-inline'` porque Next inyecta scripts inline
+ *    en el arranque; sin nonces por middleware no se puede quitar. Es decir:
+ *    esta CSP NO es la defensa contra XSS —esa es el saneado del contenido en
+ *    `packages/core-kernel/src/html/sanitize.ts`—, pero sí impide cargar
+ *    script desde otro origen.
+ *  · Los orígenes de recursos (`img-src`, `media-src`, `frame-src`) se dejan
+ *    abiertos a `https:` a propósito: el almacenamiento puede ser S3, MinIO o
+ *    un CDN del operador, y una lista cerrada aquí rompería SCORM, los PDF y
+ *    los vídeos de instalaciones que no conocemos.
+ *
+ * Todo el valor se puede sustituir con `WEB_CSP` si el operador quiere una
+ * política más estricta.
+ */
+const CSP = (
+  process.env.WEB_CSP ??
+  [
+    "default-src 'self'",
+    "base-uri 'self'",
+    "object-src 'none'",
+    "form-action 'self'",
+    "frame-ancestors 'self'",
+    "script-src 'self' 'unsafe-inline'",
+    "style-src 'self' 'unsafe-inline'",
+    "img-src 'self' data: blob: https:",
+    "media-src 'self' blob: https:",
+    "font-src 'self' data:",
+    "connect-src 'self' https:",
+    "frame-src 'self' https:",
+  ].join('; ')
+).trim();
+
+/**
+ * HSTS sólo tiene sentido donde termina TLS. Se emite en producción y se
+ * puede apagar con `WEB_HSTS=off` — que existe porque un despliegue interno
+ * servido por HTTP plano se quedaría sin acceso: el navegador recuerda la
+ * cabecera y fuerza HTTPS durante `max-age`.
+ */
+const HSTS_ENABLED = process.env.WEB_HSTS !== 'off' && process.env.NODE_ENV === 'production';
+
+const SECURITY_HEADERS = [
+  { key: 'Content-Security-Policy', value: CSP },
+  { key: 'X-Content-Type-Options', value: 'nosniff' },
+  { key: 'X-Frame-Options', value: 'SAMEORIGIN' },
+  { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+  { key: 'Cross-Origin-Opener-Policy', value: 'same-origin' },
+  { key: 'Permissions-Policy', value: 'geolocation=(), microphone=(), camera=()' },
+  ...(HSTS_ENABLED
+    ? [{ key: 'Strict-Transport-Security', value: 'max-age=31536000; includeSubDomains' }]
+    : []),
+];
+
 /** @type {import('next').NextConfig} */
 const config = {
   reactStrictMode: true,
@@ -58,6 +124,17 @@ const config = {
   },
   experimental: {
     typedRoutes: !SKIP_TYPE_CHECK,
+  },
+  async headers() {
+    return [
+      {
+        // Se excluyen las rutas que reescribimos hacia la API: sus respuestas
+        // ya llevan sus propias cabeceras (`security-headers.ts`), y la CSP de
+        // un documento HTML no le sirve a un JSON ni al Swagger UI.
+        source: '/:path((?!api/|healthz|readyz).*)',
+        headers: SECURITY_HEADERS,
+      },
+    ];
   },
   async rewrites() {
     return [

@@ -7,8 +7,8 @@
  * Aplicado global vía APP_INTERCEPTOR. Para cada request HTTP:
  *   1. Identifica `tenantId` desde `request.user` (lo setea JwtAuthGuard) o
  *      desde `request.scimTenantId` (lo setea ScimAuthGuard con el Bearer del
- *      IdP). Si no hay ninguno, trata la request como pública (bucket
- *      `'anonymous'`).
+ *      IdP). Si no hay ninguno, trata la request como pública y deriva el
+ *      cubo de la IP canónica del cliente (ver `anonymousIdentifier`).
  *   2. Decide `isPublic`: si no hay ninguna identidad resuelta, es pública.
  *   3. Llama `RateLimitService.recordRequest`.
  *   4. Setea SIEMPRE los headers estándar (`X-RateLimit-*`).
@@ -36,6 +36,7 @@ import {
   Injectable,
   NestInterceptor,
 } from '@nestjs/common';
+import { createHash } from 'node:crypto';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { Observable, from, of, switchMap } from 'rxjs';
 import { RateLimitService } from './rate-limit.service';
@@ -53,6 +54,63 @@ const RATE_LIMIT_EXEMPT_PREFIXES = [
   '/api/docs',
   '/api/license', // estado público de la licencia — necesario para el frontend incluso bajo rate limit
 ];
+
+/**
+ * Sal del hash de IP. `AUTH_SECRET` ya es un secreto por instancia, así que
+ * dos despliegues no producen las mismas claves y nadie que vea Redis puede
+ * revertir el hash por fuerza bruta sobre el espacio IPv4.
+ */
+function ipHashSalt(): string {
+  return process.env['AUTH_SECRET'] ?? 'didacta-rate-limit';
+}
+
+/**
+ * Reduce una IPv6 a su prefijo /64. Un cliente doméstico con IPv6 tiene una
+ * /64 entera para él: limitar por dirección exacta sería regalar miles de
+ * cubos a la misma persona. En IPv4 se usa la dirección completa.
+ */
+function normalizeIp(ip: string): string {
+  if (!ip.includes(':')) return ip;
+  // `::ffff:1.2.3.4` — IPv4 mapeada, se trata como IPv4.
+  const mapped = /^::ffff:(\d+\.\d+\.\d+\.\d+)$/i.exec(ip);
+  if (mapped?.[1]) return mapped[1];
+  const groups = ip.split(':');
+  return groups.slice(0, 4).join(':') + '::/64';
+}
+
+/**
+ * Identificador de cubo para tráfico sin identidad resuelta.
+ *
+ * Antes, TODA request pública compartía la clave literal `'anonymous'`: con
+ * Redis activo, los 30 req/min por defecto del plan Community eran un único
+ * cubo global para la instancia entera, así que un solo cliente podía dejar el
+ * catálogo y el acceso en 429 para visitantes que no tenían nada que ver.
+ * Ahora la clave sale de la IP canónica del cliente.
+ *
+ * `request.ip` lo resuelve Fastify a partir de `trustProxy`, que en `main.ts`
+ * declara CUÁNTOS saltos de proxy propios hay. Eso importa: con `trustProxy:
+ * true` cualquiera podía mandar un `X-Forwarded-For` inventado y elegir el
+ * cubo que le apeteciera — el suyo para saltarse el límite, o el de otro para
+ * dejarlo fuera.
+ *
+ * La IP se guarda hasheada: la clave vive 65 segundos en Redis, pero no hay
+ * razón para dejar direcciones en claro.
+ *
+ * Reportado por Bruno (ingenierosindustriales.com), ver SECURITY-CREDITS.md.
+ */
+function anonymousIdentifier(request: FastifyRequest): string {
+  const ip = typeof request.ip === 'string' ? request.ip.trim() : '';
+  // Sin IP (transporte no-TCP, tests) volvemos al cubo compartido: es el
+  // comportamiento anterior y sigue siendo mejor que no limitar nada.
+  if (!ip) return 'anonymous';
+  const digest = createHash('sha256')
+    .update(ipHashSalt())
+    .update(':')
+    .update(normalizeIp(ip))
+    .digest('hex')
+    .slice(0, 16);
+  return `anon:${digest}`;
+}
 
 @Injectable()
 export class RateLimitInterceptor implements NestInterceptor {
@@ -87,13 +145,14 @@ export class RateLimitInterceptor implements NestInterceptor {
     //      429 del cupo público por culpa de visitantes que no tienen nada que
     //      ver con el tenant.
     //
-    // Sin ninguna de las dos, la request es pública → bucket `'anonymous'`.
+    // Sin ninguna de las dos, la request es pública y el bucket se deriva de
+    // la IP del cliente (ver `anonymousIdentifier`).
     const user = request.user;
     const identifiedTenantId = user?.tenantId ?? request.scimTenantId;
     const isPublic = identifiedTenantId === undefined;
-    const tenantId = identifiedTenantId ?? 'anonymous';
+    const identifier = identifiedTenantId ?? anonymousIdentifier(request);
 
-    return from(this.rateLimit.recordRequest(tenantId, isPublic)).pipe(
+    return from(this.rateLimit.recordRequest(identifier, isPublic)).pipe(
       switchMap((decision) => {
         this.applyHeaders(reply, decision);
 
