@@ -15,7 +15,7 @@
  *   1 — al menos una verificación falla
  *   2 — error de conexión / bootstrap (DATABASE_URL inválida, etc.)
  */
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient } from '@didacta/database';
 
 type CheckResult = { name: string; ok: boolean; detail?: string };
 

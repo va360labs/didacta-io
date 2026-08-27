@@ -15,7 +15,8 @@
     "test:integration:license": "node scripts/run-integration-license.mjs",
     "test:integration:license:run": "node ../../node_modules/vitest/vitest.mjs run --config vitest.integration.config.ts",
     "post-deploy:check": "ts-node --transpile-only scripts/post-deploy-check.ts",
-    "clean": "rm -rf dist .turbo"
+    "clean": "rm -rf dist .turbo",
+    "backfill:sanitize-html": "tsx scripts/backfill-sanitize-html.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1037.0",
