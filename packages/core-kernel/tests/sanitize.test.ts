@@ -3,8 +3,8 @@
  * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
  *
  * Regresión del XSS almacenado en lecciones HTML reportado por Bruno
- * (ingenierosindustriales.com) Ver SECURITY-CREDITS.md,
- * donde consta la version afectada.
+ * (ingenierosindustriales.com). Ver SECURITY-CREDITS.md, donde consta la
+ * versión afectada.
  *
  * El payload del reporte era un elemento con manejador `onerror`, guardado por
  * un formador y ejecutado en el navegador de cada alumno que abriera la
