@@ -2,11 +2,16 @@
  * Copyright (c) VA360 LABS S.L.
  * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
  *
- * Backfill del HTML guardado ANTES del parche de saneado (v0.1.0-beta.8).
+ * Backfill del HTML guardado ANTES del parche de saneado en servidor.
+ *
+ * (La version exacta en que entro ese parche consta en SECURITY-CREDITS.md. Aqui
+ * NO se escribe: `release-bump.sh` exige que la version vieja no quede en ningun
+ * fichero, y una referencia historica se le queda atragantada release tras
+ * release. El dato vive en un solo sitio.)
  *
  * ── Qué arregla ─────────────────────────────────────────────────────────────
  *
- * Hasta la beta.8, el HTML de las lecciones y las descripciones de curso se
+ * Hasta ese parche, el HTML de las lecciones y las descripciones de curso se
  * guardaban tal cual llegaban del editor: un `<img onerror=...>` almacenado por
  * quien pudiera editar contenido se ejecutaba en el navegador de cada alumno que
  * abriera la lección. El parche cerró la puerta de entrada —ahora se sanea en el

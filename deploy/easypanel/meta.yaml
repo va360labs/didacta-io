@@ -43,7 +43,7 @@ schema:
     appServiceImage:
       type: string
       title: App Service Image
-      default: ghcr.io/va360labs/didacta-community:0.1.0-beta.8
+      default: ghcr.io/va360labs/didacta-community:0.1.0-beta.9
     databaseServiceName:
       type: string
       title: Database Service Name
