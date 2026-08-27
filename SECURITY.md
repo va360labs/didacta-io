@@ -11,7 +11,7 @@ Manda un email a **`security@didacta.io`** con:
 - **Descripción** del problema y su impacto.
 - **Pasos para reproducirlo**, idealmente con un PoC mínimo.
 - **Versión afectada** (`docker compose images` o tag de la imagen).
-- **Tu nombre + manera de reconocerte** si quieres aparecer en los créditos de seguridad (`SECURITY-CREDITS.md`, se crea con el primer reporte acreditado) (opcional).
+- **Tu nombre + manera de reconocerte** si quieres aparecer en los créditos de seguridad ([`SECURITY-CREDITS.md`](SECURITY-CREDITS.md)) (opcional).
 
 Si la vulnerabilidad es crítica y prefieres cifrar, pide la PGP key en el mismo email.
 
@@ -34,6 +34,39 @@ Si la vulnerabilidad es crítica y prefieres cifrar, pide la PGP key en el mismo
 | **Media**   | XSS reflejado, IDOR no crítico, denegación de servicio limitada                                               | 30 días       |
 | **Baja**    | Information disclosure menor, problema de rate limit, mensaje de error con info técnica                       | Próxima minor |
 
+## Modelo de confianza de los módulos
+
+Léelo antes de instalar un módulo que no hayas escrito tú.
+
+**El código de un módulo se ejecuta dentro del proceso de la API, con sus
+mismos permisos.** El `node:vm` que usa el sandbox reduce la superficie, pero
+no es una frontera de seguridad — [la propia documentación de Node lo dice][vm].
+Cualquier objeto del proceso anfitrión que llegue al contexto de la VM
+(`Buffer`, `console`, lo que devuelve `require()`) permite volver al realm del
+host. Instalar un módulo es, a efectos prácticos, ejecutar código arbitrario
+en tu servidor.
+
+Por eso:
+
+- **Sólo se ejecuta código con firma verificable.** Un paquete sin firma
+  válida se rechaza con `403 MODULE_SIGNATURE_REQUIRED` antes de instalar
+  nada: sin fila en base de datos, sin blob en el object storage y sin migrar.
+  Los módulos instalados sin firma antes de esta política tampoco se vuelven a
+  cargar al arrancar.
+- `DIDACTA_ALLOW_UNVERIFIED_MODULES=true` levanta esa puerta. Existe para
+  desarrollar un módulo propio antes de firmarlo. **No la actives en
+  producción**: quien suba un ZIP obtiene `AUTH_SECRET`, `ADMIN_DATABASE_URL`,
+  la clave de cifrado de secretos de tenant del volumen persistente y una
+  conexión cuyo rol puede hacer `SET ROLE` y saltarse RLS.
+- Instalar módulos requiere `super_admin`. Trata ese rol como lo que es.
+
+El aislamiento de verdad —proceso aparte, usuario sin privilegios, entorno sin
+credenciales, IPC explícito— es trabajo pendiente y está en la hoja de ruta.
+`worker_threads` no sirve para esto: es el mismo proceso, comparte memoria y
+hereda una copia de `process.env`.
+
+[vm]: https://nodejs.org/api/vm.html
+
 ## Versiones soportadas
 
 Durante alpha cerrada (`v0.0.x-alpha`): solo el último alpha publicado. Si reportas un bug en un alpha viejo, te pedimos actualizar al último primero.
@@ -51,7 +84,7 @@ Cuando salgamos a beta y `v1.0.0`, esta tabla se actualizará con la política L
 
 No tenemos programa formal de bug bounty durante alpha. Cuando publiquemos `v1.0.0` evaluaremos lanzar uno (probablemente con HackerOne o Intigriti).
 
-Por ahora: agradecimiento público en `SECURITY-CREDITS.md` (opt-in; ese archivo se crea con el primer reporte acreditado) y, en algunos casos, swag de Didacta o invitación a Cloud gratis durante 6 meses.
+Por ahora: agradecimiento público en [`SECURITY-CREDITS.md`](SECURITY-CREDITS.md) (opt-in) y, en algunos casos, swag de Didacta o invitación a Cloud gratis durante 6 meses.
 
 ## Comunicación con clientes Enterprise
 
