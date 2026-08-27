@@ -38,6 +38,8 @@
   "LEARNING_SCORM_INVALID_BASE64": "data must be valid base64",
   "LEARNING_SCORM_PACKAGE_TOO_LARGE": "Package too large",
   "LEARNING_SUPER_ADMIN_ONLY": "Super admin only.",
+  "LESSON_COMPLETION_EVIDENCE_MISSING": "You can't mark this lesson complete yet: you still have watch time to go.",
+  "LESSON_COMPLETION_NOT_SELF_REPORTABLE": "This lesson is completed by passing its quiz, not by marking it done.",
   "LESSON_LOCKED": "This lesson is not available yet.",
   "MEMBER_REG_ADMIN_ONLY": "Only administrators can view registration requests.",
   "MEMBER_REG_ADMIN_ROLE_REQUIRED": "This action requires the administrator role.",

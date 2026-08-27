@@ -10,7 +10,7 @@ export const manifest: ModuleManifest = parseModuleManifest({
   displayName: 'Fundae · Acciones formativas',
   description:
     'Gestión de acciones formativas Fundae (España): código de acción, modalidad, horas, fechas. Export XML para presentar a la fundación. v0.1: CRUD + XML básico.',
-  version: '0.3.0',
+  version: '0.4.0',
   author: 'VA360 LABS',
   license: 'Proprietary',
   category: 'compliance',
@@ -30,6 +30,10 @@ export const manifest: ModuleManifest = parseModuleManifest({
     'fundae.cost.write',
     'fundae.group.participant.read',
     'fundae.group.participant.write',
+    // Acceso de seguimiento (LMS-123): conceder/retirar es admin; leer el
+    // expediente lo hace la propia inspección con su concesión.
+    'fundae.inspector.read',
+    'fundae.inspector.write',
   ],
   dependencies: {
     modules: [],
@@ -66,6 +70,8 @@ export const manifest: ModuleManifest = parseModuleManifest({
     'fundae.group.completion-computed',
     'fundae.group.end-xml.generated',
     'fundae.group.audit-zip.generated',
+    'fundae.inspector.granted',
+    'fundae.inspector.revoked',
   ],
   eventsConsumed: [],
   apiNamespace: '/modules/fundae',

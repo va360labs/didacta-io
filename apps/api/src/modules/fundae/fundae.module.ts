@@ -10,6 +10,7 @@ import { ModulesModule } from '../modules.module';
 import { FundaeController } from './fundae.controller';
 import { FundaeCompaniesController } from './fundae-companies.controller';
 import { FundaeGroupsController } from './fundae-groups.controller';
+import { FundaeInspectionController } from './fundae-inspection.controller';
 import { FundaeGroupParticipantsController } from './fundae-group-participants.controller';
 import { FundaeRlptController } from './fundae-rlpt.controller';
 import { FundaeErrorFilter } from './fundae-error.filter';
@@ -35,6 +36,7 @@ import { FundaeErrorFilter } from './fundae-error.filter';
     FundaeController,
     FundaeCompaniesController,
     FundaeGroupsController,
+    FundaeInspectionController,
     FundaeGroupParticipantsController,
     FundaeRlptController,
   ],

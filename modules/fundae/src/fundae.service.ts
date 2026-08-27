@@ -12,6 +12,7 @@ import type {
   BlockView,
   CreateActionDto,
   CreateBlockDto,
+  CriterioFinalizacion,
   Modalidad,
   UpdateActionDto,
   UpdateBlockDto,
@@ -28,6 +29,9 @@ import {
   ParticipantNotInActionError,
 } from './errors.js';
 import { renderEvidencePdf } from './evidence-pdf.js';
+import { loadLessonEvidence } from './evidence-loader.js';
+import { PARTICIPANT_ENROLLMENT_FILTER } from './participant-filter.js';
+import { computeParticipantEvidence } from './tracking-evidence.js';
 import { buildPresentationZip } from './zip-package.js';
 import { buildActionXml, type ParticipantSnapshot, type BlockSnapshot } from './xml-export.js';
 
@@ -95,6 +99,7 @@ export class FundaeService {
         lugar: dto.lugar ?? null,
         cifCentro: dto.cifCentro ?? null,
         notas: dto.notas ?? null,
+        criterioFinalizacion: dto.criterioFinalizacion ?? 'UMBRAL_PROGRESO',
         status: 'DRAFT',
       },
     });
@@ -145,6 +150,9 @@ export class FundaeService {
         ...(dto.lugar !== undefined ? { lugar: dto.lugar ?? null } : {}),
         ...(dto.cifCentro !== undefined ? { cifCentro: dto.cifCentro ?? null } : {}),
         ...(dto.notas !== undefined ? { notas: dto.notas ?? null } : {}),
+        ...(dto.criterioFinalizacion !== undefined
+          ? { criterioFinalizacion: dto.criterioFinalizacion }
+          : {}),
         ...(dto.status !== undefined ? { status: dto.status } : {}),
         ...(dto.courseId !== undefined ? { courseId: dto.courseId ?? null } : {}),
       },
@@ -208,7 +216,7 @@ export class FundaeService {
     if (!action.courseId) throw new ActionWithoutCourseError(actionId);
 
     const enrollment = await this.prisma.modLearningEnrollment.findFirst({
-      where: { tenantId, courseId: action.courseId, userId, status: { not: 'CANCELLED' } },
+      where: { tenantId, courseId: action.courseId, userId, ...PARTICIPANT_ENROLLMENT_FILTER },
     });
     if (!enrollment) throw new ParticipantNotInActionError(userId);
 
@@ -223,8 +231,23 @@ export class FundaeService {
       select: { name: true },
     });
 
+    // Mismo criterio que el XML y que el paquete de auditoría: las horas que
+    // firma el centro salen del rastro de interacción, no de la casilla que
+    // marcó el alumno. Si las tres rutas no coinciden, el PDF que se entrega al
+    // participante contradice al XML que se sube a Fundae.
+    const { lessonsByUser } = await loadLessonEvidence(this.prisma, tenantId, action.courseId, [
+      userId,
+    ]);
+    const pdfLessons = lessonsByUser.get(userId) ?? [];
+    const pdfEvidence = computeParticipantEvidence(
+      pdfLessons,
+      action.horasFormacion,
+      enrollment.progressPercent ?? 0,
+    );
     const horasAsistidas = roundHours(
-      (action.horasFormacion * (enrollment.progressPercent ?? 0)) / 100,
+      pdfLessons.length === 0
+        ? pdfEvidence.horasDeclaradasPorProgreso
+        : pdfEvidence.horasAsistidas,
     );
     const passed =
       enrollment.completedAt !== null &&
@@ -270,7 +293,7 @@ export class FundaeService {
     const evidences: Array<{ filename: string; pdfData: Buffer }> = [];
     if (action.courseId) {
       const enrollments = await this.prisma.modLearningEnrollment.findMany({
-        where: { tenantId, courseId: action.courseId, status: { not: 'CANCELLED' } },
+        where: { tenantId, courseId: action.courseId, ...PARTICIPANT_ENROLLMENT_FILTER },
         orderBy: { enrolledAt: 'asc' },
       });
       const userIds = enrollments.map((e) => e.userId);
@@ -489,7 +512,7 @@ export class FundaeService {
     const action = await this.get(tenantId, actionId);
     if (!action.courseId) return 0;
     return this.prisma.modLearningEnrollment.count({
-      where: { tenantId, courseId: action.courseId, status: { not: 'CANCELLED' } },
+      where: { tenantId, courseId: action.courseId, ...PARTICIPANT_ENROLLMENT_FILTER },
     });
   }
 
@@ -516,7 +539,7 @@ export class FundaeService {
     const action = await this.get(tenantId, actionId);
     if (!action.courseId) return [];
     const enrollments = await this.prisma.modLearningEnrollment.findMany({
-      where: { tenantId, courseId: action.courseId, status: { not: 'CANCELLED' } },
+      where: { tenantId, courseId: action.courseId, ...PARTICIPANT_ENROLLMENT_FILTER },
       orderBy: { enrolledAt: 'asc' },
     });
     if (enrollments.length === 0) return [];
@@ -554,10 +577,12 @@ export class FundaeService {
    *  - Hace JOIN con `User` para obtener nombre + email + DNI futuro.
    *  - Mapea `progressPercent` y `status` a horas asistidas y resultado.
    *
-   * El cálculo de horas asistidas es una **estimación**: hours × progressPct/100.
-   * Cuando tengamos `mod_learning_session_log` con minutos reales por sesión,
-   * podremos sustituir esto por la suma exacta. El admin puede corregir
-   * manualmente en el XML antes de subir.
+   * Las horas asistidas se reconstruyen desde el rastro de interacción que
+   * registró el servidor (ver `tracking-evidence.ts`), no desde el porcentaje de
+   * lecciones marcadas: ese porcentaje lo movía el propio alumno, así que las
+   * horas que se comunicaban a Fundae eran, en el fondo, una autodeclaración.
+   * Sin itinerario que recorrer se conserva la estimación antigua — el fallo no
+   * es del alumno y dejarle el grupo a cero sería peor.
    */
   private async collectParticipants(
     tenantId: string,
@@ -565,21 +590,32 @@ export class FundaeService {
     totalHours: number,
   ): Promise<ParticipantSnapshot[]> {
     const enrollments = await this.prisma.modLearningEnrollment.findMany({
-      where: { tenantId, courseId, status: { not: 'CANCELLED' } },
+      where: { tenantId, courseId, ...PARTICIPANT_ENROLLMENT_FILTER },
       orderBy: { enrolledAt: 'asc' },
     });
     if (enrollments.length === 0) return [];
 
     const userIds = enrollments.map((e) => e.userId);
-    const users = await this.prisma.user.findMany({
-      where: { id: { in: userIds } },
-      select: { id: true, email: true, name: true, documentId: true },
-    });
+    const [users, { lessonsByUser }] = await Promise.all([
+      this.prisma.user.findMany({
+        where: { id: { in: userIds } },
+        select: { id: true, email: true, name: true, documentId: true },
+      }),
+      loadLessonEvidence(this.prisma, tenantId, courseId, userIds),
+    ]);
     const userById = new Map(users.map((u) => [u.id, u]));
 
     return enrollments.map((e) => {
       const user = userById.get(e.userId);
-      const horasAsistidas = roundHours((totalHours * (e.progressPercent ?? 0)) / 100);
+      const lessons = lessonsByUser.get(e.userId) ?? [];
+      const evidence = computeParticipantEvidence(
+        lessons,
+        totalHours,
+        e.progressPercent ?? 0,
+      );
+      const horasAsistidas = roundHours(
+        lessons.length === 0 ? evidence.horasDeclaradasPorProgreso : evidence.horasAsistidas,
+      );
       const passed = e.completedAt !== null && (e.progressPercent ?? 0) >= e.completionThreshold;
       const failed = e.status === 'CANCELLED' || (e.completedAt !== null && !passed);
       const resultado: ParticipantSnapshot['resultado'] = passed
@@ -677,6 +713,7 @@ function toView(row: {
   cifCentro: string | null;
   notas: string | null;
   status: string;
+  criterioFinalizacion: string;
   createdAt: Date;
   updatedAt: Date;
 }): ActionView {
@@ -694,6 +731,7 @@ function toView(row: {
     cifCentro: row.cifCentro,
     notas: row.notas,
     status: row.status as ActionStatus,
+    criterioFinalizacion: row.criterioFinalizacion as CriterioFinalizacion,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };

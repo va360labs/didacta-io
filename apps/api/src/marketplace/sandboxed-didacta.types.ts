@@ -250,7 +250,13 @@ export interface DidactaEnrollment {
     | 'IMPORT'
     | 'SUBSCRIPTION'
     | 'API'
-    | 'GROUP';
+    | 'GROUP'
+    /// Acceso de SEGUIMIENTO Fundae (LMS-123): la cuenta que el centro comunica
+    /// a la Fundación para que la inspección recorra el curso. Es una matrícula
+    /// de verdad —el contenido se gatea por matrícula, no por rol— pero no es un
+    /// alumno: no cuenta como participante, no aparece en el XML ni en los CSV,
+    /// y un módulo que sincronice alumnos a un CRM debe saltársela.
+    | 'INSPECTION';
   progressPercent: number;
   externalSource: string | null;
   externalId: string | null;
@@ -295,7 +301,13 @@ export interface DidactaUpsertUserInput extends DidactaExternalRef {
   email: string;
   name?: string;
   /// Rol asignado en el tenant. Default: 'alumno'.
-  role?: 'tenant_admin' | 'formador' | 'alumno' | 'auditor' | 'empresa_manager';
+  role?:
+    | 'tenant_admin'
+    | 'formador'
+    | 'alumno'
+    | 'auditor'
+    | 'inspector'
+    | 'empresa_manager';
   locale?: string;
   /// DNI/NIE en mayúsculas y sin separadores (Fundae). Validado por el core.
   documentId?: string;

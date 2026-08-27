@@ -24,6 +24,19 @@ export {
   type GroupParticipantFinalSnapshot,
 } from './group-end-xml-export.js';
 export {
+  FundaeInspectorService,
+  type InspectorAccessView,
+  type InspectionView,
+  type InspectionParticipantView,
+} from './inspector.service.js';
+export { PARTICIPANT_ENROLLMENT_FILTER } from './participant-filter.js';
+export {
+  computeParticipantEvidence,
+  type LessonEvidence,
+  type ParticipantEvidence,
+} from './tracking-evidence.js';
+export { buildSeguimientoCsv, type SeguimientoCsvRow } from './seguimiento-csv.js';
+export {
   buildAuditZip,
   buildCostsCsv,
   buildParticipantsCsv,
@@ -38,6 +51,7 @@ export {
   createActionSchema,
   createBlockSchema,
   modalidadSchema,
+  criterioFinalizacionSchema,
   updateActionSchema,
   updateBlockSchema,
   type ActionStatus,
@@ -46,6 +60,7 @@ export {
   type CreateActionDto,
   type CreateBlockDto,
   type Modalidad,
+  type CriterioFinalizacion,
   type UpdateActionDto,
   type UpdateBlockDto,
 } from './dto.js';

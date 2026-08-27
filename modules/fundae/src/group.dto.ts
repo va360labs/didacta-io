@@ -52,6 +52,34 @@ export type FinalizeGroupDto = z.infer<typeof finalizeGroupSchema>;
 
 export type ParticipantResultado = 'APTO' | 'NO_APTO' | 'EN_CURSO';
 
+/**
+ * Lo que el servidor puede DEMOSTRAR de un participante, al lado de lo que
+ * calcula. Va aparte de `horasAsistidas` a propósito: quien firma la
+ * bonificación tiene que poder ver, antes de firmar, cuánto de lo que va a
+ * declarar se apoya en registros de interacción y cuánto en la casilla que
+ * marcó el alumno. Ver `tracking-evidence.ts`.
+ */
+export interface ParticipantEvidenceView {
+  /** De las horas asistidas, las que descansan en una autodeclaración. */
+  horasSinVerificar: number;
+  /** Lo que devolvía la fórmula anterior (`horas × progreso / 100`). */
+  horasDeclaradasPorProgreso: number;
+  segundosRegistrados: number;
+  leccionesTotales: number;
+  leccionesIniciadas: number;
+  leccionesCompletadas: number;
+  leccionesVerificadas: number;
+  actividadesTotales: number;
+  actividadesSuperadas: number;
+  controlesTotales: number;
+  controlesSuperados: number;
+  pctHoras: number;
+  pctActividades: number;
+  pctControles: number;
+  primerAccesoAt: string | null;
+  ultimoAccesoAt: string | null;
+}
+
 export interface ParticipantCompletionView {
   participantId: string;
   userId: string;
@@ -62,6 +90,8 @@ export interface ParticipantCompletionView {
   progressPercent: number;
   resultado: ParticipantResultado;
   completedAt: string | null;
+  /** Ausente solo si la acción formativa no tiene curso asociado. */
+  evidencia?: ParticipantEvidenceView;
 }
 
 export interface GroupCompletionResult {

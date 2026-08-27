@@ -53,14 +53,16 @@
     "formador": "Trainer",
     "alumno": "Student",
     "auditor": "Auditor",
-    "empresa_manager": "Company manager"
+    "empresa_manager": "Company manager",
+    "inspector": "Fundae inspector"
   },
   "roleDesc": {
     "tenant_admin": "Administrators have full access to the admin panel and must enable MFA.",
     "formador": "Trainers can create and manage courses, quizzes and grading.",
     "alumno": "Students consume the published courses of the organization.",
     "auditor": "Auditors can review the audit log and certificates.",
-    "empresa_manager": "Managers see analytics and members of their company."
+    "empresa_manager": "Managers see analytics and members of their company.",
+    "inspector": "Inspectors follow the subsidised groups granted to them: they can browse the course and read tracking data, but change nothing."
   },
   "invite": {
     "back": "← Back to the list",

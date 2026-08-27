@@ -159,6 +159,46 @@ export class EnrollmentNotActiveError extends LearningError {
 }
 
 /**
+ * El alumno intentó marcar como completada una lección cuyo veredicto no le
+ * corresponde: un cuestionario lo cierra el motor de evaluaciones al aprobarlo,
+ * un SCORM lo cierra su runtime. El reproductor ya escondía el botón para esos
+ * tipos, pero la API lo aceptaba igual, así que recorrer los ids de las
+ * lecciones bastaba para llegar al 100 % de progreso —y a las horas que de él
+ * cuelgan— sin responder una sola pregunta.
+ */
+export class LessonCompletionNotSelfReportableError extends LearningError {
+  constructor(public readonly lessonType: string) {
+    super(
+      'LESSON_COMPLETION_NOT_SELF_REPORTABLE',
+      lessonType === 'QUIZ'
+        ? 'Esta lección se completa aprobando su cuestionario, no marcándola.'
+        : 'Esta lección la completa el propio contenido SCORM, no se puede marcar a mano.',
+      { detail: lessonType },
+    );
+  }
+}
+
+/**
+ * El tenant exige permanencia mínima antes de dar una lección por vista
+ * (`mod.learning.minWatchFraction`) y todavía no se alcanzó. Apagado por
+ * defecto: solo lo activan las academias que necesitan sostener las horas ante
+ * una auditoría.
+ */
+export class LessonCompletionEvidenceMissingError extends LearningError {
+  constructor(
+    public readonly requiredSeconds: number,
+    public readonly accumulatedSeconds: number,
+  ) {
+    const remaining = Math.max(0, requiredSeconds - accumulatedSeconds);
+    super(
+      'LESSON_COMPLETION_EVIDENCE_MISSING',
+      `Todavía no puedes dar esta lección por completada: faltan ${Math.ceil(remaining / 60)} min de visionado`,
+      { detail: String(remaining) },
+    );
+  }
+}
+
+/**
  * El curso está a la venta, así que no se puede uno automatricular. Antes
  * `enrollSelf` solo comprobaba que estuviera PUBLISHED y el CTA de compra se
  * saltaba con una llamada a la API.

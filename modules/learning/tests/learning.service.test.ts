@@ -8,6 +8,8 @@ import {
   EnrollmentNotActiveError,
   EnrollmentNotFoundError,
   InvitationInvalidError,
+  LessonCompletionEvidenceMissingError,
+  LessonCompletionNotSelfReportableError,
   LessonNotInCourseError,
 } from '../src/errors';
 
@@ -50,7 +52,9 @@ interface FakeProgress {
   watchedSeconds: number;
   resumePositionSec: number;
   completed: boolean;
+  completionSource: string | null;
   completedAt: Date | null;
+  firstAccessedAt: Date | null;
   lastAccessedAt: Date | null;
 }
 interface FakeLesson {
@@ -151,7 +155,12 @@ function makeFakePrisma() {
             if (!l) return null;
             if (where.deletedAt === null && l.deletedAt !== null) return null;
             if (where.module?.courseId && l.courseId !== where.module.courseId) return null;
-            return { id: l.id, publishAt: (l as { publishAt?: Date | null }).publishAt ?? null };
+            return {
+              id: l.id,
+              publishAt: (l as { publishAt?: Date | null }).publishAt ?? null,
+              type: l.type ?? 'VIDEO',
+              durationMinutes: l.durationMinutes ?? null,
+            };
           },
         ),
         // Soporta la query por módulo (drip) y la nueva por courseId+publishAt.
@@ -364,6 +373,16 @@ function makeFakePrisma() {
         findUnique: vi.fn(async () => null),
       },
       modLearningProgress: {
+        findUnique: vi.fn(
+          async ({
+            where,
+          }: {
+            where: { enrollmentId_lessonId: { enrollmentId: string; lessonId: string } };
+          }) =>
+            progress.get(
+              `${where.enrollmentId_lessonId.enrollmentId}::${where.enrollmentId_lessonId.lessonId}`,
+            ) ?? null,
+        ),
         count: vi.fn(
           async ({
             where,
@@ -415,6 +434,7 @@ function makeFakePrisma() {
                 watchedSeconds: watched,
                 resumePositionSec: update.resumePositionSec ?? existing.resumePositionSec,
                 completed: update.completed ?? existing.completed,
+                completionSource: update.completionSource ?? existing.completionSource,
                 completedAt: update.completedAt ?? existing.completedAt,
               };
               progress.set(key, merged);
@@ -428,7 +448,9 @@ function makeFakePrisma() {
               watchedSeconds: create.watchedSeconds ?? 0,
               resumePositionSec: create.resumePositionSec ?? 0,
               completed: create.completed ?? false,
+              completionSource: create.completionSource ?? null,
               completedAt: create.completedAt ?? null,
+              firstAccessedAt: new Date(),
               lastAccessedAt: new Date(),
             };
             progress.set(key, created);
@@ -456,7 +478,9 @@ function makeContext() {
       error: vi.fn(),
       child: vi.fn(),
     } as never,
-    config: { get: vi.fn(), set: vi.fn() } as never,
+    // Sin `as never`: los tests que programan `config.get` necesitan poder
+    // leerlo. El ensanchado a ModuleContext se hace en cada call site.
+    config: { get: vi.fn(), set: vi.fn() },
   };
 }
 
@@ -788,6 +812,8 @@ describe('LearningService', () => {
         watchedSeconds: 120,
         resumePositionSec: 90,
         completed: true,
+        completionSource: 'SELF',
+        firstAccessedAt: new Date('2026-06-26T09:00:00.000Z'),
         completedAt,
         lastAccessedAt,
       });
@@ -1060,6 +1086,202 @@ describe('LearningService', () => {
       expect(res.totalLessons).toBe(5);
       expect(res.completedLessons).toBe(5);
       expect(res.progressPercent).toBe(100);
+    });
+  });
+
+  describe('trackProgress — la finalización de una lección deja rastro de QUIÉN la firma (LMS-121)', () => {
+    /** Curso con lecciones de tipos mezclados: `types[i]` es el tipo de `l-i`. */
+    function seedTipos(
+      fake: ReturnType<typeof makeFakePrisma>,
+      types: Array<'VIDEO' | 'QUIZ' | 'SCORM' | 'TEXT'>,
+      durationMinutes: number | null = null,
+    ) {
+      fake.courses.set('c-1', { id: 'c-1', tenantId: 't-1', status: 'PUBLISHED', deletedAt: null });
+      fake.modules.set('m-1', {
+        id: 'm-1',
+        tenantId: 't-1',
+        courseId: 'c-1',
+        title: 'Modulo 1',
+        position: 1,
+        deletedAt: null,
+      });
+      types.forEach((type, i) => {
+        fake.lessons.set(`l-${i}`, {
+          id: `l-${i}`,
+          tenantId: 't-1',
+          moduleId: 'm-1',
+          courseId: 'c-1',
+          deletedAt: null,
+          position: i,
+          type,
+          durationMinutes,
+        });
+      });
+      fake.enrollments.set('en-1', {
+        id: 'en-1',
+        tenantId: 't-1',
+        userId: 'u-1',
+        courseId: 'c-1',
+        status: 'ACTIVE',
+        source: 'ADMIN',
+        completionThreshold: 75,
+        progressPercent: 0,
+        enrolledAt: new Date('2026-01-01'),
+        startedAt: null,
+        completedAt: null,
+        cancelledAt: null,
+      });
+    }
+
+    it('el alumno NO puede darse por aprobado un cuestionario desde la API', async () => {
+      const fake = makeFakePrisma();
+      seedTipos(fake, ['QUIZ']);
+      const service = new LearningService(fake.prisma as never, makeContext() as never);
+
+      await expect(
+        service.trackProgress('t-1', 'u-1', {
+          enrollmentId: 'en-1',
+          lessonId: 'l-0',
+          watchedSeconds: 0,
+          completed: true,
+        }),
+      ).rejects.toBeInstanceOf(LessonCompletionNotSelfReportableError);
+
+      expect(fake.progress.size).toBe(0);
+      expect(fake.enrollments.get('en-1')?.progressPercent).toBe(0);
+    });
+
+    it('tampoco puede cerrar una lección SCORM a mano', async () => {
+      const fake = makeFakePrisma();
+      seedTipos(fake, ['SCORM']);
+      const service = new LearningService(fake.prisma as never, makeContext() as never);
+
+      await expect(
+        service.trackProgress('t-1', 'u-1', {
+          enrollmentId: 'en-1',
+          lessonId: 'l-0',
+          watchedSeconds: 0,
+          completed: true,
+        }),
+      ).rejects.toBeInstanceOf(LessonCompletionNotSelfReportableError);
+    });
+
+    it('recorrer los ids de un curso de cuestionarios ya no lleva al 100 %', async () => {
+      const fake = makeFakePrisma();
+      seedTipos(fake, ['QUIZ', 'QUIZ', 'QUIZ', 'QUIZ']);
+      const ctx = makeContext();
+      const service = new LearningService(fake.prisma as never, ctx as never);
+
+      for (let i = 0; i < 4; i++) {
+        await expect(
+          service.trackProgress('t-1', 'u-1', {
+            enrollmentId: 'en-1',
+            lessonId: `l-${i}`,
+            watchedSeconds: 0,
+            completed: true,
+          }),
+        ).rejects.toBeInstanceOf(LessonCompletionNotSelfReportableError);
+      }
+
+      expect(fake.enrollments.get('en-1')?.status).toBe('ACTIVE');
+      expect(ctx.eventBus.publish).not.toHaveBeenCalledWith(
+        expect.objectContaining({ name: 'learning.course.completed' }),
+      );
+    });
+
+    it('el puente de evaluaciones SÍ la cierra, y la sella como ASSESSMENT', async () => {
+      const fake = makeFakePrisma();
+      seedTipos(fake, ['QUIZ']);
+      const service = new LearningService(fake.prisma as never, makeContext() as never);
+
+      await service.trackProgress(
+        't-1',
+        'u-1',
+        { enrollmentId: 'en-1', lessonId: 'l-0', watchedSeconds: 0, completed: true },
+        { source: 'ASSESSMENT' },
+      );
+
+      expect(fake.progress.get('en-1::l-0')?.completionSource).toBe('ASSESSMENT');
+      expect(fake.progress.get('en-1::l-0')?.completed).toBe(true);
+    });
+
+    it('sin permanencia mínima configurada, un VIDEO se cierra pero queda marcado SELF', async () => {
+      const fake = makeFakePrisma();
+      seedTipos(fake, ['VIDEO'], 30);
+      const service = new LearningService(fake.prisma as never, makeContext() as never);
+
+      await service.trackProgress('t-1', 'u-1', {
+        enrollmentId: 'en-1',
+        lessonId: 'l-0',
+        watchedSeconds: 1,
+        completed: true,
+      });
+
+      // Se admite —apagar el endurecimiento es lo que viene de fábrica— pero la
+      // fila dice exactamente lo que la respalda: nada más que el clic.
+      expect(fake.progress.get('en-1::l-0')?.completionSource).toBe('SELF');
+    });
+
+    it('con permanencia mínima al 50 %, un minuto no cierra una lección de 30', async () => {
+      const fake = makeFakePrisma();
+      seedTipos(fake, ['VIDEO'], 30);
+      const ctx = makeContext();
+      ctx.config.get.mockResolvedValue(0.5);
+      const service = new LearningService(fake.prisma as never, ctx as never);
+
+      await expect(
+        service.trackProgress('t-1', 'u-1', {
+          enrollmentId: 'en-1',
+          lessonId: 'l-0',
+          watchedSeconds: 60,
+          completed: true,
+        }),
+      ).rejects.toBeInstanceOf(LessonCompletionEvidenceMissingError);
+      expect(fake.progress.size).toBe(0);
+    });
+
+    it('alcanzada la permanencia mínima, la finalización se sella como TIME', async () => {
+      const fake = makeFakePrisma();
+      seedTipos(fake, ['VIDEO'], 30);
+      const ctx = makeContext();
+      ctx.config.get.mockResolvedValue(0.5);
+      const service = new LearningService(fake.prisma as never, ctx as never);
+
+      // Dos tramos que suman los 15 min exigidos: el tiempo se acumula.
+      await service.trackProgress('t-1', 'u-1', {
+        enrollmentId: 'en-1',
+        lessonId: 'l-0',
+        watchedSeconds: 600,
+      });
+      await service.trackProgress('t-1', 'u-1', {
+        enrollmentId: 'en-1',
+        lessonId: 'l-0',
+        watchedSeconds: 300,
+        completed: true,
+      });
+
+      expect(fake.progress.get('en-1::l-0')?.completionSource).toBe('TIME');
+    });
+
+    it('un ping posterior del reproductor no degrada lo que firmó un tercero', async () => {
+      const fake = makeFakePrisma();
+      seedTipos(fake, ['VIDEO']);
+      const service = new LearningService(fake.prisma as never, makeContext() as never);
+
+      await service.trackProgress(
+        't-1',
+        'u-1',
+        { enrollmentId: 'en-1', lessonId: 'l-0', watchedSeconds: 0, completed: true },
+        { source: 'INSTRUCTOR' },
+      );
+      await service.trackProgress('t-1', 'u-1', {
+        enrollmentId: 'en-1',
+        lessonId: 'l-0',
+        watchedSeconds: 5,
+        completed: true,
+      });
+
+      expect(fake.progress.get('en-1::l-0')?.completionSource).toBe('INSTRUCTOR');
     });
   });
 

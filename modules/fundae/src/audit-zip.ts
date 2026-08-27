@@ -17,6 +17,13 @@ import archiver from 'archiver';
  *   inicio.xml                    — comunicación de inicio (LMS-83)
  *   finalizacion.xml              — comunicación de finalización (LMS-85)
  *   participantes.csv             — listado nominal con NIF, horas, resultado
+ *   seguimiento.csv               — UNA FILA POR PARTICIPANTE Y LECCIÓN: orden
+ *                                   en el itinerario, primer y último acceso,
+ *                                   tiempo registrado, y quién dio la lección
+ *                                   por completada (LMS-121). Es lo que la
+ *                                   instrucción de seguimiento pide mirar y lo
+ *                                   único que permite distinguir la actividad
+ *                                   real de la autodeclarada.
  *   costes.csv                    — desglose por tipo + total
  *   rlpt/notificacion-N.{ext}     — adjuntos RLPT (PDF/imagen) descargados de
  *                                   Evidence Vault — uno por notificación
@@ -33,6 +40,8 @@ export interface AuditZipInput {
   startXml: string;
   endXml: string;
   participantsCsv: string;
+  /** Detalle lección a lección. Vacío solo si la acción no tiene curso asociado. */
+  seguimientoCsv: string;
   costsCsv: string;
   rlptAttachments: Array<{
     /** Nombre interno: "rlpt/notificacion-{id}.pdf" o ".png" */
@@ -66,6 +75,7 @@ export async function buildAuditZip(input: AuditZipInput): Promise<Buffer> {
   const startBuf = Buffer.from(input.startXml, 'utf8');
   const endBuf = Buffer.from(input.endXml, 'utf8');
   const partsBuf = Buffer.from(input.participantsCsv, 'utf8');
+  const seguimientoBuf = Buffer.from(input.seguimientoCsv, 'utf8');
   const costsBuf = Buffer.from(input.costsCsv, 'utf8');
 
   const manifest: AuditManifest = {
@@ -81,6 +91,7 @@ export async function buildAuditZip(input: AuditZipInput): Promise<Buffer> {
       hashEntry('inicio.xml', startBuf),
       hashEntry('finalizacion.xml', endBuf),
       hashEntry('participantes.csv', partsBuf),
+      hashEntry('seguimiento.csv', seguimientoBuf),
       hashEntry('costes.csv', costsBuf),
     ],
     rlpt: input.rlptAttachments.map((att) => ({
@@ -105,6 +116,7 @@ export async function buildAuditZip(input: AuditZipInput): Promise<Buffer> {
     archive.append(startBuf, { name: 'inicio.xml' });
     archive.append(endBuf, { name: 'finalizacion.xml' });
     archive.append(partsBuf, { name: 'participantes.csv' });
+    archive.append(seguimientoBuf, { name: 'seguimiento.csv' });
     archive.append(costsBuf, { name: 'costes.csv' });
     for (const att of input.rlptAttachments) {
       archive.append(att.blob, { name: att.filename });
@@ -134,6 +146,14 @@ export interface ParticipantCsvRow {
   horasAsistidas: number | null;
   progressPercent: number | null;
   resultado: string | null;
+  /** De `horasAsistidas`, las que solo respalda la palabra del alumno (LMS-121). */
+  horasSinVerificar: number | null;
+  /** Primer y último rastro de interacción registrados. Los pide la inspección
+   *  para situar la actividad dentro de las fechas del grupo. */
+  primerAccesoAt: string | null;
+  ultimoAccesoAt: string | null;
+  actividadesSuperadas: number | null;
+  actividadesTotales: number | null;
 }
 
 export function buildParticipantsCsv(rows: ParticipantCsvRow[]): string {
@@ -145,8 +165,13 @@ export function buildParticipantsCsv(rows: ParticipantCsvRow[]): string {
     'fecha_matricula',
     'status',
     'horas_asistidas',
+    'horas_sin_verificar',
     'progreso_pct',
     'resultado',
+    'primer_acceso',
+    'ultimo_acceso',
+    'actividades_superadas',
+    'actividades_totales',
   ].join(',');
   const lines = rows.map((r) =>
     [
@@ -157,8 +182,13 @@ export function buildParticipantsCsv(rows: ParticipantCsvRow[]): string {
       csvEscape(r.enrolledAt),
       csvEscape(r.status),
       r.horasAsistidas === null ? '' : String(r.horasAsistidas),
+      r.horasSinVerificar === null ? '' : String(r.horasSinVerificar),
       r.progressPercent === null ? '' : String(r.progressPercent),
       csvEscape(r.resultado ?? ''),
+      csvEscape(r.primerAccesoAt ?? ''),
+      csvEscape(r.ultimoAccesoAt ?? ''),
+      r.actividadesSuperadas === null ? '' : String(r.actividadesSuperadas),
+      r.actividadesTotales === null ? '' : String(r.actividadesTotales),
     ].join(','),
   );
   return [header, ...lines].join('\r\n') + '\r\n';

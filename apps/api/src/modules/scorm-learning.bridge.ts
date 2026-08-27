@@ -79,12 +79,20 @@ export class ScormLearningBridge implements OnModuleInit {
     }
 
     try {
-      await this.registry.getLearningService().trackProgress(tenantId, userId, {
-        enrollmentId: enrollment.id,
-        lessonId,
-        watchedSeconds: 0,
-        completed: true,
-      });
+      await this.registry.getLearningService().trackProgress(
+        tenantId,
+        userId,
+        {
+          enrollmentId: enrollment.id,
+          lessonId,
+          watchedSeconds: 0,
+          completed: true,
+        },
+        // Lo dictamina el runtime SCORM vía `cmi.completion_status`, no el
+        // alumno: sin declararlo, `trackProgress` rechazaría el cierre de una
+        // lección SCORM por venir de la vía autodeclarada.
+        { source: 'SCORM' },
+      );
       this.logger.log(
         { attemptId, lessonId, userId, tenantId, completionStatus, scoreScaled },
         'mod.learning: lección SCORM marcada como completada',

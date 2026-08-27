@@ -68,7 +68,8 @@
     "dniInvalido": "This doesn't look like a valid DNI/NIE: check the digits and the control letter (or leave the field empty).",
     "cambiosGuardados": "✓ Changes saved",
     "cancelar": "Cancel",
-    "guardarCambios": "Save changes"
+    "guardarCambios": "Save changes",
+    "roleInspector": "Fundae inspector"
   },
   "retos": {
     "estadoRevision": "Under review",
@@ -290,7 +291,8 @@
     "directorioNota": "The public member directory will be available soon.",
     "cargando": "Loading…",
     "sinResultados": "No results for \"{query}\"",
-    "sinMiembros": "There are no members in this tenant."
+    "sinMiembros": "There are no members in this tenant.",
+    "rolInspector": "Fundae inspector"
   },
   "perfil": {
     "noEncontrado": "We couldn't find this profile in your organization.",

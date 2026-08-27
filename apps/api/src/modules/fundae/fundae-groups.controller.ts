@@ -39,9 +39,22 @@ import { CurrentUser } from '../../auth/decorators';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { ZodValidationPipe } from '../../auth/zod-validation.pipe';
 import type { SessionClaims } from '../../auth/token.service';
+import { LearningError } from '@didacta/mod-learning';
 import { ModuleRegistryService } from '../module-registry.service';
 
 const ADMIN_ROLES = new Set(['super_admin', 'tenant_admin']);
+
+/**
+ * Alta de un acceso de seguimiento. `expiresAt` es opcional a propósito: un
+ * acceso comunicado a Fundae no tiene por qué durar para siempre, pero tampoco
+ * se le puede imponer una caducidad al centro desde aquí.
+ */
+const grantInspectorSchema = z.object({
+  userId: z.string().uuid(),
+  expiresAt: z.string().datetime().optional(),
+  notas: z.string().max(2000).optional(),
+});
+type GrantInspectorDto = z.infer<typeof grantInspectorSchema>;
 
 const listGroupsQuerySchema = z.object({
   companyId: z.string().uuid().optional(),
@@ -257,5 +270,87 @@ export class FundaeGroupsController {
     const u = this.requireAdmin(user);
     await this.registry.getFundaeGroupService().removeCost(u.tenantId, u.sub, groupId, costId);
     return { deleted: true };
+  }
+
+  // ──────────────────── ACCESO DE SEGUIMIENTO (INSPECCIÓN) ────────────────────
+  //
+  // Las claves que el centro comunica a Fundae al inicio de la acción para que
+  // la inspección pueda seguir el curso. Conceder y retirar es acción de admin;
+  // lo que el inspector ve con ellas vive en `FundaeInspectionController`.
+
+  @Get(':id/inspectors')
+  @ApiOperation({
+    summary:
+      'Accesos de seguimiento del grupo (LMS-123). Incluye los revocados: quién pudo mirar el expediente es parte de la trazabilidad.',
+  })
+  async listInspectors(@CurrentUser() user: SessionClaims | undefined, @Param('id') id: string) {
+    const u = this.requireAdmin(user);
+    return this.registry.getFundaeInspectorService().list(u.tenantId, id);
+  }
+
+  @Post(':id/inspectors')
+  @ApiOperation({
+    summary:
+      'Conceder acceso de seguimiento a una cuenta. Matricula esa cuenta en el curso de la acción con fuente INSPECTION (excluida de los listados nominales, del XML y de los CSV).',
+  })
+  async grantInspector(
+    @CurrentUser() user: SessionClaims | undefined,
+    @Param('id') id: string,
+    @Body(new ZodValidationPipe(grantInspectorSchema)) dto: GrantInspectorDto,
+  ) {
+    const u = this.requireAdmin(user);
+    const inspectors = this.registry.getFundaeInspectorService();
+
+    const access = await inspectors.grant(u.tenantId, u.sub, id, dto.userId, {
+      expiresAt: dto.expiresAt ? new Date(dto.expiresAt) : null,
+      notas: dto.notas ?? null,
+    });
+
+    // El contenido del curso se gatea por matrícula viva, no por rol: sin esta
+    // matrícula el inspector vería el currículo pero no el material, que es
+    // justamente lo que la instrucción de seguimiento le pide revisar. La
+    // composición cross-module vive aquí, en la capa de aplicación, porque las
+    // matrículas son de `mod.learning` y el acceso es de `mod.fundae`.
+    const resolved = await inspectors.resolveAccess(u.tenantId, dto.userId, id);
+    if (resolved?.courseId) {
+      try {
+        await this.registry
+          .getLearningService()
+          .enrollForInspection(u.tenantId, dto.userId, resolved.courseId);
+      } catch (err) {
+        // `AlreadyEnrolledError` es el caso normal al reconceder un acceso, o
+        // cuando la cuenta ya tenía matrícula por otra vía: el acceso queda
+        // concedido igual. Cualquier otro fallo sí sube.
+        if (!(err instanceof LearningError) || err.code !== 'ALREADY_ENROLLED') throw err;
+      }
+    }
+
+    return access;
+  }
+
+  @Delete(':id/inspectors/:userId')
+  @HttpCode(200)
+  @ApiOperation({
+    summary:
+      'Retirar el acceso de seguimiento. Marca la fila (no la borra) y cancela la matrícula INSPECTION.',
+  })
+  async revokeInspector(
+    @CurrentUser() user: SessionClaims | undefined,
+    @Param('id') id: string,
+    @Param('userId') userId: string,
+  ) {
+    const u = this.requireAdmin(user);
+    const inspectors = this.registry.getFundaeInspectorService();
+
+    // El courseId se resuelve ANTES de revocar: después, `resolveAccess`
+    // devuelve null y nos quedaríamos sin saber qué matrícula cancelar.
+    const resolved = await inspectors.resolveAccess(u.tenantId, userId, id);
+    await inspectors.revoke(u.tenantId, u.sub, id, userId);
+    if (resolved?.courseId) {
+      await this.registry
+        .getLearningService()
+        .unenrollFromInspection(u.tenantId, userId, resolved.courseId);
+    }
+    return { revoked: true };
   }
 }

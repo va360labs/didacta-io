@@ -9,6 +9,7 @@ const ACTION: ActionView = {
   codigoAccion: 'AF-2026-001',
   nombre: 'Curso piloto',
   modalidad: 'TELEFORMACION',
+  criterioFinalizacion: 'UMBRAL_PROGRESO',
   horasFormacion: 20,
   fechaInicio: '2026-05-01',
   fechaFin: '2026-05-30',

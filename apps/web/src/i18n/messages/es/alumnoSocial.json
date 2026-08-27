@@ -68,7 +68,8 @@
     "dniInvalido": "No parece un DNI/NIE válido: revisa los dígitos y la letra de control (o deja el campo vacío).",
     "cambiosGuardados": "✓ Cambios guardados",
     "cancelar": "Cancelar",
-    "guardarCambios": "Guardar cambios"
+    "guardarCambios": "Guardar cambios",
+    "roleInspector": "Inspector Fundae"
   },
   "retos": {
     "estadoRevision": "En revisión",
@@ -290,7 +291,8 @@
     "directorioNota": "El directorio público de miembros estará disponible próximamente.",
     "cargando": "Cargando…",
     "sinResultados": "Sin resultados para \"{query}\"",
-    "sinMiembros": "No hay miembros en este tenant."
+    "sinMiembros": "No hay miembros en este tenant.",
+    "rolInspector": "Inspector Fundae"
   },
   "perfil": {
     "noEncontrado": "No encontramos este perfil en tu organización.",

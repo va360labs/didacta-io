@@ -53,14 +53,16 @@
     "formador": "Formador",
     "alumno": "Alumno",
     "auditor": "Auditor",
-    "empresa_manager": "Gerente de empresa"
+    "empresa_manager": "Gerente de empresa",
+    "inspector": "Inspector Fundae"
   },
   "roleDesc": {
     "tenant_admin": "Los administradores tienen acceso completo al panel y deberán activar MFA.",
     "formador": "Los formadores pueden crear y gestionar cursos, quizzes y correcciones.",
     "alumno": "Los alumnos consumen los cursos publicados de la organización.",
     "auditor": "Los auditores pueden consultar el log y certificados.",
-    "empresa_manager": "Los gerentes ven analytics y miembros de su empresa."
+    "empresa_manager": "Los gerentes ven analytics y miembros de su empresa.",
+    "inspector": "Los inspectores siguen los grupos bonificados que se les concedan: recorren el curso y consultan el seguimiento, sin poder modificar nada."
   },
   "invite": {
     "back": "← Volver al listado",

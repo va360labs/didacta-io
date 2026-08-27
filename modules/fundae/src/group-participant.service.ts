@@ -13,6 +13,7 @@ import type {
   ParticipantStatus,
   UpdateParticipantDto,
 } from './group-participant.dto.js';
+import { PARTICIPANT_ENROLLMENT_FILTER } from './participant-filter.js';
 import {
   GroupCerradoError,
   GroupNotFoundError,
@@ -100,7 +101,7 @@ export class FundaeGroupParticipantService {
           tenantId,
           courseId: action.courseId,
           userId: dto.userId,
-          status: { not: 'CANCELLED' },
+          ...PARTICIPANT_ENROLLMENT_FILTER,
         },
         select: { id: true },
       });
@@ -190,7 +191,7 @@ export class FundaeGroupParticipantService {
     }
 
     const enrollments = await this.prisma.modLearningEnrollment.findMany({
-      where: { tenantId, courseId, status: { not: 'CANCELLED' } },
+      where: { tenantId, courseId, ...PARTICIPANT_ENROLLMENT_FILTER },
       select: { userId: true },
     });
     if (enrollments.length === 0) {
