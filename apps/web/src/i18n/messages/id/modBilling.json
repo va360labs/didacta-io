@@ -1,0 +1,31 @@
+{
+  "sales": {
+    "startTitle": "Mulai kursus ini",
+    "startSubtitle": "Akses instan ke semua materi, termasuk pembaruan.",
+    "startSubtitleMembership": "Kursus ini termasuk dalam keanggotaan. Jika organisasi Anda memberikan kode undangan, Anda dapat menukarkannya di bawah.",
+    "benefitLifetime": "Akses seumur hidup dan pembaruan",
+    "benefitCertificate": "Sertifikat terverifikasi setelah selesai",
+    "benefitPace": "Belajar sesuai ritme Anda sendiri, dari perangkat apa pun",
+    "benefitCommunity": "Komunitas siswa dan bantuan",
+    "notForSale": "Kursus ini belum tersedia untuk dibeli. Jika Anda memiliki kode undangan, Anda dapat menukarkannya di bawah.",
+    "formatsTitle": "Pilih format Anda",
+    "formatsSubtitle": "Kursus yang sama dengan tingkat bimbingan yang berbeda.",
+    "onePayment": "Pembayaran sekali bayar · Termasuk PPN",
+    "featured": "Paling populer",
+    "defaultOptionName": "Kursus lengkap",
+    "buy": "Beli",
+    "buyFrom": "Beli mulai dari {price}",
+    "buyFor": "Beli seharga {price}",
+    "discount": "−{percent}%"
+  },
+  "membership": {
+    "eyebrow": "Akses penuh",
+    "pitch": "Dapatkan akses ke <strong>semua kursus</strong> mulai dari <strong>{price}</strong> {period}.",
+    "cta": "Lihat keanggotaan",
+    "noCommitment": "Batalkan kapan saja, tanpa komitmen kontrak",
+    "unlockAll": "Buka semua akses · Lihat keanggotaan",
+    "periodMonthly": "per bulan",
+    "periodYearly": "per tahun",
+    "periodEvery": "setiap {months} bulan"
+  }
+}

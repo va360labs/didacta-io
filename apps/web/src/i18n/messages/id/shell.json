@@ -1,0 +1,85 @@
+{
+  "closeMenu": "Tutup menu",
+  "openMenu": "Buka menu navigasi",
+  "sections": {
+    "myProfile": "Profil saya",
+    "groups": "Grup",
+    "learningPaths": "Jalur pembelajaran"
+  },
+  "sidebar": {
+    "logoAlt": "Logo",
+    "expandMenu": "Perluas menu",
+    "collapseMenu": "Ciutkan menu",
+    "search": "Cari...",
+    "searchShortcut": "Cari (⌘K)",
+    "communitySubtitle": "Komunitas",
+    "myProfile": "Profil saya",
+    "logout": "Keluar"
+  },
+  "roles": {
+    "super_admin": "Super admin",
+    "tenant_admin": "Administrator",
+    "formador": "Pengajar",
+    "alumno": "Siswa",
+    "auditor": "Auditor",
+    "empresa_manager": "Manajer"
+  },
+  "palette": {
+    "ariaLabel": "Cari dan navigasi",
+    "placeholder": "Cari bagian…",
+    "inputAriaLabel": "Cari bagian",
+    "noResults": "Tidak ada hasil"
+  },
+  "drawer": {
+    "ariaLabel": "Menu navigasi"
+  },
+  "tabBar": {
+    "ariaLabel": "Navigasi utama",
+    "feed": "Feed",
+    "cursos": "Kursus",
+    "miembros": "Anggota",
+    "perfil": "Profil",
+    "menu": "Menu"
+  },
+  "notifications": {
+    "title": "Notifikasi",
+    "unreadAria": "{count, plural, other {# notifikasi belum dibaca}}",
+    "unreadShort": "{count} belum dibaca",
+    "toastDefaultTitle": "Notifikasi baru",
+    "toastClose": "Tutup notifikasi"
+  },
+  "versionBanner": {
+    "label": "Versi baru:",
+    "view": "Lihat",
+    "dismiss": "Tutup pemberitahuan versi baru"
+  },
+  "dialog": {
+    "close": "Tutup",
+    "fallbackLabel": "Dialog"
+  },
+  "smtpBanner": {
+    "title": "Konfigurasikan notifikasi:",
+    "body": "tanpa server SMTP, pengguna Anda tidak akan menerima email apa pun.",
+    "cta": "Konfigurasikan"
+  },
+  "gettingStarted": {
+    "title": "Langkah awal",
+    "subtitle": "{done} dari {total} — kelengkapan yang dibutuhkan akademi Anda agar berjalan maksimal.",
+    "doneTitle": "Akademi Anda sudah siap!",
+    "doneBody": "Semua langkah awal telah selesai. Anda dapat menyembunyikan kartu ini.",
+    "dismiss": "Sembunyikan",
+    "item": {
+      "nombre": "Beri nama akademi Anda",
+      "marca": "Unggah logo Anda",
+      "curso": "Buat kursus pertama Anda",
+      "alumnos": "Undang siswa Anda",
+      "cobros": "Hubungkan pembayaran (Stripe)",
+      "correo": "Konfigurasikan email (SMTP)"
+    }
+  },
+  "supportAccessBanner": {
+    "title": "Akses dukungan sedang aktif.",
+    "body": "Tim dukungan sedang berada di dalam ruang ini. Alasan: {reason}",
+    "expired": "kedaluwarsa"
+  }
+}

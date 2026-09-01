@@ -1,0 +1,7 @@
+{
+  "notificationAction": {
+    "reply": "Balas",
+    "view": "Lihat"
+  },
+  "tenantFallbackName": "organisasi"
+}
