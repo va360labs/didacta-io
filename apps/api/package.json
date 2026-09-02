@@ -60,7 +60,7 @@
     "adm-zip": "^0.6.0",
     "argon2": "^0.41.1",
     "bullmq": "^5.76.2",
-    "fastify": "^5.10.0",
+    "fastify": "^5.12.1",
     "ioredis": "^5.10.1",
     "jose": "^5.9.6",
     "nestjs-pino": "^4.3.0",
