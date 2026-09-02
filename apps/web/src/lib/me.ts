@@ -198,6 +198,7 @@ const LOCALE_LABELS: Record<SupportedLocale, string> = {
   'es-AR': 'Español (Argentina)',
   'es-ES': 'Español (España)',
   'en-US': 'English (US)',
+  'id-ID': 'Bahasa Indonesia',
 };
 
 /**

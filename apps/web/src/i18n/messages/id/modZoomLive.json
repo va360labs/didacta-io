@@ -1,0 +1,47 @@
+{
+  "admin": {
+    "title": "Ruang kelas virtual · Zoom Server-to-Server",
+    "description": "Tempel kredensial OAuth Server-to-Server dari akun Zoom Anda. Kredensial disimpan dalam bentuk terenkripsi (AES-256-GCM) dan tidak pernah ditampilkan dalam teks biasa. Jika dikosongkan, modul akan menggunakan stub pengembangan.",
+    "accountId": "Account ID",
+    "clientId": "Client ID",
+    "clientSecret": "Client Secret",
+    "webhookSecret": "Webhook Secret Token",
+    "webhookSecretPlaceholder": "(biarkan kosong untuk mempertahankan yang sekarang)",
+    "webhookSecretHint": "«Secret Token» yang diberikan Zoom saat Anda menyiapkan webhook aplikasi, mengarah ke <code>https://domain-anda/api/v1/webhooks/zoom</code>. Tanpa ini, ruang kelas virtual tidak menerima acara mulai/selesai sesi.",
+    "saving": "Menyimpan…",
+    "save": "Simpan kredensial",
+    "testing": "Menguji…",
+    "test": "Uji kredensial",
+    "clear": "Hapus kredensial",
+    "clearConfirm": "Hapus kredensial Zoom S2S? Sesi baru akan beralih ke stub.",
+    "saved": "✓ Berhasil disimpan secara terenkripsi.",
+    "testOk": "✓ Kredensial valid. Terhubung ke akun Zoom {accountId}.",
+    "testStub": "⚠ Modul ini menggunakan stub lokal — belum ada kredensial asli yang dikonfigurasi.",
+    "testError": "✗ {message}"
+  },
+  "calendar": {
+    "title": "Tambahkan ke kalender",
+    "titleRegistered": "Anda sudah terdaftar!",
+    "description": "Simpan \"{topic}\" ke kalender Anda.",
+    "descriptionRegistered": "Anda telah terdaftar di \"{topic}\". Simpan ke kalender agar tidak terlewat.",
+    "footer": "Kami juga akan mengingatkan Anda melalui email 2 jam sebelum dimulai.",
+    "targets": {
+      "google": {
+        "label": "Google Calendar",
+        "hint": "Akun Gmail dan Workspace"
+      },
+      "outlook": {
+        "label": "Outlook.com",
+        "hint": "Akun pribadi Outlook atau Hotmail"
+      },
+      "office365": {
+        "label": "Outlook (Microsoft 365)",
+        "hint": "Akun kantor atau sekolah"
+      },
+      "ics": {
+        "label": "Apple Calendar dan lainnya",
+        "hint": "Unduh acara .ics dan buka dengan kalender Anda"
+      }
+    }
+  }
+}
