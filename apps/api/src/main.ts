@@ -199,10 +199,13 @@ async function bootstrap(): Promise<void> {
   });
 
   const port = Number(process.env['API_PORT'] ?? 4000);
-  await app.listen(port, '0.0.0.0');
+  // Bind host is configurable for local dev (loopback-only via API_HOST=127.0.0.1);
+  // the default keeps the historical 0.0.0.0 behavior.
+  const host = process.env['API_HOST'] ?? '0.0.0.0';
+  await app.listen(port, host);
 
   const logger = app.get(Logger);
-  logger.log(`Didacta API escuchando en http://localhost:${port}`);
+  logger.log(`Didacta API escuchando en http://${host === '0.0.0.0' ? 'localhost' : host}:${port}`);
   logger.log(`Docs OpenAPI: http://localhost:${port}/api/docs`);
 }
 
