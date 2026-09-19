@@ -57,7 +57,7 @@
     "@nestjs/swagger": "^11.4.6",
     "@node-saml/node-saml": "^5.0.1",
     "@willsoto/nestjs-prometheus": "^6.0.2",
-    "adm-zip": "^0.6.0",
+    "adm-zip": "^0.6.1",
     "argon2": "^0.41.1",
     "bullmq": "^5.76.2",
     "fastify": "^5.10.0",
