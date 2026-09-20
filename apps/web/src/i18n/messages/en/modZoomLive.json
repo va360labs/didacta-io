@@ -7,7 +7,7 @@
     "clientSecret": "Client Secret",
     "webhookSecret": "Webhook Secret Token",
     "webhookSecretPlaceholder": "(leave empty to keep the current one)",
-    "webhookSecretHint": "The \"Secret Token\" Zoom gives you when you set up your app's webhook, pointing at <code>https://your-domain/api/v1/webhooks/zoom</code>. Without it, the virtual classroom receives no meeting start/end events.",
+    "webhookSecretHint": "The \"Secret Token\" Zoom gives you when you set up your app's webhook, pointing at <code>https://your-domain/api/v1/webhooks/zoom</code>. Save it here BEFORE clicking \"Validate\" in Zoom: the validation request is signed with this token and, until it is saved, Didacta answers 401 and Zoom reports the URL as invalid. Without it, the virtual classroom receives no meeting start/end events.",
     "saving": "Saving…",
     "save": "Save credentials",
     "testing": "Testing…",
