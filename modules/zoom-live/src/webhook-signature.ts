@@ -76,3 +76,34 @@ const MS_THRESHOLD = 1e12;
 function toEpochMs(ts: number): number {
   return ts < MS_THRESHOLD ? ts * 1000 : ts;
 }
+
+/**
+ * Firma un body EXACTAMENTE como lo haría Zoom (`v0:{ts}:{rawBody}` con el
+ * Secret Token, timestamp en segundos). Es el espejo de `verifyZoomSignature`
+ * y sirve para que Didacta pueda llamarse a sí misma por su URL pública y
+ * comprobar, sin pasar por Zoom, que el webhook validaría.
+ */
+export function signZoomWebhook(opts: {
+  rawBody: string;
+  secret: string;
+  /** Epoch en segundos; default ahora. */
+  timestampSeconds?: number;
+}): { 'x-zm-signature': string; 'x-zm-request-timestamp': string } {
+  const ts = String(opts.timestampSeconds ?? Math.floor(Date.now() / 1000));
+  const digest = createHmac('sha256', opts.secret).update(`v0:${ts}:${opts.rawBody}`).digest('hex');
+  return { 'x-zm-signature': `v0=${digest}`, 'x-zm-request-timestamp': ts };
+}
+
+/**
+ * Respuesta al handshake `endpoint.url_validation`: Zoom manda `plainToken` y
+ * espera recibirlo de vuelta junto a su HMAC-SHA256 hex con el Secret Token.
+ */
+export function buildUrlValidationResponse(
+  plainToken: string,
+  secret: string,
+): { plainToken: string; encryptedToken: string } {
+  return {
+    plainToken,
+    encryptedToken: createHmac('sha256', secret).update(plainToken).digest('hex'),
+  };
+}

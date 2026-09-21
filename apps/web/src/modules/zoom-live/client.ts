@@ -89,6 +89,17 @@ export interface ZoomWebhookEventItem {
   errorMessage: string | null;
 }
 
+/** Resultado de la autocomprobación del webhook (ver `zoom-webhook-selftest.ts` en la API). */
+export type WebhookSelftestResult =
+  | { ok: true; url: string }
+  | {
+      ok: false;
+      url: string;
+      reason: 'no_secret' | 'unreachable' | 'rejected' | 'bad_response';
+      status?: number;
+      detail?: string;
+    };
+
 export interface PaginatedWebhookEvents {
   items: ZoomWebhookEventItem[];
   total: number;
@@ -260,6 +271,19 @@ export const zoomLiveApi = {
   async testCredentials(): Promise<{ kind: 'real' | 'stub'; accountId: string }> {
     return apiFetch<{ kind: 'real' | 'stub'; accountId: string }>(
       '/api/v1/modules/zoom-live/test-credentials',
+      { method: 'POST', body: '{}' },
+      withAuth(),
+    );
+  },
+
+  /**
+   * Didacta se llama a sí misma por su URL pública con el handshake de Zoom
+   * firmado con el Secret Token guardado. Siempre resuelve (200): el motivo
+   * del fallo viaja en `reason`, no como excepción.
+   */
+  async testWebhook(): Promise<WebhookSelftestResult> {
+    return apiFetch<WebhookSelftestResult>(
+      '/api/v1/modules/zoom-live/test-webhook',
       { method: 'POST', body: '{}' },
       withAuth(),
     );

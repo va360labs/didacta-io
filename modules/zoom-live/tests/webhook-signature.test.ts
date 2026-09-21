@@ -1,6 +1,10 @@
 import { createHmac } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
-import { verifyZoomSignature } from '../src/webhook-signature.js';
+import {
+  buildUrlValidationResponse,
+  signZoomWebhook,
+  verifyZoomSignature,
+} from '../src/webhook-signature.js';
 
 const SECRET = 'test-webhook-secret';
 
@@ -145,5 +149,42 @@ describe('verifyZoomSignature', () => {
       now: () => NOW,
     });
     expect(ok).toBe(false);
+  });
+});
+
+describe('signZoomWebhook / buildUrlValidationResponse', () => {
+  it('lo que firma signZoomWebhook lo acepta verifyZoomSignature (espejo exacto)', () => {
+    const rawBody = JSON.stringify({
+      event: 'endpoint.url_validation',
+      payload: { plainToken: 'p' },
+    });
+    const headers = signZoomWebhook({ rawBody, secret: 'abc' });
+    expect(headers['x-zm-signature']).toMatch(/^v0=[0-9a-f]{64}$/);
+    expect(headers['x-zm-request-timestamp']).toMatch(/^\d{10}$/);
+    expect(
+      verifyZoomSignature({
+        signatureHeader: headers['x-zm-signature'],
+        timestampHeader: headers['x-zm-request-timestamp'],
+        rawBody,
+        secret: 'abc',
+      }),
+    ).toBe(true);
+    // Control: con otro secret la misma firma no vale.
+    expect(
+      verifyZoomSignature({
+        signatureHeader: headers['x-zm-signature'],
+        timestampHeader: headers['x-zm-request-timestamp'],
+        rawBody,
+        secret: 'otro',
+      }),
+    ).toBe(false);
+  });
+
+  it('buildUrlValidationResponse devuelve el HMAC hex del plainToken con el secret', () => {
+    const expected = createHmac('sha256', 'abc').update('tok').digest('hex');
+    expect(buildUrlValidationResponse('tok', 'abc')).toEqual({
+      plainToken: 'tok',
+      encryptedToken: expected,
+    });
   });
 });

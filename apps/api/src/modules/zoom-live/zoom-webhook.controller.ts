@@ -14,7 +14,11 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
-import { verifyZoomSignature, webhookEventSchema } from '@didacta/mod-zoom-live';
+import {
+  buildUrlValidationResponse,
+  verifyZoomSignature,
+  webhookEventSchema,
+} from '@didacta/mod-zoom-live';
 import type { FastifyRequest } from 'fastify';
 import {
   runAsTenantOrSanctioned,
@@ -114,9 +118,7 @@ export class ZoomWebhookController {
     ) {
       const plainToken = (parsed as { payload?: { plainToken?: string } }).payload?.plainToken;
       if (!plainToken) throw new BadRequestException('plainToken requerido para validation.');
-      const { createHmac } = await import('node:crypto');
-      const encryptedToken = createHmac('sha256', secret).update(plainToken).digest('hex');
-      return { plainToken, encryptedToken };
+      return buildUrlValidationResponse(plainToken, secret);
     }
 
     const result = webhookEventSchema.safeParse(parsed);

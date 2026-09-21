@@ -17,7 +17,20 @@
     "saved": "✓ Saved encrypted.",
     "testOk": "✓ Credentials are valid. Linked to Zoom account {accountId}.",
     "testStub": "⚠ The module is using the local stub — no real credentials are configured yet.",
-    "testError": "✗ {message}"
+    "testError": "✗ {message}",
+    "webhookTitle": "Zoom webhook",
+    "webhookUrlLabel": "URL to paste in Zoom (Event Subscriptions → Event notification endpoint URL)",
+    "webhookCopy": "Copy",
+    "webhookCopied": "✓ Copied",
+    "webhookTest": "Check webhook",
+    "webhookTesting": "Checking…",
+    "webhookOk": "✓ The webhook answers correctly at {url}. You can now click \"Validate\" in Zoom.",
+    "webhookNoSecret": "✗ No Secret Token saved yet. Paste it above and save the credentials; until then Zoom gets a 401 and reports the URL as invalid.",
+    "webhookUnreachable": "✗ Could not connect to {url} ({detail}). Check DNS, the certificate and that the proxy publishes that domain.",
+    "webhookRejected": "✗ {url} answered {status}: {detail}",
+    "webhookRejectedNoDetail": "✗ {url} answered {status}.",
+    "webhookBadResponse": "✗ {url} answered 2xx but not with Zoom's handshake: something in front of Didacta (proxy, maintenance page) is replying instead.",
+    "webhookError": "✗ {message}"
   },
   "calendar": {
     "title": "Add to calendar",

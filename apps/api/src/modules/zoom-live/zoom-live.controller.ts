@@ -15,6 +15,7 @@ import {
   Post,
   Put,
   Query,
+  Req,
   UnauthorizedException,
   UseGuards,
 } from '@nestjs/common';
@@ -30,13 +31,16 @@ import {
   type SetManualAttendanceDto,
   type UpdateSessionDto,
 } from '@didacta/mod-zoom-live';
+import type { FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { CurrentUser } from '../../auth/decorators';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { ZodValidationPipe } from '../../auth/zod-validation.pipe';
 import type { SessionClaims } from '../../auth/token.service';
+import { TenantResolverService } from '../../tenancy/tenant-resolver.service';
 import { ModuleRegistryService } from '../module-registry.service';
 import { ZoomReminderWorker } from './zoom-reminder.worker';
+import { runZoomWebhookSelftest, type WebhookSelftestResult } from './zoom-webhook-selftest';
 
 const ADMIN_ROLES = new Set(['super_admin', 'tenant_admin', 'formador']);
 
@@ -77,6 +81,7 @@ export class ZoomLiveController {
   constructor(
     private readonly registry: ModuleRegistryService,
     private readonly reminderWorker: ZoomReminderWorker,
+    private readonly tenantResolver: TenantResolverService,
   ) {}
 
   /** Gating de staff (formador/admin) con el motivo en el mensaje. */
@@ -302,6 +307,33 @@ export class ZoomLiveController {
       });
     }
     return this.registry.getZoomLiveService().testCredentials(user.tenantId);
+  }
+
+  @Post('test-webhook')
+  @HttpCode(200)
+  @ApiOperation({
+    summary:
+      'Autocomprobación del webhook de Zoom: Didacta se llama a sí misma por su URL pública con el handshake `endpoint.url_validation` firmado con el Secret Token del tenant. Siempre 200 con `{ ok, url, reason?, status?, detail? }`: el motivo del fallo es el dato, no una excepción.',
+  })
+  async testWebhook(
+    @CurrentUser() user: SessionClaims | undefined,
+    @Req() req: FastifyRequest,
+  ): Promise<WebhookSelftestResult> {
+    if (!user) throw new UnauthorizedException();
+    const allowed = new Set(['super_admin', 'tenant_admin']);
+    if (!user.roles.some((r) => allowed.has(r))) {
+      throw new ForbiddenException({
+        message: 'Solo administradores pueden probar el webhook de Zoom.',
+        code: 'ZOOM_LIVE_TEST_WEBHOOK_FORBIDDEN',
+      });
+    }
+    // La URL sale del dominio primario verificado del tenant (o del
+    // despliegue), no de lo que teclee el admin: no es un fetch a URL libre.
+    const [webBaseUrl, secret] = await Promise.all([
+      this.tenantResolver.resolveTenantWebBaseUrl(user.tenantId, req),
+      this.registry.getZoomLiveService().getWebhookSecret(user.tenantId),
+    ]);
+    return runZoomWebhookSelftest({ webBaseUrl, secret });
   }
 
   @Post('admin/reminders/run')

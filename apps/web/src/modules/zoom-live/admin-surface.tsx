@@ -15,19 +15,21 @@
 /// igual que el resto de módulos core in-tree (community, payment-connections…).
 
 import { useTranslations } from 'next-intl';
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { apiErrorMessage } from '@/lib/i18n/api-error';
-import { zoomLiveApi } from './client';
+import { zoomLiveApi, type WebhookSelftestResult } from './client';
 
 type TestStatus =
   | 'idle'
   | 'testing'
   | { kind: 'real' | 'stub'; accountId: string }
   | { error: string };
+
+type WebhookStatus = 'idle' | 'testing' | WebhookSelftestResult | { error: string };
 
 export function ZoomAdminSurface() {
   const t = useTranslations('modZoomLive');
@@ -41,6 +43,15 @@ export function ZoomAdminSurface() {
   const [status, setStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [errMsg, setErrMsg] = useState<string | null>(null);
   const [testStatus, setTestStatus] = useState<TestStatus>('idle');
+  const [webhookStatus, setWebhookStatus] = useState<WebhookStatus>('idle');
+  const [copied, setCopied] = useState(false);
+  // La URL que hay que pegar en Zoom es la de ESTA aula: el origen desde el
+  // que el admin la está mirando. Se calcula en cliente (no en SSR) para no
+  // pintar `localhost` en el HTML del servidor.
+  const [webhookUrl, setWebhookUrl] = useState('');
+  useEffect(() => {
+    setWebhookUrl(`${window.location.origin}/api/v1/webhooks/zoom`);
+  }, []);
 
   async function handleSave(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -86,6 +97,41 @@ export function ZoomAdminSurface() {
       setTestStatus(res);
     } catch (e) {
       setTestStatus({ error: apiErrorMessage(e, tErrors) });
+    }
+  }
+
+  async function handleCopy() {
+    try {
+      await navigator.clipboard.writeText(webhookUrl);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // Sin permiso de portapapeles: el campo es seleccionable a mano.
+    }
+  }
+
+  async function handleTestWebhook() {
+    setWebhookStatus('testing');
+    try {
+      setWebhookStatus(await zoomLiveApi.testWebhook());
+    } catch (e) {
+      setWebhookStatus({ error: apiErrorMessage(e, tErrors) });
+    }
+  }
+
+  function webhookMessage(r: WebhookSelftestResult): string {
+    if (r.ok) return t('admin.webhookOk', { url: r.url });
+    switch (r.reason) {
+      case 'no_secret':
+        return t('admin.webhookNoSecret');
+      case 'unreachable':
+        return t('admin.webhookUnreachable', { url: r.url, detail: r.detail ?? '' });
+      case 'rejected':
+        return r.detail
+          ? t('admin.webhookRejected', { url: r.url, status: r.status ?? '', detail: r.detail })
+          : t('admin.webhookRejectedNoDetail', { url: r.url, status: r.status ?? '' });
+      case 'bad_response':
+        return t('admin.webhookBadResponse', { url: r.url });
     }
   }
 
@@ -181,6 +227,55 @@ export function ZoomAdminSurface() {
             </div>
           ) : null}
         </form>
+
+        <div className="mt-6 space-y-3 border-t border-border pt-6">
+          <h3 className="text-sm font-semibold">{t('admin.webhookTitle')}</h3>
+          <div className="space-y-1.5">
+            <Label htmlFor="zoom-webhook-url">{t('admin.webhookUrlLabel')}</Label>
+            <div className="flex flex-wrap items-center gap-2">
+              <Input
+                id="zoom-webhook-url"
+                readOnly
+                value={webhookUrl}
+                onFocus={(e) => e.currentTarget.select()}
+                className="font-mono sm:max-w-md"
+              />
+              <Button type="button" variant="secondary" size="sm" onClick={handleCopy}>
+                {copied ? t('admin.webhookCopied') : t('admin.webhookCopy')}
+              </Button>
+            </div>
+          </div>
+          <div className="flex flex-wrap items-center gap-3">
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={handleTestWebhook}
+              disabled={webhookStatus === 'testing'}
+            >
+              {webhookStatus === 'testing' ? t('admin.webhookTesting') : t('admin.webhookTest')}
+            </Button>
+          </div>
+          {typeof webhookStatus === 'object' && 'ok' in webhookStatus ? (
+            <div
+              role="status"
+              className={
+                webhookStatus.ok
+                  ? 'rounded-lg border border-success-100 bg-success-50 p-3 text-sm text-success-700'
+                  : 'rounded-lg border border-danger-100 bg-danger-50 p-3 text-sm text-danger-700'
+              }
+            >
+              {webhookMessage(webhookStatus)}
+            </div>
+          ) : null}
+          {typeof webhookStatus === 'object' && 'error' in webhookStatus ? (
+            <div
+              role="status"
+              className="rounded-lg border border-danger-100 bg-danger-50 p-3 text-sm text-danger-700"
+            >
+              {t('admin.webhookError', { message: webhookStatus.error })}
+            </div>
+          ) : null}
+        </div>
       </CardContent>
     </Card>
   );

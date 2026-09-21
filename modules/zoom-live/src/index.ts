@@ -44,7 +44,11 @@ export {
   ZoomApiError,
   ZoomLiveError,
 } from './errors.js';
-export { verifyZoomSignature } from './webhook-signature.js';
+export {
+  buildUrlValidationResponse,
+  signZoomWebhook,
+  verifyZoomSignature,
+} from './webhook-signature.js';
 export {
   buildGoogleCalendarUrl,
   buildIcsEvent,

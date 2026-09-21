@@ -17,7 +17,20 @@
     "saved": "✓ Guardado cifrado.",
     "testOk": "✓ Credenciales válidas. Vinculado a la cuenta Zoom {accountId}.",
     "testStub": "⚠ El módulo está usando el stub local — no hay credenciales reales configuradas todavía.",
-    "testError": "✗ {message}"
+    "testError": "✗ {message}",
+    "webhookTitle": "Webhook de Zoom",
+    "webhookUrlLabel": "URL a pegar en Zoom (Event Subscriptions → Event notification endpoint URL)",
+    "webhookCopy": "Copiar",
+    "webhookCopied": "✓ Copiada",
+    "webhookTest": "Comprobar webhook",
+    "webhookTesting": "Comprobando…",
+    "webhookOk": "✓ El webhook responde bien en {url}. Ya puedes pulsar «Validate» en Zoom.",
+    "webhookNoSecret": "✗ Aún no hay Secret Token guardado. Pégalo arriba y guarda las credenciales; hasta entonces Zoom recibirá un 401 y dará la URL por inválida.",
+    "webhookUnreachable": "✗ No se pudo conectar con {url} ({detail}). Revisa DNS, certificado y que el proxy publique ese dominio.",
+    "webhookRejected": "✗ {url} respondió {status}: {detail}",
+    "webhookRejectedNoDetail": "✗ {url} respondió {status}.",
+    "webhookBadResponse": "✗ {url} contestó 2xx pero no con el handshake de Zoom: algo delante de Didacta (proxy, página de mantenimiento) está respondiendo en su lugar.",
+    "webhookError": "✗ {message}"
   },
   "calendar": {
     "title": "Añadir al calendario",
