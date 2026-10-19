@@ -5,6 +5,7 @@
 
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { MEMBERSHIP_LIVE_STATUSES } from '@didacta/mod-subscriptions';
+import type { Prisma } from '@didacta/database';
 import { Logger as PinoLogger } from 'nestjs-pino';
 import { ModuleRegistryService } from '../modules/module-registry.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -20,7 +21,10 @@ import type {
   IntegrationExternalOrder,
   IntegrationLearnerOrders,
   IntegrationTenantTotals,
+  IntegrationSubscription,
+  IntegrationSubscriptionList,
   LearnerOrdersQuery,
+  ListSubscriptionsQuery,
   ListCoursesQuery,
   UpsertExternalOrderDto,
 } from './integrations.dto';
@@ -806,6 +810,64 @@ export class IntegrationsService {
       placedAt: row.placedAt.toISOString(),
       refundedAt: row.refundedAt?.toISOString() ?? null,
       linkedToUser: row.userId !== null,
+    };
+  }
+
+  /**
+   * Las suscripciones que mod.payment-connections lee de las pasarelas, para
+   * que un CRM tenga en cada ficha el plan, el estado, el importe y la fecha de
+   * renovación reales. Lee la tabla materializada que refresca el sync cada 15
+   * minutos; no llama a ninguna pasarela.
+   *
+   * Orden estable por `updatedAt, id` para que paginar con `offset` mientras el
+   * sync escribe no salte filas de forma sistemática; quien sincroniza vuelve a
+   * pasar con `updatedSince` y recoge lo que se moviera.
+   */
+  async listSubscriptions(
+    tenantId: string,
+    query: ListSubscriptionsQuery,
+  ): Promise<IntegrationSubscriptionList> {
+    const where: Prisma.ModPaymentConnectionsSubscriberWhereInput = { tenantId };
+    if (query.updatedSince) {
+      const desde = new Date(query.updatedSince);
+      where.OR = [{ updatedAt: { gte: desde } }, { lastSeenAt: { gte: desde } }];
+    }
+    const [rows, total, ultima] = await Promise.all([
+      this.prisma.modPaymentConnectionsSubscriber.findMany({
+        where,
+        orderBy: [{ updatedAt: 'asc' }, { id: 'asc' }],
+        take: query.limit,
+        skip: query.offset,
+      }),
+      this.prisma.modPaymentConnectionsSubscriber.count({ where }),
+      this.prisma.modPaymentConnectionsSubscriber.aggregate({
+        where: { tenantId },
+        _max: { lastSeenAt: true },
+      }),
+    ]);
+    const items: IntegrationSubscription[] = rows.map((r) => ({
+      id: r.id,
+      provider: r.provider,
+      subscriptionId: r.subscriptionId,
+      email: r.userEmail,
+      userId: r.userId,
+      status: r.status,
+      statusCategory: r.statusCategory,
+      entitled: r.entitled,
+      productName: r.productName,
+      unitAmount: r.unitAmount,
+      currency: r.currency,
+      interval: r.interval,
+      currentPeriodEnd: r.currentPeriodEnd?.toISOString() ?? null,
+      lastSeenAt: r.lastSeenAt.toISOString(),
+      updatedAt: r.updatedAt.toISOString(),
+    }));
+    return {
+      items,
+      total,
+      limit: query.limit,
+      offset: query.offset,
+      lastSyncAt: ultima._max.lastSeenAt?.toISOString() ?? null,
     };
   }
 }

@@ -111,6 +111,8 @@ function KeysTab() {
         return t('keys.scopeOrdersWrite');
       case 'orders:read':
         return t('keys.scopeOrdersRead');
+      case 'subscriptions:read':
+        return t('keys.scopeSubscriptionsRead');
       default:
         return scope;
     }

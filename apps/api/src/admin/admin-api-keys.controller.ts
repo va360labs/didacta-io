@@ -38,6 +38,10 @@ import { PrismaAuditLogService } from '../modules/prisma-audit-log.service';
  * `enrollments:read` va aparte de `enrollments:write` porque permite consultar
  * el estado de CUALQUIER email del tenant: quien solo necesita pintar una
  * ficha de venta no tiene por qué poder matricular, y al revés.
+ *
+ * `subscriptions:read` da la lista de suscripciones que lee mod.payment-connections
+ * de las pasarelas (plan, estado, importe, fin de periodo). Va aparte porque
+ * es dato de dinero de todo el tenant: lo necesita un CRM, no una ficha de venta.
  */
 export const ALLOWED_API_KEY_SCOPES = [
   'enrollments:write',
@@ -46,6 +50,7 @@ export const ALLOWED_API_KEY_SCOPES = [
   'community:post',
   'orders:write',
   'orders:read',
+  'subscriptions:read',
 ] as const;
 
 const createSchema = z.object({

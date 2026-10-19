@@ -378,3 +378,54 @@ export interface IntegrationLearnerOrders {
    */
   orders: IntegrationExternalOrder[];
 }
+
+// ─── Suscripciones (GET /integrations/subscriptions) ─────────────────────────
+
+/**
+ * Paginación por `offset` y filtro opcional `updatedSince` para que quien
+ * sincroniza (un CRM) pueda traer solo lo que cambió desde su última pasada.
+ */
+export const listSubscriptionsQuerySchema = z.object({
+  /** Solo las filas que cambiaron (o se vieron por última vez) desde esta fecha. */
+  updatedSince: z.string().datetime().optional(),
+  limit: z.coerce.number().int().min(1).max(500).default(200),
+  offset: z.coerce.number().int().min(0).default(0),
+});
+export type ListSubscriptionsQuery = z.infer<typeof listSubscriptionsQuerySchema>;
+
+/**
+ * Una suscripción tal y como la ve mod.payment-connections en la pasarela.
+ *
+ * No hay fecha de baja: la pasarela deja de devolverla y el sync la marca
+ * `statusCategory: 'canceled'` sin tocar `lastSeenAt`, que queda como la mejor
+ * aproximación de cuándo se fue. `currentPeriodEnd` solo viene fiable en Stripe.
+ */
+export interface IntegrationSubscription {
+  id: string;
+  provider: string;
+  subscriptionId: string;
+  email: string;
+  /** Usuario de Didacta con ese email, o null si aún no tiene cuenta. */
+  userId: string | null;
+  status: string;
+  statusCategory: string;
+  /** Si hoy le da derecho a acceso. */
+  entitled: boolean;
+  productName: string | null;
+  /** En céntimos. */
+  unitAmount: number | null;
+  currency: string | null;
+  interval: string | null;
+  currentPeriodEnd: string | null;
+  lastSeenAt: string;
+  updatedAt: string;
+}
+
+export interface IntegrationSubscriptionList {
+  items: IntegrationSubscription[];
+  total: number;
+  limit: number;
+  offset: number;
+  /** Cuándo corrió por última vez el sync con las pasarelas (frescura del dato). */
+  lastSyncAt: string | null;
+}

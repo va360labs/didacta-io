@@ -84,6 +84,12 @@ const ENDPOINTS = [
     whatKey: 'docs.whatLearnerOrders',
   },
   {
+    method: 'GET',
+    path: '/api/v1/integrations/subscriptions',
+    scope: 'subscriptions:read',
+    whatKey: 'docs.whatSubscriptions',
+  },
+  {
     method: 'POST',
     path: '/api/v1/community-api/posts',
     scope: 'community:post',

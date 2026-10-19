@@ -15,6 +15,7 @@ export const API_KEY_SCOPES = [
   'community:post',
   'orders:write',
   'orders:read',
+  'subscriptions:read',
 ] as const;
 export type ApiKeyScope = (typeof API_KEY_SCOPES)[number];
 

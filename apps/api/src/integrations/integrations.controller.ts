@@ -34,10 +34,12 @@ import {
   learnerOrdersQuerySchema,
   learnerStateQuerySchema,
   listCoursesQuerySchema,
+  listSubscriptionsQuerySchema,
   upsertExternalOrderSchema,
   type LearnerOrdersQuery,
   type LearnerStateQuery,
   type ListCoursesQuery,
+  type ListSubscriptionsQuery,
   type UpsertExternalOrderDto,
 } from './integrations.dto';
 import { IntegrationsService } from './integrations.service';
@@ -266,5 +268,32 @@ export class IntegrationsController {
   ) {
     if (!user) throw new UnauthorizedException();
     return this.service.listLearnerOrders(user.tenantId, query);
+  }
+
+  @Get('subscriptions')
+  @RequireApiScopes('subscriptions:read')
+  @ApiOperation({
+    summary: 'Suscripciones del tenant leídas de las pasarelas (plan, estado, importe, renovación)',
+    description:
+      'Lo que mod.payment-connections ha leído de Stripe, PayPal y WooCommerce, tal y como lo ' +
+      'enseña el panel de suscripciones. Pensado para que un CRM sincronice: pagina con ' +
+      '`limit`/`offset` y, en las pasadas siguientes, pide solo lo que cambió con `updatedSince`. ' +
+      'No hay fecha de baja: una suscripción que la pasarela deja de devolver queda en ' +
+      '`statusCategory: canceled` y su `lastSeenAt` es la mejor aproximación de cuándo se fue. ' +
+      '`currentPeriodEnd` solo es fiable en Stripe. Requiere scope `subscriptions:read`, ' +
+      'separado de los demás porque expone dinero de todo el tenant.',
+  })
+  @ApiQuery({ name: 'updatedSince', required: false, example: '2026-10-19T00:00:00.000Z' })
+  @ApiQuery({ name: 'limit', required: false, example: 200 })
+  @ApiQuery({ name: 'offset', required: false, example: 0 })
+  @ApiResponse({ status: 200, description: 'Una página de suscripciones y el total.' })
+  @ApiResponse({ status: 401, description: 'API key ausente, inválida, expirada o revocada.' })
+  @ApiResponse({ status: 403, description: 'La API key no tiene el scope `subscriptions:read`.' })
+  async listSubscriptions(
+    @CurrentUser() user: SessionClaims | undefined,
+    @Query(new ZodValidationPipe(listSubscriptionsQuerySchema)) query: ListSubscriptionsQuery,
+  ) {
+    if (!user) throw new UnauthorizedException();
+    return this.service.listSubscriptions(user.tenantId, query);
   }
 }
