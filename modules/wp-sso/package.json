@@ -28,7 +28,7 @@
   "dependencies": {
     "@didacta/core-kernel": "workspace:*",
     "jose": "^5.9.6",
-    "zod": "^3.24.1"
+    "zod": "^4.6.6"
   },
   "devDependencies": {
     "@didacta/core-registry": "workspace:*",
