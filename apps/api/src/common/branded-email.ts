@@ -46,7 +46,7 @@ export interface EmailBranding {
  * queremos arrastrar el catálogo (que a su vez importa un paquete de módulo) a
  * cada test que renderice un email. Un test aserta que las dos listas coinciden.
  */
-export type EmailLang = 'es' | 'en';
+export type EmailLang = 'es' | 'en' | 'pt';
 
 export interface BrandedEmailContent {
   /**

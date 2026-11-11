@@ -23,6 +23,7 @@ import {
   emailGreeting,
   interpolate,
   resolveFixedEmailCopy,
+  rendersFromCatalog,
   resolveTransactionalDefault,
   toHubTemplateLang,
   type FixedEmailCopyKey,
@@ -94,8 +95,8 @@ export function buildOtpEmail(
     return { subject: applied.subject, text, html };
   }
 
-  if (toHubTemplateLang(locale) === 'en') {
-    // El inglés se renderiza DESDE el catálogo (misma mecánica que un
+  if (rendersFromCatalog(locale)) {
+    // Las traducciones se renderizan DESDE el catálogo (misma mecánica que un
     // override) para que composer y catálogo no puedan divergir. El español
     // conserva su maqueta HTML propia más abajo, byte a byte.
     const bodyText = interpolate(def.body, vars);
@@ -422,7 +423,7 @@ export function buildWelcomeEmail(
     return { subject: applied.subject, text, html };
   }
 
-  if (toHubTemplateLang(locale) === 'en') {
+  if (rendersFromCatalog(locale)) {
     const bodyText = interpolate(def.body, vars);
     const { html, text } = renderBrandedEmail(branding, {
       lang: toHubTemplateLang(locale),
@@ -476,7 +477,7 @@ export function buildRejectionEmail(
     return { subject: applied.subject, text, html };
   }
 
-  if (toHubTemplateLang(locale) === 'en') {
+  if (rendersFromCatalog(locale)) {
     const bodyText = interpolate(def.body, vars);
     const { html, text } = renderBrandedEmail(branding, {
       lang: toHubTemplateLang(locale),

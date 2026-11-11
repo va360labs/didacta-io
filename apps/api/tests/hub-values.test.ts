@@ -31,6 +31,7 @@ import { PrismaNotificationHubService } from '../src/modules/prisma-notification
 
 const ES = 'es-ES';
 const EN = 'en-US';
+const PT = 'pt-BR';
 
 /**
  * Las DOS implementaciones que había cableadas en los emisores, copiadas tal
@@ -127,16 +128,38 @@ describe('hub-values · fechas', () => {
     expect(resolveNotificationValue(value, ES)).toContain('17:00');
   });
 
-  it('un locale sin catálogo (pt-BR, alcanzable HOY) cae al de referencia', () => {
-    // `ALLOWED_LOCALES` de me.controller.ts admite pt-BR pero no hay catálogo:
-    // se formatea en español, igual que el resto del producto.
+  it('pt-BR: mes y día de la semana en portugués, reloj de 24 h', () => {
+    // Antes este test afirmaba lo contrario («pt-BR cae al de referencia»):
+    // el destinatario brasileño leía «14 de marzo» y «sábado» en español.
+    const datetime: NotificationValue = {
+      hubValue: 'date',
+      iso,
+      timeZone: 'America/Sao_Paulo',
+      format: 'datetime',
+    };
+    const portuguese = resolveNotificationValue(datetime, PT);
+    expect(portuguese).toContain('14 de março de 2026');
+    expect(portuguese).toContain('14:00');
+    expect(portuguese).not.toContain('marzo');
+    expect(portuguese).not.toContain('PM');
+    // Control: el mismo valor en español NO es el mismo texto.
+    expect(portuguese).not.toBe(resolveNotificationValue(datetime, ES));
+
+    const weekday: NotificationValue = { ...datetime, format: 'weekday_datetime' };
+    // «sábado» se escribe igual en los dos idiomas: lo que distingue es el mes.
+    expect(resolveNotificationValue(weekday, PT)).toContain('sábado, 14 de março');
+  });
+
+  it('un locale sin catálogo (fr-FR, alcanzable por SCIM) cae al de referencia', () => {
+    // SCIM copia el locale del IdP sin validar: se formatea en español, igual
+    // que el resto del producto.
     const value: NotificationValue = {
       hubValue: 'date',
       iso,
       timeZone: 'Europe/Madrid',
       format: 'datetime',
     };
-    expect(resolveNotificationValue(value, 'pt-BR')).toBe(resolveNotificationValue(value, ES));
+    expect(resolveNotificationValue(value, 'fr-FR')).toBe(resolveNotificationValue(value, ES));
   });
 
   it('CAMINO DEGRADADO: ISO ilegible → se manda tal cual, no se pierde el aviso', () => {
@@ -169,6 +192,16 @@ describe('hub-values · importes', () => {
     expect(resolveNotificationValue(value, EN)).toBe('€1,234.50');
   });
 
+  it('pt-BR: coma decimal como el español, pero símbolo DELANTE y punto de millar', () => {
+    // NBSP explícito entre símbolo e importe: es lo que mete `Intl`.
+    const eur: NotificationValue = { hubValue: 'money', cents: 123450, currency: 'eur' };
+    expect(resolveNotificationValue(eur, PT)).toBe('€ 1.234,50');
+    const brl: NotificationValue = { hubValue: 'money', cents: 123450, currency: 'brl' };
+    expect(resolveNotificationValue(brl, PT)).toBe('R$ 1.234,50');
+    // Control: no es el formato español con otro nombre.
+    expect(resolveNotificationValue(eur, PT)).not.toBe(resolveNotificationValue(eur, ES));
+  });
+
   it('la moneda se normaliza a mayúsculas (el evento la trae en minúsculas)', () => {
     const lower: NotificationValue = { hubValue: 'money', cents: 1000, currency: 'usd' };
     const upper: NotificationValue = { hubValue: 'money', cents: 1000, currency: 'USD' };
@@ -182,8 +215,10 @@ describe('hub-values · importes', () => {
 });
 
 describe('hub-values · términos', () => {
-  it('los dos idiomas declaran EXACTAMENTE los mismos términos', () => {
-    expect(Object.keys(HUB_TERMS.en).sort()).toEqual(Object.keys(HUB_TERMS.es).sort());
+  it('todos los idiomas declaran EXACTAMENTE los mismos términos', () => {
+    for (const lang of HUB_TEMPLATE_LANGS) {
+      expect(Object.keys(HUB_TERMS[lang]).sort(), lang).toEqual(Object.keys(HUB_TERMS.es).sort());
+    }
     expect(Object.keys(HUB_TERMS)).toEqual([...HUB_TEMPLATE_LANGS]);
   });
 
@@ -195,12 +230,23 @@ describe('hub-values · términos', () => {
     }
   });
 
-  it('los dos idiomas interpolan los MISMOS placeholders', () => {
-    // Un término inglés que pierda `{{perkTitle}}` deja el email sin el nombre
-    // del beneficio y nadie lo ve hasta que alguien lo lee en inglés.
+  it('todos los idiomas interpolan los MISMOS placeholders', () => {
+    // Un término traducido que pierda `{{perkTitle}}` deja el email sin el
+    // nombre del beneficio y nadie lo ve hasta que alguien lo lee en ese idioma.
     const vars = (text: string) => [...text.matchAll(/\{\{(\w+)\}\}/g)].map((m) => m[1]).sort();
+    for (const lang of HUB_TEMPLATE_LANGS) {
+      for (const term of Object.keys(HUB_TERMS.es) as NotificationTerm[]) {
+        expect(vars(HUB_TERMS[lang][term]), `${lang}/${term}`).toEqual(vars(HUB_TERMS.es[term]));
+      }
+    }
+  });
+
+  it('el portugués no es el español copiado: solo coincide donde se escribe igual', () => {
+    // Lengua hermana: «aprobado/aprovado» difieren, pero un término sin traducir
+    // pasaría por bueno a simple vista. Se declara lo que coincide, que es nada.
     for (const term of Object.keys(HUB_TERMS.es) as NotificationTerm[]) {
-      expect(vars(HUB_TERMS.en[term]), `${term}`).toEqual(vars(HUB_TERMS.es[term]));
+      expect(HUB_TERMS.pt[term], `${term} sin traducir`).not.toBe(HUB_TERMS.es[term]);
+      expect(HUB_TERMS.pt[term], `${term} en inglés`).not.toBe(HUB_TERMS.en[term]);
     }
   });
 
@@ -236,11 +282,17 @@ describe('hub-values · términos', () => {
     const english = resolveNotificationValue(value, EN);
     expect(english).toContain('Sesión 1:1');
     expect(english).not.toContain('Hemos aprobado');
+    expect(resolveNotificationValue(value, PT)).toBe(
+      'Aprovamos sua solicitação de "Sesión 1:1". Vamos escrever para você para combinar os detalhes.',
+    );
   });
 
   it('resolveHubTerm sin vars devuelve el texto tal cual', () => {
     expect(resolveHubTerm('quiz.result.passed', ES)).toBe('aprobado');
     expect(resolveHubTerm('quiz.result.passed', EN)).toBe('passed');
+    // Una letra de diferencia con el español: «aprovado», con «v».
+    expect(resolveHubTerm('quiz.result.passed', PT)).toBe('aprovado');
+    expect(resolveHubTerm('quiz.result.not_passed', PT)).toBe('não aprovado');
   });
 });
 
@@ -360,6 +412,18 @@ describe('el hub formatea con el idioma del DESTINATARIO, no con el del emisor',
     expect(row.body).not.toContain('aprobado');
   });
 
+  it('un destinatario pt-BR recibe la frase Y el dato en portugués', async () => {
+    // De punta a punta por el hub: idioma leído de `user.locale`, plantilla
+    // portuguesa y término portugués. Antes de tener catálogo, esta misma fila
+    // salía entera en español.
+    const row = await sendTo('pt-BR');
+    expect(row.body).toBe(
+      'Sua tentativa no quiz "Quiz final" foi corrigida manualmente. Resultado: 82% (aprovado).',
+    );
+    expect(row.body).not.toContain('aprobado');
+    expect(row.body).not.toContain('passed');
+  });
+
   it('la fila persiste TEXTO, nunca el descriptor', async () => {
     // `metadata` la leen `notification-link.ts`, el toaster y el panel: un
     // objeto ahí sería un `[object Object]` en pantalla.
@@ -399,6 +463,10 @@ describe('el hub formatea con el idioma del DESTINATARIO, no con el del emisor',
       [
         'en-US',
         'To stop receiving community emails (notices and the weekly digest), go here: https://u/unsub',
+      ],
+      [
+        'pt-BR',
+        'Para deixar de receber os e-mails da comunidade (avisos e resumo semanal), acesse: https://u/unsub',
       ],
     ] as const) {
       const prisma = makePrisma([{ id: 'u1', locale }]);

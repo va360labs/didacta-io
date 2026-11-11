@@ -80,8 +80,17 @@ function makeFakePrisma() {
       name: 'Joao',
       passwordHash: 'old-hash',
       status: 'ACTIVE',
-      // pt-BR es guardable HOY (ALLOWED_LOCALES) pero no está traducido.
       locale: 'pt-BR',
+    },
+    {
+      id: 'user-fr',
+      tenantId: 'tenant-1',
+      email: 'jean@example.com',
+      name: 'Jean',
+      passwordHash: 'old-hash',
+      status: 'ACTIVE',
+      // Guardado por SCIM (copia el locale del IdP sin validar): sin catálogo.
+      locale: 'fr-FR',
     },
     {
       id: 'user-blank-locale',
@@ -282,10 +291,13 @@ describe('PasswordResetService.request', () => {
     const { service } = makeService();
     const en = await service.request({ tenantSlug: 'demo', email: 'john@example.com' });
     expect(en?.locale).toBe('en-US');
-    // pt-BR se devuelve TAL CUAL (un override per-tenant en pt-BR podría ganar);
-    // quien lo aplana al español es el catálogo, no esta capa.
     const pt = await service.request({ tenantSlug: 'demo', email: 'joao@example.com' });
     expect(pt?.locale).toBe('pt-BR');
+    // Un locale SIN catálogo se devuelve TAL CUAL (un override per-tenant en ese
+    // locale podría ganar); quien lo aplana al español es el catálogo, no esta
+    // capa.
+    const fr = await service.request({ tenantSlug: 'demo', email: 'jean@example.com' });
+    expect(fr?.locale).toBe('fr-FR');
   });
 
   it('CAMINO DEGRADADO: fila sin locale o con locale en blanco → es-ES explícito', async () => {
@@ -806,9 +818,51 @@ describe('PasswordResetService.buildResetEmail', () => {
     expect(out.html).toContain('token=a%2Fb%2Bc%3D');
   });
 
-  it('CAMINO DEGRADADO: pt-BR (guardable pero sin traducir) y locale vacío → español', () => {
+  it('pt-BR: asunto, cuerpo, título Y BOTÓN en portugués, sin español ni inglés', () => {
+    // Era el camino degradado de abajo mientras `pt-BR` fue guardable sin
+    // catálogo: el usuario brasileño que pedía restablecer su contraseña recibía
+    // el correo entero en español.
     const { service } = makeService();
-    for (const locale of ['pt-BR', 'es-AR', '']) {
+    const out = service.buildResetEmail(
+      'abc',
+      'Ana',
+      'https://x.test',
+      branding('Academia'),
+      'pt-BR',
+    );
+    expect(out.subject).toBe('Redefinir sua senha em Academia');
+    expect(out.html).toContain('<html lang="pt">');
+    expect(out.text).toContain('Olá, Ana!');
+    expect(out.text).toContain('Recebemos um pedido para redefinir a senha da sua conta');
+    // El CTA sale en el texto plano como «label: url» y en el HTML como botón.
+    expect(out.text).toContain('Redefinir senha: https://x.test/reset-password?token=abc');
+    expect(out.html).toContain('Redefinir senha');
+    expect(out.html).toContain('Redefinir sua senha');
+    for (const ajeno of [
+      'Restablecer contraseña',
+      'Restablecer tu contraseña',
+      'Hola',
+      'Recibimos una solicitud',
+      'Reset password',
+      'Hi Ana',
+      'We received a request',
+    ]) {
+      expect(out.text, `«${ajeno}» se coló en el email portugués`).not.toContain(ajeno);
+      expect(out.html, `«${ajeno}» se coló en el HTML portugués`).not.toContain(ajeno);
+    }
+  });
+
+  it('pt-BR sin nombre: saludo genérico portugués', () => {
+    const { service } = makeService();
+    const out = service.buildResetEmail('abc', null, 'https://x.test', branding(), 'pt-BR');
+    expect(out.text).toContain('Olá!');
+    expect(out.text).not.toContain('Hola,');
+    expect(out.text).not.toContain('Hi,');
+  });
+
+  it('CAMINO DEGRADADO: locale sin catálogo (fr-FR), variante regional o vacío → español', () => {
+    const { service } = makeService();
+    for (const locale of ['fr-FR', 'es-AR', '']) {
       const out = service.buildResetEmail('abc', 'Ana', 'https://x.test', branding(), locale);
       expect(out.subject, locale).toBe('Restablecer tu contraseña en Didacta');
       expect(out.text, locale).toContain('Hola Ana,');

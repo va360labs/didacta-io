@@ -42,10 +42,16 @@ import {
  * Idiomas que el tenant puede personalizar. Los nombres son ENDÓNIMOS (cada
  * idioma en el suyo), así que no pasan por el catálogo: «Español» se escribe
  * igual mire quien mire.
+ *
+ * Uno por IDIOMA con plantillas propias en la API (`HUB_TEMPLATE_LANGS`: es, en,
+ * pt), con el locale que guarda el perfil de quien lo lee. `es-AR` no está a
+ * propósito: comparte plantillas con `es-ES` y la API busca el override del
+ * idioma de referencia cuando no hay uno del locale exacto.
  */
 const SUPPORTED_LOCALES = [
   { code: 'es-ES', label: 'Español' },
   { code: 'en-US', label: 'English' },
+  { code: 'pt-BR', label: 'Português' },
 ] as const;
 
 /**

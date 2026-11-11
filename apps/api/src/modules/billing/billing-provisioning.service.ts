@@ -22,6 +22,7 @@ import {
   interpolate,
   resolveFixedEmailCopy,
   resolveRecipientLocale,
+  rendersFromCatalog,
   resolveTransactionalDefault,
   toHubTemplateLang,
   type TemplateOverridePrisma,
@@ -228,8 +229,8 @@ export class BillingProvisioningService {
         subject = applied.subject;
         bodyText = applied.bodyText;
         bodyHtml = textToHtmlParagraphs(applied.bodyText);
-      } else if (toHubTemplateLang(locale) === 'en') {
-        // El inglés se renderiza DESDE el catálogo (misma mecánica que un
+      } else if (rendersFromCatalog(locale)) {
+        // Las traducciones se renderizan DESDE el catálogo (misma mecánica que un
         // override) para que composer y catálogo no puedan divergir. El español
         // conserva su maqueta HTML propia más abajo, byte a byte.
         bodyText = interpolate(def.body, vars);

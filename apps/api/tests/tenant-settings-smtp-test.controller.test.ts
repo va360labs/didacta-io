@@ -78,8 +78,22 @@ describe('TenantSettingsController.testSmtp — idioma del ping', () => {
     expect(msg.text).not.toContain('Prueba de SMTP');
   });
 
+  it('pt-BR sale en portugués, asunto incluido', async () => {
+    // Era parte del camino degradado de abajo mientras `pt-BR` no tuvo catálogo.
+    const msg = await sent('pt-BR');
+    expect(msg.subject).toBe('Teste de SMTP — Didacta');
+    expect(msg.text).toContain(
+      'Se você recebeu este e-mail, a configuração SMTP do seu tenant na Didacta está funcionando corretamente.',
+    );
+    expect(msg.text).toContain('Tenant: demo');
+    expect(msg.text).toMatch(/Data: \d{4}-\d{2}-\d{2}T/);
+    expect(msg.text).not.toContain('Fecha:');
+    expect(msg.text).not.toContain('Prueba de SMTP');
+    expect(msg.text).not.toContain('Date:');
+  });
+
   it('CAMINO DEGRADADO: locale en blanco o sin traducir → español', async () => {
-    for (const locale of ['', '   ', 'pt-BR', 'es-AR']) {
+    for (const locale of ['', '   ', 'fr-FR', 'es-AR']) {
       const msg = await sent(locale);
       expect(msg.subject, locale).toBe('Prueba de SMTP — Didacta');
       expect(msg.text, locale).toContain('funciona correctamente');

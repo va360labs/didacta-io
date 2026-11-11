@@ -28,6 +28,7 @@ import {
   interpolate,
   resolveFixedEmailCopy,
   resolveRecipientLocale,
+  rendersFromCatalog,
   resolveTransactionalDefault,
   toHubTemplateLang,
   type RawEmailOverride,
@@ -566,8 +567,8 @@ export class PasswordResetService {
       return { subject: applied.subject, html, text };
     }
 
-    if (toHubTemplateLang(locale) === 'en') {
-      // El inglés se renderiza DESDE el catálogo (misma mecánica que un
+    if (rendersFromCatalog(locale)) {
+      // Las traducciones se renderizan DESDE el catálogo (misma mecánica que un
       // override) para que composer y catálogo no puedan divergir. El español
       // conserva su maqueta HTML propia más abajo, byte a byte.
       const bodyText = interpolate(def.body, vars);

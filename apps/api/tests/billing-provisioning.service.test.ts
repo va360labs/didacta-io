@@ -227,11 +227,34 @@ describe('BillingProvisioningService · idioma del comprador', () => {
     expect(conCheckout.tx.user.create.mock.calls[0]![0].data.locale).toBe('es-AR');
   });
 
+  it('comprador pt-BR: asunto, cuerpo, botón y pie en portugués', async () => {
+    // Era parte del camino degradado de abajo mientras `pt-BR` no tuvo
+    // catálogo: el comprador brasileño recibía la bienvenida en español.
+    const { svc, smtp } = makeMocks({ createdLocale: 'pt-BR' });
+    await svc.provision(args);
+
+    const mail = sent(smtp);
+    expect(mail.subject).toBe('Seu curso em Academia Demo');
+    expect(mail.html).toContain('<html lang="pt">');
+    expect(mail.text).toContain('Olá, Ana!');
+    expect(mail.text).toContain('Sua compra em Academia Demo está confirmada!');
+    // Las dos piezas estructurales, en portugués.
+    expect(mail.html).toContain('Definir minha senha');
+    expect(mail.html).toContain(
+      'Depois, você poderá entrar em https://academia.example.com/signin com seu e-mail.',
+    );
+    // Ni español ni inglés dentro del email portugués.
+    expect(mail.html).not.toContain('Definir mi contraseña');
+    expect(mail.html).not.toContain('Después podrás iniciar sesión');
+    expect(mail.html).not.toContain('Set my password');
+    expect(mail.text).not.toContain('Hola Ana,');
+  });
+
   it('CAMINO DEGRADADO: fila sin locale o con uno sin catálogo → español, nunca un hueco', async () => {
-    // `undefined` es el caso real de HOY: el checkout todavía no captura el
-    // idioma del comprador, así que la columna toma su default. `pt-BR` es
-    // alcanzable en cuanto alguien lo guarde en su perfil.
-    for (const createdLocale of [undefined, '', '   ', 'pt-BR']) {
+    // `undefined` es el caso de un comprador que nunca tocó el selector: la
+    // columna toma su default. `fr-FR` es alcanzable por SCIM, que copia el
+    // locale del IdP sin validar.
+    for (const createdLocale of [undefined, '', '   ', 'fr-FR']) {
       vi.clearAllMocks();
       const { svc, smtp } = makeMocks({ createdLocale });
       await svc.provision(args);

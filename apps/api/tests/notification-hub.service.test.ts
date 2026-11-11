@@ -738,9 +738,20 @@ describe('PrismaNotificationHubService', () => {
       ).toContain(ES_ENROLLMENT);
     });
 
-    it('degradado (c): locale sin catálogo (pt-BR) → copy español', async () => {
+    it('camino feliz: el usuario en pt-BR recibe la notificación en portugués', async () => {
+      // Era el degradado (c) mientras `pt-BR` fue guardable sin catálogo.
       const n = await sendWithoutLocale([
         { id: 'u1', tenantId: 't1', email: 'a@example.com', locale: 'pt-BR' },
+      ]);
+      expect(n!.body).toContain('Você acabou de se matricular no curso "NodeJS"');
+      expect(n!.body).not.toContain(ES_ENROLLMENT);
+      expect(n!.body).not.toContain(EN_ENROLLMENT);
+      expect(n!.body).not.toContain('{{');
+    });
+
+    it('degradado (c): locale sin catálogo (fr-FR) → copy español', async () => {
+      const n = await sendWithoutLocale([
+        { id: 'u1', tenantId: 't1', email: 'a@example.com', locale: 'fr-FR' },
       ]);
       expect(n!.body).toContain(ES_ENROLLMENT);
       expect(n!.body).not.toContain('{{');

@@ -222,8 +222,42 @@ describe('InscribeService.inscribe', () => {
     }
   });
 
+  it('locale=pt-BR: asunto, cuerpo y BOTÓN del email de alta en portugués', async () => {
+    // Era parte del camino degradado de abajo mientras `pt-BR` no tuvo catálogo.
+    const h = makeHarness({ existingUser: null, resetToken: 'tok-abc' });
+
+    await h.service.inscribe(
+      TENANT_ID,
+      ACTOR_ID,
+      { email: 'joao@x.com', name: 'João', courseIds: [COURSE_A], locale: 'pt-BR' },
+      WEB_BASE_URL,
+    );
+
+    const message = h.smtp.send.mock.calls[0]![1] as {
+      subject: string;
+      html: string;
+      text: string;
+    };
+    expect(message.subject).toBe('Seu acesso a Academia Demo');
+    expect(message.html).toContain('<html lang="pt">');
+    expect(message.text).toContain('Olá, João!');
+    expect(message.text).toContain('Sua conta em Academia Demo foi criada');
+    expect(message.text).toContain(`Defina sua senha: ${WEB_BASE_URL}/reset-password?token=`);
+    expect(message.html).toContain('Defina sua senha');
+    for (const ajeno of [
+      'Define tu contraseña',
+      'Hola João',
+      'Se ha creado tu cuenta',
+      'Set your password',
+      'Hi João',
+    ]) {
+      expect(message.text, `«${ajeno}» se coló en el email portugués`).not.toContain(ajeno);
+      expect(message.html, `«${ajeno}» se coló en el HTML portugués`).not.toContain(ajeno);
+    }
+  });
+
   it('CAMINO DEGRADADO: sin locale en el alta, o con uno sin traducir, sale español', async () => {
-    for (const locale of [undefined, 'pt-BR', 'es-AR']) {
+    for (const locale of [undefined, 'fr-FR', 'es-AR']) {
       const h = makeHarness({ existingUser: null, resetToken: 'tok-abc' });
       await h.service.inscribe(
         TENANT_ID,

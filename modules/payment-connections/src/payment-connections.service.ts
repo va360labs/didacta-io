@@ -102,7 +102,7 @@ export interface SubscriptionStatusInfo {
  * del catálogo de emails del host; se redeclara aquí porque un módulo no puede
  * importar de `apps/api` (contrato de módulos). Hay test de que coinciden.
  */
-export type SubscriptionStatusLang = 'es' | 'en';
+export type SubscriptionStatusLang = 'es' | 'en' | 'pt';
 
 /** Identificador interno de etiqueta. NO es el `status` crudo del proveedor. */
 type StatusLabelKey =
@@ -151,6 +151,22 @@ const SUBSCRIPTION_STATUS_LABELS: Record<SubscriptionStatusLang, Record<StatusLa
     incomplete: 'Payment not completed',
     pending: 'Awaiting payment',
     unknown: 'Unknown',
+  },
+  // Portugués de Brasil. En femenino, como el español: califican a «a
+  // assinatura». «Inadimplente» es el término brasileño para el impago.
+  pt: {
+    active: 'Ativa',
+    trialing: 'Em teste',
+    past_due: 'Pagamento em atraso (inadimplente)',
+    unpaid: 'Inadimplente — suspensa',
+    on_hold: 'Em espera (inadimplente)',
+    paused: 'Pausada',
+    pending_cancel: 'Cancelamento agendado',
+    canceled: 'Cancelada',
+    expired: 'Expirada',
+    incomplete: 'Pagamento não concluído',
+    pending: 'Aguardando pagamento',
+    unknown: 'Desconhecido',
   },
 };
 
