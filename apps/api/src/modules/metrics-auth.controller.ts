@@ -9,14 +9,23 @@ import { PrometheusController } from '@willsoto/nestjs-prometheus';
 import type { FastifyRequest } from 'fastify';
 
 /**
- * Controller custom de `/metrics` con auth opcional por bearer token.
+ * Controller custom de `/metrics` con auth por bearer token.
  *
  * - Si `METRICS_TOKEN` está set en env: requiere `Authorization: Bearer <token>`.
  *   Diseñado para deploys donde la API queda expuesta a Internet (sin reverse
  *   proxy interno restringiendo `/metrics`). El default metrics de prom-client
  *   incluye memoria/GC/event loop, info útil para un atacante.
- * - Si `METRICS_TOKEN` NO está set: comportamiento público anterior. Backward
- *   compatible con despliegues tras reverse proxy interno (escenario habitual).
+ * - Si `METRICS_TOKEN` NO está set:
+ *   - en producción (`NODE_ENV=production`, que es lo que fija la imagen
+ *     Docker) responde 401. Antes quedaba público: memoria, GC, event loop y
+ *     los contadores de outbox, digest y jobs de módulos para cualquiera que
+ *     alcanzase la API. Que un proxy lo tape no se puede comprobar desde aquí,
+ *     así que el valor por defecto tiene que ser el cerrado;
+ *   - fuera de producción sigue siendo público (desarrollo y tests locales).
+ *
+ * No hay variable para volver a abrirlo sin token a propósito: quien scrapea
+ * desde una red interna define `METRICS_TOKEN` y se lo pasa a Prometheus
+ * (`authorization.credentials`), que es una línea en cada lado.
  *
  * El check se hace timing-safe (longitud + comparación caracter a caracter
  * via `crypto.timingSafeEqual`) para evitar timing attacks. La comparación
@@ -28,13 +37,20 @@ export class MetricsAuthController extends PrometheusController {
   @Get()
   @ApiOperation({
     summary:
-      'Métricas Prometheus en formato OpenMetrics. Si METRICS_TOKEN está configurado, requiere Bearer token.',
+      'Métricas Prometheus en formato OpenMetrics. Requiere Bearer METRICS_TOKEN si está configurado, y siempre en producción.',
   })
   override async index(
     @Res({ passthrough: false }) response: unknown,
     @Req() request?: FastifyRequest,
   ): Promise<string> {
     const expected = process.env['METRICS_TOKEN'];
+    if (!expected && process.env['NODE_ENV'] === 'production') {
+      // El mensaje dice qué hacer: quien se lo encuentra tras actualizar es un
+      // operador mirando por qué su scraper ha dejado de recibir datos.
+      throw new UnauthorizedException(
+        'En producción /metrics exige METRICS_TOKEN: defínelo en el entorno de la API y envíalo como Bearer.',
+      );
+    }
     if (expected && expected.length > 0) {
       const header = request?.headers['authorization'];
       const provided =

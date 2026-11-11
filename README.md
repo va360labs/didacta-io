@@ -229,12 +229,12 @@ docker logs didacta-app | grep "Setup token"  # token de un solo uso para /setup
 
 **Variables opcionales útiles** — conjunto completo en [`.env.example`](.env.example):
 
-| Variable                                                        | Para qué                                                                                       |
-| --------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
-| `S3_ENDPOINT`, `S3_BUCKET`, `S3_ACCESS_KEY`, `S3_SECRET_KEY`    | Storage S3-compatible: MinIO, AWS, Hetzner, etc. Obligatorio para subida de contenido.         |
-| `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM` | Envío de emails transaccionales. Sin esto, los emails se registran en logs pero no se envían.  |
-| `DIDACTA_LICENSE_KEY`                                           | JWT firmado por Didacta para activar capabilities Enterprise. Sin esto, modo Community puro.   |
-| `METRICS_TOKEN`                                                 | Bearer token para proteger `/metrics` en Prometheus. Si está vacío, el endpoint queda público. |
+| Variable                                                        | Para qué                                                                                                                                                                                      |
+| --------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `S3_ENDPOINT`, `S3_BUCKET`, `S3_ACCESS_KEY`, `S3_SECRET_KEY`    | Storage S3-compatible: MinIO, AWS, Hetzner, etc. Obligatorio para subida de contenido.                                                                                                        |
+| `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM` | Envío de emails transaccionales. Sin esto, los emails se registran en logs pero no se envían.                                                                                                 |
+| `DIDACTA_LICENSE_KEY`                                           | JWT firmado por Didacta para activar capabilities Enterprise. Sin esto, modo Community puro.                                                                                                  |
+| `METRICS_TOKEN`                                                 | Bearer token para proteger `/metrics` en Prometheus. Obligatorio en producción (`NODE_ENV=production`): sin él, `/metrics` responde 401. Fuera de producción, vacío deja el endpoint público. |
 
 ## Sobre el proyecto
 

@@ -163,6 +163,10 @@ services:
       # NODE_ENV=production, ese endpoint responde 503 hasta que la setees.
       # Solo hace falta si usás esa feature. Generar: openssl rand -hex 32
       AUDIT_REPORT_HMAC_KEY: ${AUDIT_REPORT_HMAC_KEY:-}
+      # Bearer token de /metrics. Como este compose arranca con
+      # NODE_ENV=production, /metrics responde 401 hasta que lo definas. Solo
+      # hace falta si scrapeas métricas. Generar: openssl rand -hex 32
+      METRICS_TOKEN: ${METRICS_TOKEN:-}
       # Puertos INTERNOS fijos: el mapeo de abajo publica 4000/3000 en los
       # puertos del host que digan API_PORT/WEB_PORT del .env. Si estas vars
       # entraran al contenedor, la app escucharía en un puerto distinto del
