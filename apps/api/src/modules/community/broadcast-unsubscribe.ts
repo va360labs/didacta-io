@@ -4,6 +4,7 @@
  */
 
 import { createHmac, timingSafeEqual } from 'node:crypto';
+import { loadAuthConfig } from '../../auth/auth.config';
 
 /**
  * Token de baja de los correos de la comunidad (avisos masivos y resumen
@@ -12,11 +13,21 @@ import { createHmac, timingSafeEqual } from 'node:crypto';
  * de baja no debe caducar). Lo firman los workers de avisos y del resumen (al
  * meter el enlace en cada email) y lo verifica el endpoint público de
  * unsubscribe.
+ *
+ * Se firma SOLO con `AUTH_SECRET`, leído con la misma validación que el
+ * arranque de auth (`loadAuthConfig`): sin él, o con menos de 32 caracteres,
+ * LANZA en vez de caer a otra clave. Antes había respaldo a
+ * `TENANT_SETTINGS_ENC_KEY` y, en último término, a una cadena fija escrita en
+ * el código de un repositorio público: con ella cualquiera podía fabricar el
+ * enlace de baja de cualquier usuario de cualquier instalación que arrancase
+ * este código sin el secreto puesto.
+ *
+ * Los enlaces ya enviados siguen valiendo: la API no arranca sin `AUTH_SECRET`
+ * (lo exige `TokenService`), así que en una instalación en marcha siempre se
+ * han firmado con él.
  */
 function secret(): string {
-  return (
-    process.env['AUTH_SECRET'] ?? process.env['TENANT_SETTINGS_ENC_KEY'] ?? 'didacta-dev-secret'
-  );
+  return loadAuthConfig().jwtSecret;
 }
 
 export function signUnsubscribeToken(tenantId: string, userId: string): string {

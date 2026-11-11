@@ -102,7 +102,14 @@ export class CommunityPublicController {
     token: string | undefined,
     req: FastifyRequest,
   ): Promise<{ outcome: UnsubscribeOutcome; lang: HubTemplateLang }> {
-    const parsed = token ? verifyUnsubscribeToken(token) : null;
+    let parsed: ReturnType<typeof verifyUnsubscribeToken>;
+    try {
+      parsed = token ? verifyUnsubscribeToken(token) : null;
+    } catch {
+      // Verificar lanza si falta el secreto de firma: no se puede afirmar que
+      // el enlace sea malo, solo que ahora mismo no se puede comprobar.
+      return { outcome: 'error', lang: langFromRequest(req) };
+    }
     // Sin token válido no se sabe quién es: solo queda el idioma del navegador.
     if (!parsed) return { outcome: 'invalid_token', lang: langFromRequest(req) };
     try {
