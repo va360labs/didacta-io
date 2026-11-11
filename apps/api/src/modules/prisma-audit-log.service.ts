@@ -18,9 +18,21 @@ import { PrismaService } from '../prisma/prisma.service';
  * una cadena local. Si alguien modifica una fila vieja, los hashes posteriores
  * dejan de validar.
  *
- * IMPORTANTE: la concurrencia entre dos requests del mismo tenant podría dar
- * dos filas con el mismo prev_hash. Para Fase 1.A es aceptable; en Fase 2 se
- * añadirá un lock advisory por tenantId al insertar para garantizar linealidad.
+ * CONCURRENCIA. Leer el último hash e insertar van dentro de UNA transacción
+ * con un advisory lock por tenant (`pg_advisory_xact_lock`). Sin él, dos
+ * acciones auditadas a la vez del mismo tenant leían el mismo «último hash»,
+ * se insertaban las dos con el mismo `prev_hash` y `verifyChain` daba la
+ * cadena por rota PARA SIEMPRE: las filas son append-only (hay un trigger que
+ * bloquea UPDATE y DELETE), así que una bifurcación no se puede reparar. Y una
+ * cadena que siempre sale «rota» no avisa de nada: el día que alguien manipule
+ * una fila, la alerta ya llevaba meses encendida.
+ *
+ * El lock solo serializa las escrituras de un mismo tenant; tenants distintos
+ * no se esperan entre sí. Se libera solo, al terminar la transacción.
+ *
+ * La fórmula del hash NO cambia: las cadenas ya escritas se verifican igual
+ * que antes. Lo que este cambio no hace es reparar una cadena que ya se
+ * bifurcó antes de él.
  */
 /**
  * Serializa un objeto con `JSON.stringify` ordenando claves de manera
@@ -42,6 +54,12 @@ function canonicalStringify(value: unknown): string {
   });
 }
 
+/** Primera clave del advisory lock: el «espacio» de la cadena de auditoría. */
+const AUDIT_CHAIN_LOCK_SPACE = 'audit_log';
+
+/** Margen para esperar el lock del tenant y completar la escritura. */
+const AUDIT_WRITE_TIMEOUT_MS = 10_000;
+
 @Injectable()
 export class PrismaAuditLogService implements AuditLogService {
   constructor(private readonly prisma: PrismaService) {}
@@ -56,41 +74,57 @@ export class PrismaAuditLogService implements AuditLogService {
     ip?: string;
     userAgent?: string;
   }): Promise<void> {
-    const last = await this.prisma.auditLog.findFirst({
-      where: { tenantId: entry.tenantId },
-      orderBy: { id: 'desc' },
-      select: { hash: true },
-    });
-    const prevHash = last?.hash ?? null;
+    await this.prisma.$transaction(
+      async (tx) => {
+        // Lock de DOS claves: (espacio «audit_log», tenant). La forma de dos
+        // enteros no comparte espacio con la de un solo bigint que usan otros
+        // servicios (access-groups), así que una coincidencia de hash con ellos
+        // no hace esperar a nadie.
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${AUDIT_CHAIN_LOCK_SPACE}), hashtext(${entry.tenantId}))`;
 
-    const timestamp = new Date();
-    const hashInput = canonicalStringify({
-      prevHash,
-      tenantId: entry.tenantId,
-      actorId: entry.actorId,
-      action: entry.action,
-      resourceType: entry.resourceType,
-      resourceId: entry.resourceId,
-      metadata: entry.metadata ?? {},
-      timestamp: timestamp.toISOString(),
-    });
-    const hash = createHash('sha256').update(hashInput).digest('hex');
+        // A partir de aquí nadie más del tenant está entre este SELECT y su
+        // INSERT: el «último» que se lee es el último de verdad.
+        const last = await tx.auditLog.findFirst({
+          where: { tenantId: entry.tenantId },
+          orderBy: { id: 'desc' },
+          select: { hash: true },
+        });
+        const prevHash = last?.hash ?? null;
 
-    await this.prisma.auditLog.create({
-      data: {
-        tenantId: entry.tenantId,
-        actorId: entry.actorId,
-        action: entry.action,
-        resourceType: entry.resourceType,
-        resourceId: entry.resourceId,
-        metadata: (entry.metadata ?? {}) as never,
-        ip: entry.ip ?? null,
-        userAgent: entry.userAgent ?? null,
-        timestamp,
-        prevHash,
-        hash,
+        const timestamp = new Date();
+        const hashInput = canonicalStringify({
+          prevHash,
+          tenantId: entry.tenantId,
+          actorId: entry.actorId,
+          action: entry.action,
+          resourceType: entry.resourceType,
+          resourceId: entry.resourceId,
+          metadata: entry.metadata ?? {},
+          timestamp: timestamp.toISOString(),
+        });
+        const hash = createHash('sha256').update(hashInput).digest('hex');
+
+        await tx.auditLog.create({
+          data: {
+            tenantId: entry.tenantId,
+            actorId: entry.actorId,
+            action: entry.action,
+            resourceType: entry.resourceType,
+            resourceId: entry.resourceId,
+            metadata: (entry.metadata ?? {}) as never,
+            ip: entry.ip ?? null,
+            userAgent: entry.userAgent ?? null,
+            timestamp,
+            prevHash,
+            hash,
+          },
+        });
       },
-    });
+      // En una ráfaga de acciones del mismo tenant, una escritura espera al
+      // lock de las anteriores. Los 2 s / 5 s por defecto de Prisma se quedan
+      // cortos ahí, y un timeout aquí es una entrada de auditoría perdida.
+      { maxWait: AUDIT_WRITE_TIMEOUT_MS, timeout: AUDIT_WRITE_TIMEOUT_MS },
+    );
   }
 
   /**

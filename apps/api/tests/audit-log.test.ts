@@ -46,6 +46,26 @@ function makeFakePrisma() {
       },
     },
     _rows: rows,
+    /** Advisory locks pedidos, en orden: [espacio, tenant]. */
+    _locks: [] as Array<[string, string]>,
+    /** Cuántas transacciones se han abierto. */
+    _transactions: 0,
+    // `record()` lee el último hash e inserta dentro de una transacción con un
+    // advisory lock por tenant. El doble ejecuta el callback sobre sí mismo y
+    // anota la clave del lock: que la concurrencia REAL queda resuelta se
+    // prueba contra Postgres en
+    // `tests/integration/audit-chain-concurrency.integration.test.ts` — un
+    // doble en memoria no tiene dos conexiones que puedan pisarse.
+    async $executeRaw(strings: TemplateStringsArray, ...values: unknown[]): Promise<number> {
+      if (strings.join('?').includes('pg_advisory_xact_lock')) {
+        prisma._locks.push([String(values[0]), String(values[1])]);
+      }
+      return 1;
+    },
+    async $transaction<T>(fn: (tx: unknown) => Promise<T>): Promise<T> {
+      prisma._transactions += 1;
+      return fn(prisma);
+    },
   };
   return prisma;
 }
@@ -67,6 +87,32 @@ describe('PrismaAuditLogService', () => {
     const first = prisma._rows[0]!;
     expect(first.prevHash).toBeNull();
     expect(first.hash).toMatch(/^[a-f0-9]{64}$/);
+  });
+
+  it('lee el último hash e inserta en UNA transacción, con un lock propio de ese tenant', async () => {
+    const prisma = makeFakePrisma();
+    const svc = new PrismaAuditLogService(prisma as never);
+    const entrada = (tenantId: string) => ({
+      tenantId,
+      actorId: null,
+      action: 'login',
+      resourceType: 'user',
+      resourceId: 'u1',
+    });
+
+    await svc.record(entrada('t1'));
+    await svc.record(entrada('t2'));
+    await svc.record(entrada('t1'));
+
+    // Una transacción por escritura: sin ella, el lock de transacción no
+    // protegería nada (se soltaría antes del INSERT).
+    expect(prisma._transactions).toBe(3);
+    // El lock es POR TENANT: dos tenants no se esperan entre sí.
+    expect(prisma._locks).toEqual([
+      ['audit_log', 't1'],
+      ['audit_log', 't2'],
+      ['audit_log', 't1'],
+    ]);
   });
 
   it('encadena prev_hash a la última entrada del mismo tenant', async () => {
