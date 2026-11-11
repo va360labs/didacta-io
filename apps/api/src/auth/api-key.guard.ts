@@ -11,6 +11,7 @@ import {
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import type { FastifyRequest } from 'fastify';
+import { grantableApiKeyScopes } from './api-key-scopes';
 import { ApiKeyService } from './api-key.service';
 import { PUBLIC_ROUTE_KEY } from './jwt-auth.guard';
 import { TokenService } from './token.service';
@@ -18,7 +19,12 @@ import { TokenService } from './token.service';
 /**
  * Guard combinado: acepta Bearer JWT o `Authorization: ApiKey <token>`.
  * Si el token de API key es válido, popula request.user con un SessionClaims
- * sintético que tiene mfaVerified=true y los scopes/roles equivalentes.
+ * sintético que tiene mfaVerified=true y, en `roles`, los scopes de la key.
+ *
+ * ⛔ En `roles` solo entran scopes del catálogo (`grantableApiKeyScopes`). Los
+ * scopes se guardaron durante un tiempo como texto libre, así que una key
+ * antigua puede traer `tenant_admin` o `super_admin`: volcados tal cual, cada
+ * `roles.includes('tenant_admin')` del código la tomaría por un administrador.
  */
 @Injectable()
 export class JwtOrApiKeyGuard implements CanActivate {
@@ -69,7 +75,7 @@ export class JwtOrApiKeyGuard implements CanActivate {
       req.user = {
         sub: key.userId,
         tenantId: key.tenantId,
-        roles: key.scopes,
+        roles: grantableApiKeyScopes(key.scopes),
         mfaVerified: true,
       };
       return true;

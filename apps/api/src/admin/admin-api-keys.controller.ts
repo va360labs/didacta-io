@@ -7,18 +7,17 @@ import {
   Body,
   Controller,
   Delete,
-  ForbiddenException,
   Get,
   HttpCode,
   Param,
   Post,
   Req,
-  UnauthorizedException,
   UseGuards,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { FastifyRequest } from 'fastify';
 import { z } from 'zod';
+import { ALLOWED_API_KEY_SCOPES, requireApiKeyAdmin } from '../auth/api-key-scopes';
 import { ApiKeyService } from '../auth/api-key.service';
 import { extractClientContext } from '../auth/client-context';
 import { CurrentUser } from '../auth/decorators';
@@ -27,27 +26,9 @@ import { ZodValidationPipe } from '../auth/zod-validation.pipe';
 import type { SessionClaims } from '../auth/token.service';
 import { PrismaAuditLogService } from '../modules/prisma-audit-log.service';
 
-/**
- * Scopes que el admin puede otorgar a una API key desde el panel. Mantener
- * acotado evita que el panel cree claves con permisos arbitrarios. Casos de
- * uso: inscripción externa (`POST /api/v1/inscribe`), lectura del catálogo y
- * del estado del alumno para pintar fichas fuera de Didacta
- * (`GET /api/v1/integrations/…`) y publicación en la comunidad
- * (`POST /api/v1/community-api/posts`).
- *
- * `enrollments:read` va aparte de `enrollments:write` porque permite consultar
- * el estado de CUALQUIER email del tenant: quien solo necesita pintar una
- * ficha de venta no tiene por qué poder matricular, y al revés.
- */
-export const ALLOWED_API_KEY_SCOPES = [
-  'enrollments:write',
-  'enrollments:read',
-  'courses:read',
-  'community:post',
-  'orders:write',
-  'orders:read',
-] as const;
-
+// El catálogo de scopes y la regla «solo admins» viven en
+// `auth/api-key-scopes.ts`: los comparten este panel y `/auth/api-keys`, y
+// ninguno de los dos puede aceptar scopes libres ni a quien no sea admin.
 const createSchema = z.object({
   name: z.string().trim().min(1).max(100),
   scopes: z.array(z.enum(ALLOWED_API_KEY_SCOPES)).min(1).default(['enrollments:write']),
@@ -55,23 +36,11 @@ const createSchema = z.object({
 });
 type CreateDto = z.infer<typeof createSchema>;
 
-const ADMIN_ROLES = new Set(['super_admin', 'tenant_admin']);
-
-function requireAdmin(user: SessionClaims | undefined): SessionClaims {
-  if (!user) throw new UnauthorizedException();
-  if (!user.roles.some((r) => ADMIN_ROLES.has(r))) {
-    throw new ForbiddenException({
-      message: 'Esta acción requiere rol de administrador.',
-      code: 'ADMIN_FORBIDDEN_ADMIN_ROLE_REQUIRED',
-    });
-  }
-  return user;
-}
-
 /**
  * Gestión de API keys del tenant desde Administración. A diferencia de
- * `/auth/api-keys` (scoped al usuario actual), aquí el admin ve/revoca TODAS
- * las claves del tenant. El token en claro solo se devuelve al crearla.
+ * `/auth/api-keys` (las claves propias del admin que llama), aquí el admin
+ * ve/revoca TODAS las claves del tenant. El token en claro solo se devuelve al
+ * crearla.
  */
 @ApiTags('Admin · API Keys')
 @ApiBearerAuth()
@@ -88,7 +57,7 @@ export class AdminApiKeysController {
     summary: 'Listar las API keys del tenant (sin tokens en plano) con su creador.',
   })
   async list(@CurrentUser() user: SessionClaims | undefined) {
-    const u = requireAdmin(user);
+    const u = requireApiKeyAdmin(user);
     return this.apiKeys.listForTenant(u.tenantId);
   }
 
@@ -101,7 +70,7 @@ export class AdminApiKeysController {
     @CurrentUser() user: SessionClaims | undefined,
     @Body(new ZodValidationPipe(createSchema)) body: CreateDto,
   ) {
-    const u = requireAdmin(user);
+    const u = requireApiKeyAdmin(user);
     const ctx = extractClientContext(req);
     const created = await this.apiKeys.create({
       tenantId: u.tenantId,
@@ -131,7 +100,7 @@ export class AdminApiKeysController {
     @CurrentUser() user: SessionClaims | undefined,
     @Param('id') id: string,
   ) {
-    const u = requireAdmin(user);
+    const u = requireApiKeyAdmin(user);
     const ctx = extractClientContext(req);
     await this.apiKeys.revokeForTenant(u.tenantId, id);
     await this.auditLog.record({
