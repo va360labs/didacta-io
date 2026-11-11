@@ -36,7 +36,10 @@ deploy/
   bytes en el primer arranque y la persiste en el volumen de datos. Fijarla
   desde la plantilla con un generador que no produzca exactamente 64 caracteres
   hexadecimales rompería el cifrado de secretos (SSO, SMTP por tenant, Stripe)
-  y no se notaría hasta usar esas features.
+  y no se notaría hasta usar esas features. Por eso el volumen de datos tiene
+  que ser escribible: en producción, si la clave no está definida y el fichero
+  no se puede leer ni crear, la API no arranca (antes seguía con una clave en
+  memoria que se perdía al reiniciar).
 - **`DIDACTA_SETUP_TOKEN` fijado por la plantilla.** El alta de la primera
   cuenta va protegida por un token de un solo uso que, por defecto, solo sale
   por los logs del contenedor. Las plantillas lo generan con el helper de cada

@@ -4,7 +4,14 @@ import { join, resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { loadCipherKey } from '../src/auth/cipher-key';
 
-const ENV_KEYS = ['TENANT_SETTINGS_ENC_KEY', 'TENANT_SETTINGS_ENC_KEY_FILE', 'STORAGE_ROOT'];
+// NODE_ENV entra en la lista porque decide el comportamiento: se borra antes de
+// cada test (como el resto) y solo los casos de producción lo ponen.
+const ENV_KEYS = [
+  'TENANT_SETTINGS_ENC_KEY',
+  'TENANT_SETTINGS_ENC_KEY_FILE',
+  'STORAGE_ROOT',
+  'NODE_ENV',
+];
 
 function snapshotEnv(): Record<string, string | undefined> {
   const snap: Record<string, string | undefined> = {};
@@ -230,5 +237,123 @@ describe('loadCipherKey', () => {
     expect(result.key).toMatch(/^[a-f0-9]{64}$/i);
     expect(result.key).not.toBe('not-a-valid-hex-key');
     expect(readFileSync(filePath, 'utf8').trim()).toBe(result.key);
+  });
+
+  // ── Clave efímera: nunca en producción ──
+  //
+  // Antes, si no se podía leer ni crear el fichero, se arrancaba con una clave
+  // aleatoria en memoria y un WARN. Todo lo cifrado con ella (Stripe, SMTP por
+  // tenant, OIDC, SCIM, Zoom) dejaba de leerse en el siguiente reinicio.
+
+  /** Ruta de fichero imposible de crear: su directorio padre es un fichero. */
+  function unwritableKeyFile(): string {
+    const blocker = join(tmpRoot, 'no-es-un-directorio');
+    writeFileSync(blocker, 'x', 'utf8');
+    return join(blocker, '.didacta-secret-key');
+  }
+
+  it('fuera de producción, si no puede crear el archivo usa una clave efímera (como antes)', () => {
+    process.env['TENANT_SETTINGS_ENC_KEY_FILE'] = unwritableKeyFile();
+
+    const result = loadCipherKey();
+
+    expect(result.source).toBe('ephemeral');
+    expect(result.key).toMatch(/^[a-f0-9]{64}$/i);
+  });
+
+  it('por qué importa: dos llamadas con clave efímera dan claves DISTINTAS', () => {
+    // `loadCipherKey()` se llama desde varios módulos (auth, marketplace,
+    // instance-settings, module-context). Con la clave efímera, lo que cifra
+    // uno no lo descifra otro ni dentro del mismo proceso.
+    process.env['TENANT_SETTINGS_ENC_KEY_FILE'] = unwritableKeyFile();
+
+    expect(loadCipherKey().key).not.toBe(loadCipherKey().key);
+  });
+
+  it('en producción, si no puede crear el archivo NO arranca, y dice qué hacer', () => {
+    process.env['NODE_ENV'] = 'production';
+    const filePath = unwritableKeyFile();
+    process.env['TENANT_SETTINGS_ENC_KEY_FILE'] = filePath;
+
+    let thrown: Error | undefined;
+    try {
+      loadCipherKey();
+    } catch (err) {
+      thrown = err as Error;
+    }
+
+    expect(thrown).toBeInstanceOf(Error);
+    // Dice qué fichero, que es producción, y las dos salidas.
+    expect(thrown!.message).toContain(filePath);
+    expect(thrown!.message).toContain(
+      'En producción no se arranca con una clave de cifrado efímera',
+    );
+    expect(thrown!.message).toContain('TENANT_SETTINGS_ENC_KEY_FILE');
+    expect(thrown!.message).toContain('openssl rand -hex 32');
+    // Y conserva el error original del sistema, que es el que dice POR QUÉ.
+    expect(thrown!.cause).toBeInstanceOf(Error);
+  });
+
+  it('en producción, un fichero de clave que EXISTE pero no se puede leer tampoco se sustituye por una efímera', () => {
+    // Una instalación que ya tenía su clave y pierde el acceso al fichero
+    // (permisos tras cambiar de usuario, volumen mal montado). Arrancar con
+    // otra clave dejaría sus secretos ilegibles sin avisar. Un directorio en
+    // el sitio del fichero reproduce «existe y no se puede leer» en cualquier
+    // sistema operativo.
+    process.env['NODE_ENV'] = 'production';
+    const filePath = join(tmpRoot, 'volumen', '.didacta-secret-key');
+    mkdirSync(filePath, { recursive: true });
+    process.env['TENANT_SETTINGS_ENC_KEY_FILE'] = filePath;
+
+    expect(() => loadCipherKey()).toThrow(/no se pudo leer ni crear/);
+    expect(() => loadCipherKey()).toThrow(/ya tenía una clave en ese fichero/);
+    // No se ha tocado lo que había.
+    expect(existsSync(filePath)).toBe(true);
+  });
+
+  it('en producción, con la clave en env arranca igual que antes (aunque el disco no sea escribible)', () => {
+    process.env['NODE_ENV'] = 'production';
+    process.env['TENANT_SETTINGS_ENC_KEY_FILE'] = unwritableKeyFile();
+    process.env['TENANT_SETTINGS_ENC_KEY'] = 'b'.repeat(64);
+
+    expect(loadCipherKey()).toEqual({ key: 'b'.repeat(64), source: 'env' });
+  });
+
+  it('en producción, con el archivo persistente arranca igual que antes', () => {
+    process.env['NODE_ENV'] = 'production';
+    const filePath = join(tmpRoot, 'persistente', '.didacta-secret-key');
+    mkdirSync(join(tmpRoot, 'persistente'), { recursive: true });
+    writeFileSync(filePath, 'c'.repeat(64), 'utf8');
+    process.env['TENANT_SETTINGS_ENC_KEY_FILE'] = filePath;
+
+    expect(loadCipherKey()).toEqual({ key: 'c'.repeat(64), source: 'file', filePath });
+  });
+
+  it('en producción, una instalación nueva con volumen escribible genera y persiste su clave', () => {
+    process.env['NODE_ENV'] = 'production';
+    const storageRoot = join(tmpRoot, 'storage');
+    mkdirSync(storageRoot, { recursive: true });
+    process.env['STORAGE_ROOT'] = storageRoot;
+
+    const first = loadCipherKey();
+    const second = loadCipherKey();
+
+    expect(first.source).toBe('file-new');
+    expect(second).toEqual({ key: first.key, source: 'file', filePath: first.filePath });
+  });
+
+  it('en producción, la migración desde la ruta legacy sigue funcionando', () => {
+    process.env['NODE_ENV'] = 'production';
+    const storageRoot = join(tmpRoot, 'data', 'storage');
+    mkdirSync(storageRoot, { recursive: true });
+    process.env['STORAGE_ROOT'] = storageRoot;
+    const legacyKey = 'f'.repeat(64);
+    writeFileSync(join(tmpRoot, 'data', '.didacta-secret-key'), legacyKey, 'utf8');
+
+    const result = loadCipherKey();
+
+    expect(result.source).toBe('file');
+    expect(result.key).toBe(legacyKey);
+    expect(result.filePath).toBe(resolve(storageRoot, '.didacta-secret-key'));
   });
 });

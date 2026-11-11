@@ -17,7 +17,9 @@
  *      la clave SOBREVIVE redeploys mientras el volumen persista.
  *
  *   3. Random in-memory fallback (último recurso, solo si el archivo no se
- *      puede crear — disco lleno o RO). Imprime WARN — se perderá al reiniciar.
+ *      puede leer ni crear — disco lleno, RO o permisos). Imprime WARN — se
+ *      perderá al reiniciar. SOLO fuera de producción: con
+ *      `NODE_ENV=production` no se arranca (ver `loadCipherKey`).
  *
  * Razón de NO guardar la clave en BD: anularía el cifrado at-rest. Cualquier
  * dump de Postgres revelaría tanto los secretos cifrados como la clave que
@@ -106,8 +108,32 @@ export function loadCipherKey(): ResolvedCipherKey {
       // sí aplica la máscara correctamente.
     }
     return { key: generated, source: 'file-new', filePath };
-  } catch {
-    // Disco lleno, RO, permisos rotos — caemos al fallback in-memory.
+  } catch (err) {
+    // Disco lleno, RO, permisos rotos: no hay clave que sobreviva al proceso.
+    //
+    // En producción NO se arranca. Con una clave efímera todo lo que se cifre
+    // (Stripe, SMTP por tenant, OIDC, SCIM, Zoom) deja de poder leerse en el
+    // siguiente reinicio, y ni siquiera hace falta reiniciar: esta función se
+    // llama desde varios módulos y cada llamada devolvería una clave DISTINTA,
+    // así que lo que cifra uno no lo descifra otro. Antes eso solo dejaba un
+    // WARN en el log de arranque y el fallo aparecía días después como «la
+    // integración se ha desconfigurado sola». Que no arranque, diciendo por
+    // qué, es el único aviso que no se puede pasar por alto.
+    //
+    // Tampoco se pierde nada al fallar: una instalación que llega aquí ya
+    // estaba perdiendo sus secretos en cada reinicio.
+    if (process.env['NODE_ENV'] === 'production') {
+      const causa = err instanceof Error ? err.message : String(err);
+      throw new Error(
+        `TENANT_SETTINGS_ENC_KEY: no se pudo leer ni crear ${filePath} (${causa}). ` +
+          'En producción no se arranca con una clave de cifrado efímera: los secretos cifrados se perderían al reiniciar. ' +
+          'Monta un volumen escribible en esa ruta (o apunta TENANT_SETTINGS_ENC_KEY_FILE a una que lo sea), ' +
+          'o define TENANT_SETTINGS_ENC_KEY con 64 caracteres hexadecimales (openssl rand -hex 32). ' +
+          'Si esta instalación ya tenía una clave en ese fichero, recupera el acceso a él o copia su contenido a TENANT_SETTINGS_ENC_KEY: una clave nueva no descifra lo ya guardado.',
+        { cause: err },
+      );
+    }
+    // Fuera de producción caemos al fallback in-memory.
     return { key: randomBytes(32).toString('hex'), source: 'ephemeral' };
   }
 }
