@@ -26,9 +26,12 @@ function reminderDelayHours(): number {
   return Number.isFinite(raw) && raw > 0 ? raw : 24;
 }
 
-/** Enlace absoluto a la clase, o '' si WEB_PUBLIC_URL no está configurada. */
-function classUrl(sessionId: string): string {
-  const base = (process.env['WEB_PUBLIC_URL'] ?? '').trim().replace(/\/+$/, '');
+/**
+ * Enlace absoluto a la clase en el aula del tenant, o '' si no se conoce su
+ * dirección pública (la plantilla omite entonces el bloque del enlace).
+ */
+function classUrl(webBase: string, sessionId: string): string {
+  const base = webBase.trim().replace(/\/+$/, '');
   return base ? `${base}/clase/${sessionId}` : '';
 }
 
@@ -138,7 +141,14 @@ export class SurveysReminderWorker implements OnApplicationBootstrap, OnModuleDe
           registrations.map((r) => r.userId),
         );
 
-        const variables = { topic: survey.title, surveyUrl: classUrl(survey.zoomSessionId) };
+        // Aula del tenant de ESTA encuesta (el barrido es cross-tenant): con
+        // `WEB_PUBLIC_URL` a secas, el recordatorio de cada academia enlazaba
+        // al dominio general del servidor.
+        const webBase = await this.factory.getTenantWebBaseUrl(survey.tenantId);
+        const variables = {
+          topic: survey.title,
+          surveyUrl: classUrl(webBase, survey.zoomSessionId),
+        };
         // Secuencial a propósito: nada de ráfagas SMTP paralelas.
         let sent = 0;
         for (const userId of pending) {

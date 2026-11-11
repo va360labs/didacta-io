@@ -48,6 +48,8 @@ function makeFactoryStub(args: {
     getTenantConfig: () => args.configStub,
     getSmtpAdapter: () => args.smtp,
     getSmtpResolver: () => undefined, // no se usa en estos tests
+    // Dirección del aula del tenant: aquí solo cuelga el logo del email de prueba.
+    getTenantWebBaseUrl: async () => 'https://aula.example.test',
   };
 }
 

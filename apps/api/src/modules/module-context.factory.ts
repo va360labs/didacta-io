@@ -31,6 +31,7 @@ import { SecretCipherService } from './secret-cipher.service';
 import { SmtpAdapterService } from './smtp-adapter.service';
 import { TenantSmtpResolverService } from './tenant-smtp-resolver.service';
 import { loadCipherKey } from '../auth/cipher-key';
+import { TenantResolverService } from '../tenancy/tenant-resolver.service';
 
 /**
  * Selecciona el storage backend según `STORAGE_DRIVER`. `s3` requiere las
@@ -121,6 +122,12 @@ export class ModuleContextFactory implements OnApplicationShutdown {
     @Inject(forwardRef(() => OutboxQueueService))
     private readonly outboxQueue: OutboxQueueService,
     private readonly outboxMetrics: OutboxMetrics,
+    /**
+     * Para que el hub enlace cada correo al aula de SU tenant (dominio primario
+     * verificado) y no a `WEB_PUBLIC_URL`, que es una sola por instalación.
+     * `TenancyModule` es global, así que no hace falta importarlo.
+     */
+    private readonly tenantResolver: TenantResolverService,
   ) {}
 
   build(): ModuleContext {
@@ -146,6 +153,7 @@ export class ModuleContextFactory implements OnApplicationShutdown {
       this.smtp,
       this.smtpResolver,
       this.getRealtimePublisher(),
+      this.tenantResolver,
     );
     void stubNotificationHub; // se mantiene exportado para tests; producción usa Prisma.
     return {
@@ -170,7 +178,19 @@ export class ModuleContextFactory implements OnApplicationShutdown {
       this.smtp,
       this.getSmtpResolver(),
       this.getRealtimePublisher(),
+      this.tenantResolver,
     );
+  }
+
+  /**
+   * Dirección pública del aula de un tenant para los envíos de fondo que
+   * componen sus propios enlaces (clase, encuesta, baja, publicación) antes de
+   * pasárselos al hub. Mismo criterio que el botón del hub: dominio primario
+   * verificado del tenant y, si no tiene, `WEB_PUBLIC_URL`; `''` si no hay
+   * ninguna (el emisor omite el enlace).
+   */
+  getTenantWebBaseUrl(tenantId: string): Promise<string> {
+    return this.tenantResolver.resolveTenantWebBaseUrlForBackground(tenantId);
   }
 
   /**

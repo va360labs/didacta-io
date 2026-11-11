@@ -72,7 +72,7 @@ describe('buildIcsEvent', () => {
     expect(withAlarm).toContain('TRIGGER:-PT30M');
   });
 
-  it('sin WEB_PUBLIC_URL omite URL/LOCATION en vez de escribir un enlace roto', () => {
+  it('sin dirección pública del aula omite URL/LOCATION en vez de escribir un enlace roto', () => {
     const ics = buildIcsEvent({ ...base, classUrl: '' });
     expect(ics).not.toContain('URL:');
     expect(ics).not.toContain('LOCATION:');

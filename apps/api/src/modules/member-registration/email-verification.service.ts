@@ -10,6 +10,7 @@ import { PrismaAuditLogService } from '../prisma-audit-log.service';
 import { SmtpAdapterService } from '../smtp-adapter.service';
 import { TenantSmtpResolverService } from '../tenant-smtp-resolver.service';
 import { PrismaService } from '../../prisma/prisma.service';
+import { TenantResolverService } from '../../tenancy/tenant-resolver.service';
 import type { ClientContext } from '../../auth/client-context';
 import { buildOtpEmail } from './email-templates';
 import { resolveEmailBranding, type BrandingPrisma } from '../../common/branded-email';
@@ -50,6 +51,7 @@ export class EmailVerificationService {
     private readonly smtp: SmtpAdapterService,
     private readonly smtpResolver: TenantSmtpResolverService,
     private readonly logger: PinoLogger,
+    private readonly tenantResolver: TenantResolverService,
   ) {}
 
   /**
@@ -173,7 +175,9 @@ export class EmailVerificationService {
     const branding = await resolveEmailBranding(
       this.prisma as unknown as BrandingPrisma,
       tenantId,
-      process.env['WEB_PUBLIC_URL']?.trim() ?? '',
+      // Aula del tenant (no `WEB_PUBLIC_URL`): de ahí cuelga el logo del correo.
+      // Best-effort, como el resto del branding: sin ella el correo sale sin logo.
+      await this.tenantResolver.resolveTenantWebBaseUrlForBackground(tenantId).catch(() => ''),
     );
     const locale = await this.resolveEmailLocale(tenantId, email);
     const override = await fetchEmailOverride(

@@ -114,6 +114,33 @@ export function resolveWebBaseUrl(
 }
 
 /**
+ * Variante de `resolveWebBaseUrl` para envíos SIN PETICIÓN: workers, bridges de
+ * eventos y el hub de notificaciones. Misma prioridad —el dominio primario
+ * verificado del tenant gana a `WEB_PUBLIC_URL`— pero con dos diferencias que
+ * salen de no tener `req`:
+ *
+ *   - no hay Host del que derivar nada;
+ *   - sin dominio de tenant ni `WEB_PUBLIC_URL` devuelve `''`, no
+ *     `http://localhost:3000`. Las plantillas de fondo envuelven cada enlace en
+ *     una sección (`{{#classUrl}}…{{/classUrl}}`) y el hub omite el botón cuando
+ *     no hay base: un correo sin enlace es mejor que uno que manda al alumno a
+ *     `localhost`.
+ *
+ * Devuelve la base SIN barra final.
+ */
+export function resolveWebBaseUrlForBackground(tenantPrimaryHostname?: string | null): string {
+  if (tenantPrimaryHostname) {
+    const proto = isLocalHostname(tenantPrimaryHostname) ? 'http' : 'https';
+    return `${proto}://${tenantPrimaryHostname}`;
+  }
+  const fromEnv = process.env.WEB_PUBLIC_URL?.trim();
+  if (fromEnv && isValidHttpUrl(fromEnv)) {
+    return fromEnv.replace(/\/+$/, '');
+  }
+  return '';
+}
+
+/**
  * Variante ENDURECIDA de `resolveWebBaseUrl` para redirects que PORTAN TOKENS de
  * sesión (callbacks SSO: WP-SSO, etc.). A diferencia de `resolveWebBaseUrl` —que
  * deriva del host del request a propósito para los links de email—, esta NUNCA

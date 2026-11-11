@@ -107,7 +107,18 @@ function montar(e: Escenario) {
   } as never;
   const logger = { log: vi.fn(), warn: vi.fn(), error: vi.fn() } as never;
 
-  const worker = new SubscriptionsDailyWorker(registry, smtp, smtpResolver, prisma, logger);
+  const tenantResolver = {
+    resolveTenantWebBaseUrlForBackground: vi.fn().mockResolvedValue('https://aula.example.test'),
+  } as never;
+
+  const worker = new SubscriptionsDailyWorker(
+    registry,
+    smtp,
+    smtpResolver,
+    prisma,
+    logger,
+    tenantResolver,
+  );
   return { worker, enviados, logger, prisma };
 }
 

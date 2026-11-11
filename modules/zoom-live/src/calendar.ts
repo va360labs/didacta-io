@@ -25,7 +25,10 @@ export interface CalendarEventInput {
   topic: string;
   startTime: Date;
   durationMinutes: number;
-  /** URL absoluta a `/clase/<id>`, o '' si `WEB_PUBLIC_URL` no está puesta. */
+  /**
+   * URL absoluta a `/clase/<id>` en el aula del tenant, o '' si el host no
+   * conoce su dirección pública (ni dominio del tenant ni `WEB_PUBLIC_URL`).
+   */
   classUrl: string;
   /** Nombre del tenant, para que el evento se reconozca en el calendario. */
   organizerName: string;

@@ -283,7 +283,9 @@ export class AdminSmtpController {
     const branding = await resolveEmailBranding(
       this.prisma as unknown as BrandingPrisma,
       claims.tenantId,
-      process.env['WEB_PUBLIC_URL']?.trim() ?? '',
+      // Aula del tenant (no `WEB_PUBLIC_URL`): de ahí cuelga el logo del correo.
+      // Best-effort, como el resto del branding: sin ella el correo sale sin logo.
+      await this.modules.getTenantWebBaseUrl(claims.tenantId).catch(() => ''),
     );
     // El email de prueba sale en el idioma del ADMIN que lo dispara: es él
     // quien lo va a leer para comprobar que el SMTP funciona. La key
@@ -407,7 +409,9 @@ export class AdminSmtpController {
     const branding = await resolveEmailBranding(
       this.prisma as unknown as BrandingPrisma,
       claims.tenantId,
-      process.env['WEB_PUBLIC_URL']?.trim() ?? '',
+      // Aula del tenant (no `WEB_PUBLIC_URL`): de ahí cuelga el logo del correo.
+      // Best-effort, como el resto del branding: sin ella el correo sale sin logo.
+      await this.modules.getTenantWebBaseUrl(claims.tenantId).catch(() => ''),
     );
     // `tenantName` lo inyecta el hub en todos sus envíos: sin él la plantilla
     // saldría con un hueco donde va el nombre de la plataforma.

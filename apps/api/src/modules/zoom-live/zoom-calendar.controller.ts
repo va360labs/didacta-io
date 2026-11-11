@@ -14,6 +14,7 @@ import {
 import type { FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { runSanctionedGlobalAccess } from '../../tenancy/tenant-context.storage';
+import { TenantResolverService } from '../../tenancy/tenant-resolver.service';
 import { ModuleRegistryService } from '../module-registry.service';
 import { classUrl } from './class-links';
 
@@ -37,7 +38,10 @@ const uuidSchema = z.string().uuid();
 @ApiTags('Modules · Zoom Live')
 @Controller('modules/zoom-live')
 export class ZoomCalendarController {
-  constructor(private readonly registry: ModuleRegistryService) {}
+  constructor(
+    private readonly registry: ModuleRegistryService,
+    private readonly tenantResolver: TenantResolverService,
+  ) {}
 
   @Get('sessions/:id/calendar.ics')
   @ApiOperation({
@@ -98,7 +102,13 @@ export class ZoomCalendarController {
       topic: info.topic,
       startTime: info.startTime,
       durationMinutes: info.durationMinutes,
-      classUrl: classUrl(info.id),
+      // El enlace que queda guardado en el calendario del alumno es el de SU
+      // aula: se resuelve por el tenant dueño de la clase, no por
+      // `WEB_PUBLIC_URL` (una sola para toda la instalación).
+      classUrl: classUrl(
+        await this.tenantResolver.resolveTenantWebBaseUrlForBackground(info.tenantId),
+        info.id,
+      ),
       organizerName: info.organizerName,
     };
   }

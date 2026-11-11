@@ -11,6 +11,7 @@ import { runAsTenant, runSanctionedGlobalAccess } from './tenant-context.storage
 import {
   resolveWebBaseUrl,
   resolveWebBaseUrlForAuthRedirect,
+  resolveWebBaseUrlForBackground,
   type RequestLike,
 } from '../common/resolve-web-base-url';
 
@@ -187,6 +188,25 @@ export class TenantResolverService {
   async resolveTenantWebBaseUrl(tenantId: string | null, req?: RequestLike): Promise<string> {
     const hostname = tenantId ? await this.resolvePrimaryDomain(tenantId) : null;
     return resolveWebBaseUrl(req, hostname);
+  }
+
+  /**
+   * Base pública del aula de un tenant para envíos SIN petición (workers,
+   * bridges de eventos, hub de notificaciones): su dominio primario verificado
+   * y, si no tiene, `WEB_PUBLIC_URL`. `''` cuando no hay ninguna de las dos —
+   * quien llama omite el enlace (ver `resolveWebBaseUrlForBackground`).
+   *
+   * Antes cada emisor de fondo leía `WEB_PUBLIC_URL` por su cuenta: en una
+   * instalación con varias academias, todos sus correos (recordatorios de
+   * clase, encuestas, avisos de la comunidad, el botón de cualquier
+   * notificación) enlazaban al dominio general del servidor y no al aula del
+   * destinatario.
+   *
+   * No traga errores: si no se puede leer el dominio del tenant, es preferible
+   * que el envío falle a que salga apuntando a otra aula.
+   */
+  async resolveTenantWebBaseUrlForBackground(tenantId: string): Promise<string> {
+    return resolveWebBaseUrlForBackground(await this.resolvePrimaryDomain(tenantId));
   }
 
   /** Variante endurecida (ver `resolveWebBaseUrlForAuthRedirect`) consciente del tenant. */

@@ -77,12 +77,15 @@ export class ZoomLiveNotificationsBridge implements OnModuleInit {
     eventBus.subscribe<RegistrationCreatedPayload>(
       'zoom.session.registration.created',
       async (event: DomainEvent<RegistrationCreatedPayload>) => {
+        // Los enlaces cuelgan del aula DEL TENANT, no de `WEB_PUBLIC_URL`: en un
+        // servidor con varias academias esa variable es el dominio general.
+        const webBase = await this.factory.getTenantWebBaseUrl(event.metadata.tenantId);
         await this.notify(event.metadata.tenantId, event.data.userId, {
           templateKey: 'zoom.class.registration.confirmed',
           variables: {
             topic: event.data.topic,
             startsAt: startsAtValue(event.data.startTime, event.data.timezone),
-            ...calendarVariables(event.data.sessionId),
+            ...calendarVariables(webBase, event.data.sessionId),
           },
         });
       },

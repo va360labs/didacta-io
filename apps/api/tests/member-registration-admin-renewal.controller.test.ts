@@ -79,7 +79,10 @@ function build(overrides?: {
     smtp as never,
     smtpResolver as never,
     prisma as never,
-    {} as never,
+    // Dirección del aula del tenant: aquí solo cuelga el logo del recordatorio.
+    {
+      resolveTenantWebBaseUrlForBackground: vi.fn(async () => 'https://aula.example.test'),
+    } as never,
   );
   return { controller, registration, lookup, paymentSvc, smtpResolver, smtp, prisma };
 }

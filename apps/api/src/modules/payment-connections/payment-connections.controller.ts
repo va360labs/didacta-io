@@ -811,7 +811,9 @@ export class PaymentConnectionsController {
     const branding = await resolveEmailBranding(
       this.prisma as unknown as BrandingPrisma,
       user.tenantId,
-      process.env['WEB_PUBLIC_URL']?.trim() ?? '',
+      // Aula del tenant (no `WEB_PUBLIC_URL`): de ahí cuelga el logo del correo.
+      // Best-effort, como el resto del branding: sin ella el correo sale sin logo.
+      await this.tenantResolver.resolveTenantWebBaseUrlForBackground(user.tenantId).catch(() => ''),
     );
     const result = await this.smtp.send(
       resolved.config,

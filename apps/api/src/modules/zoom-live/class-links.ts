@@ -6,35 +6,43 @@
 /**
  * Enlaces públicos de una clase en directo que viajan por email.
  *
- * Todos cuelgan de `WEB_PUBLIC_URL` (el dominio del tenant, no el de la API):
- * Next reescribe `/api/:path*` hacia la API, así que un enlace de calendario
- * servido desde el dominio de siempre funciona igual y no delata una URL
- * interna en la bandeja de entrada.
+ * Todos cuelgan de la dirección pública del aula DEL TENANT (su dominio, no el
+ * de la API): Next reescribe `/api/:path*` hacia la API, así que un enlace de
+ * calendario servido desde el dominio de siempre funciona igual y no delata
+ * una URL interna en la bandeja de entrada.
  *
- * Si `WEB_PUBLIC_URL` no está configurada, devuelven '' — las plantillas
- * envuelven cada enlace en una sección mustache (`{{#classUrl}}…{{/classUrl}}`)
- * y el bloque desaparece del email en vez de mandar una URL rota.
+ * La base la resuelve quien llama con
+ * `TenantResolverService.resolveTenantWebBaseUrlForBackground` (dominio
+ * primario verificado del tenant; `WEB_PUBLIC_URL` solo si no tiene) y la pasa
+ * aquí. Es OBLIGATORIA a propósito: estas funciones leían `WEB_PUBLIC_URL` por
+ * su cuenta y, en un servidor con varias academias, el recordatorio de clase
+ * de cada una enlazaba al dominio general del servidor.
+ *
+ * Con base `''` (ni dominio de tenant ni `WEB_PUBLIC_URL`) devuelven '' — las
+ * plantillas envuelven cada enlace en una sección mustache
+ * (`{{#classUrl}}…{{/classUrl}}`) y el bloque desaparece del email en vez de
+ * mandar una URL rota.
  */
 
-function webBase(): string {
-  return (process.env['WEB_PUBLIC_URL'] ?? '').trim().replace(/\/+$/, '');
+function clean(webBase: string): string {
+  return webBase.trim().replace(/\/+$/, '');
 }
 
 /** Página de la clase — el único sitio donde se ve el `joinUrl` (ADR-017). */
-export function classUrl(sessionId: string): string {
-  const base = webBase();
+export function classUrl(webBase: string, sessionId: string): string {
+  const base = clean(webBase);
   return base ? `${base}/clase/${sessionId}` : '';
 }
 
 /** Descarga del `.ics`: Outlook, Apple Calendar y cualquier cliente estándar. */
-export function calendarIcsUrl(sessionId: string): string {
-  const base = webBase();
+export function calendarIcsUrl(webBase: string, sessionId: string): string {
+  const base = clean(webBase);
   return base ? `${base}/api/v1/modules/zoom-live/sessions/${sessionId}/calendar.ics` : '';
 }
 
 /** Redirección al "añadir evento" de Google Calendar. */
-export function calendarGoogleUrl(sessionId: string): string {
-  const base = webBase();
+export function calendarGoogleUrl(webBase: string, sessionId: string): string {
+  const base = clean(webBase);
   return base ? `${base}/api/v1/modules/zoom-live/sessions/${sessionId}/calendar/google` : '';
 }
 
@@ -43,14 +51,17 @@ export function calendarGoogleUrl(sessionId: string): string {
  * inscripción y recordatorio). Un único sitio que cambiar si mañana se añade
  * otro proveedor.
  */
-export function calendarVariables(sessionId: string): {
+export function calendarVariables(
+  webBase: string,
+  sessionId: string,
+): {
   classUrl: string;
   calendarGoogleUrl: string;
   calendarIcsUrl: string;
 } {
   return {
-    classUrl: classUrl(sessionId),
-    calendarGoogleUrl: calendarGoogleUrl(sessionId),
-    calendarIcsUrl: calendarIcsUrl(sessionId),
+    classUrl: classUrl(webBase, sessionId),
+    calendarGoogleUrl: calendarGoogleUrl(webBase, sessionId),
+    calendarIcsUrl: calendarIcsUrl(webBase, sessionId),
   };
 }

@@ -165,7 +165,11 @@ export class ZoomReminderWorker implements OnApplicationBootstrap, OnModuleDestr
           topic: info.topic,
           startsAt: startsAtValue(info.startTime, info.timezone),
           hoursBefore,
-          ...calendarVariables(pending.id),
+          // Aula del tenant de ESTA clase (el barrido es cross-tenant).
+          ...calendarVariables(
+            await this.factory.getTenantWebBaseUrl(pending.tenantId),
+            pending.id,
+          ),
         };
 
         // Secuencial a propósito: el hub hace SMTP por destinatario y no

@@ -25,6 +25,15 @@ import {
   toHubTemplateLang,
 } from './notifications/email-template-catalog';
 import { resolveNotificationVariables } from './notifications/hub-values';
+import { resolveWebBaseUrlForBackground } from '../common/resolve-web-base-url';
+
+/**
+ * Lo único que el hub necesita del `TenantResolverService`. Interfaz mínima
+ * para no arrastrar el servicio (y su Prisma) a cada test que construye el hub.
+ */
+export interface TenantWebBaseResolver {
+  resolveTenantWebBaseUrlForBackground(tenantId: string): Promise<string>;
+}
 
 /**
  * Implementación real del NotificationHub: persiste cada notificación en
@@ -65,6 +74,17 @@ export class PrismaNotificationHubService implements NotificationHubService {
      * ya quedó persistida y el flujo no se rompe.
      */
     private readonly realtime?: NotificationRealtimePublisher,
+    /**
+     * Resuelve la dirección pública del aula de CADA tenant (su dominio
+     * primario verificado; `WEB_PUBLIC_URL` solo si no tiene). Lo inyecta
+     * `ModuleContextFactory` con el `TenantResolverService`.
+     *
+     * Sin él —tests y construcciones mínimas— se cae a `WEB_PUBLIC_URL`, que es
+     * una sola para toda la instalación: en un servidor con varias academias
+     * eso manda el botón de cada correo al dominio general y no al aula del
+     * destinatario.
+     */
+    private readonly tenantWebBase?: TenantWebBaseResolver,
   ) {}
 
   async send(notification: {
@@ -100,7 +120,11 @@ export class PrismaNotificationHubService implements NotificationHubService {
     // Branding del tenant: el nombre queda disponible como {{tenantName}} en las
     // plantillas (para no firmar como "Didacta") y el logo/color se usan en el
     // email HTML. Best-effort: nunca rompe el envío.
-    const webBaseUrl = process.env['WEB_PUBLIC_URL']?.trim() ?? '';
+    //
+    // La dirección del aula solo hace falta para el email (botón y logo): en
+    // in-app no se pinta ninguna de las dos, así que no se paga la consulta.
+    const webBaseUrl =
+      channel === 'EMAIL' ? await this.resolveWebBaseUrl(notification.tenantId) : '';
     const branding = await resolveEmailBranding(
       this.prisma as unknown as BrandingPrisma,
       notification.tenantId,
@@ -297,6 +321,17 @@ export class PrismaNotificationHubService implements NotificationHubService {
     } else {
       await this.markFailed(args.notificationId, `smtp_send_failed:${result.error ?? 'unknown'}`);
     }
+  }
+
+  /**
+   * Dirección pública del aula del tenant: es a donde lleva el botón de cada
+   * correo y de donde cuelga el logo cuando su ruta es relativa.
+   */
+  private async resolveWebBaseUrl(tenantId: string): Promise<string> {
+    if (this.tenantWebBase) {
+      return this.tenantWebBase.resolveTenantWebBaseUrlForBackground(tenantId);
+    }
+    return resolveWebBaseUrlForBackground(null);
   }
 
   /**

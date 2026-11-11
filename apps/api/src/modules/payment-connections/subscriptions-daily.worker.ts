@@ -15,6 +15,7 @@ import IORedis, { type Redis } from 'ioredis';
 import { Logger as PinoLogger } from 'nestjs-pino';
 import type { UpcomingRenewal } from '@didacta/mod-payment-connections';
 import { runAsTenant, runSanctionedGlobalAccess } from '../../tenancy/tenant-context.storage';
+import { TenantResolverService } from '../../tenancy/tenant-resolver.service';
 import { ModuleRegistryService } from '../module-registry.service';
 import { SmtpAdapterService, type SmtpConfig } from '../smtp-adapter.service';
 import { TenantSmtpResolverService } from '../tenant-smtp-resolver.service';
@@ -94,6 +95,7 @@ export class SubscriptionsDailyWorker implements OnApplicationBootstrap, OnModul
     private readonly smtpResolver: TenantSmtpResolverService,
     private readonly prisma: PrismaService,
     private readonly logger: PinoLogger,
+    private readonly tenantResolver: TenantResolverService,
   ) {}
 
   async onApplicationBootstrap(): Promise<void> {
@@ -166,7 +168,12 @@ export class SubscriptionsDailyWorker implements OnApplicationBootstrap, OnModul
           const branding = await resolveEmailBranding(
             this.prisma as unknown as BrandingPrisma,
             tenantId,
-            process.env['WEB_PUBLIC_URL']?.trim() ?? '',
+            // Aula del tenant (no `WEB_PUBLIC_URL`, una sola por instalación):
+            // de ahí cuelga el logo de los correos de este barrido. Best-effort,
+            // como el resto del branding: sin ella salen sin logo.
+            await this.tenantResolver
+              .resolveTenantWebBaseUrlForBackground(tenantId)
+              .catch(() => ''),
           );
           await this.sendAdminDigest(service, resolved.config, tenantId, branding);
           await this.sendMemberWarnings(service, resolved.config, tenantId, branding);

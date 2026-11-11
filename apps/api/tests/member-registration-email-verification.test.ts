@@ -138,6 +138,13 @@ const fakeSmtpResolver = {
 
 const fakeLogger = { warn: () => {}, log: () => {}, error: () => {}, debug: () => {} };
 
+/** Dirección del aula del tenant: aquí solo sirve para colgar el logo del correo. */
+const fakeTenantResolver = {
+  async resolveTenantWebBaseUrlForBackground(_tenantId: string) {
+    return 'https://aula.example.test';
+  },
+};
+
 function makeService() {
   const prisma = makeFakePrisma();
   const service = new EmailVerificationService(
@@ -146,6 +153,7 @@ function makeService() {
     fakeSmtp as never,
     fakeSmtpResolver as never,
     fakeLogger as never,
+    fakeTenantResolver as never,
   );
   return { service, prisma };
 }
@@ -222,6 +230,7 @@ describe('EmailVerificationService.requestCode', () => {
       smtp as never,
       fakeSmtpResolver as never,
       fakeLogger as never,
+      fakeTenantResolver as never,
     );
     await service.requestCode(TENANT_ID, EMAIL, CTX);
     expect(sendCalls).toBe(1);
@@ -240,6 +249,7 @@ describe('EmailVerificationService.requestCode', () => {
       fakeSmtp as never,
       resolver as never,
       fakeLogger as never,
+      fakeTenantResolver as never,
     );
     const seconds = await service.requestCode(TENANT_ID, EMAIL, CTX);
     expect(seconds).toBe(600);
@@ -361,6 +371,7 @@ describe('EmailVerificationService · idioma del email del código', () => {
       smtp as never,
       fakeSmtpResolver as never,
       fakeLogger as never,
+      fakeTenantResolver as never,
     );
     return { service, enviados };
   }

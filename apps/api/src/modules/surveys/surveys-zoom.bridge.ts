@@ -28,9 +28,12 @@ interface SessionEndedPayload {
   meetingId?: string;
 }
 
-/** Enlace absoluto a la clase, o '' si WEB_PUBLIC_URL no está configurada. */
-function classUrl(sessionId: string): string {
-  const base = (process.env['WEB_PUBLIC_URL'] ?? '').trim().replace(/\/+$/, '');
+/**
+ * Enlace absoluto a la clase en el aula del tenant, o '' si no se conoce su
+ * dirección pública (la plantilla omite entonces el bloque del enlace).
+ */
+function classUrl(webBase: string, sessionId: string): string {
+  const base = webBase.trim().replace(/\/+$/, '');
   return base ? `${base}/clase/${sessionId}` : '';
 }
 
@@ -90,7 +93,10 @@ export class SurveysZoomBridge implements OnModuleInit {
     });
     if (registrations.length === 0) return;
 
-    const variables = { topic: session.topic, surveyUrl: classUrl(sessionId) };
+    // Aula del tenant dueño de la clase, no `WEB_PUBLIC_URL` (una sola para
+    // toda la instalación).
+    const webBase = await this.factory.getTenantWebBaseUrl(tenantId);
+    const variables = { topic: session.topic, surveyUrl: classUrl(webBase, sessionId) };
     // Secuencial a propósito: el hub hace SMTP por destinatario y no queremos
     // ráfagas paralelas contra el servidor de correo.
     for (const { userId } of registrations) {
