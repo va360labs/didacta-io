@@ -1,0 +1,10 @@
+# Falsos positivos de gitleaks, por huella (commit:fichero:regla:línea).
+# Hace falta la huella y no basta con tocar el fichero: gitleaks recorre el
+# historial, así que el commit original seguiría saliendo.
+#
+# apps/api/tests/video-protection.test.ts — vectores de prueba de la firma de
+# Bunny: dos SHA-256 calculados con openssl sobre una clave inventada
+# ('clave-de-pruebas-de-la-libreria') y un GUID inventado. No son credenciales.
+08adfab2052529bb12cf70f483bf3323a6500d2b:apps/api/tests/video-protection.test.ts:generic-api-key:55
+08adfab2052529bb12cf70f483bf3323a6500d2b:apps/api/tests/video-protection.test.ts:generic-api-key:57
+08adfab2052529bb12cf70f483bf3323a6500d2b:apps/api/tests/video-protection.test.ts:generic-api-key:99
