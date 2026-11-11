@@ -32,6 +32,7 @@ import {
   SessionNotOpenForRegistrationError,
 } from './errors.js';
 import { buildZoomApiClient, StubZoomApiClient, type ZoomApiClient } from './zoom-api-client.js';
+import { webhookEventKey } from './webhook-event-key.js';
 
 export class ZoomLiveService {
   /**
@@ -874,13 +875,15 @@ export class ZoomLiveService {
    *  - `OK`: se aplicó un cambio de status.
    *  - `IGNORED`: evento conocido pero no relevante (no es started/ended,
    *    o el meeting no matchea ninguna sesión nuestra).
-   *  - `DUPLICATE`: el `event_id` ya estaba procesado (Zoom reintenta).
+   *  - `DUPLICATE`: ese aviso ya estaba procesado (Zoom reintenta).
    *  - `ERROR`: fallo al persistir; el controller responderá 5xx para que
    *    Zoom reintente.
    *
-   * Es idempotente por `event_id`: registramos cada evento recibido en
-   * `mod_zoom_live_webhook_event` con UNIQUE en esa columna; un segundo intento
-   * con el mismo id devuelve DUPLICATE sin re-aplicar el efecto.
+   * Es idempotente por la clave del aviso (`webhookEventKey`): registramos
+   * cada evento recibido en `mod_zoom_live_webhook_event` con UNIQUE en
+   * `event_id`; un segundo intento con la misma clave devuelve DUPLICATE sin
+   * re-aplicar el efecto. La clave NO depende de que Zoom mande `event_id` en
+   * el cuerpo (no lo manda): se deriva del contenido del aviso.
    */
   /**
    * Lee el `webhookSecret` guardado junto a las credenciales S2S del tenant
@@ -918,12 +921,18 @@ export class ZoomLiveService {
 
   async handleWebhookEvent(
     event: ZoomWebhookEvent,
+    /**
+     * `rawBody`: el cuerpo tal cual llegó. Solo se usa para derivar la clave
+     * cuando el aviso no trae ni `event_id` ni `event_ts`.
+     */
+    opts: { rawBody?: string } = {},
   ): Promise<{ result: 'OK' | 'IGNORED' | 'DUPLICATE' | 'ERROR'; sessionId?: string }> {
+    const eventId = webhookEventKey(event, opts.rawBody);
     // El evento se RECLAMA antes de hacer nada, con el unique index de
     // `event_id` como cerrojo.
     //
     // Antes era un check-then-act: `findUnique` al entrar y `create` al final.
-    // Dos entregas concurrentes del mismo `event_id` —Zoom reintenta— pasaban
+    // Dos entregas concurrentes del mismo aviso —Zoom reintenta— pasaban
     // las dos el chequeo, las dos hacían el trabajo (doble publicación del
     // evento de dominio) y la perdedora reventaba con un P2002 sin capturar al
     // llegar al `create`: 5xx a Zoom, que volvía a reintentar.
@@ -932,18 +941,22 @@ export class ZoomLiveService {
       await this.prisma.modZoomWebhookEvent.create({
         data: {
           id: randomUUID(),
-          eventId: event.event_id,
+          eventId,
           eventType: event.event,
           meetingId,
           result: 'PENDING',
         },
       });
     } catch (e) {
-      // Ya lo tiene otro (o ya se procesó en una entrega anterior).
+      // SOLO la unique de `event_id` (P2002) significa «ya lo tiene otro o ya
+      // se procesó». Cualquier otro fallo al reclamar (la base no contesta, la
+      // conexión se cae) NO es un duplicado: darlo por visto era contestar 200
+      // a Zoom, que entonces no reintenta, y el aviso se perdía sin rastro. Se
+      // relanza para que el host responda 5xx y Zoom vuelva a entregarlo.
+      if ((e as { code?: string }).code !== 'P2002') throw e;
       this.ctx.logger.info('mod.zoom-live: webhook duplicado, ignorado', {
-        eventId: event.event_id,
+        eventId,
         eventType: event.event,
-        error: e instanceof Error ? e.message : String(e),
       });
       return { result: 'DUPLICATE' };
     }
@@ -998,7 +1011,7 @@ export class ZoomLiveService {
         result = 'ERROR';
         errorMessage = e instanceof Error ? e.message : String(e);
         this.ctx.logger.error('mod.zoom-live: error aplicando webhook', {
-          eventId: event.event_id,
+          eventId,
           eventType: event.event,
           error: errorMessage,
         });
@@ -1022,7 +1035,7 @@ export class ZoomLiveService {
         result = 'ERROR';
         errorMessage = e instanceof Error ? e.message : String(e);
         this.ctx.logger.error('mod.zoom-live: error guardando grabación', {
-          eventId: event.event_id,
+          eventId,
           eventType: event.event,
           error: errorMessage,
         });
@@ -1035,7 +1048,7 @@ export class ZoomLiveService {
 
     // Cierra la reclamación con el desenlace real.
     await this.prisma.modZoomWebhookEvent.update({
-      where: { eventId: event.event_id },
+      where: { eventId },
       data: {
         sessionId: session?.id ?? null,
         tenantId: session?.tenantId ?? null,

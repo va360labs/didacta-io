@@ -1697,3 +1697,113 @@ describe('ZoomLiveService.getWebhookSecret (A2 — antes vivía en env ZOOM_WEBH
     expect(await service.getWebhookSecret('otro-tenant')).toBeNull();
   });
 });
+
+describe('ZoomLiveService.handleWebhookEvent · avisos reales de Zoom (sin event_id)', () => {
+  /**
+   * Zoom no manda `event_id` en el cuerpo. Estos avisos tienen la forma real:
+   * `{ event, event_ts, payload }`. La clave de idempotencia sale del contenido.
+   */
+  async function setup() {
+    const prisma = makeFakePrisma();
+    const ctx = makeCtx();
+    const service = new ZoomLiveService(prisma as never, ctx as never, new StubZoomApiClient());
+    const created = await service.create(TENANT, ACTOR, {
+      topic: 'Clase real',
+      startTime: '2026-05-15T10:00:00-03:00',
+      durationMinutes: 60,
+      hostEmail: 'h@x.com',
+      timezone: 'UTC',
+    });
+    const aviso = (event: string, eventTs: number, uuid = 'uuid-ocurrencia-1==') => ({
+      event,
+      event_ts: eventTs,
+      payload: { account_id: 'acc-1', object: { id: created.zoomMeetingId!, uuid } },
+    });
+    return { prisma, ctx, service, created, aviso };
+  }
+
+  it('un meeting.started sin event_id se APLICA: la clase pasa a STARTED', async () => {
+    const { service, created, aviso, ctx, prisma } = await setup();
+
+    const out = await service.handleWebhookEvent(aviso('meeting.started', 1_778_850_000_000));
+
+    expect(out).toEqual({ result: 'OK', sessionId: created.id });
+    expect((await service.get(TENANT, created.id)).status).toBe('STARTED');
+    expect(ctx.events.map((e) => e.name)).toContain('zoom.session.started');
+    // Queda archivado con una clave propia, no con un hueco.
+    expect(prisma._webhookEvents).toHaveLength(1);
+    expect(prisma._webhookEvents[0]!.eventId).toMatch(/^derived-[0-9a-f]{40}$/);
+    expect(prisma._webhookEvents[0]!.result).toBe('OK');
+  });
+
+  it('la reentrega del mismo aviso es DUPLICATE: no se aplica ni se publica dos veces', async () => {
+    const { service, aviso, ctx, prisma } = await setup();
+    const started = aviso('meeting.started', 1_778_850_000_000);
+
+    const first = await service.handleWebhookEvent(started);
+    // Zoom reintenta con el mismo cuerpo (otra petición, mismo suceso).
+    const second = await service.handleWebhookEvent(JSON.parse(JSON.stringify(started)));
+
+    expect(first.result).toBe('OK');
+    expect(second.result).toBe('DUPLICATE');
+    expect(ctx.events.filter((e) => e.name === 'zoom.session.started')).toHaveLength(1);
+    expect(prisma._webhookEvents).toHaveLength(1);
+  });
+
+  it('started y ended de la misma reunión son dos sucesos: se aplican los dos', async () => {
+    const { service, created, aviso, ctx } = await setup();
+
+    const a = await service.handleWebhookEvent(aviso('meeting.started', 1_778_850_000_000));
+    const b = await service.handleWebhookEvent(aviso('meeting.ended', 1_778_853_600_000));
+
+    expect(a.result).toBe('OK');
+    // Sin clave propia, el segundo aviso chocaba con el primero (los dos
+    // «sin id») y la clase se quedaba en STARTED para siempre.
+    expect(b.result).toBe('OK');
+    expect((await service.get(TENANT, created.id)).status).toBe('ENDED');
+    expect(ctx.events.map((e) => e.name)).toEqual(
+      expect.arrayContaining(['zoom.session.started', 'zoom.session.ended']),
+    );
+  });
+
+  it('dos ocurrencias de una reunión recurrente no se pisan', async () => {
+    const { service, aviso, prisma } = await setup();
+
+    const lunes = await service.handleWebhookEvent(aviso('meeting.started', 1_778_850_000_000));
+    const martes = await service.handleWebhookEvent(
+      aviso('meeting.started', 1_778_936_400_000, 'uuid-ocurrencia-2=='),
+    );
+
+    expect(lunes.result).toBe('OK');
+    expect(martes.result).toBe('OK');
+    expect(prisma._webhookEvents).toHaveLength(2);
+  });
+
+  it('sin event_ts la clave sale del cuerpo crudo que pasa el host', async () => {
+    const { service, created, prisma } = await setup();
+    const event = { event: 'meeting.started', payload: { object: { id: created.zoomMeetingId! } } };
+    const rawBody = JSON.stringify(event);
+
+    const first = await service.handleWebhookEvent(event, { rawBody });
+    const second = await service.handleWebhookEvent(event, { rawBody });
+
+    expect(first.result).toBe('OK');
+    expect(second.result).toBe('DUPLICATE');
+    expect(prisma._webhookEvents).toHaveLength(1);
+  });
+
+  it('si reclamar el aviso falla por algo que NO es un duplicado, el error sale: no se da por visto', async () => {
+    const { service, created, aviso, prisma } = await setup();
+    // Un fallo de base cualquiera (no la unique de `event_id`).
+    prisma.modZoomWebhookEvent.create = async () => {
+      throw new Error('connection terminated unexpectedly');
+    };
+
+    await expect(
+      service.handleWebhookEvent(aviso('meeting.started', 1_778_850_000_000)),
+    ).rejects.toThrow('connection terminated unexpectedly');
+    // Devolver DUPLICATE aquí era contestar 200 a Zoom: no reintentaba y el
+    // aviso se perdía sin rastro.
+    expect((await service.get(TENANT, created.id)).status).toBe('SCHEDULED');
+  });
+});

@@ -123,6 +123,34 @@ describe('ZoomWebhookController', () => {
     expect(result).toEqual({ result: 'OK', sessionId: 'sess-1' });
   });
 
+  it('aviso REAL de Zoom (sin event_id en el cuerpo): se procesa, no se descarta', async () => {
+    // Zoom manda `{ event, event_ts, payload }`. Cuando el schema exigía
+    // `event_id`, esto contestaba IGNORED/unknown_payload_shape y la clase
+    // nunca cambiaba de estado.
+    const handleWebhookEvent = vi.fn().mockResolvedValue({ result: 'OK', sessionId: 'sess-1' });
+    const { controller, zoomLive } = makeController({ handleWebhookEvent });
+    const body = JSON.stringify({
+      event: 'meeting.ended',
+      event_ts: 1785782996000,
+      payload: {
+        account_id: 'abc123',
+        object: { id: 87470222827, uuid: 'someUuid==', end_time: '2026-08-03T18:49:56Z' },
+      },
+    });
+
+    const result = await controller.handle(makeReq(body));
+
+    expect(result).toEqual({ result: 'OK', sessionId: 'sess-1' });
+    expect(zoomLive.resolveWebhookTenantId).toHaveBeenCalledTimes(1);
+    expect(handleWebhookEvent).toHaveBeenCalledTimes(1);
+    const [event, opts] = handleWebhookEvent.mock.calls[0]!;
+    expect(event).toMatchObject({ event: 'meeting.ended', event_ts: 1785782996000 });
+    expect(event.event_id).toBeUndefined();
+    // El cuerpo crudo viaja al módulo: es el respaldo de la clave de
+    // idempotencia cuando el aviso no trae `event_ts`.
+    expect(opts).toEqual({ rawBody: body });
+  });
+
   it('payload con shape desconocido → IGNORED sin tocar handleWebhookEvent', async () => {
     const handleWebhookEvent = vi.fn();
     const { controller } = makeController({ handleWebhookEvent });

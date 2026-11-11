@@ -49,7 +49,9 @@ import { resolvePublicHost } from '../../common/resolve-public-host';
  * probar.
  *
  * Zoom espera 2xx en menos de 3s o reintenta hasta 3 veces. La idempotencia
- * la garantiza `mod_zoom_live_webhook_event.event_id` UNIQUE en DB.
+ * la garantiza `mod_zoom_live_webhook_event.event_id` UNIQUE en DB, con una
+ * clave que el módulo deriva del contenido del aviso (`webhookEventKey`): Zoom
+ * no manda `event_id` en el cuerpo, así que no se le puede exigir.
  */
 @ApiTags('Webhooks · Zoom')
 @Controller('webhooks/zoom')
@@ -138,7 +140,7 @@ export class ZoomWebhookController {
     );
     const outcome = await runAsTenantOrSanctioned(
       tenantId,
-      () => zoomLive.handleWebhookEvent(result.data),
+      () => zoomLive.handleWebhookEvent(result.data, { rawBody }),
       { traceLabel: 'zoom-webhook' },
     );
     return outcome;

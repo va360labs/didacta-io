@@ -80,10 +80,17 @@ export type UpdateSessionDto = z.infer<typeof updateSessionSchema>;
  */
 export const webhookEventSchema = z.object({
   /**
-   * UUID del evento generado por Zoom. Usado para idempotencia (Zoom
-   * reintenta hasta 3 veces si no recibimos 2xx en 3s).
+   * OPCIONAL: Zoom NO lo manda en el cuerpo de sus avisos reales (su forma es
+   * `{ event, event_ts, payload }`). Cuando era obligatorio, el schema
+   * rechazaba TODO aviso real: el endpoint contestaba 200 IGNORED sin tocar la
+   * clase, Zoom no reintentaba y no quedaba rastro. Nadie lo vio porque los
+   * tests inventaban su propio `event_id`.
+   *
+   * Si viene (payloads hechos a mano, tests) se usa como clave de
+   * idempotencia; si no, la clave se deriva del contenido — ver
+   * `webhookEventKey`.
    */
-  event_id: z.string().min(1),
+  event_id: z.string().min(1).optional(),
   event: z.string().min(1),
   /** Timestamp epoch ms. */
   event_ts: z.number().int().optional(),

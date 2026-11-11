@@ -49,6 +49,7 @@ export {
   signZoomWebhook,
   verifyZoomSignature,
 } from './webhook-signature.js';
+export { DERIVED_EVENT_KEY_PREFIX, webhookEventKey } from './webhook-event-key.js';
 export {
   buildGoogleCalendarUrl,
   buildIcsEvent,
