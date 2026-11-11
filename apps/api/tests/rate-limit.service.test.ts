@@ -371,3 +371,76 @@ describe('RateLimitService · gate feat:api.rate_limit.elevated', () => {
     expect(keys[0]).toBe(`ratelimit:anonymous:public:${expectedMinute}`);
   });
 });
+
+describe('RateLimitService · el tier enterprise nunca baja del community', () => {
+  // El caso real: un operador sube el community por env porque su aula tiene
+  // tráfico, activa la licencia y pasan a mandar los defaults enterprise
+  // (1.000 auth / 300 public). Pagar el plan le BAJA el límite: 429 en el
+  // login y en las imágenes.
+  it('community subido por env + licencia enterprise → el enterprise hereda el suelo', async () => {
+    process.env['RATE_LIMIT_COMMUNITY_AUTH_PER_MIN'] = '100000';
+    process.env['RATE_LIMIT_COMMUNITY_PUBLIC_PER_MIN'] = '100000';
+    const service = new RateLimitService(await makeLicense('dev'), makeRedisMock());
+
+    expect(service.getCurrentTier()).toBe('enterprise');
+    expect((await service.recordRequest('tenant-1', false)).limit).toBe(100_000);
+    expect((await service.recordRequest('anon:visitante', true)).limit).toBe(100_000);
+  });
+
+  it('control: el mismo env SIN licencia ya daba esas cifras (el plan de pago no puede dar menos)', async () => {
+    process.env['RATE_LIMIT_COMMUNITY_AUTH_PER_MIN'] = '100000';
+    process.env['RATE_LIMIT_COMMUNITY_PUBLIC_PER_MIN'] = '100000';
+    const service = new RateLimitService(await makeLicense('community'), makeRedisMock());
+
+    expect(service.getCurrentTier()).toBe('community');
+    expect((await service.recordRequest('tenant-1', false)).limit).toBe(100_000);
+    expect((await service.recordRequest('anon:visitante', true)).limit).toBe(100_000);
+  });
+
+  it('cada cubo tiene su suelo: subir solo el público no toca el autenticado', async () => {
+    process.env['RATE_LIMIT_COMMUNITY_PUBLIC_PER_MIN'] = '5000';
+    const service = new RateLimitService(await makeLicense('dev'), makeRedisMock());
+
+    expect((await service.recordRequest('anon:visitante', true)).limit).toBe(5000);
+    expect((await service.recordRequest('tenant-1', false)).limit).toBe(
+      DEFAULT_RATE_LIMIT_CONFIG.enterprise.authenticated,
+    );
+  });
+
+  it('un enterprise explícito MÁS ALTO que el community se respeta', async () => {
+    process.env['RATE_LIMIT_COMMUNITY_PUBLIC_PER_MIN'] = '50';
+    process.env['RATE_LIMIT_ENTERPRISE_PUBLIC_PER_MIN'] = '900';
+    const service = new RateLimitService(await makeLicense('dev'), makeRedisMock());
+
+    expect((await service.recordRequest('anon:visitante', true)).limit).toBe(900);
+  });
+
+  it('un enterprise explícito MÁS BAJO que el community no baja el límite', async () => {
+    process.env['RATE_LIMIT_COMMUNITY_AUTH_PER_MIN'] = '400';
+    process.env['RATE_LIMIT_ENTERPRISE_AUTH_PER_MIN'] = '50';
+    const service = new RateLimitService(await makeLicense('dev'), makeRedisMock());
+
+    expect((await service.recordRequest('tenant-1', false)).limit).toBe(400);
+  });
+
+  it('sin overrides, los defaults no cambian', async () => {
+    const service = new RateLimitService(await makeLicense('dev'), makeRedisMock());
+
+    expect((await service.recordRequest('tenant-1', false)).limit).toBe(
+      DEFAULT_RATE_LIMIT_CONFIG.enterprise.authenticated,
+    );
+    expect((await service.recordRequest('anon:visitante', true)).limit).toBe(
+      DEFAULT_RATE_LIMIT_CONFIG.enterprise.public,
+    );
+  });
+
+  it('la cifra que enseña el panel es la misma que se cobra', async () => {
+    process.env['RATE_LIMIT_COMMUNITY_AUTH_PER_MIN'] = '100000';
+    const service = new RateLimitService(await makeLicense('dev'), makeRedisMock());
+
+    const config = service.getConfig();
+    expect(config.enterprise.authenticated).toBe(100_000);
+    expect(config.enterprise.authenticated).toBeGreaterThanOrEqual(config.community.authenticated);
+    expect(config.enterprise.public).toBeGreaterThanOrEqual(config.community.public);
+  });
+});

@@ -115,27 +115,47 @@ export function readPositiveIntEnv(name: string, fallback: number): number {
  * Resuelve la configuración efectiva mezclando defaults del piloto con
  * overrides de env. Pensado para llamarse al construir el service o desde
  * tests para producir un config determinista.
+ *
+ * El tier enterprise NUNCA queda por debajo del community: es el «elevado».
+ * Sin este suelo, un operador que sube el community por env (p. ej. a 100.000
+ * porque su aula tiene mucho tráfico) y luego activa la licencia se encuentra
+ * con que mandan los defaults enterprise (1.000 / 300): pagar el plan le BAJA
+ * el límite, y lo nota como 429 en el login y en las imágenes.
+ *
+ * El suelo se aplica aquí y no al decidir cada petición para que la cifra sea
+ * la misma en todas partes: la que se cobra en `RateLimitService` y la que
+ * enseña `/admin/rate-limit/info`.
+ *
+ * Consecuencia: un `RATE_LIMIT_ENTERPRISE_*` puesto a propósito por DEBAJO del
+ * community deja de tener efecto (vale el del community).
  */
 export function resolveRateLimitConfig(): RateLimitConfig {
+  const community = {
+    authenticated: readPositiveIntEnv(
+      'RATE_LIMIT_COMMUNITY_AUTH_PER_MIN',
+      DEFAULT_RATE_LIMIT_CONFIG.community.authenticated,
+    ),
+    public: readPositiveIntEnv(
+      'RATE_LIMIT_COMMUNITY_PUBLIC_PER_MIN',
+      DEFAULT_RATE_LIMIT_CONFIG.community.public,
+    ),
+  };
   return {
-    community: {
-      authenticated: readPositiveIntEnv(
-        'RATE_LIMIT_COMMUNITY_AUTH_PER_MIN',
-        DEFAULT_RATE_LIMIT_CONFIG.community.authenticated,
-      ),
-      public: readPositiveIntEnv(
-        'RATE_LIMIT_COMMUNITY_PUBLIC_PER_MIN',
-        DEFAULT_RATE_LIMIT_CONFIG.community.public,
-      ),
-    },
+    community,
     enterprise: {
-      authenticated: readPositiveIntEnv(
-        'RATE_LIMIT_ENTERPRISE_AUTH_PER_MIN',
-        DEFAULT_RATE_LIMIT_CONFIG.enterprise.authenticated,
+      authenticated: Math.max(
+        community.authenticated,
+        readPositiveIntEnv(
+          'RATE_LIMIT_ENTERPRISE_AUTH_PER_MIN',
+          DEFAULT_RATE_LIMIT_CONFIG.enterprise.authenticated,
+        ),
       ),
-      public: readPositiveIntEnv(
-        'RATE_LIMIT_ENTERPRISE_PUBLIC_PER_MIN',
-        DEFAULT_RATE_LIMIT_CONFIG.enterprise.public,
+      public: Math.max(
+        community.public,
+        readPositiveIntEnv(
+          'RATE_LIMIT_ENTERPRISE_PUBLIC_PER_MIN',
+          DEFAULT_RATE_LIMIT_CONFIG.enterprise.public,
+        ),
       ),
     },
     windowSeconds: readPositiveIntEnv(
