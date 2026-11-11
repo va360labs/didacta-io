@@ -9,6 +9,11 @@ import path from 'node:path';
 /// mínimo en lógica de negocio) sin imponer umbral al resto del suite de web,
 /// que nunca lo tuvo.
 export default defineConfig({
+  // El tsconfig de la web lleva `jsx: preserve` (lo transforma Next), y con eso
+  // esbuild cae al runtime clásico: cualquier test que llegue a PINTAR un
+  // componente revienta con «React is not defined». Con el runtime automático
+  // —el mismo que usa Next— los tests pueden montar componentes de verdad.
+  esbuild: { jsx: 'automatic' },
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
