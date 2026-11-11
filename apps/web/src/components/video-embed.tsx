@@ -7,15 +7,17 @@
 
 import { useTranslations } from 'next-intl';
 import { useRef, useState } from 'react';
+import { BunnyFrame } from '@/components/bunny-frame';
 import {
-  bunnyEmbedUrl,
   formatSeconds,
   parseBunny,
   parseResources,
   parseYouTubeId,
   parseYouTubeStartSeconds,
+  withBunnyPlayerParams,
   youTubeEmbedUrl,
 } from '@/lib/video';
+import { useBunnyPlayUrl } from '@/lib/use-bunny-play-url';
 import { useBunnyWatch, type WatchReport } from '@/lib/use-bunny-watch';
 
 interface Props {
@@ -69,13 +71,22 @@ export function VideoEmbed({
   const bunny = parseBunny(url);
   const ytId = bunny ? null : parseYouTubeId(url);
 
+  // URL de reproducción de Bunny pedida a la API: firmada (token + caducidad
+  // corta) si la academia protege sus vídeos, la de siempre si no. La que
+  // guarda la lección es permanente y, con el token activo en la librería, no
+  // carga. Al saltar a un capítulo (nonce nuevo) se revisa la caducidad.
+  const nonce = seek?.nonce ?? 0;
+  const play = useBunnyPlayUrl(bunny, nonce);
+
   // Medición de visionado real (solo Bunny por ahora). El hook no hace nada si
-  // no hay callback, está deshabilitado o no es un iframe de Bunny.
+  // no hay callback, está deshabilitado o no es un iframe de Bunny. El iframe
+  // se monta cuando llega la URL de reproducción: el `remountKey` cambia
+  // también en ese momento para que el hook se enganche al nodo recién montado.
   useBunnyWatch({
     iframeRef: bunnyIframeRef,
     onReport: onWatch ?? (() => {}),
     enabled: Boolean(bunny && onWatch && watchEnabled),
-    remountKey: seek?.nonce ?? 0,
+    remountKey: nonce * 2 + (play.url ? 1 : 0),
   });
 
   function handleSeek(seconds: number) {
@@ -101,25 +112,22 @@ export function VideoEmbed({
     );
   } else if (bunny) {
     player = (
-      <div className="aspect-video w-full overflow-hidden rounded-lg border border-border bg-black">
-        <iframe
-          key={seek?.nonce ?? 'init'}
-          ref={bunnyIframeRef}
-          src={bunnyEmbedUrl(bunny, {
+      <BunnyFrame
+        play={play}
+        title={title}
+        iframeRef={bunnyIframeRef}
+        iframeKey={seek?.nonce ?? 'init'}
+        buildSrc={(playUrl) =>
+          withBunnyPlayerParams(playUrl, {
             // Al saltar a un capítulo manda `seek`; si no, arranca en la posición
             // de reanudación guardada (si la hay). El player de Bunny queda
             // pausado (autoplay solo en el salto de capítulo), así que si la
             // posición llega tarde solo re-sitúa el vídeo, sin interrumpir.
             startSeconds: seek?.seconds ?? (resumeAt > 0 ? resumeAt : undefined),
             autoplay: seek != null,
-          })}
-          title={title}
-          loading="lazy"
-          className="h-full w-full"
-          allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture; fullscreen"
-          allowFullScreen
-        />
-      </div>
+          })
+        }
+      />
     );
   } else if (ytId) {
     const start = seek?.seconds ?? parseYouTubeStartSeconds(url);

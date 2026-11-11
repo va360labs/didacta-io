@@ -707,6 +707,24 @@ table,
   margin: 1.5rem 0;
 }
 
+/* Vídeo de Bunny Stream incrustado a mano en el HTML: su `<iframe>` se sustituye
+ * por un hueco donde la página monta el reproductor que pide su URL a la API
+ * (ver `lesson-html-videos.tsx`). El hueco ocupa el sitio que ocupaba el iframe;
+ * dentro, el iframe del reproductor llena su caja en vez de heredar el alto
+ * automático y los márgenes de la regla de arriba (que lo descuadrarían, y a
+ * pantalla completa lo dejarían a media altura). */
+.lesson-prose .lesson-bunny-slot {
+  display: block;
+  margin: 1.5rem 0;
+}
+
+.lesson-prose .lesson-bunny-slot iframe {
+  height: 100% !important;
+  aspect-ratio: auto;
+  margin: 0;
+  border-radius: 0;
+}
+
 /* Wrapper de ratio de WP (`<div style="position:relative;padding-top:56.25%">`):
  * con el iframe ya en flujo normal (arriba), aplanamos el padding-hack para que
  * no deje un hueco vacío ni descuadre la altura bajo el vídeo. */

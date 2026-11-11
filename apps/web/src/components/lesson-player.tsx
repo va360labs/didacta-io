@@ -7,6 +7,7 @@
 
 import { useTranslations } from 'next-intl';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
+import { LessonHtmlWithVideos } from '@/components/lesson-html-videos';
 import { QuizPlayer } from '@/components/quiz-player';
 import { VideoEmbed } from '@/components/video-embed';
 import { Badge } from '@/components/ui/badge';
@@ -297,11 +298,14 @@ function LessonContent({
     // sólo de proveedores de vídeo autorizados: las lecciones HTML heredadas
     // llevan el vídeo embebido a mano y seguirían funcionando. Antes esto se
     // pintaba crudo, lo que convertía a cualquier formador en dueño del
-    // navegador de sus alumnos (XSS almacenado). El memo evita que el iframe
-    // se recree en cada reporte de progreso (ver LessonRichHtml).
+    // navegador de sus alumnos (XSS almacenado). Va memoizado para que el
+    // iframe no se recree en cada reporte de progreso (ver LessonRichHtml).
     const html = sanitizeLessonHtml(raw);
     if (!html) return <Empty hint={t('lesson.emptyHtml')} />;
-    return <LessonRichHtml html={html} />;
+    // Los `<iframe>` de Bunny incrustados a mano se montan con el reproductor
+    // que pide su URL a la API (firmada si la academia protege sus vídeos); el
+    // resto del HTML, y los vídeos de otros proveedores, van tal cual.
+    return <LessonHtmlWithVideos html={html} />;
   }
 
   if (lesson.type === 'PDF') {

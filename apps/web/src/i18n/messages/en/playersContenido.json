@@ -109,7 +109,13 @@
   "video": {
     "missing": "The video is missing. Ask the instructor to upload it.",
     "chapters": "Chapters",
-    "resources": "Resources"
+    "resources": "Resources",
+    "forbidden": "You don't have access to this video.",
+    "rateLimited": "You have opened many videos in a short time. Try again in a while.",
+    "loadError": "The video could not be loaded. Reload the page to try again.",
+    "fullscreen": "Full screen",
+    "exitFullscreen": "Exit full screen",
+    "embeddedTitle": "Lesson video"
   },
   "aiTutor": {
     "title": "AI tutor",

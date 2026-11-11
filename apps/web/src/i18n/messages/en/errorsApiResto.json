@@ -50,5 +50,8 @@
   "WEBHOOKS_DEAD_LETTER_NOT_FOUND": "Dead-letter entry not found or not part of this tenant.",
   "WEBHOOKS_ENDPOINT_NOT_FOUND": "Endpoint not found",
   "webhook_limit_exceeded": "Your plan's webhook limit has been reached. Upgrade to Enterprise or free up quota.",
-  "webhook_url_duplicate": "There is already an endpoint with that URL in this tenant."
+  "webhook_url_duplicate": "There is already an endpoint with that URL in this tenant.",
+  "VIDEO_BAD_REQUEST": "Invalid video.",
+  "VIDEO_FORBIDDEN": "You don't have access to this video.",
+  "VIDEO_RATE_LIMITED": "You have opened too many different videos in a short time. Try again later."
 }

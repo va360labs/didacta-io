@@ -117,23 +117,149 @@ export function parseBunny(url: string): BunnyRef | null {
   return { libraryId: m[1] ?? '', guid: m[2] ?? '' };
 }
 
+export interface BunnyPlayerOptions {
+  startSeconds?: number;
+  autoplay?: boolean;
+}
+
 /**
- * Construye la URL de embed de Bunny Stream. `t` arranca el vídeo en ese
- * segundo (soportado por el player de Bunny); `autoplay` lo reproduce solo
- * (lo usamos al saltar a un capítulo).
+ * Añade los parámetros del reproductor (`autoplay`, `preload`, `responsive`,
+ * `t`) a una URL de embed de Bunny. Respeta lo que ya traiga la URL: la firma
+ * que devuelve la API (`token` + `expires`) va en la query y NO se toca, porque
+ * Bunny valida el hash contra esos dos valores exactos.
+ *
+ * `t` arranca el vídeo en ese segundo (soportado por el player de Bunny);
+ * `autoplay` lo reproduce solo (lo usamos al saltar a un capítulo).
  */
-export function bunnyEmbedUrl(
-  ref: BunnyRef,
-  opts: { startSeconds?: number; autoplay?: boolean } = {},
-): string {
-  const params = new URLSearchParams();
-  params.set('autoplay', opts.autoplay ? 'true' : 'false');
-  params.set('preload', 'true');
-  params.set('responsive', 'true');
+export function withBunnyPlayerParams(embedUrl: string, opts: BunnyPlayerOptions = {}): string {
+  const url = new URL(embedUrl);
+  url.searchParams.set('autoplay', opts.autoplay ? 'true' : 'false');
+  url.searchParams.set('preload', 'true');
+  url.searchParams.set('responsive', 'true');
   if (opts.startSeconds && opts.startSeconds > 0) {
-    params.set('t', String(Math.floor(opts.startSeconds)));
+    url.searchParams.set('t', String(Math.floor(opts.startSeconds)));
+  } else {
+    url.searchParams.delete('t');
   }
-  return `https://iframe.mediadelivery.net/embed/${ref.libraryId}/${ref.guid}?${params.toString()}`;
+  return url.toString();
+}
+
+/** URL de embed de Bunny SIN firmar (la permanente que guarda el contenido). */
+export function bunnyBaseEmbedUrl(ref: BunnyRef): string {
+  return `https://iframe.mediadelivery.net/embed/${ref.libraryId}/${ref.guid}`;
+}
+
+/**
+ * Construye la URL de embed de Bunny Stream SIN firmar. Ojo: si la academia
+ * protege sus vídeos (autenticación por token activa en la librería de Bunny),
+ * esta URL no carga; el reproductor debe usar la que da la API
+ * (`useBunnyPlayUrl` + `withBunnyPlayerParams`).
+ */
+export function bunnyEmbedUrl(ref: BunnyRef, opts: BunnyPlayerOptions = {}): string {
+  return withBunnyPlayerParams(bunnyBaseEmbedUrl(ref), opts);
+}
+
+/** Parámetros de la firma: los pone la API, nunca el contenido de una lección. */
+const BUNNY_SIGNATURE_PARAMS = new Set(['token', 'expires']);
+
+/**
+ * Para un `<iframe>` de Bunny incrustado a mano en una lección HTML: pasa los
+ * parámetros de reproductor que eligió quien escribió la lección (`autoplay`,
+ * `loop`, `muted`…) a la URL de reproducción que da la API. Así el vídeo se
+ * comporta como el autor lo dejó, pero cargando con la firma vigente.
+ *
+ * Un `token`/`expires` pegado en el HTML se descarta: sería una firma vieja (o
+ * de otro vídeo) y pisaría la buena.
+ */
+export function withOriginalBunnyParams(playUrl: string, originalSrc: string): string {
+  const url = new URL(playUrl);
+  let original: URL;
+  try {
+    original = new URL(originalSrc);
+  } catch {
+    return url.toString();
+  }
+  for (const [name, value] of original.searchParams) {
+    if (BUNNY_SIGNATURE_PARAMS.has(name.toLowerCase())) continue;
+    if (!url.searchParams.has(name)) url.searchParams.set(name, value);
+  }
+  return url.toString();
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// URL de reproducción (Bunny con protección de vídeo)
+//
+// Si la academia protege sus vídeos, la API firma la URL de embed (`token` +
+// `expires`) por vídeo y por alumno, con caducidad corta: una URL copiada o
+// recolectada por un script deja de servir en minutos. Estos helpers deciden
+// cuándo una URL ya pedida sigue valiendo y cuándo hay que volver a pedirla.
+// ──────────────────────────────────────────────────────────────────────────
+
+export interface BunnyPlayUrlEntry {
+  url: string;
+  /** Caducidad de la firma (epoch ms), o null si la URL no va firmada. */
+  expiresAtMs: number | null;
+  /** Cuándo se obtuvo (epoch ms). */
+  fetchedAtMs: number;
+  /** El reproductor debe pintar la marca de agua con la identidad del alumno. */
+  watermark: boolean;
+}
+
+/** Margen antes de la caducidad: no montar un iframe con una firma a punto de morir. */
+export const PLAY_URL_EXPIRY_MARGIN_MS = 60_000;
+/**
+ * Vida de una URL SIN firma en la caché. Si el admin activa la protección a
+ * mitad de sesión, a los pocos minutos el reproductor pasa a pedir la firmada.
+ */
+export const UNSIGNED_PLAY_URL_TTL_MS = 5 * 60_000;
+
+/** True si la URL cacheada se puede usar para montar el reproductor ahora. */
+export function isPlayUrlFresh(entry: BunnyPlayUrlEntry | undefined, nowMs: number): boolean {
+  if (!entry) return false;
+  if (entry.expiresAtMs === null) return nowMs - entry.fetchedAtMs < UNSIGNED_PLAY_URL_TTL_MS;
+  return entry.expiresAtMs - PLAY_URL_EXPIRY_MARGIN_MS > nowMs;
+}
+
+/** Clave de caché de un vídeo de Bunny. */
+export function bunnyRefKey(ref: BunnyRef): string {
+  return `${ref.libraryId}/${ref.guid.toLowerCase()}`;
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// Marca de agua dinámica
+// ──────────────────────────────────────────────────────────────────────────
+
+/**
+ * Posición (en % del reproductor) para la marca de agua. Acotada para que el
+ * texto quede siempre dentro del vídeo y NUNCA encima de la barra de controles
+ * de la parte inferior (último ~20 %), ni pegado al botón de pantalla completa
+ * de la esquina superior derecha.
+ *
+ * En vertical solo usa dos franjas, la de arriba y la de abajo: por el centro
+ * pasaría por encima de lo que se está explicando y distrae de la clase.
+ */
+export const WATERMARK_TOP_RANGE: readonly [number, number] = [8, 72];
+export const WATERMARK_TOP_BANDS: ReadonlyArray<readonly [number, number]> = [
+  [8, 20],
+  [60, 72],
+];
+export const WATERMARK_LEFT_RANGE: readonly [number, number] = [3, 55];
+
+export function randomWatermarkPosition(rand: () => number = Math.random): {
+  topPct: number;
+  leftPct: number;
+} {
+  const pick = ([min, max]: readonly [number, number]) => {
+    const r = Math.min(Math.max(rand(), 0), 1);
+    return Math.round((min + r * (max - min)) * 10) / 10;
+  };
+  const band = WATERMARK_TOP_BANDS[rand() < 0.5 ? 0 : 1]!;
+  return { topPct: pick(band), leftPct: pick(WATERMARK_LEFT_RANGE) };
+}
+
+/** Texto de la marca: email + id corto, para identificar a quien grabe la pantalla. */
+export function watermarkLabel(user: { email: string; id: string }): string {
+  return `${user.email} · ${user.id.slice(0, 8)}`;
 }
 
 // ──────────────────────────────────────────────────────────────────────────
