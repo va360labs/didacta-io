@@ -3,13 +3,15 @@
  * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
  */
 
-import { Controller, Get, UnauthorizedException, UseGuards } from '@nestjs/common';
+import { Controller, Get, Optional, UnauthorizedException, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { ALL_CAPABILITIES, LicenseService } from '@didacta/license-sdk';
 import { CurrentUser, MfaExempt } from '../auth/decorators';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import type { SessionClaims } from '../auth/token.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { OPEN_GATE } from '../tenancy/subscription-gate';
+import { SubscriptionGateService } from '../tenancy/subscription-gate.service';
 import { TenantModulesService } from './tenant-modules.service';
 
 /**
@@ -34,6 +36,12 @@ import { TenantModulesService } from './tenant-modules.service';
  *    Items con `requiresCapability` que no estén aquí → marcados con
  *    candado (patrón EeGate, n8n style), NO ocultos.
  *
+ *  - `subscriptionGate`: la puerta de suscripción del tenant. Para quien lo
+ *    administra, entera (estado, fin de la prueba y el enlace «Elegir plan»);
+ *    para cualquier otro rol, solo si está en pausa — la prueba y el enlace de
+ *    pago no son cosa suya. Está en la lista blanca del 402: es justo lo que el
+ *    aula necesita leer cuando está cerrada.
+ *
  * Vive en `ModulesModule` y no en `AuthModule` para evitar dependencia
  * circular (ModulesModule ya importa AuthModule).
  */
@@ -46,6 +54,7 @@ export class MeModulesController {
     private readonly tenantModules: TenantModulesService,
     private readonly license: LicenseService,
     private readonly prisma: PrismaService,
+    @Optional() private readonly subscriptionGate?: SubscriptionGateService,
   ) {}
 
   @Get('modules')
@@ -74,6 +83,19 @@ export class MeModulesController {
     const activeModules = Array.from(new Set([...builtInActive, ...thirdPartyActive]));
 
     const enabledCapabilities = ALL_CAPABILITIES.filter((c) => this.license.isCapabilityEnabled(c));
-    return { activeModules, enabledCapabilities };
+
+    const gate = this.subscriptionGate
+      ? await this.subscriptionGate.gateFor(user.tenantId)
+      : OPEN_GATE;
+    const administra = user.roles.some((r) => r === 'tenant_admin' || r === 'super_admin');
+    const subscriptionGate = administra
+      ? {
+          state: gate.state,
+          trialEndsAt: gate.trialEndsAt?.toISOString() ?? null,
+          actionUrl: gate.actionUrl,
+        }
+      : { state: gate.state === 'LOCKED' ? 'LOCKED' : 'OPEN', trialEndsAt: null, actionUrl: null };
+
+    return { activeModules, enabledCapabilities, subscriptionGate };
   }
 }

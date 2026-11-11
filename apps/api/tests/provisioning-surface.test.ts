@@ -21,7 +21,7 @@ import { AdminSystemController } from '../src/modules/admin-system.controller';
 import { ALLOW_PROVISIONING_KEY } from '../src/auth/jwt-or-provisioning.guard';
 
 /**
- * Las 10 operaciones que el plano de control necesita para dar de alta, operar,
+ * Las 11 operaciones que el plano de control necesita para dar de alta, operar,
  * facturar y sostener un tenant. Ni una más.
  *
  * `setSignups` (U7) se añadió el 2026-08-12 a conciencia: congelar altas es el
@@ -37,6 +37,12 @@ import { ALLOW_PROVISIONING_KEY } from '../src/auth/jwt-or-provisioning.guard';
  * en el audit log DEL TENANT y un aviso permanente en el aula— y todo eso lo
  * fija `support-access.test.ts`. Van juntas a propósito: abrir sin poder cerrar
  * dejaría al operador esperando a que caduque cuando se equivoque de tenant.
+ *
+ * `setSubscriptionGate` (2026-11-11) es la prueba gratis de Didacta Cloud: el
+ * plano de control abre, pone en prueba o cierra el aula según su cuenta. Como
+ * `setSignups`, el núcleo solo obedece: no cuenta días ni mira planes, y
+ * `subscription-gate.test.ts` lo vigila. No toca `status` ni las sesiones; lo
+ * peor que puede hacer es dejar un aula en pausa, y el mismo PUT la reabre.
  */
 const WHITELIST = [
   'list',
@@ -45,6 +51,7 @@ const WHITELIST = [
   'create',
   'setStatus',
   'setSignups',
+  'setSubscriptionGate',
   'grantSupportAccess',
   'revokeSupportAccess',
   'addDomain',
@@ -109,7 +116,7 @@ function isAllowed(controller: new (...args: never[]) => unknown, handler: strin
 }
 
 describe('UC-C103 AC2 · superficie de la credencial de provisioning', () => {
-  it('abre exactamente las 10 rutas de la lista blanca en AdminTenantsController', () => {
+  it('abre exactamente las 11 rutas de la lista blanca en AdminTenantsController', () => {
     const abiertas = routeHandlersOf(AdminTenantsController).filter((h) =>
       isAllowed(AdminTenantsController, h),
     );

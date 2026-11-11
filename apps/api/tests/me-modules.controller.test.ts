@@ -140,4 +140,60 @@ describe('MeModulesController · GET /me/modules', () => {
     );
     await expect(ctrl.list(undefined)).rejects.toThrow(/Unauthorized/);
   });
+
+  describe('puerta de suscripción', () => {
+    const ENDS = new Date('2026-11-18T18:00:00.000Z');
+    const URL = 'https://didacta.io/es/pricing?upgrade=tok';
+    function gate(state: 'OPEN' | 'TRIAL' | 'LOCKED') {
+      return {
+        gateFor: vi
+          .fn()
+          .mockResolvedValue(
+            state === 'OPEN'
+              ? { state, trialEndsAt: null, actionUrl: null }
+              : { state, trialEndsAt: ENDS, actionUrl: URL },
+          ),
+      };
+    }
+    async function listWith(state: 'OPEN' | 'TRIAL' | 'LOCKED', roles: string[]) {
+      await license.load({ key: null });
+      const ctrl = new MeModulesController(
+        ...([makeTenantModules([]), license, makePrisma(), gate(state)] as unknown as ServiceCtor),
+      );
+      return (await ctrl.list(makeUser({ roles }))).subscriptionGate;
+    }
+
+    it('el administrador ve la prueba entera, con fecha y enlace de pago', async () => {
+      expect(await listWith('TRIAL', ['tenant_admin'])).toEqual({
+        state: 'TRIAL',
+        trialEndsAt: ENDS.toISOString(),
+        actionUrl: URL,
+      });
+    });
+
+    it('un alumno NO ve la prueba ni el enlace: para él el aula está abierta', async () => {
+      expect(await listWith('TRIAL', ['alumno'])).toEqual({
+        state: 'OPEN',
+        trialEndsAt: null,
+        actionUrl: null,
+      });
+    });
+
+    it('con el aula en pausa, el alumno sabe que está en pausa pero no recibe el enlace', async () => {
+      expect(await listWith('LOCKED', ['alumno'])).toEqual({
+        state: 'LOCKED',
+        trialEndsAt: null,
+        actionUrl: null,
+      });
+      expect((await listWith('LOCKED', ['super_admin']))?.actionUrl).toBe(URL);
+    });
+
+    it('sin el servicio (instalación sin puerta) responde OPEN', async () => {
+      await license.load({ key: null });
+      const ctrl = new MeModulesController(
+        ...([makeTenantModules([]), license, makePrisma()] as unknown as ServiceCtor),
+      );
+      expect((await ctrl.list(makeUser())).subscriptionGate.state).toBe('OPEN');
+    });
+  });
 });

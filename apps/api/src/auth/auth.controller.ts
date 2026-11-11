@@ -3,9 +3,10 @@
  * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
  */
 
-import { Body, Controller, Get, HttpCode, HttpStatus, Post, Req } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, HttpStatus, Optional, Post, Req } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { FastifyRequest } from 'fastify';
+import { SubscriptionGateService } from '../tenancy/subscription-gate.service';
 import { runAsTenant } from '../tenancy/tenant-context.storage';
 import { TenantResolverService } from '../tenancy/tenant-resolver.service';
 import { AuthService } from './auth.service';
@@ -35,6 +36,7 @@ export class AuthController {
     private readonly passwordReset: PasswordResetService,
     private readonly tenantResolver: TenantResolverService,
     private readonly signinContext: SigninContextService,
+    @Optional() private readonly subscriptionGate?: SubscriptionGateService,
   ) {}
 
   /**
@@ -53,12 +55,18 @@ export class AuthController {
   @Get('tenant-context')
   @ApiOperation({
     summary:
-      'Resuelve el tenant del request por Host header. Devuelve { tenant: { id, slug, name, logoUrl, headline, subheadline, stats } } o { tenant: null }.',
+      'Resuelve el tenant del request por Host header. Devuelve { tenant: { id, slug, name, logoUrl, headline, subheadline, stats, subscriptionGate } } o { tenant: null }. `subscriptionGate.state` es `LOCKED` si el aula está en pausa y `OPEN` en cualquier otro caso.',
   })
   async tenantContext(@Req() req: FastifyRequest) {
     const hostStr = resolvePublicHost(req);
     const tenant = await this.tenantResolver.resolveByHost(hostStr);
     if (!tenant) return { tenant: null, host: hostStr ?? null };
+    // Puerta de suscripción, en su versión PÚBLICA: solo si el aula está en
+    // pausa. Que una academia esté en prueba no es asunto de quien la visita
+    // (la franja es solo para sus administradores, que la leen de
+    // `/me/modules` junto con el enlace de pago).
+    const gate = this.subscriptionGate ? await this.subscriptionGate.gateFor(tenant.id) : null;
+    const subscriptionGate = { state: gate?.state === 'LOCKED' ? 'LOCKED' : 'OPEN' } as const;
     const webBaseUrl = await this.tenantResolver.resolveTenantWebBaseUrl(tenant.id, req);
     // Logo del tenant (mod.theming) para que las páginas anónimas (signin,
     // registro) muestren la marca del tenant en vez de "Didacta".
@@ -85,6 +93,7 @@ export class AuthController {
         brandSaturation: branding.brandSaturation,
         stats: branding.stats,
         membershipPageActive: branding.membershipPageActive,
+        subscriptionGate,
       },
       host: hostStr ?? null,
     };

@@ -8,6 +8,7 @@ import {
   ConflictException,
   Injectable,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import { Logger as PinoLogger } from 'nestjs-pino';
 import { LICENSE_CAPABILITIES, LicenseService } from '@didacta/license-sdk';
@@ -16,6 +17,8 @@ import type { ClientContext } from '../auth/client-context';
 import { PasswordResetService } from '../auth/password-reset.service';
 import { PrismaAuditLogService } from '../modules/prisma-audit-log.service';
 import { PrismaService } from '../prisma/prisma.service';
+import type { GateState } from '../tenancy/subscription-gate';
+import { SubscriptionGateService } from '../tenancy/subscription-gate.service';
 import { runGlobalWithoutTenant } from '../tenancy/tenant-context.storage';
 
 const NO_CTX: ClientContext = { ip: null, userAgent: null };
@@ -72,6 +75,24 @@ export interface TenantUsageItem {
 }
 
 /**
+ * Respuesta de `PUT /admin/tenants/:id/subscription-gate`. Contrato con
+ * `didacta-cloud` (ver `tests/contract/admin-tenants.contract.test.ts`).
+ */
+export interface SubscriptionGateResponse {
+  tenantId: string;
+  state: GateState;
+  trialEndsAt: string | null;
+  actionUrl: string | null;
+  updatedAt: string | null;
+}
+
+export interface SubscriptionGateInput {
+  state: GateState;
+  trialEndsAt: string | null;
+  actionUrl: string | null;
+}
+
+/**
  * Roles que NO cuentan como miembro: son quien opera la academia, no quien la
  * consume. Cobrar por el administrador que da de alta a los demás sería cobrar
  * por el propio acto de administrar.
@@ -98,6 +119,9 @@ export class AdminTenantsService {
     private readonly passwordReset: PasswordResetService,
     private readonly license: LicenseService,
     private readonly logger: PinoLogger,
+    // Opcional para que los tests que montan el servicio a mano no tengan que
+    // traerlo; en la app siempre está (TenancyModule es global).
+    @Optional() private readonly subscriptionGate?: SubscriptionGateService,
   ) {}
 
   /**
@@ -552,6 +576,92 @@ export class AdminTenantsService {
       });
 
       return this.getDetail(id);
+    });
+  }
+
+  /**
+   * Mueve la puerta de suscripción del tenant. No toca `status`: el aula en
+   * pausa sigue ACTIVE para que su administrador pueda entrar y pagar. Ver
+   * `tenancy/subscription-gate.ts`.
+   *
+   * Idempotente de verdad: si lo pedido ya es lo que hay, no escribe, no deja
+   * fila en el audit log y devuelve el `updatedAt` de antes. El plano de control
+   * puede repetir la llamada todas las veces que quiera.
+   */
+  async setSubscriptionGate(
+    actor: AdminActor,
+    id: string,
+    input: SubscriptionGateInput,
+    ctx: ClientContext = NO_CTX,
+  ): Promise<SubscriptionGateResponse> {
+    return runGlobalWithoutTenant(async () => {
+      const t = await this.prisma.tenant.findFirst({
+        where: { id, deletedAt: null },
+        select: {
+          id: true,
+          subscriptionGateState: true,
+          subscriptionTrialEndsAt: true,
+          subscriptionActionUrl: true,
+          subscriptionGateUpdatedAt: true,
+        },
+      });
+      if (!t)
+        throw new NotFoundException({
+          message: 'Tenant no encontrado.',
+          code: 'ADMIN_TENANT_NOT_FOUND',
+        });
+
+      // OPEN borra fecha y enlace: un aula abierta no tiene prueba ni pago pendiente.
+      const open = input.state === 'OPEN';
+      const trialEndsAt = open || !input.trialEndsAt ? null : new Date(input.trialEndsAt);
+      const actionUrl = open ? null : input.actionUrl;
+
+      const unchanged =
+        t.subscriptionGateState === input.state &&
+        (t.subscriptionTrialEndsAt?.getTime() ?? null) === (trialEndsAt?.getTime() ?? null) &&
+        t.subscriptionActionUrl === actionUrl;
+
+      let updatedAt = t.subscriptionGateUpdatedAt;
+      if (!unchanged) {
+        updatedAt = new Date();
+        await this.prisma.tenant.update({
+          where: { id },
+          data: {
+            subscriptionGateState: input.state,
+            subscriptionTrialEndsAt: trialEndsAt,
+            subscriptionActionUrl: actionUrl,
+            subscriptionGateUpdatedAt: updatedAt,
+          },
+        });
+        this.subscriptionGate?.invalidate();
+
+        await this.auditLog.record({
+          tenantId: id,
+          actorId: auditActorId(actor),
+          action: `admin.tenant.subscription_gate.${input.state.toLowerCase()}`,
+          resourceType: 'tenant',
+          resourceId: id,
+          // El enlace lleva el token de pago de la cuenta: no se copia al log,
+          // basta con saber si había uno.
+          metadata: {
+            previousState: t.subscriptionGateState,
+            newState: input.state,
+            trialEndsAt: trialEndsAt?.toISOString() ?? null,
+            hasActionUrl: actionUrl !== null,
+            ...auditActorTrace(actor),
+          },
+          ip: ctx.ip ?? undefined,
+          userAgent: ctx.userAgent ?? undefined,
+        });
+      }
+
+      return {
+        tenantId: id,
+        state: input.state,
+        trialEndsAt: trialEndsAt?.toISOString() ?? null,
+        actionUrl,
+        updatedAt: updatedAt?.toISOString() ?? null,
+      };
     });
   }
 

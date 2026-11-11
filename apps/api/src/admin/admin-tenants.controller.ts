@@ -13,6 +13,7 @@ import {
   Param,
   Patch,
   Post,
+  Put,
   Query,
   Req,
   UnauthorizedException,
@@ -28,6 +29,7 @@ import { AllowProvisioning, CurrentUser } from '../auth/decorators';
 import { JwtOrProvisioningGuard } from '../auth/jwt-or-provisioning.guard';
 import type { SessionClaims } from '../auth/token.service';
 import { ZodValidationPipe } from '../auth/zod-validation.pipe';
+import { SUBSCRIPTION_GATE_STATES } from '../tenancy/subscription-gate';
 import { TenantResolverService } from '../tenancy/tenant-resolver.service';
 import { AdminTenantsService, type TenantUsageItem } from './admin-tenants.service';
 import { SupportAccessService } from './support-access.service';
@@ -80,6 +82,46 @@ export const supportAccessSchema = z.object({
   ttlSeconds: z.number().int().positive().optional(),
 });
 type SupportAccessDto = z.infer<typeof supportAccessSchema>;
+
+/**
+ * Campos de la puerta de suscripción. Se exportan por separado de las reglas
+ * cruzadas para que el test de contrato pueda fijar sus nombres.
+ */
+export const subscriptionGateFields = z.object({
+  state: z.enum(SUBSCRIPTION_GATE_STATES),
+  /** ISO-8601. Obligatorio en TRIAL; opcional en LOCKED; se ignora en OPEN. */
+  trialEndsAt: z.string().datetime({ offset: true }).nullish(),
+  /** Adónde lleva «Elegir plan». https obligatorio en TRIAL y LOCKED; se ignora en OPEN. */
+  actionUrl: z.string().max(2048).url().nullish(),
+});
+
+export const subscriptionGateSchema = subscriptionGateFields.superRefine((dto, ctx) => {
+  if (dto.state === 'TRIAL' && !dto.trialEndsAt) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['trialEndsAt'],
+      message: 'Obligatorio cuando el estado es TRIAL.',
+    });
+  }
+  if (dto.state !== 'OPEN') {
+    if (!dto.actionUrl) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['actionUrl'],
+        message: 'Obligatorio cuando el estado es TRIAL o LOCKED.',
+      });
+    } else if (!dto.actionUrl.startsWith('https://')) {
+      // El enlace lleva un token de pago y se abre desde el aula del cliente:
+      // por http viajaría en claro.
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['actionUrl'],
+        message: 'Tiene que ser https.',
+      });
+    }
+  }
+});
+type SubscriptionGateDto = z.infer<typeof subscriptionGateSchema>;
 
 function requireSuperAdmin(user: SessionClaims | undefined): SessionClaims {
   if (!user) throw new UnauthorizedException();
@@ -282,6 +324,47 @@ export class AdminTenantsController {
       id,
       dto.frozen,
       dto.reason,
+      extractClientContext(req),
+    );
+  }
+
+  @Put(':id/subscription-gate')
+  @AllowProvisioning()
+  @ApiOperation({
+    summary: 'Abrir, poner en prueba o cerrar la puerta de suscripción del aula.',
+    description: [
+      'Una dimensión **aparte** del estado del tenant: el aula sigue `ACTIVE` para que su',
+      'administrador pueda entrar y pagar.',
+      '',
+      '- `OPEN`: todo como siempre. Borra `trialEndsAt` y `actionUrl`. Es el estado de un',
+      '  tenant que nunca recibió esta llamada (Community autoalojada no cambia nada).',
+      '- `TRIAL`: el aula funciona y sus administradores ven una franja con los días que',
+      '  quedan y el botón «Elegir plan» → `actionUrl`. `trialEndsAt` es obligatorio.',
+      '- `LOCKED`: pantalla de pausa para todos y **402 `SUBSCRIPTION_LOCKED`** en la API',
+      '  salvo para entrar, saber quién eres, pintar la marca y leer este estado.',
+      '',
+      'Con `TRIAL` y `trialEndsAt` ya pasado, el aula se comporta como `LOCKED` aunque esta',
+      'llamada no se haya repetido. `actionUrl` tiene que ser https en `TRIAL` y `LOCKED`.',
+      '',
+      'Idempotente: repetir la misma petición no cambia `updatedAt` ni deja otra fila en el',
+      'audit log.',
+    ].join('\n'),
+  })
+  async setSubscriptionGate(
+    @Req() req: FastifyRequest,
+    @CurrentUser() user: SessionClaims | undefined,
+    @Param('id') id: string,
+    @Body(new ZodValidationPipe(subscriptionGateSchema)) dto: SubscriptionGateDto,
+  ) {
+    const actor = requireAdminActor(user, req);
+    return this.service.setSubscriptionGate(
+      actor,
+      id,
+      {
+        state: dto.state,
+        trialEndsAt: dto.trialEndsAt ?? null,
+        actionUrl: dto.actionUrl ?? null,
+      },
       extractClientContext(req),
     );
   }

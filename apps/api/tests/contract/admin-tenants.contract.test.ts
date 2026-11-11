@@ -6,7 +6,7 @@
  * CONTRATO CON `didacta-cloud` — UC-C104
  * ============================================================================
  *
- * Estas diez operaciones son las que un plano de control externo consume para
+ * Estas once operaciones son las que un plano de control externo consume para
  * dar de alta, operar, facturar y sostener tenants. **Romperlas es un breaking change**:
  * no basta con que la suite siga verde aquí, hay que coordinar el cambio con
  * `didacta-cloud` (y con cualquier self-hoster que automatice su instalación)
@@ -36,17 +36,20 @@ import {
   domainSchema,
   setStatusSchema,
   signupsSchema,
+  subscriptionGateFields,
+  subscriptionGateSchema,
   supportAccessSchema,
 } from '../../src/admin/admin-tenants.controller';
 import { SupportAccessController } from '../../src/admin/support-access.controller';
 import { SIGNUPS_FROZEN_CODE } from '../../src/tenancy/signup-freeze';
 import { SUPPORT_ACCESS_CODES } from '../../src/tenancy/support-access';
+import { SUBSCRIPTION_LOCKED_CODE } from '../../src/tenancy/subscription-gate';
 import { AdminTenantsService } from '../../src/admin/admin-tenants.service';
 
 const ACTOR = { kind: 'user' as const, userId: 'user-super-1' };
 const TENANT_ID = '99999999-8888-7777-6666-555555555555';
 
-/** Las 10 operaciones del contrato: verbo + ruta relativa al controller. */
+/** Las 11 operaciones del contrato: verbo + ruta relativa al controller. */
 const CONTRACT_ROUTES: Array<{ handler: string; method: number; path: string }> = [
   { handler: 'list', method: RequestMethod.GET, path: '/' },
   { handler: 'usage', method: RequestMethod.GET, path: 'usage' },
@@ -54,6 +57,11 @@ const CONTRACT_ROUTES: Array<{ handler: string; method: number; path: string }> 
   { handler: 'create', method: RequestMethod.POST, path: '/' },
   { handler: 'setStatus', method: RequestMethod.PATCH, path: ':id/status' },
   { handler: 'setSignups', method: RequestMethod.PATCH, path: ':id/signups' },
+  {
+    handler: 'setSubscriptionGate',
+    method: RequestMethod.PUT,
+    path: ':id/subscription-gate',
+  },
   { handler: 'grantSupportAccess', method: RequestMethod.POST, path: ':id/support-access' },
   {
     handler: 'revokeSupportAccess',
@@ -79,6 +87,9 @@ const TENANT_ITEM_FIELDS = [
   'courseCount',
 ];
 const TENANT_DOMAIN_FIELDS = ['hostname', 'isPrimary', 'isVerified'];
+
+/** Respuesta de `PUT :id/subscription-gate`. Cloud copia de aquí sus tipos. */
+const SUBSCRIPTION_GATE_FIELDS = ['tenantId', 'state', 'trialEndsAt', 'actionUrl', 'updatedAt'];
 
 /** Respuesta de `usage`. Es la que sostiene la facturación por tramos. */
 const TENANT_USAGE_FIELDS = ['tenantId', 'slug', 'activeMembers', 'asOf'];
@@ -273,6 +284,55 @@ describe('CONTRATO · admin/tenants ↔ didacta-cloud', () => {
       expect(SIGNUPS_FROZEN_CODE).toBe('TENANT_SIGNUPS_FROZEN');
     });
 
+    it('la puerta de suscripción lleva `state`, `trialEndsAt` y `actionUrl`', () => {
+      expect(Object.keys(subscriptionGateFields.shape).sort()).toEqual(
+        ['actionUrl', 'state', 'trialEndsAt'].sort(),
+      );
+      const trial = {
+        state: 'TRIAL',
+        trialEndsAt: '2026-11-18T18:00:00.000Z',
+        actionUrl: 'https://didacta.io/es/pricing?upgrade=tok',
+      };
+      expect(subscriptionGateSchema.parse(trial)).toEqual(trial);
+      // OPEN no necesita nada más; LOCKED puede ir sin fecha.
+      expect(subscriptionGateSchema.safeParse({ state: 'OPEN' }).success).toBe(true);
+      expect(
+        subscriptionGateSchema.safeParse({
+          state: 'LOCKED',
+          actionUrl: 'https://didacta.io/en/pricing?upgrade=tok',
+        }).success,
+      ).toBe(true);
+    });
+
+    it('la puerta rechaza lo que el contrato no admite (400)', () => {
+      const https = 'https://didacta.io/es/pricing?upgrade=tok';
+      const casos: Array<[string, unknown]> = [
+        ['estado desconocido', { state: 'PAUSED' }],
+        ['estado en minúsculas', { state: 'open' }],
+        ['TRIAL sin fecha', { state: 'TRIAL', actionUrl: https }],
+        ['TRIAL sin enlace', { state: 'TRIAL', trialEndsAt: '2026-11-18T18:00:00.000Z' }],
+        ['LOCKED sin enlace', { state: 'LOCKED' }],
+        [
+          'enlace http',
+          {
+            state: 'TRIAL',
+            trialEndsAt: '2026-11-18T18:00:00.000Z',
+            actionUrl: 'http://didacta.io/es/pricing',
+          },
+        ],
+        ['fecha que no es ISO', { state: 'TRIAL', trialEndsAt: '18/11/2026', actionUrl: https }],
+      ];
+      for (const [caso, body] of casos) {
+        expect(subscriptionGateSchema.safeParse(body).success, caso).toBe(false);
+      }
+    });
+
+    it('el código del 402 de un aula en pausa es estable', () => {
+      // El aula lo usa para pintar la pantalla de pausa; Cloud, para saber que
+      // el bloqueo está surtiendo efecto.
+      expect(SUBSCRIPTION_LOCKED_CODE).toBe('SUBSCRIPTION_LOCKED');
+    });
+
     it('añadir dominio lleva `hostname`', () => {
       expect(domainSchema.parse({ hostname: 'otro.didacta.io' })).toEqual({
         hostname: 'otro.didacta.io',
@@ -306,6 +366,71 @@ describe('CONTRATO · admin/tenants ↔ didacta-cloud', () => {
       expect(row!.activeMembers).toBe(7);
       // Eco de la fecha pedida: la factura tiene que ser auditable.
       expect(row!.asOf).toBe('2026-02-01T00:00:00.000Z');
+    });
+
+    it('la puerta devuelve tenantId, state, trialEndsAt, actionUrl y updatedAt', async () => {
+      prisma.tenant.findFirst.mockResolvedValue({
+        id: TENANT_ID,
+        subscriptionGateState: 'OPEN',
+        subscriptionTrialEndsAt: null,
+        subscriptionActionUrl: null,
+        subscriptionGateUpdatedAt: null,
+      });
+      const res = await service.setSubscriptionGate(ACTOR, TENANT_ID, {
+        state: 'TRIAL',
+        trialEndsAt: '2026-11-18T18:00:00.000Z',
+        actionUrl: 'https://didacta.io/es/pricing?upgrade=tok',
+      });
+      expect(Object.keys(res).sort()).toEqual([...SUBSCRIPTION_GATE_FIELDS].sort());
+      expect(res).toMatchObject({
+        tenantId: TENANT_ID,
+        state: 'TRIAL',
+        trialEndsAt: '2026-11-18T18:00:00.000Z',
+        actionUrl: 'https://didacta.io/es/pricing?upgrade=tok',
+      });
+      expect(res.updatedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+      // No toca `status`: el aula en prueba o en pausa sigue ACTIVE.
+      const data = prisma.tenant.update.mock.calls[0]?.[0]?.data as Record<string, unknown>;
+      expect(data).not.toHaveProperty('status');
+    });
+
+    it('OPEN borra la fecha y el enlace aunque vengan en la petición', async () => {
+      prisma.tenant.findFirst.mockResolvedValue({
+        id: TENANT_ID,
+        subscriptionGateState: 'LOCKED',
+        subscriptionTrialEndsAt: new Date('2026-11-18T18:00:00.000Z'),
+        subscriptionActionUrl: 'https://didacta.io/es/pricing?upgrade=tok',
+        subscriptionGateUpdatedAt: new Date('2026-11-18T18:05:00.000Z'),
+      });
+      const res = await service.setSubscriptionGate(ACTOR, TENANT_ID, {
+        state: 'OPEN',
+        trialEndsAt: '2026-11-18T18:00:00.000Z',
+        actionUrl: 'https://didacta.io/es/pricing?upgrade=tok',
+      });
+      expect(res).toMatchObject({ state: 'OPEN', trialEndsAt: null, actionUrl: null });
+      expect(prisma.tenant.update.mock.calls[0]?.[0]?.data).toMatchObject({
+        subscriptionGateState: 'OPEN',
+        subscriptionTrialEndsAt: null,
+        subscriptionActionUrl: null,
+      });
+    });
+
+    it('es idempotente: repetir lo mismo no escribe ni mueve updatedAt', async () => {
+      const antes = new Date('2026-11-11T10:00:00.000Z');
+      prisma.tenant.findFirst.mockResolvedValue({
+        id: TENANT_ID,
+        subscriptionGateState: 'TRIAL',
+        subscriptionTrialEndsAt: new Date('2026-11-18T18:00:00.000Z'),
+        subscriptionActionUrl: 'https://didacta.io/es/pricing?upgrade=tok',
+        subscriptionGateUpdatedAt: antes,
+      });
+      const res = await service.setSubscriptionGate(ACTOR, TENANT_ID, {
+        state: 'TRIAL',
+        trialEndsAt: '2026-11-18T18:00:00.000Z',
+        actionUrl: 'https://didacta.io/es/pricing?upgrade=tok',
+      });
+      expect(prisma.tenant.update).not.toHaveBeenCalled();
+      expect(res.updatedAt).toBe(antes.toISOString());
     });
 
     it('un tenant sin miembros aparece con activeMembers 0, no ausente', async () => {
@@ -358,6 +483,19 @@ describe('CONTRATO · admin/tenants ↔ didacta-cloud', () => {
       );
       await expect(
         errorCodeOf(() => service.setStatus(ACTOR, 'no-existe', 'SUSPENDED')),
+      ).resolves.toBe('ADMIN_TENANT_NOT_FOUND');
+    });
+
+    it('tenant inexistente al mover la puerta', async () => {
+      prisma.tenant.findFirst.mockResolvedValue(null);
+      await expect(
+        errorCodeOf(() =>
+          service.setSubscriptionGate(ACTOR, 'no-existe', {
+            state: 'OPEN',
+            trialEndsAt: null,
+            actionUrl: null,
+          }),
+        ),
       ).resolves.toBe('ADMIN_TENANT_NOT_FOUND');
     });
 
