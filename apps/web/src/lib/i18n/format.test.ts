@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { createTranslator } from 'next-intl';
 import es from '@/i18n/messages/es';
 import en from '@/i18n/messages/en';
+import pt from '@/i18n/messages/pt';
 import {
   formatCents,
   formatCentsExact,
@@ -72,6 +73,61 @@ describe('formatNumber / formatCurrency', () => {
   it('moneda EUR por defecto, otras monedas configurables', () => {
     expect(formatCurrency(1234.5, 'EUR', { locale: 'es-ES' })).toContain('€');
     expect(formatCurrency(99, 'USD', { locale: 'en-US' })).toBe('$99.00');
+  });
+});
+
+/**
+ * Formato de `pt-BR`. Los helpers no tienen ni una línea propia para el
+ * portugués: reciben el tag activo y se lo pasan a `Intl`. Lo que estos tests
+ * fijan es que el tag que llega es `pt-BR` y NO un `es-ES` degradado — con el
+ * español al lado como control, porque los dos idiomas comparten coma decimal
+ * y nombres de mes («7 de agosto de 2026» se escribe igual) y solo se
+ * distinguen en lo que aquí se afirma.
+ *
+ * NBSP explícito (` `) entre símbolo e importe: es lo que mete `Intl`.
+ */
+describe('formato pt-BR (fechas, números y moneda)', () => {
+  it('números: punto de millar desde el 1.000 (el español no lo pone hasta 10.000)', () => {
+    expect(formatNumber(1234.5, { locale: 'pt-BR' })).toBe('1.234,5');
+    // Control: mismo número, locale español.
+    expect(formatNumber(1234.5, { locale: 'es-ES' })).toBe('1234,5');
+  });
+
+  it('moneda: símbolo DELANTE, al revés que en español', () => {
+    expect(formatCurrency(1234.5, 'BRL', { locale: 'pt-BR' })).toBe('R$ 1.234,50');
+    expect(formatCurrency(1234.5, 'EUR', { locale: 'pt-BR' })).toBe('€ 1.234,50');
+    // Control: el español lo pone detrás.
+    expect(formatCurrency(1234.5, 'EUR', { locale: 'es-ES' })).toBe('1234,50 €');
+  });
+
+  it('céntimos: la regla del producto (redondo → sin decimales) vale igual', () => {
+    expect(formatCents(1900, 'BRL', { locale: 'pt-BR' })).toBe('R$ 19');
+    expect(formatCents(1990, 'BRL', { locale: 'pt-BR' })).toBe('R$ 19,90');
+    expect(formatCentsExact(1900, 'BRL', { locale: 'pt-BR' })).toBe('R$ 19,00');
+  });
+
+  it('fechas: día/mes/año con cero a la izquierda y reloj de 24 h', () => {
+    const tz = 'America/Sao_Paulo';
+    expect(formatDate(D, { locale: 'pt-BR', timeZone: tz })).toBe('07/08/2026');
+    expect(
+      formatDate(D, { locale: 'pt-BR', timeZone: tz, day: 'numeric', month: 'long', year: 'numeric' }), // prettier-ignore
+    ).toBe('7 de agosto de 2026');
+    expect(formatTime(D, { locale: 'pt-BR', timeZone: tz, hour: '2-digit', minute: '2-digit' })).toBe('12:30'); // prettier-ignore
+    // Control: el inglés de EE. UU. invierte día y mes y usa AM/PM.
+    expect(formatDate(D, { locale: 'en-US', timeZone: tz })).toBe('8/7/2026');
+  });
+
+  it('fecha larga con día de la semana: en portugués, no en español', () => {
+    const opts = { timeZone: 'America/Sao_Paulo', weekday: 'long', day: 'numeric', month: 'long' } as const; // prettier-ignore
+    expect(formatDate(D, { locale: 'pt-BR', ...opts })).toBe('sexta-feira, 7 de agosto');
+    // Control: es aquí donde un `pt-BR` degradado a `es-ES` se vería.
+    expect(formatDate(D, { locale: 'es-ES', ...opts })).toBe('viernes, 7 de agosto');
+  });
+
+  it('el locale activo llega por el singleton (patrón client)', () => {
+    setUserFormatPrefs({ locale: 'pt-BR', timeZone: 'America/Sao_Paulo' });
+    expect(formatNumber(1234.5)).toBe('1.234,5');
+    expect(formatDate(D)).toBe('07/08/2026');
   });
 });
 
@@ -198,6 +254,7 @@ describe('formatDate / formatDateTime / formatTime · timezone inválida', () =>
 describe('formatDuration (ICU, sucesora de lib/format)', () => {
   const tEs = createTranslator({ locale: 'es-ES', messages: es, namespace: 'common' });
   const tEn = createTranslator({ locale: 'en-US', messages: en, namespace: 'common' });
+  const tPt = createTranslator({ locale: 'pt-BR', messages: pt, namespace: 'common' });
 
   it('mantiene el contrato de la vieja formatDuration (paridad lib/format.test)', () => {
     expect(formatDuration(45, tEs)).toBe('45 min');
@@ -216,6 +273,8 @@ describe('formatDuration (ICU, sucesora de lib/format)', () => {
 
   it('resuelve contra el catálogo del locale activo', () => {
     expect(formatDuration(90, tEn)).toBe('1 h 30 min');
+    expect(formatDuration(90, tPt)).toBe('1 h 30 min');
+    expect(formatDuration(45, tPt)).toBe('45 min');
   });
 });
 
