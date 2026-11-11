@@ -93,6 +93,7 @@
     "loadError": "Could not load the tier catalog.",
     "syncInfo": "Synced {connections} account(s): {tiersCreated} new tier(s) in the catalog, {updated} user(s) with a payment tier.",
     "syncInfoWithErrors": "Synced {connections} account(s): {tiersCreated} new tier(s) in the catalog, {updated} user(s) with a payment tier · {errors} account(s) with errors.",
+    "syncInfoUnpaid": "{count, plural, one {# user with an unpaid subscription is left without a tier} other {# users with an unpaid subscription are left without a tier}}: they get it back on their own once the gateway collects the payment.",
     "syncError": "Could not sync from payments.",
     "createError": "Could not create the tier.",
     "deleteConfirm": "Delete tier \"{name}\"? Manual assignments will be left without a tier.",

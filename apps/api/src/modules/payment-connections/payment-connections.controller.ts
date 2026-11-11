@@ -500,50 +500,18 @@ export class PaymentConnectionsController {
     summary:
       'Reconcilia todas las cuentas conectadas (VERIFIED) y rellena el tier ' +
       'DERIVADO (nombre del producto/plan) de cada usuario de Didacta con ' +
-      'suscripción activa. No toca los tiers asignados manualmente.',
+      'suscripción al corriente. Un impago no da tier (salvo cortesía ' +
+      'configurada y en plazo). No toca los tiers asignados manualmente.',
   })
   async syncUserTiers(@CurrentUser() rawUser: SessionClaims | undefined) {
     const user = this.assertSuperAdmin(rawUser);
     const connectionsSvc = this.registry.getPaymentConnectionsService();
-    const conns = await connectionsSvc.listConnections(user.tenantId);
-    const entries: Array<{
-      userId: string;
-      label: string;
-      provider: string;
-      connectionId: string;
-      ref: string;
-    }> = [];
-    const errors: Array<{ connectionId: string; message: string }> = [];
-
-    // Conexiones reconciliadas con éxito (para acotar la detección de churn).
-    const reconciledConnectionIds: string[] = [];
-    // Planes de suscriptores SIN usuario en Didacta (unmatched): alimentan el
-    // CATÁLOGO de tiers aunque aún no se pueda asignar el tier a nadie. Sin esto,
-    // el catálogo solo reflejaría los planes de los pocos usuarios ya registrados.
-    const extraCatalogLabels = new Set<string>();
-    for (const c of conns) {
-      if (c.status !== 'VERIFIED') continue;
-      try {
-        const rec = await connectionsSvc.reconcile(user.tenantId, c.id);
-        reconciledConnectionIds.push(c.id);
-        for (const m of rec.matched) {
-          const label = m.subscription.productName?.trim() || tierLabelFallback(m.subscription);
-          entries.push({
-            userId: m.user.id,
-            label,
-            provider: c.provider,
-            connectionId: c.id,
-            ref: m.subscription.subscriptionId,
-          });
-        }
-        for (const sub of rec.unmatched) {
-          const label = sub.productName?.trim() || tierLabelFallback(sub);
-          if (label) extraCatalogLabels.add(label);
-        }
-      } catch (err) {
-        errors.push({ connectionId: c.id, message: (err as Error).message });
-      }
-    }
+    // Quién recibe tier lo decide el módulo, no este controlador: solo las
+    // suscripciones que dan acceso HOY. Un impago (`past_due`, `on-hold`) ya
+    // no da tier, y quien lo tenía lo pierde por el camino del churn.
+    const collected = await connectionsSvc.collectDerivedTierEntries(user.tenantId);
+    const { entries, reconciledConnectionIds, errors } = collected;
+    const extraCatalogLabels = new Set<string>(collected.extraCatalogLabels);
 
     // Parte B (D11): añade al catálogo los planes del CATÁLOGO de Stripe que aún
     // no tienen ningún suscriptor (products.list). Best-effort.
@@ -575,8 +543,10 @@ export class PaymentConnectionsController {
       updated,
       tiersCreated,
       cleared: clearedUserIds.length,
-      connections: conns.length,
+      connections: collected.connections,
       matched: entries.length,
+      // Usuarios con suscripción en impago: no reciben tier (ni lo conservan).
+      withheldUnpaid: collected.withheldUnpaid,
       errors,
     };
   }
@@ -932,18 +902,4 @@ export class PaymentConnectionsController {
       .createMyBillingPortalSession(rawUser.tenantId, rawUser.sub, body.subscriberId, returnUrl);
     return { url };
   }
-}
-
-/** Etiqueta de tier de respaldo cuando la suscripción no tiene nombre de producto. */
-function tierLabelFallback(sub: {
-  unitAmount: number | null;
-  currency: string | null;
-  interval: string | null;
-}): string {
-  if (sub.unitAmount != null) {
-    const amount = (sub.unitAmount / 100).toFixed(2);
-    const cur = (sub.currency ?? 'eur').toUpperCase();
-    return `${amount} ${cur}${sub.interval ? `/${sub.interval}` : ''}`;
-  }
-  return 'Suscripción';
 }

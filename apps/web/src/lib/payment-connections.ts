@@ -119,7 +119,7 @@ export interface SubscriptionStatusInfo {
    * `subscriptionStatusLabel`, que sí resuelve el idioma activo.
    */
   label: string;
-  /** Si el estado concede acceso vigente hoy. */
+  /** Si el estado, por sí solo, concede acceso vigente hoy. El impago no. */
   entitled: boolean;
 }
 
@@ -136,15 +136,16 @@ export function classifySubscriptionStatus(status: string): SubscriptionStatusIn
     case 'trialing':
       return { category: 'active', label: 'En prueba', entitled: true };
     case 'past_due':
-      return { category: 'past_due', label: 'Pago atrasado (impago)', entitled: true };
+      // Un impago, por sí solo, no da derecho (antes sí, y sin tope). La
+      // cortesía configurable la aplica el backend, que es quien sabe desde
+      // cuándo dura; aquí solo se decide si se preselecciona el tier.
+      return { category: 'past_due', label: 'Pago atrasado (impago)', entitled: false };
     case 'unpaid':
       return { category: 'unpaid', label: 'Impago — suspendida', entitled: false };
     case 'on-hold':
-      // WooCommerce 'on-hold' = impago/espera de pago. El set activo de la
-      // reconciliación de tiers (WC_ACTIVE_STATUSES) la cuenta como suscrita, así
-      // que aquí también es `entitled` (con etiqueta de impago) para no contradecir
-      // al sync de tiers — mismo criterio que el past_due de Stripe.
-      return { category: 'past_due', label: 'En espera (impago)', entitled: true };
+      // WooCommerce 'on-hold' = impago/espera de pago: mismo criterio que el
+      // past_due de Stripe.
+      return { category: 'past_due', label: 'En espera (impago)', entitled: false };
     case 'paused':
       return { category: 'paused', label: 'Pausada', entitled: false };
     case 'pending-cancel':
@@ -445,6 +446,11 @@ export interface TierSyncResult {
   tiersCreated: number;
   connections: number;
   matched: number;
+  /**
+   * Usuarios cuya suscripción está en impago: no reciben tier (y si lo tenían,
+   * lo pierden). Opcional: una API anterior a este campo no lo manda.
+   */
+  withheldUnpaid?: number;
   errors: Array<{ connectionId: string; message: string }>;
 }
 

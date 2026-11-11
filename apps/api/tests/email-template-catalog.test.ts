@@ -757,7 +757,13 @@ describe('builders de inscripción · idioma del destinatario', () => {
     expect(out.text).toContain('Status: Member of the Academia Demo group');
     expect(out.text).toContain('⚠ RECORDED AS UNPAID');
     expect(out.text).toContain('  Name: Ana');
-    expect(out.text).toContain('Active subscription:');
+    // La suscripción de este aspirante está en impago (`past_due`). Este test
+    // esperaba «Active subscription:» —el fallo fijado como contrato: al
+    // aprobador se le decía que estaba vigente en el mismo correo que avisa
+    // de que consta como impago—. Un impago es «no vigente», que es
+    // justo lo que dice esa cabecera («cancelled or unpaid»).
+    expect(out.text).toContain('⚠ Subscription NOT active (cancelled or unpaid):');
+    expect(out.text).not.toContain('Active subscription:');
     // La pieza que bloqueaba la traducción: la etiqueta de estado vive en
     // `modules/payment-connections` y ahora sale en el idioma del aprobador.
     expect(out.text).toContain('Payment overdue (unpaid)');

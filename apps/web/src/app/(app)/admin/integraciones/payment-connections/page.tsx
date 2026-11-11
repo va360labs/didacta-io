@@ -567,19 +567,23 @@ function TierCatalogPanel() {
     setSyncInfo(null);
     try {
       const res = await paymentTiersApi.syncFromPayments(token);
+      const resumen = res.errors.length
+        ? t('tiers.syncInfoWithErrors', {
+            connections: res.connections,
+            tiersCreated: res.tiersCreated,
+            updated: res.updated,
+            errors: res.errors.length,
+          })
+        : t('tiers.syncInfo', {
+            connections: res.connections,
+            tiersCreated: res.tiersCreated,
+            updated: res.updated,
+          });
+      // Un impago ya no da tier: se dice, para que quien vea a alguien perder
+      // el acceso tras sincronizar sepa por qué.
+      const impagos = res.withheldUnpaid ?? 0;
       setSyncInfo(
-        res.errors.length
-          ? t('tiers.syncInfoWithErrors', {
-              connections: res.connections,
-              tiersCreated: res.tiersCreated,
-              updated: res.updated,
-              errors: res.errors.length,
-            })
-          : t('tiers.syncInfo', {
-              connections: res.connections,
-              tiersCreated: res.tiersCreated,
-              updated: res.updated,
-            }),
+        impagos > 0 ? `${resumen} ${t('tiers.syncInfoUnpaid', { count: impagos })}` : resumen,
       );
       await loadTiers(); // refrescar para ver los tiers recién creados + sus conteos
     } catch (e) {

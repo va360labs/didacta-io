@@ -65,7 +65,10 @@ export interface PurchaseRecord {
 }
 
 export interface ListActiveSubscriptionsOptions {
-  /** Estados Stripe que cuentan como "activa". Default: active, trialing, past_due. */
+  /**
+   * Estados Stripe que se listan. Default: active, trialing, past_due. Listar
+   * un estado no es darle acceso: el impago se lista para verlo como impago.
+   */
   statuses?: string[];
   /** Tope defensivo de páginas por estado (100 subs/página). Default 50. */
   maxPages?: number;

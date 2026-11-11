@@ -25,9 +25,10 @@ const SUBSCRIPTION_STATUS_TABLE: Record<
 > = {
   active: { category: 'active', label: 'Activa', entitled: true },
   trialing: { category: 'active', label: 'En prueba', entitled: true },
-  past_due: { category: 'past_due', label: 'Pago atrasado (impago)', entitled: true },
+  // Impago: el estado, por sí solo, NO da derecho (antes `true`, y sin tope).
+  past_due: { category: 'past_due', label: 'Pago atrasado (impago)', entitled: false },
   unpaid: { category: 'unpaid', label: 'Impago — suspendida', entitled: false },
-  'on-hold': { category: 'past_due', label: 'En espera (impago)', entitled: true },
+  'on-hold': { category: 'past_due', label: 'En espera (impago)', entitled: false },
   paused: { category: 'paused', label: 'Pausada', entitled: false },
   'pending-cancel': { category: 'canceled', label: 'Baja programada', entitled: true },
   canceled: { category: 'canceled', label: 'Dada de baja', entitled: false },

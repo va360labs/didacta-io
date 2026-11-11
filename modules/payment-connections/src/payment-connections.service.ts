@@ -64,7 +64,12 @@ const ENTITLEMENT_RULES_KEY = 'entitlement-rules';
 const WOO_WEBHOOK_SECRET_KEY = 'woo-webhook-secret';
 /** Key en tenant_setting con la URL del Customer Portal de Stripe (enlace de cancelación). */
 const CANCEL_PORTAL_URL_KEY = 'cancel-portal-url';
-/** Estados Stripe que cuentan como "suscripción activa" para reconciliar. */
+/**
+ * Estados Stripe que se LISTAN al reconciliar. Que un estado se liste no
+ * significa que dé acceso: `past_due` está aquí para que el impago se vea en
+ * el panel como lo que es (si no se listara, el sync lo daría por baja), pero
+ * el derecho lo decide `entitledWithGrace`.
+ */
 export const STRIPE_ACTIVE_STATUSES = ['active', 'trialing', 'past_due'] as const;
 /** Tope defensivo de páginas por estado al listar suscripciones. */
 export const DEFAULT_MAX_PAGES = 50;
@@ -83,7 +88,12 @@ export interface SubscriptionStatusInfo {
   category: SubscriptionStatusCategory;
   /** Etiqueta legible en el idioma pedido (p.ej. "Dada de baja", "En impago"). */
   label: string;
-  /** Si el estado concede acceso vigente hoy (sirve para preseleccionar el tier). */
+  /**
+   * Si el estado, POR SÍ SOLO, concede acceso vigente hoy (sirve para
+   * preseleccionar el tier). El impago (`past_due`) no lo concede: solo
+   * puede conservarlo durante la cortesía, y eso depende de cuánto lleva así
+   * — ver `entitledWithGrace`.
+   */
   entitled: boolean;
 }
 
@@ -151,13 +161,18 @@ const STATUS_MAP: Record<
 > = {
   active: { category: 'active', label: 'active', entitled: true },
   trialing: { category: 'active', label: 'trialing', entitled: true },
-  past_due: { category: 'past_due', label: 'past_due', entitled: true },
+  // IMPAGO. Estaba como `entitled: true` sin tope: quien dejaba de pagar
+  // conservaba el acceso mientras la pasarela no diera la suscripción por
+  // cancelada. Y contradecía a sus propios consumidores, que ya decían «un
+  // impago no preselecciona el tier» y «si todas son bajas o impagos, lo
+  // decimos». El estado, por sí solo, NO da derecho; la cortesía configurable
+  // (con fecha de caducidad) la aplica `entitledWithGrace`.
+  past_due: { category: 'past_due', label: 'past_due', entitled: false },
   unpaid: { category: 'unpaid', label: 'unpaid', entitled: false },
-  // WooCommerce 'on-hold' = impago/espera de pago. El set activo de la
-  // reconciliación de tiers (WC_ACTIVE_STATUSES) la cuenta como suscrita, así
-  // que aquí también es `entitled` (con etiqueta de impago) para no contradecir
-  // al sync de tiers — mismo criterio que el past_due de Stripe.
-  'on-hold': { category: 'past_due', label: 'on_hold', entitled: true },
+  // WooCommerce 'on-hold' = impago/espera de pago: mismo criterio que el
+  // past_due de Stripe. El lector lo sigue LISTANDO (WC_ACTIVE_STATUSES) para
+  // que el panel lo enseñe como impago y no como baja.
+  'on-hold': { category: 'past_due', label: 'on_hold', entitled: false },
   paused: { category: 'paused', label: 'paused', entitled: false },
   'pending-cancel': { category: 'canceled', label: 'pending_cancel', entitled: true },
   canceled: { category: 'canceled', label: 'canceled', entitled: false },
@@ -193,6 +208,119 @@ export function classifySubscriptionStatus(
   const hit = STATUS_MAP[(status ?? '').toLowerCase().trim()];
   if (!hit) return { category: 'unknown', label: status || labels.unknown, entitled: false };
   return { category: hit.category, label: labels[hit.label], entitled: hit.entitled };
+}
+
+/**
+ * Días que se conserva el acceso tras entrar en impago. **0: si el pago
+ * falla, el acceso se pierde.** Es el valor por defecto.
+ *
+ * La pasarela sigue reintentando el cobro por su cuenta: en cuanto cobra, la
+ * suscripción vuelve a `active` y el acceso vuelve solo en el siguiente sync.
+ * Una instalación que prefiera dar margen (una tarjeta caducada no es una
+ * baja) lo configura con `PAYMENT_CONNECTIONS_PAST_DUE_GRACE_DAYS`.
+ */
+export const DEFAULT_PAST_DUE_GRACE_DAYS = 0;
+
+/**
+ * Lee `PAYMENT_CONNECTIONS_PAST_DUE_GRACE_DAYS`. Cualquier cosa que no sea un
+ * número de días positivo vale 0: ante una variable mal escrita se corta, no
+ * se regala (`Number('siete')` es NaN, y un NaN colado en la comparación de
+ * fechas devolvería el acceso sin tope que este cambio quita).
+ */
+export function resolvePastDueGraceDays(raw: string | undefined | null): number {
+  const n = Number(raw);
+  return Number.isFinite(n) && n > 0 ? Math.floor(n) : DEFAULT_PAST_DUE_GRACE_DAYS;
+}
+
+/**
+ * Desde cuándo lleva una suscripción en impago.
+ *
+ * Se fija al ENTRAR en impago y se conserva mientras siga igual: reiniciarla
+ * en cada barrido (cada 15 min) dejaría a todo el mundo en «lleva 0 días» y
+ * la cortesía no caducaría nunca. Una fila que ya estaba en impago sin fecha
+ * (anterior a la columna) empieza a contar ahora.
+ */
+export function pastDueSince(
+  category: string,
+  previous: { statusCategory: string; pastDueSince: Date | null } | null | undefined,
+  now: Date,
+): Date | null {
+  if (category !== 'past_due') return null; // salió del impago, o nunca entró
+  if (previous?.statusCategory === 'past_due' && previous.pastDueSince) {
+    return previous.pastDueSince;
+  }
+  return now;
+}
+
+/**
+ * ¿Da acceso HOY esta suscripción? Es la única definición: la usan la tabla
+ * del panel (`entitled`) y el sync de tiers, que es quien reparte el acceso.
+ *
+ * - Un estado que no es impago responde lo que diga su clasificación.
+ * - El impago no da acceso, salvo que haya cortesía configurada y siga
+ *   dentro de plazo contando desde `since`.
+ *
+ * Se calcula aquí y no en `classifySubscriptionStatus` porque esa función solo
+ * ve la cadena de estado, y para saber si la cortesía se agotó hace falta
+ * desde cuándo dura el impago, que es dato de la fila.
+ */
+export function entitledWithGrace(
+  info: SubscriptionStatusInfo,
+  since: Date | null,
+  now: Date,
+  graceDays: number = DEFAULT_PAST_DUE_GRACE_DAYS,
+): boolean {
+  if (info.category !== 'past_due') return info.entitled;
+  // Sin cortesía, el impago no da acceso ni un minuto. El `!(> 0)` cubre
+  // también NaN y negativos.
+  if (!(graceDays > 0)) return false;
+  // Sin fecha todavía: es el primer barrido que lo ve y la cortesía empieza a
+  // contar ahora.
+  if (!since) return true;
+  const days = Math.floor((now.getTime() - since.getTime()) / 86_400_000);
+  return days < graceDays;
+}
+
+/** Etiqueta de tier de respaldo cuando la suscripción no tiene nombre de producto. */
+export function tierLabelFallback(sub: {
+  unitAmount: number | null;
+  currency: string | null;
+  interval: string | null;
+}): string {
+  if (sub.unitAmount != null) {
+    const amount = (sub.unitAmount / 100).toFixed(2);
+    const cur = (sub.currency ?? 'eur').toUpperCase();
+    return `${amount} ${cur}${sub.interval ? `/${sub.interval}` : ''}`;
+  }
+  return 'Suscripción';
+}
+
+/**
+ * Lo que el sync de tiers saca de reconciliar las cuentas conectadas: a quién
+ * le toca tier derivado y qué planes alimentan solo el catálogo.
+ */
+export interface DerivedTierCollection {
+  /** Conexiones del tenant (verificadas o no), para el resumen de la respuesta. */
+  connections: number;
+  /** Usuarios de Didacta con una suscripción que da acceso HOY → reciben tier. */
+  entries: Array<{
+    userId: string;
+    label: string;
+    provider: string;
+    connectionId: string;
+    ref: string;
+  }>;
+  /** Planes que entran en el catálogo de tiers sin asignarse a nadie. */
+  extraCatalogLabels: string[];
+  /** Conexiones reconciliadas con éxito (acotan la detección de churn). */
+  reconciledConnectionIds: string[];
+  /**
+   * Suscripciones de usuarios de Didacta que NO dan tier por estar en impago.
+   * No van en `entries`, así que quien tenía tier derivado lo pierde por el
+   * mismo camino que una baja.
+   */
+  withheldUnpaid: number;
+  errors: Array<{ connectionId: string; message: string }>;
 }
 
 /**
@@ -467,6 +595,12 @@ export class PaymentConnectionsService {
     private readonly config: ConfigPort,
     private readonly adapterFactory: PaymentReadAdapterFactory,
     private readonly users: UserDirectoryPort,
+    /**
+     * Días de cortesía por impago (ver `DEFAULT_PAST_DUE_GRACE_DAYS`). Lo
+     * inyecta la capa de composición desde
+     * `PAYMENT_CONNECTIONS_PAST_DUE_GRACE_DAYS`.
+     */
+    private readonly pastDueGraceDays: number = DEFAULT_PAST_DUE_GRACE_DAYS,
   ) {}
 
   // ---------------- Conexiones (admin) ----------------
@@ -790,53 +924,9 @@ export class PaymentConnectionsService {
       });
       try {
         const rec = await this.reconcile(tenantId, c.id);
-        const now = new Date();
-        const rows: Array<{ sub: StripeSubscriberRecord; userId: string | null }> = [
-          ...rec.matched.map((m) => ({ sub: m.subscription, userId: m.user.id as string | null })),
-          ...rec.unmatched.map((sub) => ({ sub, userId: null as string | null })),
-        ];
-        for (const { sub, userId } of rows) {
-          const info = classifySubscriptionStatus(sub.status);
-          const data = {
-            provider: c.provider,
-            subscriptionCustomerId: sub.customerId ?? null,
-            userId,
-            userEmail: normalizeEmail(sub.email) ?? sub.email?.trim() ?? '',
-            status: sub.status,
-            statusCategory: info.category,
-            entitled: info.entitled,
-            productName: sub.productName ?? null,
-            unitAmount: sub.unitAmount ?? null,
-            currency: sub.currency ?? null,
-            interval: sub.interval ?? null,
-            currentPeriodEnd: sub.currentPeriodEnd ? new Date(sub.currentPeriodEnd * 1000) : null,
-            lastSeenAt: now,
-          };
-          await this.prisma.modPaymentConnectionsSubscriber.upsert({
-            where: {
-              tenantId_connectionId_subscriptionId: {
-                tenantId,
-                connectionId: c.id,
-                subscriptionId: sub.subscriptionId,
-              },
-            },
-            create: { tenantId, connectionId: c.id, subscriptionId: sub.subscriptionId, ...data },
-            update: data,
-          });
-          upserted += 1;
-        }
-        if (!rec.truncated) {
-          const gone = await this.prisma.modPaymentConnectionsSubscriber.updateMany({
-            where: {
-              tenantId,
-              connectionId: c.id,
-              lastSeenAt: { lt: now },
-              statusCategory: { not: 'canceled' },
-            },
-            data: { statusCategory: 'canceled', entitled: false },
-          });
-          markedGone += gone.count;
-        }
+        const m = await this.materializeSubscribers(tenantId, c, rec, new Date());
+        upserted += m.upserted;
+        markedGone += m.markedGone;
         await this.prisma.modPaymentConnectionsSyncHistory.update({
           where: { id: run.id },
           data: {
@@ -857,6 +947,173 @@ export class PaymentConnectionsService {
       }
     }
     return { connections: verified.length, upserted, markedGone, failures };
+  }
+
+  /**
+   * Vuelca en la tabla materializada lo que acaba de devolver `reconcile` para
+   * UNA conexión, y dice qué suscripciones dan acceso hoy.
+   *
+   * Es el único sitio donde se decide `entitled`. Lo comparten el sync de
+   * suscriptores (panel) y el sync de tiers (acceso) a propósito: con dos
+   * cálculos, el panel podía decir «impago, sin acceso» mientras el tier —y
+   * el grupo, y los cursos— seguían concedidos.
+   *
+   * Los que ya no aparecen se marcan baja, salvo si la conexión vino truncada
+   * (no se listaron todos → no marcar bajas falsas).
+   */
+  private async materializeSubscribers(
+    tenantId: string,
+    connection: { id: string; provider: string },
+    rec: ReconcileResult,
+    now: Date,
+  ): Promise<{ upserted: number; markedGone: number; entitledIds: Set<string> }> {
+    const rows: Array<{ sub: StripeSubscriberRecord; userId: string | null }> = [
+      ...rec.matched.map((m) => ({ sub: m.subscription, userId: m.user.id as string | null })),
+      ...rec.unmatched.map((sub) => ({ sub, userId: null as string | null })),
+    ];
+    // Quién estaba ya en impago antes de este barrido: sin esto el contador
+    // de la cortesía se reiniciaría en cada corrida.
+    const previous = new Map<string, { statusCategory: string; pastDueSince: Date | null }>(
+      (
+        await this.prisma.modPaymentConnectionsSubscriber.findMany({
+          where: { tenantId, connectionId: connection.id },
+          select: { subscriptionId: true, statusCategory: true, pastDueSince: true },
+        })
+      ).map((r) => [
+        r.subscriptionId,
+        { statusCategory: r.statusCategory, pastDueSince: r.pastDueSince },
+      ]),
+    );
+
+    const entitledIds = new Set<string>();
+    let upserted = 0;
+    for (const { sub, userId } of rows) {
+      const info = classifySubscriptionStatus(sub.status);
+      const since = pastDueSince(info.category, previous.get(sub.subscriptionId), now);
+      const entitled = entitledWithGrace(info, since, now, this.pastDueGraceDays);
+      if (entitled) entitledIds.add(sub.subscriptionId);
+      const data = {
+        provider: connection.provider,
+        subscriptionCustomerId: sub.customerId ?? null,
+        userId,
+        userEmail: normalizeEmail(sub.email) ?? sub.email?.trim() ?? '',
+        status: sub.status,
+        statusCategory: info.category,
+        entitled,
+        productName: sub.productName ?? null,
+        unitAmount: sub.unitAmount ?? null,
+        currency: sub.currency ?? null,
+        interval: sub.interval ?? null,
+        currentPeriodEnd: sub.currentPeriodEnd ? new Date(sub.currentPeriodEnd * 1000) : null,
+        pastDueSince: since,
+        lastSeenAt: now,
+      };
+      await this.prisma.modPaymentConnectionsSubscriber.upsert({
+        where: {
+          tenantId_connectionId_subscriptionId: {
+            tenantId,
+            connectionId: connection.id,
+            subscriptionId: sub.subscriptionId,
+          },
+        },
+        create: {
+          tenantId,
+          connectionId: connection.id,
+          subscriptionId: sub.subscriptionId,
+          ...data,
+        },
+        update: data,
+      });
+      upserted += 1;
+    }
+
+    let markedGone = 0;
+    if (!rec.truncated) {
+      const gone = await this.prisma.modPaymentConnectionsSubscriber.updateMany({
+        where: {
+          tenantId,
+          connectionId: connection.id,
+          lastSeenAt: { lt: now },
+          statusCategory: { not: 'canceled' },
+        },
+        data: { statusCategory: 'canceled', entitled: false, pastDueSince: null },
+      });
+      markedGone = gone.count;
+    }
+    return { upserted, markedGone, entitledIds };
+  }
+
+  /**
+   * Reconcilia todas las cuentas VERIFIED y separa a quién le toca tier
+   * derivado. Es la mitad «leer» del sync de tiers; la mitad «escribir» es
+   * `PaymentTiersService.applyDerivedTiers`.
+   *
+   * Solo recibe tier quien tiene una suscripción que DA ACCESO HOY. Antes lo
+   * recibía cualquiera que la pasarela listara, y la pasarela lista también
+   * los impagos (`past_due`, `on-hold`): el tier —y con él el grupo de acceso
+   * vinculado y sus cursos— se conservaba sin pagar y sin límite. Un impago
+   * no va en `entries`, así que quien ya tenía tier derivado lo pierde por el
+   * mismo camino que una baja (churn → `user_tier.changed` → el bridge lo
+   * saca del grupo). Su plan sigue alimentando el catálogo.
+   *
+   * De paso deja la tabla del panel al día: es la misma lectura.
+   */
+  async collectDerivedTierEntries(tenantId: string, now?: Date): Promise<DerivedTierCollection> {
+    const conns = await this.listConnections(tenantId);
+    const entries: DerivedTierCollection['entries'] = [];
+    const errors: DerivedTierCollection['errors'] = [];
+    const reconciledConnectionIds: string[] = [];
+    // Planes de suscriptores SIN usuario en Didacta (unmatched): alimentan el
+    // CATÁLOGO de tiers aunque aún no se pueda asignar el tier a nadie. Sin
+    // esto, el catálogo solo reflejaría los planes de los ya registrados.
+    const extraCatalogLabels = new Set<string>();
+    let withheldUnpaid = 0;
+
+    for (const c of conns) {
+      if (c.status !== 'VERIFIED') continue;
+      try {
+        const rec = await this.reconcile(tenantId, c.id);
+        // El instante se toma DESPUÉS de leer la pasarela (igual que en
+        // `syncSubscribers`): el churn compara contra él.
+        const { entitledIds } = await this.materializeSubscribers(
+          tenantId,
+          c,
+          rec,
+          now ?? new Date(),
+        );
+        reconciledConnectionIds.push(c.id);
+        for (const m of rec.matched) {
+          const label = m.subscription.productName?.trim() || tierLabelFallback(m.subscription);
+          if (!entitledIds.has(m.subscription.subscriptionId)) {
+            withheldUnpaid += 1;
+            if (label) extraCatalogLabels.add(label);
+            continue;
+          }
+          entries.push({
+            userId: m.user.id,
+            label,
+            provider: c.provider,
+            connectionId: c.id,
+            ref: m.subscription.subscriptionId,
+          });
+        }
+        for (const sub of rec.unmatched) {
+          const label = sub.productName?.trim() || tierLabelFallback(sub);
+          if (label) extraCatalogLabels.add(label);
+        }
+      } catch (err) {
+        errors.push({ connectionId: c.id, message: (err as Error).message });
+      }
+    }
+
+    return {
+      connections: conns.length,
+      entries,
+      extraCatalogLabels: [...extraCatalogLabels],
+      reconciledConnectionIds,
+      withheldUnpaid,
+      errors,
+    };
   }
 
   /** Lista paginada + filtrada de suscriptores materializados (para el dashboard). */

@@ -26,6 +26,10 @@ import {
   PaymentConnectionsService,
   normalizeEmail,
   classifySubscriptionStatus,
+  entitledWithGrace,
+  pastDueSince,
+  resolvePastDueGraceDays,
+  DEFAULT_PAST_DUE_GRACE_DAYS,
   type ConfigPort,
   type UserDirectoryPort,
   type DidactaUserRecord,
@@ -313,7 +317,11 @@ const users: UserDirectoryPort = {
   },
 };
 
-function buildService(adapterOverrides?: Record<string, StripeReadAdapter>) {
+function buildService(
+  adapterOverrides?: Record<string, StripeReadAdapter>,
+  /** Días de cortesía por impago. Sin pasarlo, el default del módulo (0). */
+  pastDueGraceDays?: number,
+) {
   const prisma = new MockPrisma();
   const config = new MockConfig();
   const adapters: Record<string, StripeReadAdapter> = adapterOverrides ?? {
@@ -322,7 +330,10 @@ function buildService(adapterOverrides?: Record<string, StripeReadAdapter>) {
   };
   const factory = (_provider: string, credentials: PaymentCredentials): StripeReadAdapter =>
     adapters[(credentials as { apiKey?: string }).apiKey ?? ''] ?? badAdapter();
-  const service = new PaymentConnectionsService(prisma as never, config, factory, users);
+  const service =
+    pastDueGraceDays === undefined
+      ? new PaymentConnectionsService(prisma as never, config, factory, users)
+      : new PaymentConnectionsService(prisma as never, config, factory, users, pastDueGraceDays);
   return { service, prisma, config };
 }
 
@@ -781,9 +792,12 @@ export const SUBSCRIPTION_STATUS_TABLE: Record<
 > = {
   active: { category: 'active', label: 'Activa', entitled: true },
   trialing: { category: 'active', label: 'En prueba', entitled: true },
-  past_due: { category: 'past_due', label: 'Pago atrasado (impago)', entitled: true },
+  // Impago: el estado, por sí solo, NO da derecho. Esta tabla decía `true` en
+  // las dos filas —era el fallo escrito como contrato— y por eso quien dejaba
+  // de pagar conservaba el acceso sin límite.
+  past_due: { category: 'past_due', label: 'Pago atrasado (impago)', entitled: false },
   unpaid: { category: 'unpaid', label: 'Impago — suspendida', entitled: false },
-  'on-hold': { category: 'past_due', label: 'En espera (impago)', entitled: true },
+  'on-hold': { category: 'past_due', label: 'En espera (impago)', entitled: false },
   paused: { category: 'paused', label: 'Pausada', entitled: false },
   'pending-cancel': { category: 'canceled', label: 'Baja programada', entitled: true },
   canceled: { category: 'canceled', label: 'Dada de baja', entitled: false },
@@ -801,10 +815,17 @@ describe('classifySubscriptionStatus', () => {
     }
   });
 
-  it('on-hold (WooCommerce) es vigente igual que past_due, para no contradecir al sync de tiers', () => {
-    // WC_ACTIVE_STATUSES incluye on-hold → la reconciliación la trata como suscrita.
-    expect(classifySubscriptionStatus('on-hold').entitled).toBe(true);
-    expect(classifySubscriptionStatus('on-hold').label).toContain('impago');
+  it('un impago NO es vigente: ni past_due (Stripe) ni on-hold (WooCommerce)', () => {
+    // Este test afirmaba lo contrario («on-hold es vigente igual que past_due,
+    // para no contradecir al sync de tiers»): el sync de tiers daba tier a los
+    // impagos y la clasificación se alineó con él. Se arreglan los dos.
+    for (const status of ['past_due', 'on-hold']) {
+      const info = classifySubscriptionStatus(status);
+      expect(info.entitled, status).toBe(false);
+      // Sigue distinguiéndose de una baja: es un impago, y así se etiqueta.
+      expect(info.category, status).toBe('past_due');
+      expect(info.label, status).toContain('impago');
+    }
   });
 
   it('es tolerante con mayúsculas/espacios y cae a "Desconocido" si no lo reconoce', () => {
@@ -850,6 +871,272 @@ describe('classifySubscriptionStatus', () => {
     // Y con el status vacío sí gana la etiqueta, en su idioma.
     expect(classifySubscriptionStatus('', 'es').label).toBe('Desconocido');
     expect(classifySubscriptionStatus('', 'en').label).toBe('Unknown');
+  });
+});
+
+describe('entitledWithGrace · el impago no da acceso, y la cortesía caduca', () => {
+  const AHORA = new Date('2026-08-21T12:00:00Z');
+  const impagoStripe = classifySubscriptionStatus('past_due');
+  const impagoWoo = classifySubscriptionStatus('on-hold');
+  const activa = classifySubscriptionStatus('active');
+  const prueba = classifySubscriptionStatus('trialing');
+  const bajaProgramada = classifySubscriptionStatus('pending-cancel');
+  const baja = classifySubscriptionStatus('canceled');
+  const haceDias = (n: number) => new Date(AHORA.getTime() - n * 86_400_000);
+
+  it('por defecto no hay cortesía: el impago no da acceso ni el primer minuto', () => {
+    expect(DEFAULT_PAST_DUE_GRACE_DAYS).toBe(0);
+    for (const impago of [impagoStripe, impagoWoo]) {
+      expect(entitledWithGrace(impago, null, AHORA)).toBe(false);
+      expect(entitledWithGrace(impago, haceDias(0), AHORA)).toBe(false);
+      expect(entitledWithGrace(impago, haceDias(200), AHORA)).toBe(false);
+    }
+  });
+
+  it('con cortesía configurada, conserva el acceso dentro del plazo', () => {
+    expect(entitledWithGrace(impagoStripe, haceDias(6), AHORA, 7)).toBe(true);
+    expect(entitledWithGrace(impagoWoo, haceDias(0), AHORA, 7)).toBe(true);
+  });
+
+  it('y lo pierde al cumplirse el plazo: esto es el tope que no existía', () => {
+    expect(entitledWithGrace(impagoStripe, haceDias(7), AHORA, 7)).toBe(false);
+    // Meses sin pagar: antes seguía con acceso.
+    expect(entitledWithGrace(impagoWoo, haceDias(180), AHORA, 7)).toBe(false);
+  });
+
+  it('con cortesía y sin fecha todavía, empieza a contar ahora', () => {
+    expect(entitledWithGrace(impagoStripe, null, AHORA, 7)).toBe(true);
+  });
+
+  it('quien está al corriente no se ve afectado, haya o no cortesía', () => {
+    for (const dias of [0, 7]) {
+      expect(entitledWithGrace(activa, null, AHORA, dias)).toBe(true);
+      expect(entitledWithGrace(prueba, null, AHORA, dias)).toBe(true);
+      expect(entitledWithGrace(bajaProgramada, null, AHORA, dias)).toBe(true);
+    }
+  });
+
+  it('la cortesía no resucita una baja', () => {
+    expect(entitledWithGrace(baja, haceDias(1), AHORA, 30)).toBe(false);
+  });
+
+  it('una cortesía corrupta (NaN, negativa) corta, no regala', () => {
+    expect(entitledWithGrace(impagoStripe, haceDias(1), AHORA, Number.NaN)).toBe(false);
+    expect(entitledWithGrace(impagoStripe, haceDias(1), AHORA, -5)).toBe(false);
+  });
+});
+
+describe('resolvePastDueGraceDays · PAYMENT_CONNECTIONS_PAST_DUE_GRACE_DAYS', () => {
+  it('sin variable, o con una que no es un número de días, vale 0', () => {
+    for (const raw of [undefined, null, '', '   ', 'siete', '-3', '0', 'NaN', 'Infinity']) {
+      expect(resolvePastDueGraceDays(raw), String(raw)).toBe(0);
+    }
+  });
+
+  it('un número positivo se respeta (entero hacia abajo)', () => {
+    expect(resolvePastDueGraceDays('7')).toBe(7);
+    expect(resolvePastDueGraceDays(' 3 ')).toBe(3);
+    expect(resolvePastDueGraceDays('2.9')).toBe(2);
+  });
+});
+
+describe('pastDueSince · desde cuándo dura el impago', () => {
+  const AHORA = new Date('2026-07-31T12:00:00Z');
+  const HACE_UN_MES = new Date('2026-06-30T12:00:00Z');
+
+  it('se fija al entrar en impago', () => {
+    expect(pastDueSince('past_due', undefined, AHORA)).toEqual(AHORA);
+    expect(
+      pastDueSince('past_due', { statusCategory: 'active', pastDueSince: null }, AHORA),
+    ).toEqual(AHORA);
+  });
+
+  it('se CONSERVA mientras siga en impago: reiniciarla haría eterna la cortesía', () => {
+    expect(
+      pastDueSince('past_due', { statusCategory: 'past_due', pastDueSince: HACE_UN_MES }, AHORA),
+    ).toEqual(HACE_UN_MES);
+  });
+
+  it('una fila que ya estaba en impago sin fecha (anterior a la columna) empieza ahora', () => {
+    expect(
+      pastDueSince('past_due', { statusCategory: 'past_due', pastDueSince: null }, AHORA),
+    ).toEqual(AHORA);
+  });
+
+  it('se limpia al salir del impago, pague o se dé de baja', () => {
+    const previo = { statusCategory: 'past_due', pastDueSince: HACE_UN_MES };
+    expect(pastDueSince('active', previo, AHORA)).toBeNull();
+    expect(pastDueSince('canceled', previo, AHORA)).toBeNull();
+  });
+
+  it('una recaída cuenta desde la recaída, no desde el impago anterior', () => {
+    // Pagó entre medias: la fila previa está `active` aunque arrastre fecha.
+    expect(
+      pastDueSince('past_due', { statusCategory: 'active', pastDueSince: HACE_UN_MES }, AHORA),
+    ).toEqual(AHORA);
+  });
+});
+
+describe('impago en pasarelas externas: ni el panel lo da por vigente ni recibe tier', () => {
+  /** Cuenta conectada cuyo listado se puede cambiar entre barridos. */
+  async function conImpago(estadoInicial: string, pastDueGraceDays?: number) {
+    let estado = estadoInicial;
+    const adapter: StripeReadAdapter = {
+      retrieveAccount: async () => ({ id: 'acct', email: null, country: null, businessName: null }),
+      listActiveSubscriptions: async () => ({
+        subscribers: [
+          // `match@x.com` SÍ es usuario de Didacta (user_1): es a quien se le
+          // da o se le quita el tier.
+          sub('sub_socio', 'match@x.com', estado),
+          sub('sub_otro', 'nobody@x.com', 'active'),
+        ],
+        truncated: false,
+      }),
+    };
+    const svc = buildService({ [VALID_KEY]: adapter }, pastDueGraceDays);
+    await svc.service.addConnection({
+      tenantId: TENANT,
+      actorId: null,
+      provider: 'stripe',
+      displayName: 'Stripe ES',
+      credentials: { apiKey: VALID_KEY },
+    });
+    const fila = () =>
+      [...svc.prisma.subscribers.values()].find((r) => r['subscriptionId'] === 'sub_socio')!;
+    return {
+      ...svc,
+      fila,
+      cambiarEstado: (nuevo: string) => {
+        estado = nuevo;
+      },
+    };
+  }
+
+  for (const estado of ['past_due', 'on-hold']) {
+    it(`syncSubscribers: un ${estado} queda como impago SIN derecho y con fecha de inicio`, async () => {
+      const t = await conImpago(estado);
+      await t.service.syncSubscribers(TENANT);
+
+      expect(t.fila()).toMatchObject({ statusCategory: 'past_due', entitled: false });
+      expect(t.fila()['pastDueSince']).toBeInstanceOf(Date);
+      // Y no cuenta como suscripción activa en el resumen del admin.
+      expect((await t.service.getSubscriptionDigest(TENANT, 7)).activeCount).toBe(1);
+    });
+
+    it(`sync de tiers: un ${estado} NO recibe tier, pero su plan sigue en el catálogo`, async () => {
+      const t = await conImpago(estado);
+      const r = await t.service.collectDerivedTierEntries(TENANT);
+
+      expect(r.entries).toEqual([]);
+      expect(r.withheldUnpaid).toBe(1);
+      expect(r.extraCatalogLabels).toContain('Plan Pro');
+      // La conexión SÍ se reconcilió: es lo que hace que `applyDerivedTiers`
+      // le limpie el tier a quien ya lo tenía (churn), igual que en una baja.
+      expect(r.reconciledConnectionIds).toHaveLength(1);
+      expect(r.errors).toEqual([]);
+    });
+  }
+
+  it('sync de tiers: quien está al corriente recibe su tier como siempre', async () => {
+    const t = await conImpago('active');
+    const r = await t.service.collectDerivedTierEntries(TENANT);
+
+    expect(r.withheldUnpaid).toBe(0);
+    expect(r.entries).toEqual([
+      expect.objectContaining({ userId: 'user_1', label: 'Plan Pro', ref: 'sub_socio' }),
+    ]);
+  });
+
+  it('al cobrarse, el acceso vuelve solo y la fecha de impago se limpia', async () => {
+    const t = await conImpago('past_due');
+    expect((await t.service.collectDerivedTierEntries(TENANT)).entries).toEqual([]);
+
+    t.cambiarEstado('active');
+    const r = await t.service.collectDerivedTierEntries(TENANT);
+
+    expect(r.entries.map((e) => e.userId)).toEqual(['user_1']);
+    expect(t.fila()).toMatchObject({
+      statusCategory: 'active',
+      entitled: true,
+      pastDueSince: null,
+    });
+  });
+
+  it('el sync de tiers deja la tabla del panel al día: una sola decisión para los dos', async () => {
+    const t = await conImpago('past_due');
+    await t.service.collectDerivedTierEntries(TENANT);
+
+    // Sin haber pasado por `syncSubscribers`, el panel ya dice lo mismo que el tier.
+    expect(t.fila()).toMatchObject({ statusCategory: 'past_due', entitled: false });
+  });
+
+  describe('con cortesía configurada (7 días)', () => {
+    const DIA = 86_400_000;
+
+    it('dentro del plazo conserva el tier; cumplido el plazo lo pierde', async () => {
+      const t = await conImpago('past_due', 7);
+      const entra = new Date('2026-09-01T10:00:00Z');
+
+      const dia0 = await t.service.collectDerivedTierEntries(TENANT, entra);
+      expect(dia0.entries.map((e) => e.userId)).toEqual(['user_1']);
+      expect(t.fila()['pastDueSince']).toEqual(entra);
+
+      const dia6 = await t.service.collectDerivedTierEntries(
+        TENANT,
+        new Date(entra.getTime() + 6 * DIA),
+      );
+      expect(dia6.entries.map((e) => e.userId)).toEqual(['user_1']);
+      // La fecha NO se reinicia en cada barrido: sigue siendo la del día 0.
+      expect(t.fila()['pastDueSince']).toEqual(entra);
+
+      const dia7 = await t.service.collectDerivedTierEntries(
+        TENANT,
+        new Date(entra.getTime() + 7 * DIA),
+      );
+      expect(dia7.entries).toEqual([]);
+      expect(dia7.withheldUnpaid).toBe(1);
+      expect(t.fila()).toMatchObject({ entitled: false });
+    });
+
+    it('una recaída tras pagar vuelve a tener su plazo entero', async () => {
+      const t = await conImpago('past_due', 7);
+      const entra = new Date('2026-09-01T10:00:00Z');
+      await t.service.collectDerivedTierEntries(TENANT, entra);
+
+      t.cambiarEstado('active');
+      await t.service.collectDerivedTierEntries(TENANT, new Date(entra.getTime() + 3 * DIA));
+
+      t.cambiarEstado('past_due');
+      const recae = new Date(entra.getTime() + 30 * DIA);
+      const r = await t.service.collectDerivedTierEntries(TENANT, recae);
+
+      expect(r.entries.map((e) => e.userId)).toEqual(['user_1']);
+      expect(t.fila()['pastDueSince']).toEqual(recae);
+    });
+  });
+
+  it('una conexión caída no se da por reconciliada: nadie pierde el tier por un fallo de red', async () => {
+    const adapter: StripeReadAdapter = {
+      retrieveAccount: async () => ({ id: 'acct', email: null, country: null, businessName: null }),
+      listActiveSubscriptions: async () => {
+        throw new Error('timeout de la pasarela');
+      },
+    };
+    const svc = buildService({ [VALID_KEY]: adapter });
+    await svc.service.addConnection({
+      tenantId: TENANT,
+      actorId: null,
+      provider: 'stripe',
+      displayName: 'Stripe ES',
+      credentials: { apiKey: VALID_KEY },
+    });
+
+    const r = await svc.service.collectDerivedTierEntries(TENANT);
+
+    expect(r.reconciledConnectionIds).toEqual([]);
+    expect(r.errors).toEqual([
+      expect.objectContaining({ message: expect.stringContaining('timeout') }),
+    ]);
   });
 });
 

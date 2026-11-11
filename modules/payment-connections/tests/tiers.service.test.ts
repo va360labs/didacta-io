@@ -112,13 +112,29 @@ class MockPrisma {
     findMany: async (args: { where: Record<string, unknown> }) => {
       const w = args.where;
       const inIds = (w['userId'] as { in?: string[] })?.in ?? null;
+      const inConns = (w['derivedConnectionId'] as { in?: string[] })?.in ?? null;
+      const soloConDerivado = 'derivedLabel' in w;
       const out: ReturnType<typeof this.withManual>[] = [];
       for (const ut of this.userTiers.values()) {
         if (w['tenantId'] && ut.tenantId !== w['tenantId']) continue;
         if (inIds && !inIds.includes(ut.userId)) continue;
+        if (soloConDerivado && ut.derivedLabel === null) continue;
+        if (inConns && !(ut.derivedConnectionId && inConns.includes(ut.derivedConnectionId))) {
+          continue;
+        }
         out.push(this.withManual(ut));
       }
       return out;
+    },
+    update: async (args: {
+      where: { tenantId_userId: { tenantId: string; userId: string } };
+      data: Record<string, unknown>;
+    }) => {
+      const { tenantId, userId } = args.where.tenantId_userId;
+      const row = this.userTiers.get(this.utKey(tenantId, userId));
+      if (!row) throw new Error('user tier not found');
+      Object.assign(row, args.data, { updatedAt: new Date() });
+      return this.withManual(row);
     },
     upsert: async (args: {
       where: { tenantId_userId: { tenantId: string; userId: string } };
@@ -303,5 +319,59 @@ describe('sync: auto-crear tiers de catálogo + conteo de usuarios', () => {
     expect(wc.find((t) => t.name === 'Cohorte 2024')!.memberCount).toBe(0);
     expect(wc.find((t) => t.name === 'Anual')!.memberCount).toBe(0);
     expect(wc.find((t) => t.name === 'Plan Pro')!.memberCount).toBe(1);
+  });
+});
+
+describe('sync: quien deja de dar derecho pierde el tier derivado (churn)', () => {
+  // El sync de tiers solo manda en `entries` a quien tiene una suscripción que
+  // da acceso hoy. Una baja y un impago llegan aquí igual: el usuario ya no
+  // está en `entries`, y su conexión sí se reconcilió.
+  let svc: ReturnType<typeof build>;
+  beforeEach(async () => {
+    svc = build();
+    await svc.service.applyDerivedTiers(
+      TENANT,
+      [
+        { userId: 'paga', label: 'Plan Pro', provider: 'stripe', connectionId: 'conn_1' },
+        { userId: 'impago', label: 'Plan Pro', provider: 'stripe', connectionId: 'conn_1' },
+        { userId: 'otra-cuenta', label: 'Plan Pro', provider: 'paypal', connectionId: 'conn_2' },
+      ],
+      { reconciledConnectionIds: ['conn_1', 'conn_2'] },
+    );
+  });
+
+  const efectivo = async (userId: string) =>
+    (await svc.service.getUserTiers(TENANT, [userId]))[0]?.effectiveLabel ?? null;
+
+  it('el que ya no viene en entries pierde el derivado; el que sigue, lo conserva', async () => {
+    const r = await svc.service.applyDerivedTiers(
+      TENANT,
+      [{ userId: 'paga', label: 'Plan Pro', provider: 'stripe', connectionId: 'conn_1' }],
+      { reconciledConnectionIds: ['conn_1'] },
+    );
+
+    expect(r.clearedUserIds).toEqual(['impago']);
+    expect(await efectivo('impago')).toBeNull();
+    expect(await efectivo('paga')).toBe('Plan Pro');
+  });
+
+  it('no toca a los de una conexión que no se reconcilió en este sync', async () => {
+    const r = await svc.service.applyDerivedTiers(
+      TENANT,
+      [{ userId: 'paga', label: 'Plan Pro', provider: 'stripe', connectionId: 'conn_1' }],
+      { reconciledConnectionIds: ['conn_1'] }, // conn_2 falló: no es churn
+    );
+
+    expect(r.clearedUserIds).not.toContain('otra-cuenta');
+    expect(await efectivo('otra-cuenta')).toBe('Plan Pro');
+  });
+
+  it('el tier MANUAL sobrevive: lo que dio un admin no lo quita un impago', async () => {
+    const vip = await svc.service.createTier(TENANT, { name: 'VIP' });
+    await svc.service.assignManualTier(TENANT, 'impago', vip.id, 'admin');
+
+    await svc.service.applyDerivedTiers(TENANT, [], { reconciledConnectionIds: ['conn_1'] });
+
+    expect(await efectivo('impago')).toBe('VIP');
   });
 });

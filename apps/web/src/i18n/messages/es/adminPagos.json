@@ -93,6 +93,7 @@
     "loadError": "No se pudo cargar el catálogo de tiers.",
     "syncInfo": "Sincronizadas {connections} cuenta(s): {tiersCreated} tier(s) nuevo(s) en el catálogo, {updated} usuario(s) con tier de pago.",
     "syncInfoWithErrors": "Sincronizadas {connections} cuenta(s): {tiersCreated} tier(s) nuevo(s) en el catálogo, {updated} usuario(s) con tier de pago · {errors} cuenta(s) con error.",
+    "syncInfoUnpaid": "{count, plural, one {# usuario con la suscripción en impago se queda sin tier} other {# usuarios con la suscripción en impago se quedan sin tier}}: lo recuperan solos cuando la pasarela cobre.",
     "syncError": "No se pudo sincronizar desde pagos.",
     "createError": "No se pudo crear el tier.",
     "deleteConfirm": "¿Borrar el tier \"{name}\"? Las asignaciones manuales quedarán sin tier.",

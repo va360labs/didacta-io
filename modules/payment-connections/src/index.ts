@@ -35,6 +35,11 @@ export {
   SUPPORTED_PROVIDERS,
   normalizeEmail,
   classifySubscriptionStatus,
+  entitledWithGrace,
+  pastDueSince,
+  resolvePastDueGraceDays,
+  tierLabelFallback,
+  DEFAULT_PAST_DUE_GRACE_DAYS,
   DEFAULT_RENEWAL_TEMPLATE,
 } from './payment-connections.service.js';
 export type {
@@ -57,6 +62,7 @@ export type {
   SubscriptionStatusInfo,
   SubscriptionStatusLang,
   SubscriberSyncResult,
+  DerivedTierCollection,
   SubscriberListOptions,
   SubscriberRow,
   SubscriberSummary,

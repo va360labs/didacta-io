@@ -1,0 +1,21 @@
+-- Desde cuándo lleva en impago un suscriptor de una pasarela externa.
+--
+-- `past_due` (Stripe) y `on-hold` (WooCommerce) estaban clasificados como
+-- «con derecho» sin ningún tope: quien dejaba de pagar conservaba el tier —y
+-- con él el grupo de acceso y sus cursos— mientras la pasarela no diera la
+-- suscripción por cancelada, que en WooCommerce puede ser nunca.
+--
+-- A partir de esta versión el impago NO da derecho por defecto. Quien quiera
+-- una cortesía la configura con `PAYMENT_CONNECTIONS_PAST_DUE_GRACE_DAYS`, y
+-- para que esa cortesía caduque hace falta saber cuándo empezó el impago: eso
+-- es esta columna. La rellena el sync de suscriptores al ver el cambio de
+-- estado.
+--
+-- NULLABLE y sin backfill a propósito: de las filas que hoy están en impago no
+-- se sabe desde cuándo, e inventar una fecha sería decidir aquí quién pierde
+-- el acceso. Con cortesía configurada, a esas filas les empieza a contar en el
+-- primer sync tras actualizar; sin cortesía (lo de por defecto) la fecha no
+-- interviene.
+
+-- AlterTable
+ALTER TABLE "mod_payment_connections_subscriber" ADD COLUMN     "past_due_since" TIMESTAMP(3);

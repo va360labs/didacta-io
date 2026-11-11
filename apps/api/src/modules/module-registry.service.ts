@@ -55,6 +55,7 @@ import {
   PayPalReadSdkAdapter,
   WooCommerceReadSdkAdapter,
   buildPaymentConnectionsModule,
+  resolvePastDueGraceDays,
   type ConfigPort as PaymentConnectionsConfigPort,
   type PaymentReadAdapterFactory,
   type StripeCredentials,
@@ -740,6 +741,9 @@ export class ModuleRegistryService implements OnModuleInit {
       this.factory.getTenantConfig() as unknown as PaymentConnectionsConfigPort,
       pcAdapterFactory,
       pcUserDirectory,
+      // Cortesía por impago de las pasarelas externas. 0 por defecto: un
+      // `past_due` / `on-hold` no conserva el tier ni un día.
+      resolvePastDueGraceDays(process.env['PAYMENT_CONNECTIONS_PAST_DUE_GRACE_DAYS']),
     );
     const paymentConnectionsModule = buildPaymentConnectionsModule(this.paymentConnections);
     this.paymentTiers = new PaymentTiersService(prisma);

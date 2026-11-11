@@ -3264,6 +3264,13 @@ model ModPaymentConnectionsSubscriber {
   /// `currentPeriodEnd` para el que ya se mandó el aviso de "se renovará en 7 días".
   /// Evita reenviar el mismo aviso cada día (idempotencia por periodo).
   renewalWarnedPeriodEnd DateTime? @map("renewal_warned_period_end")
+  /// Desde cuándo está en impago (`past_due` en Stripe, `on-hold` en
+  /// WooCommerce). Se fija al ENTRAR en impago y se conserva mientras siga
+  /// igual; se limpia al salir. Es lo que permite que la cortesía por impago
+  /// (`PAYMENT_CONNECTIONS_PAST_DUE_GRACE_DAYS`) CADUQUE: sin esta fecha el
+  /// impago solo se podía tratar como «con derecho» o «sin derecho», y estaba
+  /// puesto en «con derecho» sin tope.
+  pastDueSince           DateTime? @map("past_due_since")
   /// Última corrida del sync en la que se vio este suscriptor (para churn).
   lastSeenAt             DateTime  @default(now()) @map("last_seen_at")
   createdAt              DateTime  @default(now()) @map("created_at")

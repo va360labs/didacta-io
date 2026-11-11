@@ -35,7 +35,11 @@ export interface WooCommerceReaderCredentials {
 
 type FetchFn = typeof fetch;
 
-/** Estados WooCommerce que cuentan como "suscrito" hoy. */
+/**
+ * Estados WooCommerce que se LISTAN al reconciliar. `on-hold` (impago) se
+ * lista para que el panel lo enseñe como impago y no como baja; el derecho lo
+ * decide `entitledWithGrace`, no esta lista.
+ */
 const WC_ACTIVE_STATUSES = ['active', 'on-hold'];
 /**
  * Estados consultados en el lookup de inscripción (no solo los vigentes): incluye
