@@ -34,6 +34,7 @@ import {
   type TemplateOverridePrisma,
 } from '../modules/notifications/email-template-catalog';
 import type { ClientContext } from './client-context';
+import { storedEmailFor } from './email-lookup';
 import { PasswordService } from './password.service';
 
 const TOKEN_TTL_MINUTES = 60;
@@ -92,6 +93,12 @@ export class PasswordResetService {
   ): Promise<{
     rawToken: string;
     userId: string;
+    /**
+     * Email de la cuenta TAL COMO ESTÁ GUARDADO. Es a donde se envía el enlace:
+     * la búsqueda no distingue mayúsculas, así que lo que tecleó quien lo pide
+     * puede no ser letra a letra la dirección de la cuenta.
+     */
+    email: string;
     userName: string | null;
     tenantId: string;
     tenantName: string;
@@ -116,14 +123,22 @@ export class PasswordResetService {
   ): Promise<{
     rawToken: string;
     userId: string;
+    /**
+     * Email de la cuenta TAL COMO ESTÁ GUARDADO. Es a donde se envía el enlace:
+     * la búsqueda no distingue mayúsculas, así que lo que tecleó quien lo pide
+     * puede no ser letra a letra la dirección de la cuenta.
+     */
+    email: string;
     userName: string | null;
     tenantId: string;
     tenantName: string;
     /** Idioma del DESTINATARIO — ver `resolveRecipientLocale`. */
     locale: string;
   } | null> {
+    // Sin distinguir mayúsculas, igual que el login (ver `storedEmailFor`).
+    const email = await storedEmailFor(this.prisma, tenant.id, args.email);
     const user = await this.prisma.user.findUnique({
-      where: { tenantId_email: { tenantId: tenant.id, email: args.email } },
+      where: { tenantId_email: { tenantId: tenant.id, email } },
     });
     const allowedStatuses = opts.allowPending
       ? new Set(['ACTIVE', 'PENDING'])
@@ -170,6 +185,7 @@ export class PasswordResetService {
     return {
       rawToken,
       userId: user.id,
+      email: user.email,
       userName: user.name,
       tenantId: tenant.id,
       // alpha.77 — branding por tenant en emails. Si el tenant no tiene
@@ -293,7 +309,9 @@ export class PasswordResetService {
     // RLS F2: branding/override/SMTP del tenant bajo su ALS.
     return runAsTenant(
       result.tenantId,
-      () => this.sendResetEmail(result, args.email, webBaseUrl, opts),
+      // A la dirección GUARDADA, no a la tecleada: el enlace abre la cuenta,
+      // así que solo puede salir hacia el buzón que consta en ella.
+      () => this.sendResetEmail(result, result.email, webBaseUrl, opts),
       { traceLabel: 'pwd-email' },
     );
   }
@@ -471,19 +489,23 @@ export class PasswordResetService {
       return null;
     }
     // Lookup cross-tenant DELIBERADO (aún no sabemos el tenant): sancionado.
+    // Sin distinguir mayúsculas, igual que el login.
     const matches = await runSanctionedGlobalAccess(() =>
       this.prisma.user.findMany({
         where: {
-          email: args.email,
+          email: { equals: args.email, mode: 'insensitive' },
           deletedAt: null,
           status: 'ACTIVE',
           tenant: { status: 'ACTIVE' },
         },
         include: { tenant: true },
-        take: 2,
+        take: 5,
       }),
     );
-    if (matches.length === 1) return matches[0]!.tenant;
+    // Se cuenta por tenant, no por fila: dos cuentas del MISMO tenant que solo
+    // difieren en mayúsculas siguen siendo una sola organización.
+    const tenants = new Set(matches.map((m) => m.tenant.id));
+    if (tenants.size === 1) return matches[0]!.tenant;
     return null;
   }
 

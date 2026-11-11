@@ -114,6 +114,39 @@ function makeFakePrisma() {
         if (!w) return null;
         return users.find((u) => u.tenantId === w.tenantId && u.email === w.email) ?? null;
       },
+      /**
+       * Atiende las dos consultas por email del servicio: la de
+       * `storedEmailFor` (acotada a un tenant) y la que resuelve el tenant por
+       * email cuando no hay host ni slug (cruza tenants y trae el suyo).
+       *
+       * Fiel a Prisma: un `email` en texto plano es una comparación EXACTA y
+       * solo `mode: 'insensitive'` ignora mayúsculas. Sin esa fidelidad el
+       * doble contestaría lo mismo con el código sin arreglar.
+       */
+      async findMany(args: {
+        where: {
+          tenantId?: string;
+          email: string | { equals: string; mode?: 'insensitive' };
+          status?: UserRow['status'];
+          tenant?: { status: TenantRow['status'] };
+        };
+        take: number;
+      }) {
+        const e = args.where.email;
+        const matchEmail = (stored: string) =>
+          typeof e === 'string'
+            ? stored === e
+            : e.mode === 'insensitive'
+              ? stored.toLowerCase() === e.equals.toLowerCase()
+              : stored === e.equals;
+        return users
+          .filter((u) => !args.where.tenantId || u.tenantId === args.where.tenantId)
+          .filter((u) => matchEmail(u.email))
+          .filter((u) => !args.where.status || u.status === args.where.status)
+          .map((u) => ({ ...u, tenant: tenants.find((t) => t.id === u.tenantId)! }))
+          .filter((u) => !args.where.tenant || u.tenant.status === args.where.tenant.status)
+          .slice(0, args.take);
+      },
       async update(args: {
         where: { id: string };
         data: { passwordHash?: string; status?: UserRow['status'] };
@@ -263,6 +296,70 @@ describe('PasswordResetService.request', () => {
     expect(blank?.locale).toBe('es-ES');
   });
 
+  it('el email no distingue mayúsculas: «Ana@Example.com» es la cuenta de «ana@example.com»', async () => {
+    const { service, prisma } = makeService();
+    const result = await service.request({ tenantSlug: 'demo', email: 'Ana@Example.com' });
+    expect(result?.userId).toBe('user-1');
+    // Lo que se devuelve para enviar es la dirección GUARDADA, no la tecleada.
+    expect(result?.email).toBe('ana@example.com');
+    expect(prisma.tokens).toHaveLength(1);
+  });
+
+  it('cuenta guardada CON mayúsculas y email escrito en minúsculas: también la encuentra', async () => {
+    const { service, prisma } = makeService();
+    prisma.users.push({ ...prisma.users[0]!, id: 'user-mayus', email: 'Marta.Gil@Example.com' });
+    const result = await service.request({ tenantSlug: 'demo', email: 'marta.gil@example.com' });
+    expect(result?.userId).toBe('user-mayus');
+    expect(result?.email).toBe('Marta.Gil@Example.com');
+  });
+
+  it('dos cuentas que solo difieren en mayúsculas: la escrita EXACTA sigue siendo la suya', async () => {
+    const { service, prisma } = makeService();
+    prisma.users.push({ ...prisma.users[0]!, id: 'user-dup', email: 'ANA@example.com' });
+    expect((await service.request({ tenantSlug: 'demo', email: 'ANA@example.com' }))?.userId).toBe(
+      'user-dup',
+    );
+    expect((await service.request({ tenantSlug: 'demo', email: 'ana@example.com' }))?.userId).toBe(
+      'user-1',
+    );
+  });
+
+  it('dos cuentas que solo difieren en mayúsculas y una tercera forma: no elige ninguna', async () => {
+    const { service, prisma } = makeService();
+    prisma.users.push({ ...prisma.users[0]!, id: 'user-dup', email: 'ANA@example.com' });
+    const result = await service.request({ tenantSlug: 'demo', email: 'Ana@Example.com' });
+    expect(result).toBeNull();
+    expect(prisma.tokens).toHaveLength(0);
+  });
+
+  it('sin host ni slug, el tenant se resuelve por email sin distinguir mayúsculas', async () => {
+    const { service } = makeService();
+    const result = await service.request({ email: 'Ana@Example.com' });
+    expect(result?.userId).toBe('user-1');
+    expect(result?.tenantId).toBe('tenant-1');
+  });
+
+  it('sin host ni slug, dos cuentas del MISMO tenant que difieren en mayúsculas no lo hacen ambiguo', async () => {
+    const { service, prisma } = makeService();
+    prisma.users.push({ ...prisma.users[0]!, id: 'user-dup', email: 'ANA@example.com' });
+    // El tenant se resuelve (es uno solo); la cuenta exacta es la de siempre.
+    const result = await service.request({ email: 'ana@example.com' });
+    expect(result?.userId).toBe('user-1');
+  });
+
+  it('sin host ni slug, el mismo email en DOS tenants sigue sin resolverse (anti-enumeración)', async () => {
+    const { service, prisma } = makeService();
+    prisma.tenants.push({ id: 'tenant-3', slug: 'otra', name: 'Otra', status: 'ACTIVE' });
+    prisma.users.push({
+      ...prisma.users[0]!,
+      id: 'user-otra',
+      tenantId: 'tenant-3',
+      email: 'Ana@example.com',
+    });
+    expect(await service.request({ email: 'ana@example.com' })).toBeNull();
+    expect(prisma.tokens).toHaveLength(0);
+  });
+
   it('devuelve null sin crear token si el user no existe (anti user enumeration)', async () => {
     const { service, prisma } = makeService();
     const result = await service.request({ tenantSlug: 'demo', email: 'inexistente@example.com' });
@@ -374,6 +471,43 @@ describe('PasswordResetService.request', () => {
     );
     expect(result).toBeNull();
     expect(prisma.tokens).toHaveLength(0);
+  });
+});
+
+describe('PasswordResetService.requestAndSendEmail', () => {
+  /**
+   * La búsqueda ya no distingue mayúsculas, así que lo tecleado puede no ser
+   * letra a letra la dirección de la cuenta. El enlace abre la cuenta: solo
+   * puede salir hacia el buzón que consta en ella.
+   */
+  it('envía el enlace a la dirección GUARDADA, no a la que tecleó quien lo pide', async () => {
+    const prisma = makeFakePrisma();
+    const sent: Array<{ to: string }> = [];
+    const smtp = {
+      ...fakeSmtp,
+      async send(_config: unknown, message: { to: string }) {
+        sent.push(message);
+        return { ok: true, messageId: 'fake' };
+      },
+    };
+    const smtpResolver = { resolve: async () => ({ config: {}, source: 'tenant' }) };
+    const service = new PasswordResetService(
+      prisma as never,
+      fakePasswords as never,
+      fakeAuditLog as never,
+      smtp as never,
+      fakeTenantConfig as never,
+      fakeLogger as never,
+      smtpResolver as never,
+    );
+
+    await service.requestAndSendEmail(
+      { tenantSlug: 'demo', email: 'ANA@EXAMPLE.COM' },
+      'https://aula.example.com',
+    );
+
+    expect(sent).toHaveLength(1);
+    expect(sent[0]!.to).toBe('ana@example.com');
   });
 });
 

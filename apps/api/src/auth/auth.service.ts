@@ -22,6 +22,7 @@ import { PasswordService } from './password.service';
 import { SessionRegistryService, SessionRevokedError } from './session-registry.service';
 import { TokenService, type SignedTokens } from './token.service';
 import type { SigninDto, SignupDto } from './dto';
+import { storedEmailFor } from './email-lookup';
 
 export class AmbiguousTenantError extends UnauthorizedException {
   constructor(public readonly candidateSlugs: string[]) {
@@ -303,8 +304,10 @@ export class AuthService {
     dto: SigninDto,
     ctx: ClientContext,
   ): Promise<AuthResult> {
+    // Sin distinguir mayúsculas: «Ana@…» es la cuenta de «ana@…».
+    const email = await storedEmailFor(this.prisma, tenant.id, dto.email);
     const user = await this.prisma.user.findUnique({
-      where: { tenantId_email: { tenantId: tenant.id, email: dto.email } },
+      where: { tenantId_email: { tenantId: tenant.id, email } },
       include: { roles: { include: { role: true } }, tenant: true },
     });
     if (!user || !user.passwordHash || user.status !== 'ACTIVE') {
@@ -542,11 +545,12 @@ export class AuthService {
     }
 
     // Fallback email-first: ¿este email existe en uno o varios tenants?
+    // Sin distinguir mayúsculas (ver `storedEmailFor`).
     // Lookup cross-tenant DELIBERADO (aún no sabemos el tenant): sancionado.
     const matches = await runSanctionedGlobalAccess(() =>
       this.prisma.user.findMany({
         where: {
-          email: args.email,
+          email: { equals: args.email, mode: 'insensitive' },
           deletedAt: null,
           status: 'ACTIVE',
           tenant: { status: 'ACTIVE' },
@@ -555,10 +559,13 @@ export class AuthService {
         take: 5,
       }),
     );
+    // Dos filas del MISMO tenant que solo difieren en mayúsculas no son dos
+    // organizaciones: se cuenta por tenant, no por fila.
+    const tenants = [...new Map(matches.map((m) => [m.tenant.id, m.tenant])).values()];
 
-    if (matches.length === 0) return null;
-    if (matches.length === 1) return matches[0]!.tenant;
+    if (tenants.length === 0) return null;
+    if (tenants.length === 1) return tenants[0]!;
 
-    throw new AmbiguousTenantError(matches.map((m) => m.tenant.slug));
+    throw new AmbiguousTenantError(tenants.map((t) => t.slug));
   }
 }

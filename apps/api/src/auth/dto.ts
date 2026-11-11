@@ -20,7 +20,8 @@ export type SignupDto = z.infer<typeof signupSchema>;
 
 export const signinSchema = z.object({
   tenantSlug: z.string().min(1).max(64).optional(),
-  email: z.string().email(),
+  // Sin espacios alrededor: el autocompletado del móvil deja uno detrás.
+  email: z.string().trim().email(),
   password: z.string().min(1).max(128),
 });
 export type SigninDto = z.infer<typeof signinSchema>;
@@ -32,7 +33,7 @@ export type RefreshDto = z.infer<typeof refreshSchema>;
 
 export const forgotPasswordSchema = z.object({
   tenantSlug: z.string().min(1).max(64).optional(),
-  email: z.string().email(),
+  email: z.string().trim().email(),
 });
 export type ForgotPasswordDto = z.infer<typeof forgotPasswordSchema>;
 
