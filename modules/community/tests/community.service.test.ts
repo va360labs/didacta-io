@@ -511,6 +511,9 @@ describe('CommunityService.deleteComment', () => {
   });
 });
 
+/** Quien publica el post y el comentario a los que otros reaccionan. */
+const AUTHOR = { id: 'u2', displayName: 'B' };
+
 describe('CommunityService.addReaction', () => {
   it('error si no se manda postId ni commentId', async () => {
     const prisma = makeFakePrisma();
@@ -528,12 +531,17 @@ describe('CommunityService.addReaction', () => {
     ).rejects.toBeInstanceOf(ReactionTargetMissingError);
   });
 
+  // Estos tres reaccionaban a ids inventados ('post-x', 'p', 'cmt-x'): fijaban
+  // como contrato justo el fallo —se podía reaccionar a algo que no existe—.
+  // Ahora reaccionan a un post y a un comentario de verdad.
   it('reacciona a post + emite evento', async () => {
     const prisma = makeFakePrisma();
     const events: { name: string; data: unknown }[] = [];
     const svc = new CommunityService(prisma as never, trackingCtx(events));
-    const r = await svc.addReaction('t1', 'u1', { postId: 'post-x', emoji: '👍' });
-    expect(r.postId).toBe('post-x');
+    const post = await svc.createPost('t1', AUTHOR, postDto({ title: 'P', body: 'x' }));
+    events.length = 0;
+    const r = await svc.addReaction('t1', 'u1', { postId: post.id, emoji: '👍' });
+    expect(r.postId).toBe(post.id);
     expect(r.emoji).toBe('👍');
     expect(events[0]?.name).toBe('community.reaction.added');
   });
@@ -541,8 +549,9 @@ describe('CommunityService.addReaction', () => {
   it('idempotente: misma reaccion del mismo author no duplica', async () => {
     const prisma = makeFakePrisma();
     const svc = new CommunityService(prisma as never, trackingCtx([]));
-    const r1 = await svc.addReaction('t1', 'u1', { postId: 'p', emoji: '👍' });
-    const r2 = await svc.addReaction('t1', 'u1', { postId: 'p', emoji: '👍' });
+    const post = await svc.createPost('t1', AUTHOR, postDto({ title: 'P', body: 'x' }));
+    const r1 = await svc.addReaction('t1', 'u1', { postId: post.id, emoji: '👍' });
+    const r2 = await svc.addReaction('t1', 'u1', { postId: post.id, emoji: '👍' });
     expect(r1.id).toBe(r2.id);
     expect(prisma._reactions).toHaveLength(1);
   });
@@ -550,9 +559,91 @@ describe('CommunityService.addReaction', () => {
   it('reacciona a comment', async () => {
     const prisma = makeFakePrisma();
     const svc = new CommunityService(prisma as never, trackingCtx([]));
-    const r = await svc.addReaction('t1', 'u1', { commentId: 'cmt-x', emoji: '🎉' });
-    expect(r.commentId).toBe('cmt-x');
+    const post = await svc.createPost('t1', AUTHOR, postDto({ title: 'P', body: 'x' }));
+    const c = await svc.addComment('t1', post.id, AUTHOR, { body: 'c' });
+    const r = await svc.addReaction('t1', 'u1', { commentId: c.id, emoji: '🎉' });
+    expect(r.commentId).toBe(c.id);
     expect(r.postId).toBeNull();
+  });
+
+  describe('el destino tiene que existir en el tenant y no estar borrado', () => {
+    async function setup() {
+      const prisma = makeFakePrisma();
+      const events: { name: string; data: unknown }[] = [];
+      const svc = new CommunityService(prisma as never, trackingCtx(events));
+      const post = await svc.createPost('t1', AUTHOR, postDto({ title: 'P', body: 'x' }));
+      const comment = await svc.addComment('t1', post.id, AUTHOR, { body: 'c' });
+      events.length = 0;
+      return { prisma, svc, post, comment, events };
+    }
+
+    it('post que no existe → POST_NOT_FOUND', async () => {
+      const { svc, prisma } = await setup();
+      await expect(
+        svc.addReaction('t1', 'u1', { postId: 'no-existe', emoji: '👍' }),
+      ).rejects.toBeInstanceOf(PostNotFoundError);
+      expect(prisma._reactions).toHaveLength(0);
+    });
+
+    it('post de OTRO tenant → POST_NOT_FOUND, sin reacción ni evento', async () => {
+      const { svc, prisma, post, events } = await setup();
+      await expect(
+        svc.addReaction('otro-tenant', 'u1', { postId: post.id, emoji: '👍' }),
+      ).rejects.toBeInstanceOf(PostNotFoundError);
+      expect(prisma._reactions).toHaveLength(0);
+      expect(events).toEqual([]);
+    });
+
+    it('post borrado → POST_NOT_FOUND', async () => {
+      const { svc, prisma, post, events } = await setup();
+      await svc.deletePost('t1', AUTHOR.id, post.id);
+      await expect(
+        svc.addReaction('t1', 'u1', { postId: post.id, emoji: '👍' }),
+      ).rejects.toBeInstanceOf(PostNotFoundError);
+      expect(prisma._reactions).toHaveLength(0);
+      expect(events).toEqual([]);
+    });
+
+    it('comentario que no existe o de otro tenant → COMMENT_NOT_FOUND', async () => {
+      const { svc, prisma, comment } = await setup();
+      await expect(
+        svc.addReaction('t1', 'u1', { commentId: 'no-existe', emoji: '👍' }),
+      ).rejects.toBeInstanceOf(CommentNotFoundError);
+      await expect(
+        svc.addReaction('otro-tenant', 'u1', { commentId: comment.id, emoji: '👍' }),
+      ).rejects.toBeInstanceOf(CommentNotFoundError);
+      expect(prisma._reactions).toHaveLength(0);
+    });
+
+    it('comentario borrado → COMMENT_NOT_FOUND', async () => {
+      const { svc, prisma, comment } = await setup();
+      await svc.deleteComment('t1', AUTHOR.id, comment.id);
+      await expect(
+        svc.addReaction('t1', 'u1', { commentId: comment.id, emoji: '👍' }),
+      ).rejects.toBeInstanceOf(CommentNotFoundError);
+      expect(prisma._reactions).toHaveLength(0);
+    });
+
+    it('comentario vivo de un post borrado → COMMENT_NOT_FOUND: el hilo ya no existe', async () => {
+      // Borrar un post no borra sus comentarios; quedan vivos en la tabla pero
+      // inalcanzables. Reaccionar a uno es reaccionar a contenido borrado.
+      const { svc, prisma, post, comment } = await setup();
+      await svc.deletePost('t1', AUTHOR.id, post.id);
+      await expect(
+        svc.addReaction('t1', 'u1', { commentId: comment.id, emoji: '👍' }),
+      ).rejects.toBeInstanceOf(CommentNotFoundError);
+      expect(prisma._reactions).toHaveLength(0);
+    });
+
+    it('una reacción previa no salva el borrado: repetirla tras borrar el post también da 404', async () => {
+      const { svc, prisma, post } = await setup();
+      await svc.addReaction('t1', 'u1', { postId: post.id, emoji: '👍' });
+      await svc.deletePost('t1', AUTHOR.id, post.id);
+      await expect(
+        svc.addReaction('t1', 'u1', { postId: post.id, emoji: '👍' }),
+      ).rejects.toBeInstanceOf(PostNotFoundError);
+      expect(prisma._reactions).toHaveLength(1);
+    });
   });
 });
 
@@ -566,7 +657,8 @@ describe('CommunityService.removeReaction', () => {
   it('borra la reaccion del autor', async () => {
     const prisma = makeFakePrisma();
     const svc = new CommunityService(prisma as never, trackingCtx([]));
-    const r = await svc.addReaction('t1', 'u1', { postId: 'p', emoji: '👍' });
+    const post = await svc.createPost('t1', AUTHOR, postDto({ title: 'P', body: 'x' }));
+    const r = await svc.addReaction('t1', 'u1', { postId: post.id, emoji: '👍' });
     await svc.removeReaction('t1', 'u1', r.id);
     expect(prisma._reactions).toHaveLength(0);
   });
@@ -574,8 +666,20 @@ describe('CommunityService.removeReaction', () => {
   it('error si intenta borrar reaccion ajena', async () => {
     const prisma = makeFakePrisma();
     const svc = new CommunityService(prisma as never, trackingCtx([]));
-    const r = await svc.addReaction('t1', 'u1', { postId: 'p', emoji: '👍' });
+    const post = await svc.createPost('t1', AUTHOR, postDto({ title: 'P', body: 'x' }));
+    const r = await svc.addReaction('t1', 'u1', { postId: post.id, emoji: '👍' });
     await expect(svc.removeReaction('t1', 'otro', r.id)).rejects.toBeInstanceOf(NotAuthorError);
+  });
+
+  it('se puede quitar la reacción a un post que después se borró', async () => {
+    // Quitar no exige que el destino siga vivo: es limpiar lo propio.
+    const prisma = makeFakePrisma();
+    const svc = new CommunityService(prisma as never, trackingCtx([]));
+    const post = await svc.createPost('t1', AUTHOR, postDto({ title: 'P', body: 'x' }));
+    const r = await svc.addReaction('t1', 'u1', { postId: post.id, emoji: '👍' });
+    await svc.deletePost('t1', AUTHOR.id, post.id);
+    await svc.removeReaction('t1', 'u1', r.id);
+    expect(prisma._reactions).toHaveLength(0);
   });
 });
 

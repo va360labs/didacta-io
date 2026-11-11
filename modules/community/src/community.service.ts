@@ -528,10 +528,38 @@ export class CommunityService {
   /**
    * Idempotente: si el author ya reaccionó a ese target con ese emoji, no
    * duplica la fila (vuelve la existente).
+   *
+   * El destino tiene que existir EN ESTE TENANT y no estar borrado. Antes no se
+   * comprobaba: se creaban reacciones colgando de un post o comentario borrado
+   * —o de otro tenant, porque la FK no sabe de tenants y su comprobación no
+   * pasa por RLS—, y se publicaba `community.reaction.added` por ellas. Mismo
+   * criterio y mismos códigos (`POST_NOT_FOUND` / `COMMENT_NOT_FOUND`) que
+   * `addComment`.
    */
   async addReaction(tenantId: string, actorId: string, dto: AddReactionDto) {
     const targets = [dto.postId, dto.commentId].filter((x): x is string => Boolean(x));
     if (targets.length !== 1) throw new ReactionTargetMissingError();
+
+    if (dto.postId) {
+      const post = await this.prisma.modCommunityPost.findFirst({
+        where: { id: dto.postId, tenantId, deletedAt: null },
+        select: { id: true },
+      });
+      if (!post) throw new PostNotFoundError();
+    } else {
+      const comment = await this.prisma.modCommunityComment.findFirst({
+        where: { id: dto.commentId!, tenantId, deletedAt: null },
+        select: { postId: true },
+      });
+      if (!comment) throw new CommentNotFoundError();
+      // Borrar un post no borra sus comentarios: siguen vivos en la tabla pero
+      // el hilo ya no existe. Reaccionar a uno es reaccionar a contenido borrado.
+      const thread = await this.prisma.modCommunityPost.findFirst({
+        where: { id: comment.postId, tenantId, deletedAt: null },
+        select: { id: true },
+      });
+      if (!thread) throw new CommentNotFoundError();
+    }
 
     if (dto.postId) {
       const existing = await this.prisma.modCommunityReaction.findFirst({
