@@ -29,5 +29,6 @@
   "WEBHOOKS_ENDPOINT_NOT_FOUND": "Endpoint no encontrado",
   "VIDEO_BAD_REQUEST": "Vídeo no válido.",
   "VIDEO_FORBIDDEN": "No tienes acceso a este vídeo.",
-  "VIDEO_RATE_LIMITED": "Has abierto demasiados vídeos distintos en poco tiempo. Vuelve a intentarlo más tarde."
+  "VIDEO_RATE_LIMITED": "Has abierto demasiados vídeos distintos en poco tiempo. Vuelve a intentarlo más tarde.",
+  "SUBSCRIPTION_LOCKED": "El acceso a esta academia está en pausa."
 }

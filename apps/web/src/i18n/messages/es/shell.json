@@ -81,5 +81,29 @@
     "title": "Acceso de soporte activo.",
     "body": "Alguien de soporte está dentro de este espacio. Motivo: {reason}",
     "expired": "caducado"
+  },
+  "subscriptionGate": {
+    "trialBanner": {
+      "label": "Prueba gratis",
+      "daysLeft": "{days, plural, one {te queda # día} other {te quedan # días}}",
+      "cta": "Elegir plan",
+      "newTab": "(se abre en una pestaña nueva)"
+    },
+    "lock": {
+      "brandLine": "Todo sigue ahí.",
+      "adminTitle": "Tu prueba gratis ha terminado",
+      "adminBody": "Tu academia está en pausa, no borrada. Elige un plan y vuelve a abrirla tal y como la dejaste.",
+      "keptTitle": "Lo que se conserva",
+      "keptCourses": "Tus cursos y lecciones",
+      "keptStudents": "Tus alumnos y su progreso",
+      "keptBrand": "Tu marca, tu comunidad y tus ajustes",
+      "choosePlan": "Elegir plan",
+      "reopenNote": "En cuanto se complete el pago, tu academia se abre de nuevo.",
+      "signOut": "Cerrar sesión",
+      "otherTitle": "El acceso a {name} está en pausa",
+      "otherBody": "Sus responsables ya lo saben. No se ha perdido nada: cuando vuelva a abrirse, todo seguirá donde estaba.",
+      "adminSignIn": "¿Eres administrador? Inicia sesión",
+      "fallbackName": "esta academia"
+    }
   }
 }

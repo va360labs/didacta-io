@@ -15,6 +15,7 @@ import { LicenseProvider } from '@/components/license-provider';
 import { NotificationsBell } from '@/components/notifications-bell';
 import { NotificationsSetupBanner } from '@/components/notifications-setup-banner';
 import { SupportAccessBanner } from '@/components/support-access-banner';
+import { SubscriptionTrialBanner } from '@/components/subscription-trial-banner';
 import { ReferralsPromoButton } from '@/components/referrals-promo-button';
 import { NotificationsProvider } from '@/components/notifications-provider';
 import { NotificationsToaster } from '@/components/notifications-toaster';
@@ -448,6 +449,9 @@ function Shell({
                   producto parece ir bien mientras pierde en silencio las altas
                   y los restablecimientos de contraseña. */}
               <NotificationsSetupBanner roles={session.user.roles} />
+              {/* Prueba gratis de Didacta Cloud: solo para quien administra
+                  la academia, y solo mientras dura. */}
+              <SubscriptionTrialBanner roles={session.user.roles} />
               <header className="flex h-14 items-center gap-2 border-b border-border-soft bg-surface/95 px-4 backdrop-blur lg:px-6">
                 {/* Móvil: hamburguesa + marca. En escritorio el rail ya provee ambos. */}
                 <button

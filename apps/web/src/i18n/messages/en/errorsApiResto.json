@@ -53,5 +53,6 @@
   "webhook_url_duplicate": "There is already an endpoint with that URL in this tenant.",
   "VIDEO_BAD_REQUEST": "Invalid video.",
   "VIDEO_FORBIDDEN": "You don't have access to this video.",
-  "VIDEO_RATE_LIMITED": "You have opened too many different videos in a short time. Try again later."
+  "VIDEO_RATE_LIMITED": "You have opened too many different videos in a short time. Try again later.",
+  "SUBSCRIPTION_LOCKED": "Access to this academy is paused."
 }

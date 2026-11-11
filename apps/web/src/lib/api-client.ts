@@ -20,6 +20,11 @@ import { rememberIntendedPath } from './post-login-redirect';
 const API_URL =
   typeof window === 'undefined' ? (process.env.API_INTERNAL_URL ?? 'http://localhost:4000') : '';
 
+/** Código del 402 de un aula en pausa (`apps/api/src/tenancy/subscription-gate.ts`). */
+export const SUBSCRIPTION_LOCKED_CODE = 'SUBSCRIPTION_LOCKED';
+/** Evento de ventana que dispara cualquier petición que reciba ese 402. */
+export const SUBSCRIPTION_LOCKED_EVENT = 'didacta:subscription-locked';
+
 export interface ApiError {
   message: string;
   issues?: Array<{ path: string; message: string; code: string }>;
@@ -259,6 +264,15 @@ export async function apiFetch<T>(
       }
       clearAuthAndRedirect();
       throw error;
+    }
+
+    // Aula en pausa (puerta de suscripción cerrada): la API contesta 402 a todo
+    // el contenido. Se avisa a `SubscriptionGate`, que cambia la pantalla por
+    // la de pausa; así una prueba que vence con la pestaña abierta se cierra en
+    // la siguiente petición, sin esperar a recargar. El throw sigue: quien
+    // llamó decide qué hace con su error, aunque ya nadie lo vaya a ver.
+    if (error.code === SUBSCRIPTION_LOCKED_CODE && typeof window !== 'undefined') {
+      window.dispatchEvent(new Event(SUBSCRIPTION_LOCKED_EVENT));
     }
 
     // Auto-redirect del cliente cuando el API rechaza con mfa_required

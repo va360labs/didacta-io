@@ -37,6 +37,12 @@ export interface TenantPublicInfo {
   stats?: TenantPublicStats;
   /** El tenant tiene /unete activa: solo entonces el login enlaza la membresía. */
   membershipPageActive?: boolean;
+  /**
+   * Puerta de suscripción, versión pública: `LOCKED` si el aula está en pausa,
+   * `OPEN` en cualquier otro caso (la prueba gratis solo la ven sus
+   * administradores, por `/me/modules`). Ausente en una API anterior = abierta.
+   */
+  subscriptionGate?: { state: 'OPEN' | 'LOCKED' };
 }
 
 export interface TenantContextResponse {
@@ -74,6 +80,15 @@ export async function fetchTenantContext(): Promise<TenantContextResponse> {
       inflight = null;
     });
   return inflight;
+}
+
+/**
+ * Olvida la respuesta cacheada: la siguiente `fetchTenantContext()` vuelve a
+ * preguntar. Lo usa la pantalla de pausa para enterarse de que el aula se ha
+ * reabierto sin obligar a nadie a recargar.
+ */
+export function invalidateTenantContext(): void {
+  cached = null;
 }
 
 /**

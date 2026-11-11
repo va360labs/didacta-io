@@ -81,5 +81,29 @@
     "title": "Support access active.",
     "body": "Someone from support is inside this space. Reason: {reason}",
     "expired": "expired"
+  },
+  "subscriptionGate": {
+    "trialBanner": {
+      "label": "Free trial",
+      "daysLeft": "{days, plural, one {# day left} other {# days left}}",
+      "cta": "Choose a plan",
+      "newTab": "(opens in a new tab)"
+    },
+    "lock": {
+      "brandLine": "Everything is still here.",
+      "adminTitle": "Your free trial has ended",
+      "adminBody": "Your academy is paused, not deleted. Choose a plan to reopen it exactly as you left it.",
+      "keptTitle": "What's kept",
+      "keptCourses": "Your courses and lessons",
+      "keptStudents": "Your students and their progress",
+      "keptBrand": "Your brand, community and settings",
+      "choosePlan": "Choose a plan",
+      "reopenNote": "As soon as the payment goes through, your academy opens again.",
+      "signOut": "Sign out",
+      "otherTitle": "Access to {name} is paused",
+      "otherBody": "Its administrators already know. Nothing has been lost: when it reopens, everything will be where it was.",
+      "adminSignIn": "Are you an administrator? Sign in",
+      "fallbackName": "this academy"
+    }
   }
 }

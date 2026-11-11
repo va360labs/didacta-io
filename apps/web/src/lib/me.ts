@@ -67,6 +67,24 @@ export interface OnboardingStatus {
   missing: string[];
 }
 
+/**
+ * Puerta de suscripción del tenant tal y como la ve quien llama: entera
+ * (prueba, fecha y enlace de pago) para quien administra; para cualquier otro,
+ * solo si el aula está en pausa.
+ */
+export interface MySubscriptionGate {
+  state: 'OPEN' | 'TRIAL' | 'LOCKED';
+  trialEndsAt: string | null;
+  actionUrl: string | null;
+}
+
+export interface MyModulesResponse {
+  activeModules: string[];
+  enabledCapabilities: string[];
+  /** Ausente en una API anterior a la puerta: se trata como abierta. */
+  subscriptionGate?: MySubscriptionGate;
+}
+
 export interface ActiveSession {
   id: string;
   createdAt: string;
@@ -119,14 +137,8 @@ export const meApi = {
    * `requiresModule`. Las capabilities EE NO se usan para ocultar — siguen
    * el patrón EeGate (visible-pero-bloqueado).
    */
-  async getMyModules(
-    bearer: string,
-  ): Promise<{ activeModules: string[]; enabledCapabilities: string[] }> {
-    return apiFetch<{ activeModules: string[]; enabledCapabilities: string[] }>(
-      '/api/v1/me/modules',
-      { method: 'GET' },
-      bearer,
-    );
+  async getMyModules(bearer: string): Promise<MyModulesResponse> {
+    return apiFetch<MyModulesResponse>('/api/v1/me/modules', { method: 'GET' }, bearer);
   },
 
   // ── Onboarding ─────────────────────────────────────────────────────────────

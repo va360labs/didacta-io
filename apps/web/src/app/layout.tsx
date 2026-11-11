@@ -9,6 +9,7 @@ import type { ReactNode } from 'react';
 import { NextIntlClientProvider } from 'next-intl';
 import { getLocale, getMessages } from 'next-intl/server';
 import { LocaleSync } from '@/components/locale-sync';
+import { SubscriptionGate } from '@/components/subscription-gate';
 import { TenantThemeProvider } from '@/components/tenant-theme-provider';
 import { TenantTitle } from '@/components/tenant-title';
 import './globals.css';
@@ -59,7 +60,14 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
          */}
         <NextIntlClientProvider locale={locale} messages={messages}>
           <TenantTitle />
-          <TenantThemeProvider>{children}</TenantThemeProvider>
+          {/*
+           * Puerta de suscripción: con el aula en pausa, su pantalla sustituye
+           * al contenido en cualquier ruta salvo las de entrar. Va dentro del
+           * tema para pintarse con la marca del tenant.
+           */}
+          <TenantThemeProvider>
+            <SubscriptionGate>{children}</SubscriptionGate>
+          </TenantThemeProvider>
           <LocaleSync />
         </NextIntlClientProvider>
       </body>
