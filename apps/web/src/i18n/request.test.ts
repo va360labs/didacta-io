@@ -55,14 +55,20 @@ describe('i18n/request · cookie → catálogo servido', () => {
 
   it('el catálogo servido a pt-BR dice lo suyo en portugués, no en español', async () => {
     // Comprobación de CONTENIDO, no solo de identidad de objeto: si alguien
-    // volviera a apuntar `pt` al catálogo español, la aserción de arriba
-    // seguiría en verde y esta no.
+    // volviera a apuntar `pt` al catálogo español (o al inglés), la aserción de
+    // arriba seguiría en verde y esta no. Sin literales portugueses a mano: lo
+    // que se prueba es el mecanismo, no la redacción.
     const cfg = await resolveWithCookie('pt-BR');
     const messages = cfg.messages as typeof es;
-    expect(messages.shell.sidebar.logout).toBe('Sair');
-    expect(messages.shell.sidebar.logout).not.toBe(es.shell.sidebar.logout);
-    expect(messages.errors.unknown).not.toBe(es.errors.unknown);
-    expect(messages.errors.unknown).not.toBe(en.errors.unknown);
+    for (const pick of [
+      (m: typeof es) => m.shell.sidebar.logout,
+      (m: typeof es) => m.errors.unknown,
+      (m: typeof es) => m.auth.signin.title,
+    ]) {
+      expect(pick(messages)).not.toBe(pick(es));
+      expect(pick(messages)).not.toBe(pick(en));
+      expect(pick(messages).trim()).not.toBe('');
+    }
   });
 
   it('control: es-ES y en-US siguen recibiendo cada uno el suyo', async () => {
