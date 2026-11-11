@@ -22,6 +22,7 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { useTranslations } from 'next-intl';
 import { EeGate, LICENSE_CAPABILITIES } from '@didacta/license-sdk/react';
+import { VideoProtectionCard } from '@/components/admin/video-protection-card';
 import { Icon } from '@/components/icon';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -220,6 +221,9 @@ export default function AdminSeguridadPage() {
           </CardContent>
         </Card>
       ) : null}
+
+      {/* Independiente de la política MFA: carga y guarda por su cuenta. */}
+      <VideoProtectionCard />
     </div>
   );
 }

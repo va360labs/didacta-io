@@ -32,5 +32,7 @@
   "ADMIN_USER_NOT_FOUND": "Usuario no encontrado.",
   "ADMIN_USER_SELF_ROLE_REMOVAL_FORBIDDEN": "No puedes quitarte el rol tenant_admin a ti mismo (te quedarías sin acceso al panel).",
   "ADMIN_USER_SELF_STATUS_FORBIDDEN": "No puedes suspender ni desactivar tu propio usuario.",
-  "ADMIN_WP_SSO_CONFIG_FORBIDDEN": "Solo super_admin y tenant_admin pueden gestionar la configuración WP-SSO."
+  "ADMIN_WP_SSO_CONFIG_FORBIDDEN": "Solo super_admin y tenant_admin pueden gestionar la configuración WP-SSO.",
+  "ADMIN_VIDEO_PROTECTION_FORBIDDEN": "Solo super_admin o tenant_admin pueden gestionar la protección de vídeo.",
+  "ADMIN_VIDEO_PROTECTION_LIMITS_INVALID": "El tope diario no puede ser menor que el tope por hora."
 }
