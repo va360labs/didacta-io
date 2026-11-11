@@ -217,10 +217,16 @@ function Expediente({ view }: { view: InspectionView }) {
                   <th className="pb-1 pr-2 font-medium">{t('seguimiento.colParticipante')}</th>
                   <th className="pb-1 pr-2 font-medium">{t('seguimiento.colNif')}</th>
                   <th className="pb-1 pr-2 text-right font-medium">{t('seguimiento.colHoras')}</th>
-                  <th className="pb-1 pr-2 text-right font-medium">{t('seguimiento.colActividades')}</th>
-                  <th className="pb-1 pr-2 text-right font-medium">{t('seguimiento.colLecciones')}</th>
+                  <th className="pb-1 pr-2 text-right font-medium">
+                    {t('seguimiento.colActividades')}
+                  </th>
+                  <th className="pb-1 pr-2 text-right font-medium">
+                    {t('seguimiento.colLecciones')}
+                  </th>
                   <th className="pb-1 pr-2 font-medium">{t('seguimiento.colAccesos')}</th>
-                  <th className="pb-1 pr-2 text-right font-medium">{t('seguimiento.colResultado')}</th>
+                  <th className="pb-1 pr-2 text-right font-medium">
+                    {t('seguimiento.colResultado')}
+                  </th>
                   <th />
                 </tr>
               </thead>

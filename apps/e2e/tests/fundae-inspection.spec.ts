@@ -239,8 +239,10 @@ test.describe('Fundae · Acceso de seguimiento (LMS-123)', () => {
     const fila = vista.participants.find((p) => p.userId === alumno.user.id);
     expect(fila, 'el alumno aparece en el expediente').toBeTruthy();
     expect(fila!.leccionesCompletadas).toBeGreaterThan(0);
-    expect(fila!.itinerario.length, 'el itinerario trae el recorrido lección a lección')
-      .toBeGreaterThan(0);
+    expect(
+      fila!.itinerario.length,
+      'el itinerario trae el recorrido lección a lección',
+    ).toBeGreaterThan(0);
     // El inspector NO se cuela en el expediente que viene a inspeccionar: su
     // matrícula es `source = INSPECTION` y `participant-filter` la excluye.
     expect(vista.participants.some((p) => p.userId === inspector.user.id)).toBe(false);
@@ -278,10 +280,9 @@ test.describe('Fundae · Acceso de seguimiento (LMS-123)', () => {
 
     // La fila NO se borra: quién pudo mirar el expediente es parte de la
     // trazabilidad, y el admin la sigue viendo marcada como retirada.
-    const listaAdmin = await api<Array<{ userId: string; activo: boolean; revokedAt: string | null }>>(
-      `/api/v1/admin/fundae/groups/${groupId}/inspectors`,
-      { bearer },
-    );
+    const listaAdmin = await api<
+      Array<{ userId: string; activo: boolean; revokedAt: string | null }>
+    >(`/api/v1/admin/fundae/groups/${groupId}/inspectors`, { bearer });
     const registro = (
       listaAdmin.body as Array<{ userId: string; activo: boolean; revokedAt: string | null }>
     ).find((a) => a.userId === inspector.user.id);
