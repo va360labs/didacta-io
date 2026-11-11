@@ -10,5 +10,6 @@ export type {
   InstalledModuleStatus,
   InstalledModuleVendor,
   TenantDomainSurface,
+  SubscriptionGateState,
 } from './client.js';
 export { withTenantContext } from './tenant-context.js';

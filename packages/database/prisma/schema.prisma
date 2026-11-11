@@ -50,6 +50,21 @@ model Tenant {
   signupsFrozenAt     DateTime? @map("signups_frozen_at")
   signupsFrozenReason String?   @map("signups_frozen_reason")
 
+  /// Puerta de suscripcion: una dimension APARTE de `status`. El aula
+  /// bloqueada sigue `ACTIVE` para que su administrador pueda entrar y pagar;
+  /// lo que cambia es que el contenido deja de servirse (402
+  /// `SUBSCRIPTION_LOCKED`) y el aula pinta la pantalla de pausa.
+  ///
+  /// `OPEN` es el estado de cualquier instalacion: una self-hosted no recibe
+  /// nunca la llamada y se queda abierta para siempre. Solo la mueve el plano de
+  /// control del SaaS gestionado (`PUT /admin/tenants/:id/subscription-gate`)
+  /// o un super_admin; el nucleo no la cambia solo, salvo leer una prueba
+  /// vencida como cerrada (ver `tenancy/subscription-gate.ts`).
+  subscriptionGateState     SubscriptionGateState @default(OPEN) @map("subscription_gate_state")
+  subscriptionTrialEndsAt   DateTime?             @map("subscription_trial_ends_at")
+  subscriptionActionUrl     String?               @map("subscription_action_url")
+  subscriptionGateUpdatedAt DateTime?             @map("subscription_gate_updated_at")
+
   users              User[]
   sessions           Session[]
   apiKeys            ApiKey[]
@@ -157,6 +172,13 @@ enum TenantStatus {
   ACTIVE
   SUSPENDED
   ARCHIVED
+}
+
+/// Puerta de suscripcion del tenant (ver `Tenant.subscriptionGateState`).
+enum SubscriptionGateState {
+  OPEN
+  TRIAL
+  LOCKED
 }
 
 model Module {

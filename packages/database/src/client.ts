@@ -35,3 +35,5 @@ export type {
 /// nadie salvo este package-, asi que compilaba en local y en CI por el
 /// hoisting y reventaba dentro de la imagen. Por eso la regla de arriba.
 export type { TenantDomainSurface } from '@prisma/client';
+/// Puerta de suscripcion del tenant. Lo consume `apps/api/src/tenancy`.
+export type { SubscriptionGateState } from '@prisma/client';
