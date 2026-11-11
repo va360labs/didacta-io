@@ -391,8 +391,15 @@ describe('el hub formatea con el idioma del DESTINATARIO, no con el del emisor',
     // enlace a la publicación y la nota de baja son copy del producto: antes
     // los concatenaba el worker en español dentro de `body`.
     for (const [locale, esperado] of [
-      ['es-ES', 'Para dejar de recibir avisos, entra aquí: https://u/unsub'],
-      ['en-US', 'To stop receiving notices, go here: https://u/unsub'],
+      // La baja corta los DOS correos de la comunidad, y el pie lo dice.
+      [
+        'es-ES',
+        'Para dejar de recibir los correos de la comunidad (avisos y resumen semanal), entra aquí: https://u/unsub',
+      ],
+      [
+        'en-US',
+        'To stop receiving community emails (notices and the weekly digest), go here: https://u/unsub',
+      ],
     ] as const) {
       const prisma = makePrisma([{ id: 'u1', locale }]);
       const svc = new PrismaNotificationHubService(prisma as never, noopLogger);

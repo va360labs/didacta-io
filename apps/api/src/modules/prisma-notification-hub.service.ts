@@ -102,6 +102,22 @@ export class PrismaNotificationHubService implements NotificationHubService {
   }): Promise<void> {
     const channel = this.mapChannel(notification.channel);
 
+    // ⛔ A una cuenta eliminada, suspendida o desactivada no se le escribe NADA,
+    // por ningún canal, ni se le guarda la notificación. Va lo primero: es
+    // anterior a cualquier preferencia y vale para todos los emisores del hub.
+    if (await this.recipientIsGone(notification.tenantId, notification.to)) {
+      this.logger.log(
+        {
+          tenantId: notification.tenantId,
+          userId: notification.to,
+          templateKey: notification.templateKey,
+          channel,
+        },
+        'NotificationHub: destinatario eliminado o suspendido, no se le escribe',
+      );
+      return;
+    }
+
     // Respeta la preferencia del usuario cuando el caller declara la categoría.
     // Si el usuario deshabilitó este (categoría, canal), no persistimos ni
     // enviamos nada — el envío es opt-in por canal desde la matriz de su cuenta.
@@ -192,6 +208,7 @@ export class PrismaNotificationHubService implements NotificationHubService {
         branding,
         webBaseUrl,
         locale,
+        unsubscribeUrl: unsubscribeUrlOf(variables),
       });
       return;
     }
@@ -219,6 +236,11 @@ export class PrismaNotificationHubService implements NotificationHubService {
      * texto que envuelve.
      */
     locale: string;
+    /**
+     * Enlace de baja del correo, si el emisor lo puso (variable `unsubUrl`).
+     * Además de ir en el cuerpo, viaja como cabecera `List-Unsubscribe`.
+     */
+    unsubscribeUrl?: string;
   }): Promise<void> {
     if (!this.tenantConfig || !this.smtp) {
       // El hub se construyó en modo legacy (sin TenantConfig) — log y skip.
@@ -301,7 +323,16 @@ export class PrismaNotificationHubService implements NotificationHubService {
 
     const result = await this.smtp.send(
       config,
-      { to: recipientEmail, subject: args.subject, text, html },
+      {
+        to: recipientEmail,
+        subject: args.subject,
+        text,
+        html,
+        // El enlace de baja también va como cabecera: así Gmail y Outlook
+        // ofrecen «Cancelar suscripción» junto al remitente y nadie tiene que
+        // contestar al correo para pedirla.
+        ...(args.unsubscribeUrl ? { unsubscribeUrl: args.unsubscribeUrl } : {}),
+      },
       args.branding.tenantName,
     );
 
@@ -321,6 +352,44 @@ export class PrismaNotificationHubService implements NotificationHubService {
     } else {
       await this.markFailed(args.notificationId, `smtp_send_failed:${result.error ?? 'unknown'}`);
     }
+  }
+
+  /**
+   * ¿El destinatario es una cuenta a la que ya no se le escribe? Lo son las
+   * ELIMINADAS (`deletedAt`; su fila sigue existiendo) y las SUSPENDIDAS o
+   * DESACTIVADAS (`status`): ninguna puede entrar al aula, así que un aviso de
+   * actividad —una mención, un recordatorio de clase, el resumen semanal— solo
+   * sirve para recordarles un sitio al que no tienen acceso.
+   *
+   * `PENDING` NO cuenta: es una cuenta que todavía no ha terminado su alta y a
+   * la que sí hay que poder escribir.
+   *
+   * Los correos de cuenta (restablecer contraseña, decisión de un alta,
+   * invitaciones) no pasan por el hub, así que esto no los corta.
+   *
+   * CAMINOS DEGRADADOS, los dos deliberados:
+   *  - sin fila (o no legible bajo el tenant actual): no se puede afirmar que
+   *    esté eliminada; sigue el camino de siempre, que termina en
+   *    `recipient_email_not_found` sin enviar nada.
+   *  - la consulta revienta: se deja pasar y se avisa. Cortar aquí dejaría sin
+   *    notificaciones a todo el mundo por un fallo de lectura.
+   */
+  private async recipientIsGone(tenantId: string, userId: string): Promise<boolean> {
+    let user: { deletedAt?: Date | null; status?: string } | null;
+    try {
+      user = await this.prisma.user.findUnique({
+        where: { id: userId },
+        select: { deletedAt: true, status: true },
+      });
+    } catch (err) {
+      this.logger.warn(
+        { userId, tenantId, err: (err as Error).message },
+        'NotificationHub: no se pudo comprobar si el destinatario sigue activo',
+      );
+      return false;
+    }
+    if (!user) return false;
+    return Boolean(user.deletedAt) || user.status === 'SUSPENDED' || user.status === 'DEACTIVATED';
   }
 
   /**
@@ -479,6 +548,18 @@ export class PrismaNotificationHubService implements NotificationHubService {
 interface RenderedTemplate {
   subject: string | null;
   body: string;
+}
+
+/**
+ * Variable RESERVADA `unsubUrl`: el enlace de baja que el emisor pone en los
+ * correos de los que uno se puede dar de baja (avisos y resumen de la
+ * comunidad). La plantilla lo pinta en el pie y el hub lo manda además como
+ * cabecera `List-Unsubscribe`. Solo se acepta una URL http(s) absoluta: una
+ * cabecera con otra cosa haría que el gestor de correo ofreciese un botón roto.
+ */
+function unsubscribeUrlOf(variables: Record<string, unknown>): string | undefined {
+  const value = variables['unsubUrl'];
+  return typeof value === 'string' && /^https?:\/\//i.test(value) ? value : undefined;
 }
 
 // Los defaults hardcoded del producto y la interpolación viven en el catálogo

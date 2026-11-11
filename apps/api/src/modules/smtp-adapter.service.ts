@@ -46,6 +46,14 @@ export interface SmtpSendInput {
   subject: string;
   text: string;
   html?: string;
+  /**
+   * Enlace de baja en un clic (RFC 8058). Con él, el correo lleva
+   * `List-Unsubscribe` + `List-Unsubscribe-Post` y Gmail/Outlook enseñan
+   * «Cancelar suscripción» junto al remitente, que hace un POST a esta URL.
+   * Solo para correos de los que uno se puede dar de baja (nunca un reset de
+   * contraseña).
+   */
+  unsubscribeUrl?: string;
 }
 
 export interface SmtpSendResult {
@@ -100,6 +108,12 @@ export class SmtpAdapterService {
         subject: input.subject,
         text: input.text,
         html: input.html,
+        ...(input.unsubscribeUrl
+          ? {
+              list: { unsubscribe: input.unsubscribeUrl },
+              headers: { 'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click' },
+            }
+          : {}),
       });
       return { ok: true, messageId: info.messageId };
     } catch (err) {

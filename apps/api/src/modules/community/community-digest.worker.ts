@@ -17,6 +17,7 @@ import { CommunityDigestMetrics } from './community-digest.metrics';
 import { runAsTenant, runSanctionedGlobalAccess } from '../../tenancy/tenant-context.storage';
 import { ModuleContextFactory } from '../module-context.factory';
 import { ModuleRegistryService } from '../module-registry.service';
+import { communityUnsubscribeUrl } from './broadcast-unsubscribe';
 
 const QUEUE_NAME = 'didacta.community.digest';
 const REPEAT_PATTERN = process.env['COMMUNITY_DIGEST_CRON'] ?? '0 9 * * 1'; // Lun 09:00 UTC
@@ -33,7 +34,7 @@ interface DigestJobData {
  *  1. Lista todos los usuarios ACTIVE.
  *  2. Para cada uno, llama `CommunityService.buildDigest(since=now-7d)`.
  *  3. Si hay menciones o respuestas, envía un email vía NotificationHub
- *     con templateKey `community.digest.weekly`.
+ *     con templateKey `community.digest.weekly`, con su enlace de baja.
  *
  * Si REDIS_URL no está set, el worker no arranca (igual que outbox queue).
  * En tests (NODE_ENV=test) tampoco, para no romper bootstraps de Nest sin
@@ -145,6 +146,17 @@ export class CommunityDigestWorker implements OnApplicationBootstrap, OnModuleDe
     let skipped = 0;
     let failed = 0;
 
+    // Dirección del aula de cada tenant, para el enlace de baja. Una consulta
+    // por tenant y no por usuario: el barrido es cross-tenant y puede ser largo.
+    const webBaseByTenant = new Map<string, string>();
+    const webBaseOf = async (tenantId: string): Promise<string> => {
+      const cached = webBaseByTenant.get(tenantId);
+      if (cached !== undefined) return cached;
+      const base = await this.factory.getTenantWebBaseUrl(tenantId);
+      webBaseByTenant.set(tenantId, base);
+      return base;
+    };
+
     for (const u of users) {
       this.metrics.recordUserProcessed();
       // Digest y envío por usuario bajo su tenant (scope RLS).
@@ -167,6 +179,12 @@ export class CommunityDigestWorker implements OnApplicationBootstrap, OnModuleDe
               mentions: digest.mentions,
               replies: digest.replies,
               sinceIso: since.toISOString(),
+              // Sin él, el resumen no tenía forma de darse de baja: quien la
+              // quería solo podía contestar al correo, y quien ya la había
+              // pedido desde un aviso lo seguía recibiendo cada semana. La
+              // plantilla envuelve el bloque en `{{#unsubUrl}}`: sin dirección
+              // pública del aula, el pie sale sin enlace.
+              unsubUrl: communityUnsubscribeUrl(await webBaseOf(u.tenantId), u.tenantId, u.userId),
             },
           });
           sent++;

@@ -57,6 +57,8 @@ interface Escenario {
   cancelUrl?: string | null;
   /** Fuerza el fallo de la consulta de idiomas (camino degradado). */
   userLookupRevienta?: boolean;
+  /** Emails de cuentas ELIMINADAS del tenant: a esos no se les escribe. */
+  eliminados?: string[];
 }
 
 function montar(e: Escenario) {
@@ -65,12 +67,17 @@ function montar(e: Escenario) {
 
   const prisma = {
     user: {
-      findMany: vi.fn(async (args: { where: { email: { in: string[] } } }) => {
-        if (e.userLookupRevienta) throw new Error('db down');
-        return args.where.email.in
-          .filter((email) => email in usuarios)
-          .map((email) => ({ email, locale: usuarios[email] }));
-      }),
+      findMany: vi.fn(
+        async (args: { where: { email?: { in: string[] }; deletedAt?: { not: null } } }) => {
+          // Dos consultas distintas pasan por aquí: las cuentas eliminadas del
+          // tenant (`deletedAt: { not: null }`) y el idioma de los destinatarios.
+          if (args.where.deletedAt) return (e.eliminados ?? []).map((email) => ({ email }));
+          if (e.userLookupRevienta) throw new Error('db down');
+          return (args.where.email?.in ?? [])
+            .filter((email) => email in usuarios)
+            .map((email) => ({ email, locale: usuarios[email] }));
+        },
+      ),
     },
     tenant: { findUnique: vi.fn().mockResolvedValue({ name: 'Academia Demo' }) },
     modThemingTenantTheme: { findUnique: vi.fn().mockResolvedValue(null) },
@@ -318,5 +325,53 @@ describe('worker diario · aviso de fin de acceso', () => {
     });
     expect(enviados[0]!.text).toContain('your access');
     expect(enviados[0]!.text).not.toContain('tu acceso');
+  });
+});
+
+describe('worker diario · a una cuenta eliminada no se le escribe', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  const OTRA = { ...UN_SUSCRIPTOR[0]!, id: 'sub-2', userEmail: 'borrada@example.test' };
+  const OTRO_ACCESO = { ...UN_ACCESO[0]!, id: 'acc-2', customerEmail: 'Borrada@Example.test' };
+
+  it('CONTROL: sin cuentas eliminadas, los dos suscriptores reciben su aviso', async () => {
+    const { enviados } = await correr({ suscriptores: [UN_SUSCRIPTOR[0]!, OTRA] });
+    expect(enviados.map((m) => m.to).sort()).toEqual(['ana@example.test', 'borrada@example.test']);
+  });
+
+  it('el aviso de renovación no sale para el correo de una cuenta eliminada', async () => {
+    const { enviados } = await correr({
+      suscriptores: [UN_SUSCRIPTOR[0]!, OTRA],
+      eliminados: ['borrada@example.test'],
+    });
+    expect(enviados.map((m) => m.to)).toEqual(['ana@example.test']);
+  });
+
+  it('el aviso de fin de acceso tampoco (el correo se compara sin mayúsculas)', async () => {
+    const { enviados } = await correr({
+      accesos: [UN_ACCESO[0]!, OTRO_ACCESO],
+      eliminados: ['borrada@example.test'],
+    });
+    expect(enviados.map((m) => m.to)).toEqual(['ana@example.test']);
+  });
+
+  it('el resumen a los admins no depende de esto: sale aunque la consulta de eliminadas falle', async () => {
+    const { worker, enviados, prisma } = montar({
+      admins: ['admin@example.test'],
+      suscriptores: [UN_SUSCRIPTOR[0]!],
+    });
+    const findMany = (prisma as unknown as { user: { findMany: ReturnType<typeof vi.fn> } }).user
+      .findMany;
+    const original = findMany.getMockImplementation()!;
+    findMany.mockImplementation(async (args: { where: { deletedAt?: unknown } }) => {
+      if (args.where.deletedAt) throw new Error('db down');
+      return original(args);
+    });
+
+    await worker.triggerNow();
+
+    // Sin saber a quién NO escribir, no se escribe a ningún suscriptor (los
+    // avisos esperan al barrido de mañana); el admin sí recibe su resumen.
+    expect(enviados.map((m) => m.to)).toEqual(['admin@example.test']);
   });
 });

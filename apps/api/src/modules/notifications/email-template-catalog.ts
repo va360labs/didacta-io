@@ -188,7 +188,10 @@ export const HUB_TEMPLATE_DEFAULTS: Record<string, TemplateDef> = {
   'community.digest.weekly': {
     subject:
       'Tu resumen semanal de la comunidad ({{mentionsCount}} menciones · {{repliesCount}} respuestas)',
-    body: 'Esta semana en la comunidad:\n\n· {{mentionsCount}} mención(es) nueva(s)\n· {{repliesCount}} respuesta(s) en hilos donde participaste\n\nRevísalas todas en tu sección de menciones. Desde el resumen anterior: {{sinceIso}}.',
+    // El pie de baja es una sección: sin `unsubUrl` (no se conoce la dirección
+    // pública del aula) desaparece. La baja corta los DOS correos de la
+    // comunidad, y por eso el texto nombra los dos.
+    body: 'Esta semana en la comunidad:\n\n· {{mentionsCount}} mención(es) nueva(s)\n· {{repliesCount}} respuesta(s) en hilos donde participaste\n\nRevísalas todas en tu sección de menciones. Desde el resumen anterior: {{sinceIso}}.{{#unsubUrl}}\n\n———\nRecibes este resumen como miembro de la comunidad. Para dejar de recibir los correos de la comunidad (resumen semanal y avisos), entra aquí: {{unsubUrl}}{{/unsubUrl}}',
   },
   // Aviso masivo (broadcast) a toda la comunidad. El asunto y el cuerpo los
   // escribe el admin al enviarlo, así que van como passthrough; el enlace a la
@@ -200,7 +203,7 @@ export const HUB_TEMPLATE_DEFAULTS: Record<string, TemplateDef> = {
   // que es como el aviso in-app se queda sin pie de baja.
   'community.broadcast': {
     subject: '{{subject}}',
-    body: '{{body}}{{#postUrl}}\n\nVer la publicación: {{postUrl}}{{/postUrl}}{{#unsubUrl}}\n\n———\nRecibes este aviso como miembro de la comunidad. Para dejar de recibir avisos, entra aquí: {{unsubUrl}}{{/unsubUrl}}',
+    body: '{{body}}{{#postUrl}}\n\nVer la publicación: {{postUrl}}{{/postUrl}}{{#unsubUrl}}\n\n———\nRecibes este aviso como miembro de la comunidad. Para dejar de recibir los correos de la comunidad (avisos y resumen semanal), entra aquí: {{unsubUrl}}{{/unsubUrl}}',
   },
   // Aviso de desbloqueo de una clase programada por fecha (MEJ-009). Lo dispara
   // el LessonUnlockNotifierWorker cuando la lección cruza su publishAt.
@@ -321,14 +324,14 @@ export const HUB_TEMPLATE_DEFAULTS_EN: Record<string, TemplateDef> = {
   },
   'community.digest.weekly': {
     subject: 'Your weekly community digest ({{mentionsCount}} mentions · {{repliesCount}} replies)',
-    body: 'This week in the community:\n\n· {{mentionsCount}} new mention(s)\n· {{repliesCount}} new replies in threads you took part in\n\nReview them all in your mentions section. Since the previous digest: {{sinceIso}}.',
+    body: 'This week in the community:\n\n· {{mentionsCount}} new mention(s)\n· {{repliesCount}} new replies in threads you took part in\n\nReview them all in your mentions section. Since the previous digest: {{sinceIso}}.{{#unsubUrl}}\n\n———\nYou receive this digest as a member of the community. To stop receiving community emails (the weekly digest and notices), go here: {{unsubUrl}}{{/unsubUrl}}',
   },
   // El asunto y el cuerpo los escribe el admin al enviar el aviso (passthrough,
   // no hay nada que traducir ahí). Lo que SÍ es copy del producto —el enlace a
   // la publicación y el pie de baja— se traduce aquí.
   'community.broadcast': {
     subject: '{{subject}}',
-    body: '{{body}}{{#postUrl}}\n\nSee the post: {{postUrl}}{{/postUrl}}{{#unsubUrl}}\n\n———\nYou receive this notice as a member of the community. To stop receiving notices, go here: {{unsubUrl}}{{/unsubUrl}}',
+    body: '{{body}}{{#postUrl}}\n\nSee the post: {{postUrl}}{{/postUrl}}{{#unsubUrl}}\n\n———\nYou receive this notice as a member of the community. To stop receiving community emails (notices and the weekly digest), go here: {{unsubUrl}}{{/unsubUrl}}',
   },
   'lesson.unlocked': {
     subject: 'Now available: {{lessonTitle}}',
@@ -772,6 +775,10 @@ const HUB_TEMPLATE_META: Record<
       { name: 'mentionsCount', description: 'Nº de menciones nuevas' },
       { name: 'repliesCount', description: 'Nº de respuestas nuevas' },
       { name: 'sinceIso', description: 'Fecha del resumen anterior' },
+      {
+        name: 'unsubUrl',
+        description: 'Enlace de baja de los correos de la comunidad (resumen y avisos)',
+      },
       { name: 'tenantName', description: 'Nombre de la plataforma' },
     ],
   },
@@ -785,7 +792,11 @@ const HUB_TEMPLATE_META: Record<
       { name: 'subject', description: 'Asunto escrito por el admin' },
       { name: 'body', description: 'Mensaje escrito por el admin' },
       { name: 'postUrl', description: 'Enlace a la publicación (vacío si el aviso no la lleva)' },
-      { name: 'unsubUrl', description: 'Enlace de baja de avisos (solo en el email)' },
+      {
+        name: 'unsubUrl',
+        description:
+          'Enlace de baja de los correos de la comunidad: avisos y resumen (solo en el email)',
+      },
       { name: 'tenantName', description: 'Nombre de la plataforma' },
     ],
   },

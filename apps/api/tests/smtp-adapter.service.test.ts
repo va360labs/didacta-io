@@ -83,6 +83,33 @@ describe('SmtpAdapterService', () => {
       expect(closeMock).toHaveBeenCalled();
     });
 
+    it('con enlace de baja añade List-Unsubscribe y List-Unsubscribe-Post (RFC 8058)', async () => {
+      sendMailMock.mockResolvedValue({ messageId: '<abc@x>' });
+      const unsubscribeUrl =
+        'https://aula.example.test/api/v1/modules/community/unsubscribe?token=t';
+      await svc.send(svc.parseConfig(VALID), {
+        to: 'a@b.com',
+        subject: 'resumen',
+        text: 'cuerpo',
+        unsubscribeUrl,
+      });
+      expect(sendMailMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          // nodemailer convierte `list.unsubscribe` en `List-Unsubscribe: <url>`.
+          list: { unsubscribe: unsubscribeUrl },
+          headers: { 'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click' },
+        }),
+      );
+    });
+
+    it('sin enlace de baja NO añade esas cabeceras (un reset de contraseña no las lleva)', async () => {
+      sendMailMock.mockResolvedValue({ messageId: '<abc@x>' });
+      await svc.send(svc.parseConfig(VALID), { to: 'a@b.com', subject: 's', text: 't' });
+      const arg = sendMailMock.mock.calls[0]![0] as Record<string, unknown>;
+      expect(arg).not.toHaveProperty('list');
+      expect(arg).not.toHaveProperty('headers');
+    });
+
     it('con fromName arma el From como { name, address } (firma con el tenant)', async () => {
       sendMailMock.mockResolvedValue({ messageId: '<abc@x>' });
       await svc.send(

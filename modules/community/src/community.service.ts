@@ -49,7 +49,32 @@ const UNKNOWN_ACTOR_NAME: NotificationValue = {
   term: 'community.actor.unknown',
 };
 
-/** Destinatario de un lote de aviso masivo. `optedOut` = dado de baja de broadcasts. */
+/**
+ * Quién se ha dado de baja de los correos de la comunidad (resumen semanal y
+ * avisos masivos). Hay dos marcas por historia —`digestOptOut` la pone el
+ * interruptor «Comunidad · Email» de /cuenta, `broadcastOptOut` el enlace de
+ * baja de un correo—, pero para quien las pone son UNA decisión: «no me
+ * escribáis». Cualquiera de las dos corta los dos correos.
+ *
+ * Con cada marca cortando solo lo suyo, quien pulsaba «darse de baja» en un
+ * aviso seguía recibiendo el resumen cada semana, y quien apagaba el
+ * interruptor de /cuenta seguía recibiendo los avisos.
+ */
+const COMMUNITY_EMAIL_OPT_OUT = {
+  OR: [{ digestOptOut: true }, { broadcastOptOut: true }],
+};
+
+/**
+ * Cuenta a la que se le puede escribir: activa y NO eliminada. `deletedAt` va
+ * aparte de `status` porque hay borrados que no tocan el estado (el de un
+ * módulo vía `ctx.didacta.users`), y a una cuenta eliminada no se le manda nada.
+ */
+const WRITABLE_ACCOUNT = { status: 'ACTIVE', deletedAt: null } as const;
+
+/**
+ * Destinatario de un lote de aviso masivo. `optedOut` = dado de baja de los
+ * correos de la comunidad (por cualquiera de las dos marcas).
+ */
 export interface BroadcastRecipient {
   userId: string;
   email: string;
@@ -692,22 +717,23 @@ export class CommunityService {
   }
 
   /**
-   * Lista los IDs de los users ACTIVE de cada tenant. Útil para el job de
-   * digest que itera sobre todos. Limit razonable para evitar OOM si un
-   * tenant tiene 100k+ users (raro en este producto).
+   * Lista los IDs de los users ACTIVE (y no eliminados) de cada tenant. Útil
+   * para el job de digest que itera sobre todos. Limit razonable para evitar
+   * OOM si un tenant tiene 100k+ users (raro en este producto).
    */
   async listActiveUsersForDigest(): Promise<Array<{ tenantId: string; userId: string }>> {
     const rows = await this.prisma.user.findMany({
-      where: { status: 'ACTIVE' },
+      where: { ...WRITABLE_ACCOUNT },
       select: { id: true, tenantId: true },
       take: 50_000,
     });
     if (rows.length === 0) return [];
 
-    // Filtra los que han optado por NO recibir el digest. Vamos contra la
-    // tabla de prefs: si no hay fila, default = recibir (false).
+    // Filtra los que se han dado de baja de los correos de la comunidad. Vamos
+    // contra la tabla de prefs: si no hay fila, default = recibir. Cualquiera
+    // de las dos marcas vale (ver `COMMUNITY_EMAIL_OPT_OUT`).
     const optedOut = await this.prisma.modCommunityUserPref.findMany({
-      where: { digestOptOut: true, userId: { in: rows.map((r) => r.id) } },
+      where: { ...COMMUNITY_EMAIL_OPT_OUT, userId: { in: rows.map((r) => r.id) } },
       select: { tenantId: true, userId: true },
     });
     const optedOutKey = new Set(optedOut.map((p) => `${p.tenantId}::${p.userId}`));
@@ -726,32 +752,37 @@ export class CommunityService {
     const row = await this.prisma.modCommunityUserPref.findUnique({
       where: { tenantId_userId: { tenantId, userId } },
     });
-    return { digestOptOut: row?.digestOptOut ?? false };
+    // `digestOptOut` es lo que pinta el interruptor «Comunidad · Email» de
+    // /cuenta: quien se dio de baja desde el enlace de un correo lo ve apagado,
+    // que es exactamente lo que pidió.
+    return { digestOptOut: (row?.digestOptOut ?? false) || (row?.broadcastOptOut ?? false) };
   }
 
   /**
    * Upsert de las preferencias del usuario. La estructura está pensada
    * para añadir más campos sin migración: solo se actualizan las claves
    * presentes en el patch.
+   *
+   * `digestOptOut` mueve las DOS marcas: el interruptor de /cuenta es «correos
+   * de la comunidad», y quien lo apaga no quiere ni el resumen ni los avisos.
+   * Con una sola, quien lo apagaba seguía recibiendo avisos — y quien se había
+   * dado de baja por enlace no podía volver a darse de alta desde /cuenta.
    */
   async updateUserPreferences(
     tenantId: string,
     userId: string,
     patch: { digestOptOut?: boolean },
   ): Promise<{ digestOptOut: boolean }> {
+    const marks =
+      patch.digestOptOut !== undefined
+        ? { digestOptOut: patch.digestOptOut, broadcastOptOut: patch.digestOptOut }
+        : {};
     const row = await this.prisma.modCommunityUserPref.upsert({
       where: { tenantId_userId: { tenantId, userId } },
-      create: {
-        id: randomUUID(),
-        tenantId,
-        userId,
-        digestOptOut: patch.digestOptOut ?? false,
-      },
-      update: {
-        ...(patch.digestOptOut !== undefined ? { digestOptOut: patch.digestOptOut } : {}),
-      },
+      create: { id: randomUUID(), tenantId, userId, digestOptOut: false, ...marks },
+      update: marks,
     });
-    return { digestOptOut: row.digestOptOut };
+    return { digestOptOut: row.digestOptOut || row.broadcastOptOut };
   }
 
   /**
@@ -1022,7 +1053,7 @@ export class CommunityService {
     createdById: string,
     input: { subject: string; bodyText: string; important?: boolean; postId?: string | null },
   ) {
-    const total = await this.prisma.user.count({ where: { tenantId, status: 'ACTIVE' } });
+    const total = await this.prisma.user.count({ where: { tenantId, ...WRITABLE_ACCOUNT } });
     return this.prisma.modCommunityBroadcast.create({
       data: {
         tenantId,
@@ -1052,11 +1083,12 @@ export class CommunityService {
   }
 
   /**
-   * Toma el siguiente lote de destinatarios de un aviso (usuarios ACTIVE con
-   * `id > cursor`, orden asc por id). Marca RUNNING en el primer lote y DONE
-   * cuando ya no quedan. Devuelve cada destinatario con su flag de baja para que
-   * el worker decida a quién enviar (los `important` ignoran la baja). NO avanza
-   * el cursor — eso lo hace `commitBroadcastBatch` tras enviar (resumible).
+   * Toma el siguiente lote de destinatarios de un aviso (usuarios ACTIVE y no
+   * eliminados con `id > cursor`, orden asc por id). Marca RUNNING en el primer
+   * lote y DONE cuando ya no quedan. Devuelve cada destinatario con su flag de
+   * baja para que el worker decida a quién enviar (los `important` ignoran la
+   * baja). NO avanza el cursor — eso lo hace `commitBroadcastBatch` tras enviar
+   * (resumible).
    */
   async claimBroadcastBatch(broadcastId: string, batchSize: number) {
     const b = await this.prisma.modCommunityBroadcast.findUnique({ where: { id: broadcastId } });
@@ -1072,7 +1104,7 @@ export class CommunityService {
     const users = await this.prisma.user.findMany({
       where: {
         tenantId: b.tenantId,
-        status: 'ACTIVE',
+        ...WRITABLE_ACCOUNT,
         ...(b.cursorUserId ? { id: { gt: b.cursorUserId } } : {}),
       },
       orderBy: { id: 'asc' },
@@ -1090,7 +1122,7 @@ export class CommunityService {
       where: {
         tenantId: b.tenantId,
         userId: { in: users.map((u) => u.id) },
-        broadcastOptOut: true,
+        ...COMMUNITY_EMAIL_OPT_OUT,
       },
       select: { userId: true },
     });
@@ -1119,12 +1151,19 @@ export class CommunityService {
     });
   }
 
-  /** Marca (o quita) la baja de avisos masivos de un usuario. Para el unsubscribe. */
-  async setBroadcastOptOut(tenantId: string, userId: string, value: boolean) {
+  /**
+   * Marca (o quita) la baja de los correos de la comunidad: avisos Y resumen
+   * semanal. Es lo que hace el enlace «darse de baja» de cualquiera de los dos.
+   *
+   * Antes (`setBroadcastOptOut`) solo marcaba los avisos, y el resumen —que
+   * miraba la otra marca— seguía saliendo cada semana a quien ya había pulsado
+   * «darse de baja».
+   */
+  async setCommunityEmailOptOut(tenantId: string, userId: string, value: boolean) {
     await this.prisma.modCommunityUserPref.upsert({
       where: { tenantId_userId: { tenantId, userId } },
-      create: { tenantId, userId, broadcastOptOut: value },
-      update: { broadcastOptOut: value },
+      create: { tenantId, userId, broadcastOptOut: value, digestOptOut: value },
+      update: { broadcastOptOut: value, digestOptOut: value },
     });
   }
 

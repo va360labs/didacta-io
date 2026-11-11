@@ -722,7 +722,7 @@ describe('PrismaNotificationHubService', () => {
       expect(prisma._rows[0]!.body).toContain(ES_ENROLLMENT);
     });
 
-    it('con locale explícito NO consulta al usuario (sin query de más)', async () => {
+    it('con locale explícito NO consulta el idioma del usuario (sin query de más)', async () => {
       const prisma = makeFakePrisma([{ id: 'u1', tenantId: 't1', email: 'a@example.com' }]);
       const spy = vi.fn(prisma.user.findUnique);
       prisma.user.findUnique = spy;
@@ -735,7 +735,14 @@ describe('PrismaNotificationHubService', () => {
         to: 'u1',
         variables: { course: 'NodeJS' },
       });
-      expect(spy).not.toHaveBeenCalled();
+      // La ÚNICA lectura del usuario es la que comprueba que la cuenta sigue
+      // viva (eliminada / suspendida): esa no se puede ahorrar, porque a una
+      // cuenta eliminada no se le escribe por ningún canal. La del idioma, que
+      // es de la que habla este test, sigue sin hacerse.
+      expect(spy).toHaveBeenCalledTimes(1);
+      const selects = spy.mock.calls.map((c) => c[0].select ?? {});
+      expect(selects).toEqual([{ deletedAt: true, status: true }]);
+      expect(selects.some((s) => 'locale' in s)).toBe(false);
     });
 
     it('el override per-tenant del locale del usuario gana al default traducido', async () => {

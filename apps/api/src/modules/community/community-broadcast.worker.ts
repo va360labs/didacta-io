@@ -16,7 +16,7 @@ import { Logger as PinoLogger } from 'nestjs-pino';
 import { runAsTenant, runSanctionedGlobalAccess } from '../../tenancy/tenant-context.storage';
 import { ModuleContextFactory } from '../module-context.factory';
 import { ModuleRegistryService } from '../module-registry.service';
-import { signUnsubscribeToken } from './broadcast-unsubscribe';
+import { communityUnsubscribeUrl } from './broadcast-unsubscribe';
 
 /**
  * Entero positivo de una env var, con default si falta o no es un número.
@@ -49,7 +49,9 @@ interface BroadcastJobData {
  * por **lotes con auto-continuación**: manda un lote (BATCH_SIZE) y re-encola el
  * siguiente con `delay` (BATCH_INTERVAL_MS) para no reventar el rate-limit del
  * SMTP. El avance es resumible (cursor por userId en la tabla) e idempotente ante
- * reinicios. Respeta la baja (`broadcastOptOut`) salvo avisos `important`.
+ * reinicios. Respeta la baja de los correos de la comunidad (cualquiera de las
+ * dos marcas, ver `COMMUNITY_EMAIL_OPT_OUT` en el módulo) salvo avisos
+ * `important`.
  *
  * Sin `REDIS_URL` (dev/test) cae a modo in-process: procesa los lotes en el propio
  * proceso con la misma pausa entre lotes (sin durabilidad).
@@ -179,12 +181,7 @@ export class CommunityBroadcastWorker implements OnApplicationBootstrap, OnModul
           });
           continue;
         }
-        const unsubUrl = webBase
-          ? `${webBase}/api/v1/modules/community/unsubscribe?token=${signUnsubscribeToken(
-              broadcast.tenantId,
-              r.userId,
-            )}`
-          : '';
+        const unsubUrl = communityUnsubscribeUrl(webBase, broadcast.tenantId, r.userId);
         try {
           // La baja SOLO va por email (in-app no se «recibe» en la bandeja):
           // la plantilla envuelve su bloque en `{{#unsubUrl}}`, así que omitir

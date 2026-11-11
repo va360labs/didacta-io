@@ -176,10 +176,14 @@ export class SubscriptionsDailyWorker implements OnApplicationBootstrap, OnModul
               .catch(() => ''),
           );
           await this.sendAdminDigest(service, resolved.config, tenantId, branding);
-          await this.sendMemberWarnings(service, resolved.config, tenantId, branding);
+          // Si no se puede saber a quién NO escribir, no se escribe a nadie: la
+          // excepción cae al catch del tenant y los avisos esperan a mañana. Va
+          // después del resumen a los admins, que no depende de esto.
+          const deleted = await this.deletedAccountEmails(tenantId);
+          await this.sendMemberWarnings(service, resolved.config, tenantId, branding, deleted);
           // Los accesos con vigencia no los cubre el aviso de renovación: viven
           // en otra tabla y nadie más va a avisar de ellos.
-          await this.sendTimedAccessWarnings(resolved.config, tenantId, branding);
+          await this.sendTimedAccessWarnings(resolved.config, tenantId, branding, deleted);
         });
       } catch (err) {
         this.logger.error(
@@ -188,6 +192,23 @@ export class SubscriptionsDailyWorker implements OnApplicationBootstrap, OnModul
         );
       }
     }
+  }
+
+  /**
+   * Correos (normalizados) de las cuentas ELIMINADAS del tenant.
+   *
+   * Los avisos de este worker van al correo del espejo de pagos (Stripe,
+   * PayPal, WooCommerce), no a un usuario del aula, así que el filtro del hub
+   * de notificaciones no los cubre: sin esto, a quien se le eliminó la cuenta
+   * le seguían llegando el aviso de renovación o el de fin de acceso de una
+   * compra que sigue viva en la pasarela.
+   */
+  private async deletedAccountEmails(tenantId: string): Promise<Set<string>> {
+    const rows = await this.prisma.user.findMany({
+      where: { tenantId, deletedAt: { not: null } },
+      select: { email: true },
+    });
+    return new Set(rows.map((r) => normalizeEmail(r.email)));
   }
 
   /**
@@ -301,11 +322,13 @@ export class SubscriptionsDailyWorker implements OnApplicationBootstrap, OnModul
     config: SmtpConfig,
     tenantId: string,
     branding: EmailBranding,
+    deleted: ReadonlySet<string> = new Set(),
   ): Promise<void> {
-    const [toWarn, cancelUrl] = await Promise.all([
+    const [all, cancelUrl] = await Promise.all([
       service.listSubscribersToWarn(tenantId, WINDOW_DAYS),
       service.getCancelPortalUrl(tenantId),
     ]);
+    const toWarn = all.filter((s) => !isDeletedAccount(deleted, s.userEmail));
     // El aviso lo lee el SUSCRIPTOR, así que va en su idioma. Un fetch de
     // idiomas por lote y un fetch de override por idioma distinto (no por
     // email): el volumen diario es bajo, pero no hace falta castigarlo.
@@ -407,9 +430,12 @@ export class SubscriptionsDailyWorker implements OnApplicationBootstrap, OnModul
     config: SmtpConfig,
     tenantId: string,
     branding: EmailBranding,
+    deleted: ReadonlySet<string> = new Set(),
   ): Promise<void> {
     const mirror = this.registry.getOrderMirrorService();
-    const toWarn = await mirror.listTimedAccessToWarn(tenantId, WINDOW_DAYS);
+    const toWarn = (await mirror.listTimedAccessToWarn(tenantId, WINDOW_DAYS)).filter(
+      (a) => !isDeletedAccount(deleted, a.customerEmail),
+    );
     if (toWarn.length === 0) return;
 
     // Lo lee el COMPRADOR: su idioma manda. Como en el aviso de renovación,
@@ -549,4 +575,13 @@ function describeUpcoming(u: UpcomingRenewal, locale: string): string {
       ? ` (${(u.unitAmount / 100).toFixed(2)} ${(u.currency ?? 'eur').toUpperCase()})`
       : '';
   return `${plan}${amount} · ${u.userEmail} · ${fmtDate(u.currentPeriodEnd, locale)}`;
+}
+
+function normalizeEmail(email: string): string {
+  return email.trim().toLowerCase();
+}
+
+/** ¿Es el correo de una cuenta eliminada? Sin correo no hay a quién escribir. */
+function isDeletedAccount(deleted: ReadonlySet<string>, email: string | null | undefined): boolean {
+  return !email || deleted.has(normalizeEmail(email));
 }
