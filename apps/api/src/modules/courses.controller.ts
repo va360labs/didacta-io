@@ -38,6 +38,11 @@ import { CurrentUser } from '../auth/decorators';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { ZodValidationPipe } from '../auth/zod-validation.pipe';
 import type { SessionClaims } from '../auth/token.service';
+import {
+  COURSE_EDITOR_ROLES,
+  lessonContentAllowed,
+  resolveLessonContentGate,
+} from './lesson-content-gate';
 import { ModuleRegistryService } from './module-registry.service';
 
 const listQuerySchema = z.object({
@@ -45,9 +50,6 @@ const listQuerySchema = z.object({
   q: z.string().trim().min(1).max(120).optional(),
   category: z.string().trim().min(1).max(80).optional(),
 });
-
-/** Roles que gestionan cursos y ven SIEMPRE el contenido completo (sin gating de drip). */
-const COURSE_EDITOR_ROLES = new Set(['super_admin', 'tenant_admin', 'formador']);
 
 /**
  * Toda escritura del catálogo (crear/editar/publicar/borrar cursos, módulos y
@@ -244,21 +246,23 @@ export class CoursesController {
         throw new NotFoundException({ message: 'Curso no encontrado', code: 'COURSE_NOT_FOUND' });
       }
 
-      const learning = this.registry.getLearningService();
+      // La regla de quién recibe el contenido de cada lección es compartida con
+      // la protección de vídeo (ver `lesson-content-gate.ts`): el `content` y
+      // la URL firmada de su vídeo se deciden con la MISMA respuesta.
+      const gate = await resolveLessonContentGate(
+        this.registry.getLearningService(),
+        user.tenantId,
+        user.sub,
+        id,
+      );
       // Sin matrícula viva: devolvemos la ESTRUCTURA (currículo) pero NUNCA el
       // `content` de las lecciones. Antes el cuerpo completo viajaba a cualquier
       // usuario autenticado, dejando el drip (y el muro de pago) en decorativo.
-      const enrolled = await learning.hasActiveEnrollment(user.tenantId, user.sub, id);
-      if (!enrolled) return maskCourseContent(course, () => true);
-
+      //
       // Matriculado: ocultar solo el `content` de las lecciones aún no liberadas
       // por el drip (lectura adelantada). El resto, completo.
-      const availability = await learning.getCourseAvailability(user.tenantId, user.sub, id);
-      if (!availability.drip) return course;
-      return maskCourseContent(
-        course,
-        (lessonId) => availability.lessons[lessonId]?.available === false,
-      );
+      if (gate.kind === 'all') return course;
+      return maskCourseContent(course, (lessonId) => !lessonContentAllowed(gate, lessonId));
     } catch (error) {
       throw this.translate(error);
     }
