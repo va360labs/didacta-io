@@ -1,0 +1,43 @@
+{
+  "channel": {
+    "EMAIL": "E-mail",
+    "IN_APP": "No app",
+    "WEBHOOK": "Webhook"
+  },
+  "category": {
+    "account": "Conta e acesso",
+    "members": "Inscrição de membros",
+    "billing": "Assinatura e pagamentos",
+    "learning": "Aprendizagem",
+    "community": "Comunidade",
+    "system": "Sistema"
+  },
+  "errorLoad": "Não foi possível carregar os e-mails.",
+  "errorSave": "Não foi possível salvar o modelo.",
+  "errorTest": "Não foi possível enviar o teste.",
+  "errorRestore": "Não foi possível restaurar o modelo.",
+  "noticeSaved": "Modelo de “{name}” personalizado.",
+  "noticeTestSent": "Teste enviado para {email}. Se não chegar, confira a caixa de spam.",
+  "noticeRestored": "“{name}” voltou ao texto padrão.",
+  "promptTestAddress": "Para qual endereço enviamos o teste de “{name}”?",
+  "confirmRestore": "Restaurar “{name}” ({channel} · {locale}) para o texto padrão do produto?",
+  "editorTitle": "Personalizar “{name}”",
+  "variablesTitle": "Variáveis disponíveis (as não resolvidas ficam vazias):",
+  "channelLabel": "Canal",
+  "localeLabel": "Idioma",
+  "localeOption": "{label} ({code})",
+  "transactionalNote": "E-mail transacional — só o canal E-mail em espanhol (es-ES) pode ser personalizado.",
+  "subjectLabel": "Assunto",
+  "bodyLabel": "Corpo",
+  "restoreDefault": "Restaurar padrão",
+  "sendTest": "Enviar um teste para mim",
+  "cancel": "Cancelar",
+  "saving": "Salvando…",
+  "save": "Salvar",
+  "customized": "Personalizado",
+  "subjectPrefix": "Assunto:",
+  "noSubject": "(sem assunto)",
+  "edit": "Editar",
+  "restore": "Restaurar",
+  "customize": "Personalizar"
+}
