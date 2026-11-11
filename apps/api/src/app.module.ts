@@ -35,6 +35,7 @@ import { SsoOidcModule } from './sso/oidc/oidc.module';
 import { SsoSamlModule } from './sso/saml/saml.module';
 import { SsoWpModule } from './sso/wp/wp-sso.module';
 import { TenancyModule } from './tenancy/tenancy.module';
+import { VideoModule } from './video/video.module';
 import { WebhooksModule } from './webhooks/webhooks.module';
 
 @Module({
@@ -127,6 +128,10 @@ import { WebhooksModule } from './webhooks/webhooks.module';
     // modules/member-registration/); reusa AuthModule (PasswordService, SMTP,
     // audit, JwtAuthGuard) y ModulesModule (registry, access-groups, outbox).
     MemberRegistrationModule,
+    // Protección de vídeo: URLs de Bunny Stream firmadas y con caducidad,
+    // autorización por vídeo, tope de vídeos distintos por cuenta y marca de
+    // agua, por tenant. Infra CORE del host; reusa AuthModule y ModulesModule.
+    VideoModule,
     // Quinto piloto License SDK — gate feat:reports.advanced_signed end-to-end.
     // Vivimos en módulo separado para acoplar `adm-zip` solo donde se usa.
     AuditExportModule,
