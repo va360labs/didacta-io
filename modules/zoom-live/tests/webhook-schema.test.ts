@@ -66,6 +66,43 @@ describe('webhookEventSchema · forma real de Zoom', () => {
     );
   });
 
+  it('recording.completed conserva los tramos de grabación (se usan para saber de cuándo es)', () => {
+    const result = webhookEventSchema.safeParse({
+      event: 'recording.completed',
+      event_ts: 1785783100000,
+      payload: {
+        object: {
+          id: 87470222827,
+          share_url: 'https://zoom.example.test/rec/x',
+          duration: 31,
+          recording_files: [
+            {
+              id: 'f1',
+              recording_start: '2026-08-03T18:18:10Z',
+              recording_end: '2026-08-03T18:49:50Z',
+            },
+          ],
+        },
+      },
+    });
+    expect(result.success).toBe(true);
+    expect(result.success && result.data.payload?.object?.recording_files).toEqual([
+      { id: 'f1', recording_start: '2026-08-03T18:18:10Z', recording_end: '2026-08-03T18:49:50Z' },
+    ]);
+  });
+
+  it('unos tramos de grabación con forma rara NO tiran el aviso', () => {
+    for (const recording_files of ['texto', 7, null, [null, { recording_end: null }], {}]) {
+      const result = webhookEventSchema.safeParse({
+        event: 'recording.completed',
+        payload: {
+          object: { id: 1, share_url: 'https://zoom.example.test/rec/x', recording_files },
+        },
+      });
+      expect(result.success, JSON.stringify(recording_files)).toBe(true);
+    }
+  });
+
   it('CONTROL: algo que no es un aviso (sin `event`) se sigue rechazando', () => {
     expect(webhookEventSchema.safeParse({ not: 'a webhook event' }).success).toBe(false);
   });

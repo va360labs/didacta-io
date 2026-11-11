@@ -43,7 +43,7 @@ export const zoomLiveExtension: ModuleWebExtension = {
 /// Re-exports del módulo. Los consumidores externos (páginas Next del
 /// core que actúan como wrapper) importan el cliente HTTP y los tipos
 /// desde `@/modules/zoom-live` — nunca desde `./client` o paths internos.
-export { zoomLiveApi } from './client';
+export { zoomLiveApi, ZOOM_EVENT_OUT_OF_SCHEDULE } from './client';
 export { AddToCalendarDialog } from './add-to-calendar';
 export type {
   AttendanceConfidence,

@@ -24,7 +24,8 @@ import { adminTokenForBootstrap, API_URL } from '../helpers/api';
  *   4. POST al endpoint público `/api/v1/webhooks/zoom` (sin auth bearer).
  *   5. Verificamos `result=OK`.
  *   6. GET de la sesión confirma `status=STARTED`.
- *   7. Re-POST del mismo `event_id` → `result=DUPLICATE` (idempotencia).
+ *   7. Re-POST del mismo aviso → `result=DUPLICATE` (idempotencia). El cuerpo
+ *      NO lleva `event_id` (Zoom no lo manda): la clave sale del contenido.
  *   8. POST con firma falsa → 401.
  *   9. Cleanup: borra `zoom-live/credentials`.
  */
@@ -71,7 +72,9 @@ test.describe('mod.zoom-live · webhook HMAC (G5.3)', () => {
       },
       body: JSON.stringify({
         topic: `Webhook E2E ${stamp}`,
-        startTime: '2026-12-15T10:00:00-03:00',
+        // A punto de empezar: un `meeting.started` semanas antes de la clase
+        // es una reunión abierta fuera de hora y se archiva sin aplicarse.
+        startTime: new Date(Date.now() + 10 * 60_000).toISOString(),
         durationMinutes: 60,
         hostEmail: process.env.E2E_ADMIN_EMAIL ?? 'admin@example.test',
         timezone: 'UTC',
@@ -86,11 +89,13 @@ test.describe('mod.zoom-live · webhook HMAC (G5.3)', () => {
     expect(session.status).toBe('SCHEDULED');
     expect(session.zoomMeetingId).toBeTruthy();
 
-    // 2. Payload meeting.started firmado.
-    const eventId = `evt-${stamp}-started`;
+    // 2. Payload meeting.started firmado, con la forma REAL de Zoom: sin
+    // `event_id` en el cuerpo (no lo manda) y con `event_ts`. Mientras este
+    // spec mandaba un `event_id` inventado, nadie vio que los avisos reales
+    // se descartaban por no traerlo.
     const startedBody = JSON.stringify({
-      event_id: eventId,
       event: 'meeting.started',
+      event_ts: Date.now(),
       payload: {
         object: {
           id: session.zoomMeetingId,
@@ -123,7 +128,8 @@ test.describe('mod.zoom-live · webhook HMAC (G5.3)', () => {
     const detail = (await after.json()) as { status: string };
     expect(detail.status).toBe('STARTED');
 
-    // 5. Idempotencia: el mismo event_id retorna DUPLICATE sin re-aplicar.
+    // 5. Idempotencia: la reentrega del MISMO aviso (mismo cuerpo) retorna
+    // DUPLICATE sin re-aplicar. La clave sale del contenido, no de un id.
     const dupRes = await fetch(`${API_URL}/api/v1/webhooks/zoom`, {
       method: 'POST',
       headers: {
@@ -139,8 +145,8 @@ test.describe('mod.zoom-live · webhook HMAC (G5.3)', () => {
 
     // 6. Firma incorrecta → 401.
     const fakeBody = JSON.stringify({
-      event_id: `evt-${stamp}-fake`,
       event: 'meeting.ended',
+      event_ts: Date.now(),
       payload: { object: { id: session.zoomMeetingId } },
     });
     const fakeRes = await fetch(`${API_URL}/api/v1/webhooks/zoom`, {

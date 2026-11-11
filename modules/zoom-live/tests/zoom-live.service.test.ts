@@ -203,7 +203,7 @@ function makeFakePrisma(
         where: {
           id: string;
           tenantId?: string;
-          status?: { notIn: string[] };
+          status?: string | { notIn: string[] };
           reminderSentAt?: null;
         };
         data: Partial<SessionRow>;
@@ -213,7 +213,9 @@ function makeFakePrisma(
           const s = sessions[i]!;
           if (s.id !== args.where.id) continue;
           if (args.where.tenantId && s.tenantId !== args.where.tenantId) continue;
-          if (args.where.status?.notIn && args.where.status.notIn.includes(s.status)) continue;
+          const status = args.where.status;
+          if (typeof status === 'string' && s.status !== status) continue;
+          if (typeof status === 'object' && status.notIn.includes(s.status)) continue;
           if (args.where.reminderSentAt === null && s.reminderSentAt !== null) continue;
           sessions[i] = { ...s, ...args.data, updatedAt: new Date() };
           count++;
@@ -1805,5 +1807,212 @@ describe('ZoomLiveService.handleWebhookEvent · avisos reales de Zoom (sin event
     // Devolver DUPLICATE aquí era contestar 200 a Zoom: no reintentaba y el
     // aviso se perdía sin rastro.
     expect((await service.get(TENANT, created.id)).status).toBe('SCHEDULED');
+  });
+});
+
+describe('ZoomLiveService.handleWebhookEvent · avisos fuera de la hora de la clase', () => {
+  /**
+   * Clase el 9 de noviembre a las 17:30 (Madrid). Antes, cualquier
+   * `meeting.ended` la cerraba: bastaba con que el formador abriese la reunión
+   * dos días antes para probarla. La clase quedaba «terminada», se cerraban las
+   * inscripciones y se lanzaba la encuesta post-clase a todos.
+   */
+  const STARTS_AT = '2026-11-09T17:30:00+01:00';
+  const at = (iso: string) => ({ now: new Date(iso) });
+
+  async function setup() {
+    const prisma = makeFakePrisma();
+    const ctx = makeCtx();
+    const service = new ZoomLiveService(prisma as never, ctx as never, new StubZoomApiClient());
+    const created = await service.create(TENANT, ACTOR, {
+      topic: 'Clase del lunes',
+      startTime: STARTS_AT,
+      durationMinutes: 60,
+      hostEmail: 'h@x.com',
+      timezone: 'Europe/Madrid',
+    });
+    ctx.events.length = 0;
+    let n = 0;
+    const aviso = (event: string, object: Record<string, unknown> = {}) => ({
+      event_id: `evt-fuera-de-hora-${++n}`,
+      event,
+      payload: { object: { id: created.zoomMeetingId!, ...object } },
+    });
+    const status = async () => (await service.get(TENANT, created.id)).status;
+    const names = () => ctx.events.map((e) => e.name);
+    return { prisma, ctx, service, created, aviso, status, names };
+  }
+
+  it('un meeting.ended dos días antes NO cierra la clase ni lanza la encuesta', async () => {
+    const { service, created, aviso, status, names, prisma } = await setup();
+
+    const out = await service.handleWebhookEvent(
+      aviso('meeting.ended'),
+      at('2026-11-07T19:05:00+01:00'),
+    );
+
+    expect(out).toEqual({ result: 'IGNORED', sessionId: created.id });
+    expect(await status()).toBe('SCHEDULED');
+    // `zoom.session.ended` es lo que dispara la encuesta post-clase.
+    expect(names()).not.toContain('zoom.session.ended');
+    // Queda archivado con el motivo, para que el admin vea por qué no se aplicó.
+    expect(prisma._webhookEvents[0]).toMatchObject({
+      result: 'IGNORED',
+      sessionId: created.id,
+      errorMessage: 'ZOOM_EVENT_OUT_OF_SCHEDULE',
+    });
+  });
+
+  it('un meeting.started dos días antes NO la pone en directo', async () => {
+    const { service, aviso, status, names } = await setup();
+
+    const out = await service.handleWebhookEvent(
+      aviso('meeting.started'),
+      at('2026-11-07T19:00:00+01:00'),
+    );
+
+    expect(out.result).toBe('IGNORED');
+    expect(await status()).toBe('SCHEDULED');
+    expect(names()).not.toContain('zoom.session.started');
+  });
+
+  it('abrir 20 minutos antes sí es la clase: pasa a STARTED', async () => {
+    const { service, aviso, status } = await setup();
+    const out = await service.handleWebhookEvent(
+      aviso('meeting.started'),
+      at('2026-11-09T17:10:00+01:00'),
+    );
+    expect(out.result).toBe('OK');
+    expect(await status()).toBe('STARTED');
+  });
+
+  it('si la reunión se abre dentro del margen y se cierra antes de la hora, la clase vuelve a programada', async () => {
+    const { service, aviso, status, names } = await setup();
+    await service.handleWebhookEvent(aviso('meeting.started'), at('2026-11-09T17:10:00+01:00'));
+    expect(await status()).toBe('STARTED');
+
+    const out = await service.handleWebhookEvent(
+      aviso('meeting.ended'),
+      at('2026-11-09T17:20:00+01:00'),
+    );
+
+    expect(out.result).toBe('IGNORED');
+    // Ni «en directo» (ya no hay nadie) ni «terminada» (no se ha dado).
+    expect(await status()).toBe('SCHEDULED');
+    expect(names()).not.toContain('zoom.session.ended');
+  });
+
+  it('CONTROL: la clase de verdad se abre, se da y se cierra como siempre', async () => {
+    const { service, aviso, status, names } = await setup();
+
+    const a = await service.handleWebhookEvent(
+      aviso('meeting.started'),
+      at('2026-11-09T17:28:00+01:00'),
+    );
+    const b = await service.handleWebhookEvent(
+      aviso('meeting.ended'),
+      at('2026-11-09T18:35:00+01:00'),
+    );
+
+    expect(a.result).toBe('OK');
+    expect(b.result).toBe('OK');
+    expect(await status()).toBe('ENDED');
+    expect(names()).toEqual(['zoom.session.started', 'zoom.session.ended']);
+  });
+
+  it('una prueba de días antes no estropea la clase: el día de verdad todo se aplica', async () => {
+    const { service, created, aviso, status, names } = await setup();
+    // La prueba del formador, el sábado.
+    await service.handleWebhookEvent(aviso('meeting.started'), at('2026-11-07T19:00:00+01:00'));
+    await service.handleWebhookEvent(aviso('meeting.ended'), at('2026-11-07T19:05:00+01:00'));
+    expect(await status()).toBe('SCHEDULED');
+    // Con la clase programada, un alumno todavía puede inscribirse.
+    await expect(service.register(TENANT, 'alumno-1', created.id)).resolves.toMatchObject({
+      isRegistered: true,
+    });
+
+    // El lunes.
+    await service.handleWebhookEvent(aviso('meeting.started'), at('2026-11-09T17:29:00+01:00'));
+    await service.handleWebhookEvent(aviso('meeting.ended'), at('2026-11-09T18:31:00+01:00'));
+
+    expect(await status()).toBe('ENDED');
+    expect(names().filter((n) => n === 'zoom.session.ended')).toHaveLength(1);
+  });
+
+  it('cuenta cuándo ocurrió, no cuándo llegó: un ended de la prueba reentregado con la clase empezada no la cierra', async () => {
+    const { service, status, created } = await setup();
+    await service.handleWebhookEvent(
+      {
+        event: 'meeting.started',
+        event_ts: new Date('2026-11-09T17:29:00+01:00').getTime(),
+        payload: { object: { id: created.zoomMeetingId! } },
+      },
+      at('2026-11-09T17:29:01+01:00'),
+    );
+    expect(await status()).toBe('STARTED');
+
+    // El `meeting.ended` de una prueba de las 16:40, que Zoom reintenta a las 17:45.
+    const out = await service.handleWebhookEvent(
+      {
+        event: 'meeting.ended',
+        event_ts: new Date('2026-11-09T16:40:00+01:00').getTime(),
+        payload: { object: { id: created.zoomMeetingId! } },
+      },
+      at('2026-11-09T17:45:00+01:00'),
+    );
+
+    expect(out.result).toBe('IGNORED');
+    // La clase está en marcha de verdad: NO vuelve a programada por un aviso viejo.
+    expect(await status()).toBe('STARTED');
+  });
+
+  it('la grabación de una prueba no se cuelga en la clase', async () => {
+    const { service, created, aviso, names } = await setup();
+
+    const out = await service.handleWebhookEvent(
+      aviso('recording.completed', {
+        share_url: 'https://zoom.example.test/rec/prueba',
+        duration: 2,
+        recording_files: [{ recording_end: '2026-11-07T18:07:00Z' }],
+      }),
+      // El aviso de grabación puede tardar: llega con la clase ya dada.
+      at('2026-11-09T19:00:00+01:00'),
+    );
+
+    expect(out.result).toBe('IGNORED');
+    const after = await service.get(TENANT, created.id, { userId: 'staff', isStaff: true });
+    expect(after.recordingUrl).toBeNull();
+    expect(names()).not.toContain('zoom.session.recording_ready');
+  });
+
+  it('CONTROL: la grabación de la clase sí se guarda', async () => {
+    const { service, created, aviso, names } = await setup();
+
+    const out = await service.handleWebhookEvent(
+      aviso('recording.completed', {
+        share_url: 'https://zoom.example.test/rec/clase',
+        duration: 61,
+        recording_files: [{ recording_end: '2026-11-09T17:31:00Z' }],
+      }),
+      at('2026-11-09T19:00:00+01:00'),
+    );
+
+    expect(out.result).toBe('OK');
+    const after = await service.get(TENANT, created.id, { userId: 'staff', isStaff: true });
+    expect(after.recordingUrl).toBe('https://zoom.example.test/rec/clase');
+    expect(names()).toContain('zoom.session.recording_ready');
+  });
+
+  it('una clase cancelada sigue sin resucitar, sea la hora que sea', async () => {
+    const { service, created, aviso, status } = await setup();
+    await service.cancel(TENANT, ACTOR, created.id);
+
+    const out = await service.handleWebhookEvent(
+      aviso('meeting.started'),
+      at('2026-11-09T17:29:00+01:00'),
+    );
+
+    expect(out.result).toBe('IGNORED');
+    expect(await status()).toBe('CANCELLED');
   });
 });

@@ -18,6 +18,7 @@ import { formatDateTime } from '@/lib/i18n/format';
 import { labelOr } from '@/lib/i18n/labels';
 import {
   zoomLiveApi,
+  ZOOM_EVENT_OUT_OF_SCHEDULE,
   type PaginatedWebhookEvents,
   type WebhookEventResult,
   type ZoomWebhookEventItem,
@@ -209,7 +210,10 @@ function EventRow({ event }: { event: ZoomWebhookEventItem }) {
         </Badge>
       </td>
       <td className="px-6 py-3 text-xs text-text-muted">
-        {event.errorMessage ? (
+        {event.errorMessage === ZOOM_EVENT_OUT_OF_SCHEDULE ? (
+          // No es un fallo: el aviso llegó bien y se decidió no aplicarlo.
+          <span>{t('zoom.outOfSchedule')}</span>
+        ) : event.errorMessage ? (
           <span className="text-danger-700">{event.errorMessage}</span>
         ) : event.sessionId ? (
           <span className="font-mono">

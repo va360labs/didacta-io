@@ -116,6 +116,16 @@ export const webhookEventSchema = z.object({
            * (en minutos). Zoom puede reportar 0 si fue cortado abruptamente.
            */
           duration: z.number().int().nonnegative().optional(),
+          /**
+           * Solo en `recording.completed`: los tramos de la grabación, cada uno
+           * con su `recording_end`. Se usa para saber si la grabación es de la
+           * clase o de una reunión abierta fuera de hora (`isFalseStart`).
+           *
+           * `unknown` A PROPÓSITO: un schema estricto aquí rechazaría el aviso
+           * entero —y con él la grabación— por un campo que Zoom mandase con
+           * otra forma. Quien lo lee lo hace a la defensiva.
+           */
+          recording_files: z.unknown().optional(),
         })
         .optional(),
     })

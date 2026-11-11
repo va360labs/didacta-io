@@ -270,7 +270,8 @@
     "previous": "Previous",
     "next": "Next",
     "shownOf": "{shown} of {total}",
-    "sessionPrefix": "session: {id}…"
+    "sessionPrefix": "session: {id}…",
+    "outOfSchedule": "Outside the class time: not applied. Someone opened or closed the meeting ahead of time."
   },
   "zoomResult": {
     "OK": "OK",

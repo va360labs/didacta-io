@@ -78,6 +78,14 @@ export interface AttendanceReport {
 
 export type WebhookEventResult = 'OK' | 'IGNORED' | 'ERROR';
 
+/**
+ * Código que la API deja en `errorMessage` cuando un aviso de Zoom se archiva
+ * sin aplicar porque ocurrió fuera de la hora de la clase (alguien abrió la
+ * reunión días antes). No es un error: es el motivo, y se pinta traducido.
+ * Mismo valor que `OUT_OF_SCHEDULE_NOTE` en `@didacta/mod-zoom-live`.
+ */
+export const ZOOM_EVENT_OUT_OF_SCHEDULE = 'ZOOM_EVENT_OUT_OF_SCHEDULE';
+
 export interface ZoomWebhookEventItem {
   id: string;
   eventId: string;

@@ -50,6 +50,7 @@ export {
   verifyZoomSignature,
 } from './webhook-signature.js';
 export { DERIVED_EVENT_KEY_PREFIX, webhookEventKey } from './webhook-event-key.js';
+export { EARLY_EVENT_MARGIN_MINUTES, isFalseStart, OUT_OF_SCHEDULE_NOTE } from './false-start.js';
 export {
   buildGoogleCalendarUrl,
   buildIcsEvent,

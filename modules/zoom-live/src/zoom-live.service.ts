@@ -32,6 +32,7 @@ import {
   SessionNotOpenForRegistrationError,
 } from './errors.js';
 import { buildZoomApiClient, StubZoomApiClient, type ZoomApiClient } from './zoom-api-client.js';
+import { isFalseStart, OUT_OF_SCHEDULE_NOTE } from './false-start.js';
 import { webhookEventKey } from './webhook-event-key.js';
 
 export class ZoomLiveService {
@@ -874,7 +875,8 @@ export class ZoomLiveService {
    * el controller). Devuelve el resultado de la operación:
    *  - `OK`: se aplicó un cambio de status.
    *  - `IGNORED`: evento conocido pero no relevante (no es started/ended,
-   *    o el meeting no matchea ninguna sesión nuestra).
+   *    o el meeting no matchea ninguna sesión nuestra), o que ocurrió fuera
+   *    de la hora de la clase (ver `isFalseStart`).
    *  - `DUPLICATE`: ese aviso ya estaba procesado (Zoom reintenta).
    *  - `ERROR`: fallo al persistir; el controller responderá 5xx para que
    *    Zoom reintente.
@@ -924,9 +926,11 @@ export class ZoomLiveService {
     /**
      * `rawBody`: el cuerpo tal cual llegó. Solo se usa para derivar la clave
      * cuando el aviso no trae ni `event_id` ni `event_ts`.
+     * `now`: momento de llegada (inyectable para tests deterministas).
      */
-    opts: { rawBody?: string } = {},
+    opts: { rawBody?: string; now?: Date } = {},
   ): Promise<{ result: 'OK' | 'IGNORED' | 'DUPLICATE' | 'ERROR'; sessionId?: string }> {
+    const now = opts.now ?? new Date();
     const eventId = webhookEventKey(event, opts.rawBody);
     // El evento se RECLAMA antes de hacer nada, con el unique index de
     // `event_id` como cerrojo.
@@ -980,6 +984,11 @@ export class ZoomLiveService {
     let result: 'OK' | 'IGNORED' | 'ERROR' = 'OK';
     let errorMessage: string | undefined;
 
+    const falseStart =
+      session && (nextStatus || isRecordingCompleted)
+        ? isFalseStart(event, session.startTime, now)
+        : false;
+
     if (!session) {
       // Sin sesión local no hay nada que actualizar; persistimos el evento
       // como IGNORED para trazabilidad.
@@ -989,6 +998,36 @@ export class ZoomLiveService {
       // (o el host arrancando un meeting borrado a medias) la dejaría
       // STARTED y reabriría inscripciones. Trazabilidad sin efecto.
       result = 'IGNORED';
+    } else if (falseStart) {
+      // Alguien abrió la reunión FUERA DE HORA (el formador probándola días
+      // antes, o preparando la sala): no es la clase. Sin esto, ese
+      // `meeting.ended` la dejaba «terminada» —sin botón el día de verdad y con
+      // las inscripciones cerradas—, lanzaba la encuesta post-clase a todos y
+      // colgaba la grabación de la prueba. Se archiva con el motivo y no se
+      // aplica.
+      result = 'IGNORED';
+      errorMessage = OUT_OF_SCHEDULE_NOTE;
+      this.ctx.logger.warn('mod.zoom-live: aviso de Zoom fuera de hora, ignorado', {
+        eventId,
+        eventType: event.event,
+        sessionId: session.id,
+        startTime: session.startTime.toISOString(),
+      });
+      // Si un `meeting.started` dentro del margen la dejó «en directo» y la
+      // reunión se cerró antes de la hora, la clase vuelve a «programada»: ni
+      // está en marcha (ya no hay nadie) ni se ha dado. Solo cuando el aviso
+      // es de AHORA: un `meeting.ended` viejo que llega reentregado con la
+      // clase ya empezada no puede sacarla del directo.
+      if (
+        nextStatus === 'ENDED' &&
+        session.status === 'STARTED' &&
+        now.getTime() < session.startTime.getTime()
+      ) {
+        await this.prisma.modZoomSession.updateMany({
+          where: { id: session.id, status: 'STARTED' },
+          data: { status: 'SCHEDULED' },
+        });
+      }
     } else if (nextStatus) {
       try {
         await this.prisma.modZoomSession.update({

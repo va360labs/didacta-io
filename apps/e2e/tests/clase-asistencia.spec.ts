@@ -59,7 +59,10 @@ test.describe('mod.zoom-live · asistencia real (ADR-018)', () => {
       headers: adminHeaders,
       body: JSON.stringify({
         topic: `Asistencia E2E ${stamp}`,
-        startTime: '2026-12-02T18:00:00+01:00',
+        // Hace 5 min: el `meeting.ended` del paso 8 llega después de la hora,
+        // como en una clase real. Antes de la hora sería una reunión abierta
+        // fuera de hora y el aviso se archivaría sin cerrar la clase.
+        startTime: new Date(Date.now() - 5 * 60_000).toISOString(),
         durationMinutes: 60,
         hostEmail: process.env.E2E_ADMIN_EMAIL ?? 'admin@example.test',
         timezone: 'Europe/Madrid',
@@ -173,9 +176,12 @@ test.describe('mod.zoom-live · asistencia real (ADR-018)', () => {
     });
     expect(credsRes.ok, `set webhookSecret OK (got ${credsRes.status})`).toBe(true);
 
+    // Con la forma REAL de Zoom: sin `event_id` en el cuerpo (no lo manda) y
+    // con `event_ts`. Un fixture con `event_id` inventado fue lo que escondió
+    // que los avisos reales se descartaban.
     const endedBody = JSON.stringify({
-      event_id: `evt-asistencia-${stamp}-ended`,
       event: 'meeting.ended',
+      event_ts: Date.now(),
       payload: {
         object: { id: session.zoomMeetingId, uuid: `uuid-asistencia-${stamp}==` },
       },
