@@ -193,7 +193,7 @@ describeWithDb('Protección de vídeo — Postgres real como didacta_app (RLS fo
     // Academia A: un curso publicado con el vídeo compartido en una lección de
     // vídeo y otro incrustado a mano en una lección HTML; un curso con vídeo
     // destacado; y un curso en borrador.
-    [lessonSharedA] = await seedCourse(tenantA, {
+    const lessonsA = await seedCourse(tenantA, {
       lessons: [
         { type: 'VIDEO', content: { videoUrl: embed(LIB_A, GUID_SHARED) } },
         {
@@ -205,6 +205,7 @@ describeWithDb('Protección de vídeo — Postgres real como didacta_app (RLS fo
         },
       ],
     });
+    lessonSharedA = lessonsA[0]!;
     await seedCourse(tenantA, {
       featuredVideoUrl: embed(LIB_FEATURED, GUID_FEATURED_A),
       lessons: [],
