@@ -5,6 +5,7 @@
 
 import { randomUUID } from 'node:crypto';
 import type { ModuleContext } from '@didacta/core-kernel';
+import { eventIdempotencyKey } from '@didacta/core-kernel';
 import type { PrismaClient } from '@didacta/database';
 import type { AskDto, AskResponseView, CitationView } from './dto.js';
 import {
@@ -656,7 +657,7 @@ export class AiTutorChatService {
         tenantId,
         timestamp: new Date().toISOString(),
         traceId: randomUUID(),
-        idempotencyKey: `${name}:${JSON.stringify(data)}:${Date.now()}`,
+        idempotencyKey: eventIdempotencyKey(name, data),
       },
     });
   }

@@ -426,11 +426,30 @@ function makeFakePrisma(
   };
 }
 
-function makeCtx() {
+/**
+ * Tope de la fila de un índice btree de Postgres. `outbox_event` tiene un
+ * índice único sobre `(tenant_id, idempotency_key)`: una clave que no quepa
+ * hace fallar el INSERT del evento con este mismo mensaje (comprobado contra
+ * Postgres 16; lo cubre también
+ * `apps/api/tests/integration/outbox-idempotency-key.integration.test.ts`).
+ */
+const BTREE_MAX_ROW = 2704;
+
+function makeCtx(opts: { outboxComoPostgres?: boolean } = {}) {
   const events: { name: string; data: unknown }[] = [];
+  /** Claves de idempotencia con las que se publicó cada evento, en orden. */
+  const keys: string[] = [];
   return {
     eventBus: {
-      async publish(evt: { name: string; data: unknown }) {
+      async publish(evt: { name: string; data: unknown; metadata?: { idempotencyKey?: string } }) {
+        const key = evt.metadata?.idempotencyKey ?? '';
+        if (opts.outboxComoPostgres && Buffer.byteLength(key) > BTREE_MAX_ROW) {
+          throw new Error(
+            `index row size ${Buffer.byteLength(key)} exceeds btree version 4 maximum ${BTREE_MAX_ROW} ` +
+              'for index "outbox_event_tenant_id_idempotency_key_key"',
+          );
+        }
+        keys.push(key);
         events.push({ name: evt.name, data: evt.data });
       },
     },
@@ -441,6 +460,7 @@ function makeCtx() {
       debug: () => undefined,
     },
     events,
+    keys,
   };
 }
 
@@ -1006,6 +1026,50 @@ describe('ZoomLiveService · inscripciones y gating (ADR-017)', () => {
       'u-1',
       'u-2',
     ]);
+  });
+
+  it('cancelar una clase LLENA avisa a todos: la clave del evento ya no crece con los inscritos', async () => {
+    // El payload lleva a todos los inscritos, y la clave de idempotencia
+    // llevaba el payload entero. Con unos setenta inscritos dejaba de caber en
+    // el índice único del outbox: la clase quedaba cancelada (en Zoom y en la
+    // base), el evento no se guardaba, nadie recibía el aviso, y reintentar no
+    // servía porque la sesión ya estaba CANCELLED.
+    const prisma = makeFakePrisma();
+    const ctx = makeCtx({ outboxComoPostgres: true });
+    const service = new ZoomLiveService(prisma as never, ctx as never, new StubZoomApiClient());
+    const created = await makeSession(service);
+    const inscritos = Array.from(
+      { length: 200 },
+      (_, i) => `00000000-0000-4000-8000-${String(i).padStart(12, '0')}`,
+    );
+    for (const userId of inscritos) await service.register(TENANT, userId, created.id);
+
+    await service.cancel(TENANT, ACTOR, created.id);
+
+    const cancelled = ctx.events.find((e) => e.name === 'zoom.session.cancelled');
+    expect(cancelled, 'el evento de cancelación no llegó al outbox').toBeDefined();
+    // Van TODOS: acotar la clave no recorta el payload.
+    expect((cancelled!.data as { registeredUserIds: string[] }).registeredUserIds).toHaveLength(
+      200,
+    );
+    expect(Math.max(...ctx.keys.map((k) => k.length))).toBeLessThanOrEqual(256);
+    expect((await service.get(TENANT, created.id)).status).toBe('CANCELLED');
+  });
+
+  it('todas las claves que publica el módulo caben de sobra en el índice del outbox', async () => {
+    const prisma = makeFakePrisma();
+    const ctx = makeCtx();
+    const service = new ZoomLiveService(prisma as never, ctx as never, new StubZoomApiClient());
+    const created = await makeSession(service);
+    await service.register(TENANT, ALUMNO, created.id);
+    await service.unregister(TENANT, ALUMNO, created.id);
+    await service.cancel(TENANT, ACTOR, created.id);
+
+    expect(ctx.keys.length).toBeGreaterThanOrEqual(4);
+    for (const key of ctx.keys) {
+      // nombre : resumen del payload : instante — sin el payload dentro.
+      expect(key).toMatch(/^zoom\.session\.[a-z_.]+:[0-9a-f]{32}:\d+$/);
+    }
   });
 });
 

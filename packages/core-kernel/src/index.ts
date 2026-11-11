@@ -46,6 +46,8 @@ export type {
   TenantConfigService,
 } from './module/module.js';
 
+export { eventIdempotencyKey, EVENT_IDEMPOTENCY_KEY_MAX_LENGTH } from './module/events.js';
+
 export {
   sanitizeRichText,
   sanitizeLessonHtml,

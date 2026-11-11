@@ -5,6 +5,7 @@
 
 import { randomUUID } from 'node:crypto';
 import type { ModuleContext } from '@didacta/core-kernel';
+import { eventIdempotencyKey } from '@didacta/core-kernel';
 import type { PrismaClient } from '@didacta/database';
 import type {
   CompanyView,
@@ -182,7 +183,7 @@ export class FundaeCompanyService {
         userId: actorId ?? undefined,
         timestamp: new Date().toISOString(),
         traceId: randomUUID(),
-        idempotencyKey: `${name}:${JSON.stringify(data)}:${Date.now()}`,
+        idempotencyKey: eventIdempotencyKey(name, data),
       },
     });
   }

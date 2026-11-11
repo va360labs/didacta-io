@@ -233,6 +233,58 @@ describe('AiTutorIndexerService (LMS-90.C)', () => {
     );
   });
 
+  it('un error LARGO del proveedor no tapa el fallo real con un error de base de datos', async () => {
+    // El motivo del fallo va en el payload, y la clave de idempotencia llevaba
+    // el payload entero. Un proveedor que contesta con una página de error de
+    // varios KB hacía que publicar el evento reventara contra el índice único
+    // del outbox (2.704 bytes por fila): el admin veía un error de Postgres en
+    // vez del motivo, y el evento de fallo no existía.
+    const BTREE_MAX_ROW = 2704;
+    const publicados: Array<{ name: string; key: string }> = [];
+    const ctx = {
+      ...makeContext(),
+      eventBus: {
+        publish: vi.fn(async (evt: { name: string; metadata: { idempotencyKey: string } }) => {
+          const key = evt.metadata.idempotencyKey;
+          if (Buffer.byteLength(key) > BTREE_MAX_ROW) {
+            throw new Error(
+              `index row size ${Buffer.byteLength(key)} exceeds btree version 4 maximum ${BTREE_MAX_ROW}`,
+            );
+          }
+          publicados.push({ name: evt.name, key });
+        }),
+      },
+    };
+    const prisma = makeFakePrisma({
+      course: { id: 'c1', tenantId: 't1', status: 'PUBLISHED' },
+      modules: [{ id: 'm1', title: 'M', position: 0 }],
+      lessons: [
+        {
+          id: 'l1',
+          moduleId: 'm1',
+          type: 'TEXT',
+          title: 'T',
+          content: { text: 'algo' },
+          position: 0,
+        },
+      ],
+    });
+    const paginaDeError = `<html><body>502 Bad Gateway ${'x'.repeat(10_000)}</body></html>`;
+    const failingEmbed: EmbedFn = async () => {
+      throw new Error(paginaDeError);
+    };
+    const svc = new AiTutorIndexerService(prisma as never, ctx as never, failingEmbed);
+
+    // El error que sube es el del proveedor, no el del índice.
+    await expect(svc.indexCourse('t1', 'c1')).rejects.toBeInstanceOf(EmbeddingsProviderError);
+    expect(publicados.map((e) => e.name)).toEqual(['ai-tutor.course.index-failed']);
+    expect(publicados[0]!.key.length).toBeLessThanOrEqual(256);
+    // Y el motivo entero sigue viajando en el payload: lo acotado es la clave.
+    expect(ctx.eventBus.publish).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ reason: paginaDeError }) }),
+    );
+  });
+
   it('re-indexar borra chunks previos antes de insertar (idempotente)', async () => {
     const prisma = makeFakePrisma({
       course: { id: 'c1', tenantId: 't1', status: 'PUBLISHED' },
