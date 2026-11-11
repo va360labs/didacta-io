@@ -178,7 +178,11 @@ export class LearningPathsController {
 
   @Post(':id/enroll')
   @HttpCode(200)
-  @ApiOperation({ summary: 'Matricularse en una ruta (también matricula en cada curso)' })
+  @ApiOperation({
+    summary:
+      'Apuntarse a una ruta: matricula en sus cursos gratuitos; los de pago siguen ' +
+      'pidiendo compra y se devuelven en `coursesWithoutAccess`',
+  })
   async enrollPath(@CurrentUser() user: SessionClaims | undefined, @Param('id') id: string) {
     if (!user) throw new UnauthorizedException();
     try {

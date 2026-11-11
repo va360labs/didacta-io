@@ -13,8 +13,41 @@ import {
   getPath,
   enrollPath,
   cancelEnrollment,
+  type LearningPathCourseAccess,
   type LearningPathDetail,
 } from '@/lib/learning-paths';
+
+/**
+ * Qué acceso tiene el alumno a cada curso de la ruta. Apuntarse a la ruta no
+ * regala cursos de pago: solo matricula en los gratuitos, y los demás se
+ * enseñan como lo que son para que nadie descubra a mitad de ruta que le
+ * falta uno.
+ */
+function CourseAccessNote({
+  access,
+  purchasable,
+  inPath,
+}: {
+  access: LearningPathCourseAccess | null;
+  /** El curso está publicado y tiene ficha a la que mandar al alumno. */
+  purchasable: boolean;
+  /** El alumno ya está apuntado a la ruta. */
+  inPath: boolean;
+}) {
+  const t = useTranslations('alumnoAprendizaje');
+  if (!access) return null;
+  const text =
+    access === 'enrolled'
+      ? t('courseAccessEnrolled')
+      : access === 'free'
+        ? inPath
+          ? t('courseAccessFree')
+          : t('courseAccessFreeOnJoin')
+        : purchasable
+          ? t('courseAccessLocked')
+          : t('courseAccessUnavailable');
+  return <p className="text-xs text-text-muted">{text}</p>;
+}
 
 export default function RutaDetailPage() {
   const { slug } = useParams<{ slug: string }>();
@@ -27,6 +60,8 @@ export default function RutaDetailPage() {
   const [enrolling, setEnrolling] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
+  // Cursos de la ruta que siguen sin acceso tras apuntarse (son de pago).
+  const [pendingCourses, setPendingCourses] = useState(0);
 
   useEffect(() => {
     getPath(slug)
@@ -39,18 +74,11 @@ export default function RutaDetailPage() {
     if (!path) return;
     setEnrolling(true);
     try {
-      const enrollment = await enrollPath(path.id);
-      setPath((prev) =>
-        prev
-          ? {
-              ...prev,
-              enrollment: {
-                status: enrollment.status,
-                progressPercent: enrollment.progressPercent,
-              },
-            }
-          : prev,
-      );
+      const result = await enrollPath(path.id);
+      setPendingCourses(result.coursesWithoutAccess?.length ?? 0);
+      // Se recarga la ficha: el acceso a cada curso cambia al apuntarse (los
+      // gratuitos quedan matriculados, los de pago siguen pidiendo compra).
+      setPath(await getPath(slug));
     } finally {
       setEnrolling(false);
     }
@@ -61,6 +89,7 @@ export default function RutaDetailPage() {
     setCancelling(true);
     try {
       await cancelEnrollment(path.id);
+      setPendingCourses(0);
       setPath((prev) => (prev ? { ...prev, enrollment: null } : prev));
       setShowCancelConfirm(false);
     } finally {
@@ -169,6 +198,12 @@ export default function RutaDetailPage() {
         </div>
       )}
 
+      {enrolled && pendingCourses > 0 && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          {t('pathPendingCoursesNotice', { count: pendingCourses })}
+        </div>
+      )}
+
       {enrolled && !isCompleted && (
         <div className="rounded-xl border border-border bg-surface p-4">
           <div className="mb-2 flex justify-between text-sm">
@@ -207,13 +242,25 @@ export default function RutaDetailPage() {
                   </div>
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-medium text-text">
-                      {t('courseNumber', { number: idx + 1 })}
+                      {c.title ?? t('courseNumber', { number: idx + 1 })}
                     </p>
-                    <p className="text-xs text-text-muted">{c.courseId}</p>
+                    <CourseAccessNote
+                      access={c.access ?? null}
+                      purchasable={Boolean(c.slug)}
+                      inPath={Boolean(enrolled)}
+                    />
                   </div>
                   {isLinearBlocked && (
                     <span className="text-xs text-text-muted">{t('lockedChip')}</span>
                   )}
+                  {c.access === 'locked' && c.slug ? (
+                    <Link
+                      href={`/cursos/${c.slug}`}
+                      className="shrink-0 rounded-lg border border-border px-3 py-1.5 text-xs font-semibold text-text hover:bg-border/40"
+                    >
+                      {t('courseHowToGet')}
+                    </Link>
+                  ) : null}
                 </div>
               );
             })}

@@ -16,10 +16,22 @@ export interface LearningPathEnrollmentInfo {
   progressPercent: number;
 }
 
+/**
+ * Acceso del alumno a un curso de la ruta: `enrolled` ya lo tiene, `free` se
+ * le matricula al apuntarse (curso gratuito), `locked` hay que adquirirlo (o
+ * todavía no está publicado). Apuntarse a la ruta no regala cursos de pago.
+ */
+export type LearningPathCourseAccess = 'enrolled' | 'free' | 'locked';
+
 export interface LearningPathCourseEntry {
   id: string;
   courseId: string;
   position: number;
+  /** Solo los trae la ficha del alumno; null si el curso no está publicado. */
+  title?: string | null;
+  slug?: string | null;
+  /** null si no hay alumno al que referirlo. */
+  access?: LearningPathCourseAccess | null;
 }
 
 export interface LearningPath {
@@ -102,12 +114,13 @@ export function restorePath(id: string): Promise<LearningPath> {
   return apiFetch<LearningPath>(`${BASE}/${id}/restore`, { method: 'POST' }, withAuth());
 }
 
-export function enrollPath(id: string): Promise<LearningPathEnrollmentInfo> {
-  return apiFetch<LearningPathEnrollmentInfo>(
-    `${BASE}/${id}/enroll`,
-    { method: 'POST' },
-    withAuth(),
-  );
+export interface LearningPathEnrollResult extends LearningPathEnrollmentInfo {
+  /** Cursos de la ruta a los que el alumno sigue sin acceso (hay que adquirirlos). */
+  coursesWithoutAccess: string[];
+}
+
+export function enrollPath(id: string): Promise<LearningPathEnrollResult> {
+  return apiFetch<LearningPathEnrollResult>(`${BASE}/${id}/enroll`, { method: 'POST' }, withAuth());
 }
 
 export function cancelEnrollment(id: string): Promise<void> {

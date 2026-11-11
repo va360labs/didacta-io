@@ -32,6 +32,8 @@ export {
   type CreateLearningPathDto,
   type UpdateLearningPathDto,
   type LearningPathCourseInput,
+  type LearningPathCourseAccess,
+  type LearningPathEnroller,
 } from './learning-paths.service.js';
 export {
   ScormService,

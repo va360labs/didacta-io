@@ -117,6 +117,7 @@ import { Logger as PinoLogger } from 'nestjs-pino';
 import { AiGatewayService } from '../ai/ai-gateway.service';
 import { runSanctionedGlobalAccess } from '../tenancy/tenant-context.storage';
 import { resolveCoreContractVersion } from '../core-version';
+import { buildCourseSaleChecker } from './course-sale-checker';
 import { ModuleContextFactory } from './module-context.factory';
 import {
   TenantStripeResolverService,
@@ -192,26 +193,17 @@ export class ModuleRegistryService implements OnModuleInit {
 
     const prisma = this.factory.getPrisma() as never;
     this.courses = new CoursesService(prisma, context);
-    // ¿El tenant vende este curso? Un curso a la venta no admite
+    // ¿El tenant cobra por este curso? Un curso por el que se cobra no admite
     // automatrícula: sin esto, el CTA de compra se saltaba con una llamada a
-    // `POST /modules/learning/enroll`. Solo esta capa puede mirar los
-    // catálogos de mod.billing y mod.subscriptions a la vez.
-    const cursoALaVenta: LearningCourseSaleChecker = async (tenantId, courseId) => {
-      const db = this.factory.getPrisma();
-      const [producto, suscripcion] = await Promise.all([
-        db.modBillingProduct.findFirst({
-          where: { tenantId, courseId, active: true },
-          select: { id: true },
-        }),
-        db.modSubscriptionsSubscription.findFirst({
-          where: { tenantId, courseId },
-          select: { id: true },
-        }),
-      ]);
-      return producto !== null || suscripcion !== null;
-    };
+    // `POST /modules/learning/enrollments/me`. Solo esta capa puede mirar a la
+    // vez los catálogos de cobro y los grupos de acceso (ver el fichero).
+    const cursoALaVenta: LearningCourseSaleChecker = buildCourseSaleChecker(() =>
+      this.factory.getPrisma(),
+    );
     this.learning = new LearningService(prisma, context, cursoALaVenta);
-    this.learningPaths = new LearningPathsService(prisma, context);
+    // La ruta de aprendizaje matricula con la regla de `LearningService`: es
+    // lo que impide que apuntarse a una ruta regale sus cursos de pago.
+    this.learningPaths = new LearningPathsService(prisma, context, this.learning);
     this.certificates = new CertificatesService(prisma, context);
     this.assessments = new AssessmentsService(prisma, context);
     this.community = new CommunityService(prisma, context);

@@ -6,12 +6,27 @@
 import type { ModuleContext } from '@didacta/core-kernel';
 import type { PrismaClient } from '@didacta/database';
 import {
+  AlreadyEnrolledError,
+  CourseNotFreeError,
+  CourseNotPublishedError,
   LearningPathAlreadyEnrolledError,
   LearningPathEnrollmentNotFoundError,
   LearningPathNotFoundError,
   LearningPathNotPublishedError,
   LearningPathNoCourseError,
 } from './errors.js';
+import type { LearningService } from './learning.service.js';
+
+/**
+ * Acceso del alumno a un curso de la ruta (ver `courseAccesses`):
+ * - `enrolled`: ya tiene matrícula viva, venga de donde venga;
+ * - `free`: no la tiene, pero el curso es gratuito y puede matricularse solo;
+ * - `locked`: no la tiene y el curso hay que adquirirlo (o no está publicado).
+ */
+export type LearningPathCourseAccess = 'enrolled' | 'free' | 'locked';
+
+/** Lo que `LearningPathsService` necesita del servicio de matrículas. */
+export type LearningPathEnroller = Pick<LearningService, 'enrollSelf' | 'canSelfEnroll'>;
 
 function slugify(text: string): string {
   return text
@@ -45,6 +60,13 @@ export class LearningPathsService {
   constructor(
     private readonly prisma: PrismaClient,
     private readonly ctx: ModuleContext,
+    /**
+     * Matricula en los cursos gratuitos con la MISMA regla que la
+     * automatrícula del alumno (`LearningService.enrollSelf`). Es obligatorio
+     * a propósito: sin él, este servicio volvería a decidir por su cuenta
+     * quién entra en un curso.
+     */
+    private readonly learning: LearningPathEnroller,
   ) {}
 
   async listPaths(tenantId: string, userId?: string) {
@@ -85,6 +107,20 @@ export class LearningPathsService {
       }
     }
 
+    const courseIds = path.courses.map((c) => c.courseId);
+    const [info, accesses] = await Promise.all([
+      courseIds.length > 0
+        ? this.prisma.modCoursesCourse.findMany({
+            // Solo PUBLISHED: el título de un borrador metido en la ruta no es
+            // asunto del alumno. Sin fila, la ficha pinta «Curso N».
+            where: { tenantId, id: { in: courseIds }, status: 'PUBLISHED', deletedAt: null },
+            select: { id: true, slug: true, title: true },
+          })
+        : [],
+      userId ? this.courseAccesses(tenantId, userId, path.courses) : null,
+    ]);
+    const byId = new Map(info.map((c) => [c.id, c]));
+
     return {
       ...this.formatPath(path, enrollment),
       nextStep,
@@ -92,6 +128,10 @@ export class LearningPathsService {
         id: c.id,
         courseId: c.courseId,
         position: c.position,
+        title: byId.get(c.courseId)?.title ?? null,
+        slug: byId.get(c.courseId)?.slug ?? null,
+        // null si no hay alumno (p. ej. la vista sin sesión de un test).
+        access: accesses?.get(c.courseId) ?? null,
       })),
     };
   }
@@ -209,26 +249,79 @@ export class LearningPathsService {
     });
     if (existing && existing.status === 'ACTIVE') throw new LearningPathAlreadyEnrolledError();
 
-    return this.prisma.$transaction(async (tx) => {
-      const enrollment = await tx.modLearningPathEnrollment.upsert({
-        where: { tenantId_pathId_userId: { tenantId, pathId, userId } },
-        create: { tenantId, pathId, userId, status: 'ACTIVE', progressPercent: 0 },
-        update: { status: 'ACTIVE', completedAt: null },
-      });
-
-      for (const { courseId } of path.courses) {
-        const existingCourseEnrollment = await tx.modLearningEnrollment.findUnique({
-          where: { tenantId_userId_courseId: { tenantId, userId, courseId } },
-        });
-        if (!existingCourseEnrollment) {
-          await tx.modLearningEnrollment.create({
-            data: { tenantId, userId, courseId, status: 'ACTIVE', source: 'ADMIN' },
-          });
+    // Apuntarse a la ruta NO da acceso a sus cursos. Antes se creaba aquí una
+    // matrícula `ADMIN` en cada uno sin mirar si el curso se vende: cualquier
+    // alumno con sesión se llevaba gratis los cursos de pago de la ruta con
+    // una sola llamada. Ahora cada curso exige lo suyo:
+    //   - si ya tiene acceso (compra, membresía, grupo, invitación…) no se toca;
+    //   - si es gratuito se matricula con la regla de la automatrícula;
+    //   - si es de pago se queda fuera y la ficha de la ruta lo enseña como tal.
+    // La matrícula a mano del equipo (`LearningService.enrollByAdmin`) no pasa
+    // por aquí y sigue pudiendo con cualquier curso.
+    const accesses = await this.courseAccesses(tenantId, userId, path.courses);
+    const coursesWithoutAccess: string[] = [];
+    for (const { courseId } of path.courses) {
+      const access = accesses.get(courseId);
+      if (access === 'enrolled') continue;
+      if (access === 'free') {
+        try {
+          await this.learning.enrollSelf(tenantId, userId, courseId);
+          continue;
+        } catch (err) {
+          // Carrera con otra matrícula: ya tiene acceso.
+          if (err instanceof AlreadyEnrolledError) continue;
+          // Dejó de ser gratuito o se despublicó entre la consulta y aquí:
+          // queda pendiente, igual que un curso de pago. Cualquier otro error
+          // sí es un fallo y se propaga.
+          if (!(err instanceof CourseNotFreeError || err instanceof CourseNotPublishedError)) {
+            throw err;
+          }
         }
       }
+      coursesWithoutAccess.push(courseId);
+    }
 
-      return enrollment;
+    // La inscripción en la ruta va DESPUÉS de sus cursos: si una matrícula
+    // falla de verdad, el alumno no queda «ya inscrito» en una ruta a medias y
+    // puede reintentar (los cursos que sí entraron ya constan como acceso).
+    const enrollment = await this.prisma.modLearningPathEnrollment.upsert({
+      where: { tenantId_pathId_userId: { tenantId, pathId, userId } },
+      create: { tenantId, pathId, userId, status: 'ACTIVE', progressPercent: 0 },
+      update: { status: 'ACTIVE', completedAt: null },
     });
+
+    return { ...enrollment, coursesWithoutAccess };
+  }
+
+  /**
+   * Acceso del alumno a cada curso de la ruta. Una matrícula PAUSED (impago)
+   * o CANCELLED no cuenta como acceso: quien dejó de pagar no lo recupera por
+   * apuntarse a una ruta.
+   */
+  private async courseAccesses(
+    tenantId: string,
+    userId: string,
+    courses: Array<{ courseId: string }>,
+  ): Promise<Map<string, LearningPathCourseAccess>> {
+    const result = new Map<string, LearningPathCourseAccess>();
+    const courseIds = courses.map((c) => c.courseId);
+    if (courseIds.length === 0) return result;
+    const live = await this.prisma.modLearningEnrollment.findMany({
+      where: {
+        tenantId,
+        userId,
+        courseId: { in: courseIds },
+        status: { in: ['ACTIVE', 'COMPLETED'] },
+      },
+      select: { courseId: true },
+    });
+    const enrolled = new Set(live.map((e) => e.courseId));
+    for (const courseId of courseIds) {
+      if (enrolled.has(courseId)) result.set(courseId, 'enrolled');
+      else if (await this.learning.canSelfEnroll(tenantId, courseId)) result.set(courseId, 'free');
+      else result.set(courseId, 'locked');
+    }
+    return result;
   }
 
   async cancelEnrollment(tenantId: string, userId: string, pathId: string) {

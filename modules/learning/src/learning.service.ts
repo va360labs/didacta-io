@@ -154,9 +154,11 @@ export interface EnrollmentProgressDetail {
 }
 
 /**
- * ¿El tenant ha puesto precio a este curso dentro del aula? Lo implementa
- * apps/api, la única capa que puede mirar los catálogos de los dos módulos de
- * cobro sin saltarse el contrato modular.
+ * ¿El tenant cobra por este curso dentro del aula? Lo implementa apps/api
+ * (`course-sale-checker.ts`), la única capa que puede mirar a la vez los
+ * catálogos de cobro y los grupos de acceso sin saltarse el contrato modular:
+ * precio propio, suscripción al curso, o curso que se entrega con la membresía
+ * o con un tier de pago.
  */
 export type CourseSaleChecker = (tenantId: string, courseId: string) => Promise<boolean>;
 
@@ -166,7 +168,8 @@ export class LearningService {
     private readonly ctx: ModuleContext,
     /**
      * ¿Este curso está a la venta dentro del aula? Lo resuelve la capa de
-     * composición leyendo los catálogos de mod.billing / mod.subscriptions.
+     * composición leyendo los catálogos de mod.billing / mod.subscriptions y
+     * los grupos de acceso que se conceden a cambio de un pago.
      * Por defecto responde que no: sin catálogo cableado, el único gate que
      * queda es `externalPurchaseUrl`, y un despliegue que no vende cursos
      * (el caso de la mayoría) sigue permitiendo la automatrícula.
@@ -206,17 +209,19 @@ export class LearningService {
    * cualquier usuario autenticado se matriculaba gratis en un curso de pago.
    * Un curso está en venta si tiene página de compra externa
    * (`externalPurchaseUrl`, cuya sola presencia hace que la ficha pinte
-   * "Comprar") o si el tenant le ha puesto precio dentro del aula — eso último
-   * lo resuelve la capa de composición, que sí puede mirar mod.billing y
-   * mod.subscriptions sin romper el contrato modular.
+   * "Comprar") o si el tenant cobra por él dentro del aula (precio propio,
+   * suscripción, o curso entregado con la membresía o con un tier de pago) —
+   * eso último lo resuelve la capa de composición, que sí puede mirar los
+   * catálogos de cobro y los grupos de acceso sin romper el contrato modular.
    */
   async enrollSelf(tenantId: string, userId: string, courseId: string) {
     const course = await this.prisma.modCoursesCourse.findFirst({
       where: { tenantId, id: courseId, deletedAt: null },
       select: { externalPurchaseUrl: true },
     });
-    if (course?.externalPurchaseUrl) throw new CourseNotFreeError();
-    if (await this.courseIsSold(tenantId, courseId)) throw new CourseNotFreeError();
+    // Un curso que no existe NO se resuelve aquí: si nadie lo vende sigue
+    // hasta `createEnrollment`, que es quien responde «no publicado».
+    if (!(await this.isFreeCourse(tenantId, courseId, course))) throw new CourseNotFreeError();
 
     return this.createEnrollment({
       tenantId,
@@ -225,6 +230,40 @@ export class LearningService {
       courseId,
       source: 'ADMIN',
     });
+  }
+
+  /**
+   * ¿Puede el alumno matricularse solo en este curso? Es la MISMA regla que
+   * `enrollSelf`, para quien necesita saberlo sin matricular: apuntarse a una
+   * ruta de aprendizaje solo matricula en los cursos que pasan por aquí, y su
+   * ficha pinta cada curso como gratuito o como «hay que adquirirlo».
+   *
+   * Un curso que no existe, está borrado o no está publicado responde
+   * `false`: `enrollSelf` lo rechazaría con «no publicado», así que no hay
+   * nada en lo que matricularse.
+   */
+  async canSelfEnroll(tenantId: string, courseId: string): Promise<boolean> {
+    const course = await this.prisma.modCoursesCourse.findFirst({
+      where: { tenantId, id: courseId, deletedAt: null },
+      select: { externalPurchaseUrl: true, status: true },
+    });
+    if (!course || course.status !== 'PUBLISHED') return false;
+    return this.isFreeCourse(tenantId, courseId, course);
+  }
+
+  /**
+   * La única definición de «curso gratuito» del módulo. Que `enrollSelf` y
+   * `canSelfEnroll` la compartan es lo que impide que vuelva a haber dos
+   * caminos con dos criterios: la ruta de aprendizaje matriculaba por su
+   * cuenta, sin mirar nada, y regalaba los cursos de pago.
+   */
+  private async isFreeCourse(
+    tenantId: string,
+    courseId: string,
+    course: { externalPurchaseUrl: string | null } | null,
+  ): Promise<boolean> {
+    if (course?.externalPurchaseUrl) return false;
+    return !(await this.courseIsSold(tenantId, courseId));
   }
 
   /**
