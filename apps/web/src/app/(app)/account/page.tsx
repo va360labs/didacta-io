@@ -75,8 +75,9 @@ function getInitials(name: string | null, email: string): string {
 
 /**
  * Etiqueta del idioma para la ficha de solo lectura. Normaliza antes de buscar:
- * un perfil guardado con un tag que ya no se ofrece (`pt-BR`) mostraría si no
- * el tag crudo, y encima anunciaría un idioma que la UI no está sirviendo.
+ * un perfil guardado con un tag que el selector no ofrece (`fr-FR` que entró
+ * por SCIM) mostraría si no el tag crudo, y encima anunciaría un idioma que la
+ * UI no está sirviendo.
  */
 function localeLabel(value: string): string {
   const normalized = toSupportedLocale(value);
@@ -136,11 +137,11 @@ export default function CuentaPage() {
     setDepartment(p.department ?? '');
     setLocation(p.location ?? '');
     setBio(p.bio ?? '');
-    // Normalizado, no crudo: en base de datos hay perfiles con locales que el
-    // selector ya no ofrece (`pt-BR` de antes de su retirada, o cualquier tag
-    // que entre por SCIM). Con el valor crudo el `<select>` no casaría con
-    // ninguna opción y quedaría en blanco. Degradado al mismo idioma que la UI
-    // está sirviendo de verdad.
+    // Normalizado, no crudo: en base de datos puede haber perfiles con locales
+    // que el selector no ofrece (cualquier tag que entre por SCIM: `fr-FR`,
+    // `pt-PT`…). Con el valor crudo el `<select>` no casaría con ninguna opción
+    // y quedaría en blanco. Degradado al mismo idioma que la UI está sirviendo
+    // de verdad.
     setLocale(toSupportedLocale(p.locale));
     setTimezone(p.timezone);
     setAvatarUrl(p.avatarUrl ?? '');
