@@ -1,5 +1,11 @@
 {
   "durationMinutes": "{minutes, plural, other {# min}}",
   "durationHours": "{hours, plural, other {# h}}",
-  "durationHoursMinutes": "{hours} h {minutes} min"
+  "durationHoursMinutes": "{hours} h {minutes} min",
+  "tenantSuspended": {
+    "metaTitle": "Aula suspendida",
+    "title": "Esta aula está suspendida",
+    "body": "Ahora mismo no se puede acceder a ella.",
+    "owner": "Si eres su responsable, revisa tu suscripción."
+  }
 }

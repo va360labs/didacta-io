@@ -4,7 +4,14 @@
  */
 
 import { NextResponse, type NextRequest } from 'next/server';
+import { LOCALE_COOKIE } from './i18n/config';
 import { SITE_PATH_PREFIX } from './lib/site-routing';
+import {
+  pickSuspendedCatalog,
+  renderTenantSuspendedPage,
+  TENANT_SUSPENDED_STATUS,
+  tenantSuspendedHeaders,
+} from './lib/tenant-suspended-page';
 
 /**
  * Dos puertas, en este orden.
@@ -30,6 +37,13 @@ import { SITE_PATH_PREFIX } from './lib/site-routing';
  *    No se puede arreglar en Traefik: el comodín es justo lo que hace que un
  *    aula recién aprovisionada funcione sin tocar el proxy. La capa correcta es
  *    esta.
+ *
+ *    Dentro de esta puerta hay un tercer caso: el host de un tenant que existe
+ *    pero está SUSPENDIDO. Antes caía en el mismo 404 que un host desconocido,
+ *    y al cliente con la suscripción vencida le parecía que su dominio estaba
+ *    mal o que el producto se había caído. Ahora recibe una página propia que
+ *    se lo dice (`tenant-suspended-page.ts`), en CUALQUIER ruta — `/signin`
+ *    incluida, así que desde ahí no se puede ni intentar entrar.
  */
 
 const API_INTERNAL_URL = process.env.API_INTERNAL_URL ?? 'http://localhost:4000';
@@ -44,8 +58,11 @@ const ALLOW_UNKNOWN_HOSTS = process.env['DIDACTA_ALLOW_UNKNOWN_HOSTS'] === 'true
 
 let initializedCache = false;
 
-/** host → (¿es de algún tenant?, cuándo caduca la respuesta). */
-const hostCache = new Map<string, { known: boolean; surface: HostSurface; expiresAt: number }>();
+/** host → (¿es de algún tenant?, ¿está suspendido?, cuándo caduca la respuesta). */
+const hostCache = new Map<
+  string,
+  { known: boolean; surface: HostSurface; suspended: boolean; expiresAt: number }
+>();
 
 /// Qué sirve un dominio. `null` = no lo sabemos (host siempre válido, o la
 /// API no contestó): en ese caso se sirve el aula, que es lo que ya había.
@@ -58,6 +75,10 @@ type HostSurface = 'APP' | 'SITE' | null;
  * aprovisionada por el plano de control estrena hostname, y si su primer
  * visitante se lleva un 404 cacheado cinco minutos, el cliente estrena su aula
  * viendo que no existe.
+ *
+ * «Suspendida» caduca igual de rápido que el «no», por el mismo motivo: quien
+ * acaba de regularizar su suscripción no puede seguir viendo el aviso cinco
+ * minutos más.
  */
 const TTL_CONOCIDO_MS = 5 * 60_000;
 const TTL_DESCONOCIDO_MS = 30_000;
@@ -96,11 +117,13 @@ function esHostSiempreValido(hostname: string): boolean {
   return false;
 }
 
-async function resolverHost(host: string): Promise<{ known: boolean; surface: HostSurface }> {
+async function resolverHost(
+  host: string,
+): Promise<{ known: boolean; surface: HostSurface; suspended: boolean }> {
   const ahora = Date.now();
   const cacheado = hostCache.get(host);
   if (cacheado && cacheado.expiresAt > ahora) {
-    return { known: cacheado.known, surface: cacheado.surface };
+    return { known: cacheado.known, surface: cacheado.surface, suspended: cacheado.suspended };
   }
 
   try {
@@ -115,18 +138,27 @@ async function resolverHost(host: string): Promise<{ known: boolean; surface: Ho
     // La API no contesta lo que esperábamos: dejar pasar. Un fallo de la API no
     // debe convertirse en un 404 global — el modo degradado tiene que ser
     // «como antes», no «el producto no existe».
-    if (!res.ok) return { known: true, surface: null };
-    const data = (await res.json()) as { known?: boolean; surface?: HostSurface };
+    if (!res.ok) return { known: true, surface: null, suspended: false };
+    const data = (await res.json()) as {
+      known?: boolean;
+      surface?: HostSurface;
+      suspended?: boolean;
+    };
     const known = data.known === true;
     const surface = data.surface === 'SITE' ? 'SITE' : data.surface === 'APP' ? 'APP' : null;
+    // Solo un `true` explícito y solo si la API NO lo da por conocido: una API
+    // anterior a este campo no lo manda (y se sigue contestando el 404 de
+    // antes), y un aula en marcha nunca puede acabar tapada por este aviso.
+    const suspended = !known && data.suspended === true;
     hostCache.set(host, {
       known,
       surface,
+      suspended,
       expiresAt: ahora + (known ? TTL_CONOCIDO_MS : TTL_DESCONOCIDO_MS),
     });
-    return { known, surface };
+    return { known, surface, suspended };
   } catch {
-    return { known: true, surface: null };
+    return { known: true, surface: null, suspended: false };
   }
 }
 
@@ -161,7 +193,21 @@ export async function middleware(req: NextRequest) {
   const hostname = host.startsWith('[') ? host : (host.split(':')[0] ?? host);
   if (esHostSiempreValido(hostname)) return NextResponse.next();
 
-  const { known, surface } = await resolverHost(host);
+  const { known, surface, suspended } = await resolverHost(host);
+  if (suspended) {
+    // El aula existe pero está suspendida. Se contesta aquí, con un documento
+    // autocontenido, en vez de dejar pasar a la app: no se sirve el shell, ni
+    // el login, ni nada del tenant. Lo único que entra en la página es el
+    // idioma de quien la pide.
+    const catalog = pickSuspendedCatalog(
+      req.cookies.get(LOCALE_COOKIE)?.value,
+      req.headers.get('accept-language'),
+    );
+    return new NextResponse(renderTenantSuspendedPage(catalog), {
+      status: TENANT_SUSPENDED_STATUS,
+      headers: tenantSuspendedHeaders(catalog),
+    });
+  }
   if (known) {
     // Reparto por dominio: el mismo despliegue sirve el aula y el sitio
     // público, y lo único que los distingue es por dónde entró la petición.

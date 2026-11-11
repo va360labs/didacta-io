@@ -12,6 +12,115 @@ describe('TenantResolverService', () => {
     return { service, mockPrisma };
   }
 
+  /**
+   * Un tenant suspendido NO es un host desconocido.
+   *
+   * Antes las dos cosas eran `null` y la web contestaba «Not Found» en el aula
+   * de un cliente con la suscripción vencida. `resolveHostStatus` las separa;
+   * `resolveByHost` sigue devolviendo solo tenants ACTIVOS, que es lo que
+   * impide iniciar sesión en uno suspendido.
+   */
+  describe('resolveHostStatus() / resolveByHost()', () => {
+    const domainOf = (status: 'ACTIVE' | 'SUSPENDED' | 'ARCHIVED') => ({
+      hostname: 'aula.academia.com',
+      surface: 'APP',
+      tenant: { id: 'tenant-1', slug: 'academia', name: 'Academia Ejemplo', status },
+    });
+    const findFirst = (mockPrisma: PrismaService) =>
+      mockPrisma.tenantDomain.findFirst as ReturnType<typeof vi.fn>;
+
+    it('tenant ACTIVO → active, con el tenant', async () => {
+      const { service, mockPrisma } = createMocks();
+      findFirst(mockPrisma).mockResolvedValue(domainOf('ACTIVE'));
+
+      expect(await service.resolveHostStatus('aula.academia.com')).toEqual({
+        status: 'active',
+        tenant: {
+          id: 'tenant-1',
+          slug: 'academia',
+          name: 'Academia Ejemplo',
+          matchedBy: 'hostname',
+          hostname: 'aula.academia.com',
+          surface: 'APP',
+        },
+      });
+      expect((await service.resolveByHost('aula.academia.com'))?.id).toBe('tenant-1');
+    });
+
+    it('tenant SUSPENDIDO → suspended, y NADA más: ni id, ni slug, ni nombre', async () => {
+      const { service, mockPrisma } = createMocks();
+      findFirst(mockPrisma).mockResolvedValue(domainOf('SUSPENDED'));
+
+      const resolution = await service.resolveHostStatus('aula.academia.com');
+
+      expect(resolution).toEqual({ status: 'suspended' });
+      expect(JSON.stringify(resolution)).not.toMatch(/tenant-1|academia|Academia Ejemplo/);
+    });
+
+    it('tenant SUSPENDIDO → resolveByHost sigue dando null (no se puede iniciar sesión en él)', async () => {
+      const { service, mockPrisma } = createMocks();
+      findFirst(mockPrisma).mockResolvedValue(domainOf('SUSPENDED'));
+
+      expect(await service.resolveByHost('aula.academia.com')).toBeNull();
+      expect(await service.resolveByRequest({ headers: { host: 'aula.academia.com' } })).toBeNull();
+    });
+
+    it('host que no es de nadie → unknown (el 404 de siempre), no suspended', async () => {
+      const { service, mockPrisma } = createMocks();
+      findFirst(mockPrisma).mockResolvedValue(null);
+
+      expect(await service.resolveHostStatus('zzz-random.didacta.io')).toEqual({
+        status: 'unknown',
+      });
+      expect(await service.resolveByHost('zzz-random.didacta.io')).toBeNull();
+    });
+
+    it('tenant ARCHIVADO → unknown: ahí ya no hay nada que reactivar', async () => {
+      const { service, mockPrisma } = createMocks();
+      findFirst(mockPrisma).mockResolvedValue(domainOf('ARCHIVED'));
+
+      expect(await service.resolveHostStatus('aula.academia.com')).toEqual({ status: 'unknown' });
+      expect(await service.resolveByHost('aula.academia.com')).toBeNull();
+    });
+
+    it('sin host → unknown, sin consultar la BD', async () => {
+      const { service, mockPrisma } = createMocks();
+
+      expect(await service.resolveHostStatus(undefined)).toEqual({ status: 'unknown' });
+      expect(await service.resolveHostStatus('   ')).toEqual({ status: 'unknown' });
+      expect(findFirst(mockPrisma)).not.toHaveBeenCalled();
+    });
+
+    it('solo mira dominios VERIFICADOS, con el host normalizado', async () => {
+      // Un dominio sin verificar de un tenant suspendido no puede servir para
+      // sondear qué aulas existen: la consulta lo deja fuera antes de mirar el
+      // estado.
+      const { service, mockPrisma } = createMocks();
+      findFirst(mockPrisma).mockResolvedValue(null);
+
+      await service.resolveHostStatus('Aula.Academia.COM:443');
+
+      expect(findFirst(mockPrisma)).toHaveBeenCalledWith({
+        where: { hostname: 'aula.academia.com', isVerified: true },
+        include: { tenant: true },
+      });
+    });
+
+    it('resolveHostStatusByRequest pregunta por el host PÚBLICO, no por el del salto interno', async () => {
+      const { service, mockPrisma } = createMocks();
+      findFirst(mockPrisma).mockResolvedValue(domainOf('SUSPENDED'));
+
+      const resolution = await service.resolveHostStatusByRequest({
+        headers: { host: 'localhost:4000', 'x-forwarded-host': 'aula.academia.com' },
+      });
+
+      expect(resolution).toEqual({ status: 'suspended' });
+      expect(findFirst(mockPrisma)).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { hostname: 'aula.academia.com', isVerified: true } }),
+      );
+    });
+  });
+
   describe('resolvePrimaryDomain()', () => {
     it('devuelve el hostname del dominio primario verificado', async () => {
       const { service, mockPrisma } = createMocks();
