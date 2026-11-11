@@ -100,9 +100,9 @@
     "emptyHtml": "Esta leitura está vazia.",
     "emptyPdf": "Falta o PDF. Peça ao instrutor para enviá-lo.",
     "emptyText": "Esta aula de texto está vazia.",
-    "previewQuiz": "Pré-visualização: os questionários são respondidos após a matrícula no curso.",
+    "previewQuiz": "Prévia: os questionários são respondidos após a matrícula no curso.",
     "emptyQuiz": "Esta aula está marcada como Quiz, mas o instrutor ainda não vinculou as perguntas.",
-    "previewScorm": "Pré-visualização: o conteúdo SCORM é executado após a matrícula no curso.",
+    "previewScorm": "Prévia: o conteúdo SCORM é executado após a matrícula no curso.",
     "unsupportedType": "O tipo de aula \"{type}\" ainda não é suportado.",
     "scormLoadError": "Não foi possível carregar o pacote SCORM. Peça ao instrutor para enviá-lo."
   },

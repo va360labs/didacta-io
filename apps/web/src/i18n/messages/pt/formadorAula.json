@@ -329,7 +329,7 @@
     "saving": "Salvando…",
     "saveChanges": "Salvar alterações",
     "createTemplate": "Criar modelo",
-    "previewPdf": "Pré-visualização em PDF",
+    "previewPdf": "Prévia em PDF",
     "cancel": "Cancelar",
     "emptyTitle": "Ainda não há modelos",
     "emptyHint": "O primeiro que você marcar como <strong>padrão</strong> será aplicado a todos os cursos do tenant que não tenham um atribuído.",

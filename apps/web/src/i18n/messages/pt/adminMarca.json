@@ -163,7 +163,7 @@
     "saveError": "Não foi possível salvar a configuração de storage.",
     "saved": "Salvo com sucesso.",
     "saving": "Salvando…",
-    "saveButton": "Salvar configuração",
+    "saveButton": "Salvar configurações",
     "activeNote": "<strong>Ativo:</strong> os uploads de imagens e os arquivos do tenant já usam esta configuração quando o driver é <code>s3</code>. Se você escolher disco local ou não preencher o bucket, o servidor recorre ao adapter global do env."
   },
   "tenantStatus": {

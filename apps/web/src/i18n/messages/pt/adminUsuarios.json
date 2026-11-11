@@ -65,7 +65,7 @@
     "inspector": "Os inspetores acompanham os grupos bonificados que lhes forem concedidos: percorrem o curso e consultam o acompanhamento, sem poder modificar nada."
   },
   "invite": {
-    "back": "← Voltar à lista",
+    "back": "← Voltar para a lista",
     "title": "Convidar pessoa",
     "subtitle": "Enviaremos um e-mail com um link para a pessoa definir a senha e entrar.",
     "cardTitle": "Dados do novo usuário",
@@ -84,7 +84,7 @@
     "submit": "Enviar convite"
   },
   "import": {
-    "back": "← Voltar à lista",
+    "back": "← Voltar para a lista",
     "title": "Importar CSV",
     "subtitle": "Cadastre várias pessoas de uma vez. Todas recebem a mesma função e (se você escolher um) o mesmo grupo de acesso; cada uma recebe seu próprio e-mail para definir a senha.",
     "cardTitle": "Arquivo e dados comuns",
