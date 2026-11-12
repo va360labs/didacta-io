@@ -655,7 +655,7 @@ describe('Disputas', () => {
       disputeOpen: false,
       disputeOutcome: 'won',
       reinstatedAmount: 5000,
-      canRefund: true,
+      canRefund: false,
     });
   });
 

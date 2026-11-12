@@ -260,7 +260,9 @@ export class PayoutsReportsService {
           row.gross !== null &&
           row.transferAmount !== null &&
           row.refundedAmount < row.gross &&
-          !disputed.has(row.id),
+          // Con disputa (abierta o decidida) Stripe no deja reembolsar el cargo.
+          !disputed.has(row.id) &&
+          !outcomes.has(row.id),
         transferredAt: row.transferredAt?.toISOString() ?? null,
         availableOn: row.availableOn?.toISOString() ?? null,
         estimatedArrival: arrival ? arrival.toISOString().slice(0, 10) : null,

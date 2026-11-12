@@ -217,10 +217,7 @@ export function PayoutsSalesSection({
                     </th>
                     <th className="py-2 pr-3 text-right font-medium">{t('colYouGet')}</th>
                     <th className="py-2 pr-3 font-medium">{t('colArrives')}</th>
-                    <th className="py-2 pr-3 font-medium">{t('colStatus')}</th>
-                    <th className="py-2 font-medium">
-                      <span className="sr-only">{t('refundCta')}</span>
-                    </th>
+                    <th className="py-2 font-medium">{t('colStatus')}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -262,20 +259,20 @@ export function PayoutsSalesSection({
                         <td className="whitespace-nowrap py-3 pr-3 text-text-muted">
                           {row.arrives}
                         </td>
-                        <td className="min-w-[8.5rem] py-3 pr-3">
+                        <td className="min-w-[8.5rem] py-3">
                           <Badge
                             variant={BADGE_BY_TONE[row.status.tone]}
                             className="whitespace-normal text-left leading-snug"
                           >
                             {t(`status.${row.status.key}`)}
                           </Badge>
-                        </td>
-                        <td className="py-3 text-right">
+                          {/* En la misma celda: la tabla cabe a 1280 px con el menú abierto. */}
                           {sale.canRefund ? (
                             <Button
                               type="button"
                               variant="secondary"
                               size="sm"
+                              className="mt-2 block"
                               onClick={() => setRefunding(sale)}
                               data-testid="refund-open"
                             >
