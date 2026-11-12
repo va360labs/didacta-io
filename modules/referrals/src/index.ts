@@ -25,6 +25,8 @@ export {
   REFERRAL_SCOPES,
   purchaseInvoiceRef,
   utcDay,
+  CREDIT_MAX_SHARE_BPS,
+  creditIdempotencyKey,
 } from './referrals.service.js';
 export type {
   ReferralsEventPublisher,
@@ -38,6 +40,8 @@ export type {
   AccrueResult,
   PurchaseInput,
   PurchaseResult,
+  ReferralsCreditPort,
+  MemberCreditView,
 } from './referrals.service.js';
 export { deriveInviteeState, initialsOf } from './invitees.js';
 export type { InviteeState, InviteeFacts } from './invitees.js';
@@ -49,6 +53,10 @@ export {
   ReferralsCommissionStateError,
   ReferralsPayoutValidationError,
   ReferralsConfigValidationError,
+  ReferralsCreditDisabledError,
+  ReferralsCreditNothingError,
+  ReferralsCreditUnavailableError,
+  ReferralsCreditFailedError,
 } from './errors.js';
 
 export function buildReferralsModule(_service: ReferralsService): DidactaModule {

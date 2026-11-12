@@ -1,12 +1,18 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import {
   ReferralsService,
+  creditIdempotencyKey,
   purchaseInvoiceRef,
   utcDay,
+  type ReferralsCreditPort,
   type ReferralsEventPublisher,
 } from '../src/referrals.service.js';
 import {
   ReferralsCommissionStateError,
+  ReferralsCreditDisabledError,
+  ReferralsCreditFailedError,
+  ReferralsCreditNothingError,
+  ReferralsCreditUnavailableError,
   ReferralsMembershipRequiredError,
   ReferralsPayoutValidationError,
   ReferralsProgramInactiveError,
@@ -204,6 +210,8 @@ class MockPrisma {
         if (w['referralId'] && c['referralId'] !== w['referralId']) return false;
         const idIn = (w['id'] as Row | undefined)?.['in'] as string[] | undefined;
         if (idIn && !idIn.includes(c['id'] as string)) return false;
+        if ('payoutId' in w && w['payoutId'] === null && c['payoutId'] != null) return false;
+        if (w['currency'] && c['currency'] !== w['currency']) return false;
         const approveAfter = (w['approveAfter'] as Row | undefined)?.['lte'] as Date | undefined;
         if (approveAfter && (c['approveAfter'] as Date) > approveAfter) return false;
         return true;
@@ -235,6 +243,7 @@ class MockPrisma {
         if (idIn && !idIn.includes(c['id'] as string)) return false;
         if (!idIn && w['id'] && c['id'] !== w['id']) return false;
         if (w['tenantId'] && c['tenantId'] !== w['tenantId']) return false;
+        if ('payoutId' in w && w['payoutId'] === null && c['payoutId'] != null) return false;
         const status = w['status'];
         if (status) {
           const statusIn =
@@ -276,9 +285,48 @@ class MockPrisma {
 
   modReferralsPayout = {
     create: async ({ data }: never) => {
-      const row = { id: nextId('payout'), createdAt: new Date(), ...(data as Row) };
+      const d = data as Row;
+      // Como el índice parcial: una CREDIT PENDING por alumno y aula.
+      if (
+        d['method'] === 'CREDIT' &&
+        d['status'] === 'PENDING' &&
+        this.payouts.some(
+          (p) =>
+            p['tenantId'] === d['tenantId'] &&
+            p['referrerUserId'] === d['referrerUserId'] &&
+            p['method'] === 'CREDIT' &&
+            p['status'] === 'PENDING',
+        )
+      ) {
+        throw uniqueViolation();
+      }
+      const row = {
+        id: nextId('payout'),
+        createdAt: new Date(),
+        method: 'CASH',
+        status: 'DONE',
+        stripeCustomerId: null,
+        ...d,
+      };
       this.payouts.push(row);
       return row;
+    },
+    findFirst: async ({ where }: never) => {
+      const w = where as Row;
+      const row = this.payouts.find((p) => Object.entries(w).every(([k, v]) => p[k] === v)) ?? null;
+      if (!row) return null;
+      return {
+        ...row,
+        commissions: this.commissions
+          .filter((c) => c['payoutId'] === row['id'])
+          .map((c) => ({ id: c['id'] })),
+      };
+    },
+    updateMany: async ({ where, data }: never) => {
+      const w = where as Row;
+      const targets = this.payouts.filter((p) => Object.entries(w).every(([k, v]) => p[k] === v));
+      for (const t of targets) Object.assign(t, data as Row);
+      return { count: targets.length };
     },
     findMany: async ({ where }: never) => {
       const w = where as Row;
@@ -292,13 +340,17 @@ class MockPrisma {
     findFirst: async ({ where }: never) => {
       const w = where as Row;
       const statuses = ((w['status'] as Row)?.['in'] as string[]) ?? [];
+      const customerPrefix = (w['stripeCustomerId'] as Row | undefined)?.['startsWith'] as
+        | string
+        | undefined;
       return (
         this.subscriptions.find(
           (s) =>
             s['tenantId'] === w['tenantId'] &&
             s['userId'] === w['userId'] &&
             s['planId'] != null &&
-            statuses.includes(s['status'] as string),
+            statuses.includes(s['status'] as string) &&
+            (!customerPrefix || String(s['stripeCustomerId'] ?? '').startsWith(customerPrefix)),
         ) ?? null
       );
     },
@@ -332,7 +384,7 @@ function buildPublisher(): { publisher: ReferralsEventPublisher; events: Publish
 const TENANT = 'tenant-1';
 const emails = new Map<string, string>();
 
-function build(overrides: { config?: Row } = {}) {
+function build(overrides: { config?: Row; creditPort?: ReferralsCreditPort } = {}) {
   const prisma = new MockPrisma();
   if (overrides.config !== null) {
     prisma.configs.push({
@@ -346,6 +398,7 @@ function build(overrides: { config?: Row } = {}) {
       minPayoutCents: 0,
       requireActiveMembership: false,
       memberCopy: null,
+      allowCreditRedemption: true,
       ...(overrides.config ?? {}),
     });
   }
@@ -354,6 +407,7 @@ function build(overrides: { config?: Row } = {}) {
     prisma as never,
     publisher,
     async (_tenantId, userId) => emails.get(userId) ?? null,
+    overrides.creditPort ?? null,
   );
   return { prisma, service, events };
 }
@@ -1073,6 +1127,267 @@ describe('memberStats', () => {
     expect(stats.totals.pendingCents).toBe(1197);
     expect(stats.totals.paidCents).toBe(0);
     expect(stats.commissions).toHaveLength(1);
+  });
+});
+
+// ============================================================================
+// Descuento en la cuota (saldo de cliente de Stripe)
+// ============================================================================
+
+/** Doble del saldo de cliente: idempotente por clave, como Stripe. */
+function fakeCreditPort(opts: { balanceCents?: number; failTimes?: number } = {}) {
+  const balances = new Map<string, number>();
+  const byKey = new Map<string, { id: string; amountCents: number }>();
+  const calls: Array<{ tenantId: string; customerId: string; amountCents: number; key: string }> =
+    [];
+  let failures = opts.failTimes ?? 0;
+  let seq = 0;
+  const port: ReferralsCreditPort = {
+    retrieveBalance: async (_tenantId, customerId) => ({
+      balanceCents: balances.get(customerId) ?? opts.balanceCents ?? 0,
+      currency: 'eur',
+    }),
+    credit: async (tenantId, p) => {
+      calls.push({
+        tenantId,
+        customerId: p.customerId,
+        amountCents: p.amountCents,
+        key: p.idempotencyKey,
+      });
+      if (failures > 0) {
+        failures -= 1;
+        throw new Error('stripe 500');
+      }
+      const done = byKey.get(p.idempotencyKey);
+      if (done) return { id: done.id };
+      seq += 1;
+      const tx = { id: `cbtxn_${seq}`, amountCents: p.amountCents };
+      byKey.set(p.idempotencyKey, tx);
+      balances.set(
+        p.customerId,
+        (balances.get(p.customerId) ?? opts.balanceCents ?? 0) - p.amountCents,
+      );
+      return { id: tx.id };
+    },
+  };
+  return { port, calls, balances, byKey };
+}
+
+/** Membresía viva de 3000 (30 €) y comisiones del referidor en los estados pedidos. */
+function seedMember(
+  prisma: MockPrisma,
+  commissions: Array<{ amountCents: number; status: string; currency?: string }>,
+  sub: Row = {},
+) {
+  prisma.subscriptions.push({
+    tenantId: TENANT,
+    userId: 'referrer-1',
+    planId: 'plan-1',
+    status: 'ACTIVE',
+    stripeCustomerId: 'cus_referidor',
+    unitAmount: 3000,
+    currency: 'eur',
+    ...sub,
+  });
+  const ids: string[] = [];
+  commissions.forEach((c, i) => {
+    const id = nextId('com');
+    ids.push(id);
+    prisma.commissions.push({
+      id,
+      tenantId: TENANT,
+      referrerUserId: 'referrer-1',
+      stripeInvoiceId: `in_seed_${i}`,
+      amountCents: c.amountCents,
+      currency: c.currency ?? 'eur',
+      status: c.status,
+      payoutId: null,
+      approvedAt: new Date(Date.UTC(2026, 10, 1 + i)),
+      createdAt: new Date(Date.UTC(2026, 9, 1 + i)),
+    });
+  });
+  return ids;
+}
+
+describe('descuento en la cuota: configuración', () => {
+  it('encendido por defecto (sin fila de config) y el creador lo apaga', async () => {
+    const { service } = build({ config: null as never });
+    expect((await service.getConfig(TENANT)).allowCreditRedemption).toBe(true);
+    const next = await service.updateConfig(TENANT, { allowCreditRedemption: false });
+    expect(next.allowCreditRedemption).toBe(false);
+    expect((await service.getConfig(TENANT)).allowCreditRedemption).toBe(false);
+  });
+});
+
+describe('descuento en la cuota: lo que ve el alumno (memberStats.credit)', () => {
+  it('con membresía: suma las APPROVED sin pagar que caben en el 80 % de la cuota', async () => {
+    const { port } = fakeCreditPort();
+    const { prisma, service } = build({ creditPort: port });
+    seedMember(prisma, [
+      { amountCents: 900, status: 'APPROVED' },
+      { amountCents: 900, status: 'APPROVED' },
+      { amountCents: 900, status: 'APPROVED' }, // 2700 > 2400: no cabe
+      { amountCents: 500, status: 'PENDING' }, // en garantía: no cuenta
+      { amountCents: 300, status: 'APPROVED', currency: 'usd' }, // otra divisa
+    ]);
+    const { credit } = await service.memberStats(TENANT, 'referrer-1');
+    expect(credit).toEqual({
+      enabled: true,
+      availableCents: 1800,
+      currency: 'eur',
+      maxCents: 2400,
+      pending: false,
+    });
+  });
+
+  it('sin membresía activa, con la opción apagada o sin Stripe: no aparece', async () => {
+    const { port } = fakeCreditPort();
+    const sinMembresia = build({ creditPort: port });
+    seedMember(sinMembresia.prisma, [{ amountCents: 900, status: 'APPROVED' }], {
+      status: 'CANCELED',
+    });
+    expect((await sinMembresia.service.memberStats(TENANT, 'referrer-1')).credit.enabled).toBe(
+      false,
+    );
+
+    const apagado = build({ creditPort: port, config: { allowCreditRedemption: false } });
+    seedMember(apagado.prisma, [{ amountCents: 900, status: 'APPROVED' }]);
+    expect((await apagado.service.memberStats(TENANT, 'referrer-1')).credit.enabled).toBe(false);
+
+    const sinStripe = build();
+    seedMember(sinStripe.prisma, [{ amountCents: 900, status: 'APPROVED' }]);
+    expect((await sinStripe.service.memberStats(TENANT, 'referrer-1')).credit.enabled).toBe(false);
+  });
+});
+
+describe('descuento en la cuota: redeemAsCredit', () => {
+  it('abona lo canjeable con la clave de su liquidación; las comisiones quedan PAID con la referencia', async () => {
+    const { port, calls } = fakeCreditPort();
+    const { prisma, service, events } = build({ creditPort: port });
+    const ids = seedMember(prisma, [
+      { amountCents: 900, status: 'APPROVED' },
+      { amountCents: 300, status: 'APPROVED' },
+      { amountCents: 500, status: 'PENDING' },
+    ]);
+    const result = await service.redeemAsCredit(TENANT, 'referrer-1');
+    expect(result).toMatchObject({
+      totalCents: 1200,
+      currency: 'eur',
+      count: 2,
+      stripeBalanceTransactionId: 'cbtxn_1',
+    });
+    expect(calls).toEqual([
+      {
+        tenantId: TENANT,
+        customerId: 'cus_referidor',
+        amountCents: 1200,
+        key: creditIdempotencyKey(result.payoutId),
+      },
+    ]);
+    const payout = prisma.payouts.find((p) => p['id'] === result.payoutId)!;
+    expect(payout).toMatchObject({
+      method: 'CREDIT',
+      status: 'DONE',
+      externalReference: 'cbtxn_1',
+      stripeCustomerId: 'cus_referidor',
+      totalCents: 1200,
+      createdByUserId: 'referrer-1',
+    });
+    expect(prisma.commissions.map((c) => [c['id'], c['status'], c['payoutId'] ?? null])).toEqual([
+      [ids[0], 'PAID', result.payoutId],
+      [ids[1], 'PAID', result.payoutId],
+      [ids[2], 'PENDING', null],
+    ]);
+    expect(events.at(-1)).toMatchObject({
+      name: 'referrals.payout.recorded',
+      payload: { method: 'CREDIT', totalCents: 1200, externalReference: 'cbtxn_1' },
+    });
+    // Ya no queda nada que canjear: un segundo clic no abona otra vez.
+    await expect(service.redeemAsCredit(TENANT, 'referrer-1')).rejects.toBeInstanceOf(
+      ReferralsCreditNothingError,
+    );
+    expect(calls).toHaveLength(1);
+  });
+
+  it('lo que ya tiene a favor en Stripe cuenta para el tope (no se apilan abonos)', async () => {
+    const { port, calls } = fakeCreditPort({ balanceCents: -2000 });
+    const { prisma, service } = build({ creditPort: port });
+    seedMember(prisma, [
+      { amountCents: 900, status: 'APPROVED' }, // no cabe en 400
+      { amountCents: 300, status: 'APPROVED' },
+    ]);
+    const result = await service.redeemAsCredit(TENANT, 'referrer-1');
+    expect(result.totalCents).toBe(300);
+    expect(calls.map((c) => c.amountCents)).toEqual([300]);
+  });
+
+  it('Stripe falla: la liquidación queda PENDING y el reintento usa la MISMA clave e importe (un solo abono)', async () => {
+    const { port, calls, byKey } = fakeCreditPort({ failTimes: 1 });
+    const { prisma, service } = build({ creditPort: port });
+    seedMember(prisma, [{ amountCents: 900, status: 'APPROVED' }]);
+    await expect(service.redeemAsCredit(TENANT, 'referrer-1')).rejects.toBeInstanceOf(
+      ReferralsCreditFailedError,
+    );
+    expect(prisma.payouts).toHaveLength(1);
+    expect(prisma.payouts[0]).toMatchObject({ status: 'PENDING', method: 'CREDIT' });
+    expect(prisma.commissions[0]).toMatchObject({ status: 'PAID' });
+    expect((await service.memberStats(TENANT, 'referrer-1')).credit.pending).toBe(true);
+
+    // Entretanto aprueban otra comisión: el reintento NO la mete en el abono a medias.
+    seedMember(prisma, [{ amountCents: 400, status: 'APPROVED' }]);
+    const retried = await service.redeemAsCredit(TENANT, 'referrer-1');
+    expect(retried).toMatchObject({ totalCents: 900, count: 1 });
+    expect(calls.map((c) => [c.key, c.amountCents])).toEqual([
+      [creditIdempotencyKey(retried.payoutId), 900],
+      [creditIdempotencyKey(retried.payoutId), 900],
+    ]);
+    expect(byKey.size).toBe(1);
+    expect(prisma.payouts).toHaveLength(1);
+    expect(prisma.payouts[0]).toMatchObject({ status: 'DONE', externalReference: 'cbtxn_1' });
+  });
+
+  it('dos canjes a la vez: uno abona, el otro no encuentra nada', async () => {
+    const { port, calls } = fakeCreditPort();
+    const { prisma, service } = build({ creditPort: port });
+    seedMember(prisma, [{ amountCents: 900, status: 'APPROVED' }]);
+    const results = await Promise.allSettled([
+      service.redeemAsCredit(TENANT, 'referrer-1'),
+      service.redeemAsCredit(TENANT, 'referrer-1'),
+    ]);
+    expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
+    const rejected = results.find((r) => r.status === 'rejected') as PromiseRejectedResult;
+    expect(rejected.reason).toBeInstanceOf(ReferralsCreditNothingError);
+    expect(calls).toHaveLength(1);
+  });
+
+  it('reglas: opción apagada, sin Stripe, sin membresía, sin nada aprobado', async () => {
+    const { port } = fakeCreditPort();
+    const apagado = build({ creditPort: port, config: { allowCreditRedemption: false } });
+    seedMember(apagado.prisma, [{ amountCents: 900, status: 'APPROVED' }]);
+    await expect(apagado.service.redeemAsCredit(TENANT, 'referrer-1')).rejects.toBeInstanceOf(
+      ReferralsCreditDisabledError,
+    );
+
+    const sinStripe = build();
+    seedMember(sinStripe.prisma, [{ amountCents: 900, status: 'APPROVED' }]);
+    await expect(sinStripe.service.redeemAsCredit(TENANT, 'referrer-1')).rejects.toBeInstanceOf(
+      ReferralsCreditUnavailableError,
+    );
+
+    const sinMembresia = build({ creditPort: port });
+    seedMember(sinMembresia.prisma, [{ amountCents: 900, status: 'APPROVED' }], {
+      status: 'PAST_DUE',
+    });
+    await expect(sinMembresia.service.redeemAsCredit(TENANT, 'referrer-1')).rejects.toBeInstanceOf(
+      ReferralsMembershipRequiredError,
+    );
+
+    const nada = build({ creditPort: port });
+    seedMember(nada.prisma, [{ amountCents: 900, status: 'PENDING' }]);
+    await expect(nada.service.redeemAsCredit(TENANT, 'referrer-1')).rejects.toBeInstanceOf(
+      ReferralsCreditNothingError,
+    );
+    expect(nada.prisma.payouts).toEqual([]);
   });
 });
 

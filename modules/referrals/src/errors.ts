@@ -84,3 +84,47 @@ export class ReferralsConfigValidationError extends ReferralsError {
     this.name = 'ReferralsConfigValidationError';
   }
 }
+
+/** El creador apagó el canje como descuento en la cuota. */
+export class ReferralsCreditDisabledError extends ReferralsError {
+  constructor() {
+    super(
+      'En esta academia lo ganado no se puede usar como descuento en la cuota.',
+      'REFERRALS_CREDIT_DISABLED',
+    );
+    this.name = 'ReferralsCreditDisabledError';
+  }
+}
+
+/** No hay nada que canjear: sin comisiones aprobadas o ya tiene el máximo a favor. */
+export class ReferralsCreditNothingError extends ReferralsError {
+  constructor() {
+    super(
+      'Ahora mismo no tienes nada que usar como descuento en tu próxima cuota.',
+      'REFERRALS_CREDIT_NOTHING',
+    );
+    this.name = 'ReferralsCreditNothingError';
+  }
+}
+
+/** El aula no tiene Stripe para abonar (instancia sin pagos configurados). */
+export class ReferralsCreditUnavailableError extends ReferralsError {
+  constructor() {
+    super(
+      'El descuento en la cuota no está disponible en esta academia.',
+      'REFERRALS_CREDIT_UNAVAILABLE',
+    );
+    this.name = 'ReferralsCreditUnavailableError';
+  }
+}
+
+/** Stripe no confirmó el abono. Reintentar es seguro: misma clave, mismo importe. */
+export class ReferralsCreditFailedError extends ReferralsError {
+  constructor() {
+    super(
+      'No hemos podido aplicar el descuento. Vuelve a intentarlo: no se aplicará dos veces.',
+      'REFERRALS_CREDIT_FAILED',
+    );
+    this.name = 'ReferralsCreditFailedError';
+  }
+}

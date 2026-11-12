@@ -9,6 +9,10 @@ import {
   ReferralsCommissionNotFoundError,
   ReferralsCommissionStateError,
   ReferralsConfigValidationError,
+  ReferralsCreditDisabledError,
+  ReferralsCreditFailedError,
+  ReferralsCreditNothingError,
+  ReferralsCreditUnavailableError,
   ReferralsMembershipRequiredError,
   ReferralsPayoutValidationError,
   ReferralsProgramInactiveError,
@@ -47,6 +51,56 @@ export interface ReferralsEventPublisher {
 /** Lookup de email de un user del core — lo implementa el host (el módulo no lee `user`). */
 export type UserEmailLookup = (tenantId: string, userId: string) => Promise<string | null>;
 
+/**
+ * Saldo de cliente de Stripe de la suscripción del alumno, en la cuenta donde
+ * vive esa suscripción (la del creador con Stripe propio; la del operador en
+ * modo plataforma, donde `mod.payouts` descuenta el abono al creador). Lo
+ * implementa el host con el adaptador de `mod.subscriptions`: el módulo no
+ * habla con Stripe.
+ */
+export interface ReferralsCreditPort {
+  retrieveBalance(
+    tenantId: string,
+    customerId: string,
+  ): Promise<{ balanceCents: number; currency: string | null }>;
+  credit(
+    tenantId: string,
+    params: {
+      customerId: string;
+      amountCents: number;
+      currency: string;
+      description: string;
+      metadata: Record<string, string>;
+      idempotencyKey: string;
+    },
+  ): Promise<{ id: string }>;
+}
+
+/**
+ * Tope del descuento: el 80 % de UNA cuota, contando lo que el alumno ya tenga
+ * a favor. Así cada factura conserva un cobro real: con un cobro de 0 € el
+ * operador se quedaría sin su comisión de ese mes (el reparto se hace sobre un
+ * cargo) y un cargo minúsculo deja al creador con neto negativo.
+ */
+export const CREDIT_MAX_SHARE_BPS = 8000;
+
+/** Clave de idempotencia del abono en Stripe: la fila de la liquidación. */
+export function creditIdempotencyKey(payoutId: string): string {
+  return `referrals-credit:${payoutId}`;
+}
+
+export interface MemberCreditView {
+  /** Se puede canjear: opción encendida, puerto disponible y membresía viva con cliente. */
+  enabled: boolean;
+  /** Lo que se canjearía ahora (comisiones aprobadas sin pagar que caben en el tope). */
+  availableCents: number;
+  currency: string | null;
+  /** Tope de una cuota (sin descontar lo que ya tenga a favor en Stripe). */
+  maxCents: number;
+  /** Hay un canje a medias (Stripe no confirmó): se reintenta con la misma clave. */
+  pending: boolean;
+}
+
 export const REFERRALS_EVENT = {
   ATTRIBUTED: 'referrals.referral.attributed',
   COMMISSION_CREATED: 'referrals.commission.created',
@@ -68,6 +122,8 @@ export interface ReferralsConfigView {
   minPayoutCents: number;
   requireActiveMembership: boolean;
   memberCopy: string | null;
+  /** El alumno puede cobrar lo ganado como descuento en su próxima cuota. */
+  allowCreditRedemption: boolean;
 }
 
 export interface ReferralsConfigInput {
@@ -80,6 +136,7 @@ export interface ReferralsConfigInput {
   minPayoutCents?: number;
   requireActiveMembership?: boolean;
   memberCopy?: string | null;
+  allowCreditRedemption?: boolean;
 }
 
 const DEFAULT_CONFIG: ReferralsConfigView = {
@@ -94,6 +151,8 @@ const DEFAULT_CONFIG: ReferralsConfigView = {
   // las venda puede exigir membresía viva del referidor desde la config.
   requireActiveMembership: false,
   memberCopy: null,
+  // Encendido por defecto: el creador lo apaga en Ventas si no lo quiere.
+  allowCreditRedemption: true,
 };
 
 export interface AttributeInput {
@@ -193,6 +252,11 @@ function generateCode(): string {
   return out;
 }
 
+/** Tope de un canje: el {@link CREDIT_MAX_SHARE_BPS} de la cuota, a la baja. */
+function creditCap(unitAmount: number): number {
+  return Math.floor((unitAmount * CREDIT_MAX_SHARE_BPS) / 10_000);
+}
+
 function isUniqueViolation(err: unknown): boolean {
   return typeof err === 'object' && err !== null && (err as { code?: string }).code === 'P2002';
 }
@@ -212,6 +276,8 @@ export class ReferralsService {
     private readonly prisma: PrismaClient,
     private readonly publisher: ReferralsEventPublisher,
     private readonly getUserEmail: UserEmailLookup,
+    /** Sin puerto (tests, instancia sin Stripe) el canje como descuento no está disponible. */
+    private readonly creditPort: ReferralsCreditPort | null = null,
   ) {}
 
   // ---------------- Config ----------------
@@ -231,6 +297,7 @@ export class ReferralsService {
       minPayoutCents: row.minPayoutCents,
       requireActiveMembership: row.requireActiveMembership,
       memberCopy: row.memberCopy,
+      allowCreditRedemption: row.allowCreditRedemption,
     };
   }
 
@@ -272,6 +339,7 @@ export class ReferralsService {
       minPayoutCents: input.minPayoutCents ?? current.minPayoutCents,
       requireActiveMembership: input.requireActiveMembership ?? current.requireActiveMembership,
       memberCopy: input.memberCopy !== undefined ? input.memberCopy : current.memberCopy,
+      allowCreditRedemption: input.allowCreditRedemption ?? current.allowCreditRedemption,
     };
     await this.prisma.modReferralsConfig.upsert({
       where: { tenantId },
@@ -928,6 +996,7 @@ export class ReferralsService {
       orderBy: { createdAt: 'desc' },
       take: 20,
     });
+    const credit = await this.memberCredit(tenantId, userId, config);
     return {
       programActive: config.active,
       memberCopy: config.memberCopy,
@@ -958,8 +1027,279 @@ export class ReferralsService {
         totalCents: p.totalCents,
         currency: p.currency,
         externalReference: p.externalReference,
+        method: p.method === 'CREDIT' ? ('CREDIT' as const) : ('CASH' as const),
+        status: p.status === 'PENDING' ? ('PENDING' as const) : ('DONE' as const),
         createdAt: p.createdAt,
       })),
+      credit,
+    };
+  }
+
+  // ---------------- Canje como descuento en la cuota ----------------
+
+  /**
+   * Qué puede canjear ahora el alumno como descuento. Sin llamar a Stripe: el
+   * saldo que ya tenga a favor se descuenta del tope al canjear.
+   */
+  private async memberCredit(
+    tenantId: string,
+    userId: string,
+    config: ReferralsConfigView,
+  ): Promise<MemberCreditView> {
+    const pending = await this.prisma.modReferralsPayout.findFirst({
+      where: { tenantId, referrerUserId: userId, method: 'CREDIT', status: 'PENDING' },
+      select: { id: true },
+    });
+    const off: MemberCreditView = {
+      enabled: false,
+      availableCents: 0,
+      currency: null,
+      maxCents: 0,
+      pending: pending !== null,
+    };
+    if (!config.allowCreditRedemption || !this.creditPort) return off;
+    const sub = await this.creditSubscription(tenantId, userId);
+    if (!sub) return off;
+    const maxCents = creditCap(sub.unitAmount);
+    const { totalCents } = await this.selectRedeemable(
+      this.prisma,
+      tenantId,
+      userId,
+      sub,
+      maxCents,
+    );
+    return {
+      enabled: maxCents > 0,
+      availableCents: totalCents,
+      currency: sub.currency,
+      maxCents,
+      pending: pending !== null,
+    };
+  }
+
+  /**
+   * El alumno cobra lo ganado como DESCUENTO en su próxima cuota: un abono en
+   * el saldo de cliente de Stripe de su membresía.
+   *
+   * - Solo comisiones APPROVED (pasada la garantía) y sin liquidar, en la
+   *   divisa de la cuota, hasta el tope ({@link CREDIT_MAX_SHARE_BPS}) menos
+   *   lo que ya tenga a favor. Sin mínimo de liquidación: el mínimo existe por
+   *   el coste de una transferencia, que aquí no hay.
+   * - Idempotente: en UNA transacción la liquidación nace PENDING y las
+   *   comisiones pasan a PAID con ella (dos canjes a la vez: uno gana, el otro
+   *   no encuentra nada o choca con el índice de «una pendiente por alumno»).
+   *   Después se abona en Stripe con la clave `referrals-credit:<id>` y la fila
+   *   pasa a DONE con el `cbtxn_…`. Si Stripe falla, la fila sigue PENDING y el
+   *   siguiente intento repite la MISMA llamada (misma clave, mismo importe):
+   *   nunca dos abonos por el mismo saldo.
+   */
+  async redeemAsCredit(
+    tenantId: string,
+    userId: string,
+  ): Promise<{
+    payoutId: string;
+    totalCents: number;
+    currency: string;
+    count: number;
+    stripeBalanceTransactionId: string;
+  }> {
+    const config = await this.getConfig(tenantId);
+    if (!config.allowCreditRedemption) throw new ReferralsCreditDisabledError();
+    const port = this.creditPort;
+    if (!port) throw new ReferralsCreditUnavailableError();
+
+    // 1) Un canje a medias se termina antes de abrir otro.
+    const pending = await this.prisma.modReferralsPayout.findFirst({
+      where: { tenantId, referrerUserId: userId, method: 'CREDIT', status: 'PENDING' },
+      include: { commissions: { select: { id: true } } },
+    });
+    if (pending) {
+      return this.completeCredit(port, tenantId, userId, {
+        payoutId: pending.id,
+        customerId: pending.stripeCustomerId ?? '',
+        totalCents: pending.totalCents,
+        currency: pending.currency,
+        count: pending.commissions.length,
+      });
+    }
+
+    // 2) Membresía viva con cliente de Stripe.
+    const sub = await this.creditSubscription(tenantId, userId);
+    if (!sub) throw new ReferralsMembershipRequiredError();
+    const cap = creditCap(sub.unitAmount);
+
+    // 3) Lo que ya tenga a favor cuenta para el tope.
+    let balance: { balanceCents: number; currency: string | null };
+    try {
+      balance = await port.retrieveBalance(tenantId, sub.stripeCustomerId);
+    } catch {
+      throw new ReferralsCreditFailedError();
+    }
+    if (balance.currency && balance.currency.toLowerCase() !== sub.currency) {
+      throw new ReferralsCreditNothingError();
+    }
+    const room = cap - Math.max(0, -balance.balanceCents);
+    if (room <= 0) throw new ReferralsCreditNothingError();
+
+    // 4) Reserva atómica: liquidación PENDING + comisiones PAID.
+    let reserved: { payoutId: string; totalCents: number; count: number };
+    try {
+      reserved = await this.prisma.$transaction(async (tx) => {
+        const picked = await this.selectRedeemable(
+          tx as unknown as PrismaClient,
+          tenantId,
+          userId,
+          sub,
+          room,
+        );
+        if (picked.ids.length === 0) throw new ReferralsCreditNothingError();
+        const payout = await tx.modReferralsPayout.create({
+          data: {
+            tenantId,
+            referrerUserId: userId,
+            totalCents: picked.totalCents,
+            currency: sub.currency,
+            externalReference: 'pendiente',
+            createdByUserId: userId,
+            method: 'CREDIT',
+            status: 'PENDING',
+            stripeCustomerId: sub.stripeCustomerId,
+          },
+        });
+        const updated = await tx.modReferralsCommission.updateMany({
+          where: { id: { in: picked.ids }, tenantId, status: 'APPROVED', payoutId: null },
+          data: { status: 'PAID', payoutId: payout.id },
+        });
+        if (updated.count !== picked.ids.length) {
+          // Otro canje (o el admin) se llevó alguna comisión: rollback entero.
+          throw new ReferralsCreditNothingError();
+        }
+        return { payoutId: payout.id, totalCents: picked.totalCents, count: picked.ids.length };
+      });
+    } catch (err) {
+      // El índice parcial «una pendiente por alumno»: otro canje a la vez.
+      if (isUniqueViolation(err)) throw new ReferralsCreditNothingError();
+      throw err;
+    }
+
+    // 5) El abono en Stripe y el cierre.
+    return this.completeCredit(port, tenantId, userId, {
+      ...reserved,
+      customerId: sub.stripeCustomerId,
+      currency: sub.currency,
+    });
+  }
+
+  private async completeCredit(
+    port: ReferralsCreditPort,
+    tenantId: string,
+    userId: string,
+    p: {
+      payoutId: string;
+      customerId: string;
+      totalCents: number;
+      currency: string;
+      count: number;
+    },
+  ) {
+    if (!p.customerId) throw new ReferralsCreditFailedError();
+    let tx: { id: string };
+    try {
+      tx = await port.credit(tenantId, {
+        customerId: p.customerId,
+        amountCents: p.totalCents,
+        currency: p.currency,
+        description: `Descuento por invitar (${p.count} ${p.count === 1 ? 'comisión' : 'comisiones'})`,
+        metadata: {
+          didacta_kind: 'referral_credit',
+          didacta_tenant_id: tenantId,
+          didacta_referral_payout_id: p.payoutId,
+        },
+        idempotencyKey: creditIdempotencyKey(p.payoutId),
+      });
+    } catch {
+      // La fila sigue PENDING: el próximo intento repite la misma llamada.
+      throw new ReferralsCreditFailedError();
+    }
+    await this.prisma.modReferralsPayout.updateMany({
+      where: { id: p.payoutId, tenantId, status: 'PENDING' },
+      data: { status: 'DONE', externalReference: tx.id },
+    });
+    await this.publisher.publish(tenantId, userId, REFERRALS_EVENT.PAYOUT_RECORDED, {
+      payoutId: p.payoutId,
+      referrerUserId: userId,
+      totalCents: p.totalCents,
+      currency: p.currency,
+      commissionCount: p.count,
+      externalReference: tx.id,
+      method: 'CREDIT',
+    });
+    return {
+      payoutId: p.payoutId,
+      totalCents: p.totalCents,
+      currency: p.currency,
+      count: p.count,
+      stripeBalanceTransactionId: tx.id,
+    };
+  }
+
+  /**
+   * Comisiones canjeables: APPROVED, sin liquidar, en la divisa de la cuota;
+   * las más antiguas primero, saltando las que no caben en el tope.
+   */
+  private async selectRedeemable(
+    db: PrismaClient,
+    tenantId: string,
+    userId: string,
+    sub: { currency: string },
+    capCents: number,
+  ): Promise<{ ids: string[]; totalCents: number }> {
+    const rows = await db.modReferralsCommission.findMany({
+      where: {
+        tenantId,
+        referrerUserId: userId,
+        status: 'APPROVED',
+        payoutId: null,
+        currency: sub.currency,
+      },
+      orderBy: [{ approvedAt: 'asc' }, { createdAt: 'asc' }],
+      select: { id: true, amountCents: true },
+    });
+    const ids: string[] = [];
+    let totalCents = 0;
+    for (const row of rows) {
+      if (row.amountCents <= 0 || totalCents + row.amountCents > capCents) continue;
+      ids.push(row.id);
+      totalCents += row.amountCents;
+    }
+    return { ids, totalCents };
+  }
+
+  /**
+   * La membresía viva del alumno con su cliente de Stripe (la más reciente).
+   * Lectura acotada de mod_subscriptions_subscription filtrando por tenantId
+   * (ADR-016, dependencia opcional declarada en el manifest).
+   */
+  private async creditSubscription(
+    tenantId: string,
+    userId: string,
+  ): Promise<{ stripeCustomerId: string; currency: string; unitAmount: number } | null> {
+    const sub = await this.prisma.modSubscriptionsSubscription.findFirst({
+      where: {
+        tenantId,
+        userId,
+        planId: { not: null },
+        status: { in: ['ACTIVE', 'TRIALING'] },
+        stripeCustomerId: { startsWith: 'cus_' },
+      },
+      orderBy: { createdAt: 'desc' },
+      select: { stripeCustomerId: true, currency: true, unitAmount: true },
+    });
+    if (!sub?.stripeCustomerId || !sub.unitAmount || sub.unitAmount <= 0) return null;
+    return {
+      stripeCustomerId: sub.stripeCustomerId,
+      currency: sub.currency.toLowerCase(),
+      unitAmount: sub.unitAmount,
     };
   }
 
