@@ -422,9 +422,11 @@
         "review": "La estamos revisando; te escribimos si hace falta algo",
         "refundedPartial": "Reembolsada en parte",
         "disputeWon": "Reclamación ganada: te lo devolvimos",
-        "disputeLost": "Reclamación perdida: el banco lo devolvió al alumno"
+        "disputeLost": "Reclamación perdida: el banco lo devolvió al alumno",
+        "heldTaxData": "Retenida hasta que completes tus datos fiscales"
       },
       "noticeHeld": "Tienes ventas retenidas: el dinero está a salvo y lo volvemos a intentar cada día. Si dice «hasta que completes tus datos de cobro», pulsa «Completar» arriba.",
+      "noticeHeldTaxData": "Tienes ventas retenidas hasta que completes tus datos fiscales (más arriba). El dinero está a salvo y te llega en cuanto los completes.",
       "noticeDebt": "Tienes {amount} pendientes de descontar de tus próximas ventas.",
       "summaryTitle": "Resumen en {currency}",
       "summarySold": "Vendido",
@@ -481,6 +483,96 @@
       "disputeNoteOpen": "Retenido mientras el banco decide",
       "disputeNoteWon": "Te lo devolvimos al ganar la reclamación",
       "disputeNoteLost": "El banco se lo devolvió al alumno"
+    },
+    "tax": {
+      "title": "Tus datos fiscales",
+      "intro": "Los necesitamos para hacerte la factura de nuestra comisión y porque Hacienda nos obliga a pedirlos y comunicarlos (normativa DAC7). Lo que ya sabía Stripe viene escrito; solo te falta tu NIF.",
+      "status": {
+        "missing": "Faltan",
+        "incomplete": "Incompletos",
+        "complete": "Completos"
+      },
+      "requiredNotice": "Hasta que los completes, tus ventas se cobran igual, pero no te transferimos el dinero. Queda a salvo y te llega en cuanto los completes.",
+      "heldNotice": "Tienes {count, plural, one {# venta retenida} other {# ventas retenidas}} por faltar estos datos. El dinero está a salvo: te lo transferimos en cuanto los completes.",
+      "savedComplete": "Datos guardados. Si tenías ventas retenidas por esto, ya van de camino.",
+      "prefillNote": "Hemos rellenado lo que nos ha dado Stripe. Revísalo y añade tu NIF.",
+      "entityLabel": "¿Cómo vendes?",
+      "entity": {
+        "individual": "Particular o autónomo",
+        "company": "Empresa"
+      },
+      "legalNameLabel": "Nombre o razón social",
+      "personNameLabel": "Nombre y apellidos",
+      "companyNameLabel": "Razón social",
+      "countryLabel": "País de residencia fiscal",
+      "taxIdLabel": "NIF",
+      "taxIdHintEs": "Tu DNI o NIE con la letra, o el NIF de tu empresa.",
+      "taxIdHintOther": "Tu número de identificación fiscal en tu país.",
+      "taxIdSavedHint": "Guardado: •••• {hint}. Escríbelo solo si cambia.",
+      "vatIdOptionalLabel": "NIF-IVA (opcional)",
+      "vatIdLabel": "NIF-IVA",
+      "vatIdHintEs": "Si estás dado de alta en operaciones intracomunitarias (ES + tu NIF).",
+      "vatIdHintEu": "Si lo tienes, la factura va sin IVA (lo declaras tú). Sin él, nuestro 5 % lleva IVA español incluido.",
+      "vatIdSavedHint": "Guardado: •••• {hint}. Escríbelo solo si cambia.",
+      "vatStatus": {
+        "valid": "(comprobado en VIES)",
+        "invalid": "(VIES dice que no es válido)",
+        "pending": "(pendiente de comprobar en VIES)"
+      },
+      "addressLabel": "Dirección fiscal",
+      "line1Label": "Dirección",
+      "line2Label": "Piso, puerta… (opcional)",
+      "postalCodeLabel": "Código postal",
+      "cityLabel": "Ciudad",
+      "regionLabel": "Provincia o región (opcional)",
+      "birthDateLabel": "Fecha de nacimiento",
+      "birthDateHint": "Nos la pide Hacienda a las personas físicas que venden en plataformas.",
+      "privacyNote": "Guardamos estos datos cifrados y solo los usamos para tus facturas y para lo que nos exige Hacienda.",
+      "fieldErrors": {
+        "required": "Falta este dato.",
+        "invalid": "Este dato no es válido.",
+        "format": "Revisa el formato.",
+        "check_digit": "La letra o el dígito de control no cuadra.",
+        "entity_mismatch": "No corresponde con «¿Cómo vendes?».",
+        "not_eu": "Solo para países de la UE.",
+        "country_mismatch": "No es de tu país.",
+        "underage": "Tienes que ser mayor de edad."
+      },
+      "save": "Guardar datos fiscales",
+      "saving": "Guardando…",
+      "edit": "Cambiar",
+      "cancel": "Cancelar",
+      "loadError": "No hemos podido cargar tus datos fiscales.",
+      "saveError": "No hemos podido guardar tus datos. Inténtalo de nuevo."
+    },
+    "invoices": {
+      "title": "Tus facturas",
+      "intro": "Cada mes te hacemos una factura de nuestra comisión, con el IVA desglosado. No tienes que pagarla: ya se descontó de tus ventas.",
+      "empty": "Todavía no hay facturas. La primera llega a principios del mes siguiente a tu primera venta.",
+      "disabled": "La factura de la comisión no está activada en esta instalación (faltan los datos del emisor).",
+      "line": "Emitida el {date} · ventas del {from} al {to}",
+      "rectifying": "Rectificativa",
+      "replaced": "Sustituida por {number}",
+      "pendingData": "Faltan tus datos fiscales",
+      "testMode": "Modo prueba",
+      "rectifies": "Rectifica: {numbers}",
+      "vatBreakdown": "{base} + IVA {rate} % ({vat})",
+      "regime": {
+        "ES_VAT": "IVA incluido",
+        "ES_VAT_EU_NO_VAT_ID": "IVA español incluido",
+        "EU_REVERSE_CHARGE": "Sin IVA: inversión del sujeto pasivo",
+        "NOT_SUBJECT_OUTSIDE_EU": "Sin IVA: fuera de la UE",
+        "NOT_SUBJECT_ES_SPECIAL_TERRITORY": "Sin IVA: Canarias, Ceuta o Melilla"
+      },
+      "download": "Descargar PDF",
+      "downloading": "Descargando…",
+      "downloadError": "No hemos podido descargar la factura.",
+      "loadError": "No hemos podido cargar tus facturas.",
+      "runMonthLabel": "Mes a facturar (todas las academias)",
+      "run": "Emitir facturas del mes",
+      "running": "Emitiendo…",
+      "runDone": "{month}: {issued} facturas emitidas, {sent} correos enviados, {errors} errores.",
+      "runError": "No se ha podido emitir."
     }
   }
 }

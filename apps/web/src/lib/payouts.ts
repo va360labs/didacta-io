@@ -93,6 +93,113 @@ function withAuth(): string {
   return token;
 }
 
+// ── Datos fiscales y facturas de la comisión (condiciones legales) ───────────
+
+export type PayoutsTaxEntityType = 'individual' | 'company';
+export type PayoutsVatStatus = 'valid' | 'invalid' | 'pending' | 'not_applicable';
+
+export interface PayoutsTaxAddressDto {
+  line1: string;
+  line2?: string | null;
+  postalCode: string;
+  city: string;
+  region?: string | null;
+}
+
+/** `GET /modules/payouts/tax-profile`. El NIF nunca viene entero. */
+export interface PayoutsTaxProfileDto {
+  status: 'missing' | 'incomplete' | 'complete';
+  required: boolean;
+  profile: {
+    entityType: PayoutsTaxEntityType;
+    legalName: string;
+    country: string;
+    taxIdHint: string | null;
+    vatIdHint: string | null;
+    vatStatus: PayoutsVatStatus;
+    vatCheckedAt: string | null;
+    address: PayoutsTaxAddressDto | null;
+    birthDate: string | null;
+    confirmedAt: string | null;
+  } | null;
+  prefill: {
+    entityType: PayoutsTaxEntityType | null;
+    legalName: string | null;
+    country: string | null;
+    address: PayoutsTaxAddressDto | null;
+    birthDate: string | null;
+  } | null;
+  missing: string[];
+  heldSales: number;
+}
+
+export interface PayoutsTaxProfileInput {
+  entityType: PayoutsTaxEntityType;
+  legalName: string;
+  country: string;
+  /** Vacío = conservar el guardado. */
+  taxId?: string;
+  /** `''` lo borra; ausente lo conserva. */
+  vatId?: string;
+  address: PayoutsTaxAddressDto;
+  birthDate?: string | null;
+}
+
+export type PayoutsVatRegime =
+  | 'ES_VAT'
+  | 'EU_REVERSE_CHARGE'
+  | 'ES_VAT_EU_NO_VAT_ID'
+  | 'NOT_SUBJECT_OUTSIDE_EU'
+  | 'NOT_SUBJECT_ES_SPECIAL_TERRITORY';
+
+export interface PayoutsInvoiceDto {
+  id: string;
+  kind: 'ORDINARY' | 'RECTIFYING';
+  fullNumber: string;
+  issueDate: string;
+  periodStart: string;
+  periodEnd: string;
+  currency: string;
+  regime: PayoutsVatRegime;
+  vatRateBps: number;
+  total: number;
+  taxBase: number;
+  vatAmount: number;
+  recipientComplete: boolean;
+  rectifies: Array<{ fullNumber: string; issueDate: string }>;
+  replacedBy: string | null;
+  items: number;
+  emailedAt: string | null;
+  livemode: boolean;
+}
+
+export interface PayoutsInvoicesDto {
+  enabled: boolean;
+  items: PayoutsInvoiceDto[];
+}
+
+export interface PayoutsInvoiceRunDto {
+  month: string;
+  tenants: number;
+  issued: number;
+  outcomes: Record<string, number>;
+  errors: number;
+  emails: { sent: number; failed: number };
+}
+
+/**
+ * `detail` del 422 `PAYOUTS_TAX_PROFILE_INVALID` (`taxId:check_digit,…`) →
+ * campo → motivo. Puro.
+ */
+export function taxProfileFieldErrors(detail: string | undefined | null): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const part of (detail ?? '').split(',')) {
+    const [field, reason] = part.split(':');
+    if (field && reason) out[field.trim()] = reason.trim();
+  }
+  return out;
+}
+
 export const payoutsApi = {
   /**
    * Estado de cobros. `null` = la instalación no está en modo plataforma (la
@@ -128,6 +235,61 @@ export const payoutsApi = {
     return apiFetch<{ url: string }>(
       '/api/v1/modules/payouts/dashboard-link',
       { method: 'GET' },
+      withAuth(),
+    );
+  },
+  /** Datos fiscales. `null` = sin modo plataforma (la ruta no existe). */
+  async taxProfile(): Promise<PayoutsTaxProfileDto | null> {
+    try {
+      return await apiFetch<PayoutsTaxProfileDto>(
+        '/api/v1/modules/payouts/tax-profile',
+        { method: 'GET' },
+        withAuth(),
+      );
+    } catch (err) {
+      if (err instanceof ApiHttpError && err.status === 404) return null;
+      throw err;
+    }
+  },
+  saveTaxProfile(input: PayoutsTaxProfileInput) {
+    return apiFetch<PayoutsTaxProfileDto>(
+      '/api/v1/modules/payouts/tax-profile',
+      { method: 'PUT', body: JSON.stringify(input) },
+      withAuth(),
+    );
+  },
+  /** Facturas de la comisión. `null` = sin modo plataforma (la ruta no existe). */
+  async invoices(): Promise<PayoutsInvoicesDto | null> {
+    try {
+      return await apiFetch<PayoutsInvoicesDto>(
+        '/api/v1/modules/payouts/invoices',
+        { method: 'GET' },
+        withAuth(),
+      );
+    } catch (err) {
+      if (err instanceof ApiHttpError && err.status === 404) return null;
+      throw err;
+    }
+  },
+  /** El PDF de una factura (con la sesión: no se puede enlazar a pelo). */
+  async invoicePdf(invoiceId: string): Promise<Blob> {
+    const res = await fetch(
+      `/api/v1/modules/payouts/invoices/${encodeURIComponent(invoiceId)}/pdf`,
+      { method: 'GET', headers: { Authorization: `Bearer ${withAuth()}` } },
+    );
+    if (!res.ok) {
+      throw new ApiHttpError({
+        message: `No se pudo descargar la factura (${res.status})`,
+        status: res.status,
+      });
+    }
+    return res.blob();
+  },
+  /** Solo super_admin: emite ahora las facturas de un mes (`AAAA-MM`). */
+  runInvoices(month?: string) {
+    return apiFetch<PayoutsInvoiceRunDto>(
+      '/api/v1/modules/payouts/admin/invoices/run',
+      { method: 'POST', body: JSON.stringify(month ? { month } : {}) },
       withAuth(),
     );
   },
@@ -397,6 +559,7 @@ export type PayoutsSaleStatusKey =
   | 'sent'
   | 'netted'
   | 'heldAccount'
+  | 'heldTaxData'
   | 'heldRetry'
   | 'refunded'
   | 'refundedPartial'
@@ -433,6 +596,7 @@ export function saleStatusView(
       return { key: 'netted', tone: 'neutral' };
     case 'HELD':
       if (sale.reason === 'account_not_ready') return { key: 'heldAccount', tone: 'warning' };
+      if (sale.reason === 'tax_profile_incomplete') return { key: 'heldTaxData', tone: 'warning' };
       if (sale.reason === 'charge_refunded') return { key: 'refunded', tone: 'neutral' };
       if (sale.reason === 'charge_disputed') return { key: 'disputed', tone: 'danger' };
       return { key: 'heldRetry', tone: 'warning' };
