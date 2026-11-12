@@ -62,6 +62,31 @@ export interface MemberReferralStats {
   payouts: ReferralPayoutRow[];
 }
 
+/**
+ * Estado de un invitado (lo deriva el servidor):
+ * trial = en prueba; paying = suscripción viva (ACTIVE/PAST_DUE);
+ * bought_course = compra suelta sin suscripción viva; cancelled = tuvo
+ * suscripción y ya no; joined = nada de lo anterior.
+ */
+export type InviteeState = 'trial' | 'paying' | 'bought_course' | 'cancelled' | 'joined';
+
+/** Un invitado: solo iniciales, nunca nombre ni correo. */
+export interface MemberInvitee {
+  id: string;
+  initials: string;
+  joinedAt: string;
+  state: InviteeState;
+  /** Comisiones no anuladas que ha generado, en céntimos. */
+  generatedCents: number;
+  currency: string;
+}
+
+export interface MemberInvitees {
+  /** Invitados con la suscripción viva ahora mismo. */
+  payingNow: number;
+  invitees: MemberInvitee[];
+}
+
 export interface AdminCommissionRow extends ReferralCommissionRow {
   tenantId: string;
   referralId: string;
@@ -98,6 +123,11 @@ export const referralsApi = {
 
   async myStats(): Promise<MemberReferralStats> {
     return apiFetch<MemberReferralStats>(`${BASE}/me/stats`, { method: 'GET' }, withAuth());
+  },
+
+  /** Tus invitados: iniciales, fecha, estado y lo que han generado. */
+  async myInvitees(): Promise<MemberInvitees> {
+    return apiFetch<MemberInvitees>(`${BASE}/me/invitees`, { method: 'GET' }, withAuth());
   },
 
   /** Registro público de clic (best-effort, sin sesión). */

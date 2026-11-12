@@ -14,6 +14,8 @@ import { ApiHttpError } from '@/lib/api-client';
 import { formatCents, formatDate, formatNumber } from '@/lib/i18n/format';
 import {
   referralsApi,
+  type InviteeState,
+  type MemberInvitees,
   type MemberReferralStats,
   type ReferralCommissionStatus,
 } from '@/lib/referrals';
@@ -34,8 +36,8 @@ export interface ReferralFigures {
 }
 
 /**
- * Cifras de la página con datos REALES del programa: no hay «pagando ahora»
- * ni lista de invitados en el módulo, así que no se inventan.
+ * Cifras de la página con datos REALES del programa. «Pagando ahora» y la
+ * lista de invitados vienen aparte, de `GET /me/invitees`.
  */
 export function referralFigures(
   stats: MemberReferralStats,
@@ -66,6 +68,20 @@ const STATUS_TONE: Record<ReferralCommissionStatus, string> = {
   REVOKED: 'bg-danger-50 text-danger-700',
 };
 
+const INVITEE_TONE: Record<InviteeState, string> = {
+  paying: 'bg-success-50 text-success-700',
+  trial: 'bg-warning-50 text-warning-700',
+  bought_course: 'bg-brand-50 text-brand-700',
+  cancelled: 'bg-bg-subtle text-text-subtle',
+  joined: 'bg-bg-subtle text-text-subtle',
+};
+
+/** «MP» → «M. P.»; «·» se queda tal cual. */
+export function spacedInitials(initials: string): string {
+  if (initials === '·') return initials;
+  return [...initials].map((c) => `${c}.`).join(' ');
+}
+
 /**
  * «Invita y gana» del alumno en MODO SENCILLO (sobre `mod.referrals`): el % que
  * puso el creador, el enlace personal con Copiar y compartir, lo ganado y cómo
@@ -75,6 +91,8 @@ export function SimpleReferrals() {
   const t = useTranslations('modoSencilloAprender.referidos');
   const academy = useTenantDisplayName();
   const [stats, setStats] = useState<MemberReferralStats | null>(null);
+  const [invitees, setInvitees] = useState<MemberInvitees | null>(null);
+  const [inviteesError, setInviteesError] = useState(false);
   const [link, setLink] = useState<string | null>(null);
   const [products, setProducts] = useState<ReferralProductLink[]>([]);
   const [linkError, setLinkError] = useState<string | null>(null);
@@ -85,6 +103,10 @@ export function SimpleReferrals() {
   useEffect(() => {
     setCanShare(typeof navigator !== 'undefined' && typeof navigator.share === 'function');
     let cancelled = false;
+    referralsApi
+      .myInvitees()
+      .then((i) => !cancelled && setInvitees(i))
+      .catch(() => !cancelled && setInviteesError(true));
     referralsApi
       .myStats()
       .then((s) => {
@@ -273,10 +295,13 @@ export function SimpleReferrals() {
               ) : null}
             </div>
             <div className="border-r border-border p-4">
-              <div className="text-[26px] font-extrabold tracking-tight text-text tabular-nums">
-                {formatNumber(fig.people)}
+              <div
+                className="text-[26px] font-extrabold tracking-tight text-text tabular-nums"
+                data-testid="referidos-pagando"
+              >
+                {invitees ? formatNumber(invitees.payingNow) : '…'}
               </div>
-              <div className="text-sm text-text-muted">{t('personas')}</div>
+              <div className="text-sm text-text-muted">{t('pagandoAhora')}</div>
             </div>
             <div className="p-4">
               <div className="text-[26px] font-extrabold tracking-tight text-text tabular-nums">
@@ -284,6 +309,68 @@ export function SimpleReferrals() {
               </div>
               <div className="text-sm text-text-muted">{t('esteMes')}</div>
             </div>
+          </section>
+
+          <section
+            className="rounded-2xl border border-border bg-surface"
+            aria-labelledby="referidos-invitados"
+            data-testid="referidos-invitados"
+          >
+            <div className="px-4 pt-4 pb-2 lg:px-5">
+              <h2 id="referidos-invitados" className="text-base font-bold text-text">
+                {t('invitadosTitulo')}
+              </h2>
+              <p className="text-sm text-text-muted">{t('invitadosTexto')}</p>
+            </div>
+            {inviteesError ? (
+              <p className="px-4 pb-5 text-sm text-text-subtle lg:px-5">{t('invitadosError')}</p>
+            ) : !invitees ? (
+              <div className="px-4 pb-5 lg:px-5">
+                <div className="skeleton h-14 w-full" />
+              </div>
+            ) : invitees.invitees.length === 0 ? (
+              <p className="px-4 pb-5 text-sm text-text-subtle lg:px-5">{t('invitadosVacio')}</p>
+            ) : (
+              <ul>
+                {invitees.invitees.map((p) => (
+                  <li
+                    key={p.id}
+                    className="flex items-center gap-3 border-t border-border-soft px-4 py-3 lg:px-5"
+                  >
+                    <span
+                      aria-hidden="true"
+                      className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-brand-50 text-xs font-bold text-brand-700"
+                    >
+                      {p.initials}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <div className="text-sm font-semibold text-text">
+                        {spacedInitials(p.initials)}
+                      </div>
+                      <div className="text-xs text-text-subtle">
+                        {t('entro', { date: formatDate(p.joinedAt, { dateStyle: 'long' }) })}
+                      </div>
+                    </div>
+                    <span
+                      className={cn(
+                        'rounded-full px-2.5 py-0.5 text-xs font-bold',
+                        INVITEE_TONE[p.state],
+                      )}
+                    >
+                      {t(`invitadoEstado.${p.state}`)}
+                    </span>
+                    <span
+                      className={cn(
+                        'w-20 text-right font-bold tabular-nums',
+                        p.generatedCents > 0 ? 'text-text' : 'text-text-subtle',
+                      )}
+                    >
+                      {formatCents(p.generatedCents, p.currency.toUpperCase())}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
           </section>
 
           <section className="rounded-2xl border border-border bg-surface">
