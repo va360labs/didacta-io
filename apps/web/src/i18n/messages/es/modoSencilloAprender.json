@@ -85,6 +85,8 @@
     },
     "cobro": "Lo que ganas se confirma cuando pasa el plazo de devolución y te lo paga {academia}.",
     "cobroMinimo": "Lo que ganas se confirma cuando pasa el plazo de devolución y te lo paga {academia} cuando llegas a {min}.",
+    "cobroODescuento": "Lo que ganas se confirma cuando pasa el plazo de devolución. Entonces puedes usarlo como descuento en tu próxima cuota o pedir que te lo pague {academia}.",
+    "cobroODescuentoMinimo": "Lo que ganas se confirma cuando pasa el plazo de devolución. Entonces puedes usarlo como descuento en tu próxima cuota o, cuando llegues a {min}, pedir que te lo pague {academia}.",
     "dudasTitulo": "Dudas",
     "dudas": {
       "cuando": "¿Cuándo empieza a contar?",

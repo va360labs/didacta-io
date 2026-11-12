@@ -85,6 +85,8 @@
     },
     "cobro": "What you earn is confirmed once the refund period is over and {academia} pays it to you.",
     "cobroMinimo": "What you earn is confirmed once the refund period is over and {academia} pays it to you when you reach {min}.",
+    "cobroODescuento": "What you earn is confirmed once the refund period is over. Then you can use it as a discount on your next fee or ask {academia} to pay it to you.",
+    "cobroODescuentoMinimo": "What you earn is confirmed once the refund period is over. Then you can use it as a discount on your next fee or, once you reach {min}, ask {academia} to pay it to you.",
     "dudasTitulo": "Questions",
     "dudas": {
       "cuando": "When does it start counting?",

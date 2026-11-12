@@ -531,9 +531,16 @@ export function SimpleReferrals() {
             <p className="mt-4 flex gap-2 rounded-xl bg-bg-subtle p-3 text-sm text-text-muted">
               <Icon name="help" size={16} />
               <span>
-                {stats.minPayoutCents > 0
-                  ? t('cobroMinimo', { academia: academy, min: money(stats.minPayoutCents) })
-                  : t('cobro', { academia: academy })}
+                {credit?.enabled
+                  ? stats.minPayoutCents > 0
+                    ? t('cobroODescuentoMinimo', {
+                        academia: academy,
+                        min: money(stats.minPayoutCents),
+                      })
+                    : t('cobroODescuento', { academia: academy })
+                  : stats.minPayoutCents > 0
+                    ? t('cobroMinimo', { academia: academy, min: money(stats.minPayoutCents) })
+                    : t('cobro', { academia: academy })}
               </span>
             </p>
           </section>
