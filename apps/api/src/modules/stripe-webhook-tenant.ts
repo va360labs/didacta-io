@@ -77,7 +77,23 @@ export interface StripeEventTenantInput {
   logger: WebhookRejectionLogger;
   host?: string;
   client?: ClientContext;
+  /**
+   * Solo con el modo plataforma encendido: ¿nombra el evento un objeto que
+   * cobró la PLATAFORMA (sesión, PaymentIntent, cargo, cliente… registrados en
+   * `mod_payouts_object_ref`, o la orden local de una de esas sesiones)?
+   *
+   * Esos eventos solo los firma Stripe con el secreto del operador y entran por
+   * el webhook de plataforma. Por un endpoint heredado los firma un aula con
+   * SUS claves: aunque fuera su propia venta, completaría una orden que la
+   * plataforma no ha cobrado. Se rechazan con 403 antes de tocar nada.
+   */
+  namesPlatformObject?: () => Promise<boolean>;
+  /** `code` del 403 por objeto de plataforma (por defecto, `errorCode`). */
+  platformObjectErrorCode?: string;
 }
+
+/** Acción de auditoría del rechazo por objeto de plataforma. */
+export const WEBHOOK_PLATFORM_OBJECT_AUDIT_ACTION = 'security.webhook.platform_object';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -86,6 +102,17 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
  * No tiene efectos cuando acepta; cuando rechaza, solo log + auditoría.
  */
 export async function resolveStripeEventTenant(input: StripeEventTenantInput): Promise<string> {
+  // Regla de la plataforma, la primera: ni siquiera el aula dueña de la venta
+  // puede firmar con sus claves un evento sobre lo que cobró el operador.
+  if (input.namesPlatformObject && (await input.namesPlatformObject())) {
+    await reportPlatformObjectWebhook(input);
+    throw new ForbiddenException({
+      message:
+        'Este evento es de un cobro hecho a través de la plataforma: solo se acepta por el webhook de la plataforma.',
+      code: input.platformObjectErrorCode ?? input.errorCode,
+    });
+  }
+
   const named = [...new Set(input.claims.filter((c): c is string => Boolean(c)))];
   const foreign = named.filter((t) => t !== input.verifiedTenantId);
 
@@ -115,6 +142,43 @@ export async function resolveStripeEventTenant(input: StripeEventTenantInput): P
     message: 'Este webhook solo acepta eventos del aula a la que pertenece este dominio.',
     code: input.errorCode,
   });
+}
+
+/** Rastro del rechazo: log de error y auditoría en el aula que firmó. */
+async function reportPlatformObjectWebhook(input: StripeEventTenantInput): Promise<void> {
+  const detail = {
+    provider: 'stripe',
+    endpoint: input.endpoint,
+    eventId: input.event.id.slice(0, 255),
+    eventType: input.event.type.slice(0, 100),
+    verifiedTenantId: input.verifiedTenantId,
+    credentialsSource: input.verified.source,
+    host: input.host ? input.host.slice(0, 255) : null,
+    ip: input.client?.ip ?? null,
+  };
+  input.logger.error(
+    { ...detail, code: input.platformObjectErrorCode ?? input.errorCode },
+    'WEBHOOK SOSPECHOSO: evento firmado con las claves de un aula que nombra un cobro de la PLATAFORMA. Rechazado sin procesar.',
+  );
+  try {
+    await runAsTenant(input.verifiedTenantId, () =>
+      input.audit({
+        tenantId: input.verifiedTenantId,
+        actorId: null,
+        action: WEBHOOK_PLATFORM_OBJECT_AUDIT_ACTION,
+        resourceType: 'stripe_webhook',
+        resourceId: detail.eventId,
+        metadata: detail,
+        ip: input.client?.ip ?? undefined,
+        userAgent: input.client?.userAgent ?? undefined,
+      }),
+    );
+  } catch (err) {
+    input.logger.error(
+      { err, eventId: detail.eventId },
+      'No se pudo auditar el webhook sospechoso (el rechazo se mantiene).',
+    );
+  }
 }
 
 async function sharesStripeAccount(input: StripeEventTenantInput, other: string): Promise<boolean> {
