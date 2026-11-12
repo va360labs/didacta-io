@@ -25,6 +25,14 @@ import { runGlobalWithoutTenant } from '../tenancy/tenant-context.storage';
 
 const NO_CTX: ClientContext = { ip: null, userAgent: null };
 
+/** Una regla automática del servidor (no una persona ni el plano de control). */
+interface SystemActor {
+  kind: 'system';
+  /** Qué regla actúa (`video-inactivity`). */
+  job: string;
+  metadata: Record<string, unknown>;
+}
+
 const SLUG_RE = /^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$/;
 const HOSTNAME_RE = /^[a-z0-9.-]{1,253}$/;
 
@@ -507,8 +515,25 @@ export class AdminTenantsService {
     return runGlobalWithoutTenant(() => this.setStatusGlobal(actor, id, status, ctx));
   }
 
+  /**
+   * Archiva un aula por una regla automática del servidor (sin persona ni
+   * credencial detrás): hoy, la política de inactividad del vídeo de Didacta
+   * Cloud. Hace EXACTAMENTE lo mismo que archivar desde el panel (cierra las
+   * sesiones, desconecta los cobros, audita); en el audit log el actor queda
+   * vacío y `metadata` dice qué regla fue (`actorKind: 'system'`, `job`).
+   */
+  async archiveBySystem(
+    id: string,
+    job: string,
+    metadata: Record<string, unknown> = {},
+  ): Promise<TenantListItem> {
+    return runGlobalWithoutTenant(() =>
+      this.setStatusGlobal({ kind: 'system', job, metadata }, id, 'ARCHIVED', NO_CTX),
+    );
+  }
+
   private async setStatusGlobal(
-    actor: AdminActor,
+    actor: AdminActor | SystemActor,
     id: string,
     status: 'ACTIVE' | 'SUSPENDED' | 'ARCHIVED',
     ctx: ClientContext,
@@ -558,7 +583,7 @@ export class AdminTenantsService {
 
     await this.auditLog.record({
       tenantId: id,
-      actorId: auditActorId(actor),
+      actorId: actor.kind === 'system' ? null : auditActorId(actor),
       action: `admin.tenant.status_changed.${status.toLowerCase()}`,
       resourceType: 'tenant',
       resourceId: id,
@@ -566,7 +591,9 @@ export class AdminTenantsService {
         previousStatus: t.status,
         newStatus: status,
         ...(payoutsOffboarding ? { payoutsOffboarding } : {}),
-        ...auditActorTrace(actor),
+        ...(actor.kind === 'system'
+          ? { actorKind: 'system', job: actor.job, ...actor.metadata }
+          : auditActorTrace(actor)),
       },
       ip: ctx.ip ?? undefined,
       userAgent: ctx.userAgent ?? undefined,

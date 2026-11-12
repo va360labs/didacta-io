@@ -148,7 +148,10 @@ function requireSuperAdmin(user: SessionClaims | undefined): SessionClaims {
  * blanca no se re-comprueba aquí a propósito, para que exista un solo sitio
  * donde ampliarla.
  */
-function requireAdminActor(user: SessionClaims | undefined, req: FastifyRequest): AdminActor {
+export function requireAdminActor(
+  user: SessionClaims | undefined,
+  req: FastifyRequest,
+): AdminActor {
   const machine = req.provisioningActor;
   if (machine) return { kind: 'provisioning', credentialId: machine.credentialId };
   return { kind: 'user', userId: requireSuperAdmin(user).sub };

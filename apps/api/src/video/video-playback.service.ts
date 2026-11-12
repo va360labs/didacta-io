@@ -3,10 +3,11 @@
  * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
  */
 
-import { Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { isCourseEditor } from '../modules/lesson-content-gate';
 import { PrismaAuditLogService } from '../modules/prisma-audit-log.service';
 import { bunnyEmbedBaseUrl, signBunnyEmbedUrl } from './bunny-embed';
+import { VIDEO_CLOUD_LIBRARY, type CloudVideoLibrary } from './cloud/video-cloud.tokens';
 import { VideoAccessService, type VideoViewer } from './video-access.service';
 import { VideoPlayLimiter, type VideoPlayWindow } from './video-play-limiter';
 import { VideoProtectionConfigService } from './video-protection-config.service';
@@ -28,6 +29,14 @@ export class VideoRateLimitedError extends Error {
     // llenado viaja aparte, en `window`.
     super('Has abierto demasiados vídeos distintos en poco tiempo. Vuelve a intentarlo más tarde.');
     this.name = 'VideoRateLimitedError';
+  }
+}
+
+/** La academia ha llegado al tope de horas vistas del mes (vídeo subido a Cloud). */
+export class VideoWatchQuotaError extends Error {
+  constructor() {
+    super('Esta academia ha llegado a su límite de horas de vídeo de este mes.');
+    this.name = 'VideoWatchQuotaError';
   }
 }
 
@@ -72,9 +81,14 @@ export class VideoPlaybackService {
     private readonly config: VideoProtectionConfigService,
     private readonly limiter: VideoPlayLimiter,
     private readonly auditLog: PrismaAuditLogService,
+    /** Solo con la subida de vídeo de Didacta Cloud encendida (`VideoCloudModule`). */
+    @Optional() @Inject(VIDEO_CLOUD_LIBRARY) private readonly cloud?: CloudVideoLibrary,
   ) {}
 
   async getPlayUrl(viewer: VideoViewer, libraryId: string, guid: string): Promise<PlayUrl> {
+    if (this.cloud && libraryId === this.cloud.libraryId) {
+      return this.getCloudPlayUrl(viewer, libraryId, guid, this.cloud);
+    }
     const protection = await this.config.resolveLibrary(viewer.tenantId, libraryId);
     if (!protection.active) {
       return {
@@ -100,6 +114,40 @@ export class VideoPlaybackService {
 
     const signed = signBunnyEmbedUrl({ libraryId, guid, tokenKey: protection.tokenKey });
     return { ...signed, protected: true, watermark: protection.settings.watermark };
+  }
+
+  /**
+   * Vídeo de la biblioteca de Didacta Cloud (compartida por todas las aulas):
+   * SIEMPRE firmado, y solo si el vídeo es de un aula de ESTE tenant —pegar en
+   * una lección la URL de un vídeo de otra academia no da acceso—. El
+   * interruptor de protección del aula no aplica (la biblioteca exige firma);
+   * el tope por cuenta y la marca de agua, sí.
+   */
+  private async getCloudPlayUrl(
+    viewer: VideoViewer,
+    libraryId: string,
+    guid: string,
+    cloud: CloudVideoLibrary,
+  ): Promise<PlayUrl> {
+    const editor = isCourseEditor(viewer.roles);
+    const decision = await cloud.resolvePlay({ tenantId: viewer.tenantId, guid, isEditor: editor });
+    if (decision.kind === 'not_ours') throw new VideoForbiddenError();
+    if (decision.kind === 'watch_quota_exceeded') throw new VideoWatchQuotaError();
+    if (!(await this.access.canPlay(viewer, guid))) throw new VideoForbiddenError();
+
+    const settings = await this.config.getSettings(viewer.tenantId);
+    if (!editor) {
+      const limit = await this.limiter.check(viewer.tenantId, viewer.userId, guid, {
+        perHour: settings.maxVideosPerHour,
+        perDay: settings.maxVideosPerDay,
+      });
+      if (!limit.allowed) {
+        await this.onRateLimited(viewer, guid, limit);
+        throw new VideoRateLimitedError(limit.window, limit.retryAfterSeconds);
+      }
+    }
+    const signed = signBunnyEmbedUrl({ libraryId, guid, tokenKey: decision.tokenKey });
+    return { ...signed, protected: true, watermark: settings.watermark };
   }
 
   private async onRateLimited(

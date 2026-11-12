@@ -35,6 +35,7 @@ import { SsoOidcModule } from './sso/oidc/oidc.module';
 import { SsoSamlModule } from './sso/saml/saml.module';
 import { SsoWpModule } from './sso/wp/wp-sso.module';
 import { TenancyModule } from './tenancy/tenancy.module';
+import { VideoCloudModule } from './video/cloud/video-cloud.module';
 import { VideoModule } from './video/video.module';
 import { WebhooksModule } from './webhooks/webhooks.module';
 
@@ -132,6 +133,8 @@ import { WebhooksModule } from './webhooks/webhooks.module';
     // autorización por vídeo, tope de vídeos distintos por cuenta y marca de
     // agua, por tenant. Infra CORE del host; reusa AuthModule y ModulesModule.
     VideoModule,
+    // Subida de vídeo a Bunny Stream (Didacta Cloud). Vacío sin BUNNY_STREAM_API_KEY.
+    VideoCloudModule.register(),
     // Quinto piloto License SDK — gate feat:reports.advanced_signed end-to-end.
     // Vivimos en módulo separado para acoplar `adm-zip` solo donde se usa.
     AuditExportModule,
