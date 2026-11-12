@@ -10,7 +10,10 @@ import http from 'node:http';
  * venta (crear Product y Price, y leerlos) y para el descuento por referidos
  * (leer el saldo de un cliente y abonarle: `POST
  * /v1/customers/:id/balance_transactions`, idempotente por `Idempotency-Key`
- * como Stripe). La API habla con él cuando
+ * como Stripe), y para una compra de curso: `POST /v1/checkout/sessions` devuelve
+ * una sesión cuya `url` es una página de pago de mentira servida por el propio
+ * doble (`GET /pagar/:id`); el test completa el pago con el webhook firmado.
+ * La API habla con él cuando
  * arranca con `STRIPE_TEST_API_URL` y una clave `sk_test_` (ver
  * `apps/api/src/modules/stripe-test-api.ts`). Guarda lo creado en memoria y
  * lo expone para que el test pueda comprobarlo.
@@ -40,6 +43,7 @@ export async function startStripeDouble(
   const balances = new Map<string, number>();
   const idempotent = new Map<string, Record<string, unknown>>();
   let seq = 0;
+  const run = Date.now().toString(36);
   const server = http.createServer((req, res) => {
     let raw = '';
     req.on('data', (c) => (raw += c));
@@ -60,6 +64,26 @@ export async function startStripeDouble(
           active: true,
           type: 'one_time',
         };
+      } else if (req.method === 'POST' && path === '/v1/checkout/sessions') {
+        // Único entre ejecuciones: `stripe_session_id` es UNIQUE en toda la base.
+        const id = `cs_doble_${run}_${++seq}`;
+        obj = {
+          id,
+          object: 'checkout.session',
+          mode: body.mode,
+          url: `http://127.0.0.1:${port}/pagar/${id}`,
+          metadata: Object.fromEntries(
+            Object.entries(body)
+              .filter(([k]) => k.startsWith('metadata['))
+              .map(([k, v]) => [k.slice('metadata['.length, -1), v]),
+          ),
+        };
+      } else if (req.method === 'GET' && path.startsWith('/pagar/')) {
+        res.setHeader('content-type', 'text/html; charset=utf-8');
+        res.end(
+          `<!doctype html><title>Pago de prueba</title><h1>Pago de prueba</h1><p data-session="${path.slice('/pagar/'.length)}">Doble de Stripe</p>`,
+        );
+        return;
       } else if (req.method === 'GET' && /^\/v1\/(prices|products)\//.test(path)) {
         obj = objects.get(path.split('/').pop()!);
       } else if (req.method === 'GET' && /^\/v1\/customers\/[^/]+$/.test(path)) {
