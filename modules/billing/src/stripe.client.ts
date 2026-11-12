@@ -124,6 +124,10 @@ export interface StripeAdapterOptions {
    * `payment_intent_data.on_behalf_of` (el comercio que ve el comprador y el que
    * figura en el extracto es esa cuenta) y `transfer_group: 'didacta_<orderId>'`,
    * que agrupa en Stripe el cargo y la transferencia posterior de su parte.
+   *
+   * Nunca `application_fee_amount` ni `transfer_data.amount`: desactivan los
+   * precios multidivisa (`currency_options`) y Adaptive Pricing. La parte del
+   * creador se transfiere después, con la comisión real ya conocida.
    */
   readonly connect?: { readonly onBehalfOf: string };
   /**

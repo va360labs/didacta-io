@@ -19,7 +19,10 @@ import type { PlatformStripeClient, StripeObject } from '../stripe/platform-stri
  *
  * Reglas:
  *  - Los importes se LEEN DE LA API (`GET /v1/checkout/sessions/{id}` con el
- *    PaymentIntent y su cargo expandidos), nunca del evento.
+ *    PaymentIntent, su cargo y su `balance_transaction` expandidos), nunca
+ *    del evento. Lo que pagó el alumno (con Adaptive Pricing, en su moneda:
+ *    `charge.presentment_details`) va a `presentment_*`; la divisa de
+ *    liquidación, de `balance_transaction`, a `gross`/`currency`.
  *  - Sin cobro confirmado no hay venta: `payment_status` distinto de `paid`
  *    (pago diferido —SEPA, transferencia— que aún no ha llegado) o un cargo
  *    que no está `succeeded`. La venta se crea con `async_payment_succeeded`.
@@ -71,6 +74,22 @@ interface ChargeFromApi {
   readonly created?: number;
   readonly on_behalf_of?: unknown;
   readonly customer?: unknown;
+  /**
+   * Con Adaptive Pricing el alumno paga en SU moneda (p. ej. 2.149,77 MXN) y
+   * el cargo va en la del precio (100,00 €): aquí está lo que pagó él.
+   */
+  readonly presentment_details?: {
+    readonly presentment_amount?: number;
+    readonly presentment_currency?: string;
+  } | null;
+  /** Expandido: importe en la divisa de LIQUIDACIÓN. Null hasta que Stripe lo asienta. */
+  readonly balance_transaction?: unknown;
+}
+
+interface BalanceTransactionFromApi {
+  readonly id: string;
+  readonly amount?: number;
+  readonly currency?: string;
 }
 
 export async function recordCheckoutSale(
@@ -80,7 +99,7 @@ export async function recordCheckoutSale(
   const session = await deps.stripe.v1<SessionFromApi>(
     'GET',
     `/v1/checkout/sessions/${encodeURIComponent(input.sessionId)}`,
-    { expand: ['payment_intent.latest_charge', 'line_items'] },
+    { expand: ['payment_intent.latest_charge.balance_transaction', 'line_items'] },
   );
   if (session.mode !== 'payment') return { outcome: 'not_a_payment' };
   if (session.payment_status !== 'paid') return { outcome: 'not_paid' };
@@ -158,9 +177,31 @@ export async function recordCheckoutSale(
   );
 
   // 2) La venta.
+  //    - presentment_*: lo que pagó el alumno, en SU moneda. Con Adaptive
+  //      Pricing está en `presentment_details`; si no, es el propio cargo.
+  //    - gross/currency: la divisa de LIQUIDACIÓN, de `balance_transaction`, y
+  //      solo si Stripe ya la ha asentado. El reparto (comisión real, 5 %,
+  //      transferencia) es de la liquidación (E4): la venta sigue AWAITING_FEE.
   const chargeId = charge.id;
-  const amount = charge.amount!;
-  const currency = charge.currency.toLowerCase();
+  const presented = charge.presentment_details;
+  const presentedAmount = presented?.presentment_amount;
+  const presentedCurrency = presented?.presentment_currency;
+  const hasPresentment =
+    Number.isInteger(presentedAmount) && (presentedAmount ?? 0) > 0 && !!presentedCurrency;
+  const presentmentAmount = hasPresentment ? presentedAmount! : charge.amount!;
+  const presentmentCurrency = (hasPresentment ? presentedCurrency! : charge.currency).toLowerCase();
+  const bt =
+    charge.balance_transaction && typeof charge.balance_transaction === 'object'
+      ? (charge.balance_transaction as BalanceTransactionFromApi)
+      : null;
+  const settled =
+    bt && idOf(bt.id) && Number.isInteger(bt.amount) && bt.currency
+      ? {
+          stripeBalanceTransactionId: bt.id,
+          gross: bt.amount!,
+          currency: bt.currency.toLowerCase(),
+        }
+      : {};
   const chargedAt = Number.isInteger(charge.created)
     ? new Date(charge.created! * 1000)
     : new Date();
@@ -185,8 +226,9 @@ export async function recordCheckoutSale(
           buyerEmail: session.customer_details?.email ?? null,
           stripeChargeId: chargeId,
           stripePaymentIntentId: intentId,
-          presentmentAmount: amount,
-          presentmentCurrency: currency,
+          presentmentAmount,
+          presentmentCurrency,
+          ...settled,
           status: 'AWAITING_FEE',
           chargedAt,
         },

@@ -165,8 +165,42 @@ describe('recordCheckoutSale', () => {
     expect(stripe.calls[0]).toMatchObject({
       method: 'GET',
       path: '/v1/checkout/sessions/cs_test_Sesion',
-      params: { expand: ['payment_intent.latest_charge', 'line_items'] },
+      params: { expand: ['payment_intent.latest_charge.balance_transaction', 'line_items'] },
     });
+  });
+
+  it('Adaptive Pricing: el alumno paga en su moneda (MXN) y el cargo y la liquidación van en EUR', async () => {
+    seedPaid({ amount: 10000 });
+    stripe.seed({
+      id: 'txn_1Liquidacion',
+      object: 'balance_transaction',
+      amount: 10000,
+      currency: 'eur',
+    });
+    stripe.patch('ch_3Cargo', {
+      presentment_details: { presentment_amount: 214977, presentment_currency: 'mxn' },
+      balance_transaction: 'txn_1Liquidacion',
+    });
+    await recordCheckoutSale({ db: db.port(), stripe }, input);
+    expect(db.sales[0]).toMatchObject({
+      presentmentAmount: 214977,
+      presentmentCurrency: 'mxn',
+      gross: 10000,
+      currency: 'eur',
+      stripeBalanceTransactionId: 'txn_1Liquidacion',
+      // El reparto es de la liquidación (E4).
+      status: 'AWAITING_FEE',
+    });
+    expect(db.sales[0]).not.toHaveProperty('stripeFee');
+  });
+
+  it('sin presentment_details lo pagado es el propio cargo; sin balance_transaction, sin gross', async () => {
+    seedPaid({ amount: 4900 });
+    stripe.patch('ch_3Cargo', { presentment_details: null });
+    await recordCheckoutSale({ db: db.port(), stripe }, input);
+    expect(db.sales[0]).toMatchObject({ presentmentAmount: 4900, presentmentCurrency: 'eur' });
+    expect(db.sales[0]).not.toHaveProperty('gross');
+    expect(db.sales[0]).not.toHaveProperty('currency');
   });
 
   it('cinco veces la misma sesión → una venta', async () => {
