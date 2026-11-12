@@ -212,6 +212,9 @@ test.describe('Viaje 2 público — catálogo y compra anónima (F4)', () => {
         object: {
           id: sessionId,
           object: 'checkout.session',
+          // Stripe SIEMPRE lo manda en una Checkout Session, y el fulfillment falla
+          // cerrado sin él: sin cobro resuelto no se concede acceso.
+          payment_status: 'paid',
           // Metadata del checkout PÚBLICO: SIN userId — la order no tiene dueño.
           metadata: { orderId, productId, tenantId: tid, courseId: course.id },
           customer_email: null,

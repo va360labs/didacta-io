@@ -175,6 +175,9 @@ test.describe('Membresía — trial completo (webhooks Stripe firmados)', () => 
         object: {
           id: `cs_e2e_${stamp}`,
           object: 'checkout.session',
+          // Stripe SIEMPRE lo manda en una Checkout Session, y el fulfillment falla
+          // cerrado sin él: sin cobro resuelto no se concede acceso.
+          payment_status: 'no_payment_required',
           metadata: { membership: '1', tenantId, planId: plan.body.id },
           subscription: stripeSubId,
           customer: `cus_e2e_${stamp}`,

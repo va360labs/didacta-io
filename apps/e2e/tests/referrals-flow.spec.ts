@@ -165,6 +165,9 @@ test.describe('Referidos — flujo completo (webhooks Stripe firmados)', () => {
         object: {
           id: `cs_e2e_ref_${stamp}`,
           object: 'checkout.session',
+          // Stripe SIEMPRE lo manda en una Checkout Session, y el fulfillment falla
+          // cerrado sin él: sin cobro resuelto no se concede acceso.
+          payment_status: 'paid',
           metadata: { membership: '1', tenantId, planId: plan.body.id, referralCode: code },
           subscription: stripeSubId,
           customer: `cus_e2e_ref_${stamp}`,
@@ -185,6 +188,7 @@ test.describe('Referidos — flujo completo (webhooks Stripe firmados)', () => {
         object: {
           id: `cs_e2e_ref_${stamp}`,
           object: 'checkout.session',
+          payment_status: 'paid',
           metadata: { membership: '1', tenantId, planId: plan.body.id, referralCode: code },
           subscription: stripeSubId,
           customer: `cus_e2e_ref_${stamp}`,
@@ -204,6 +208,7 @@ test.describe('Referidos — flujo completo (webhooks Stripe firmados)', () => {
         object: {
           id: `cs_e2e_ref_${stamp}_self`,
           object: 'checkout.session',
+          payment_status: 'paid',
           metadata: { membership: '1', tenantId, planId: plan.body.id, referralCode: code },
           subscription: `sub_e2e_ref_${stamp}_self`,
           customer: `cus_e2e_ref_${stamp}_self`,
@@ -375,6 +380,7 @@ test.describe('Referidos — flujo completo (webhooks Stripe firmados)', () => {
         object: {
           id: `cs_e2e_refund_${stamp}`,
           object: 'checkout.session',
+          payment_status: 'paid',
           metadata: { membership: '1', tenantId, planId: plan.body.id, referralCode: code },
           subscription: stripeSubId,
           customer: `cus_e2e_refund_${stamp}`,
