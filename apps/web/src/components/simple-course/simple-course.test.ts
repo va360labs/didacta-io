@@ -4,7 +4,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { parseAmount, suggestCurrency } from '@/lib/simple-mode';
+import { parseAmount, saleState, suggestCurrency } from '@/lib/simple-mode';
 import { lessonReady } from './simple-course-editor';
 import { toSlug } from './slug';
 
@@ -39,5 +39,18 @@ describe('precio en el alta', () => {
     expect(suggestCurrency('en-GB', plataforma)).toBe('gbp');
     expect(suggestCurrency('es-MX', plataforma)).toBe('eur');
     expect(suggestCurrency('es-MX', ['eur', 'mxn'])).toBe('mxn');
+  });
+});
+
+describe('¿se puede comprar ya?', () => {
+  const paso = (done: boolean) => [{ id: 'payments' as const, done }];
+  it('sin publicar', () => {
+    expect(saleState({ salePath: null, steps: paso(true) })).toBe('unpublished');
+  });
+  it('publicado sin cobros: NO se puede comprar', () => {
+    expect(saleState({ salePath: '/catalogo/x', steps: paso(false) })).toBe('not-purchasable');
+  });
+  it('publicado con cobros: a la venta', () => {
+    expect(saleState({ salePath: '/catalogo/x', steps: paso(true) })).toBe('on-sale');
   });
 });

@@ -25,7 +25,7 @@ import {
   type PayoutsSummaryDto,
 } from '@/lib/payouts';
 import { referralsAdminApi, type AdminCommissionRow, type ReferralsConfig } from '@/lib/referrals';
-import { parseAmount, simpleModeApi, type StartHereView } from '@/lib/simple-mode';
+import { parseAmount, saleState, simpleModeApi, type StartHereView } from '@/lib/simple-mode';
 import { cn } from '@/lib/utils';
 import { bpsToPercentInput, percentToBps, primaryCurrency, referralSales } from './sales-math';
 
@@ -181,7 +181,7 @@ export function SimpleSales({
               <h2 className="text-base font-bold text-text">{t('vacio.titulo')}</h2>
               <p className="mt-0.5 max-w-[60ch] text-sm text-text-muted">{t('vacio.texto')}</p>
             </div>
-            {view.salePath ? (
+            {!ready ? null : view.salePath ? (
               <a
                 href="#enlace"
                 className="inline-flex h-10 items-center rounded-xl bg-brand-600 px-4 text-sm font-semibold text-white hover:bg-brand-700"
@@ -307,6 +307,9 @@ function SaleLinkCard({
   useEffect(() => setOrigin(window.location.origin), []);
   const offer = view.offer;
   const published = view.salePath !== null;
+  // Publicado no basta: sin cobros conectados nadie puede pagar.
+  const state = saleState(view);
+  const onSale = state === 'on-sale';
   const path =
     view.salePath ??
     (offer?.kind === 'membership'
@@ -338,24 +341,36 @@ function SaleLinkCard({
         <span
           className={cn(
             'inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-bold',
-            published ? 'bg-success-50 text-success-700' : 'bg-bg-subtle text-text-subtle',
+            onSale
+              ? 'bg-success-50 text-success-700'
+              : state === 'not-purchasable'
+                ? 'bg-warning-50 text-warning-700'
+                : 'bg-bg-subtle text-text-subtle',
           )}
+          data-testid="estado-venta"
         >
-          <Icon name={published ? 'globe' : 'lock'} size={12} />
-          {published ? t('aLaVenta') : t('sinPublicar')}
+          <Icon name={onSale ? 'globe' : 'lock'} size={12} />
+          {onSale
+            ? t('aLaVenta')
+            : state === 'not-purchasable'
+              ? t('noComprable')
+              : t('sinPublicar')}
         </span>
       </div>
       {url ? (
         <div className="mt-3 flex h-12 min-w-0 items-center gap-2 rounded-xl border border-border bg-bg-subtle px-3 text-[15px] text-text">
-          <Icon name={published ? 'link' : 'lock'} size={16} />
+          <Icon name={onSale ? 'link' : 'lock'} size={16} />
           <span className="truncate">{url.replace(/^https?:\/\//, '')}</span>
         </div>
+      ) : null}
+      {state === 'not-purchasable' ? (
+        <p className="mt-2 text-[13px] text-warning-700">{t('notaNoComprable')}</p>
       ) : null}
       <div className="mt-3 grid gap-2">
         <button
           type="button"
           onClick={copy}
-          disabled={!published}
+          disabled={!onSale}
           className="inline-flex h-11 items-center justify-center gap-1.5 rounded-xl bg-brand-600 px-3 text-[15px] font-semibold text-white hover:bg-brand-700 disabled:bg-bg-subtle disabled:text-text-disabled"
         >
           <Icon name="link" size={15} />

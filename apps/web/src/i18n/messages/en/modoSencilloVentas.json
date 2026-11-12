@@ -45,7 +45,9 @@
     "cancelar": "Cancel",
     "precioInvalido": "Write a price greater than zero.",
     "precioError": "Could not change the price. Try again.",
-    "comision": "Didacta keeps {percent}% of each sale. You see it broken down on each payment."
+    "comision": "Didacta keeps {percent}% of each sale. You see it broken down on each payment.",
+    "noComprable": "Cannot be bought yet",
+    "notaNoComprable": "Connect your payouts so people can buy. Until then the link cannot be used to sell."
   },
   "referidos": {
     "titulo": "Your students sell for you",

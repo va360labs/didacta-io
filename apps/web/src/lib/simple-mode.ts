@@ -114,6 +114,17 @@ export interface StartHereView {
   paymentsSetupPath: string;
 }
 
+/**
+ * ¿Se puede comprar ya? Un curso publicado con los cobros sin conectar NO se
+ * puede comprar: el enlace existe pero nadie podría pagar.
+ */
+export type SaleState = 'on-sale' | 'not-purchasable' | 'unpublished';
+
+export function saleState(view: Pick<StartHereView, 'salePath' | 'steps'>): SaleState {
+  if (!view.salePath) return 'unpublished';
+  return view.steps.find((s) => s.id === 'payments')?.done ? 'on-sale' : 'not-purchasable';
+}
+
 /** «49», «49,90» o «49.90» → unidad mínima de la moneda; `null` si no vale. */
 export function parseAmount(raw: string, currency: string): number | null {
   const n = Number(raw.trim().replace(/\s/g, '').replace(',', '.'));

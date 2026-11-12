@@ -45,7 +45,9 @@
     "cancelar": "Cancelar",
     "precioInvalido": "Escribe un precio mayor que cero.",
     "precioError": "No se ha podido cambiar el precio. Inténtalo de nuevo.",
-    "comision": "Didacta se queda el {percent} % de cada venta. Lo ves desglosado en cada cobro."
+    "comision": "Didacta se queda el {percent} % de cada venta. Lo ves desglosado en cada cobro.",
+    "noComprable": "Aún no se puede comprar",
+    "notaNoComprable": "Conecta tus cobros para que se pueda comprar. Hasta entonces el enlace no sirve para vender."
   },
   "referidos": {
     "titulo": "Tus alumnos venden por ti",
