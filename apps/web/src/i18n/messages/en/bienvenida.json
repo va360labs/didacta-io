@@ -83,6 +83,7 @@
 
   "cobrosTitulo": "Will you charge for your courses?",
   "cobrosCuerpo": "You can sell your courses with card payments through Stripe. The money goes straight to your account — we never touch it.",
+  "cobrosCuerpoConectar": "Connect your payouts and your students can pay you by card. It takes a few minutes and there are no keys to paste.",
   "cobrosNo": "I don't sell courses",
 
   "correoTitulo": "Emails, under your name",

@@ -9,6 +9,7 @@ import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslations } from 'next-intl';
+import { PaymentsConnectCard } from '@/components/admin/payments-connect-card';
 import { SmtpSettingsCard } from '@/components/admin/smtp-settings-card';
 import { StripeSettingsCard } from '@/components/admin/stripe-settings-card';
 import { Icon, type IconName } from '@/components/icon';
@@ -19,18 +20,23 @@ import { Label } from '@/components/ui/label';
 import { authStorage } from '@/lib/auth-storage';
 import {
   academyApi,
+  ajustarAlModo,
+  cobrosConectados,
   concederPaseDeBienvenida,
-  DESTINOS,
+  destinos,
   onboardingApi,
-  ONBOARDING_STEPS,
-  PASOS_CONTABLES,
+  onboardingSteps,
+  pasosContables,
   PASOS_OBLIGATORIOS,
+  paymentsSetupOf,
   retirarPaseDeBienvenida,
+  tarjetaDeCobros,
   VACIO,
   type Academy,
   type OnboardingProgress,
   type OnboardingStep,
 } from '@/lib/academy';
+import { derivePayoutsCardView, payoutsApi, type PayoutsStatusDto } from '@/lib/payouts';
 import {
   publishThemeUpdate,
   themingApi,
@@ -52,6 +58,28 @@ const RAIL: Array<{ paso: OnboardingStep; icono: IconName; clave: string }> = [
 ];
 
 /**
+ * Estado de los cobros de plataforma, o `null` (= el asistente de siempre).
+ * Un fallo al preguntar NUNCA bloquea: se cae al modo de claves propias.
+ *
+ * Con `sync` se le pide a la API que lo consulte en Stripe. Se usa cuando el
+ * asistente estaba en el paso de cobros: vuelve de terminar el alta en Stripe
+ * (su `return_url` es Cobros, y el gate de la academia lo devuelve aquí) y el
+ * estado guardado puede no haberse enterado aún.
+ */
+async function leerCobrosDePlataforma(sync: boolean): Promise<PayoutsStatusDto | null> {
+  try {
+    return await payoutsApi.status({ sync });
+  } catch {
+    if (!sync) return null;
+    try {
+      return await payoutsApi.status();
+    } catch {
+      return null;
+    }
+  }
+}
+
+/**
  * Asistente de puesta en marcha de la academia.
  *
  * Bloqueante por decisión de producto, pero **solo `nombre` y `marca` son
@@ -61,6 +89,11 @@ const RAIL: Array<{ paso: OnboardingStep; icono: IconName; clave: string }> = [
  * formulario propio, y cobros y correo embebiendo las mismas cards de
  * Configuración (`StripeSettingsCard`, `SmtpSettingsCard`) — mandarlos a otra
  * pestaña rompía el hilo del asistente. Todo lo no obligatorio lleva «Ahora no».
+ *
+ * En modo plataforma (Didacta Cloud) cambian dos cosas: el paso de cobros
+ * embebe la tarjeta «Conectar cobros» (`PaymentsConnectCard`) en vez de la de
+ * claves, y el paso de correo no existe — el correo sale de la plataforma. El
+ * modo se pregunta durante la carga, así que el rail nunca cambia a la vista.
  *
  * El progreso se guarda en el servidor a cada paso (ver `onboardingApi`), no al
  * final: si se cae la conexión en el paso 5, no se pierden los cuatro anteriores.
@@ -95,9 +128,17 @@ export default function BienvenidaPage() {
   // Referencias estables: son dependencia del efecto de carga de las cards.
   const marcarCobrosHecho = useCallback(() => setCobrosHecho(true), []);
   const marcarCorreoHecho = useCallback(() => setCorreoHecho(true), []);
+  // Cobros de plataforma (Didacta Cloud). `null` = asistente de siempre.
+  const [cobrosPlataforma, setCobrosPlataforma] = useState<PayoutsStatusDto | null>(null);
+  const setup = paymentsSetupOf(cobrosPlataforma);
+  const pasos = useMemo(() => onboardingSteps(setup), [setup]);
+  const destinosDelModo = useMemo(() => destinos(setup), [setup]);
+  const rail = useMemo(() => RAIL.filter((r) => pasos.includes(r.paso)), [pasos]);
+  const totalPasos = pasosContables(setup);
+  const vistaCobros = derivePayoutsCardView(cobrosPlataforma);
 
   const paso = progreso.step;
-  const indice = ONBOARDING_STEPS.indexOf(paso);
+  const indice = pasos.indexOf(paso);
 
   useEffect(() => {
     const token = authStorage.getAccessToken();
@@ -107,10 +148,16 @@ export default function BienvenidaPage() {
     }
     let cancelado = false;
     void (async () => {
-      const [prog, aca, th] = await Promise.all([
-        onboardingApi.read(),
+      const lecturaProgreso = onboardingApi.read();
+      const [prog, aca, th, cobros] = await Promise.all([
+        lecturaProgreso,
         academyApi.getMine(token).catch(() => null),
         themingApi.getMine(token).catch(() => null),
+        // Dentro de la carga, no después: los pasos dependen del modo y el
+        // rail no debe cambiar a la vista.
+        lecturaProgreso.then((p) =>
+          p.completedAt ? null : leerCobrosDePlataforma(p.step === 'cobros'),
+        ),
       ]);
       if (cancelado) return;
       // Ya lo hizo (o lo hizo el otro admin de la academia): no se repite.
@@ -118,7 +165,14 @@ export default function BienvenidaPage() {
         router.replace('/inicio');
         return;
       }
-      setProgreso(prog);
+      const setupLeido = paymentsSetupOf(cobros);
+      setCobrosPlataforma(setupLeido === 'platform' ? cobros : null);
+      if (setupLeido === 'platform' && cobrosConectados(derivePayoutsCardView(cobros))) {
+        setCobrosHecho(true);
+      }
+      // Un `step: 'correo'` guardado no existe en modo plataforma: pasa al
+      // siguiente paso válido en vez de dejarlo delante de una pantalla vacía.
+      setProgreso(ajustarAlModo(prog, setupLeido));
       setAcademia(aca);
       setTheme(th);
       // El nombre autogenerado NO se precarga: si lo dejamos escrito, basta con
@@ -171,15 +225,15 @@ export default function BienvenidaPage() {
 
   const avanzar = useCallback(
     (marcar?: { done?: boolean; skipped?: boolean }) => {
-      const siguiente = ONBOARDING_STEPS[Math.min(indice + 1, ONBOARDING_STEPS.length - 1)]!;
+      const siguiente = pasos[Math.min(indice + 1, pasos.length - 1)]!;
       irA(siguiente, marcar);
     },
-    [indice, irA],
+    [indice, irA, pasos],
   );
 
   const retroceder = useCallback(() => {
-    irA(ONBOARDING_STEPS[Math.max(indice - 1, 0)]!);
-  }, [indice, irA]);
+    irA(pasos[Math.max(indice - 1, 0)]!);
+  }, [indice, irA, pasos]);
 
   const guardarNombre = useCallback(async () => {
     const limpio = nombre.trim();
@@ -249,7 +303,7 @@ export default function BienvenidaPage() {
 
   const esObligatorio = PASOS_OBLIGATORIOS.includes(paso);
   const conRail = paso !== 'bienvenida' && paso !== 'resumen';
-  const pendientes = ONBOARDING_STEPS.filter((p) => progreso.skipped.includes(p) && DESTINOS[p]);
+  const pendientes = pasos.filter((p) => progreso.skipped.includes(p) && destinosDelModo[p]);
 
   // La cabecera se pinta SIEMPRE — también durante la carga — para que la marca
   // no parpadee al entrar. Durante la carga enseña la de Didacta.
@@ -369,16 +423,16 @@ export default function BienvenidaPage() {
             <>
               {/* Rail de progreso (escritorio): los 6 pasos, con su estado. */}
               <nav
-                aria-label={t('progreso', { actual: indice, total: PASOS_CONTABLES })}
+                aria-label={t('progreso', { actual: indice, total: totalPasos })}
                 className="hidden border-r border-border-soft bg-surface-2 p-4 md:block"
               >
                 <p className="mb-4 px-2 text-xs font-medium uppercase tracking-wide text-text-subtle">
-                  {t('progreso', { actual: indice, total: PASOS_CONTABLES })}
+                  {t('progreso', { actual: indice, total: totalPasos })}
                 </p>
                 <ol className="space-y-1">
-                  {RAIL.map(({ paso: p, icono, clave }, i) => {
+                  {rail.map(({ paso: p, icono, clave }, i) => {
                     const estado = railEstado(p);
-                    const visitable = ONBOARDING_STEPS.indexOf(p) < indice;
+                    const visitable = pasos.indexOf(p) < indice;
                     return (
                       <li key={p}>
                         <button
@@ -419,10 +473,10 @@ export default function BienvenidaPage() {
               {/* Progreso compacto (móvil): contador + segmentos. */}
               <div className="border-b border-border-soft p-4 md:hidden">
                 <p className="mb-2 text-sm text-text-muted">
-                  {t('progreso', { actual: indice, total: PASOS_CONTABLES })}
+                  {t('progreso', { actual: indice, total: totalPasos })}
                 </p>
                 <div className="flex gap-1.5">
-                  {RAIL.map(({ paso: p }) => {
+                  {rail.map(({ paso: p }) => {
                     const estado = railEstado(p);
                     return (
                       <div
@@ -528,14 +582,25 @@ export default function BienvenidaPage() {
                     <h1 className="font-display text-2xl font-bold tracking-tight">
                       {t('cobrosTitulo')}
                     </h1>
-                    <p className="text-text-muted">{t('cobrosCuerpo')}</p>
+                    <p className="text-text-muted">
+                      {setup === 'platform' ? t('cobrosCuerpoConectar') : t('cobrosCuerpo')}
+                    </p>
                   </header>
-                  {/* La misma card de Configuración → Pagos, embebida: salir a
-                      otra pestaña rompía el hilo del asistente. Al guardar (o
-                      si ya había config propia) marca el paso hecho y el pie
-                      pasa de «Ahora no» a «Continuar». */}
-                  <StripeSettingsCard onSaved={marcarCobrosHecho} />
-                  {!cobrosHecho && (
+                  {tarjetaDeCobros(setup) === 'conectar' ? (
+                    // La misma tarjeta de Administración → Cobros, con el
+                    // estado ya leído en la carga (sin segundo «Cargando…»).
+                    // Conectar lleva al alta de Stripe; al volver, el estado
+                    // se relee con `sync` y, si quedó lista o en revisión, el
+                    // pie pasa a «Continuar».
+                    <PaymentsConnectCard initialStatus={cobrosPlataforma} />
+                  ) : (
+                    // La misma card de Configuración → Pagos, embebida: salir
+                    // a otra pestaña rompía el hilo del asistente. Al guardar
+                    // (o si ya había config propia) marca el paso hecho y el
+                    // pie pasa de «Ahora no» a «Continuar».
+                    <StripeSettingsCard onSaved={marcarCobrosHecho} />
+                  )}
+                  {!cobrosHecho && (setup === 'own' || vistaCobros.kind === 'not-connected') && (
                     <Button type="button" variant="outline" onClick={() => avanzar({ done: true })}>
                       {t('cobrosNo')}
                     </Button>
@@ -628,7 +693,7 @@ export default function BienvenidaPage() {
                               </span>
                               <a
                                 className="flex items-center gap-1 text-sm font-semibold text-brand-600 hover:underline"
-                                href={DESTINOS[p]}
+                                href={destinosDelModo[p]}
                                 target="_blank"
                                 rel="noopener"
                                 onClick={() => concederPaseDeBienvenida()}

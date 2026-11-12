@@ -74,6 +74,98 @@ export const DESTINOS: Partial<Record<OnboardingStep, string>> = {
 };
 
 /**
+ * Cómo se cobra en esta instalación, visto desde el asistente.
+ *
+ *  - `platform` — Didacta Cloud (`GET /modules/payouts/status` con
+ *    `mode: 'platform'`): los cobros se conectan con un botón, sin pegar
+ *    claves, y el correo sale de la plataforma, así que el paso de correo
+ *    propio (SMTP) sobra.
+ *  - `own` — todo lo demás: Community (sin la ruta → `null`), un tenant con
+ *    claves propias heredadas (`mode: 'own'`) y cualquier fallo al preguntar.
+ *    El asistente de siempre, con la tarjeta de claves y el paso de correo.
+ */
+export type PaymentsSetup = 'platform' | 'own';
+
+export function paymentsSetupOf(status: { mode: string } | null | undefined): PaymentsSetup {
+  return status?.mode === 'platform' ? 'platform' : 'own';
+}
+
+/** Pasos que no existen en cada modo. */
+const PASOS_FUERA: Record<PaymentsSetup, readonly OnboardingStep[]> = {
+  platform: ['correo'],
+  own: [],
+};
+
+/** Los pasos del asistente en este modo, en orden. */
+export function onboardingSteps(setup: PaymentsSetup): readonly OnboardingStep[] {
+  const fuera = PASOS_FUERA[setup];
+  return ONBOARDING_STEPS.filter((p) => !fuera.includes(p));
+}
+
+/** El «Paso X de N» de este modo (sin portada ni resumen). */
+export function pasosContables(setup: PaymentsSetup): number {
+  return onboardingSteps(setup).length - 2;
+}
+
+/**
+ * Los destinos de este modo. En modo plataforma los cobros viven en
+ * Administración → Cobros (la pestaña «Pagos» de Configuración no existe ahí)
+ * y no hay destino de correo porque no hay paso de correo.
+ */
+export function destinos(setup: PaymentsSetup): Partial<Record<OnboardingStep, string>> {
+  if (setup === 'own') return DESTINOS;
+  const plataforma: Partial<Record<OnboardingStep, string>> = {
+    ...DESTINOS,
+    cobros: '/admin/cobros',
+  };
+  delete plataforma.correo;
+  return plataforma;
+}
+
+/**
+ * Qué tarjeta lleva el paso de cobros: la de «Conectar cobros» (sin claves)
+ * en modo plataforma; la de claves de Stripe de siempre en el resto.
+ */
+export function tarjetaDeCobros(setup: PaymentsSetup): 'conectar' | 'claves' {
+  return setup === 'platform' ? 'conectar' : 'claves';
+}
+
+/**
+ * En modo plataforma, ¿el paso de cobros ya está resuelto? Sí cuando la cuenta
+ * está lista o Stripe la está revisando: no le queda nada que hacer. Si aún no
+ * conectó o le falta un dato, sigue pendiente («Ahora no» lo deja en el
+ * resumen con su enlace a Cobros).
+ */
+export function cobrosConectados(view: { kind: string }): boolean {
+  return view.kind === 'ready' || view.kind === 'review';
+}
+
+/**
+ * Ajusta un progreso guardado al modo actual. Un `step` que en este modo no
+ * existe (un `correo` guardado antes de pasar a Cloud) lleva al SIGUIENTE paso
+ * válido — nunca deja al admin delante de una pantalla que ya no se pinta — y
+ * las entradas de `done`/`skipped` de pasos que no existen se quitan, para que
+ * ni cuenten en el rail ni salgan como pendientes en el resumen.
+ */
+export function ajustarAlModo(
+  progress: OnboardingProgress,
+  setup: PaymentsSetup,
+): OnboardingProgress {
+  const pasos = onboardingSteps(setup);
+  const valido = (p: OnboardingStep) => pasos.includes(p);
+  const desde = ONBOARDING_STEPS.indexOf(progress.step);
+  const step = valido(progress.step)
+    ? progress.step
+    : (pasos.find((p) => ONBOARDING_STEPS.indexOf(p) > desde) ?? pasos[pasos.length - 1]!);
+  return {
+    ...progress,
+    step,
+    done: progress.done.filter(valido),
+    skipped: progress.skipped.filter(valido),
+  };
+}
+
+/**
  * El pase del asistente.
  *
  * El gate del shell autenticado manda a todo admin con el asistente sin

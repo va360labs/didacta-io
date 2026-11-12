@@ -61,6 +61,12 @@ export interface PaymentsConnectCardProps {
    * la página (h1) y la tarjeta no lo repite.
    */
   asPage?: boolean;
+  /**
+   * Estado ya pedido por quien la monta (el asistente de bienvenida lo
+   * necesita antes para decidir sus pasos): se pinta tal cual, sin una segunda
+   * petición ni el «Cargando…» intermedio. Sin `returnAction`, nada más.
+   */
+  initialStatus?: PayoutsStatusDto | null;
 }
 
 type Busy = 'connect' | 'finish' | 'dashboard' | 'sync' | null;
@@ -76,13 +82,14 @@ export function PaymentsConnectCard({
   returnAction = null,
   onReturnHandled,
   asPage = false,
+  initialStatus,
 }: PaymentsConnectCardProps): React.JSX.Element {
   const t = useTranslations('adminPagos.payouts');
   const tErrors = useTranslations('errors');
   const locale = useLocale();
   const countryName = useCountryName(locale);
 
-  const [status, setStatus] = useState<PayoutsStatusDto | null | undefined>(undefined);
+  const [status, setStatus] = useState<PayoutsStatusDto | null | undefined>(initialStatus);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [busy, setBusy] = useState<Busy>(null);
@@ -109,6 +116,7 @@ export function PaymentsConnectCard({
 
   useEffect(() => {
     let cancelled = false;
+    if (initialStatus !== undefined && !returnAction) return;
     void (async () => {
       if (returnAction === 'renew') {
         // El enlace del alta caducó: uno nuevo y de vuelta a Stripe.
