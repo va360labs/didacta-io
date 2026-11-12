@@ -202,11 +202,23 @@ describe('CONTRATO · admin/tenants ↔ didacta-cloud', () => {
       };
       expect(createTenantSchema.parse(body)).toEqual(body);
       expect(Object.keys(createTenantSchema.shape).sort()).toEqual(
-        ['slug', 'name', 'adminEmail', 'adminName', 'primaryHostname'].sort(),
+        ['slug', 'name', 'adminEmail', 'adminName', 'primaryHostname', 'simpleMode'].sort(),
       );
     });
 
-    it('`adminName` es el único opcional al crear', () => {
+    it('`simpleMode` es opcional y booleano: Cloud puede no enviarlo', () => {
+      const base = {
+        slug: 'acme',
+        name: 'Acme Corp',
+        adminEmail: 'admin@acme.io',
+        primaryHostname: 'acme.didacta.io',
+      };
+      expect(createTenantSchema.safeParse({ ...base, simpleMode: true }).success).toBe(true);
+      expect(createTenantSchema.safeParse({ ...base, simpleMode: false }).success).toBe(true);
+      expect(createTenantSchema.safeParse({ ...base, simpleMode: 'si' }).success).toBe(false);
+    });
+
+    it('`adminName` y `simpleMode` son los únicos opcionales al crear', () => {
       const sinAdminName = {
         slug: 'acme',
         name: 'Acme Corp',

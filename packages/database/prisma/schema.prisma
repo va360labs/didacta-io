@@ -65,6 +65,16 @@ model Tenant {
   subscriptionActionUrl     String?               @map("subscription_action_url")
   subscriptionGateUpdatedAt DateTime?             @map("subscription_gate_updated_at")
 
+  /// Modo sencillo del aula: menú corto en lenguaje llano, alta en 3 preguntas
+  /// y «Empieza aquí» como inicio del creador. Lo avanzado no se borra: se
+  /// pliega en «Más opciones».
+  ///
+  /// `false` es el estado de cualquier instalación propia y de toda aula que
+  /// existiera antes: nada cambia para ellas. Solo nace encendido en las aulas
+  /// que aprovisiona el plano de control del SaaS (credencial de provisioning)
+  /// o cuando alguien lo enciende a mano.
+  simpleMode Boolean @default(false) @map("simple_mode")
+
   users              User[]
   sessions           Session[]
   apiKeys            ApiKey[]

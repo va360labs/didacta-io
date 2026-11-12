@@ -96,6 +96,14 @@ export class MeModulesController {
         }
       : { state: gate.state === 'LOCKED' ? 'LOCKED' : 'OPEN', trialEndsAt: null, actionUrl: null };
 
-    return { activeModules, enabledCapabilities, subscriptionGate };
+    // Modo sencillo del aula (menú corto, «Empieza aquí»). Lo lee el shell en
+    // esta misma llamada para no pintar el menú completo y luego recortarlo.
+    const tenant = await this.prisma.tenant.findUnique({
+      where: { id: user.tenantId },
+      select: { simpleMode: true },
+    });
+    const simpleMode = tenant?.simpleMode ?? false;
+
+    return { activeModules, enabledCapabilities, subscriptionGate, simpleMode };
   }
 }

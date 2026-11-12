@@ -48,6 +48,12 @@ export const createTenantSchema = z.object({
   adminEmail: z.string().email().max(200),
   adminName: z.string().min(1).max(120).optional(),
   primaryHostname: z.string().min(1).max(253),
+  /**
+   * Modo sencillo del aula. Opcional y retrocompatible: si no llega, nace
+   * encendido cuando quien crea es el plano de control del SaaS (credencial de
+   * provisioning) y apagado cuando es un super_admin de una instalación propia.
+   */
+  simpleMode: z.boolean().optional(),
 });
 type CreateTenantDto = z.infer<typeof createTenantSchema>;
 

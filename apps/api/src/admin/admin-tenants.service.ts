@@ -304,6 +304,7 @@ export class AdminTenantsService {
       adminEmail: string;
       adminName?: string;
       primaryHostname: string;
+      simpleMode?: boolean;
     },
     webBaseUrl: string,
     ctx: ClientContext = NO_CTX,
@@ -326,6 +327,7 @@ export class AdminTenantsService {
       adminEmail: string;
       adminName?: string;
       primaryHostname: string;
+      simpleMode?: boolean;
     },
     webBaseUrl: string,
     ctx: ClientContext,
@@ -387,6 +389,7 @@ export class AdminTenantsService {
           slug: dto.slug,
           name: dto.name,
           status: 'ACTIVE',
+          simpleMode: resolveSimpleMode(actor, dto.simpleMode),
         },
       });
       await tx.tenantDomain.create({
@@ -823,4 +826,17 @@ export class AdminTenantsService {
     });
     return this.getDetail(tenantId);
   }
+}
+
+/**
+ * ¿Nace el aula en modo sencillo?
+ *
+ * Lo pedido explícitamente manda. Sin pedirlo: las aulas que crea el plano de
+ * control del SaaS (Didacta Cloud, credencial de provisioning) nacen en modo
+ * sencillo, y las que crea un super_admin de una instalación propia, en modo
+ * completo, que es lo que tenían todas antes de existir el ajuste.
+ */
+export function resolveSimpleMode(actor: AdminActor, requested: boolean | undefined): boolean {
+  if (requested !== undefined) return requested;
+  return actor.kind === 'provisioning';
 }
