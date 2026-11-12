@@ -19,7 +19,13 @@ import { manifest } from './manifest.js';
 import { ReferralsService } from './referrals.service.js';
 
 export { manifest };
-export { ReferralsService, REFERRALS_EVENT, REFERRAL_SCOPES, utcDay } from './referrals.service.js';
+export {
+  ReferralsService,
+  REFERRALS_EVENT,
+  REFERRAL_SCOPES,
+  purchaseInvoiceRef,
+  utcDay,
+} from './referrals.service.js';
 export type {
   ReferralsEventPublisher,
   UserEmailLookup,
@@ -30,6 +36,8 @@ export type {
   AttributeResult,
   AccrueInput,
   AccrueResult,
+  PurchaseInput,
+  PurchaseResult,
 } from './referrals.service.js';
 export {
   ReferralsError,

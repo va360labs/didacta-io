@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import {
   ReferralsService,
+  purchaseInvoiceRef,
   utcDay,
   type ReferralsEventPublisher,
 } from '../src/referrals.service.js';
@@ -150,7 +151,9 @@ class MockPrisma {
     create: async ({ data }: never) => {
       const d = data as Row;
       if (
-        this.referrals.some((r) => r['stripeSubscriptionId'] === d['stripeSubscriptionId']) ||
+        // Como Postgres: el índice único admite varios NULL (referidos de compra).
+        (d['stripeSubscriptionId'] != null &&
+          this.referrals.some((r) => r['stripeSubscriptionId'] === d['stripeSubscriptionId'])) ||
         this.referrals.some(
           (r) => r['tenantId'] === d['tenantId'] && r['referredUserId'] === d['referredUserId'],
         )
@@ -646,6 +649,147 @@ describe('accrueCommission', () => {
       currency: 'eur',
     });
     expect(ok).toMatchObject({ accrued: true });
+  });
+});
+
+describe('recordPurchase (compra suelta con enlace)', () => {
+  async function purchase(
+    service: ReferralsService,
+    code: string,
+    over: Partial<{ buyer: string; orderId: string; amountCents: number }> = {},
+  ) {
+    return service.recordPurchase({
+      tenantId: TENANT,
+      referralCode: code,
+      buyerUserId: over.buyer ?? 'buyer-1',
+      orderId: over.orderId ?? 'order-1',
+      amountCents: over.amountCents ?? 4900,
+      currency: 'eur',
+    });
+  }
+
+  it('crea el referido de la orden y devenga PENDING con el mismo % y garantía', async () => {
+    const { prisma, service, events } = build();
+    const { code } = await service.getOrCreateCode(TENANT, 'referrer-1');
+    const result = await purchase(service, code);
+    // 4900 × 30 % = 1470
+    expect(result).toMatchObject({
+      accrued: true,
+      amountCents: 1470,
+      referrerUserId: 'referrer-1',
+      alreadyExisted: false,
+    });
+    expect(prisma.referrals[0]).toMatchObject({
+      referredUserId: 'buyer-1',
+      orderId: 'order-1',
+      code,
+    });
+    expect(prisma.referrals[0]!['subscriptionId']).toBeUndefined();
+    const commission = prisma.commissions[0]!;
+    expect(commission).toMatchObject({
+      stripeInvoiceId: 'order:order-1',
+      baseAmountCents: 4900,
+      status: 'PENDING',
+      commissionBps: 3000,
+    });
+    const expectedApprove = Date.now() + 14 * 24 * 60 * 60 * 1000;
+    expect(Math.abs((commission['approveAfter'] as Date).getTime() - expectedApprove)).toBeLessThan(
+      5_000,
+    );
+    expect(events.map((e) => e.name)).toEqual([
+      'referrals.referral.attributed',
+      'referrals.commission.created',
+    ]);
+    expect(events[0]!.payload['orderId']).toBe('order-1');
+  });
+
+  it('es idempotente por orden (webhook reentregado)', async () => {
+    const { prisma, service } = build();
+    const { code } = await service.getOrCreateCode(TENANT, 'referrer-1');
+    await purchase(service, code);
+    const again = await purchase(service, code);
+    expect(again).toMatchObject({ accrued: true, alreadyExisted: true });
+    expect(prisma.referrals).toHaveLength(1);
+    expect(prisma.commissions).toHaveLength(1);
+  });
+
+  it('dos compras de dos personas con el mismo enlace: dos referidos y dos comisiones', async () => {
+    const { prisma, service } = build();
+    emails.set('buyer-2', 'b2@example.test');
+    const { code } = await service.getOrCreateCode(TENANT, 'referrer-1');
+    await purchase(service, code);
+    const second = await purchase(service, code, { buyer: 'buyer-2', orderId: 'order-2' });
+    expect(second).toMatchObject({ accrued: true });
+    expect(prisma.referrals).toHaveLength(2);
+    expect(prisma.commissions).toHaveLength(2);
+  });
+
+  it('bloquea el autorreferido por usuario y por email', async () => {
+    const { prisma, service } = build();
+    const { code } = await service.getOrCreateCode(TENANT, 'referrer-1');
+    expect(await purchase(service, code, { buyer: 'referrer-1' })).toMatchObject({
+      accrued: false,
+      reason: 'self_referral',
+    });
+    emails.set('alter-ego', 'REFERRER@example.test');
+    expect(await purchase(service, code, { buyer: 'alter-ego' })).toMatchObject({
+      accrued: false,
+      reason: 'self_referral',
+    });
+    expect(prisma.referrals).toHaveLength(0);
+    expect(prisma.commissions).toHaveLength(0);
+  });
+
+  it('first-touch: si ya era referido por la membresía, la comisión va a su referidor', async () => {
+    const { prisma, service } = build();
+    await seedAttribution(prisma, service);
+    emails.set('referrer-2', 'r2@example.test');
+    const { code: code2 } = await service.getOrCreateCode(TENANT, 'referrer-2');
+    const result = await purchase(service, code2);
+    expect(result).toMatchObject({ accrued: true, referrerUserId: 'referrer-1' });
+    expect(prisma.referrals).toHaveLength(1);
+    expect(prisma.commissions[0]!['referrerUserId']).toBe('referrer-1');
+  });
+
+  it('programa inactivo, código ajeno o importe 0 → sin comisión y sin lanzar', async () => {
+    const { service } = build();
+    expect(await purchase(service, 'nope')).toMatchObject({
+      accrued: false,
+      reason: 'code_not_found',
+    });
+    const { code } = await service.getOrCreateCode(TENANT, 'referrer-1');
+    expect(await purchase(service, code, { amountCents: 0 })).toMatchObject({
+      accrued: false,
+      reason: 'zero_amount',
+    });
+    const inactive = build({ config: { active: false } });
+    expect(await purchase(inactive.service, code)).toMatchObject({
+      accrued: false,
+      reason: 'program_inactive',
+    });
+  });
+
+  it('scope FIRST_PAYMENT: solo la primera compra del referido devenga', async () => {
+    const { service } = build({ config: { scope: 'FIRST_PAYMENT' } });
+    const { code } = await service.getOrCreateCode(TENANT, 'referrer-1');
+    await purchase(service, code);
+    expect(await purchase(service, code, { orderId: 'order-2' })).toMatchObject({
+      accrued: false,
+      reason: 'out_of_scope',
+    });
+  });
+
+  it('el reembolso de la orden anula la comisión', async () => {
+    const { prisma, service } = build();
+    const { code } = await service.getOrCreateCode(TENANT, 'referrer-1');
+    await purchase(service, code);
+    const revoked = await service.revokeCommissionByInvoice(
+      TENANT,
+      purchaseInvoiceRef('order-1'),
+      'Reembolso de la compra',
+    );
+    expect(revoked).toMatchObject({ revoked: true });
+    expect(prisma.commissions[0]!['status']).toBe('REVOKED');
   });
 });
 

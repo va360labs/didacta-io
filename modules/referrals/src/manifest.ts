@@ -9,7 +9,7 @@ export const manifest: ModuleManifest = parseModuleManifest({
   name: 'mod.referrals',
   displayName: 'Programa de referidos',
   description:
-    'Los miembros recomiendan la membresía con un enlace propio y reciben un % de los cobros reales de quien entra. Atribución vía metadata de Stripe Checkout, comisiones con periodo de garantía y liquidación manual trazable (sin Stripe Connect en v1).',
+    'Los miembros recomiendan lo que vende el aula (membresía y cursos sueltos) con un enlace propio y reciben un % de los cobros reales de quien entra. Atribución vía metadata de Stripe Checkout, comisiones con periodo de garantía y liquidación manual trazable (sin Stripe Connect en v1).',
   version: '1.0.0',
   author: 'VA360 LABS',
   license: 'Proprietary',
@@ -34,6 +34,9 @@ export const manifest: ModuleManifest = parseModuleManifest({
     'subscriptions.membership.activated',
     'subscriptions.invoice.paid',
     'subscriptions.invoice.refunded',
+    // Compra suelta (curso de pago único) con `attribution.referralCode`.
+    'billing.order.completed',
+    'billing.order.refunded',
   ],
   apiNamespace: '/modules/referrals',
 });

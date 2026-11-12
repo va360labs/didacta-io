@@ -4094,10 +4094,15 @@ model ModReferralsReferral {
   /// Código usado (se conserva aunque el código se regenere).
   code                 String
   /// Suscripción de Stripe que materializó la atribución (idempotencia).
-  stripeSubscriptionId String   @unique @map("stripe_subscription_id")
+  /// Null cuando el referido nació de una compra suelta (ver `orderId`).
+  stripeSubscriptionId String?  @unique @map("stripe_subscription_id")
   /// ID lógico de la suscripción local de mod.subscriptions (sin FK
   /// cross-module — lectura permitida por ADR-016, escritura nunca).
-  subscriptionId       String   @map("subscription_id") @db.Uuid
+  /// Null cuando el referido nació de una compra suelta.
+  subscriptionId       String?  @map("subscription_id") @db.Uuid
+  /// Orden de mod.billing que materializó la atribución (compra de un curso
+  /// suelto). ID lógico sin FK. Null en los referidos de membresía.
+  orderId              String?  @map("order_id") @db.Uuid
   /// Plan comprado (ID lógico, para métricas).
   planId               String?  @map("plan_id") @db.Uuid
   /// Momento de la atribución — ancla del ámbito recurringMonths.

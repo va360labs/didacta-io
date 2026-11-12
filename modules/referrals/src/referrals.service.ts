@@ -133,6 +133,52 @@ export type AccrueResult =
         | 'zero_commission';
     };
 
+/**
+ * Una compra suelta (curso de pago único u otro producto de mod.billing) hecha
+ * con el enlace de un referidor. La comisión se calcula igual que en la
+ * membresía (mismo % sobre lo cobrado, misma garantía) y su referencia de
+ * idempotencia es `purchaseInvoiceRef(orderId)`.
+ */
+export interface PurchaseInput {
+  tenantId: string;
+  /** Código del enlace con el que llegó el comprador (`?ref=`). */
+  referralCode: string;
+  /** Comprador ya materializado (el webhook de billing lo crea si no existía). */
+  buyerUserId: string;
+  /** Orden de mod.billing (ID lógico, sin FK). */
+  orderId: string;
+  /** Lo cobrado de verdad, en céntimos (amount_total de Stripe). */
+  amountCents: number;
+  currency: string;
+}
+
+export type PurchaseResult =
+  | {
+      accrued: true;
+      commissionId: string;
+      amountCents: number;
+      referralId: string;
+      referrerUserId: string;
+      alreadyExisted: boolean;
+    }
+  | {
+      accrued: false;
+      reason:
+        | 'program_inactive'
+        | 'code_not_found'
+        | 'self_referral'
+        | Extract<AccrueResult, { accrued: false }>['reason'];
+    };
+
+/**
+ * Referencia de idempotencia de la comisión de una compra suelta. Comparte
+ * columna con las facturas de Stripe (`stripe_invoice_id`, única global): el
+ * prefijo evita cualquier choque con un `in_…` real.
+ */
+export function purchaseInvoiceRef(orderId: string): string {
+  return `order:${orderId}`;
+}
+
 /** Alfabeto sin caracteres confusos (sin 0/O, 1/l/i) para códigos legibles. */
 const CODE_ALPHABET = 'abcdefghjkmnpqrstuvwxyz23456789';
 const CODE_LENGTH = 8;
@@ -332,16 +378,7 @@ export class ReferralsService {
     if (!codeRow) return { attributed: false, reason: 'code_not_found' };
 
     // Anti-fraude: mismo usuario o mismo email normalizado.
-    if (codeRow.userId === input.referredUserId) {
-      return { attributed: false, reason: 'self_referral' };
-    }
-    const [referrerEmail, referredEmail] = await Promise.all([
-      this.getUserEmail(input.tenantId, codeRow.userId),
-      this.getUserEmail(input.tenantId, input.referredUserId),
-    ]);
-    const a = normalizeEmail(referrerEmail);
-    const b = normalizeEmail(referredEmail);
-    if (a !== null && a === b) {
+    if (await this.isSelfReferral(input.tenantId, codeRow.userId, input.referredUserId)) {
       return { attributed: false, reason: 'self_referral' };
     }
 
@@ -418,6 +455,116 @@ export class ReferralsService {
     });
     if (!referral) return { accrued: false, reason: 'not_attributed' };
 
+    return this.accrueForReferral(referral, input);
+  }
+
+  // ---------------- Compra suelta (billing.order.completed) ----------------
+
+  /**
+   * Comisión por una compra suelta hecha con el enlace de un referidor (curso
+   * de pago único y cualquier otro producto que cobre mod.billing).
+   *
+   * - Mismas reglas que la membresía: programa activo, código del aula,
+   *   nada de autorreferidos (mismo usuario o mismo email), mismo % sobre lo
+   *   cobrado, PENDING hasta que pasa la garantía y anulable por reembolso.
+   * - First-touch por aula: si el comprador ya era referido de alguien (por
+   *   una membresía o una compra anterior), la comisión va a ESE referidor; si
+   *   no, esta compra crea el referido apuntando a la orden.
+   * - Idempotente por orden (`purchaseInvoiceRef`): un webhook reentregado no
+   *   duplica nada.
+   *
+   * No lanza por reglas de negocio: el fulfillment de la compra jamás se
+   * rompe por el programa de referidos (el caller loguea el motivo).
+   */
+  async recordPurchase(input: PurchaseInput): Promise<PurchaseResult> {
+    if (input.amountCents <= 0) return { accrued: false, reason: 'zero_amount' };
+    const config = await this.getConfig(input.tenantId);
+    if (!config.active) return { accrued: false, reason: 'program_inactive' };
+
+    const codeRow = await this.prisma.modReferralsCode.findUnique({
+      where: { tenantId_code: { tenantId: input.tenantId, code: input.referralCode } },
+    });
+    if (!codeRow) return { accrued: false, reason: 'code_not_found' };
+    if (await this.isSelfReferral(input.tenantId, codeRow.userId, input.buyerUserId)) {
+      return { accrued: false, reason: 'self_referral' };
+    }
+
+    const referral = await this.findOrCreatePurchaseReferral(input, codeRow.userId);
+    const result = await this.accrueForReferral(referral, {
+      tenantId: input.tenantId,
+      stripeInvoiceId: purchaseInvoiceRef(input.orderId),
+      amountCents: input.amountCents,
+      currency: input.currency,
+    });
+    if (!result.accrued) return result;
+    return {
+      ...result,
+      referralId: referral.id,
+      referrerUserId: referral.referrerUserId,
+    };
+  }
+
+  private async findOrCreatePurchaseReferral(
+    input: PurchaseInput,
+    referrerUserId: string,
+  ): Promise<{ id: string; referrerUserId: string; attributedAt: Date }> {
+    const where = {
+      tenantId_referredUserId: { tenantId: input.tenantId, referredUserId: input.buyerUserId },
+    };
+    const existing = await this.prisma.modReferralsReferral.findUnique({ where });
+    if (existing) return existing;
+    try {
+      const referral = await this.prisma.modReferralsReferral.create({
+        data: {
+          tenantId: input.tenantId,
+          referrerUserId,
+          referredUserId: input.buyerUserId,
+          code: input.referralCode,
+          orderId: input.orderId,
+        },
+      });
+      await this.publisher.publish(input.tenantId, input.buyerUserId, REFERRALS_EVENT.ATTRIBUTED, {
+        referralId: referral.id,
+        referrerUserId,
+        referredUserId: input.buyerUserId,
+        subscriptionId: null,
+        orderId: input.orderId,
+      });
+      return referral;
+    } catch (err) {
+      // Carrera con otro webhook del mismo comprador: gana el primero.
+      if (isUniqueViolation(err)) {
+        const raced = await this.prisma.modReferralsReferral.findUnique({ where });
+        if (raced) return raced;
+      }
+      throw err;
+    }
+  }
+
+  /** Mismo usuario o mismo email normalizado que el dueño del código. */
+  private async isSelfReferral(
+    tenantId: string,
+    codeOwnerUserId: string,
+    buyerUserId: string,
+  ): Promise<boolean> {
+    if (codeOwnerUserId === buyerUserId) return true;
+    const [referrerEmail, referredEmail] = await Promise.all([
+      this.getUserEmail(tenantId, codeOwnerUserId),
+      this.getUserEmail(tenantId, buyerUserId),
+    ]);
+    const a = normalizeEmail(referrerEmail);
+    const b = normalizeEmail(referredEmail);
+    return a !== null && a === b;
+  }
+
+  /**
+   * Núcleo común del devengo (membresía y compra suelta): idempotencia por
+   * referencia de cobro, ámbito, membresía del referidor y cálculo.
+   */
+  private async accrueForReferral(
+    referral: { id: string; referrerUserId: string; attributedAt: Date },
+    input: { tenantId: string; stripeInvoiceId: string; amountCents: number; currency: string },
+  ): Promise<AccrueResult> {
     const existing = await this.prisma.modReferralsCommission.findUnique({
       where: { stripeInvoiceId: input.stripeInvoiceId },
     });
