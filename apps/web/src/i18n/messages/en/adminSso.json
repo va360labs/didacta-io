@@ -311,8 +311,8 @@
     "deleteConfirmButton": "Delete",
     "bannerVerified": "<strong>Verified</strong> on {date}.",
     "bannerUnverified": "Configured but unverified — use the <em>Send test email</em> button to confirm delivery.",
-    "bannerFallback": "Using the host's global SMTP (fallback). If you want your own sender, save a tenant configuration.",
-    "bannerNone": "No SMTP configured — emails (activation, password reset, notifications) are not sent."
+    "bannerFallback": "Your emails go out through the platform’s email service, with your academy’s name. If you’d rather send them from your own email service, connect it below.",
+    "bannerNone": "Your academy’s emails can’t be sent yet (welcome messages, password resets, notifications): your email service isn’t connected. Do it below."
   },
   "replyTo": {
     "title": "Reply-to email",

@@ -30,8 +30,14 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import { adminSmtpApi, deriveSmtpStatus, shouldShowSmtpBanner } from '@/lib/admin-smtp';
+import {
+  adminSmtpApi,
+  deriveSmtpStatus,
+  isSmtpSettingsRoute,
+  shouldShowSmtpBanner,
+} from '@/lib/admin-smtp';
 
 /// Ruta al tab de notificaciones del panel, enlazable desde fuera.
 const RUTA_AJUSTES = '/admin/configuracion?tab=notifications';
@@ -39,6 +45,9 @@ const RUTA_AJUSTES = '/admin/configuracion?tab=notifications';
 export function NotificationsSetupBanner({ roles }: { roles: readonly string[] }) {
   const t = useTranslations('shell');
   const [visible, setVisible] = useState(false);
+  const pathname = usePathname();
+  // En Configuración la tarjeta del correo ya lo explica: un solo aviso.
+  const enAjustesDeCorreo = isSmtpSettingsRoute(pathname);
 
   // Pregunta solo si el rol puede arreglarlo; con cualquier otro, el endpoint
   // respondería 403 en cada carga de página sin que sirviera de nada.
@@ -64,7 +73,7 @@ export function NotificationsSetupBanner({ roles }: { roles: readonly string[] }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [puedeArreglarlo]);
 
-  if (!visible) return null;
+  if (!visible || enAjustesDeCorreo) return null;
 
   return (
     /* Los tokens `warning` del sistema, no los de la barra lateral: aquí el

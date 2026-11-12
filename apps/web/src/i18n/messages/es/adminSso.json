@@ -311,8 +311,8 @@
     "deleteConfirmButton": "Eliminar",
     "bannerVerified": "<strong>Verificado</strong> el {date}.",
     "bannerUnverified": "Configurado pero sin verificar — usa el botón <em>Enviar email de prueba</em> para confirmar que llega.",
-    "bannerFallback": "Usando SMTP global del host (fallback). Si quieres un remitente propio, guarda una configuración de tenant.",
-    "bannerNone": "Sin SMTP configurado — los emails (activación, reset de contraseña, notificaciones) no se envían."
+    "bannerFallback": "Tus correos salen con el servicio de correo de la plataforma, con el nombre de tu academia. Si prefieres enviarlos desde tu propio servicio de correo, conéctalo abajo.",
+    "bannerNone": "Los correos de tu academia aún no se pueden enviar (avisos, recuperar contraseña, notificaciones): falta conectar tu servicio de correo. Hazlo abajo."
   },
   "replyTo": {
     "title": "Correo para respuestas",

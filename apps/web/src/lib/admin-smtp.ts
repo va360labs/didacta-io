@@ -230,3 +230,13 @@ export function shouldShowSmtpBanner(roles: readonly string[], status: AdminSmtp
   const puedeArreglarlo = roles.some((r) => r === 'super_admin' || r === 'tenant_admin');
   return puedeArreglarlo && status === 'none';
 }
+
+/**
+ * ¿Es la pantalla donde se conecta el correo? Ahí el aviso superior no se
+ * pinta: la tarjeta del correo (pestaña Notificaciones, la que abre por
+ * defecto) ya lo explica junto al formulario. Las pestañas son estado local,
+ * así que la señal es la ruta.
+ */
+export function isSmtpSettingsRoute(pathname: string | null): boolean {
+  return pathname === '/admin/configuracion';
+}
