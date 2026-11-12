@@ -30,6 +30,7 @@ import { RegistryModule } from './registry/registry.module';
 import { ScimModule } from './scim/scim.module';
 import { PublicModule } from './public/public.module';
 import { SetupModule } from './setup/setup.module';
+import { SimpleModeModule } from './simple-mode/simple-mode.module';
 import { SystemModule } from './system/system.module';
 import { SsoOidcModule } from './sso/oidc/oidc.module';
 import { SsoSamlModule } from './sso/saml/saml.module';
@@ -104,6 +105,8 @@ import { WebhooksModule } from './webhooks/webhooks.module';
     // Bootstrap del primer arranque. Endpoints públicos /setup/status + /setup/init.
     // Va después de AuthModule porque reusa PasswordService + TokenService.
     SetupModule,
+    // Modo sencillo del aula (Didacta Cloud): alta en 3 preguntas y «Empieza aquí».
+    SimpleModeModule,
     PublicModule,
     // Endpoints transversales (proxy a Docker Hub para "versión nueva", etc.).
     SystemModule,
