@@ -40,6 +40,8 @@ export interface MembershipAdminPlan extends MembershipPlan {
   active: boolean;
   sortOrder: number;
   stripePriceId: string | null;
+  /** Precios fijos por mercado: moneda → importe en su unidad mínima. */
+  currencyOptions?: Record<string, number> | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -120,6 +122,8 @@ export interface PlanInput {
   active?: boolean;
   isFeatured?: boolean;
   sortOrder?: number;
+  /** Precios fijos por mercado (solo cobros de plataforma). `null` = ninguno. */
+  currencyOptions?: Record<string, number> | null;
 }
 
 // ── Público ──────────────────────────────────────────────────────────────────

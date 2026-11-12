@@ -15,7 +15,7 @@
 
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -31,30 +31,42 @@ import { authStorage } from '@/lib/auth-storage';
 import { coursesApi, type Course } from '@/lib/courses';
 import { apiErrorMessage } from '@/lib/i18n/api-error';
 import { formatCents } from '@/lib/i18n/format';
+import { CurrencyNotice, MarketPricesFields } from '@/components/admin/price-fields';
+import {
+  buildPrice,
+  usePricePolicy,
+  type CurrencyOptionDraft,
+  type PriceDraftError,
+} from '@/lib/pricing';
+import { minorToInput, parseMajorInput } from '@/lib/stripe-currencies';
 import {
   membershipAdminApi,
   type MembershipAdminPlan,
   type MembershipConfig,
 } from '@/lib/membership';
 
-/** "999.5" o "999,5" (unidades de la moneda) → céntimos int, o null si no parsea. */
-function amountToCents(raw: string): number | null {
-  const t = raw.trim().replace(',', '.');
+/**
+ * Lo que escribe el admin («999», «999,5», «39.900») → unidad mínima de STRIPE
+ * para esa moneda (`@/lib/stripe-currencies`: COP y HUF con dos decimales
+ * aunque `Intl` diga cero; JPY sin ninguno). `0` vale (plan gratis). `null` si
+ * no es un importe.
+ */
+function amountToCents(raw: string, currency: string, locale: string): number | null {
+  const t = raw.trim();
   if (!t) return null;
-  const n = Number(t);
-  if (!Number.isFinite(n) || n < 0) return null;
-  return Math.round(n * 100);
+  if (/^0+([.,]0+)?$/.test(t)) return 0;
+  return parseMajorInput(t, currency, locale);
 }
 
-function centsToAmount(cents: number | null): string {
+function centsToAmount(cents: number | null, currency: string, locale: string): string {
   if (cents === null) return '';
-  return (cents / 100).toFixed(2).replace(/\.00$/, '');
+  return minorToInput(cents, currency, locale);
 }
 
 /**
- * Monedas del selector, curadas a monedas de DOS decimales: los importes se
- * guardan en céntimos y se formatean dividiendo entre 100 (una moneda
- * cero-decimal tipo JPY necesitaría otro tratamiento).
+ * Monedas del selector con claves propias (las de siempre). Con cobros de
+ * plataforma, las de `usePricePolicy` (las de liquidación de los países
+ * admitidos), con la del creador por defecto.
  */
 const CURRENCY_OPTIONS = ['eur', 'usd', 'gbp', 'mxn', 'cop', 'ars', 'pen', 'brl'];
 
@@ -69,6 +81,8 @@ interface PlanDraft {
   compareAtRaw: string;
   trialDays: string;
   isFeatured: boolean;
+  /** Precios fijos por mercado (solo con cobros de plataforma). */
+  marketPrices: CurrencyOptionDraft[];
 }
 
 const EMPTY_DRAFT: PlanDraft = {
@@ -79,6 +93,7 @@ const EMPTY_DRAFT: PlanDraft = {
   compareAtRaw: '',
   trialDays: '0',
   isFeatured: false,
+  marketPrices: [],
 };
 
 export default function MembresiaAdminPage() {
@@ -86,6 +101,14 @@ export default function MembresiaAdminPage() {
   const tInterval = useTranslations('adminMonetizacion.interval');
   const tSub = useTranslations('adminMonetizacion.subscription');
   const tErrors = useTranslations('errors');
+  const tPrice = useTranslations('modBilling.priceFields');
+  const locale = useLocale();
+  const pricePolicy = usePricePolicy(CURRENCY_OPTIONS);
+  const emptyDraft = (): PlanDraft => ({
+    ...EMPTY_DRAFT,
+    currency: pricePolicy?.defaultCurrency ?? EMPTY_DRAFT.currency,
+  });
+  const [marketErrors, setMarketErrors] = useState<PriceDraftError[]>([]);
   const [plans, setPlans] = useState<MembershipAdminPlan[] | null>(null);
   const [config, setConfig] = useState<MembershipConfig | null>(null);
   const [groups, setGroups] = useState<AccessGroupListItem[]>([]);
@@ -103,6 +126,13 @@ export default function MembresiaAdminPage() {
   // Alta/edición de plan
   const [draft, setDraft] = useState<PlanDraft>(EMPTY_DRAFT);
   const [editingId, setEditingId] = useState<string | null>(null);
+  useEffect(() => {
+    // Cobros de plataforma: un plan nuevo nace en la moneda del creador.
+    if (pricePolicy && !editingId && !draft.amountRaw && !draft.name) {
+      setDraft((d) => ({ ...d, currency: pricePolicy.defaultCurrency }));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- solo cuando llega la política
+  }, [pricePolicy]);
 
   // Config editable
   const [headline, setHeadline] = useState('');
@@ -135,7 +165,7 @@ export default function MembresiaAdminPage() {
         setPlans(planList);
         setGroups(groupRes.groups);
         setCourses(courseList);
-        applyConfig(cfg);
+        applyConfig(cfg, planList[0]?.currency ?? 'eur');
       } catch (e) {
         setError(apiErrorMessage(e, tErrors));
       }
@@ -160,7 +190,8 @@ export default function MembresiaAdminPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  function applyConfig(cfg: MembershipConfig) {
+  /** `currency`: la de los precios de referencia (la del primer plan). */
+  function applyConfig(cfg: MembershipConfig, currency = plans?.[0]?.currency ?? 'eur') {
     setConfig(cfg);
     setHeadline(cfg.headline);
     setSubheadline(cfg.subheadline ?? '');
@@ -172,7 +203,9 @@ export default function MembresiaAdminPage() {
     setTAuthor(cfg.testimonialAuthor ?? '');
     setTRole(cfg.testimonialRole ?? '');
     const prices: Record<string, string> = {};
-    for (const p of cfg.coursePrices) prices[p.courseId] = centsToAmount(p.amountCents);
+    for (const p of cfg.coursePrices) {
+      prices[p.courseId] = centsToAmount(p.amountCents, currency, locale);
+    }
     setPriceByCourse(prices);
   }
 
@@ -205,12 +238,24 @@ export default function MembresiaAdminPage() {
   async function savePlan() {
     const bearer = token();
     if (!bearer) return;
-    const amountCents = amountToCents(draft.amountRaw);
+    const amountCents = amountToCents(draft.amountRaw, draft.currency, locale);
     if (!draft.name.trim() || amountCents === null) {
       setError(t('planNeedsNamePrice'));
       return;
     }
-    const compareAtCents = draft.compareAtRaw.trim() ? amountToCents(draft.compareAtRaw) : null;
+    const compareAtCents = draft.compareAtRaw.trim()
+      ? amountToCents(draft.compareAtRaw, draft.currency, locale)
+      : null;
+    // Precios fijos por mercado: mismas reglas que el resto de precios.
+    const market = pricePolicy?.platform
+      ? buildPrice(
+          { amount: draft.amountRaw, currency: draft.currency, options: draft.marketPrices },
+          locale,
+        )
+      : null;
+    const marketOnlyErrors = (market?.errors ?? []).filter((e) => e.field === 'option');
+    setMarketErrors(marketOnlyErrors);
+    if (marketOnlyErrors.length) return;
     const trialDays = Number(draft.trialDays) || 0;
     setBusy(true);
     setError(null);
@@ -223,11 +268,12 @@ export default function MembresiaAdminPage() {
         compareAtCents,
         trialDays,
         isFeatured: draft.isFeatured,
+        ...(market ? { currencyOptions: market.currencyOptions } : {}),
       };
       if (editingId) await membershipAdminApi.updatePlan(bearer, editingId, input);
       else await membershipAdminApi.createPlan(bearer, input);
       setPlans(await membershipAdminApi.listPlans(bearer));
-      setDraft(EMPTY_DRAFT);
+      setDraft(emptyDraft());
       setEditingId(null);
       setNotice(editingId ? t('planUpdated') : t('planCreated'));
     } catch (e) {
@@ -272,11 +318,16 @@ export default function MembresiaAdminPage() {
       name: plan.name,
       intervalMonths: plan.intervalMonths,
       currency: plan.currency,
-      amountRaw: centsToAmount(plan.amountCents),
-      compareAtRaw: centsToAmount(plan.compareAtCents),
+      amountRaw: centsToAmount(plan.amountCents, plan.currency, locale),
+      compareAtRaw: centsToAmount(plan.compareAtCents, plan.currency, locale),
       trialDays: String(plan.trialDays),
       isFeatured: plan.isFeatured,
+      marketPrices: Object.entries(plan.currencyOptions ?? {}).map(([code, minor]) => ({
+        currency: code,
+        amount: minorToInput(minor, code, locale),
+      })),
     });
+    setMarketErrors([]);
   }
 
   async function saveConfig() {
@@ -294,7 +345,10 @@ export default function MembresiaAdminPage() {
     setError(null);
     try {
       const coursePrices = Object.entries(priceByCourse)
-        .map(([courseId, amount]) => ({ courseId, amountCents: amountToCents(amount) }))
+        .map(([courseId, amount]) => ({
+          courseId,
+          amountCents: amountToCents(amount, plans?.[0]?.currency ?? 'eur', locale),
+        }))
         .filter((x): x is { courseId: string; amountCents: number } => x.amountCents !== null);
       const updated = await membershipAdminApi.updateConfig(bearer, {
         active,
@@ -477,12 +531,14 @@ export default function MembresiaAdminPage() {
                 value={draft.currency}
                 onChange={(e) => setDraft({ ...draft, currency: e.target.value })}
               >
-                {(CURRENCY_OPTIONS.includes(draft.currency)
-                  ? CURRENCY_OPTIONS
-                  : [...CURRENCY_OPTIONS, draft.currency]
-                ).map((c) => (
+                {(() => {
+                  const list = pricePolicy?.currencies ?? CURRENCY_OPTIONS;
+                  return list.includes(draft.currency) ? list : [...list, draft.currency];
+                })().map((c) => (
                   <option key={c} value={c}>
-                    {c.toUpperCase()}
+                    {pricePolicy?.platform && c === pricePolicy.settlementCurrency
+                      ? tPrice('currencyYours', { currency: c.toUpperCase() })
+                      : c.toUpperCase()}
                   </option>
                 ))}
               </Select>
@@ -518,6 +574,19 @@ export default function MembresiaAdminPage() {
                 onChange={(e) => setDraft({ ...draft, trialDays: e.target.value })}
               />
             </div>
+            {pricePolicy?.platform ? (
+              <div className="flex flex-col gap-3 md:col-span-2">
+                <CurrencyNotice policy={pricePolicy} currency={draft.currency} />
+                <MarketPricesFields
+                  idPrefix="plan"
+                  currency={draft.currency}
+                  options={draft.marketPrices}
+                  errors={marketErrors}
+                  disabled={busy}
+                  onOptions={(marketPrices) => setDraft({ ...draft, marketPrices })}
+                />
+              </div>
+            ) : null}
             <div className="flex items-end gap-2 pb-1">
               <Switch
                 id="plan-featured"
@@ -535,7 +604,8 @@ export default function MembresiaAdminPage() {
                   variant="ghost"
                   onClick={() => {
                     setEditingId(null);
-                    setDraft(EMPTY_DRAFT);
+                    setDraft(emptyDraft());
+                    setMarketErrors([]);
                   }}
                 >
                   {t('cancelEdit')}
