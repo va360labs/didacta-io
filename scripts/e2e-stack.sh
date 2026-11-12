@@ -281,7 +281,7 @@ Mismo caso que la API: localiza al dueño antes de matar nada.
   log "Arrancando la web en :3010…"
   ( cd apps/web && unset PORT && exec >"$WEB_LOG" 2>&1
     echo "$BASHPID" > "$WEB_PID_FILE"
-    exec "$NODE_BIN" "$NEXT_CLI" start -p 3010 ) &
+    exec "$NODE_BIN" "$NEXT_CLI" start -p "${E2E_WEB_PORT:-3010}" ) &
 }
 
 stop_pid_file() {
