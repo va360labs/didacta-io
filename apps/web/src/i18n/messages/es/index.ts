@@ -57,6 +57,7 @@ import modZoomLive from './modZoomLive.json';
 import nav from './nav.json';
 import playersContenido from './playersContenido.json';
 import publicSite from './publicSite.json';
+import modoSencillo from './modoSencillo.json';
 import shell from './shell.json';
 
 export default {
@@ -106,5 +107,6 @@ export default {
   nav,
   playersContenido,
   publicSite,
+  modoSencillo,
   shell,
 } as const;

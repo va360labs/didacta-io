@@ -1,0 +1,67 @@
+{
+  "tabs": {
+    "empieza": "Start here",
+    "inicio": "Home",
+    "comunidad": "Community",
+    "cursos": "Courses",
+    "directos": "Live",
+    "miembros": "Members",
+    "ranking": "Leaderboard",
+    "alumnos": "Students",
+    "ventas": "Sales",
+    "ajustes": "Settings",
+    "mas": "More"
+  },
+  "shell": {
+    "navAria": "Sections",
+    "buscar": "Search your academy",
+    "buscarCorto": "Search",
+    "mensajes": "Messages",
+    "mensajesSinLeer": "Messages, {count} unread",
+    "notificaciones": "Notifications",
+    "notificacionesSinLeer": "Notifications, {count} unread",
+    "tuPerfil": "Your profile",
+    "miPerfil": "My profile",
+    "misCertificados": "My certificates",
+    "miProgreso": "My progress",
+    "invitaYGana": "Invite and earn",
+    "cerrarSesion": "Log out",
+    "masTitulo": "More options",
+    "masAyuda": "Everything else in your academy",
+    "cerrar": "Close",
+    "pasosHechos": "{done} of {total}"
+  },
+  "campana": {
+    "titulo": "Notifications",
+    "todas": "All",
+    "menciones": "Mentions",
+    "marcarTodo": "Mark all as read",
+    "verTodas": "See all notifications",
+    "vacioTodas": "You have no notifications.",
+    "vacioMenciones": "When someone mentions you with @ in the community, you will see it here.",
+    "cargando": "Loading…",
+    "error": "Could not load them. Try again.",
+    "sinLeer": "Unread",
+    "hace": {
+      "ahora": "Just now",
+      "min": "{n} min ago",
+      "h": "{n} h ago",
+      "d": "{n} days ago"
+    }
+  },
+  "comunidad": {
+    "escribeAlgo": "Write something…",
+    "escribeAlgoAria": "Write something for the community",
+    "todo": "All",
+    "nuevoEspacio": "New space",
+    "espaciosAria": "Community spaces"
+  },
+  "referidos": {
+    "titulo": "Invite and earn",
+    "tituloContexto": "Know someone who would find this useful? Invite them and earn",
+    "gana": "Share your link. You get {percent}% of what each person who joins through it pays.",
+    "copiar": "Copy",
+    "copiado": "Copied",
+    "verGanado": "See what you have earned"
+  }
+}

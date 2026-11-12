@@ -45,6 +45,12 @@ import type { IconName } from '@/components/icon';
 import { CreateSpaceModal } from '@/components/create-space-modal';
 import { MobileNavDrawer } from '@/components/mobile-nav-drawer';
 import { MobileTabBar } from '@/components/mobile-tab-bar';
+import { SimpleShell } from '@/components/simple-shell/simple-shell';
+import {
+  readSimpleModeCache,
+  SIMPLE_MODE_CHANGED_EVENT,
+  writeSimpleModeCache,
+} from '@/lib/simple-mode';
 
 /**
  * Shell de la app autenticada — sidebar persistente Didacta + main canvas.
@@ -242,6 +248,9 @@ function Shell({
   // módulo y se refleja sin recargar" ya lo cubre el listener de
   // `didacta:modules-changed` de abajo, que se dispara desde el toggle.
   const [activeModules, setActiveModules] = useState<Set<string> | null>(null);
+  // Modo sencillo del aula (Didacta Cloud). `null` = aún no se sabe: con la
+  // caché de la pestaña el primer pintado ya acierta el armazón.
+  const [simpleMode, setSimpleMode] = useState<boolean | null>(() => readSimpleModeCache());
   useEffect(() => {
     const token = authStorage.getAccessToken();
     if (!token) return;
@@ -249,18 +258,39 @@ function Shell({
     meApi
       .getMyModules(token)
       .then((res) => {
-        if (!cancelled) setActiveModules(new Set(res.activeModules));
+        if (cancelled) return;
+        setActiveModules(new Set(res.activeModules));
+        const simple = res.simpleMode === true;
+        writeSimpleModeCache(simple);
+        setSimpleMode(simple);
       })
       .catch(() => {
         // Si falla (red, 401 expirado, módulo registry indisponible), dejamos
         // null para no romper el sidebar — el usuario verá items que tal vez
         // no tengan módulo activo y el backend devolverá 403 al click.
-        if (!cancelled) setActiveModules(null);
+        if (!cancelled) {
+          setActiveModules(null);
+          setSimpleMode((prev) => prev ?? false);
+        }
       });
     return () => {
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    function onChange(e: Event) {
+      setSimpleMode((e as CustomEvent<boolean>).detail === true);
+    }
+    window.addEventListener(SIMPLE_MODE_CHANGED_EVENT, onChange);
+    return () => window.removeEventListener(SIMPLE_MODE_CHANGED_EVENT, onChange);
+  }, []);
+
+  // La tipografía del modo sencillo va en <html> para alcanzar los portales.
+  useEffect(() => {
+    document.documentElement.classList.toggle('modo-sencillo', simpleMode === true);
+    return () => document.documentElement.classList.remove('modo-sencillo');
+  }, [simpleMode]);
 
   // Listener para actualización en caliente desde la misma página: cuando
   // /admin/configuracion termina un toggle, dispatchea
@@ -405,6 +435,56 @@ function Shell({
     const parts = [sectionLabel, tenantName, 'Didacta'].filter((p): p is string => Boolean(p));
     document.title = parts.join(' | ');
   }, [sectionLabel, tenantName]);
+
+  // Banners fijos de arriba: los mismos en los dos armazones.
+  const banners = (
+    <>
+      {/* Va el PRIMERO y en rojo: mientras haya un acceso de soporte
+          abierto, hay alguien de fuera dentro del aula de un cliente. */}
+      <SupportAccessBanner />
+      <Suspense fallback={null}>
+        <NotificationsSetupBanner roles={session.user.roles} />
+      </Suspense>
+      <SubscriptionTrialBanner roles={session.user.roles} />
+    </>
+  );
+
+  // Aún no se sabe qué armazón toca (sin caché, primera respuesta en vuelo):
+  // fondo vacío un instante en vez de pintar un menú y cambiarlo después.
+  if (simpleMode === null) return <div className="min-h-dvh bg-bg-subtle" />;
+
+  if (simpleMode) {
+    // Modo sencillo: el árbol COMPLETO (principal + administración) alimenta
+    // «Más», para que nada se pierda; las pestañas las decide `simple-nav`.
+    const fullBase = [
+      ...buildGroups({ isAdminOrFormador, isAdmin, isSuperAdmin, espacios: espaciosGroup }),
+      ...(isAdmin ? buildAdminGroups({ isSuperAdmin }) : []),
+    ];
+    const fullGroups = filterByActiveModules(
+      mergeExtensionSidebarItems(fullBase, moduleExtensions, userRoles),
+      activeModules,
+    );
+    return (
+      <NotificationsProvider>
+        <MessagingProvider>
+          <CreateSpaceModal open={createSpaceOpen} onClose={() => setCreateSpaceOpen(false)} />
+          <SimpleShell
+            session={session}
+            pathname={pathname ?? ''}
+            fullGroups={fullGroups}
+            activeModules={activeModules}
+            isAdmin={isAdmin}
+            onLogout={onLogout}
+            banners={banners}
+          >
+            {children}
+          </SimpleShell>
+          <FloatingChat launcher={false} />
+          <NotificationsToaster />
+        </MessagingProvider>
+      </NotificationsProvider>
+    );
+  }
 
   return (
     <NotificationsProvider>

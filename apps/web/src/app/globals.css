@@ -758,3 +758,21 @@ table,
 .acceso-total-cta:hover {
   background: linear-gradient(180deg, #fbeeb8 0%, #f2d478 55%, #e0b43c 100%);
 }
+
+/* ── Modo sencillo (aulas de Didacta Cloud) ────────────────────────────────
+ * Una sola familia, Figtree, para todo: títulos, botones y texto. Solo cuando
+ * el shell marca <html class="modo-sencillo">; el modo completo no cambia.
+ * Va en <html> (no en un contenedor) para alcanzar también los diálogos que se
+ * pintan en un portal fuera del shell. */
+html.modo-sencillo body,
+html.modo-sencillo .font-display,
+html.modo-sencillo h1,
+html.modo-sencillo h2,
+html.modo-sencillo h3 {
+  font-family: var(--font-figtree), var(--font-sans);
+}
+html.modo-sencillo h1,
+html.modo-sencillo h2 {
+  letter-spacing: -0.015em;
+}
+

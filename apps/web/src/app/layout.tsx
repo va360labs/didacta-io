@@ -4,7 +4,7 @@
  */
 
 import type { Metadata } from 'next';
-import { Inter, Sora } from 'next/font/google';
+import { Figtree, Inter, Sora } from 'next/font/google';
 import type { ReactNode } from 'react';
 import { NextIntlClientProvider } from 'next-intl';
 import { getLocale, getMessages } from 'next-intl/server';
@@ -29,6 +29,19 @@ const sora = Sora({
 });
 
 /**
+ * Tipografía del MODO SENCILLO (aulas de Didacta Cloud). Solo se aplica cuando
+ * `<html>` lleva la clase `modo-sencillo`; sin `preload` para que el modo
+ * completo no descargue nada nuevo en su primera carga.
+ */
+const figtree = Figtree({
+  subsets: ['latin'],
+  variable: '--font-figtree',
+  display: 'swap',
+  weight: ['400', '500', '600', '700', '800'],
+  preload: false,
+});
+
+/**
  * El sufijo de marca base es "Didacta" porque el servidor no sabe a qué tenant
  * pertenece el visitante (se resuelve por dominio contra la API). `TenantTitle`
  * lo completa en el cliente a "<Tenant> powered by Didacta" en cuanto conoce el
@@ -49,7 +62,11 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
   const locale = await getLocale();
   const messages = await getMessages();
   return (
-    <html lang={locale} className={`${inter.variable} ${sora.variable}`} suppressHydrationWarning>
+    <html
+      lang={locale}
+      className={`${inter.variable} ${sora.variable} ${figtree.variable}`}
+      suppressHydrationWarning
+    >
       <body>
         {/*
          * TenantThemeProvider en el ROOT para que el branding por tenant

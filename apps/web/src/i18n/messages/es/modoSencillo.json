@@ -1,0 +1,67 @@
+{
+  "tabs": {
+    "empieza": "Empieza aquí",
+    "inicio": "Inicio",
+    "comunidad": "Comunidad",
+    "cursos": "Cursos",
+    "directos": "Directos",
+    "miembros": "Miembros",
+    "ranking": "Ranking",
+    "alumnos": "Alumnos",
+    "ventas": "Ventas",
+    "ajustes": "Ajustes",
+    "mas": "Más"
+  },
+  "shell": {
+    "navAria": "Secciones",
+    "buscar": "Buscar en la academia",
+    "buscarCorto": "Buscar",
+    "mensajes": "Mensajes",
+    "mensajesSinLeer": "Mensajes, {count} sin leer",
+    "notificaciones": "Notificaciones",
+    "notificacionesSinLeer": "Notificaciones, {count} sin leer",
+    "tuPerfil": "Tu perfil",
+    "miPerfil": "Mi perfil",
+    "misCertificados": "Mis certificados",
+    "miProgreso": "Mi progreso",
+    "invitaYGana": "Invita y gana",
+    "cerrarSesion": "Cerrar sesión",
+    "masTitulo": "Más opciones",
+    "masAyuda": "Todo lo demás de tu academia",
+    "cerrar": "Cerrar",
+    "pasosHechos": "{done} de {total}"
+  },
+  "campana": {
+    "titulo": "Notificaciones",
+    "todas": "Todas",
+    "menciones": "Menciones",
+    "marcarTodo": "Marcar todo como leído",
+    "verTodas": "Ver todas las notificaciones",
+    "vacioTodas": "No tienes notificaciones.",
+    "vacioMenciones": "Cuando alguien te mencione con @ en la comunidad, lo verás aquí.",
+    "cargando": "Cargando…",
+    "error": "No se han podido cargar. Inténtalo de nuevo.",
+    "sinLeer": "Sin leer",
+    "hace": {
+      "ahora": "Ahora mismo",
+      "min": "Hace {n} min",
+      "h": "Hace {n} h",
+      "d": "Hace {n} días"
+    }
+  },
+  "comunidad": {
+    "escribeAlgo": "Escribe algo…",
+    "escribeAlgoAria": "Escribe algo para la comunidad",
+    "todo": "Todo",
+    "nuevoEspacio": "Nuevo espacio",
+    "espaciosAria": "Espacios de la comunidad"
+  },
+  "referidos": {
+    "titulo": "Invita y gana",
+    "tituloContexto": "¿Conoces a alguien a quien le sirva? Invítale y gana",
+    "gana": "Comparte tu enlace. Te llevas el {percent} % de lo que pague cada persona que entre con él.",
+    "copiar": "Copiar",
+    "copiado": "Copiado",
+    "verGanado": "Ver lo que llevas ganado"
+  }
+}
