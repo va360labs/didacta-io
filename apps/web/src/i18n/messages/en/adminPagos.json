@@ -456,7 +456,8 @@
         "close": "Close"
       },
       "noticeDebtItem": "We'll take {amount} from your next payouts because of {reason}.",
-      "noticeDebtFrozen": "If the bank rules in our favour, we won't take anything.",
+      "noticeDebtFrozen": "If the bank rules in our favour, this amount won't be taken.",
+      "noticeDebtDisputeWon": "We won the claim on \"{item}\". The bank doesn't return its fee ({amount}) even when we win: it will be taken from your next payouts.",
       "debtReasons": {
         "REFUND_FEE": "the card fee on a refund (\"{item}\")",
         "REVERSAL_FAILED": "a refund we couldn't take back from your balance (\"{item}\")",

@@ -40,6 +40,7 @@ import {
   payoutsApi,
   saleStatusView,
   type PayoutsCurrencySummaryDto,
+  type PayoutsDebtDto,
   type PayoutsSaleDto,
   type PayoutsSalesPageDto,
   type PayoutsSummaryDto,
@@ -182,13 +183,7 @@ export function PayoutsSalesSection({
       ))}
       {debts.map((d) => (
         <Notice key={d.id} tone="warning" testId="payouts-notice-debt">
-          {t('noticeDebtItem', {
-            amount: money(d.amountOutstanding, d.currency) ?? '',
-            reason: t(`debtReasons.${debtReasonKey(d.reason)}`, {
-              item: d.saleDescription ?? t('noDescription'),
-            }),
-          })}
-          {d.frozen ? ` ${t('noticeDebtFrozen')}` : null}
+          {debtNoticeText(d, money, t as SalesTranslator)}
         </Notice>
       ))}
 
@@ -393,6 +388,26 @@ export function PayoutsSalesSection({
 
 /** Traductor mínimo (el de `adminPagos.payouts.sales`). */
 export type SalesTranslator = (key: string, values?: Record<string, string | number>) => string;
+
+/**
+ * Aviso de una deuda abierta, en llano. La tasa de una reclamación que
+ * GANAMOS tiene su propio texto: primero que se ganó y luego que el banco no
+ * devuelve su tasa y se descuenta de los próximos cobros. Puro.
+ */
+export function debtNoticeText(
+  debt: PayoutsDebtDto,
+  money: (amount: number | null, currency: string | null) => string | null,
+  t: SalesTranslator,
+): string {
+  const amount = money(debt.amountOutstanding, debt.currency) ?? '';
+  const item = debt.saleDescription ?? t('noDescription');
+  if (debt.fromWonDispute) return t('noticeDebtDisputeWon', { amount, item });
+  const text = t('noticeDebtItem', {
+    amount,
+    reason: t(`debtReasons.${debtReasonKey(debt.reason)}`, { item }),
+  });
+  return debt.frozen ? `${text} ${t('noticeDebtFrozen')}` : text;
+}
 
 /**
  * Textos de una fila. Puro (se prueba sin DOM): lo que se ve sale de la venta

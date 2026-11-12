@@ -272,6 +272,11 @@ export interface PayoutsDebtDto {
   saleDescription: string | null;
   /** De una reclamación aún sin decidir: no se descuenta hasta que se decida. */
   frozen: boolean;
+  /**
+   * La tasa de una reclamación que GANAMOS: el banco no la devuelve y se
+   * descuenta igual. Opcional: una API anterior no la manda.
+   */
+  fromWonDispute?: boolean;
 }
 
 /** Una reclamación del alumno a su banco, aún sin decidir. */

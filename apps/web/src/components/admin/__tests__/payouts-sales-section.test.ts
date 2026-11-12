@@ -11,12 +11,17 @@ import { describe, expect, it } from 'vitest';
 import enPagos from '@/i18n/messages/en/adminPagos.json';
 import esPagos from '@/i18n/messages/es/adminPagos.json';
 import { refundExplanation, type RefundTranslator } from '@/components/admin/payouts-refund-dialog';
-import { describeSale, type SalesTranslator } from '@/components/admin/payouts-sales-section';
+import {
+  debtNoticeText,
+  describeSale,
+  type SalesTranslator,
+} from '@/components/admin/payouts-sales-section';
 import {
   debtReasonKey,
   formatStripeAmount,
   parseRefundAmount,
   refundAmountInput,
+  type PayoutsDebtDto,
   type PayoutsRefundPreviewDto,
   type PayoutsSaleDto,
 } from '@/lib/payouts';
@@ -325,6 +330,41 @@ describe('E6: avisos', () => {
     );
   });
 
+  const debt = (over: Partial<PayoutsDebtDto>): PayoutsDebtDto => ({
+    id: 'd1',
+    reason: 'DISPUTE_FEE',
+    amountOriginal: 2000,
+    amountOutstanding: 2000,
+    currency: 'eur',
+    createdAt: '2026-11-12T10:00:00.000Z',
+    saleId: 's1',
+    saleDescription: 'Curso de IA',
+    frozen: false,
+    ...over,
+  });
+
+  it('reclamación ganada: se dice que se ganó y que la tasa del banco se descuenta, sin jerga', () => {
+    const text = debtNoticeText(debt({ fromWonDispute: true }), money, t);
+    expect(text).toBe(
+      `Ganamos la reclamación de «Curso de IA». El banco no devuelve su tasa (${money(2000, 'eur')}) aunque ganemos: se descontará de tus próximos cobros.`,
+    );
+    for (const word of ['chargeback', 'fee', 'payout', 'Stripe', 'disputa']) {
+      expect(text.toLowerCase()).not.toContain(word.toLowerCase());
+    }
+  });
+
+  it('reclamación perdida y deuda congelada: el texto de siempre', () => {
+    expect(debtNoticeText(debt({ fromWonDispute: false }), money, t)).toBe(
+      `Te descontaremos ${money(2000, 'eur')} de tus próximos cobros por una reclamación al banco que no ganamos: la tasa del banco y la comisión de la tarjeta («Curso de IA»).`,
+    );
+    // Una API anterior no manda `fromWonDispute`.
+    expect(
+      debtNoticeText(debt({ reason: 'DISPUTE', frozen: true, amountOutstanding: 4160 }), money, t),
+    ).toBe(
+      `Te descontaremos ${money(4160, 'eur')} de tus próximos cobros por una reclamación al banco («Curso de IA»). Si el banco nos da la razón, esta cantidad no se te descontará.`,
+    );
+  });
+
   it('los textos nuevos existen en los dos idiomas (mismas claves)', () => {
     const keys = (node: unknown, prefix = ''): string[] =>
       node && typeof node === 'object'
@@ -339,6 +379,7 @@ describe('E6: avisos', () => {
       'refundCta',
       'refund.confirm',
       'noticeDebtItem',
+      'noticeDebtDisputeWon',
       'noticeDispute',
       'debtReasons.DISPUTE_FEE',
     ]) {

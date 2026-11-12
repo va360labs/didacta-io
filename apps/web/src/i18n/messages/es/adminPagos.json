@@ -456,7 +456,8 @@
         "close": "Cerrar"
       },
       "noticeDebtItem": "Te descontaremos {amount} de tus próximos cobros por {reason}.",
-      "noticeDebtFrozen": "Si el banco nos da la razón, no te descontaremos nada.",
+      "noticeDebtFrozen": "Si el banco nos da la razón, esta cantidad no se te descontará.",
+      "noticeDebtDisputeWon": "Ganamos la reclamación de «{item}». El banco no devuelve su tasa ({amount}) aunque ganemos: se descontará de tus próximos cobros.",
       "debtReasons": {
         "REFUND_FEE": "la comisión de la tarjeta de un reembolso («{item}»)",
         "REVERSAL_FAILED": "un reembolso que no pudimos retirar de tu saldo («{item}»)",
