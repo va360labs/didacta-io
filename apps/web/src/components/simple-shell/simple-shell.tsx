@@ -29,7 +29,7 @@ import { formatTenantName } from '@/lib/tenant-name';
 import { cn } from '@/lib/utils';
 import { CHAT_TOGGLE_EVENT, useMessagingContext } from '@/modules/messaging';
 import { SimpleBell } from './simple-bell';
-import { Counter, useOutsideClose } from './shell-utils';
+import { avatarInitials, Counter, useOutsideClose } from './shell-utils';
 
 /** Lo dispara cualquier pantalla que cambie el estado de «Empieza aquí». */
 export const START_HERE_CHANGED_EVENT = 'didacta:empieza-cambio';
@@ -359,15 +359,6 @@ function MessagesButton() {
 
 // ── Avatar ─────────────────────────────────────────────────────────────────
 
-function initialsOf(name: string): string {
-  return name
-    .split(/[\s.@]+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((s) => s[0]?.toUpperCase() ?? '')
-    .join('');
-}
-
 function AvatarMenu({
   session,
   activeModules,
@@ -381,7 +372,10 @@ function AvatarMenu({
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement | null>(null);
   useOutsideClose(ref, open, () => setOpen(false));
-  const name = session.user.name ?? session.user.email;
+  const name = session.user.name?.trim() || session.user.email;
+  const initials = avatarInitials(session.user.name, session.user.email);
+  // Una foto que no carga (borrada, caducada) no puede dejar el círculo vacío.
+  const [photoFailed, setPhotoFailed] = useState(false);
   const links = [
     { href: SIMPLE_AVATAR_LINKS.profile, label: t('shell.miPerfil'), icon: 'user' as const },
     {
@@ -409,11 +403,18 @@ function AvatarMenu({
         aria-label={t('shell.tuPerfil')}
         className="grid h-10 w-10 place-items-center overflow-hidden rounded-full bg-brand-600 text-[13px] font-bold text-white"
       >
-        {session.user.avatarUrl ? (
+        {session.user.avatarUrl && !photoFailed ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={session.user.avatarUrl} alt="" className="h-full w-full object-cover" />
+          <img
+            src={session.user.avatarUrl}
+            alt=""
+            className="h-full w-full object-cover"
+            onError={() => setPhotoFailed(true)}
+          />
+        ) : initials ? (
+          initials
         ) : (
-          initialsOf(name)
+          <Icon name="user" size={18} />
         )}
       </button>
       {open ? (

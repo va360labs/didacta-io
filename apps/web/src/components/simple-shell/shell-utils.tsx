@@ -38,3 +38,23 @@ export function useOutsideClose(
     };
   }, [ref, open, onClose]);
 }
+
+/**
+ * Iniciales del avatar: dos del nombre («Marta Ríos» → «MR») o, sin nombre, la
+ * inicial del correo. Cadena vacía si no hay ninguna (el avatar pone un icono).
+ */
+export function avatarInitials(
+  name: string | null | undefined,
+  email: string | null | undefined,
+): string {
+  const fromName = (name ?? '')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((w) => [...w][0]?.toLocaleUpperCase() ?? '')
+    .join('');
+  if (fromName) return fromName;
+  const first = [...(email ?? '').trim()][0];
+  return first && /\p{L}|\p{N}/u.test(first) ? first.toLocaleUpperCase() : '';
+}
