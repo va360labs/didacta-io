@@ -187,7 +187,7 @@ describeWithDb('Vídeo subido a Bunny — Postgres real como didacta_app (RLS fo
   async function addSale(
     tenantId: string,
     platformFee: number,
-    opts: { refundedAll?: boolean } = {},
+    opts: { refundedAll?: boolean; heldForTax?: boolean } = {},
   ) {
     const account = await admin.modPayoutsAccount.create({
       data: { tenantId, country: 'ES', entityType: 'individual', status: 'READY' },
@@ -206,6 +206,15 @@ describeWithDb('Vídeo subido a Bunny — Postgres real como didacta_app (RLS fo
         currency: 'eur',
         refundedAmount: opts.refundedAll ? platformFee * 20 : 0,
         chargedAt: new Date(realNow - DAY),
+        // Como la deja `SettlementService.hold()` cuando faltan los datos
+        // fiscales del creador: cobrada, sin transferir y reintentándose.
+        ...(opts.heldForTax
+          ? {
+              status: 'HELD' as const,
+              lastError: 'tax_profile_incomplete: faltan los datos fiscales del creador',
+              nextAttemptAt: new Date(realNow + DAY),
+            }
+          : {}),
       },
     });
   }
@@ -388,6 +397,21 @@ describeWithDb('Vídeo subido a Bunny — Postgres real como didacta_app (RLS fo
       });
       const ok = await upload(t.id, t.lessons[1]!, { durationSeconds: 41 * 60 });
       expect(ok.asset.maxResolution).toBe('1080p');
+    });
+
+    it('una venta RETENIDA por faltar los datos fiscales cuenta como primera venta', async () => {
+      // El alumno ya pagó: que el dinero del creador espere a sus datos
+      // fiscales no cambia que el aula haya vendido.
+      const t = await seedTenant('held-tax');
+      expect((await cloud.quotaView(t.id)).tier).toBe('pre_sale');
+      await addSale(t.id, 500, { heldForTax: true });
+      expect(await admin.modPayoutsTaxProfile.count({ where: { tenantId: t.id } })).toBe(0);
+      const sale = await admin.modPayoutsSale.findFirstOrThrow({ where: { tenantId: t.id } });
+      expect(sale).toMatchObject({ status: 'HELD', stripeTransferId: null });
+      expect(await cloud.quotaView(t.id)).toMatchObject({
+        tier: 'post_sale',
+        maxResolution: '1080p',
+      });
     });
 
     it('si Bunny falla al crear el vídeo: 502 y ninguna fila', async () => {
