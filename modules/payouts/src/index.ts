@@ -38,10 +38,18 @@ export {
   prorate,
   computeProportionalReversal,
   sumMinor,
+  sharesOfGross,
+  chargeToSettlement,
 } from './money.js';
-export type { ComputeSplitInput, Split, ProportionalReversalInput } from './money.js';
+export type {
+  ComputeSplitInput,
+  Split,
+  ProportionalReversalInput,
+  SettledSaleAmounts,
+  GrossShares,
+} from './money.js';
 
-export { LedgerService, IDEMPOTENCY_KEYS } from './ledger.service.js';
+export { LedgerService, IDEMPOTENCY_KEYS, isSettlementEntryKey } from './ledger.service.js';
 export type {
   LedgerEntry,
   LedgerEntryInput,
@@ -176,6 +184,58 @@ export type {
   ReconcilerDeps,
 } from './reconciler.service.js';
 
+export {
+  DEFAULT_LOSS_POLICY,
+  PAYOUTS_LOSS_ALERTS,
+  SILENT_NOTIFIER,
+  isInsufficientFunds,
+  reverseTransfer,
+  reversibleBalance,
+} from './losses.js';
+export type {
+  PayoutsLossPolicy,
+  PayoutsNotifier,
+  ReversalResult,
+  ReversalStatus,
+} from './losses.js';
+
+export {
+  PayoutsDebtsService,
+  createDebt,
+  frozenDisputeSaleIds,
+  netAgainstPendingSale,
+} from './debts.service.js';
+export type {
+  CreateDebtInput,
+  DebtAlertReport,
+  DebtRecoveryReport,
+  DebtView,
+  DebtsServiceOptions,
+} from './debts.service.js';
+
+export { PayoutsRefundsService } from './refunds.service.js';
+export type {
+  RefundAccountingOutcome,
+  RefundPreview,
+  RefundResult,
+  RefundsServiceOptions,
+} from './refunds.service.js';
+
+export { PayoutsDisputesService } from './disputes.service.js';
+export type {
+  DisputeSyncOutcome,
+  DisputeView,
+  DisputesServiceOptions,
+} from './disputes.service.js';
+
+export { PayoutsOffboardingService } from './offboarding.service.js';
+export type { DisconnectResult } from './offboarding.service.js';
+
+export { handleRefundEvent, REFUND_EVENT_TYPES } from './handlers/refund.js';
+export type { RefundEventOutcome } from './handlers/refund.js';
+export { handleDisputeEvent, DISPUTE_EVENT_TYPES } from './handlers/dispute.js';
+export type { DisputeEventOutcome } from './handlers/dispute.js';
+
 export { PayoutsReportsService, estimatePayoutDate } from './reports.service.js';
 export type {
   CurrencySummary,
@@ -227,6 +287,10 @@ export {
   PayoutsNotReadyError,
   PayoutsSaleUnrecordableError,
   PayoutsSettlementConflictError,
+  PayoutsSaleNotFoundError,
+  PayoutsSaleNotRefundableError,
+  PayoutsRefundExceedsRemainingError,
+  PayoutsRefundRejectedError,
   PlatformStripeConfigError,
   PlatformStripeApiError,
 } from './errors.js';

@@ -6,8 +6,11 @@
 import type { PrismaClient } from '@didacta/database';
 import type { PayoutsDbPort, PayoutsLogger } from './accounts.service.js';
 import type { PlatformStripeEvent } from './account-events.js';
+import type { PayoutsDebtsService } from './debts.service.js';
+import type { PayoutsDisputesService } from './disputes.service.js';
 import { idOf, routePlatformEvent } from './event-router.js';
 import { recordCheckoutSale } from './handlers/checkout.js';
+import type { PayoutsRefundsService } from './refunds.service.js';
 import { computePlatformFee } from './money.js';
 import { RefsService } from './refs.service.js';
 import {
@@ -46,8 +49,16 @@ import type { PlatformStripeClient } from './stripe/platform-stripe.client.js';
  * Nada de esto decide importes: lo que crea o avanza pasa por
  * `recordCheckoutSale` y `SettlementService`, que releen Stripe.
  *
- * Fuera de E4 (puntos de enganche): la recuperación activa de deudas (E6) y
- * las facturas de suscripción sin venta (E5, hoy solo alerta).
+ * E6 (si el host pasa `losses`):
+ *  7. **Reembolsos**: los listados en Stripe en la ventana se anotan (cubre
+ *     un `charge.refunded` cuyo dinero falló al procesarse), y se completan
+ *     los que quedaron a medias (`retryPending`).
+ *  8. **Disputas**: las nuevas de la ventana y TODAS las que siguen sin
+ *     decidir se releen de Stripe (`disputes.sync`).
+ *  9. **Deudas** (solo en la pasada profunda, una vez al día): recobro
+ *     revirtiendo transferencias y aviso al operador de las grandes o viejas.
+ *
+ * Fuera de E4/E6: las facturas de suscripción sin venta (E5, hoy solo alerta).
  */
 
 export interface ReconcilerDeps {
@@ -58,6 +69,12 @@ export interface ReconcilerDeps {
   readonly replayEvent: (event: PlatformStripeEvent) => Promise<{ readonly outcome: string }>;
   readonly logger?: PayoutsLogger;
   readonly now?: () => Date;
+  /** Reembolsos, disputas y deudas (E6). Sin esto, esos pasos no se hacen. */
+  readonly losses?: {
+    readonly refunds: Pick<PayoutsRefundsService, 'syncCharge' | 'retryPending'>;
+    readonly disputes: Pick<PayoutsDisputesService, 'sync' | 'listUnresolved'>;
+    readonly debts: Pick<PayoutsDebtsService, 'recoverOpenDebts' | 'alertOldOrLargeDebts'>;
+  };
 }
 
 export interface ReconcileOptions {
@@ -100,6 +117,15 @@ export interface ReconcileReport {
   readonly transfers: { listed: number; unrecorded: number; inFlight: number; mismatched: number };
   readonly invariants: { salesChecked: number; violations: InvariantViolation[] };
   readonly lateBalanceTransactions: number;
+  /** E6: reembolsos, disputas y deudas. `null` si el host no los pasa. */
+  readonly losses: {
+    readonly refunds: { listed: number; synced: number; retried: number; errors: number };
+    readonly disputes: { checked: number; errors: number };
+    readonly debts: {
+      recovered: Array<{ currency: string; amount: number }>;
+      alerts: number;
+    } | null;
+  } | null;
 }
 
 const LATE_BALANCE_TRANSACTION_MS = 90 * 60_000;
@@ -147,6 +173,7 @@ export class PayoutsReconcilerService {
     const sales = await this.deps.settlement.sweep(200);
     const charges = await this.chargesWithoutSale(since, maxPages);
     const transfers = await this.transfersWithoutEntry(since, maxPages);
+    const losses = await this.losses(since, maxPages, options.deep);
     const invariants = await this.checkInvariants(options.deep ? null : new Date(since * 1000));
     const lateBalanceTransactions = await this.lateBalanceTransactions();
 
@@ -161,6 +188,7 @@ export class PayoutsReconcilerService {
       transfers,
       invariants,
       lateBalanceTransactions,
+      losses,
     };
     this.deps.logger?.log?.(
       {
@@ -172,6 +200,7 @@ export class PayoutsReconcilerService {
         transfers: report.transfers,
         violations: report.invariants.violations.length,
         lateBalanceTransactions,
+        losses,
       },
       'payouts.reconcile: pasada completada',
     );
@@ -324,6 +353,25 @@ export class PayoutsReconcilerService {
           select: { amount: true, currency: true },
         }),
       }));
+      // Transferencia nueva de una disputa ganada (E6): sin venta propia, con asiento.
+      if (!known.sale && known.entry) {
+        if (
+          known.entry.amount !== -(transfer.amount ?? NaN) ||
+          known.entry.currency !== (transfer.currency ?? '').toLowerCase()
+        ) {
+          mismatched += 1;
+          this.alert(
+            PAYOUTS_ALERTS.transferMismatch,
+            {
+              transferId: transfer.id,
+              stripeAmount: transfer.amount,
+              ledgerAmount: known.entry.amount,
+            },
+            'la transferencia de Stripe no casa con su asiento (no se toca)',
+          );
+        }
+        continue;
+      }
       if (known.sale && known.entry) {
         if (
           known.entry.amount !== -(transfer.amount ?? NaN) ||
@@ -369,6 +417,95 @@ export class PayoutsReconcilerService {
     return { listed: transfers.length, unrecorded, inFlight, mismatched };
   }
 
+  // ── 7–9. Reembolsos, disputas y deudas (E6) ────────────────────────────
+
+  private async losses(
+    since: number,
+    maxPages: number,
+    deep: boolean,
+  ): Promise<ReconcileReport['losses']> {
+    const deps = this.deps.losses;
+    if (!deps) return null;
+    let errors = 0;
+    const saleTenantOf = (chargeId: string) =>
+      this.deps.db.global((tx) =>
+        tx.modPayoutsSale.findUnique({
+          where: { stripeChargeId: chargeId },
+          select: { tenantId: true },
+        }),
+      );
+
+    // Reembolsos de la ventana: cada cargo con venta se pone al día.
+    const refunds = await this.listAll<{ id: string; charge?: unknown }>(
+      '/v1/refunds',
+      { created: { gte: since } },
+      maxPages,
+    );
+    const charges = [
+      ...new Set(refunds.map((r) => idOf(r.charge)).filter((id): id is string => !!id)),
+    ];
+    let synced = 0;
+    for (const chargeId of charges) {
+      const sale = await saleTenantOf(chargeId);
+      if (!sale) continue;
+      try {
+        await deps.refunds.syncCharge(sale.tenantId, chargeId);
+        synced += 1;
+      } catch (err) {
+        errors += 1;
+        this.deps.logger?.warn(
+          { chargeId, tenantId: sale.tenantId, err: describe(err) },
+          'payouts.reconcile: no se pudieron poner al día los reembolsos de un cargo',
+        );
+      }
+    }
+    const retried = await deps.refunds.retryPending();
+    errors += retried.errors;
+
+    // Disputas: las nuevas de la ventana (si su cargo tiene venta) y las abiertas.
+    const disputes = await this.listAll<{ id: string; charge?: unknown }>(
+      '/v1/disputes',
+      { created: { gte: since } },
+      maxPages,
+    );
+    const toSync = new Map<string, string>();
+    for (const dispute of disputes) {
+      const chargeId = idOf(dispute.charge);
+      if (!chargeId) continue;
+      const sale = await saleTenantOf(chargeId);
+      if (sale) toSync.set(dispute.id, sale.tenantId);
+    }
+    for (const open of await deps.disputes.listUnresolved()) {
+      toSync.set(open.stripeDisputeId, open.tenantId);
+    }
+    let disputeErrors = 0;
+    for (const [disputeId, tenantId] of toSync) {
+      try {
+        await deps.disputes.sync(tenantId, disputeId);
+      } catch (err) {
+        disputeErrors += 1;
+        this.deps.logger?.warn(
+          { disputeId, tenantId, err: describe(err) },
+          'payouts.reconcile: no se pudo poner al día una disputa',
+        );
+      }
+    }
+
+    // Deudas: una vez al día.
+    let debts: { recovered: Array<{ currency: string; amount: number }>; alerts: number } | null =
+      null;
+    if (deep) {
+      const recovery = await deps.debts.recoverOpenDebts();
+      const alerts = await deps.debts.alertOldOrLargeDebts();
+      debts = { recovered: recovery.recovered, alerts: alerts.alerts };
+    }
+    return {
+      refunds: { listed: refunds.length, synced, retried: retried.accounted, errors },
+      disputes: { checked: toSync.size, errors: disputeErrors },
+      debts,
+    };
+  }
+
   // ── 5. Invariantes ─────────────────────────────────────────────────────
 
   /**
@@ -402,10 +539,19 @@ export class PayoutsReconcilerService {
           stripeTransferId: true,
         },
       });
+      // Solo los asientos del REPARTO de la venta: los de reembolsos, disputas
+      // y recobros (E6) van en grupos aparte que suman 0 por sí mismos.
       const entries = sales.length
         ? await tx.modPayoutsLedgerEntry.groupBy({
             by: ['saleId', 'type'],
-            where: { saleId: { in: sales.map((s) => s.id) } },
+            where: {
+              saleId: { in: sales.map((s) => s.id) },
+              OR: [
+                { idempotencyKey: { startsWith: 'payouts:sale:' } },
+                { idempotencyKey: { startsWith: 'payouts:transfer:' } },
+                { type: 'DEBT_RECOVERED', idempotencyKey: { contains: ':sale:' } },
+              ],
+            },
             _sum: { amount: true },
             orderBy: [{ saleId: 'asc' }, { type: 'asc' }],
           })
