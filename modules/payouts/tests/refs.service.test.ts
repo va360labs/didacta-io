@@ -49,17 +49,30 @@ class MockPrisma {
       this.visible().find(
         (r) => r.stripeObjectId === (where as { stripeObjectId: string }).stripeObjectId,
       ) ?? null,
-    findMany: async ({ where }: never) => {
-      const ids = (where as { stripeObjectId: { in: string[] } }).stripeObjectId.in;
-      return this.visible()
-        .filter((r) => ids.includes(r.stripeObjectId))
-        .sort((a, b) => a.stripeObjectId.localeCompare(b.stripeObjectId));
-    },
-    findFirst: async ({ where }: never) => {
-      const ids = (where as { stripeObjectId: { in: string[] } }).stripeObjectId.in;
-      return this.visible().find((r) => ids.includes(r.stripeObjectId)) ?? null;
-    },
+    findMany: async ({ where }: never) =>
+      this.visible()
+        .filter((r) => matchesWhere(r, where))
+        .sort((a, b) => a.stripeObjectId.localeCompare(b.stripeObjectId)),
+    findFirst: async ({ where }: never) =>
+      this.visible().find((r) => matchesWhere(r, where)) ?? null,
   };
+}
+
+/** El subconjunto de `where` de Prisma que usa RefsService. */
+function matchesWhere(row: Row, where: unknown): boolean {
+  const w = where as {
+    OR?: unknown[];
+    stripeObjectId?: { in: string[] };
+    parentObjectId?: { in: string[] };
+    localRef?: { in: string[] };
+    kind?: string;
+  };
+  if (w.OR) return w.OR.some((inner) => matchesWhere(row, inner));
+  if (w.stripeObjectId && !w.stripeObjectId.in.includes(row.stripeObjectId)) return false;
+  if (w.parentObjectId && !w.parentObjectId.in.includes(row.parentObjectId ?? '')) return false;
+  if (w.localRef && !w.localRef.in.includes(row.localRef ?? '')) return false;
+  if (w.kind !== undefined && row.kind !== w.kind) return false;
+  return true;
 }
 
 const TENANT_A = '11111111-1111-4111-8111-111111111111';
@@ -235,6 +248,58 @@ describe('RefsService.isPlatformObject', () => {
     expect(await refs.isPlatformObject(['pi_3NoEsta', 'cs_test_a1B2c3'])).toBe(true);
     expect(await refs.isPlatformObject(['pi_3NoEsta'])).toBe(false);
     expect(await refs.isPlatformObject([null, undefined])).toBe(false);
+  });
+
+  it('la orden local también delata: un cs_ inventado que apunta a una orden de plataforma', async () => {
+    await refs.register(sesion({ localRef: 'orden-de-plataforma' }));
+    expect(
+      await refs.isPlatformObject(['cs_test_inventada'], {
+        checkoutLocalRefs: ['orden-de-plataforma'],
+      }),
+    ).toBe(true);
+    expect(
+      await refs.isPlatformObject(['cs_test_inventada'], { checkoutLocalRefs: ['orden-propia'] }),
+    ).toBe(false);
+    // Solo cuenta la orden de una SESIÓN de checkout, no el localRef de un hijo.
+    await refs.register(
+      sesion({
+        stripeObjectId: 'pi_3Hijo',
+        kind: 'payment_intent',
+        localRef: 'orden-del-hijo',
+        parentObjectId: 'cs_test_a1B2c3',
+      }),
+    );
+    expect(await refs.isPlatformObject([], { checkoutLocalRefs: ['orden-del-hijo'] })).toBe(false);
+  });
+});
+
+describe('RefsService.resolveTenantByParents', () => {
+  it('atribuye por el hijo registrado que cuelga del id', async () => {
+    await refs.register(
+      sesion({ stripeObjectId: 'ch_3Cargo', kind: 'charge', parentObjectId: 'pi_3Padre' }),
+    );
+    const r = await refs.resolveTenantByParents(['pi_3Padre']);
+    expect(r).toMatchObject({ status: 'resolved', tenantId: TENANT_A });
+    expect(await refs.resolveTenantByParents(['pi_3Otro'])).toEqual({ status: 'unknown' });
+    expect(await refs.resolveTenantByParents([])).toEqual({ status: 'unknown' });
+  });
+
+  it('dos tenants colgando del mismo padre → ambiguo', async () => {
+    await refs.register(
+      sesion({ stripeObjectId: 'ch_3A', kind: 'charge', parentObjectId: 'pi_3Comun' }),
+    );
+    await refs.register(
+      sesion({
+        tenantId: TENANT_B,
+        stripeObjectId: 'ch_3B',
+        kind: 'charge',
+        parentObjectId: 'pi_3Comun',
+      }),
+    );
+    expect(await refs.resolveTenantByParents(['pi_3Comun'])).toMatchObject({
+      status: 'ambiguous',
+      tenantIds: [TENANT_A, TENANT_B].sort(),
+    });
   });
 });
 

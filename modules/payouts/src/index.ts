@@ -131,6 +131,22 @@ export {
 } from './account-events.js';
 export type { PlatformStripeEvent } from './account-events.js';
 
+export {
+  idOf,
+  resolvePlatformEventTenant,
+  routePlatformEvent,
+  stripeIdsNamedByEvent,
+  subscriptionIdFromInvoice,
+} from './event-router.js';
+export type {
+  PlatformEventAttribution,
+  PlatformEventFamily,
+  PlatformEventRoute,
+} from './event-router.js';
+
+export { recordCheckoutSale } from './handlers/checkout.js';
+export type { CheckoutSaleInput, CheckoutSaleOutcome } from './handlers/checkout.js';
+
 export { PayoutsSettingsService } from './settings.service.js';
 export type { PayoutsSettingsView } from './settings.service.js';
 
@@ -170,6 +186,8 @@ export {
   PayoutsAccountOnboardingIncompleteError,
   PayoutsWebhookPayloadInvalidError,
   PayoutsWebhookLivemodeMismatchError,
+  PayoutsNotReadyError,
+  PayoutsSaleUnrecordableError,
   PlatformStripeConfigError,
   PlatformStripeApiError,
 } from './errors.js';

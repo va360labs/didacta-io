@@ -174,20 +174,62 @@ export class RefsService {
   }
 
   /**
+   * Como `resolveTenant`, pero por los objetos registrados que CUELGAN de esos
+   * ids (`parent_object_id`). Llamar bajo acceso global sancionado.
+   */
+  async resolveTenantByParents(
+    parentObjectIds: ReadonlyArray<string | null | undefined>,
+  ): Promise<TenantResolution> {
+    const ids = uniqueIds(parentObjectIds.filter((id): id is string => typeof id === 'string'));
+    if (ids.length === 0) return { status: 'unknown' };
+    const refs = await this.prisma.modPayoutsObjectRef.findMany({
+      where: { parentObjectId: { in: ids } },
+      orderBy: { stripeObjectId: 'asc' },
+    });
+    if (refs.length === 0) return { status: 'unknown' };
+    const tenantIds = [...new Set(refs.map((ref) => ref.tenantId))].sort();
+    if (tenantIds.length > 1) return { status: 'ambiguous', tenantIds, refs };
+    return { status: 'resolved', tenantId: tenantIds[0]!, refs };
+  }
+
+  /**
    * ¿Algún id es de un objeto de PLATAFORMA? Lo usan los webhooks heredados
    * (claves propias) para rechazar eventos que nombren objetos de este modo.
    * Llamar bajo acceso global sancionado.
    */
   async isPlatformObject(
     stripeObjectIds: ReadonlyArray<string | null | undefined>,
+    opts: {
+      /**
+       * Ids LOCALES de la orden (`metadata.orderId`) que el evento nombra. Un
+       * evento falsificado puede inventarse el `cs_…` y apuntar con la metadata
+       * a una orden real cobrada por la plataforma: la orden también delata.
+       */
+      readonly checkoutLocalRefs?: ReadonlyArray<string | null | undefined>;
+    } = {},
   ): Promise<boolean> {
     const ids = uniqueIds(stripeObjectIds.filter((id): id is string => typeof id === 'string'));
-    if (ids.length === 0) return false;
+    const localRefs = uniqueIds(
+      (opts.checkoutLocalRefs ?? []).filter((id): id is string => typeof id === 'string'),
+    );
+    if (ids.length === 0 && localRefs.length === 0) return false;
     const found = await this.prisma.modPayoutsObjectRef.findFirst({
-      where: { stripeObjectId: { in: ids } },
+      where: {
+        OR: [
+          ...(ids.length > 0 ? [{ stripeObjectId: { in: ids } }] : []),
+          ...(localRefs.length > 0
+            ? [{ kind: 'checkout_session', localRef: { in: localRefs } }]
+            : []),
+        ],
+      },
       select: { stripeObjectId: true },
     });
     return found !== null;
+  }
+
+  /** Fila registrada de un objeto (la que el contexto actual deja ver). */
+  async find(stripeObjectId: string): Promise<ObjectRef | null> {
+    return this.prisma.modPayoutsObjectRef.findUnique({ where: { stripeObjectId } });
   }
 }
 

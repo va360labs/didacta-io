@@ -4801,6 +4801,9 @@ model ModPayoutsObjectRef {
 
   @@index([tenantId, kind])
   @@index([parentObjectId])
+  /// Los webhooks heredados buscan la sesión de checkout de plataforma por su
+  /// orden local (`metadata.orderId`) para rechazar el evento.
+  @@index([kind, localRef])
   @@map("mod_payouts_object_ref")
 }
 

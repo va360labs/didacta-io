@@ -220,6 +220,34 @@ export class PayoutsWebhookLivemodeMismatchError extends PayoutsError {
   }
 }
 
+/**
+ * El tenant cobra a través de la plataforma pero su cuenta conectada todavía no
+ * puede vender (sin conectar, alta a medias, restringida o desconectada). Se
+ * responde ANTES de crear la orden y la sesión: no se manda a nadie a pagar.
+ */
+export class PayoutsNotReadyError extends PayoutsError {
+  constructor(public readonly reason: string) {
+    super(
+      'Esta academia todavía no puede cobrar: tiene que terminar de conectar sus cobros.',
+      'PAYOUTS_NOT_READY',
+      { detail: reason },
+    );
+    this.name = 'PayoutsNotReadyError';
+  }
+}
+
+/**
+ * Lo que dice Stripe de un cobro no permite anotar la venta: un cargo sin
+ * cuenta conectada del tenant, o una sesión cobrada sin cargo. No bloquea el
+ * acceso del alumno; lo recoge el conciliador.
+ */
+export class PayoutsSaleUnrecordableError extends PayoutsError {
+  constructor(what: string) {
+    super(`No se puede anotar la venta: ${what}`, 'PAYOUTS_SALE_UNRECORDABLE', { detail: what });
+    this.name = 'PayoutsSaleUnrecordableError';
+  }
+}
+
 /** La clave de Stripe de plataforma no tiene el formato esperado. */
 export class PlatformStripeConfigError extends PayoutsError {
   constructor(what: string) {
