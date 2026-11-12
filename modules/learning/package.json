@@ -28,7 +28,7 @@
     "@didacta/core-kernel": "workspace:*",
     "@didacta/database": "workspace:*",
     "adm-zip": "^0.6.1",
-    "fast-xml-parser": "^5.7.1",
+    "fast-xml-parser": "^5.12.0",
     "zod": "^3.24.1"
   },
   "devDependencies": {
