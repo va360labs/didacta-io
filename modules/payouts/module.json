@@ -1,0 +1,19 @@
+{
+  "name": "payouts",
+  "version": "1.0.0",
+  "edition": "community",
+  "coreVersionRequired": "^0.1.0",
+  "displayName": "Cobros de plataforma",
+  "category": "core",
+  "tablePrefix": "mod_payouts_",
+  "permissions": [
+    "payouts.account.read",
+    "payouts.account.manage",
+    "payouts.sale.read",
+    "payouts.sale.refund"
+  ],
+  "events": [],
+  "hooks": [],
+  "apiNamespace": "/modules/payouts",
+  "surfaces": ["admin"]
+}
