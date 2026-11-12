@@ -31,8 +31,15 @@ import {
   SessionAlreadyEndedError,
   SessionNotFoundError,
   SessionNotOpenForRegistrationError,
+  ZoomNotConfiguredError,
 } from './errors.js';
-import { buildZoomApiClient, StubZoomApiClient, type ZoomApiClient } from './zoom-api-client.js';
+import {
+  buildZoomApiClient,
+  hasZoomCredentials,
+  StubZoomApiClient,
+  zoomStubAllowed,
+  type ZoomApiClient,
+} from './zoom-api-client.js';
 import { isFalseStart, OUT_OF_SCHEDULE_NOTE } from './false-start.js';
 import { webhookEventKey } from './webhook-event-key.js';
 
@@ -677,6 +684,39 @@ export class ZoomLiveService {
     return rows.map((r) => r.userId);
   }
 
+  /**
+   * Crea la reunión en Zoom con las credenciales del aula. Sin credenciales,
+   * solo en desarrollo y tests se usa el cliente de pega; en producción se
+   * avisa (`ZOOM_NOT_CONFIGURED`) en vez de guardar un enlace que no funciona.
+   */
+  private async createZoomMeeting(tenantId: string, dto: CreateSessionDto) {
+    let api: ZoomApiClient;
+    if (this.fixedApi) {
+      api = this.fixedApi;
+    } else {
+      const creds = this.ctx.config
+        ? await this.ctx.config
+            .get<unknown>(tenantId, 'zoom-live', 'credentials')
+            .catch(() => undefined)
+        : undefined;
+      if (hasZoomCredentials(creds)) {
+        api = buildZoomApiClient(creds);
+      } else if (zoomStubAllowed()) {
+        api = new StubZoomApiClient();
+      } else {
+        throw new ZoomNotConfiguredError();
+      }
+    }
+    return api.createMeeting({
+      hostEmail: dto.hostEmail,
+      topic: dto.topic,
+      startTime: dto.startTime,
+      durationMinutes: dto.durationMinutes,
+      timezone: dto.timezone,
+      description: dto.description,
+    });
+  }
+
   async create(
     tenantId: string,
     actorId: string | null,
@@ -705,15 +745,12 @@ export class ZoomLiveService {
       if (!lesson) throw new LessonNotInCourseError();
     }
 
-    const api = await this.clientFor(tenantId);
-    const meeting = await api.createMeeting({
-      hostEmail: dto.hostEmail,
-      topic: dto.topic,
-      startTime: dto.startTime,
-      durationMinutes: dto.durationMinutes,
-      timezone: dto.timezone,
-      description: dto.description,
-    });
+    // Enlace propio (Meet, Teams, su Zoom personal…): no se habla con Zoom.
+    // El formador entra por el mismo enlace que los alumnos.
+    const meeting: { meetingId: string | null; joinUrl: string; startUrl: string } =
+      dto.externalJoinUrl
+        ? { meetingId: null, joinUrl: dto.externalJoinUrl, startUrl: dto.externalJoinUrl }
+        : await this.createZoomMeeting(tenantId, dto);
 
     const created = await this.prisma.modZoomSession.create({
       data: {
@@ -794,6 +831,11 @@ export class ZoomLiveService {
         ...(dto.durationMinutes !== undefined ? { durationMinutes: dto.durationMinutes } : {}),
         ...(dto.timezone !== undefined ? { timezone: dto.timezone } : {}),
         ...(dto.description !== undefined ? { description: dto.description } : {}),
+        // El enlace propio solo se cambia en clases que se crearon con él: el
+        // de una reunión de Zoom lo gestiona Zoom.
+        ...(dto.externalJoinUrl !== undefined && !existing.zoomMeetingId
+          ? { joinUrl: dto.externalJoinUrl, startUrl: dto.externalJoinUrl }
+          : {}),
         // Reprogramar la clase reabre el recordatorio: el que se mandó (si se
         // mandó) hablaba de otra hora. Con `reminderSentAt` a NULL el worker
         // vuelve a avisar 2h antes de la hora nueva.

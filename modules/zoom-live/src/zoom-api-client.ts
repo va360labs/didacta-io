@@ -411,6 +411,30 @@ function toParticipantRecord(raw: unknown): ZoomParticipantRecord {
 }
 
 /**
+ * ¿Se permite el cliente de pega cuando el aula no tiene credenciales?
+ *
+ * Solo fuera de producción (desarrollo y tests) o con `ZOOM_ALLOW_STUB=true`
+ * (arnés E2E, que corre la API compilada con `NODE_ENV=production`). En
+ * producción, un enlace `stub-zoom.didacta.dev` es un enlace roto que llega a
+ * los alumnos: mejor un error claro que diga qué hacer.
+ */
+export function zoomStubAllowed(env: Record<string, string | undefined> = process.env): boolean {
+  if (env['ZOOM_ALLOW_STUB'] === 'true') return true;
+  return env['NODE_ENV'] !== 'production';
+}
+
+/** ¿Son estructuralmente credenciales S2S de Zoom? */
+export function hasZoomCredentials(creds: unknown): creds is ZoomS2SCredentials {
+  return Boolean(
+    creds &&
+    typeof creds === 'object' &&
+    typeof (creds as ZoomS2SCredentials).accountId === 'string' &&
+    typeof (creds as ZoomS2SCredentials).clientId === 'string' &&
+    typeof (creds as ZoomS2SCredentials).clientSecret === 'string',
+  );
+}
+
+/**
  * Factory: si el tenant tiene credenciales válidas, devuelve `RealZoomApiClient`.
  * Si no, `StubZoomApiClient`. Validación es estructural; Zoom solo dice si
  * son válidas en el primer call (que se traduce a `ZoomApiError`).

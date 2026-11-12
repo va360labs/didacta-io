@@ -151,6 +151,11 @@
 # Con mas de un aula eso ya no es el valor por defecto: hay que declararlo.
 : "${STRIPE_ALLOW_GLOBAL_FALLBACK:=true}"
 
+# Directos sin credenciales de Zoom: en producción la API ya no inventa un
+# enlace `stub-zoom.didacta.dev` (avisa con ZOOM_NOT_CONFIGURED). El arnés corre
+# la API compilada con NODE_ENV=production y sus specs crean clases sin Zoom.
+: "${ZOOM_ALLOW_STUB:=true}"
+
 E2E_ENV_VARS="
 DATABASE_URL REDIS_URL
 E2E_PG_CONTAINER E2E_PG_USER E2E_PG_DB E2E_PG_PORT
@@ -164,7 +169,7 @@ E2E_BASE_URL E2E_API_URL E2E_API_DIRECT_URL
 E2E_TENANT_SLUG E2E_ADMIN_EMAIL E2E_ADMIN_PASSWORD
 E2E_WEBHOOK_SECRET STRIPE_SECRET_KEY STRIPE_WEBHOOK_SECRET
 SUBSCRIPTIONS_WEBHOOK_SECRET E2E_STRIPE_WEBHOOK_SECRET E2E_BILLING_WEBHOOK_SECRET
-STRIPE_ALLOW_GLOBAL_FALLBACK
+STRIPE_ALLOW_GLOBAL_FALLBACK ZOOM_ALLOW_STUB
 "
 
 # shellcheck disable=SC2086

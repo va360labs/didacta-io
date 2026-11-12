@@ -111,6 +111,20 @@ export class ZoomApiError extends ZoomLiveError {
 }
 
 /**
+ * No hay forma de crear la videollamada: el aula no tiene credenciales de Zoom
+ * y no se pegó ningún enlace propio. Antes la clase se creaba igual con un
+ * enlace falso (`stub-zoom.didacta.dev`) y los alumnos no podían entrar.
+ */
+export class ZoomNotConfiguredError extends ZoomLiveError {
+  constructor() {
+    super(
+      'ZOOM_NOT_CONFIGURED',
+      'Pega el enlace de tu videollamada (Zoom, Google Meet o Teams) o conecta tu cuenta de Zoom en Ajustes.',
+    );
+  }
+}
+
+/**
  * El email del host no corresponde a ningún usuario de la cuenta de Zoom.
  *
  * Zoom crea las reuniones con `POST /users/{hostEmail}/meetings`, así que el

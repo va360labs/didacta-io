@@ -20,6 +20,16 @@ import { z } from 'zod';
 export const sessionStatusSchema = z.enum(['SCHEDULED', 'STARTED', 'ENDED', 'CANCELLED']);
 export type SessionStatus = z.infer<typeof sessionStatusSchema>;
 
+/** Enlace propio de videollamada: solo `https://`. */
+export const externalJoinUrlSchema = z
+  .string()
+  .trim()
+  .max(2000)
+  .url()
+  .refine((u) => u.toLowerCase().startsWith('https://'), {
+    message: 'El enlace tiene que empezar por https://',
+  });
+
 export const createSessionSchema = z.object({
   /** UUID del curso al que se vincula. NULL = sesión libre del tenant. */
   courseId: z.string().uuid().nullable().optional(),
@@ -44,10 +54,19 @@ export const createSessionSchema = z.object({
    * una clase de prueba nunca acaba publicada por descuido.
    */
   announce: z.boolean().optional(),
+  /**
+   * Enlace de una videollamada que ya tiene el formador (Zoom, Google Meet,
+   * Microsoft Teams, Jitsi…). Con él no se habla con la API de Zoom: la clase
+   * guarda ese enlace como enlace de entrada y no hacen falta credenciales.
+   * Solo `https://`.
+   */
+  externalJoinUrl: externalJoinUrlSchema.optional(),
 });
 export type CreateSessionDto = z.infer<typeof createSessionSchema>;
 
 export const updateSessionSchema = z.object({
+  /** Cambiar el enlace propio de una clase que se creó con él (no la de Zoom). */
+  externalJoinUrl: externalJoinUrlSchema.optional(),
   topic: z.string().min(1).max(200).optional(),
   startTime: z.string().datetime({ offset: true }).optional(),
   durationMinutes: z.number().int().min(15).max(480).optional(),
