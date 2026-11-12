@@ -766,6 +766,143 @@ describeWithDb('Reembolsos, disputas y deudas — Postgres real como didacta_app
     expect(await violationsOfOurTenants()).toEqual([]);
   });
 
+  it('disputa que llega ANTES que la compra (como en el sandbox): el evento queda pendiente y la venta la pone al día', async () => {
+    // La compra existe en Stripe (sesión registrada) pero su completed aún no llegó.
+    const orderId = randomUUID();
+    const tag = orderId.replace(/-/g, '');
+    const ids = { sessionId: `cs_test_${tag}`, piId: `pi_${tag}`, chId: `ch_${tag}` };
+    await admin.modBillingOrder.create({
+      data: {
+        id: orderId,
+        tenantId: A,
+        userId: null,
+        productId: randomUUID(),
+        courseId: randomUUID(),
+        stripeSessionId: ids.sessionId,
+        currency: 'eur',
+      },
+    });
+    await admin.modPayoutsObjectRef.create({
+      data: {
+        stripeObjectId: ids.sessionId,
+        tenantId: A,
+        kind: 'checkout_session',
+        source: 'billing',
+        localRef: orderId,
+      },
+    });
+    fake.seed(
+      {
+        id: `txn_${tag}`,
+        object: 'balance_transaction',
+        type: 'charge',
+        amount: 10000,
+        fee: 340,
+        net: 9660,
+        currency: 'eur',
+      },
+      {
+        id: ids.chId,
+        object: 'charge',
+        amount: 10000,
+        currency: 'eur',
+        status: 'succeeded',
+        paid: true,
+        amount_refunded: 0,
+        disputed: true,
+        created: Math.floor(Date.now() / 1000),
+        on_behalf_of: ACCT[A],
+        payment_intent: ids.piId,
+        transfer_group: `didacta_${orderId}`,
+        balance_transaction: `txn_${tag}`,
+      },
+      { id: ids.piId, object: 'payment_intent', latest_charge: ids.chId, on_behalf_of: ACCT[A] },
+      {
+        id: ids.sessionId,
+        object: 'checkout.session',
+        mode: 'payment',
+        payment_status: 'paid',
+        livemode: false,
+        customer_details: { email: `t-${tag}@example.test` },
+        payment_intent: ids.piId,
+        line_items: { object: 'list', data: [{ description: 'Curso temprano' }] },
+      },
+    );
+    fake.on('GET', '/v1/checkout/sessions', (req) => ({
+      object: 'list',
+      has_more: false,
+      data: req.params['payment_intent'] === ids.piId ? [{ id: ids.sessionId }] : [],
+    }));
+    const dp = `dp_early_${stamp}`;
+    seedDispute(dp, ids.chId, 'needs_response', [{ amount: -10000, fee: 2000 }]);
+    fake.on('GET', '/v1/disputes', (req) => ({
+      object: 'list',
+      has_more: false,
+      data: req.params['charge'] === ids.chId ? [fake.get(dp)!] : [],
+    }));
+    const early = evtId('early');
+    const first = await platform.handle(
+      signed(
+        'charge.dispute.created',
+        { id: dp, object: 'dispute', charge: ids.chId, payment_intent: ids.piId },
+        early,
+      ),
+    );
+    expect(first).toMatchObject({ outcome: 'processed', dispute: 'no_sale' });
+    const archived = await admin.modPayoutsWebhookEvent.findUniqueOrThrow({
+      where: { stripeEventId: early },
+    });
+    expect(archived.processedAt).toBeNull();
+
+    const completed = await platform.handle(
+      signed(
+        'checkout.session.completed',
+        {
+          id: ids.sessionId,
+          object: 'checkout.session',
+          mode: 'payment',
+          payment_status: 'paid',
+          status: 'complete',
+          payment_intent: ids.piId,
+          client_reference_id: orderId,
+          metadata: { orderId, tenantId: A },
+        },
+        evtId('latecompleted'),
+      ),
+    );
+    expect(completed).toMatchObject({ sale: 'created', settlement: 'held' });
+    const sale = await admin.modPayoutsSale.findUniqueOrThrow({
+      where: { stripeChargeId: ids.chId },
+    });
+    expect(sale).toMatchObject({
+      status: 'SETTLED_NETTED',
+      debtNetted: 9160,
+      stripeTransferId: null,
+    });
+    expect(await lossEntries(sale.id)).toMatchObject({
+      DISPUTE_WITHDRAWN: -10000,
+      DISPUTE_FEE: -2000,
+    });
+    // El evento pendiente, al reproducirse, ya no tiene nada que hacer.
+    expect(
+      await platform.process(
+        JSON.parse(
+          JSON.stringify({
+            id: early,
+            object: 'event',
+            type: 'charge.dispute.created',
+            livemode: false,
+            created: 1,
+            data: {
+              object: { id: dp, object: 'dispute', charge: ids.chId, payment_intent: ids.piId },
+            },
+          }),
+        ),
+      ),
+    ).toMatchObject({ dispute: 'synced' });
+    expect(await violationsOfOurTenants()).toEqual([]);
+  });
+
   // ══════════════════ desconexión ══════════════════
 
   it('desconectar: DISCONNECTED cierra el checkout; lo pendiente se sigue liquidando', async () => {

@@ -199,8 +199,13 @@ export class PlatformEventProcessor {
         await prisma.modPayoutsWebhookEvent.update({
           where: { stripeEventId: event.id },
           data: {
-            processedAt: new Date(),
-            errorMessage: money.error,
+            // E6: un reembolso o una disputa de un cargo cuya venta aún no está
+            // anotada se deja PENDIENTE: lo reproduce el conciliador (y la venta,
+            // al anotarse, se pone al día ella misma).
+            processedAt: money.pending ? null : new Date(),
+            errorMessage: money.pending
+              ? 'pendiente: la venta del cargo aún no está anotada'
+              : money.error,
             attempts: { increment: 1 },
           },
         });
@@ -231,6 +236,8 @@ export class PlatformEventProcessor {
     settlement?: PlatformWebhookResult['settlement'];
     refund?: string;
     dispute?: string;
+    /** E6: el evento se deja sin procesar para que se reintente. */
+    pending?: boolean;
     error: string | null;
   }> {
     const fail = (stage: string, err: unknown, extra: Record<string, unknown>) => {
@@ -260,6 +267,9 @@ export class PlatformEventProcessor {
           const settled = await this.runtime.settlement.settleSale(tenantId, recorded.saleId, {
             force: true,
           });
+          // E6: retenida por un reembolso o una disputa que aún no consta (sus
+          // eventos llegaron antes que la venta): se ponen al día ahora.
+          if (settled.outcome === 'held') await this.catchUpLosses(tenantId, recorded.chargeId);
           return { sale: recorded.outcome, settlement: settled.outcome, error: null };
         } catch (err) {
           return {
@@ -283,7 +293,7 @@ export class PlatformEventProcessor {
             object: (event.data?.object ?? {}) as Record<string, unknown>,
           },
         );
-        return { refund: result.outcome, error: null };
+        return { refund: result.outcome, pending: result.outcome === 'no_sale', error: null };
       } catch (err) {
         return { refund: 'pending', error: fail('refund', err, { objectId: route.primaryId }) };
       }
@@ -298,7 +308,7 @@ export class PlatformEventProcessor {
             object: (event.data?.object ?? {}) as Record<string, unknown>,
           },
         );
-        return { dispute: result.outcome, error: null };
+        return { dispute: result.outcome, pending: result.outcome === 'no_sale', error: null };
       } catch (err) {
         return { dispute: 'pending', error: fail('dispute', err, { disputeId: route.primaryId }) };
       }
@@ -335,6 +345,22 @@ export class PlatformEventProcessor {
       }
     }
     return { error: null };
+  }
+
+  /**
+   * E6: disputas y reembolsos de un cargo recién anotado cuyos eventos llegaron
+   * antes que la venta. Nunca lanza: si falla, lo recoge el conciliador.
+   */
+  private async catchUpLosses(tenantId: string, chargeId: string): Promise<void> {
+    try {
+      await this.runtime.disputes.syncCharge(tenantId, chargeId);
+      await this.runtime.refunds.syncCharge(tenantId, chargeId);
+    } catch (err) {
+      this.logger.warn(
+        { err, tenantId, chargeId },
+        'payouts: no se pudieron poner al día las disputas o reembolsos del cargo (lo recoge el conciliador)',
+      );
+    }
   }
 
   /** Eventos de cuenta (E2): el evento solo dispara `syncAccount`. */

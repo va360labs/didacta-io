@@ -674,6 +674,53 @@ describe('Disputas', () => {
     expect(await invariantViolations()).toEqual([]);
   });
 
+  it('disputa ANTES que la venta (visto en el sandbox): no_sale sin alerta; al anotarse la venta, syncCharge la pone al día', async () => {
+    seedCharge(fake, {
+      chargeId: 'ch_3Temprana',
+      onBehalfOf: ACCT_A,
+      amount: 10000,
+      currency: 'eur',
+      bt: { amount: 10000, fee: 340, currency: 'eur' },
+    });
+    fake.patch('ch_3Temprana', { disputed: true });
+    seedDispute(fake, {
+      id: 'dp_early',
+      chargeId: 'ch_3Temprana',
+      amount: 10000,
+      currency: 'eur',
+      status: 'needs_response',
+      withdrawn: { amount: 10000, fee: 2000, currency: 'eur' },
+    });
+    expect(await disputeEvent('charge.dispute.created', 'dp_early')).toMatchObject({
+      outcome: 'no_sale',
+    });
+    expect(alerts).toEqual([]);
+
+    // Llega la venta: la liquidación la retiene (disputa sin anotar) …
+    const [row] = db.insert('modPayoutsSale', {
+      tenantId: A,
+      accountId: accountA,
+      sourceKind: 'ORDER',
+      sourceRef: randomUUID(),
+      description: 'Curso temprano',
+      stripeChargeId: 'ch_3Temprana',
+      presentmentAmount: 10000,
+      presentmentCurrency: 'eur',
+      status: 'AWAITING_FEE',
+      chargedAt: new Date(clock),
+    });
+    const saleId = row!['id'] as string;
+    expect((await settlement.settleSale(A, saleId, { force: true })).outcome).toBe('held');
+    // … y al ponerse al día, la retirada sale de su transferencia pendiente.
+    fake.on('GET', '/v1/disputes', () => ({ data: [fake.get('dp_early')!], has_more: false }));
+    clock += 60_000;
+    const synced = await disputes.syncCharge(A, 'ch_3Temprana');
+    expect(synced).toEqual([expect.objectContaining({ outcome: 'synced' })]);
+    expect(sale(saleId)).toMatchObject({ status: 'SETTLED_NETTED', debtNetted: 9160 });
+    expect(transfers.all).toHaveLength(0);
+    expect(await invariantViolations()).toEqual([]);
+  });
+
   it('una disputa abierta bloquea el reembolso desde el panel', async () => {
     const s = await transferredSale({});
     seedDispute(fake, {

@@ -166,6 +166,23 @@ export class PayoutsDisputesService {
   }
 
   /**
+   * Todas las disputas de un cargo (`GET /v1/disputes?charge=`): lo que hace la
+   * venta al anotarse retenida por disputa, por si los eventos llegaron antes.
+   */
+  async syncCharge(tenantId: string, chargeId: string): Promise<DisputeSyncOutcome[]> {
+    const list = await this.stripe.v1<{ data?: Array<{ id?: unknown }> }>('GET', '/v1/disputes', {
+      charge: chargeId,
+      limit: 10,
+    });
+    const out: DisputeSyncOutcome[] = [];
+    for (const item of list.data ?? []) {
+      const id = idOf(item.id);
+      if (id) out.push(await this.sync(tenantId, id));
+    }
+    return out;
+  }
+
+  /**
    * Lleva la disputa a lo que dice Stripe. Idempotente: cada paso tiene su
    * sello (la clave de su primer asiento o el `outcome` de la fila).
    */
@@ -188,12 +205,16 @@ export class PayoutsDisputesService {
       return { sale, stripeAccountId: account?.stripeAccountId ?? null };
     });
     if (!loaded) {
-      await this.alert(PAYOUTS_LOSS_ALERTS.disputeMismatch, {
-        tenantId,
-        disputeId,
-        chargeId,
-        detail: 'disputa de un cargo sin venta anotada: revisar a mano',
-      });
+      // Lo normal: con algunas tarjetas Stripe abre la disputa ANTES de que
+      // llegue el `checkout.session.completed` que anota la venta (visto en el
+      // sandbox con la tarjeta de disputa). No es un fallo: quien llama deja el
+      // evento pendiente y se reintenta (y la venta, al anotarse, la pone al
+      // día con `syncCharge`). Si la venta no llega nunca, lo avisa el
+      // conciliador como cobro sin venta.
+      this.logger.warn(
+        { tenantId, disputeId, chargeId },
+        'payouts.dispute: la venta del cargo aún no está anotada (se reintenta)',
+      );
       return { outcome: 'no_sale', disputeId };
     }
     const { sale } = loaded;
