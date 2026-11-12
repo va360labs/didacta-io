@@ -253,7 +253,13 @@ export class AdminStripeController {
     const globalResolved = await this.resolver.resolve(tenantId);
     const hasGlobalFallback = globalResolved?.source === 'global';
     const fallback = await this.resolver.describeGlobalFallback();
-    const globalFallbackBlocked = !secret && fallback.instanceCredentials && !fallback.allowed;
+    // En modo plataforma la cuenta de instancia no se hereda por diseño: no es
+    // un aviso para el aula (cobra por la plataforma, ver «Cobros»).
+    const globalFallbackBlocked =
+      !secret &&
+      fallback.instanceCredentials &&
+      !fallback.allowed &&
+      fallback.reason !== 'platform-payments';
 
     return {
       hasSecretKey: Boolean(secret?.secretKey),
