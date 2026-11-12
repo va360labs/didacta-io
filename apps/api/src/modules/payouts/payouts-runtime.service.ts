@@ -7,6 +7,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import type { PrismaClient } from '@didacta/database';
 import {
   PayoutsAccountsService,
+  PayoutsPortalService,
   PayoutsReportsService,
   PayoutsSettingsService,
   RefsService,
@@ -23,7 +24,7 @@ import { runAsTenant, runGlobalWithoutTenant } from '../../tenancy/tenant-contex
 import { PaymentModeResolver } from '../payment-mode.resolver';
 import { TenantStripeResolverService } from '../tenant-stripe-resolver.service';
 import type { PlatformPaymentsEnabled } from './platform-payments.config';
-import type { PlatformRefsPort } from './platform-stripe-adapters';
+import type { PlatformPortalPort, PlatformRefsPort } from './platform-stripe-adapters';
 
 /** Configuración del modo plataforma (solo existe con el modo encendido). */
 export const PLATFORM_PAYMENTS_CONFIG = Symbol('PLATFORM_PAYMENTS_CONFIG');
@@ -93,6 +94,7 @@ export class PayoutsRuntime {
       },
     });
     this.reports = new PayoutsReportsService(db);
+    this.portal = new PayoutsPortalService(db, stripe);
     // Sin Redis no hay barrido cada minuto: la compra y `charge.updated` se
     // liquidan en línea desde el webhook.
     this.settleInline = !process.env['REDIS_URL'];
@@ -104,6 +106,24 @@ export class PayoutsRuntime {
   readonly reports: PayoutsReportsService;
   /** `true` sin `REDIS_URL`: el webhook liquida en línea. */
   readonly settleInline: boolean;
+  /** Portal de cliente del creador (E5). */
+  readonly portal: PayoutsPortalService;
+
+  /**
+   * Portal del creador para el adaptador de suscripciones
+   * (`platform-stripe-adapters.ts`): su configuración, con el nombre del aula
+   * como titular, y su cuenta conectada.
+   */
+  platformPortal(): PlatformPortalPort {
+    return {
+      forTenant: async (tenantId: string) => {
+        const tenant = await runAsTenant(tenantId, () =>
+          this.prisma.tenant.findUnique({ where: { id: tenantId }, select: { name: true } }),
+        );
+        return this.portal.ensureConfiguration(tenantId, { headline: tenant?.name ?? '' });
+      },
+    };
+  }
 
   /**
    * Registro de objetos para los adaptadores de Stripe de los módulos

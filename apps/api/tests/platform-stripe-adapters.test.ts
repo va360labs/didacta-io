@@ -95,6 +95,11 @@ function build(
     buildBilling: (credentials, options) =>
       fakeAdapter(credentials.secretKey === OWN.secretKey ? 'propia' : 'plataforma', log, options),
     buildSubscriptions: (credentials) => ({ label: credentials.secretKey }) as never,
+    portal: {
+      forTenant: async () => {
+        throw new Error('el portal no se usa en estos tests');
+      },
+    },
   });
   return { adapters, log, registered };
 }
@@ -209,22 +214,24 @@ describe('PlatformStripeAdapters.billing', () => {
   });
 });
 
-describe('PlatformStripeAdapters.subscriptions (las membresías aún no van por la plataforma)', () => {
-  it('modo propio → claves propias; plataforma con claves propias heredadas → claves propias', async () => {
+describe('PlatformStripeAdapters.subscriptions (lo de E5 está en platform-membership.test.ts)', () => {
+  it('modo propio → claves propias, el adaptador de siempre', async () => {
     const own = build({
       mode: 'own',
       credentials: { credentials: OWN, source: 'tenant', verified: true },
     });
     expect(await own.adapters.subscriptions(TENANT)).toEqual({ label: OWN.secretKey });
-    const coexist = build(
-      { mode: 'platform', ready: true, stripeAccountId: 'acct_1C', country: 'ES', feeBps: 500 },
-      { own: true },
-    );
-    expect(await coexist.adapters.subscriptions(TENANT)).toEqual({ label: OWN.secretKey });
   });
 
-  it('plataforma sin claves propias → 503, nunca la clave del operador ni las de instancia', async () => {
+  it('plataforma sin claves propias → ya no es 503: el decorador de plataforma (E5)', async () => {
     const { adapters } = build({ mode: 'platform', ready: false, reason: 'not_connected' });
+    const adapter = await adapters.subscriptions(TENANT);
+    expect(adapter).not.toEqual({ label: OWN.secretKey });
+    expect(adapter.constructor.name).toBe('PlatformSubscriptionsStripeAdapter');
+  });
+
+  it('modo none → StripeConfigMissingError (503), como siempre', async () => {
+    const { adapters } = build({ mode: 'none' });
     await expect(adapters.subscriptions(TENANT)).rejects.toBeInstanceOf(
       SubscriptionsStripeConfigMissingError,
     );
