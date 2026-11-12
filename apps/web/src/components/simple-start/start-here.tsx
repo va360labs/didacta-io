@@ -12,7 +12,13 @@ import { Icon } from '@/components/icon';
 import { START_HERE_CHANGED_EVENT } from '@/components/simple-shell/simple-shell';
 import { ApiHttpError } from '@/lib/api-client';
 import { formatCents, formatDateTime } from '@/lib/i18n/format';
-import { parseAmount, simpleModeApi, type StartHereView, type StepId } from '@/lib/simple-mode';
+import {
+  parseAmount,
+  saleState,
+  simpleModeApi,
+  type StartHereView,
+  type StepId,
+} from '@/lib/simple-mode';
 import { cn } from '@/lib/utils';
 
 /** Primer paso pendiente: el único que se abre. `null` = todos hechos. */
@@ -459,6 +465,9 @@ function SaleLinkCard({ view, origin }: { view: StartHereView; origin: string })
   const t = useTranslations('modoSencillo');
   const [copied, setCopied] = useState(false);
   const published = view.salePath !== null;
+  // Publicado no basta: sin cobros conectados nadie puede pagar.
+  const state = saleState(view);
+  const onSale = state === 'on-sale';
   const path = plannedSalePath(view);
   const url = path ? `${origin}${path}` : '';
   const offer = view.offer;
@@ -488,24 +497,32 @@ function SaleLinkCard({ view, origin }: { view: StartHereView; origin: string })
         <span
           className={cn(
             'inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-bold',
-            published ? 'bg-success-50 text-success-700' : 'bg-bg-subtle text-text-subtle',
+            onSale
+              ? 'bg-success-50 text-success-700'
+              : state === 'not-purchasable'
+                ? 'bg-warning-50 text-warning-700'
+                : 'bg-bg-subtle text-text-subtle',
           )}
         >
-          <Icon name={published ? 'globe' : 'lock'} size={12} />
-          {published ? t('empieza.enlace.aLaVenta') : t('empieza.enlace.sinPublicar')}
+          <Icon name={onSale ? 'globe' : 'lock'} size={12} />
+          {onSale
+            ? t('empieza.enlace.aLaVenta')
+            : state === 'not-purchasable'
+              ? t('empieza.enlace.noComprable')
+              : t('empieza.enlace.sinPublicar')}
         </span>
       </div>
       {url ? (
         <div
           className={cn(
             'mt-3 flex h-12 min-w-0 items-center gap-2 rounded-xl border px-3 text-[15px]',
-            published
+            onSale
               ? 'border-border bg-bg-subtle text-text'
               : 'border-dashed border-border-strong bg-bg-subtle text-text-subtle',
           )}
           data-testid="enlace-url"
         >
-          <Icon name={published ? 'link' : 'lock'} size={16} />
+          <Icon name={onSale ? 'link' : 'lock'} size={16} />
           <span className="truncate">{url.replace(/^https?:\/\//, '')}</span>
         </div>
       ) : null}
@@ -529,7 +546,7 @@ function SaleLinkCard({ view, origin }: { view: StartHereView; origin: string })
         <button
           type="button"
           onClick={copy}
-          disabled={!published}
+          disabled={!onSale}
           data-testid="copiar-enlace"
           className="inline-flex h-11 items-center justify-center gap-1.5 rounded-xl bg-brand-600 px-3 text-[15px] font-semibold text-white hover:bg-brand-700 disabled:bg-bg-subtle disabled:text-text-disabled"
         >
@@ -549,7 +566,11 @@ function SaleLinkCard({ view, origin }: { view: StartHereView; origin: string })
         ) : null}
       </div>
       <p className="mt-2.5 text-[13px] text-text-subtle">
-        {published ? t('empieza.enlace.notaDespues') : t('empieza.enlace.notaAntes')}
+        {onSale
+          ? t('empieza.enlace.notaDespues')
+          : state === 'not-purchasable'
+            ? t('empieza.enlace.notaNoComprable')
+            : t('empieza.enlace.notaAntes')}
       </p>
     </section>
   );

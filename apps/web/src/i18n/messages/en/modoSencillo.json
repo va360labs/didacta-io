@@ -165,7 +165,9 @@
       "copiado": "Copied",
       "verAlumno": "View as a student",
       "notaAntes": "This is what your students will see. The link switches on when you publish.",
-      "notaDespues": "Share it on social media, your website or WhatsApp."
+      "notaDespues": "Share it on social media, your website or WhatsApp.",
+      "noComprable": "Cannot be bought yet",
+      "notaNoComprable": "Connect your payouts (step 4) so people can buy."
     },
     "ayudaTitulo": "Stuck on a step?",
     "ayudaTexto": "Write to us and we will help you get it ready.",

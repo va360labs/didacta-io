@@ -165,7 +165,9 @@
       "copiado": "Copiado",
       "verAlumno": "Ver como alumno",
       "notaAntes": "Así lo verán tus alumnos. El enlace se enciende al publicar.",
-      "notaDespues": "Compártelo en tus redes, tu web o por WhatsApp."
+      "notaDespues": "Compártelo en tus redes, tu web o por WhatsApp.",
+      "noComprable": "Aún no se puede comprar",
+      "notaNoComprable": "Conecta tus cobros (paso 4) para que se pueda comprar."
     },
     "ayudaTitulo": "¿Te atascas en algún paso?",
     "ayudaTexto": "Escríbenos y te ayudamos a dejarlo listo.",

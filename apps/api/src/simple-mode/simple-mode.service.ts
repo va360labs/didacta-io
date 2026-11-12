@@ -329,7 +329,8 @@ export class SimpleModeService {
       course: courseDone.done,
       price: (offer?.amountCents ?? 0) > 0,
       payments: paymentsReady,
-      publish: published,
+      // Publicado no basta: sin cobros nadie puede comprar todavía.
+      publish: published && paymentsReady,
       invite: invited > 0 || sales.count > 0,
     };
 

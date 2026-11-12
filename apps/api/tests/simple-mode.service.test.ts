@@ -205,7 +205,7 @@ function mundo(opts: { paymentsReady?: boolean } = {}) {
     registry as never,
     stripeResolver as never,
   );
-  return { db, service, courses, billing, community, membership };
+  return { db, service, courses, billing, community, membership, stripeResolver };
 }
 
 const ALTA = {
@@ -406,5 +406,17 @@ describe('Empieza aquí', () => {
     expect(view.steps.find((s) => s.id === 'publish')?.done).toBe(true);
     expect(view.sales).toEqual({ count: 1, firstSaleAt: '2026-11-12T10:00:00.000Z' });
     expect(view.steps.find((s) => s.id === 'invite')?.done).toBe(true);
+  });
+
+  it('publicado pero con los cobros caídos: el paso de publicar NO cuenta como hecho', async () => {
+    const { db, service, stripeResolver } = mundo({ paymentsReady: true });
+    await service.quickStart(T, { id: U }, ALTA);
+    db.lessons.push({ type: 'TEXT', content: { text: 'Hola' }, module: { courseId: 'c1' } });
+    await service.publish(T, U);
+    stripeResolver.resolve.mockResolvedValue(null as never);
+    const view = await service.startHere(T);
+    expect(view.salePath).toBe('/catalogo/acuarela-desde-cero');
+    expect(view.steps.find((s) => s.id === 'payments')?.done).toBe(false);
+    expect(view.steps.find((s) => s.id === 'publish')?.done).toBe(false);
   });
 });
