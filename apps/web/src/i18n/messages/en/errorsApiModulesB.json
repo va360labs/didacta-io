@@ -225,5 +225,7 @@
   "PAYOUTS_SALE_NOT_FOUND": "We couldn't find that sale.",
   "PAYOUTS_SALE_NOT_REFUNDABLE": "This sale can't be refunded right now: the payment may still be processing, it may already be fully refunded, or the student may have disputed it with their bank.",
   "PAYOUTS_REFUND_EXCEEDS_REMAINING": "That's more than what's left to refund on this sale.",
-  "PAYOUTS_REFUND_REJECTED": "The bank didn't accept the refund. Nothing was refunded; please try again later."
+  "PAYOUTS_REFUND_REJECTED": "The bank didn't accept the refund. Nothing was refunded; please try again later.",
+  "PAYOUTS_PRICE_CURRENCY": "That price can’t be set in {detail}. Pick a currency from the list and an amount that can be charged in it.",
+  "BILLING_PRICE_ID_NOT_ALLOWED": "Here the price is entered as an amount: nothing to set up in Stripe."
 }

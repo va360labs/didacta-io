@@ -75,6 +75,10 @@ export interface PayoutsStatusDto {
   account: PayoutsAccountDto | null;
   supportedCountries: string[];
   feeBps: number;
+  /** Moneda en la que cobra el creador (la de sus precios por defecto). `null` sin cuenta. */
+  settlementCurrency?: string | null;
+  /** Monedas en las que puede poner precio en modo plataforma. */
+  priceCurrencies?: string[];
 }
 
 export type PayoutsEntityType = 'individual' | 'company';

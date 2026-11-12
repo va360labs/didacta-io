@@ -196,5 +196,7 @@
   "PAYOUTS_SALE_NOT_FOUND": "No encontramos esa venta.",
   "PAYOUTS_SALE_NOT_REFUNDABLE": "Esta venta no se puede reembolsar ahora: puede que aún se esté procesando el pago, que ya esté devuelta entera o que el alumno la haya reclamado a su banco.",
   "PAYOUTS_REFUND_EXCEEDS_REMAINING": "Ese importe es mayor que lo que queda por devolver de esta venta.",
-  "PAYOUTS_REFUND_REJECTED": "El banco no ha aceptado el reembolso. No se ha devuelto nada; inténtalo de nuevo más tarde."
+  "PAYOUTS_REFUND_REJECTED": "El banco no ha aceptado el reembolso. No se ha devuelto nada; inténtalo de nuevo más tarde.",
+  "PAYOUTS_PRICE_CURRENCY": "No se puede poner ese precio en {detail}. Elige una moneda de la lista y un importe que se pueda cobrar en ella.",
+  "BILLING_PRICE_ID_NOT_ALLOWED": "Aquí el precio se escribe como importe: no hace falta crear nada en Stripe."
 }

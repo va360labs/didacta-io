@@ -10,6 +10,7 @@ import { useParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { InvitationsPanel } from './invitations-panel';
 import { DripPanel } from './drip-panel';
+import { PricePanel } from './price-panel';
 
 // El editor de curso arrastra librerías pesadas (tiptap ~200KB + dnd-kit ~100KB).
 // Lo cargamos bajo demanda (chunk aparte) para que la página pinte el esqueleto
@@ -77,6 +78,7 @@ export default function CourseEditorPage() {
         </Button>
       </div>
       <CourseEditor initial={course} onChange={reload} />
+      <PricePanel courseId={course.id} published={course.status === 'PUBLISHED'} />
       <DripPanel courseId={course.id} />
       <InvitationsPanel courseId={course.id} />
     </div>

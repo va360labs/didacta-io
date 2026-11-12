@@ -57,9 +57,27 @@ export interface BillingProduct {
   stripePriceId: string;
   unitAmount: number;
   currency: string;
+  /** Precios fijos extra por mercado: moneda → importe en su unidad mínima. */
+  currencyOptions?: Record<string, number> | null;
+  /** Precio «antes» tachado, en la unidad mínima. */
+  compareAtAmount?: number | null;
+  /** Nombre de la opción de compra ("" = precio único del curso). */
+  name?: string;
   active: boolean;
   createdAt: string;
   updatedAt: string;
+}
+
+/**
+ * Precio escrito como importe: Didacta crea el Product y el Price en Stripe.
+ * `amountCents` en la unidad mínima de STRIPE para esa moneda (ver
+ * `@/lib/stripe-currencies`): 4900 = 49 €, 500 = 500 JPY.
+ */
+export interface BillingPriceInput {
+  amountCents: number;
+  currency: string;
+  currencyOptions?: Record<string, number> | null;
+  compareAtCents?: number | null;
 }
 
 export interface BillingProductsListResponse {
@@ -109,22 +127,42 @@ export const billingApi = {
     return apiFetch<BillingProductsListResponse>(PRODUCTS, { method: 'GET' }, bearer);
   },
 
+  /**
+   * Pone el curso a la venta. Con un `price_…` ya creado en Stripe (claves
+   * propias) o con el importe (`BillingPriceInput`): en ese caso Didacta crea
+   * el precio, que es lo único posible con cobros de plataforma.
+   */
   async createProduct(
     bearer: string,
     courseId: string,
-    stripePriceId: string,
+    price: string | BillingPriceInput,
   ): Promise<BillingProductResponse> {
+    const body =
+      typeof price === 'string'
+        ? { courseId, stripePriceId: price }
+        : {
+            courseId,
+            amountCents: price.amountCents,
+            currency: price.currency,
+            ...(price.currencyOptions ? { currencyOptions: price.currencyOptions } : {}),
+            ...(price.compareAtCents ? { compareAtCents: price.compareAtCents } : {}),
+          };
     return apiFetch<BillingProductResponse>(
       PRODUCTS,
-      { method: 'POST', body: JSON.stringify({ courseId, stripePriceId }) },
+      { method: 'POST', body: JSON.stringify(body) },
       bearer,
     );
   },
 
+  /**
+   * Cambia una opción ya a la venta. Con importe/moneda/precios por mercado,
+   * el servidor crea un Price nuevo sobre el MISMO Product de Stripe (los
+   * Price no se pueden editar); las compras ya hechas no cambian.
+   */
   async updateProduct(
     bearer: string,
     id: string,
-    patch: { active?: boolean; stripePriceId?: string },
+    patch: { active?: boolean; stripePriceId?: string } | Partial<BillingPriceInput>,
   ): Promise<BillingProductResponse> {
     return apiFetch<BillingProductResponse>(
       `${PRODUCTS}/${id}`,
