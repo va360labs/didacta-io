@@ -13,6 +13,7 @@ import {
   ReferralsPayoutValidationError,
   ReferralsProgramInactiveError,
 } from './errors.js';
+import { deriveInviteeState, initialsOf, type InviteeState } from './invitees.js';
 
 /**
  * mod.referrals — dominio puro (sin NestJS).
@@ -959,6 +960,101 @@ export class ReferralsService {
         externalReference: p.externalReference,
         createdAt: p.createdAt,
       })),
+    };
+  }
+
+  /**
+   * «Tus invitados»: las personas que entraron con el enlace del miembro, con
+   * su estado y lo que han generado. Solo los SUYOS y solo de su aula.
+   *
+   * Privacidad: del invitado solo salen sus iniciales; ni nombre ni correo.
+   * Lecturas acotadas por `tenantId` (ADR-016: `mod.subscriptions` está
+   * declarado en `optionalModules` del manifest; nunca se escribe en ella).
+   */
+  async memberInvitees(
+    tenantId: string,
+    userId: string,
+  ): Promise<{
+    payingNow: number;
+    invitees: Array<{
+      id: string;
+      initials: string;
+      joinedAt: Date;
+      state: InviteeState;
+      generatedCents: number;
+      currency: string;
+    }>;
+  }> {
+    const referrals = await this.prisma.modReferralsReferral.findMany({
+      where: { tenantId, referrerUserId: userId },
+      orderBy: { attributedAt: 'desc' },
+      take: 200,
+      select: { id: true, referredUserId: true, orderId: true, attributedAt: true },
+    });
+    if (referrals.length === 0) return { payingNow: 0, invitees: [] };
+
+    const referralIds = referrals.map((r) => r.id);
+    const referredIds = [...new Set(referrals.map((r) => r.referredUserId))];
+    const [users, subscriptions, commissions] = await Promise.all([
+      this.prisma.user.findMany({
+        where: { tenantId, id: { in: referredIds } },
+        select: { id: true, name: true, deletedAt: true },
+      }),
+      this.prisma.modSubscriptionsSubscription.findMany({
+        where: { tenantId, userId: { in: referredIds }, planId: { not: null } },
+        select: { userId: true, status: true, createdAt: true },
+      }),
+      this.prisma.modReferralsCommission.findMany({
+        where: { tenantId, referrerUserId: userId, referralId: { in: referralIds } },
+        select: {
+          referralId: true,
+          stripeInvoiceId: true,
+          amountCents: true,
+          currency: true,
+          status: true,
+        },
+      }),
+    ]);
+
+    const nameBy = new Map(users.map((u) => [u.id, u.deletedAt ? null : u.name]));
+    const subsBy = new Map<string, Array<{ status: string; createdAt: Date }>>();
+    for (const s of subscriptions) {
+      const list = subsBy.get(s.userId) ?? [];
+      list.push({ status: s.status, createdAt: s.createdAt });
+      subsBy.set(s.userId, list);
+    }
+    const commissionsBy = new Map<string, typeof commissions>();
+    for (const c of commissions) {
+      const list = commissionsBy.get(c.referralId) ?? [];
+      list.push(c);
+      commissionsBy.set(c.referralId, list);
+    }
+
+    const invitees = referrals.map((r) => {
+      const all = commissionsBy.get(r.id) ?? [];
+      const live = all.filter((c) => c.status !== 'REVOKED');
+      // Compra suelta: comisión de pedido viva, o referido nacido de un
+      // pedido que no devengó comisión (fuera de ámbito o de ventana). Si
+      // todas sus comisiones de pedido están anuladas, se reembolsó.
+      const orderCommissions = all.filter((c) => c.stripeInvoiceId.startsWith('order:'));
+      const hasCoursePurchase =
+        orderCommissions.some((c) => c.status !== 'REVOKED') ||
+        (r.orderId !== null && orderCommissions.length === 0);
+      return {
+        id: r.id,
+        initials: initialsOf(nameBy.get(r.referredUserId)),
+        joinedAt: r.attributedAt,
+        state: deriveInviteeState({
+          subscriptions: subsBy.get(r.referredUserId) ?? [],
+          hasCoursePurchase,
+        }),
+        generatedCents: live.reduce((sum, c) => sum + c.amountCents, 0),
+        currency: live[0]?.currency ?? commissionsBy.get(r.id)?.[0]?.currency ?? 'eur',
+      };
+    });
+    return {
+      payingNow: invitees.filter((i) => i.state === 'paying').length,
+      invitees,
     };
   }
 

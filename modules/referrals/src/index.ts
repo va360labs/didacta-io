@@ -39,6 +39,8 @@ export type {
   PurchaseInput,
   PurchaseResult,
 } from './referrals.service.js';
+export { deriveInviteeState, initialsOf } from './invitees.js';
+export type { InviteeState, InviteeFacts } from './invitees.js';
 export {
   ReferralsError,
   ReferralsProgramInactiveError,

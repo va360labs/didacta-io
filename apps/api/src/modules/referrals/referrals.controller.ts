@@ -116,6 +116,18 @@ export class ReferralsController {
     return this.registry.getReferralsService().memberStats(u.tenantId, u.sub);
   }
 
+  @Get('me/invitees')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary:
+      'Invitados del miembro (solo los suyos, de su aula): iniciales, fecha de entrada, estado (trial|paying|bought_course|cancelled|joined) y comisión generada no anulada. Nunca devuelve nombre ni correo.',
+  })
+  async myInvitees(@CurrentUser() user: SessionClaims | undefined) {
+    const u = this.requireUser(user);
+    return this.registry.getReferralsService().memberInvitees(u.tenantId, u.sub);
+  }
+
   // ---------------- Público (clics) ----------------
 
   @Post('track')
