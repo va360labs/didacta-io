@@ -191,5 +191,6 @@
   "PAYOUTS_ACCOUNT_ONBOARDING_INCOMPLETE": "Termina de conectar tus cobros para poder ver tus pagos en Stripe.",
   "PAYOUTS_ADMIN_ROLE_REQUIRED": "Solo la administración de la academia puede gestionar los cobros.",
   "PAYOUTS_SUPPORT_SESSION_FORBIDDEN": "Una sesión de soporte no puede conectar los cobros ni abrir el panel de pagos.",
-  "PAYOUTS_STRIPE_API_ERROR": "Stripe no ha respondido como esperábamos. Vuelve a intentarlo en unos minutos."
+  "PAYOUTS_STRIPE_API_ERROR": "Stripe no ha respondido como esperábamos. Vuelve a intentarlo en unos minutos.",
+  "PAYOUTS_NOT_READY": "Esta academia todavía no puede cobrar. Vuelve a intentarlo más adelante."
 }

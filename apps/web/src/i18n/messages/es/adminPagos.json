@@ -322,7 +322,7 @@
   },
   "payouts": {
     "title": "Cobros",
-    "subtitle": "Tus alumnos pagan a {operator} y {operator} te transfiere tu parte. Sin claves ni webhooks.",
+    "subtitle": "Tus alumnos te pagan a través de {operator} y te transferimos tu parte cada semana.",
     "loading": "Cargando el estado de tus cobros…",
     "loadError": "No se pudo cargar el estado de tus cobros.",
     "notConnected": "Aún no puedes cobrar. Conecta tus cobros: son unos 5 minutos y no tienes que pegar ninguna clave.",

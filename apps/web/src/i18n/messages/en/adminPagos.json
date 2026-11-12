@@ -322,7 +322,7 @@
   },
   "payouts": {
     "title": "Payouts",
-    "subtitle": "Your students pay {operator} and {operator} sends you your share. No keys, no webhooks.",
+    "subtitle": "Your students pay through {operator} and we send you your share every week.",
     "loading": "Loading your payouts status…",
     "loadError": "Couldn't load your payouts status.",
     "notConnected": "You can't take payments yet. Connect payouts: about 5 minutes, no keys to paste.",

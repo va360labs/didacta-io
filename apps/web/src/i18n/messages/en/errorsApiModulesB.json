@@ -220,5 +220,6 @@
   "PAYOUTS_ACCOUNT_ONBOARDING_INCOMPLETE": "Finish connecting payouts to see your payouts on Stripe.",
   "PAYOUTS_ADMIN_ROLE_REQUIRED": "Only the academy's administrators can manage payouts.",
   "PAYOUTS_SUPPORT_SESSION_FORBIDDEN": "A support session can't connect payouts or open the payouts dashboard.",
-  "PAYOUTS_STRIPE_API_ERROR": "Stripe didn't respond as expected. Try again in a few minutes."
+  "PAYOUTS_STRIPE_API_ERROR": "Stripe didn't respond as expected. Try again in a few minutes.",
+  "PAYOUTS_NOT_READY": "This academy can't take payments yet. Please try again later."
 }
