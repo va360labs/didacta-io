@@ -34,6 +34,7 @@ import {
   AdminTenantsController,
   AdminTenantsPayoutsController,
   payoutsSettingsSchema,
+  payoutsVolumeQuerySchema,
   createTenantSchema,
   domainSchema,
   setStatusSchema,
@@ -534,6 +535,7 @@ describe('CONTRATO · admin/tenants ↔ didacta-cloud', () => {
 // ============================================================================
 
 const PAYOUTS_ROUTES: Array<{ handler: string; method: number; path: string }> = [
+  { handler: 'getPayoutsVolume', method: RequestMethod.GET, path: 'payouts/volume' },
   { handler: 'setPayoutsSettings', method: RequestMethod.PUT, path: ':id/payouts-settings' },
   { handler: 'getPayouts', method: RequestMethod.GET, path: ':id/payouts' },
 ];
@@ -562,7 +564,24 @@ describe('CONTRATO · admin/tenants (cobros de plataforma) ↔ didacta-cloud', (
       })),
       debtOutstanding: vi.fn(async () => []),
     };
+    const reports = {
+      volume: vi.fn(async (from: Date, to: Date) => [
+        {
+          tenantId: PAYOUTS_TENANT,
+          day: from.toISOString().slice(0, 10),
+          currency: 'eur',
+          gmv: 10000,
+          stripeFees: 175,
+          platformFees: 500,
+          refunds: 0,
+          disputes: 0,
+          salesCount: 1,
+          _to: to.toISOString(),
+        },
+      ]),
+    };
     const runtime = {
+      reports,
       settings,
       accounts: {
         getAccount: vi.fn(async () => ({ status: 'ONBOARDING', country: 'ES' })),
@@ -587,7 +606,7 @@ describe('CONTRATO · admin/tenants (cobros de plataforma) ↔ didacta-cloud', (
       runtime as unknown as ConstructorParameters<typeof AdminTenantsPayoutsController>[0],
       audit as unknown as ConstructorParameters<typeof AdminTenantsPayoutsController>[1],
     );
-    return { controller, settings, audit };
+    return { controller, settings, audit, reports };
   }
 
   it('cuelgan de admin/tenants, en un controller aparte del de siempre', () => {
@@ -672,5 +691,76 @@ describe('CONTRATO · admin/tenants (cobros de plataforma) ↔ didacta-cloud', (
         missing.controller.getPayouts(machineReq as never, undefined, PAYOUTS_TENANT),
       ),
     ).resolves.toBe('ADMIN_TENANT_NOT_FOUND');
+  });
+
+  // ── GET payouts/volume (E4): lo consume `VolumeCaptureService` de Cloud ──
+
+  it('payouts/volume se declara ANTES que las rutas con `:id`', () => {
+    const names = Object.getOwnPropertyNames(AdminTenantsPayoutsController.prototype);
+    expect(names.indexOf('getPayoutsVolume')).toBeGreaterThan(-1);
+    expect(names.indexOf('getPayoutsVolume')).toBeLessThan(names.indexOf('setPayoutsSettings'));
+    expect(names.indexOf('getPayoutsVolume')).toBeLessThan(names.indexOf('getPayouts'));
+  });
+
+  it('payouts/volume: `from` y `to` son días YYYY-MM-DD incluidos, máximo 366 días', () => {
+    expect(Object.keys(payoutsVolumeQuerySchema._def.schema._def.schema.shape).sort()).toEqual([
+      'from',
+      'to',
+    ]);
+    const ok = (from: string, to: string) =>
+      payoutsVolumeQuerySchema.safeParse({ from, to }).success;
+    expect(ok('2026-11-01', '2026-11-30')).toBe(true);
+    expect(ok('2026-11-12', '2026-11-12')).toBe(true);
+    expect(ok('2025-11-12', '2026-11-12')).toBe(true); // 366 días contando los dos extremos
+    expect(ok('2025-11-11', '2026-11-12')).toBe(false);
+    expect(ok('2026-11-13', '2026-11-12')).toBe(false);
+    expect(ok('2026-02-30', '2026-03-01')).toBe(false);
+    expect(ok('2026-11-12T00:00:00Z', '2026-11-13')).toBe(false);
+    expect(payoutsVolumeQuerySchema.safeParse({ from: '2026-11-01' }).success).toBe(false);
+  });
+
+  it('payouts/volume responde filas tenantId, day, currency, gmv, stripeFees, platformFees, refunds, disputes, salesCount', async () => {
+    const { controller, reports } = buildController();
+    const rows = await controller.getPayoutsVolume(machineReq as never, undefined, {
+      from: '2026-11-01',
+      to: '2026-11-12',
+    });
+    // `to` se incluye: el servicio recibe el final EXCLUSIVO del día siguiente.
+    expect(reports.volume).toHaveBeenCalledWith(
+      new Date('2026-11-01T00:00:00.000Z'),
+      new Date('2026-11-13T00:00:00.000Z'),
+    );
+    const { _to: _ignored, ...row } = rows[0] as unknown as Record<string, unknown>;
+    expect(Object.keys(row).sort()).toEqual(
+      [
+        'currency',
+        'day',
+        'disputes',
+        'gmv',
+        'platformFees',
+        'refunds',
+        'salesCount',
+        'stripeFees',
+        'tenantId',
+      ].sort(),
+    );
+  });
+
+  it('payouts/volume exige credencial de aprovisionamiento (o super_admin): sin ella 401, tenant_admin 403', async () => {
+    const { controller, reports } = buildController();
+    const query = { from: '2026-11-01', to: '2026-11-12' };
+    await expect(
+      controller.getPayoutsVolume({ headers: {} } as never, undefined, query),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
+    await expect(
+      errorCodeOf(() =>
+        controller.getPayoutsVolume(
+          { headers: {} } as never,
+          { sub: 'u', tenantId: PAYOUTS_TENANT, roles: ['tenant_admin'] } as never,
+          query,
+        ),
+      ),
+    ).resolves.toBe('ADMIN_FORBIDDEN_SUPER_ADMIN_REQUIRED');
+    expect(reports.volume).not.toHaveBeenCalled();
   });
 });

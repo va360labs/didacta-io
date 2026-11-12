@@ -482,6 +482,43 @@ export interface TenantPayoutsSettingsResponse {
   readonly updatedAt: string;
 }
 
+const DAY = /^\d{4}-\d{2}-\d{2}$/;
+const isRealDay = (value: string) =>
+  DAY.test(value) && new Date(`${value}T00:00:00.000Z`).toISOString().slice(0, 10) === value;
+
+/** `GET /admin/tenants/payouts/volume?from&to`. Contrato con `didacta-cloud`. */
+export const payoutsVolumeQuerySchema = z
+  .object({
+    /** Primer día (UTC), incluido. */
+    from: z.string().refine(isRealDay, 'Fecha YYYY-MM-DD'),
+    /** Último día (UTC), incluido. */
+    to: z.string().refine(isRealDay, 'Fecha YYYY-MM-DD'),
+  })
+  .refine((q) => q.from <= q.to, {
+    message: '`from` no puede ser posterior a `to`',
+    path: ['from'],
+  })
+  .refine((q) => Date.parse(q.to) - Date.parse(q.from) <= 365 * 86_400_000, {
+    message: 'Como mucho 366 días por consulta',
+    path: ['to'],
+  });
+type PayoutsVolumeQuery = z.infer<typeof payoutsVolumeQuerySchema>;
+
+/** Fila de `GET /admin/tenants/payouts/volume`. Importes en unidad mínima de `currency`. */
+export interface TenantPayoutsVolumeRow {
+  readonly tenantId: string;
+  /** `YYYY-MM-DD`, día UTC del cobro. */
+  readonly day: string;
+  /** Divisa de liquidación, minúsculas. */
+  readonly currency: string;
+  readonly gmv: number;
+  readonly stripeFees: number;
+  readonly platformFees: number;
+  readonly refunds: number;
+  readonly disputes: number;
+  readonly salesCount: number;
+}
+
 /** Respuesta de `GET /admin/tenants/:id/payouts`. */
 export interface TenantPayoutsResponse {
   readonly tenantId: string;
@@ -513,6 +550,27 @@ export class AdminTenantsPayoutsController {
     private readonly runtime: PayoutsRuntime,
     private readonly auditLog: PrismaAuditLogService,
   ) {}
+
+  // OJO: `payouts/volume` va ANTES de las rutas con `:id`, igual que `usage`
+  // en el controller de siempre.
+  @Get('payouts/volume')
+  @AllowProvisioning()
+  @ApiOperation({
+    summary:
+      'Volumen cobrado por la plataforma, por aula, día (UTC del cobro) y divisa de liquidación, entre `from` y `to` (ambos incluidos, YYYY-MM-DD, máx. 366 días).',
+    description:
+      'Una venta cuenta cuando su reparto se conoce: conviene volver a pedir los últimos días. Nunca suma divisas distintas.',
+  })
+  async getPayoutsVolume(
+    @Req() req: FastifyRequest,
+    @CurrentUser() user: SessionClaims | undefined,
+    @Query(new ZodValidationPipe(payoutsVolumeQuerySchema)) query: PayoutsVolumeQuery,
+  ): Promise<TenantPayoutsVolumeRow[]> {
+    requireAdminActor(user, req);
+    const from = new Date(`${query.from}T00:00:00.000Z`);
+    const toExclusive = new Date(Date.parse(`${query.to}T00:00:00.000Z`) + 86_400_000);
+    return this.runtime.reports.volume(from, toExclusive);
+  }
 
   @Put(':id/payouts-settings')
   @AllowProvisioning()
