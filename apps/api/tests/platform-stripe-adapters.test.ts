@@ -249,6 +249,7 @@ describe('PlatformCheckoutGate en el controlador público de compra', () => {
     };
     const runtime = {
       mode: { resolve: vi.fn(async () => mode) },
+      accounts: { getAccount: vi.fn(async () => ({ country: 'ES', defaultCurrency: 'eur' })) },
       refs: { isPlatformObject: vi.fn(async () => false) },
     };
     const gate = new PlatformCheckoutGate(runtime as never);

@@ -21,6 +21,43 @@ import { PayoutsRuntime } from './payouts-runtime.service';
 export const PAYOUTS_NOT_READY_OFFER_REASON = 'payouts_not_ready';
 
 /**
+ * Lo que la venta PÚBLICA (catálogo, ficha, `/unete`) necesita saber del cobro
+ * de un aula, resuelto con UNA sola consulta del modo.
+ */
+export interface PublicCheckoutInfo {
+  /** Por qué no puede vender todavía; `null` si puede (o cobra con claves propias). */
+  readonly blockedReason: PaymentModeNotReadyReason | null;
+  /** ¿Cobra por la plataforma? Ahí no hay cupones en el pago (`promotionCodes: 'deny'`). */
+  readonly platform: boolean;
+  /** Moneda de liquidación del creador; `null` con claves propias o sin cuenta lista. */
+  readonly settlementCurrency: string | null;
+}
+
+/**
+ * ¿Verá el alumno este precio en su moneda al pagar? Solo en modo plataforma y
+ * con el precio en la moneda de liquidación del creador: es cuando Stripe
+ * (Adaptive Pricing) lo convierte en el Checkout sin que el creador haga nada.
+ */
+export function localCurrencyAtCheckout(info: PublicCheckoutInfo, currency: string): boolean {
+  return (
+    info.platform &&
+    info.settlementCurrency !== null &&
+    currency.toLowerCase() === info.settlementCurrency
+  );
+}
+
+/** Marca cada precio (opción de curso o plan) con `localCurrencyAtCheckout`. */
+export function withLocalCurrencyHint<T extends { readonly currency: string }>(
+  items: readonly T[],
+  info: PublicCheckoutInfo,
+): Array<T & { localCurrencyAtCheckout: boolean }> {
+  return items.map((item) => ({
+    ...item,
+    localCurrencyAtCheckout: localCurrencyAtCheckout(info, item.currency),
+  }));
+}
+
+/**
  * Puerta de la VENTA en modo plataforma, para los controladores de compra de
  * `mod.billing` (público y de alumno) y, desde E5, de la membresía (`/unete`).
  *
@@ -69,6 +106,27 @@ export class PlatformCheckoutGate {
   async assertPrice(tenantId: string, check: PriceCurrencyCheck): Promise<void> {
     if ((await this.pricePolicy(tenantId)) === null) return;
     assertPlatformPrice(check);
+  }
+
+  /**
+   * Para la venta pública: si puede vender, si cobra por la plataforma y en qué
+   * moneda liquida el creador. Con claves propias, `{ null, false, null }`: la
+   * página es la de siempre (cupones en el pago, sin conversión automática).
+   */
+  async publicCheckoutInfo(tenantId: string): Promise<PublicCheckoutInfo> {
+    const mode = await runAsTenant(tenantId, () => this.runtime.mode.resolve(tenantId));
+    if (mode.mode !== 'platform') {
+      return { blockedReason: null, platform: false, settlementCurrency: null };
+    }
+    if (!mode.ready) {
+      return { blockedReason: mode.reason, platform: true, settlementCurrency: null };
+    }
+    const account = await runAsTenant(tenantId, () => this.runtime.accounts.getAccount(tenantId));
+    return {
+      blockedReason: null,
+      platform: true,
+      settlementCurrency: settlementCurrencyOf(account),
+    };
   }
 
   /** `null` si puede vender (o no cobra por la plataforma); si no, por qué. */

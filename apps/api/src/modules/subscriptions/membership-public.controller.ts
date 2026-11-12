@@ -15,6 +15,7 @@ import { ModuleRegistryService } from '../module-registry.service';
 import {
   PAYOUTS_NOT_READY_OFFER_REASON,
   PlatformCheckoutGate,
+  withLocalCurrencyHint,
 } from '../payouts/platform-checkout-gate';
 import { membershipCheckoutSchema, type MembershipCheckoutDto } from './membership.dto';
 import { resolvePublicHost } from '../../common/resolve-public-host';
@@ -51,11 +52,21 @@ export class MembershipPublicController {
     // el ALS del tenant resuelto por Host.
     return runAsTenant(tenantId, async () => {
       const page = await this.registry.getMembershipService().getPublicPage(tenantId);
+      // Sin modo plataforma (Community) la página sale tal cual, sin campos nuevos.
+      const checkoutInfo = await this.payoutsGate?.publicCheckoutInfo(tenantId);
+      if (!checkoutInfo) return page;
       // Cobros de plataforma sin terminar de conectar: la página se ve, sin venta.
-      if (await this.payoutsGate?.saleBlockedReason(tenantId)) {
+      if (checkoutInfo.blockedReason) {
         return { ...page, plans: [], reason: PAYOUTS_NOT_READY_OFFER_REASON };
       }
-      return page;
+      return {
+        ...page,
+        // ¿Verá el alumno el precio del plan en su moneda al pagar?
+        plans: withLocalCurrencyHint(page.plans, checkoutInfo),
+        // En modo plataforma el pago no admite cupones (`promotionCodes: 'deny'`):
+        // la página no debe prometer que se pueden aplicar.
+        couponsAtCheckout: !checkoutInfo.platform,
+      };
     });
   }
 

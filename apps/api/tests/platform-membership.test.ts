@@ -355,19 +355,32 @@ describe('PlatformSubscriptionsStripeAdapter · portal del cliente', () => {
 // ───────────────────────── /unete ─────────────────────────
 
 describe('PlatformCheckoutGate en /unete (MembershipPublicController)', () => {
-  function controller(mode: PaymentMode) {
+  const PLAN_USD = '44444444-4444-4444-8444-444444444444';
+  const PAGE = {
+    headline: 'Hazte miembro',
+    plans: [
+      { id: PLAN, name: 'Mensual', amountCents: 2900, currency: 'eur' },
+      { id: PLAN_USD, name: 'Anual', amountCents: 29900, currency: 'usd' },
+    ],
+    courses: [],
+  };
+  function controller(
+    mode: PaymentMode,
+    account: { country: string; defaultCurrency: string | null } | null = {
+      country: 'ES',
+      defaultCurrency: 'eur',
+    },
+    withGate = true,
+  ) {
     const membership = {
-      getPublicPage: vi.fn(async () => ({
-        headline: 'Hazte miembro',
-        plans: [{ id: PLAN, name: 'Mensual', amountCents: 2900 }],
-        courses: [],
-      })),
+      getPublicPage: vi.fn(async () => PAGE),
       startMembershipCheckout: vi.fn(async () => ({ url: 'https://x', sessionId: 'cs_1' })),
       resyncStripeCatalog: vi.fn(async () => ({ resynced: 1, skipped: 0 })),
     };
     const isPlatformObject = vi.fn(async () => true);
     const gate = new PlatformCheckoutGate({
       mode: { resolve: async () => mode },
+      accounts: { getAccount: async () => account },
       refs: { isPlatformObject },
     } as never);
     const ctrl = new MembershipPublicController(
@@ -376,7 +389,7 @@ describe('PlatformCheckoutGate en /unete (MembershipPublicController)', () => {
         resolveByHost: async () => ({ id: A }),
         resolveTenantWebBaseUrl: async () => 'https://aula.test',
       } as never,
-      gate,
+      withGate ? gate : undefined,
     );
     return { ctrl, membership, isPlatformObject };
   }
@@ -402,7 +415,7 @@ describe('PlatformCheckoutGate en /unete (MembershipPublicController)', () => {
   it('cuenta lista → página con sus planes y, antes del checkout, el precio del plan en la cuenta del operador', async () => {
     const { ctrl, membership, isPlatformObject } = controller(READY);
     expect((await ctrl.page(req)) as { plans: unknown[] }).toMatchObject({
-      plans: [{ id: PLAN }],
+      plans: [{ id: PLAN }, { id: PLAN_USD }],
     });
     await ctrl.checkout(req, { planId: PLAN } as never);
     expect(membership.resyncStripeCatalog).toHaveBeenCalledWith(A, {
@@ -429,6 +442,43 @@ describe('PlatformCheckoutGate en /unete (MembershipPublicController)', () => {
     await ctrl.checkout(req, { planId: PLAN } as never);
     expect(membership.resyncStripeCatalog).not.toHaveBeenCalled();
     expect(membership.startMembershipCheckout).toHaveBeenCalledTimes(1);
+  });
+
+  it('cuenta lista → cada plan dice si se verá en la moneda del alumno, y sin cupones', async () => {
+    const { ctrl } = controller(READY);
+    expect(await ctrl.page(req)).toEqual({
+      ...PAGE,
+      plans: [
+        { ...PAGE.plans[0], localCurrencyAtCheckout: true },
+        // Precio en otra moneda que la de liquidación: Stripe no lo convierte.
+        { ...PAGE.plans[1], localCurrencyAtCheckout: false },
+      ],
+      couponsAtCheckout: false,
+    });
+  });
+
+  it('cuenta sin moneda dicha por Stripe → la del país del creador', async () => {
+    const { ctrl } = controller(READY, { country: 'US', defaultCurrency: null });
+    const page = (await ctrl.page(req)) as { plans: Array<{ localCurrencyAtCheckout: boolean }> };
+    expect(page.plans.map((p) => p.localCurrencyAtCheckout)).toEqual([false, true]);
+  });
+
+  it('claves propias con el modo encendido → cupones sí, sin conversión automática', async () => {
+    const { ctrl } = controller({
+      mode: 'own',
+      credentials: { credentials: OWN, source: 'tenant', verified: true },
+    });
+    const page = (await ctrl.page(req)) as {
+      plans: Array<{ localCurrencyAtCheckout: boolean }>;
+      couponsAtCheckout: boolean;
+    };
+    expect(page.couponsAtCheckout).toBe(true);
+    expect(page.plans.map((p) => p.localCurrencyAtCheckout)).toEqual([false, false]);
+  });
+
+  it('sin modo plataforma (Community) → la página es idéntica a la del módulo', async () => {
+    const { ctrl } = controller(READY, null, false);
+    expect(await ctrl.page(req)).toBe(PAGE);
   });
 });
 

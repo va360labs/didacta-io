@@ -29,6 +29,7 @@ import { ModuleRegistryService } from '../module-registry.service';
 import {
   PAYOUTS_NOT_READY_OFFER_REASON,
   PlatformCheckoutGate,
+  withLocalCurrencyHint,
 } from '../payouts/platform-checkout-gate';
 import { resolvePublicHost } from '../../common/resolve-public-host';
 
@@ -74,7 +75,12 @@ interface PublicCatalogCourse {
   thumbnailUrl: string | null;
   category: string | null;
   estimatedMinutes: number | null;
-  options: CourseOfferOption[];
+  /**
+   * Solo con el modo plataforma encendido, cada opción lleva además
+   * `localCurrencyAtCheckout` (¿la verá el alumno en su moneda al pagar?).
+   * Sin él (Community), las opciones son las del módulo tal cual.
+   */
+  options: Array<CourseOfferOption & { localCurrencyAtCheckout?: boolean }>;
 }
 
 /**
@@ -115,7 +121,8 @@ export class BillingPublicController {
     // ALS del tenant resuelto por Host para que cada query quede escopada.
     return runAsTenant(tenantId, async () => {
       // Cobros de plataforma sin terminar de conectar: no se ofrece nada.
-      if (await this.payoutsGate?.saleBlockedReason(tenantId)) return { courses: [] };
+      const checkoutInfo = await this.payoutsGate?.publicCheckoutInfo(tenantId);
+      if (checkoutInfo?.blockedReason) return { courses: [] };
       const billing = this.registry.getBillingService();
       const ofertas = await billing.getCatalog(tenantId);
       if (ofertas.length === 0) return { courses: [] };
@@ -151,7 +158,9 @@ export class BillingPublicController {
           thumbnailUrl: c.thumbnailUrl,
           category: c.category,
           estimatedMinutes: c.estimatedMinutes,
-          options: optionsByCourse.get(c.id) ?? [],
+          options: checkoutInfo
+            ? withLocalCurrencyHint(optionsByCourse.get(c.id) ?? [], checkoutInfo)
+            : (optionsByCourse.get(c.id) ?? []),
         })),
       };
     });
@@ -174,10 +183,15 @@ export class BillingPublicController {
       });
       if (!curso) return { forSale: false, options: [] };
       // El aula cobra por la plataforma y su cuenta aún no puede vender.
-      if (await this.payoutsGate?.saleBlockedReason(tenantId)) {
+      const checkoutInfo = await this.payoutsGate?.publicCheckoutInfo(tenantId);
+      if (checkoutInfo?.blockedReason) {
         return { forSale: false, options: [], reason: PAYOUTS_NOT_READY_OFFER_REASON };
       }
-      return this.registry.getBillingService().getCourseOffer(tenantId, courseId);
+      const offer = await this.registry.getBillingService().getCourseOffer(tenantId, courseId);
+      // Sin modo plataforma la oferta sale tal cual (Community no cambia).
+      return checkoutInfo
+        ? { ...offer, options: withLocalCurrencyHint(offer.options, checkoutInfo) }
+        : offer;
     });
   }
 
