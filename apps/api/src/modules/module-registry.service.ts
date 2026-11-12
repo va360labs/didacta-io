@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
  */
 
+import { withStripeTestApi } from './stripe-test-api';
 import { Injectable, Optional, type OnModuleInit } from '@nestjs/common';
 import { ModuleRegistry } from '@didacta/core-registry';
 import { Prisma } from '@didacta/database';
@@ -923,7 +924,7 @@ export class ModuleRegistryService implements OnModuleInit {
     // Carga perezosa de Stripe SDK — evita romper en NODE_ENV=test si no
     // está instalado (vitest unit no lo necesita).
     // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const StripeCtor = require('stripe').default ?? require('stripe');
+    const StripeCtor = withStripeTestApi(require('stripe').default ?? require('stripe'));
     // Sin opciones (modo propio): la llamada de siempre, sin cuarto argumento.
     return options
       ? new StripeSdkAdapter(credentials.secretKey, credentials.webhookSecret, StripeCtor, options)
@@ -935,7 +936,7 @@ export class ModuleRegistryService implements OnModuleInit {
     options?: SubscriptionsStripeAdapterOptions,
   ): SubscriptionsStripeAdapter {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const StripeCtor = require('stripe').default ?? require('stripe');
+    const StripeCtor = withStripeTestApi(require('stripe').default ?? require('stripe'));
     const webhookSecret = credentials.subscriptionsWebhookSecret || credentials.webhookSecret;
     // Sin opciones (modo propio): la llamada de siempre, sin cuarto argumento.
     return options
