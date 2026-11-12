@@ -5,7 +5,13 @@
 
 import { type DynamicModule, Module } from '@nestjs/common';
 import { APP_FILTER } from '@nestjs/core';
-import { FetchPlatformStripeClient, type PlatformStripeClient } from '@didacta/mod-payouts';
+import {
+  FetchPlatformStripeClient,
+  type PlatformStripeClient,
+  type ViesClient,
+} from '@didacta/mod-payouts';
+import { loadCipherKey } from '../../auth/cipher-key';
+import { SecretCipherService } from '../secret-cipher.service';
 import { AdminTenantsPayoutsController } from '../../admin/admin-tenants.controller';
 import { AuthModule } from '../../auth/auth.module';
 import { PayoutsAccountsWorker } from './payouts-accounts.worker';
@@ -15,10 +21,15 @@ import { PayoutsSettleWorker } from './payouts-settle.worker';
 import { PayoutsController } from './payouts.controller';
 import { PayoutsErrorFilter } from './payouts-error.filter';
 import {
+  PAYOUTS_CIPHER,
+  PAYOUTS_VIES_CLIENT,
   PLATFORM_PAYMENTS_CONFIG,
   PLATFORM_STRIPE_CLIENT,
   PayoutsRuntime,
 } from './payouts-runtime.service';
+import { PayoutsInvoiceMailer } from './payouts-invoice-mailer';
+import { PayoutsInvoicesWorker } from './payouts-invoices.worker';
+import { PayoutsLegalController } from './payouts-legal.controller';
 import { PlatformCheckoutGate } from './platform-checkout-gate';
 import {
   ModulesPlatformEventDispatcher,
@@ -59,12 +70,14 @@ export class PayoutsModule {
    *   real. En producción nadie lo pasa.
    * @param overrides.dispatcher Solo tests: el reparto a módulos, para montar
    *   el webhook sin el grafo entero de módulos.
+   * @param overrides.vies Solo tests: VIES sin red.
    */
   static register(
     config: PlatformPaymentsConfig = getPlatformPaymentsConfig(),
     overrides: {
       readonly stripe?: PlatformStripeClient;
       readonly dispatcher?: PlatformEventDispatcher;
+      readonly vies?: ViesClient;
     } = {},
   ): DynamicModule {
     if (!config.enabled) return { module: PayoutsModule };
@@ -75,6 +88,7 @@ export class PayoutsModule {
       controllers: [
         PayoutsController,
         PayoutsSalesController,
+        PayoutsLegalController,
         PlatformWebhookController,
         AdminTenantsPayoutsController,
       ],
@@ -85,7 +99,17 @@ export class PayoutsModule {
           useFactory: () =>
             overrides.stripe ?? new FetchPlatformStripeClient({ secretKey: config.secretKey }),
         },
+        // Datos fiscales y facturas: cifrados con la clave maestra de siempre
+        // (la misma que las credenciales de cada aula; la rota
+        // `rotate-cipher-key.ts`).
+        {
+          provide: PAYOUTS_CIPHER,
+          useFactory: () => new SecretCipherService(loadCipherKey().key),
+        },
+        ...(overrides.vies ? [{ provide: PAYOUTS_VIES_CLIENT, useValue: overrides.vies }] : []),
         PayoutsRuntime,
+        PayoutsInvoiceMailer,
+        PayoutsInvoicesWorker,
         PayoutsAccountsWorker,
         PayoutsSettleWorker,
         PayoutsReconcileWorker,

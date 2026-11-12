@@ -6,8 +6,11 @@
 import { Inject, Injectable, Optional } from '@nestjs/common';
 import type { PrismaClient } from '@didacta/database';
 import {
+  FetchViesClient,
   PayoutsAccountsService,
   PayoutsDebtsService,
+  PayoutsInvoicesService,
+  PayoutsTaxProfileService,
   PayoutsDisputesService,
   PayoutsOffboardingService,
   PayoutsPortalService,
@@ -17,12 +20,14 @@ import {
   RefsService,
   SettlementService,
   createConnectedAccountsApi,
+  type PayoutsCipher,
   type PayoutsDbPort,
   type PayoutsLogger,
   type PayoutsNotifier,
   type PayoutsTx,
   type PlatformStripeClient,
   type RegisterObjectRefInput,
+  type ViesClient,
 } from '@didacta/mod-payouts';
 import { Logger as PinoLogger } from 'nestjs-pino';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -40,6 +45,10 @@ import type { PlatformPortalPort, PlatformRefsPort } from './platform-stripe-ada
 export const PLATFORM_PAYMENTS_CONFIG = Symbol('PLATFORM_PAYMENTS_CONFIG');
 /** Cliente de Stripe de la cuenta del operador. Los tests lo sustituyen por el doble. */
 export const PLATFORM_STRIPE_CLIENT = Symbol('PLATFORM_STRIPE_CLIENT');
+/** Cifrado de los datos fiscales y de las facturas (`SecretCipherService`). */
+export const PAYOUTS_CIPHER = Symbol('PAYOUTS_CIPHER');
+/** Cliente de VIES. Los tests lo sustituyen por uno sin red. */
+export const PAYOUTS_VIES_CLIENT = Symbol('PAYOUTS_VIES_CLIENT');
 
 /**
  * Composición de `mod.payouts` en el host: une el dominio del módulo (que no
@@ -70,6 +79,10 @@ export class PayoutsRuntime {
     @Optional() smtpResolver?: TenantSmtpResolverService,
     @Optional() smtp?: SmtpAdapterService,
     @Optional() tenantResolver?: TenantResolverService,
+    // Condiciones legales: datos fiscales y facturas. Sin cifrador (tests de
+    // etapas anteriores que montan el runtime a mano) no existen.
+    @Optional() @Inject(PAYOUTS_CIPHER) cipher?: PayoutsCipher,
+    @Optional() @Inject(PAYOUTS_VIES_CLIENT) vies?: ViesClient,
   ) {
     const db: PayoutsDbPort = (this.db = {
       // La extensión RLS del cliente inyecta el `set_config` del tenant como
@@ -101,12 +114,51 @@ export class PayoutsRuntime {
     this.settings = new PayoutsSettingsService(db, config.defaultFeeBps);
     this.refs = new RefsService(prisma as unknown as PrismaClient);
     this.mode = new PaymentModeResolver(config, stripeResolver, () => prisma);
+    const plainLogger: PayoutsLogger = {
+      warn: (obj, msg) => logger.warn(obj, msg),
+      log: (obj, msg) => logger.log(obj, msg),
+      error: (obj, msg) => logger.error(obj, msg),
+    };
+    // Datos fiscales del creador (factura y DAC7) y factura de la comisión.
+    this.taxProfiles = cipher
+      ? new PayoutsTaxProfileService(
+          db,
+          cipher,
+          vies ?? new FetchViesClient({ requesterVatId: config.invoicing?.issuer.vatId ?? null }),
+          createConnectedAccountsApi(stripe, config.accountsApi),
+          { logger: plainLogger, required: config.taxProfileRequired === true },
+        )
+      : null;
+    this.invoices =
+      cipher && this.taxProfiles && config.invoicing
+        ? new PayoutsInvoicesService(
+            db,
+            cipher,
+            this.taxProfiles,
+            {
+              issuer: config.invoicing.issuer,
+              seriesPrefix: config.invoicing.seriesPrefix,
+              serviceName: config.invoicing.serviceName,
+              livemode: config.livemode,
+            },
+            {
+              logger: plainLogger,
+              fallbackName: async (tenantId) =>
+                (
+                  await runAsTenant(tenantId, () =>
+                    prisma.tenant.findUnique({ where: { id: tenantId }, select: { name: true } }),
+                  )
+                )?.name ?? null,
+            },
+          )
+        : null;
     this.settlement = new SettlementService(db, stripe, this.settings, {
-      logger: {
-        warn: (obj, msg) => logger.warn(obj, msg),
-        log: (obj, msg) => logger.log(obj, msg),
-        error: (obj, msg) => logger.error(obj, msg),
-      },
+      logger: plainLogger,
+      // Sin datos fiscales completos, las transferencias se retienen (solo con
+      // el requisito encendido: `PAYMENTS_PLATFORM_TAX_PROFILE_REQUIRED`).
+      ...(this.taxProfiles && config.taxProfileRequired === true
+        ? { transferGate: this.taxProfiles }
+        : {}),
     });
     this.reports = new PayoutsReportsService(db);
     this.portal = new PayoutsPortalService(db, stripe);
@@ -154,6 +206,10 @@ export class PayoutsRuntime {
 
   /** Liquidación de ventas (E4). */
   readonly settlement: SettlementService;
+  /** Datos fiscales del creador. `null` sin cifrador. */
+  readonly taxProfiles: PayoutsTaxProfileService | null;
+  /** Factura mensual de la comisión. `null` sin datos del emisor. */
+  readonly invoices: PayoutsInvoicesService | null;
   /** «Tus ventas», resumen por divisa y volumen del pool. */
   readonly reports: PayoutsReportsService;
   /** `true` sin `REDIS_URL`: el webhook liquida en línea. */

@@ -8,7 +8,10 @@ import {
   DEFAULT_FEE_BPS,
   DEFAULT_LOSS_POLICY,
   MAX_FEE_BPS,
+  checkSpanishNif,
+  checkVatId,
   stripeKeyLivemode,
+  type InvoiceIssuer,
   type PayoutsLossPolicy,
 } from '@didacta/mod-payouts';
 
@@ -56,6 +59,26 @@ export const PLATFORM_PAYMENTS_ENV = {
   disputeWonFeeBearer: 'PAYMENTS_PLATFORM_DISPUTE_WON_FEE_BEARER',
   /** Correo del operador para las alertas de dinero (opcional). */
   operatorAlertEmail: 'PAYMENTS_PLATFORM_OPERATOR_ALERT_EMAIL',
+  /**
+   * ¿Se retienen las transferencias mientras el creador no complete sus datos
+   * fiscales? Por defecto, sí (factura de la comisión y DAC7).
+   */
+  taxProfileRequired: 'PAYMENTS_PLATFORM_TAX_PROFILE_REQUIRED',
+  // Factura mensual de la comisión: datos del EMISOR (el operador). Todo o
+  // nada: sin nombre, NIF y domicilio no se factura (y se avisa al arrancar).
+  invoiceIssuerName: 'PAYMENTS_PLATFORM_INVOICE_ISSUER_NAME',
+  invoiceIssuerTaxId: 'PAYMENTS_PLATFORM_INVOICE_ISSUER_TAX_ID',
+  invoiceIssuerVatId: 'PAYMENTS_PLATFORM_INVOICE_ISSUER_VAT_ID',
+  invoiceIssuerAddressLine1: 'PAYMENTS_PLATFORM_INVOICE_ISSUER_ADDRESS_LINE1',
+  invoiceIssuerPostalCode: 'PAYMENTS_PLATFORM_INVOICE_ISSUER_POSTAL_CODE',
+  invoiceIssuerCity: 'PAYMENTS_PLATFORM_INVOICE_ISSUER_CITY',
+  invoiceIssuerRegion: 'PAYMENTS_PLATFORM_INVOICE_ISSUER_REGION',
+  invoiceIssuerCountry: 'PAYMENTS_PLATFORM_INVOICE_ISSUER_COUNTRY',
+  invoiceIssuerEmail: 'PAYMENTS_PLATFORM_INVOICE_ISSUER_EMAIL',
+  /** Prefijo de la serie (`DC` → `DC-2026-000001`, rectificativas `DCR-…`). */
+  invoiceSeries: 'PAYMENTS_PLATFORM_INVOICE_SERIES',
+  /** Nombre del servicio en la factura («Didacta Cloud»). */
+  invoiceServiceName: 'PAYMENTS_PLATFORM_INVOICE_SERVICE_NAME',
 } as const;
 
 /**
@@ -161,6 +184,21 @@ export interface PlatformPaymentsEnabled {
   readonly lossPolicy: PayoutsLossPolicy;
   /** Adónde van las alertas de dinero por correo. `null`: solo al log. */
   readonly operatorAlertEmail: string | null;
+  /**
+   * ¿Se retienen las transferencias sin datos fiscales completos? Opcional
+   * para las configuraciones escritas a mano (tests de etapas anteriores):
+   * ausente = no se retiene. `loadPlatformPaymentsConfig` lo fija siempre
+   * (por defecto, `true`).
+   */
+  readonly taxProfileRequired?: boolean;
+  /** Factura mensual de la comisión. `null`/ausente: no se factura. */
+  readonly invoicing?: PlatformInvoicingConfig | null;
+}
+
+export interface PlatformInvoicingConfig {
+  readonly issuer: InvoiceIssuer;
+  readonly seriesPrefix: string;
+  readonly serviceName: string;
 }
 
 export type PlatformPaymentsConfig = PlatformPaymentsDisabled | PlatformPaymentsEnabled;
@@ -283,6 +321,24 @@ const enabledSchema = z.object({
   disputeLossBearer: z.enum(['creator', 'platform']).default('creator'),
   disputeWonFeeBearer: z.enum(['creator', 'platform']).default('creator'),
   operatorAlertEmail: z.string().email('debe ser un correo electrónico').optional(),
+  taxProfileRequired: z.enum(['true', 'false']).default('true'),
+  invoiceIssuerName: z.string().min(2).max(200).optional(),
+  invoiceIssuerTaxId: z.string().max(30).optional(),
+  invoiceIssuerVatId: z.string().max(20).optional(),
+  invoiceIssuerAddressLine1: z.string().max(200).optional(),
+  invoiceIssuerPostalCode: z.string().max(20).optional(),
+  invoiceIssuerCity: z.string().max(120).optional(),
+  invoiceIssuerRegion: z.string().max(120).optional(),
+  invoiceIssuerCountry: z
+    .string()
+    .regex(/^[A-Za-z]{2}$/, 'debe ser un código de país de dos letras')
+    .default('ES'),
+  invoiceIssuerEmail: z.string().email('debe ser un correo electrónico').optional(),
+  invoiceSeries: z
+    .string()
+    .regex(/^[A-Z]{1,6}$/, 'solo letras mayúsculas (de 1 a 6)')
+    .default('DC'),
+  invoiceServiceName: z.string().min(2).max(80).default('Didacta Cloud'),
 });
 
 type EnvKey = keyof typeof PLATFORM_PAYMENTS_ENV;
@@ -331,6 +387,7 @@ export function loadPlatformPaymentsConfig(
   }
 
   const data = parsed.data;
+  const invoicing = invoicingFrom(data);
   return Object.freeze({
     enabled: true,
     secretKey: data.secretKey,
@@ -357,6 +414,62 @@ export function loadPlatformPaymentsConfig(
       disputeWonFeeBearer: data.disputeWonFeeBearer,
     }),
     operatorAlertEmail: data.operatorAlertEmail ?? null,
+    taxProfileRequired: data.taxProfileRequired === 'true',
+    invoicing,
+  });
+}
+
+/**
+ * Datos del emisor de la factura: o todos los obligatorios (nombre, NIF,
+ * dirección, código postal y ciudad) o ninguno. A medias es un error: se
+ * emitirían facturas sin los datos que exige el RD 1619/2012.
+ */
+function invoicingFrom(data: z.infer<typeof enabledSchema>): PlatformInvoicingConfig | null {
+  const required = {
+    invoiceIssuerName: data.invoiceIssuerName,
+    invoiceIssuerTaxId: data.invoiceIssuerTaxId,
+    invoiceIssuerAddressLine1: data.invoiceIssuerAddressLine1,
+    invoiceIssuerPostalCode: data.invoiceIssuerPostalCode,
+    invoiceIssuerCity: data.invoiceIssuerCity,
+  };
+  const given = Object.entries(required).filter(([, value]) => value !== undefined);
+  if (given.length === 0) return null;
+  const problems: string[] = [];
+  if (given.length < Object.keys(required).length) {
+    const missing = Object.entries(required)
+      .filter(([, value]) => value === undefined)
+      .map(([key]) => PLATFORM_PAYMENTS_ENV[key as EnvKey]);
+    problems.push(
+      `faltan datos del emisor de las facturas: ${missing.join(', ')} (o todos, o ninguno)`,
+    );
+  }
+  const country = data.invoiceIssuerCountry.toUpperCase();
+  if (country === 'ES' && data.invoiceIssuerTaxId && !checkSpanishNif(data.invoiceIssuerTaxId).ok) {
+    problems.push(`${PLATFORM_PAYMENTS_ENV.invoiceIssuerTaxId}: no es un NIF español válido`);
+  }
+  let vatId: string | null = null;
+  if (data.invoiceIssuerVatId) {
+    const check = checkVatId(country, data.invoiceIssuerVatId);
+    if (check.ok) vatId = check.value;
+    else problems.push(`${PLATFORM_PAYMENTS_ENV.invoiceIssuerVatId}: no es un NIF-IVA válido`);
+  }
+  if (problems.length > 0) throw new PlatformPaymentsConfigError(problems);
+  return Object.freeze({
+    issuer: Object.freeze({
+      name: data.invoiceIssuerName!.trim(),
+      taxId: data.invoiceIssuerTaxId!.toUpperCase().replace(/[\s.-]/g, ''),
+      vatId,
+      address: Object.freeze({
+        line1: data.invoiceIssuerAddressLine1!.trim(),
+        postalCode: data.invoiceIssuerPostalCode!.trim(),
+        city: data.invoiceIssuerCity!.trim(),
+        region: data.invoiceIssuerRegion?.trim() || null,
+      }),
+      country,
+      email: data.invoiceIssuerEmail ?? null,
+    }),
+    seriesPrefix: data.invoiceSeries,
+    serviceName: data.invoiceServiceName,
   });
 }
 
