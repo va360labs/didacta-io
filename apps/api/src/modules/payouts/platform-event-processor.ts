@@ -449,6 +449,9 @@ export class PlatformEventProcessor {
       const settled = await this.runtime.settlement.settleSale(tenantId, recorded.saleId, {
         force: true,
       });
+      // E6, igual que en la venta de una compra: un reembolso o una disputa de
+      // este cargo que llegó antes que la factura se pone al día ahora.
+      if (settled.outcome === 'held') await this.catchUpLosses(tenantId, recorded.chargeId);
       return { sale: recorded.outcome, settlement: settled.outcome, error: null };
     } catch (err) {
       return {
