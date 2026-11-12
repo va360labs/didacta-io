@@ -25,13 +25,27 @@ test.describe('Métricas del negocio (bloque 7)', () => {
     expect(res.ok, `metrics (${res.status})`).toBe(true);
     const m = (await res.json()) as {
       nps: { score: number | null; responses: number };
-      revenue: { totalCents30d: number; weekly: Array<{ weekStart: string; value: number }> };
+      revenue: {
+        byCurrency: Array<{
+          currency: string;
+          totalMinor30d: number;
+          weekly: Array<{ weekStart: string; value: number }>;
+        }>;
+      };
       arrears: { total: number };
       members: { newMembers30d: number; weeklySignups: unknown[] };
       connections: { totalActive: number };
       aiTutor: { questions30d: number };
     };
-    expect(m.revenue.weekly).toHaveLength(12);
+    // Una entrada por moneda (nunca se suman monedas); cada una con 12 semanas.
+    expect(Array.isArray(m.revenue.byCurrency)).toBe(true);
+    for (const r of m.revenue.byCurrency) {
+      expect(r.currency).toMatch(/^[a-z]{3}$/);
+      expect(r.weekly).toHaveLength(12);
+    }
+    expect(new Set(m.revenue.byCurrency.map((r) => r.currency)).size).toBe(
+      m.revenue.byCurrency.length,
+    );
     expect(m.members.weeklySignups).toHaveLength(12);
     expect(m.connections.totalActive).toBeGreaterThanOrEqual(1);
     // Las encuestas E2E anteriores dejaron respuestas NPS en la ventana.
@@ -79,7 +93,7 @@ test.describe('Métricas del negocio (bloque 7)', () => {
     await expect(page.getByText('NPS (30 días)')).toBeVisible();
     await expect(page.getByText('Ventas (30 días)')).toBeVisible();
     await expect(page.getByText('Impagos ahora')).toBeVisible();
-    await expect(page.getByRole('heading', { name: 'Ventas por semana' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: /^Ventas por semana/ }).first()).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Altas por semana' })).toBeVisible();
 
     // Y se llega igual desde la pestaña, entrando por el panel.

@@ -317,6 +317,7 @@
     "aiTutorLabel": "AI Tutor (30 days)",
     "aiTutorHint": "questions · {students} distinct students · {posts} community posts",
     "weeklyRevenueTitle": "Sales per week",
+    "weeklyRevenueTitleCurrency": "Sales per week in {currency}",
     "weeklyRevenueDescription": "Course and membership payments, last 12 weeks.",
     "weeklySignupsTitle": "Signups per week",
     "weeklySignupsDescription": "New members, last 12 weeks.",

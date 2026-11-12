@@ -317,6 +317,7 @@
     "aiTutorLabel": "Tutor IA (30 días)",
     "aiTutorHint": "preguntas · {students} alumnos distintos · {posts} posts en comunidad",
     "weeklyRevenueTitle": "Ventas por semana",
+    "weeklyRevenueTitleCurrency": "Ventas por semana en {currency}",
     "weeklyRevenueDescription": "Cobros de cursos y membresía, últimas 12 semanas.",
     "weeklySignupsTitle": "Altas por semana",
     "weeklySignupsDescription": "Miembros nuevos, últimas 12 semanas.",
