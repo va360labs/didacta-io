@@ -166,6 +166,7 @@ describe('toPlayUrlError', () => {
 
   it('VIDEO_RATE_LIMITED → tope de vídeos', () => {
     expect(toPlayUrlError(http(429, 'VIDEO_RATE_LIMITED')).kind).toBe('rate_limited');
+    expect(toPlayUrlError(http(429, 'VIDEO_WATCH_QUOTA')).kind).toBe('watch_quota');
   });
 
   it('se decide por el code, no por el status: un 403/429 de otra capa no es de vídeo', () => {

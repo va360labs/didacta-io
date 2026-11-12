@@ -5227,3 +5227,141 @@ model ModPayoutsInvoiceCounter {
 
   @@map("mod_payouts_invoice_counter")
 }
+
+// ============================================================================
+// VÍDEO SUBIDO A BUNNY STREAM (Didacta Cloud)
+// ----------------------------------------------------------------------------
+// Infra del host (como la protección de vídeo), no un módulo: el creador sube
+// el vídeo de una lección directamente desde su navegador a la biblioteca de
+// Bunny Stream del operador, en una colección por aula (`DC_<slug>`).
+//
+// Solo se usa si el operador define `BUNNY_STREAM_*` (Didacta Cloud). Sin esas
+// variables las tres tablas se quedan vacías y la lección sigue admitiendo
+// solo enlaces, como siempre.
+//
+//  - Las tres llevan `tenant_id`: `rls.sql` les aplica sola la política de
+//    aislamiento por tenant.
+//  - Sin FK a otras tablas: la lección (`lesson_id`) y el usuario
+//    (`created_by_id`) son ids lógicos (contrato modular).
+//  - El original NUNCA se guarda: Bunny lo descarta al codificar.
+// ============================================================================
+
+/// Estado de un vídeo subido, derivado SIEMPRE de consultar el vídeo en Bunny
+/// (el webhook solo avisa de que hay que mirar).
+enum VideoAssetStatus {
+  /// Firmada la subida; el navegador aún está enviando los bytes.
+  UPLOADING
+  /// Bunny ya tiene los bytes y está codificando.
+  PROCESSING
+  /// Codificado y reproducible.
+  READY
+  /// Bunny no pudo codificarlo, la subida falló o se rechazó al comprobarlo
+  /// (más largo de lo permitido, cuota superada). `failure_reason` dice cuál.
+  FAILED
+  /// Borrado en Bunny (sustituido, quitado de la lección, aula inactiva…).
+  DELETED
+}
+
+model VideoAsset {
+  id                   String           @id @default(uuid()) @db.Uuid
+  tenantId             String           @map("tenant_id") @db.Uuid
+  /// Lección para la que se subió. Id lógico de mod.courses, sin FK.
+  lessonId             String?          @map("lesson_id") @db.Uuid
+  /// Biblioteca de Bunny Stream (la de Didacta Cloud).
+  libraryId            String           @map("library_id") @db.VarChar(20)
+  /// GUID del vídeo en Bunny, en minúsculas. Único: un vídeo es de una sola aula.
+  bunnyGuid            String           @unique @map("bunny_guid") @db.VarChar(36)
+  /// Colección `DC_<slug>` en la que se creó.
+  collectionId         String?          @map("collection_id") @db.VarChar(36)
+  title                String           @db.VarChar(200)
+  status               VideoAssetStatus @default(UPLOADING)
+  /// `too_long` | `quota` | `encoding_failed` | `upload_failed` | `abandoned`.
+  failureReason        String?          @map("failure_reason") @db.VarChar(40)
+  /// Lo que dijo el navegador antes de firmar (se vuelve a comprobar con lo
+  /// que mide Bunny al terminar de codificar).
+  declaredBytes        BigInt           @map("declared_bytes")
+  declaredSeconds      Int              @map("declared_seconds")
+  /// Duración real medida por Bunny (segundos). Null hasta que la conoce.
+  durationSeconds      Int?             @map("duration_seconds")
+  /// Bytes que ocupan las versiones codificadas en Bunny.
+  storageBytes         BigInt?          @map("storage_bytes")
+  /// Resolución máxima permitida al subirlo: `720p` | `1080p`.
+  maxResolution        String           @map("max_resolution") @db.VarChar(8)
+  /// Resoluciones que Bunny tiene de verdad (`240p,360p,720p`).
+  availableResolutions String?          @map("available_resolutions") @db.VarChar(120)
+  /// Ya se borraron las resoluciones por encima del máximo permitido.
+  resolutionsCapped    Boolean          @default(false) @map("resolutions_capped")
+  /// Último `totalWatchTime` (segundos) que dio Bunny: lo que se suma al mes
+  /// es la diferencia con la lectura anterior.
+  watchSecondsTotal    BigInt           @default(0) @map("watch_seconds_total")
+  lastPlayedAt         DateTime?        @map("last_played_at")
+  /// Primera vez que se vio sin ninguna lección del aula que lo use. Se borra
+  /// en Bunny si sigue así pasado el margen (el creador puede estar aún en el
+  /// editor sin haber guardado).
+  unreferencedSince    DateTime?        @map("unreferenced_since")
+  lastSyncedAt         DateTime?        @map("last_synced_at")
+  createdById          String?          @map("created_by_id") @db.Uuid
+  createdAt            DateTime         @default(now()) @map("created_at")
+  updatedAt            DateTime         @updatedAt @map("updated_at")
+  deletedAt            DateTime?        @map("deleted_at")
+  /// `replaced` | `removed` | `inactivity` | `quota` | `too_long` | `abandoned` | `bunny`.
+  deleteReason         String?          @map("delete_reason") @db.VarChar(40)
+
+  // Copia en Google Drive antes del borrado por inactividad (se guarda 90 días).
+  backupDriveFileId String?   @map("backup_drive_file_id") @db.VarChar(200)
+  backupBytes       BigInt?   @map("backup_bytes")
+  backupAt          DateTime? @map("backup_at")
+  backupExpiresAt   DateTime? @map("backup_expires_at")
+  /// La copia ya no existe (caducó o se pidió su supresión).
+  backupDeletedAt   DateTime? @map("backup_deleted_at")
+  backupError       String?   @map("backup_error") @db.VarChar(300)
+
+  @@index([tenantId, status])
+  @@index([tenantId, lessonId])
+  @@index([status, updatedAt])
+  @@index([backupExpiresAt])
+  @@map("video_asset")
+}
+
+/// Horas vistas por aula y mes natural (UTC), acumuladas a partir del
+/// `totalWatchTime` de cada vídeo en Bunny.
+model VideoUsageMonth {
+  tenantId       String   @map("tenant_id") @db.Uuid
+  /// `YYYY-MM` en UTC.
+  month          String   @db.VarChar(7)
+  watchedSeconds BigInt   @default(0) @map("watched_seconds")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  @@id([tenantId, month])
+  @@map("video_usage_month")
+}
+
+/// Vídeo de Didacta Cloud por aula: su colección en Bunny y la política de
+/// inactividad (avisos a los 10 y 20 días; copia, borrado y archivado a los 30).
+model VideoTenantState {
+  tenantId            String    @id @map("tenant_id") @db.Uuid
+  /// Colección `DC_<slug>` en Bunny y el nombre con el que se creó.
+  collectionId        String?   @map("collection_id") @db.VarChar(36)
+  collectionName      String?   @map("collection_name") @db.VarChar(120)
+  /// Reserva para crear la colección una sola vez aunque lleguen dos subidas a la vez.
+  collectionClaimedAt DateTime? @map("collection_claimed_at")
+  /// Última actividad calculada por el barrido diario, y de qué fuente salió.
+  lastActivityAt      DateTime? @map("last_activity_at")
+  lastActivitySource  String?   @map("last_activity_source") @db.VarChar(40)
+  /// Avisos de inactividad ENVIADOS (salió al menos un correo). Se vacían en
+  /// cuanto vuelve a haber actividad.
+  warned10At          DateTime? @map("warned_10_at")
+  warned20At          DateTime? @map("warned_20_at")
+  /// Copia a Drive, borrado en Bunny y archivado del aula.
+  purgeStartedAt      DateTime? @map("purge_started_at")
+  purgedAt            DateTime? @map("purged_at")
+  archivedAt          DateTime? @map("archived_at")
+  /// Último motivo por el que el borrado no se ejecutó (sin copia, error…).
+  purgeBlockedReason  String?   @map("purge_blocked_reason") @db.VarChar(300)
+  /// Mes (`YYYY-MM`) del último aviso al operador por coste de vídeo.
+  costAlertMonth      String?   @map("cost_alert_month") @db.VarChar(7)
+  createdAt           DateTime  @default(now()) @map("created_at")
+  updatedAt           DateTime  @updatedAt @map("updated_at")
+
+  @@map("video_tenant_state")
+}

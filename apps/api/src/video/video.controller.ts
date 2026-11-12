@@ -21,6 +21,7 @@ import {
   VideoForbiddenError,
   VideoPlaybackService,
   VideoRateLimitedError,
+  VideoWatchQuotaError,
   type PlayUrl,
 } from './video-playback.service';
 
@@ -55,6 +56,9 @@ export class VideoController {
     } catch (error) {
       if (error instanceof VideoForbiddenError) {
         throw new HttpException({ message: error.message, code: 'VIDEO_FORBIDDEN' }, 403);
+      }
+      if (error instanceof VideoWatchQuotaError) {
+        throw new HttpException({ message: error.message, code: 'VIDEO_WATCH_QUOTA' }, 429);
       }
       if (error instanceof VideoRateLimitedError) {
         throw new HttpException(

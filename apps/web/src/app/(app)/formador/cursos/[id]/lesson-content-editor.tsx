@@ -20,6 +20,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { VideoUploadField } from '@/components/video-upload-field';
 import { ApiHttpError } from '@/lib/api-client';
 import { apiErrorMessage } from '@/lib/i18n/api-error';
 import { formatDate } from '@/lib/i18n/format';
@@ -172,6 +173,14 @@ export function LessonContentEditor({
 
       {lesson.type === 'VIDEO' && (
         <div className="space-y-1.5">
+          {/* Solo en academias con subida de vídeo (Didacta Cloud); si no, no pinta nada. */}
+          <VideoUploadField
+            lessonId={lesson.id}
+            videoUrl={videoUrl}
+            savedVideoUrl={typeof content['videoUrl'] === 'string' ? content['videoUrl'] : ''}
+            onVideoUrl={setVideoUrl}
+            onDuration={(minutes) => setDuration((d) => d || String(minutes))}
+          />
           <Label htmlFor={`videoUrl-${lesson.id}`}>{t('videoUrlLabel')}</Label>
           <Input
             id={`videoUrl-${lesson.id}`}

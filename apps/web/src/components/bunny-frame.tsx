@@ -20,9 +20,13 @@ import type { PlayUrlErrorKind } from '@/lib/video-protection';
  */
 const WATERMARK_MOVE_MS = 120_000;
 
-const ERROR_KEYS: Record<PlayUrlErrorKind, 'forbidden' | 'rateLimited' | 'loadError'> = {
+const ERROR_KEYS: Record<
+  PlayUrlErrorKind,
+  'forbidden' | 'rateLimited' | 'watchQuota' | 'loadError'
+> = {
   forbidden: 'forbidden',
   rate_limited: 'rateLimited',
+  watch_quota: 'watchQuota',
   unknown: 'loadError',
 };
 
