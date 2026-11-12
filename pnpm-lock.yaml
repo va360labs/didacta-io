@@ -126,6 +126,9 @@ importers:
       '@didacta/mod-payment-connections':
         specifier: workspace:*
         version: link:../../modules/payment-connections
+      '@didacta/mod-payouts':
+        specifier: workspace:*
+        version: link:../../modules/payouts
       '@didacta/mod-referrals':
         specifier: workspace:*
         version: link:../../modules/referrals
