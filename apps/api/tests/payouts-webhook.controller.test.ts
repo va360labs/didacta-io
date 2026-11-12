@@ -102,7 +102,15 @@ describe('PlatformWebhookController', () => {
     const built = buildRuntime(refs);
     return {
       ...built,
-      webhook: new PlatformWebhookController(built.runtime as never, logger as never),
+      // Los eventos de cuenta no se reparten a módulos: el repartidor no se usa.
+      webhook: new PlatformWebhookController(built.runtime as never, logger as never, {
+        claims: async () => {
+          throw new Error('un evento de cuenta no consulta a los módulos');
+        },
+        dispatch: async () => {
+          throw new Error('un evento de cuenta no se reparte a los módulos');
+        },
+      }),
     };
   }
 

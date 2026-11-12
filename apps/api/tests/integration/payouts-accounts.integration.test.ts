@@ -551,12 +551,20 @@ describeWithDb('mod.payouts E2 — alta y estado contra Postgres como didacta_ap
       expect(fake.callsTo('GET', `/v1/accounts/${acctA}`).length).toBe(gets + 1);
     });
 
-    it('un tipo que E2 no atiende se archiva sin efectos', async () => {
+    it('un tipo que el webhook no atiende se archiva sin efectos', async () => {
+      const res = await postEvent(
+        { id: evt(), type: 'customer.created', livemode: false, data: { object: { id: 'cus_x' } } },
+        OPERATOR_SECRETS[0]!,
+      );
+      expect(res.json()).toEqual({ received: true, outcome: 'ignored' });
+    });
+
+    it('un cargo que no está en el registro (E3) se archiva «sin atribuir»', async () => {
       const res = await postEvent(
         { id: evt(), type: 'charge.updated', livemode: false, data: { object: { id: 'ch_x' } } },
         OPERATOR_SECRETS[0]!,
       );
-      expect(res.json()).toEqual({ received: true, outcome: 'ignored' });
+      expect(res.json()).toEqual({ received: true, outcome: 'unattributed' });
     });
 
     it('con la cuenta lista, el panel de Stripe ya se abre; sin terminar el alta, 409', async () => {
