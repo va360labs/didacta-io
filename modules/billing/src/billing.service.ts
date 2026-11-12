@@ -661,6 +661,8 @@ export class BillingService {
 
     // Idempotencia: insertar el row del evento ANTES de hacer trabajo. Si el
     // unique constraint salta, otro worker ya lo procesó.
+    /** ¿Hay una fila de archivo NUESTRA (visible) en la que llevar la cuenta? */
+    let archived = true;
     try {
       await this.prisma.modBillingWebhookEvent.create({
         data: {
@@ -676,24 +678,34 @@ export class BillingService {
         },
       });
     } catch (err) {
-      const message = (err as Error).message ?? '';
-      if (message.includes('Unique constraint') || message.includes('mod_billing_webhook_event')) {
-        // El evento ya se RECIBIÓ antes. Eso no significa que se procesara con
-        // éxito: si el intento anterior falló a mitad, la fila quedó con
-        // `processedAt` a null y un `errorMessage`. Dedupear por recibido
-        // "quemaba" el evento — ni un reintento de Stripe ni un reenvío manual
-        // volvían a intentarlo, y un pago podía quedarse sin matrícula para
-        // siempre. Dedupeamos por PROCESADO: solo salimos si ya se completó.
-        const previo = await this.prisma.modBillingWebhookEvent.findUnique({
-          where: { stripeEventId: event.id },
-          select: { processedAt: true },
-        });
-        if (previo?.processedAt) return; // ya procesado con éxito; idempotente.
-        // Si no, seguimos y reintentamos el trabajo de dominio (que es
-        // idempotente por su cuenta: la order no retrocede de COMPLETED).
-      } else {
-        throw err;
-      }
+      if (!isUniqueViolation(err)) throw err;
+      // El evento ya se RECIBIÓ antes. Eso no significa que se procesara con
+      // éxito: si el intento anterior falló a mitad, la fila quedó con
+      // `processedAt` a null y un `errorMessage`. Dedupear por recibido
+      // «quemaba» el evento — ni un reintento de Stripe ni un reenvío manual
+      // volvían a intentarlo. Dedupeamos por PROCESADO: solo salimos si ya se
+      // completó.
+      const previo = await this.prisma.modBillingWebhookEvent.findUnique({
+        where: { stripeEventId: event.id },
+        select: { processedAt: true },
+      });
+      if (previo?.processedAt) return; // ya procesado con éxito; idempotente.
+      // La fila EXISTE (por eso chocó la clave primaria, que es global) pero
+      // no la vemos: la archivó otra aula. Pasa cuando dos aulas cobran con la
+      // misma cuenta de Stripe y cada una tiene su endpoint —Stripe entrega
+      // cada evento a los dos—, o cuando un evento llegó antes que su fila
+      // local y se archivó en el aula del dominio. Con RLS no se puede ni leer
+      // ni actualizar esa fila: antes el `update` de abajo fallaba y esto era
+      // un 500 que Stripe reintentaba durante días, por un evento que aquí no
+      // tenía nada que hacer.
+      //
+      // Se sigue con el trabajo de dominio —idempotente y limitado a las filas
+      // de ESTA aula; para un evento que no le toca nada es un no-op y la
+      // respuesta es 200— pero sin llevar la cuenta en una fila que no es
+      // nuestra.
+      if (!previo) archived = false;
+      // Si no, seguimos y reintentamos el trabajo de dominio (que es
+      // idempotente por su cuenta: los handlers no retroceden estado).
     }
 
     try {
@@ -723,16 +735,21 @@ export class BillingService {
           // hacemos nada. Quedan en webhook_event para auditoría.
           break;
       }
-      await this.prisma.modBillingWebhookEvent.update({
-        where: { stripeEventId: event.id },
-        data: { processedAt: new Date() },
-      });
+      if (archived) {
+        await this.prisma.modBillingWebhookEvent.update({
+          where: { stripeEventId: event.id },
+          data: { processedAt: new Date() },
+        });
+      }
     } catch (err) {
-      const message = (err as Error).message ?? 'unknown';
-      await this.prisma.modBillingWebhookEvent.update({
-        where: { stripeEventId: event.id },
-        data: { errorMessage: message },
-      });
+      if (archived) {
+        const message = (err as Error).message ?? 'unknown';
+        // Apuntar el fallo no puede tapar el fallo: si esta escritura también
+        // revienta, lo que tiene que salir es el error original.
+        await this.prisma.modBillingWebhookEvent
+          .update({ where: { stripeEventId: event.id }, data: { errorMessage: message } })
+          .catch(() => undefined);
+      }
       throw err;
     }
   }
@@ -1045,4 +1062,14 @@ function cryptoRandomId(): string {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { randomUUID } = require('node:crypto') as typeof import('node:crypto');
   return randomUUID();
+}
+
+/**
+ * ¿El error es la violación de una clave única? Solo eso significa «este
+ * evento ya está archivado». Antes bastaba con que el mensaje nombrara la
+ * tabla, y así un rechazo de RLS al insertar pasaba por duplicado.
+ */
+function isUniqueViolation(err: unknown): boolean {
+  if ((err as { code?: string } | null)?.code === 'P2002') return true;
+  return ((err as Error | null)?.message ?? '').includes('Unique constraint');
 }

@@ -146,6 +146,28 @@ describe('ScormService.uploadPackage', () => {
     expect(ctx.uploads.some((u) => u.key.endsWith('/assets/style.css'))).toBe(true);
   });
 
+  it('los ficheros ocultos del empaquetador se saltan en vez de tumbar la subida', async () => {
+    // El storage no admite segmentos con punto delante (ahí guarda lo suyo el
+    // servidor). Un ZIP hecho en macOS trae `.DS_Store` y `__MACOSX/._x`; uno
+    // exportado de un Apache, `.htaccess`. Ningún paquete los referencia.
+    const ctx = setup();
+    const zip = new AdmZip(buildScormZip());
+    zip.addFile('.DS_Store', Buffer.from('basura'));
+    zip.addFile('__MACOSX/._index.html', Buffer.from('basura'));
+    zip.addFile('assets/.htaccess', Buffer.from('Deny from all'));
+
+    await ctx.service.uploadPackage('t1', 'lesson-1', 'user-1', {
+      zipData: zip.toBuffer(),
+      filename: 'pkg.zip',
+    });
+
+    expect(ctx.uploads.map((u) => u.key.replace(/^scorm\/t1\/[^/]+\//, '')).sort()).toEqual([
+      'assets/style.css',
+      'imsmanifest.xml',
+      'index.html',
+    ]);
+  });
+
   it('lanza SCORM_LESSON_TYPE_MISMATCH si la lección no es SCORM', async () => {
     const ctx = setup({ lessonType: 'TEXT' });
     const zipData = buildScormZip();

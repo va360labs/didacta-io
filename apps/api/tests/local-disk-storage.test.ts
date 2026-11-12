@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -42,6 +42,37 @@ describe('LocalDiskStorageService', () => {
 
   it('rechaza keys con caracteres no permitidos', async () => {
     await expect(storage.upload('a b\\c', Buffer.from('x'))).rejects.toThrow(/no permitidos/);
+  });
+
+  /**
+   * Los ficheros ocultos de la raíz son del propio servidor: ahí vivió la clave
+   * maestra de cifrado. Ningún camino de la aplicación —ni el endpoint público,
+   * ni un módulo, ni una subida— puede leerlos, pisarlos ni borrarlos a través
+   * del adaptador.
+   */
+  it.each([
+    '.didacta-secret-key',
+    '.oculto/fichero.bin',
+    'tenants/t1/.oculto',
+    'tenants/t1/uploads/.htaccess',
+    'tenants/./uploads/a.png',
+    'tenants//uploads/a.png',
+    'tenants/t1/uploads/',
+  ])('rechaza leer, escribir y borrar %j (segmento oculto o vacío)', async (key) => {
+    await writeFile(join(root, '.didacta-secret-key'), 'clave', 'utf8');
+
+    await expect(storage.download(key)).rejects.toThrow(/segmento|traversal/);
+    await expect(storage.upload(key, Buffer.from('pisada'))).rejects.toThrow(/segmento|traversal/);
+    await expect(storage.delete(key)).rejects.toThrow(/segmento|traversal/);
+    await expect(storage.getSignedUrl(key)).rejects.toThrow(/segmento|traversal/);
+
+    // La clave sigue ahí, intacta.
+    expect(await readFile(join(root, '.didacta-secret-key'), 'utf8')).toBe('clave');
+  });
+
+  it('un punto en medio del nombre no es un fichero oculto', async () => {
+    await storage.upload('tenants/t1/uploads/1-informe.v2.pdf', Buffer.from('x'));
+    expect((await storage.download('tenants/t1/uploads/1-informe.v2.pdf')).toString()).toBe('x');
   });
 
   it('delete es idempotente sobre archivos inexistentes', async () => {

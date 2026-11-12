@@ -3,7 +3,17 @@
  * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
  */
 
-import { Body, Controller, Get, HttpCode, HttpStatus, Optional, Post, Req } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Logger,
+  Optional,
+  Post,
+  Req,
+} from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { FastifyRequest } from 'fastify';
 import { SubscriptionGateService } from '../tenancy/subscription-gate.service';
@@ -27,10 +37,16 @@ import { PasswordResetService } from './password-reset.service';
 import { SigninContextService } from './signin-context.service';
 import { ZodValidationPipe } from './zod-validation.pipe';
 import { resolvePublicHost } from '../common/resolve-public-host';
+import {
+  resolveWebBaseUrl,
+  resolveWebBaseUrlForAuthRedirect,
+} from '../common/resolve-web-base-url';
 
 @ApiTags('Auth')
 @Controller('auth')
 export class AuthController {
+  private readonly logger = new Logger(AuthController.name);
+
   constructor(
     private readonly auth: AuthService,
     private readonly passwordReset: PasswordResetService,
@@ -145,17 +161,9 @@ export class AuthController {
     const resolvedTenantId = await this.resolveTenantIdFromHost(req);
     await this.passwordReset.requestAndSendEmail(
       { email: dto.email, tenantSlug: dto.tenantSlug, resolvedTenantId },
-      // La base del enlace sale del tenant en el que se ENCUENTRA la cuenta.
-      //
-      // Antes se calculaba aquí, con el tenant del dominio. Si el dominio de la
-      // petición no era de ningún aula (lo pone quien llama) la cuenta se
-      // resolvía igual —por el `tenantSlug` del cuerpo o por el correo— pero la
-      // base se calculaba sin tenant: caía a `WEB_PUBLIC_URL` y, sin ella, al
-      // propio `Host` de la petición. Un enlace de restablecer contraseña con
-      // su token, enviado al buzón de la víctima y apuntando al dominio de un
-      // tercero. Con el tenant de la cuenta, su dominio primario verificado
-      // (que sale de nuestra base, no de la petición) va por delante.
-      (accountTenantId) => this.tenantResolver.resolveTenantWebBaseUrl(accountTenantId, req),
+      // La base del enlace se decide cuando ya se sabe en qué aula está la
+      // cuenta, y con ella. Ver `resetLinkBase`.
+      (accountTenantId) => this.resetLinkBase(accountTenantId, resolvedTenantId, req),
       extractClientContext(req),
     );
     return {
@@ -177,6 +185,45 @@ export class AuthController {
   }
 
   // -------------------- helpers --------------------
+
+  /**
+   * Adónde apunta el enlace de «restablecer contraseña». Lleva un token que
+   * abre la cuenta, así que la cabecera `Host` —que la pone quien llama— no
+   * puede decidirlo.
+   *
+   * Antes se calculaba con el tenant del dominio de la petición, antes de
+   * saber en qué aula estaba la cuenta. Con un dominio que no era de ningún
+   * aula la cuenta se resolvía igual (por el `tenantSlug` del cuerpo o por el
+   * correo) pero la base salía sin tenant: `WEB_PUBLIC_URL` y, sin ella, el
+   * propio `Host`. Un enlace con el token de la víctima, en su buzón,
+   * apuntando al dominio de un tercero.
+   *
+   * Orden:
+   *  1. El dominio primario VERIFICADO del aula de la cuenta (sale de nuestra
+   *     base, no de la petición).
+   *  2. Si la petición llegó por un dominio verificado de ESA MISMA aula, lo de
+   *     siempre: `WEB_PUBLIC_URL` y, si no, ese dominio (está en nuestra base).
+   *  3. Si no, la variante endurecida: `WEB_PUBLIC_URL`, o el `Host` solo si
+   *     está en `WEB_PUBLIC_ALLOWED_HOSTS`. Nunca un `Host` cualquiera.
+   */
+  private async resetLinkBase(
+    accountTenantId: string,
+    hostTenantId: string | undefined,
+    req: FastifyRequest,
+  ): Promise<string> {
+    const primary = await this.tenantResolver.resolvePrimaryDomain(accountTenantId);
+    if (primary || hostTenantId === accountTenantId) return resolveWebBaseUrl(req, primary);
+
+    const base = resolveWebBaseUrlForAuthRedirect(req, null);
+    if (!process.env['WEB_PUBLIC_URL']?.trim()) {
+      this.logger.warn(
+        `forgot-password: la petición llegó por un dominio que no es del aula ${accountTenantId}, que no tiene dominio primario ` +
+          `verificado, y WEB_PUBLIC_URL no está definida. El enlace se ha enviado con base ${base}; el Host de la petición ` +
+          `NO se usa para un enlace con token salvo que esté en WEB_PUBLIC_ALLOWED_HOSTS. Define WEB_PUBLIC_URL.`,
+      );
+    }
+    return base;
+  }
 
   private async resolveTenantIdFromHost(req: FastifyRequest): Promise<string | undefined> {
     const hostStr = resolvePublicHost(req);

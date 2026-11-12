@@ -32,7 +32,7 @@ import {
  * Cripto: reusa `SecretCipherService` (AES-256-GCM con IV+tag), ya probado
  * para `tenant_setting`. La key se resuelve via `loadCipherKey()` que
  * implementa el patrón "sin fricción al primer install" (env > file >
- * file-new persistido a `${STORAGE_ROOT}/.didacta-secret-key` con 0600 >
+ * file-new persistido en el directorio de secretos, fuera del storage, con 0600 >
  * ephemeral fallback).
  *
  * Cap policy:

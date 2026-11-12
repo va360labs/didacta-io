@@ -53,6 +53,13 @@ interface StripeResponseDto {
   hasTenantConfig: boolean;
   /** True si el despliegue tiene env globales que sirven de fallback. */
   hasGlobalFallback: boolean;
+  /**
+   * True si el despliegue TIENE cuenta de Stripe de instancia pero esta aula no
+   * la hereda (hay varias aulas y nadie lo ha permitido). Sin credenciales
+   * propias, el aula no cobra: el panel lo dice en vez de enseñar un «sin
+   * configurar» genérico.
+   */
+  globalFallbackBlocked: boolean;
 }
 
 function requireAdmin(user: SessionClaims | undefined): SessionClaims {
@@ -245,6 +252,8 @@ export class AdminStripeController {
 
     const globalResolved = await this.resolver.resolve(tenantId);
     const hasGlobalFallback = globalResolved?.source === 'global';
+    const fallback = await this.resolver.describeGlobalFallback();
+    const globalFallbackBlocked = !secret && fallback.instanceCredentials && !fallback.allowed;
 
     return {
       hasSecretKey: Boolean(secret?.secretKey),
@@ -255,6 +264,7 @@ export class AdminStripeController {
       verifiedByUserId: meta.verifiedByUserId ?? null,
       hasTenantConfig: Boolean(secret),
       hasGlobalFallback,
+      globalFallbackBlocked,
     };
   }
 }

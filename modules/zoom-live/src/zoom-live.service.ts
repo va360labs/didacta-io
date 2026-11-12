@@ -953,6 +953,11 @@ export class ZoomLiveService {
           eventId,
           eventType: event.event,
           meetingId,
+          // El aula verificada por el host. No es solo rastro: la tabla tiene
+          // RLS (`tenant_id = current_tenant_id()` también al insertar) y el
+          // aviso se procesa SIEMPRE en contexto de aula, así que una fila sin
+          // `tenant_id` la rechaza la base y el aviso acababa en 500.
+          tenantId: opts.tenantId ?? null,
           result: 'PENDING',
         },
       });
@@ -1101,7 +1106,9 @@ export class ZoomLiveService {
       where: { eventId },
       data: {
         sessionId: session?.id ?? null,
-        tenantId: session?.tenantId ?? null,
+        // Sin clase local se conserva el aula verificada: ponerlo a null sacaría
+        // la fila del aula en la que se creó, y RLS rechaza ese UPDATE.
+        tenantId: session?.tenantId ?? opts.tenantId ?? null,
         result,
         errorMessage: errorMessage ?? null,
       },

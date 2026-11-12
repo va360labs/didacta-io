@@ -299,6 +299,7 @@
     "verifiedBanner": "{mode, select, live {<strong>Verificado</strong> el {date} (modo LIVE).} test {<strong>Verificado</strong> el {date} (modo test).} other {<strong>Verificado</strong> el {date}.}}",
     "unverifiedBanner": "Configurado pero sin verificar — usa el botón <em>Probar conexión</em> para confirmar que las claves son válidas.",
     "fallbackBanner": "Usando Stripe global del host (fallback). Si quieres cobrar en tu propia cuenta, guarda una configuración de tenant.",
+    "fallbackBlockedBanner": "Esta aula NO está cobrando. El servidor tiene una cuenta de Stripe común, pero al haber varias aulas ya no se usa automáticamente. Guarda aquí las credenciales de tu cuenta de Stripe, o pide a quien administra el servidor que permita la cuenta común (STRIPE_ALLOW_GLOBAL_FALLBACK=true).",
     "noneBanner": "Sin Stripe configurado — la venta de cursos sueltos y las suscripciones/membresía no funcionan."
   },
   "alerts": {

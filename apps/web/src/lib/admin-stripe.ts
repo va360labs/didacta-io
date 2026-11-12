@@ -33,6 +33,12 @@ export interface AdminStripeDto {
   hasTenantConfig: boolean;
   /** True si el despliegue tiene env globales que sirven de fallback. */
   hasGlobalFallback: boolean;
+  /**
+   * True si el servidor tiene cuenta de Stripe de instancia pero esta aula NO la
+   * hereda (hay varias aulas y el operador no lo ha permitido). Opcional: una
+   * API anterior no lo manda.
+   */
+  globalFallbackBlocked?: boolean;
 }
 
 export interface AdminStripeUpsertPayload {
@@ -104,7 +110,12 @@ export const adminStripeApi = {
   },
 };
 
-export type AdminStripeStatus = 'verified' | 'configured-unverified' | 'fallback' | 'none';
+export type AdminStripeStatus =
+  | 'verified'
+  | 'configured-unverified'
+  | 'fallback'
+  | 'fallback-blocked'
+  | 'none';
 
 /**
  * Deriva el estado del banner a partir del DTO. Mismo criterio que
@@ -114,5 +125,6 @@ export function deriveStripeStatus(dto: AdminStripeDto): AdminStripeStatus {
   if (dto.hasTenantConfig && dto.verifiedAt) return 'verified';
   if (dto.hasTenantConfig) return 'configured-unverified';
   if (dto.hasGlobalFallback) return 'fallback';
+  if (dto.globalFallbackBlocked) return 'fallback-blocked';
   return 'none';
 }

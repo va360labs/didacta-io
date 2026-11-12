@@ -7,6 +7,7 @@ import { mkdir, readFile, unlink, writeFile } from 'node:fs/promises';
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import type { StorageAdapter } from '@didacta/core-kernel';
 import { resolvePersistentDataRoot } from './persistent-data-root';
+import { hasForbiddenSegment } from './public-storage-keys';
 
 /**
  * Adapter de storage que persiste en disco bajo el volumen persistente.
@@ -19,6 +20,10 @@ import { resolvePersistentDataRoot } from './persistent-data-root';
  *
  * Pensado para Fase 1.A: nada de S3 todavía. La key se sanea para evitar
  * traversal: solo se permiten letras/dígitos/`-_./` y nunca se sale del root.
+ * Tampoco se admite ningún segmento que empiece por punto: los ficheros
+ * ocultos de la raíz son del propio servidor (ahí vivió la clave maestra de
+ * cifrado) y ningún camino de la aplicación debe poder leerlos, escribirlos ni
+ * borrarlos a través de este adaptador.
  *
  * `getSignedUrl` no firma realmente — devuelve la ruta relativa que el reverse
  * proxy del despliegue sirve. En Fase 2 se reemplaza por un service S3-compatible.
@@ -79,6 +84,9 @@ export class LocalDiskStorageService implements StorageAdapter {
     }
     if (key.includes('..')) throw new Error('Storage key contiene traversal');
     if (key.startsWith('/')) throw new Error('Storage key debe ser relativa');
+    if (hasForbiddenSegment(key)) {
+      throw new Error('Storage key con un segmento vacío u oculto (empieza por punto)');
+    }
     return key;
   }
 
