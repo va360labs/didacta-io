@@ -15,6 +15,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { randomBytes } from 'node:crypto';
 import { z } from 'zod';
 import { CurrentUser } from '../auth/decorators';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
@@ -179,7 +180,13 @@ export class StorageController {
       .replace(/^-+|-+$/g, '')
       .slice(0, 80);
 
-    const requestedKey = `tenants/${user.tenantId}/uploads/${Date.now()}-${safeName || 'image'}`;
+    // El tramo aleatorio hace la URL inadivinable. Estos ficheros se sirven sin
+    // sesión (van en `<img>`, en adjuntos de la comunidad y en correos), así
+    // que su única protección es que nadie pueda construir la ruta: con solo
+    // el milisegundo y el nombre original, un adjunto «factura.pdf» se podía
+    // encontrar probando.
+    const unguessable = randomBytes(12).toString('hex');
+    const requestedKey = `tenants/${user.tenantId}/uploads/${Date.now()}-${unguessable}-${safeName || 'image'}`;
 
     // Adapter per-tenant: si el tenant configuró storage S3 propio en
     // /admin/configuracion, usamos su bucket. Si no, fallback al adapter

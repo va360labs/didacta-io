@@ -107,6 +107,10 @@ export class ScormService {
     for (const entry of entries) {
       if (entry.isDirectory) continue;
       const relPath = entry.entryName.replace(/\\/g, '/');
+      // Ficheros ocultos del empaquetador (`.DS_Store`, `__MACOSX/._x`,
+      // `.htaccess`): ningún paquete los referencia y el storage no admite
+      // segmentos con punto delante. Se saltan en vez de tumbar la subida.
+      if (relPath.split('/').some((segment) => segment.startsWith('.'))) continue;
       const data = entry.getData();
       totalSize += data.length;
       if (totalSize > MAX_PACKAGE_BYTES) {

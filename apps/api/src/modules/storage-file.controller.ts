@@ -6,6 +6,7 @@
 import { Controller, Get, Header, NotFoundException, Param, StreamableFile } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { LocalDiskStorageService } from './local-disk-storage.service';
+import { isPublicStorageKey } from './public-storage-keys';
 
 const MIME_BY_EXT: Record<string, string> = {
   png: 'image/png',
@@ -21,8 +22,14 @@ const MIME_BY_EXT: Record<string, string> = {
  * Sirve los ficheros del storage LOCAL (driver `local`) de forma pública para
  * que puedan cargarse en `<img src>` (los navegadores no envían el bearer en
  * imágenes). Solo aplica al storage en disco; con S3 las URLs son pre-firmadas
- * y no pasan por aquí. La key se sanea en `LocalDiskStorageService` (sin
- * traversal, dentro del root), así que solo se exponen ficheros bajo el root.
+ * y no pasan por aquí.
+ *
+ * ⚠️ Público NO es «todo lo que haya bajo el root». Solo se sirve lo que está
+ * en la lista blanca de `public-storage-keys.ts`; el resto responde 404 exista
+ * o no. Antes bastaba con que la key no hiciera traversal, y bajo el root vivía
+ * la clave maestra de cifrado: `GET /storage/file/.didacta-secret-key` la
+ * devolvía. La lista se comprueba ANTES de tocar el disco, y el adaptador
+ * rechaza por su cuenta cualquier segmento oculto.
  *
  * Ruta: `GET /api/v1/storage/file/<key>` (público, sin guard).
  */
@@ -40,6 +47,14 @@ export class StorageFileController {
   @Header('X-Content-Type-Options', 'nosniff')
   @ApiOperation({ summary: 'Sirve un fichero del storage local por su key (público).' })
   async serve(@Param('*') keyPath: string): Promise<StreamableFile> {
+    // Mismo 404 para «no existe» y para «no se sirve»: no se confirma a nadie
+    // qué hay en el disco.
+    if (!isPublicStorageKey(keyPath)) {
+      throw new NotFoundException({
+        message: 'Fichero no encontrado.',
+        code: 'STORAGE_FILE_NOT_FOUND',
+      });
+    }
     let buffer: Buffer;
     try {
       buffer = await this.storage.download(keyPath);
