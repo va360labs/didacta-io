@@ -14,11 +14,13 @@
  *  - `POST /api/v1/modules/payouts/connect` → `{ account, onboardingUrl }`.
  *  - `POST /api/v1/modules/payouts/connect/link` → `{ url }` («Completar»).
  *  - `GET  /api/v1/modules/payouts/dashboard-link` → `{ url }` (panel Express).
+ *  - `GET  /api/v1/modules/payouts/sales?page&pageSize` → ventas («Tus ventas»).
+ *  - `GET  /api/v1/modules/payouts/summary` → resumen por divisa.
  */
 
 import { ApiHttpError, apiFetch } from './api-client';
 import { authStorage } from './auth-storage';
-import { regionNameFormatter } from './i18n/format';
+import { formatCurrency, formatNumber, regionNameFormatter } from './i18n/format';
 
 export type PayoutsAccountStatus =
   | 'NOT_CONNECTED'
@@ -121,7 +123,189 @@ export const payoutsApi = {
       withAuth(),
     );
   },
+  /** Ventas del aula. `null` = sin modo plataforma (la ruta no existe). */
+  async sales(page = 1, pageSize = 20): Promise<PayoutsSalesPageDto | null> {
+    try {
+      return await apiFetch<PayoutsSalesPageDto>(
+        `/api/v1/modules/payouts/sales?page=${page}&pageSize=${pageSize}`,
+        { method: 'GET' },
+        withAuth(),
+      );
+    } catch (err) {
+      if (err instanceof ApiHttpError && err.status === 404) return null;
+      throw err;
+    }
+  },
+  /** Resumen por divisa. `null` = sin modo plataforma. */
+  async summary(): Promise<PayoutsSummaryDto | null> {
+    try {
+      return await apiFetch<PayoutsSummaryDto>(
+        '/api/v1/modules/payouts/summary',
+        { method: 'GET' },
+        withAuth(),
+      );
+    } catch (err) {
+      if (err instanceof ApiHttpError && err.status === 404) return null;
+      throw err;
+    }
+  },
 };
+
+// ── «Tus ventas» ─────────────────────────────────────────────────────────
+
+export type PayoutsSaleStatus =
+  | 'AWAITING_FEE'
+  | 'READY'
+  | 'TRANSFERRED'
+  | 'SETTLED_NETTED'
+  | 'HELD'
+  | 'FAILED';
+
+/** Una venta tal como la da `GET /modules/payouts/sales`. Importes en unidad mínima. */
+export interface PayoutsSaleDto {
+  id: string;
+  chargedAt: string | null;
+  description: string | null;
+  sourceKind: string;
+  status: PayoutsSaleStatus;
+  /** Código del motivo si está retenida o en revisión (`transfer_rejected`…). */
+  reason: string | null;
+  /** Lo que pagó el alumno, en SU moneda. */
+  presentmentAmount: number;
+  presentmentCurrency: string;
+  /** Moneda en la que cobra el creador; `null` mientras Stripe no ha asentado el pago. */
+  currency: string | null;
+  gross: number | null;
+  stripeFee: number | null;
+  feeBpsApplied: number | null;
+  platformFee: number | null;
+  creatorNet: number | null;
+  debtNetted: number;
+  transferAmount: number | null;
+  refundedAmount: number;
+  transferredAt: string | null;
+  availableOn: string | null;
+  /** `YYYY-MM-DD` (UTC): día estimado del pago al banco. */
+  estimatedArrival: string | null;
+}
+
+export interface PayoutsSalesPageDto {
+  items: PayoutsSaleDto[];
+  page: number;
+  pageSize: number;
+  total: number;
+}
+
+export interface PayoutsCurrencySummaryDto {
+  currency: string;
+  salesCount: number;
+  gross: number;
+  stripeFees: number;
+  platformFees: number;
+  received: number;
+  pending: number;
+  debtNetted: number;
+  debtOutstanding: number;
+}
+
+export interface PayoutsSummaryDto {
+  currencies: PayoutsCurrencySummaryDto[];
+  awaitingFeeCount: number;
+  operatorName: string;
+  feeBps: number;
+}
+
+/**
+ * Divisas que Stripe trata SIN decimales: el importe de la API ya es la
+ * unidad (1000 JPY = ¥1.000). El resto va en céntimos, incluidas las que
+ * Stripe trata con dos decimales aunque `Intl` diga otra cosa (HUF, ISK, UGX).
+ * Tabla de https://docs.stripe.com/currencies#zero-decimal.
+ */
+const STRIPE_ZERO_DECIMAL = new Set([
+  'bif',
+  'clp',
+  'djf',
+  'gnf',
+  'jpy',
+  'kmf',
+  'krw',
+  'mga',
+  'pyg',
+  'rwf',
+  'vnd',
+  'vuv',
+  'xaf',
+  'xof',
+  'xpf',
+]);
+
+/** Importe de Stripe (unidad mínima) → unidades de la divisa. */
+export function stripeMinorToMajor(amount: number, currency: string): number {
+  return STRIPE_ZERO_DECIMAL.has(currency.toLowerCase()) ? amount : amount / 100;
+}
+
+/**
+ * Importe de Stripe para enseñar al creador, CON sus decimales: se cuadra a
+ * ojo contra su panel de pagos y su banco («93,25 €», nunca «93 €»).
+ */
+export function formatStripeAmount(amount: number, currency: string, locale?: string): string {
+  // Los decimales los marca Stripe, no `Intl`: en HUF `Intl` redondea a
+  // forintos enteros y 37.221,50 se vería como 37.222.
+  const digits = STRIPE_ZERO_DECIMAL.has(currency.toLowerCase()) ? 0 : 2;
+  return formatCurrency(stripeMinorToMajor(amount, currency), currency.toUpperCase(), {
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
+    ...(locale ? { locale } : {}),
+  });
+}
+
+/** Clave del estado en lenguaje llano (`adminPagos.payouts.sales.status.*`) y su tono. */
+export type PayoutsSaleStatusKey =
+  | 'calculating'
+  | 'onTheWay'
+  | 'sent'
+  | 'netted'
+  | 'heldAccount'
+  | 'heldRetry'
+  | 'refunded'
+  | 'disputed'
+  | 'review';
+
+export interface PayoutsSaleStatusView {
+  key: PayoutsSaleStatusKey;
+  tone: 'neutral' | 'info' | 'success' | 'warning' | 'danger';
+}
+
+export function saleStatusView(
+  sale: Pick<PayoutsSaleDto, 'status' | 'reason'>,
+): PayoutsSaleStatusView {
+  switch (sale.status) {
+    case 'AWAITING_FEE':
+      return { key: 'calculating', tone: 'neutral' };
+    case 'READY':
+      return { key: 'onTheWay', tone: 'info' };
+    case 'TRANSFERRED':
+      return { key: 'sent', tone: 'success' };
+    case 'SETTLED_NETTED':
+      return { key: 'netted', tone: 'neutral' };
+    case 'HELD':
+      if (sale.reason === 'account_not_ready') return { key: 'heldAccount', tone: 'warning' };
+      if (sale.reason === 'charge_refunded') return { key: 'refunded', tone: 'neutral' };
+      if (sale.reason === 'charge_disputed') return { key: 'disputed', tone: 'danger' };
+      return { key: 'heldRetry', tone: 'warning' };
+    case 'FAILED':
+    default:
+      return { key: 'review', tone: 'danger' };
+  }
+}
+
+/** Porcentaje legible de unos puntos básicos: 500 → «5», 250 → «2,5». */
+export function feePercent(feeBps: number, locale?: string): string {
+  return formatNumber(feeBps / 100, {
+    maximumFractionDigits: 2,
+    ...(locale ? { locale } : {}),
+  });
+}
 
 /** Qué pinta la tarjeta. Una sola función para que los tests fijen la tabla. */
 export type PayoutsCardView =

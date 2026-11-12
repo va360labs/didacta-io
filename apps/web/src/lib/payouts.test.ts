@@ -11,6 +11,10 @@ import {
   countryOptions,
   defaultCountry,
   derivePayoutsCardView,
+  feePercent,
+  formatStripeAmount,
+  saleStatusView,
+  stripeMinorToMajor,
   type PayoutsAccountDto,
   type PayoutsStatusDto,
 } from './payouts';
@@ -147,5 +151,64 @@ describe('textos EXACTOS del plan (sección 4)', () => {
     expect(p.finishCta).toBe('Finish');
     expect(p.ready).toBe("All set. You're paid in {currency} every {day}.");
     expect(p.dashboardCta).toBe('See my payouts on Stripe');
+  });
+});
+
+describe('«Tus ventas»: importes y estados', () => {
+  it('importes de Stripe con sus decimales y en la moneda de cada venta', () => {
+    expect(formatStripeAmount(9325, 'eur', 'es')).toBe('93,25 €');
+    expect(formatStripeAmount(10000, 'eur', 'es')).toBe('100,00 €');
+    expect(formatStripeAmount(9180, 'usd', 'en')).toBe('$91.80');
+    expect(formatStripeAmount(9330, 'gbp', 'en')).toBe('£93.30');
+    // HUF: Stripe lo cobra con dos decimales aunque se pague en forintos enteros.
+    expect(stripeMinorToMajor(3722150, 'huf')).toBe(37221.5);
+    // JPY: sin decimales en Stripe.
+    expect(stripeMinorToMajor(1000, 'jpy')).toBe(1000);
+    expect(stripeMinorToMajor(214977, 'MXN')).toBe(2149.77);
+  });
+
+  it('porcentaje del operador desde puntos básicos', () => {
+    expect(feePercent(500, 'es')).toBe('5');
+    expect(feePercent(250, 'es')).toBe('2,5');
+    expect(feePercent(250, 'en')).toBe('2.5');
+  });
+
+  it('cada estado tiene su texto en lenguaje llano, sin jerga', () => {
+    const cases = [
+      [{ status: 'AWAITING_FEE', reason: null }, 'calculating'],
+      [{ status: 'READY', reason: null }, 'onTheWay'],
+      [{ status: 'TRANSFERRED', reason: null }, 'sent'],
+      [{ status: 'SETTLED_NETTED', reason: null }, 'netted'],
+      [{ status: 'HELD', reason: 'account_not_ready' }, 'heldAccount'],
+      [{ status: 'HELD', reason: 'transfer_rejected' }, 'heldRetry'],
+      [{ status: 'HELD', reason: 'charge_refunded' }, 'refunded'],
+      [{ status: 'HELD', reason: 'charge_disputed' }, 'disputed'],
+      [{ status: 'FAILED', reason: 'negative_net' }, 'review'],
+    ] as const;
+    for (const [sale, key] of cases) {
+      expect(saleStatusView(sale).key).toBe(key);
+      expect(esPagos.payouts.sales.status[key]).toBeTruthy();
+      expect(enPagos.payouts.sales.status[key]).toBeTruthy();
+    }
+    const jerga = /transfer|balance|payout|stripe|charge|liquidaci|netted/i;
+    for (const texts of [esPagos.payouts.sales, enPagos.payouts.sales]) {
+      for (const value of Object.values(texts.status)) expect(value).not.toMatch(jerga);
+      for (const key of ['colCardFee', 'colYouGet', 'colArrives', 'noticeHeld', 'empty'] as const) {
+        expect(texts[key]).not.toMatch(jerga);
+      }
+    }
+  });
+
+  it('textos del plan (sección 4): comisión de la tarjeta, el % del operador y lo que recibes', () => {
+    expect(esPagos.payouts.sales.colCardFee).toBe('Comisión de la tarjeta');
+    expect(esPagos.payouts.sales.colOperatorFee).toBe('{percent} % {operator}');
+    expect(esPagos.payouts.sales.colYouGet).toBe('Lo que recibes');
+    expect(esPagos.payouts.sales.colArrives).toBe('Cuándo llega');
+    expect(Object.keys(enPagos.payouts.sales).sort()).toEqual(
+      Object.keys(esPagos.payouts.sales).sort(),
+    );
+    expect(Object.keys(enPagos.payouts.sales.status).sort()).toEqual(
+      Object.keys(esPagos.payouts.sales.status).sort(),
+    );
   });
 });

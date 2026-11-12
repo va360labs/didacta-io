@@ -17,11 +17,15 @@
  *
  * Stripe devuelve aquí al terminar el alta (`?vuelta=1`) y cuando el enlace
  * del alta caducó (`?renovar=1`).
+ *
+ * Debajo, «Tus ventas»: cada venta con lo que te llega y cuándo, y el resumen
+ * por moneda.
  */
 
 import { useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { PaymentsConnectCard } from '@/components/admin/payments-connect-card';
+import { PayoutsSalesSection } from '@/components/admin/payouts-sales-section';
 
 export default function CobrosPage(): React.JSX.Element {
   const router = useRouter();
@@ -41,14 +45,17 @@ export default function CobrosPage(): React.JSX.Element {
   }, [router]);
 
   return (
-    <div className="max-w-3xl">
-      <PaymentsConnectCard
-        asPage
-        whenPlatformOff={null}
-        onPlatformUnavailable={toLegacyPayments}
-        returnAction={returnAction}
-        onReturnHandled={clearQuery}
-      />
+    <div className="max-w-5xl space-y-10">
+      <div className="max-w-3xl">
+        <PaymentsConnectCard
+          asPage
+          whenPlatformOff={null}
+          onPlatformUnavailable={toLegacyPayments}
+          returnAction={returnAction}
+          onReturnHandled={clearQuery}
+        />
+      </div>
+      <PayoutsSalesSection />
     </div>
   );
 }
