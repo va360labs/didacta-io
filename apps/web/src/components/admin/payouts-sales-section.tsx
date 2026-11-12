@@ -217,7 +217,10 @@ export function PayoutsSalesSection({
                           {row.arrives}
                         </td>
                         <td className="py-3">
-                          <Badge variant={BADGE_BY_TONE[row.status.tone]}>
+                          <Badge
+                            variant={BADGE_BY_TONE[row.status.tone]}
+                            className="whitespace-nowrap"
+                          >
                             {t(`status.${row.status.key}`)}
                           </Badge>
                         </td>
@@ -234,14 +237,14 @@ export function PayoutsSalesSection({
                 const row = describeSale(sale, money, locale, t as SalesTranslator);
                 return (
                   <li key={sale.id} className="space-y-2 py-4">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <p className="truncate font-medium text-text">{row.item}</p>
-                        <p className="text-xs text-text-subtle">{row.date}</p>
+                    <div>
+                      <p className="font-medium text-text">{row.item}</p>
+                      <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
+                        <span className="text-xs text-text-subtle">{row.date}</span>
+                        <Badge variant={BADGE_BY_TONE[row.status.tone]}>
+                          {t(`status.${row.status.key}`)}
+                        </Badge>
                       </div>
-                      <Badge variant={BADGE_BY_TONE[row.status.tone]} className="shrink-0">
-                        {t(`status.${row.status.key}`)}
-                      </Badge>
                     </div>
                     <dl className="grid grid-cols-2 gap-x-3 gap-y-1 text-sm">
                       <dt className="text-text-muted">{t('colPaid')}</dt>
