@@ -113,10 +113,13 @@ export const billingApi = {
     optionId?: string,
     /** La casilla de la renuncia al desistimiento (la API la exige). */
     withdrawalWaiver?: WithdrawalWaiverAcceptance,
+    /** Código del enlace de referido con el que llegó (`?ref=`), si lo hay. */
+    referralCode?: string,
   ): Promise<StartCheckoutResult> {
     const body = {
       ...(optionId ? { optionId } : {}),
       ...(withdrawalWaiver ? { withdrawalWaiver } : {}),
+      ...(referralCode ? { referralCode } : {}),
     };
     return apiFetch<StartCheckoutResult>(
       `${BASE}/checkout/${encodeURIComponent(courseId)}`,

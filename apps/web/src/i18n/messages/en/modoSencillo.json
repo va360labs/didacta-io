@@ -62,7 +62,9 @@
     "gana": "Share your link. You get {percent}% of what each person who joins through it pays.",
     "copiar": "Copy",
     "copiado": "Copied",
-    "verGanado": "See what you have earned"
+    "verGanado": "See what you have earned",
+    "porProducto": "Or share the link to a specific product",
+    "membresia": "The membership"
   },
   "alta": {
     "pregunta": "Question {n} of 3",

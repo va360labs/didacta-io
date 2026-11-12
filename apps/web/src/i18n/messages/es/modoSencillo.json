@@ -62,7 +62,9 @@
     "gana": "Comparte tu enlace. Te llevas el {percent} % de lo que pague cada persona que entre con él.",
     "copiar": "Copiar",
     "copiado": "Copiado",
-    "verGanado": "Ver lo que llevas ganado"
+    "verGanado": "Ver lo que llevas ganado",
+    "porProducto": "O comparte el enlace de un producto concreto",
+    "membresia": "La membresía"
   },
   "alta": {
     "pregunta": "Pregunta {n} de 3",

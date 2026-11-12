@@ -25,6 +25,7 @@ import { formatCents } from '@/lib/membership';
 import { featuredOption, getPublicCatalog, type CatalogCourse } from '@/lib/catalog';
 import { showLocalCurrencyNote } from '@/lib/checkout-hints';
 import { richHtmlToPlainText } from '@/lib/sanitize-html';
+import { captureReferralFromLocation } from '@/lib/referral-links';
 
 export function CatalogoView() {
   const t = useTranslations('publicSite');
@@ -37,6 +38,12 @@ export function CatalogoView() {
   const [courses, setCourses] = useState<CatalogCourse[] | null>(null);
   const [loadError, setLoadError] = useState(false);
   const [filter, setFilter] = useState('Todos');
+
+  // Enlace de referido (?ref=) del catálogo: se guarda y viaja al checkout
+  // del curso que acabe comprando.
+  useEffect(() => {
+    captureReferralFromLocation(window.location.search);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;

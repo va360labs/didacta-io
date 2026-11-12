@@ -17,6 +17,7 @@ import {
   type MemberReferralStats,
   type ReferralCommissionStatus,
 } from '@/lib/referrals';
+import { loadReferralLinks, type ReferralProductLink } from '@/lib/referral-links';
 import { useTenantDisplayName } from '@/lib/tenant-context';
 import { cn } from '@/lib/utils';
 
@@ -75,9 +76,10 @@ export function SimpleReferrals() {
   const academy = useTenantDisplayName();
   const [stats, setStats] = useState<MemberReferralStats | null>(null);
   const [link, setLink] = useState<string | null>(null);
+  const [products, setProducts] = useState<ReferralProductLink[]>([]);
   const [linkError, setLinkError] = useState<string | null>(null);
   const [error, setError] = useState(false);
-  const [copied, setCopied] = useState(false);
+  const [copied, setCopied] = useState<string | null>(null);
   const [canShare, setCanShare] = useState(false);
 
   useEffect(() => {
@@ -89,9 +91,19 @@ export function SimpleReferrals() {
         if (cancelled) return;
         setStats(s);
         if (!s.programActive) return;
+        // Enlace general + uno por producto: vale para todo lo que vende el aula.
         referralsApi
           .me()
-          .then((l) => !cancelled && setLink(l.url))
+          .then(loadReferralLinks)
+          .then((links) => {
+            if (cancelled) return;
+            if (!links.general) {
+              setLinkError(t('nadaALaVenta'));
+              return;
+            }
+            setLink(links.general);
+            setProducts(links.products);
+          })
           .catch((e) => {
             if (cancelled) return;
             setLinkError(
@@ -115,12 +127,12 @@ export function SimpleReferrals() {
   const money = (c: number) => formatCents(c, fig.currency);
   const shareText = t('mensajeCompartir', { academia: academy });
 
-  async function copy() {
-    if (!link) return;
+  async function copy(value: string | null) {
+    if (!value) return;
     try {
-      await navigator.clipboard.writeText(link);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      await navigator.clipboard.writeText(value);
+      setCopied(value);
+      setTimeout(() => setCopied(null), 2000);
     } catch {
       /* el enlace sigue a la vista */
     }
@@ -174,12 +186,12 @@ export function SimpleReferrals() {
                     </div>
                     <button
                       type="button"
-                      onClick={copy}
+                      onClick={() => void copy(link)}
                       disabled={!link}
                       className="inline-flex h-12 shrink-0 items-center justify-center gap-2 rounded-xl bg-brand-600 px-5 text-[15px] font-semibold text-white hover:bg-brand-700 disabled:opacity-50"
                     >
                       <Icon name="link" size={16} />
-                      {copied ? t('copiado') : t('copiar')}
+                      {link && copied === link ? t('copiado') : t('copiar')}
                     </button>
                   </div>
                   {link ? (
@@ -214,6 +226,30 @@ export function SimpleReferrals() {
                           {t('mas')}
                         </button>
                       ) : null}
+                    </div>
+                  ) : null}
+                  {products.length > 0 ? (
+                    <div className="mt-5" data-testid="referidos-productos">
+                      <h2 className="text-sm font-bold text-text">{t('porProductoTitulo')}</h2>
+                      <ul className="mt-2 grid gap-2">
+                        {products.map((p) => (
+                          <li
+                            key={p.url}
+                            className="flex items-center gap-2 rounded-xl border border-border px-3 py-2"
+                          >
+                            <span className="min-w-0 flex-1 truncate text-sm font-semibold text-text">
+                              {p.title ?? t('membresia')}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => void copy(p.url)}
+                              className="h-9 shrink-0 rounded-lg border border-border bg-surface px-3 text-sm font-semibold text-text hover:border-border-strong"
+                            >
+                              {copied === p.url ? t('copiado') : t('copiar')}
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
                     </div>
                   ) : null}
                 </>

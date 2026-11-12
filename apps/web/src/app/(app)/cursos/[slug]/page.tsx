@@ -36,6 +36,7 @@ import { labelOr, type TranslatorLike } from '@/lib/i18n/labels';
 import { learningApi, type Enrollment } from '@/lib/learning';
 import { sanitizeRichHtml } from '@/lib/sanitize-html';
 import { useSimpleMode } from '@/lib/simple-mode';
+import { captureReferralFromLocation } from '@/lib/referral-links';
 import { subscriptionsApi } from '@/modules/subscriptions';
 import { zoomLiveApi, type ZoomSession } from '@/modules/zoom-live';
 
@@ -56,6 +57,11 @@ export default function CourseAlumnoPage() {
   }, []);
   const [course, setCourse] = useState<CourseDetail | null>(null);
   const [enrollment, setEnrollment] = useState<Enrollment | null>(null);
+  // Enlace de referido (?ref=) también en la ficha con sesión: se guarda y
+  // viaja en el checkout del curso (BuyCourseButton).
+  useEffect(() => {
+    captureReferralFromLocation(window.location.search);
+  }, []);
   /**
    * Segundo por el que va el vídeo de la lección abierta. Lo reporta el
    * reproductor de Bunny y viaja al tutor IA para que sepa dónde está el alumno

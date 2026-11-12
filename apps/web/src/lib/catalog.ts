@@ -56,7 +56,13 @@ export async function getPublicCatalog(): Promise<{ courses: CatalogCourse[] }> 
 
 export async function startPublicCheckout(
   courseId: string,
-  opts?: { optionId?: string; email?: string; withdrawalWaiver?: WithdrawalWaiverAcceptance },
+  opts?: {
+    optionId?: string;
+    email?: string;
+    withdrawalWaiver?: WithdrawalWaiverAcceptance;
+    /** Código del enlace de referido con el que llegó (`?ref=`), si lo hay. */
+    referralCode?: string;
+  },
 ): Promise<{ url: string; sessionId: string }> {
   return apiFetch<{ url: string; sessionId: string }>(
     `${PUBLIC_BASE}/checkout/${encodeURIComponent(courseId)}`,
@@ -66,6 +72,7 @@ export async function startPublicCheckout(
         ...(opts?.optionId ? { optionId: opts.optionId } : {}),
         ...(opts?.email ? { email: opts.email } : {}),
         ...(opts?.withdrawalWaiver ? { withdrawalWaiver: opts.withdrawalWaiver } : {}),
+        ...(opts?.referralCode ? { referralCode: opts.referralCode } : {}),
       }),
     },
   );

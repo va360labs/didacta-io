@@ -34,6 +34,7 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { ApiHttpError } from '@/lib/api-client';
 import { authStorage } from '@/lib/auth-storage';
+import { getStoredReferralCode } from '@/lib/referrals';
 import type { TranslatorLike } from '@/lib/i18n/labels';
 import { billingApi } from '@/modules/billing';
 import {
@@ -83,7 +84,14 @@ export function BuyCourseButton({
         setPending(false);
         return;
       }
-      const { url } = await billingApi.startCheckout(courseId, token, optionId, waiver.acceptance);
+      const { url } = await billingApi.startCheckout(
+        courseId,
+        token,
+        optionId,
+        waiver.acceptance,
+        // Enlace de referido con el que llegó a cualquier página de venta.
+        getStoredReferralCode() ?? undefined,
+      );
       // Redirigimos a la URL hosted de Stripe. NO usamos router.push() porque
       // es un dominio externo — sólo `window.location.href` cambia de origin.
       window.location.href = url;

@@ -33,6 +33,8 @@ import { useTenantContext } from '@/lib/tenant-context';
 import { formatCents } from '@/lib/membership';
 import { showLocalCurrencyNote } from '@/lib/checkout-hints';
 import { sanitizeRichHtml } from '@/lib/sanitize-html';
+import { getStoredReferralCode } from '@/lib/referrals';
+import { captureReferralFromLocation } from '@/lib/referral-links';
 import {
   featuredOption,
   getPublicCatalog,
@@ -62,6 +64,12 @@ export function FichaVentaView() {
   // precarga el checkout; el provisioning lo reconocerá y no duplicará cuenta.
   const session = useMemo(() => authStorage.getSession(), []);
 
+  // Enlace de referido (?ref=): vale en cualquier página de venta, no solo en
+  // /unete. Se guarda y viaja en el checkout de este curso.
+  useEffect(() => {
+    captureReferralFromLocation(window.location.search);
+  }, []);
+
   useEffect(() => {
     let cancelled = false;
     getPublicCatalog()
@@ -90,6 +98,7 @@ export function FichaVentaView() {
         optionId: selected.id,
         email: session?.user.email,
         withdrawalWaiver: waiver.acceptance,
+        referralCode: getStoredReferralCode() ?? undefined,
       });
       window.location.assign(url);
     } catch (err) {

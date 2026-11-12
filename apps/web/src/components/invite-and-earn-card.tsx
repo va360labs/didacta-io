@@ -10,8 +10,7 @@ import { useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { Icon } from '@/components/icon';
 import { formatNumber } from '@/lib/i18n/format';
-import { referralsApi } from '@/lib/referrals';
-import { fetchTenantContext } from '@/lib/tenant-context';
+import { loadMyReferralLinks, type ReferralProductLink } from '@/lib/referral-links';
 import { cn } from '@/lib/utils';
 
 /** Porcentaje legible a partir de puntos básicos (1250 → «12,5»). */
@@ -25,9 +24,10 @@ export function percentFromBps(bps: number): string {
  * referidos (`/modules/referrals/me` y `/me/stats`); si el aula no lo tiene
  * activo, o el alumno no puede tener enlace, no pinta nada.
  *
- * Solo con la membresía a la venta: el módulo paga comisión por las cuotas de
- * la membresía (no por un curso suelto) y el enlace personal lleva a `/unete`.
- * Sin membresía activa, el enlace caería en una página apagada y no daría nada.
+ * Vale para todo lo que vende el aula (membresía y cursos sueltos): se pinta si
+ * hay CUALQUIER cosa a la venta. Si hay más de un producto, debajo del enlace
+ * general se puede copiar el de cada uno. Sin nada a la venta no se pinta: el
+ * enlace caería en una página vacía y no daría nada.
  */
 export function InviteAndEarnCard({
   variant = 'aside',
@@ -42,21 +42,18 @@ export function InviteAndEarnCard({
   const t = useTranslations('modoSencillo');
   const [percent, setPercent] = useState<string | null>(null);
   const [url, setUrl] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
+  const [products, setProducts] = useState<ReferralProductLink[]>([]);
+  const [copied, setCopied] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     try {
-      referralsApi
-        .myStats()
-        .then(async (s) => {
-          if (cancelled || !s.programActive) return;
-          const ctx = await fetchTenantContext().catch(() => null);
-          if (cancelled || !ctx?.tenant?.membershipPageActive) return;
-          const link = await referralsApi.me();
-          if (cancelled) return;
-          setPercent(percentFromBps(s.commissionBps));
-          setUrl(link.url);
+      loadMyReferralLinks()
+        .then((r) => {
+          if (cancelled || !r) return;
+          setPercent(percentFromBps(r.commissionBps));
+          setUrl(r.links.general);
+          setProducts(r.links.products);
         })
         .catch(() => undefined);
     } catch {
@@ -69,11 +66,11 @@ export function InviteAndEarnCard({
 
   if (!percent || !url) return null;
 
-  async function copy() {
+  async function copy(link: string) {
     try {
-      await navigator.clipboard.writeText(url!);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      await navigator.clipboard.writeText(link);
+      setCopied(link);
+      setTimeout(() => setCopied(null), 2000);
     } catch {
       /* el enlace sigue visible para copiarlo a mano */
     }
@@ -110,12 +107,35 @@ export function InviteAndEarnCard({
         </span>
         <button
           type="button"
-          onClick={copy}
+          onClick={() => void copy(url)}
           className="h-9 shrink-0 rounded-lg bg-brand-600 px-3 text-sm font-semibold text-white hover:bg-brand-700"
         >
-          {copied ? t('referidos.copiado') : t('referidos.copiar')}
+          {copied === url ? t('referidos.copiado') : t('referidos.copiar')}
         </button>
       </div>
+      {products.length > 0 ? (
+        <details className="group mt-2" data-testid="invite-and-earn-productos">
+          <summary className="cursor-pointer list-none text-sm font-semibold text-text-muted hover:text-text">
+            {t('referidos.porProducto')}
+          </summary>
+          <ul className="mt-2 grid gap-1.5">
+            {products.map((p) => (
+              <li key={p.url} className="flex items-center gap-2">
+                <span className="min-w-0 flex-1 truncate text-sm text-text">
+                  {p.title ?? t('referidos.membresia')}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => void copy(p.url)}
+                  className="h-8 shrink-0 rounded-lg border border-border bg-surface px-2.5 text-xs font-semibold text-text hover:border-border-strong"
+                >
+                  {copied === p.url ? t('referidos.copiado') : t('referidos.copiar')}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </details>
+      ) : null}
       <Link
         href="/referidos"
         className="mt-3 inline-block text-sm font-semibold text-brand-600 hover:underline"
