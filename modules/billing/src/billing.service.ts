@@ -132,6 +132,13 @@ export interface StartCheckoutInput {
    * módulo NO lo interpreta ni lo valida — lo hace el host.
    */
   locale?: string;
+  /**
+   * Código de atribución OPCIONAL (programa de referidos, `?ref=` de la página
+   * de venta). Opaco para este módulo, igual que en la membresía: viaja en la
+   * metadata de la session y vuelve en `billing.order.completed` como
+   * `attribution.referralCode`, que interpreta mod.referrals.
+   */
+  referralCode?: string;
 }
 
 /** Una opción de compra del curso, tal y como la ve el alumno. */
@@ -644,6 +651,7 @@ export class BillingService {
           // metadata) es la fuente de verdad del comprador en el fulfillment.
           ...(input.userId ? { userId: input.userId } : {}),
           ...(input.locale ? { locale: input.locale } : {}),
+          ...(input.referralCode ? { referralCode: input.referralCode } : {}),
         },
       });
     } catch (err) {
@@ -905,6 +913,11 @@ export class BillingService {
     // `idempotencyKey` = `billing.order.completed:<orderId>`: si el evento SÍ
     // llegó a salir, este publish es un no-op; si no llegó, esta es la única
     // forma de que salga.
+    // Atribución opaca (referidos): la escribió `startCheckout` en la metadata
+    // y solo la interpreta quien la consuma (mod.referrals, vía el host).
+    const referralCode = metadata['referralCode']?.trim();
+    const attribution = referralCode ? { referralCode } : null;
+
     if (order.status === 'COMPLETED') {
       await this.publisher.publish(tenantId, order.userId, EVENT.ORDER_COMPLETED, {
         orderId: order.id,
@@ -915,6 +928,7 @@ export class BillingService {
         amountPaid: order.amountPaid,
         currency: order.currency,
         customerEmail: order.customerEmail,
+        attribution,
       });
       return;
     }
@@ -1007,6 +1021,7 @@ export class BillingService {
       amountPaid: updated.amountPaid,
       currency: updated.currency,
       customerEmail: updated.customerEmail,
+      attribution,
     });
   }
 

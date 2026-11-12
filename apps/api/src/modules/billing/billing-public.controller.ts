@@ -70,6 +70,16 @@ const publicCheckoutSchema = z
      * pierde el desistimiento de 14 días. Obligatoria (422 si falta).
      */
     withdrawalWaiver: withdrawalWaiverSchema.optional(),
+    /**
+     * Código del enlace de referido (`?ref=` de la página de venta). OPCIONAL y
+     * opaco para la venta: viaja en la metadata de Stripe y lo interpreta
+     * mod.referrals al completarse el pago. Mismo formato que en la membresía.
+     */
+    referralCode: z
+      .string()
+      .trim()
+      .regex(/^[a-z0-9]{3,32}$/i)
+      .optional(),
   })
   .strict()
   .optional()
@@ -78,6 +88,7 @@ type PublicCheckoutDto = {
   optionId?: string;
   email?: string;
   withdrawalWaiver?: WithdrawalWaiverDto;
+  referralCode?: string;
 };
 
 /** Curso del catálogo público, con lo justo para la ficha de venta. */
@@ -278,6 +289,9 @@ export class BillingPublicController {
         // metadata de Stripe porque su fila de `user` no existe todavía: se
         // crea en el webhook, después del salto a la pasarela.
         locale: readRequestLocale(req.headers),
+        // Enlace de referido: opaco aquí; lo valida mod.referrals (código del
+        // aula, sin autorreferidos) cuando el pago se completa.
+        ...(dto.referralCode ? { referralCode: dto.referralCode.toLowerCase() } : {}),
         // Retorno a las páginas PÚBLICAS del catálogo: el comprador aún no tiene
         // sesión y las de /cursos/checkout viven tras el gate de login.
         successUrl: `${base}/catalogo/checkout/success?session_id={CHECKOUT_SESSION_ID}`,

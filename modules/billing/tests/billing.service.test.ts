@@ -822,6 +822,52 @@ describe('BillingService — handleWebhookEvent (idempotente)', () => {
     expect(publisher.events[0]!.payload.amountPaid).toBe(1999);
   });
 
+  it('el código de referido viaja opaco en la metadata y vuelve como attribution', async () => {
+    stripe.setPrice('price_a');
+    await svc.createProduct({ tenantId: 't1', courseId: 'course-1', stripePriceId: 'price_a' });
+    const checkout = await svc.startCheckout({
+      tenantId: 't1',
+      userId: 'u1',
+      userEmail: 'u@test',
+      courseId: 'course-1',
+      referralCode: 'abc23xyz',
+    });
+    expect(stripe.lastCheckout?.metadata['referralCode']).toBe('abc23xyz');
+    publisher.events = [];
+
+    const event = buildSessionCompletedEvent(checkout.orderId);
+    const session = event.data.object as Stripe.Checkout.Session;
+    session.metadata = { ...session.metadata, referralCode: 'abc23xyz' };
+    await svc.handleWebhookEvent(event, {}, { tenantId: 't1' });
+    expect(publisher.events[0]!.payload.attribution).toEqual({ referralCode: 'abc23xyz' });
+
+    // Reentrega con la orden ya COMPLETED: el evento re-publicado conserva la
+    // atribución (si no, una caída entre el update y el publish la perdería).
+    // (Otro id de evento: el mismo id lo descarta antes la idempotencia.)
+    publisher.events = [];
+    await svc.handleWebhookEvent({ ...event, id: 'evt_reentrega' }, {}, { tenantId: 't1' });
+    expect(publisher.events[0]!.payload.attribution).toEqual({ referralCode: 'abc23xyz' });
+  });
+
+  it('sin enlace de referido el evento lleva attribution null y la metadata no lo menciona', async () => {
+    stripe.setPrice('price_a');
+    await svc.createProduct({ tenantId: 't1', courseId: 'course-1', stripePriceId: 'price_a' });
+    const checkout = await svc.startCheckout({
+      tenantId: 't1',
+      userId: 'u1',
+      userEmail: 'u@test',
+      courseId: 'course-1',
+    });
+    expect(stripe.lastCheckout?.metadata).not.toHaveProperty('referralCode');
+    publisher.events = [];
+    await svc.handleWebhookEvent(
+      buildSessionCompletedEvent(checkout.orderId),
+      {},
+      { tenantId: 't1' },
+    );
+    expect(publisher.events[0]!.payload.attribution).toBeNull();
+  });
+
   async function comprarYCobrar() {
     stripe.setPrice('price_a');
     await svc.createProduct({ tenantId: 't1', courseId: 'course-1', stripePriceId: 'price_a' });

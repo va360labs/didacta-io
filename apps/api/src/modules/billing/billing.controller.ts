@@ -52,6 +52,16 @@ const checkoutBodySchema = z
     optionId: z.string().uuid().optional(),
     /** Renuncia al desistimiento (obligatoria: 422 si falta). */
     withdrawalWaiver: withdrawalWaiverSchema.optional(),
+    /**
+     * Código del enlace de referido (`?ref=` de la página de venta). OPCIONAL y
+     * opaco para la venta: viaja en la metadata de Stripe y lo interpreta
+     * mod.referrals al completarse el pago. Mismo formato que en la membresía.
+     */
+    referralCode: z
+      .string()
+      .trim()
+      .regex(/^[a-z0-9]{3,32}$/i)
+      .optional(),
   })
   .strict()
   .optional()
@@ -115,7 +125,7 @@ export class BillingController {
     @CurrentUser() user: SessionClaims | undefined,
     @Req() req: FastifyRequest,
     @Body(new ZodValidationPipe(checkoutBodySchema))
-    body: { optionId?: string; withdrawalWaiver?: WithdrawalWaiverDto },
+    body: { optionId?: string; withdrawalWaiver?: WithdrawalWaiverDto; referralCode?: string },
   ) {
     if (!user) throw new UnauthorizedException();
 
@@ -191,6 +201,7 @@ export class BillingController {
       userEmail: account?.email ?? '',
       courseId,
       optionId: body?.optionId,
+      ...(body?.referralCode ? { referralCode: body.referralCode.toLowerCase() } : {}),
       successUrl: `${webBaseUrl}/cursos/checkout/success?session_id={CHECKOUT_SESSION_ID}`,
       cancelUrl: `${webBaseUrl}/cursos/checkout/cancel`,
     });
