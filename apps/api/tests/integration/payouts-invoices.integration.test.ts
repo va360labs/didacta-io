@@ -92,7 +92,10 @@ describeWithDb('Datos fiscales y facturas de la comisión — Postgres real como
   let invoices: PayoutsInvoicesService;
   let taxProfiles: PayoutsTaxProfileService;
   const vies = new FakeVies();
-  const cipher = new SecretCipherService('ab'.repeat(32));
+  // La clave del resto de la suite: `rotate-cipher-key.integration.test.ts`
+  // recifra TODO lo cifrado de la base, también estas filas (y las facturas
+  // emitidas lo permiten: el trigger solo deja cambiar su bloque cifrado).
+  const cipher = new SecretCipherService(process.env['TENANT_SETTINGS_ENC_KEY'] ?? '0'.repeat(64));
   const logger = { error: vi.fn(), warn: vi.fn(), log: vi.fn() };
   const stamp = Date.now();
   const tenants: string[] = [];

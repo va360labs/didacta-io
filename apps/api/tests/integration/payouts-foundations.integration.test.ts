@@ -310,7 +310,7 @@ describeWithDb('mod.payouts — cimientos contra Postgres como didacta_app', () 
       expect(rows).toEqual([{ current_user: 'didacta_app', rolsuper: false, rolbypassrls: false }]);
     });
 
-    it('las nueve tablas tienen RLS activada, FORZADA y la política tenant_isolation', async () => {
+    it('las tablas con tenant_id tienen RLS activada, FORZADA y la política tenant_isolation', async () => {
       const rows = await admin.$queryRaw<
         Array<{
           relname: string;
@@ -326,16 +326,22 @@ describeWithDb('mod.payouts — cimientos contra Postgres como didacta_app', () 
         FROM pg_class c
         JOIN pg_namespace n ON n.oid = c.relnamespace
         WHERE n.nspname = 'public' AND c.relkind = 'r' AND c.relname LIKE 'mod\\_payouts\\_%'
+          -- El contador de facturas es GLOBAL a propósito (la numeración es del
+          -- emisor): no tiene tenant_id. Se comprueba aparte, abajo.
+          AND c.relname <> 'mod_payouts_invoice_counter'
         ORDER BY c.relname`;
       expect(rows.map((r) => r.relname)).toEqual([
         'mod_payouts_account',
         'mod_payouts_debt',
         'mod_payouts_dispute',
+        'mod_payouts_invoice',
+        'mod_payouts_invoice_item',
         'mod_payouts_ledger_entry',
         'mod_payouts_object_ref',
         'mod_payouts_refund',
         'mod_payouts_sale',
         'mod_payouts_settings',
+        'mod_payouts_tax_profile',
         'mod_payouts_webhook_event',
       ]);
       for (const row of rows) {
@@ -343,6 +349,19 @@ describeWithDb('mod.payouts — cimientos contra Postgres como didacta_app', () 
         expect(row.relforcerowsecurity, row.relname).toBe(true);
         expect(row.policies, row.relname).toEqual(['tenant_isolation']);
       }
+    });
+
+    it('el contador de facturas es la única tabla del módulo sin tenant_id', async () => {
+      const rows = await admin.$queryRaw<Array<{ table_name: string }>>`
+        SELECT t.table_name::text
+        FROM information_schema.tables t
+        WHERE t.table_schema = 'public' AND t.table_name LIKE 'mod\\_payouts\\_%'
+          AND NOT EXISTS (
+            SELECT 1 FROM information_schema.columns c
+            WHERE c.table_schema = 'public' AND c.table_name = t.table_name
+              AND c.column_name = 'tenant_id'
+          )`;
+      expect(rows.map((r) => r.table_name)).toEqual(['mod_payouts_invoice_counter']);
     });
 
     it('el libro tiene los dos triggers de solo inserción, activos', async () => {
