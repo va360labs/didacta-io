@@ -24,11 +24,15 @@ import { useTenantDisplayName } from '@/lib/tenant-context';
 import { cn } from '@/lib/utils';
 
 export interface ReferralFigures {
-  /** Confirmado: aprobado (por cobrar) + ya pagado. */
+  /**
+   * Todo lo ganado que sigue en pie: confirmado (aprobado o ya pagado) MÁS lo
+   * pendiente de confirmar. Las tres cifras miden lo mismo (comisiones no
+   * anuladas), así «este mes» nunca supera al total.
+   */
   earnedCents: number;
-  /** Aún en plazo de devolución: se puede anular. */
+  /** De lo ganado, lo que aún está en plazo de devolución (se puede anular). */
   pendingCents: number;
-  /** Comisiones de este mes (sin las anuladas). */
+  /** Lo ganado este mes, con el mismo criterio que el total. */
   thisMonthCents: number;
   /** Personas que entraron con el enlace. */
   people: number;
@@ -53,7 +57,7 @@ export function referralFigures(
     })
     .reduce((sum, c) => sum + c.amountCents, 0);
   return {
-    earnedCents: stats.totals.approvedCents + stats.totals.paidCents,
+    earnedCents: stats.totals.approvedCents + stats.totals.paidCents + stats.totals.pendingCents,
     pendingCents: stats.totals.pendingCents,
     thisMonthCents,
     people: stats.referrals,

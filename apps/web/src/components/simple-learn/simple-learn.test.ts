@@ -101,9 +101,9 @@ describe('cifras de «Invita y gana» (solo datos reales del módulo)', () => {
     };
   }
 
-  it('ganado = confirmado + pagado; lo pendiente va aparte', () => {
+  it('ganado = confirmado + pagado + pendiente; lo pendiente se dice aparte («de ello»)', () => {
     const f = referralFigures(stats(), new Date('2026-11-12T00:00:00.000Z'));
-    expect(f.earnedCents).toBe(4200);
+    expect(f.earnedCents).toBe(4700);
     expect(f.pendingCents).toBe(500);
     expect(f.people).toBe(3);
     expect(f.currency).toBe('EUR');
@@ -121,5 +121,25 @@ describe('cifras de «Invita y gana» (solo datos reales del módulo)', () => {
       stats({ commissions: [], totals: { pendingCents: 0, approvedCents: 0, paidCents: 0 } }),
     );
     expect(f).toMatchObject({ earnedCents: 0, thisMonthCents: 0, currency: 'EUR' });
+  });
+
+  it('«este mes» nunca supera al total: con solo una comisión pendiente, las dos son iguales', () => {
+    const f = referralFigures(
+      stats({
+        totals: { pendingCents: 1470, approvedCents: 0, paidCents: 0 },
+        commissions: [
+          {
+            id: 'p',
+            amountCents: 1470,
+            baseAmountCents: 4900,
+            currency: 'eur',
+            status: 'PENDING',
+            createdAt: '2026-11-12T10:00:00.000Z',
+          },
+        ],
+      }),
+      new Date('2026-11-12T12:00:00.000Z'),
+    );
+    expect(f).toMatchObject({ earnedCents: 1470, pendingCents: 1470, thisMonthCents: 1470 });
   });
 });
