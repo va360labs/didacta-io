@@ -33,7 +33,7 @@ import { Label } from '@/components/ui/label';
 import { ApiHttpError } from '@/lib/api-client';
 import { authStorage } from '@/lib/auth-storage';
 import { apiErrorMessage } from '@/lib/i18n/api-error';
-import { formatCurrency, formatDateTime } from '@/lib/i18n/format';
+import { formatCentsExact, formatDateTime } from '@/lib/i18n/format';
 import type { TranslatorLike } from '@/lib/i18n/labels';
 import { billingApi, type BillingProduct } from '@/modules/billing';
 import { coursesApi, type Course } from '@/lib/courses';
@@ -42,11 +42,8 @@ const PRICE_ID_PATTERN = /^price_[A-Za-z0-9]+$/;
 
 /** unitAmount en céntimos + currency ISO-4217 → moneda formateada según el locale activo. */
 function fmtPrice(unitAmount: number, currency: string): string {
-  try {
-    return formatCurrency(unitAmount / 100, currency.toUpperCase());
-  } catch {
-    return `${(unitAmount / 100).toFixed(2)} ${currency.toUpperCase()}`;
-  }
+  // Decimales según Stripe (`stripe-currencies.ts`), no `Intl`.
+  return formatCentsExact(unitAmount, currency.toUpperCase());
 }
 
 /** Error de acción, con marca aparte para el caso "Stripe sin configurar" (CTA a Administración → Pagos). */

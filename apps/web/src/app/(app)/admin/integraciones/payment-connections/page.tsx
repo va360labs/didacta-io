@@ -33,7 +33,7 @@ import { Select } from '@/components/ui/select';
 import { ApiHttpError } from '@/lib/api-client';
 import { authStorage } from '@/lib/auth-storage';
 import { apiErrorMessage } from '@/lib/i18n/api-error';
-import { formatCurrency, formatDateTime } from '@/lib/i18n/format';
+import { formatCentsExact, formatDateTime } from '@/lib/i18n/format';
 import { SubscriptionsDashboard } from './subscriptions-dashboard';
 import { SubscriptionAlertsSettings } from './subscription-alerts-settings';
 import {
@@ -56,11 +56,8 @@ const API_KEY_PATTERN = /^(sk|rk)_(live|test)_[A-Za-z0-9]+$/;
 function fmtAmount(unitAmount: number | null, currency: string | null): string {
   if (unitAmount === null) return '—';
   const cur = (currency ?? 'eur').toUpperCase();
-  try {
-    return formatCurrency(unitAmount / 100, cur);
-  } catch {
-    return `${(unitAmount / 100).toFixed(2)} ${cur}`;
-  }
+  // Decimales según Stripe (`stripe-currencies.ts`), no `Intl`.
+  return formatCentsExact(unitAmount, cur);
 }
 
 export default function PaymentConnectionsPage() {

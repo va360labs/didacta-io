@@ -24,6 +24,7 @@
 import { ApiHttpError, apiFetch } from './api-client';
 import { authStorage } from './auth-storage';
 import { formatCurrency, formatNumber, regionNameFormatter } from './i18n/format';
+import { STRIPE_ZERO_DECIMAL_CURRENCIES } from './stripe-currencies';
 
 export type PayoutsAccountStatus =
   | 'NOT_CONNECTED'
@@ -362,31 +363,8 @@ export function debtReasonKey(reason: string): PayoutsDebtReason {
   return (known as readonly string[]).includes(reason) ? (reason as PayoutsDebtReason) : 'MANUAL';
 }
 
-/**
- * Divisas que Stripe trata SIN decimales: el importe de la API ya es la
- * unidad (1000 JPY = ¥1.000). El resto va en céntimos, incluidas las que
- * Stripe trata con dos decimales aunque `Intl` diga otra cosa (HUF, ISK, UGX).
- * Tabla de https://docs.stripe.com/currencies#zero-decimal.
- */
-const STRIPE_ZERO_DECIMAL = new Set([
-  'bif',
-  'clp',
-  'djf',
-  'gnf',
-  'jpy',
-  'kmf',
-  'krw',
-  'mga',
-  'pyg',
-  'rwf',
-  'vnd',
-  'vuv',
-  'xaf',
-  'xof',
-  'xpf',
-]);
-
-const STRIPE_ZERO_DECIMAL_CURRENCIES: ReadonlySet<string> = STRIPE_ZERO_DECIMAL;
+// Decimales de cada moneda: tabla de Stripe en `stripe-currencies.ts` (no `Intl`).
+const STRIPE_ZERO_DECIMAL = STRIPE_ZERO_DECIMAL_CURRENCIES;
 
 /** Importe de Stripe (unidad mínima) → unidades de la divisa. */
 export function stripeMinorToMajor(amount: number, currency: string): number {

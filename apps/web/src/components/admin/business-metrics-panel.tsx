@@ -31,10 +31,8 @@ import {
 /**
  * Importe en la unidad mínima de su moneda → texto.
  *
- * TODO divisas: `formatCents` divide siempre entre 100, así que una moneda sin
- * decimales en Stripe (JPY, CLP, KRW) saldría 100 veces más pequeña. Cambiar
- * por `formatStripeMinor(amount, currency)` de `@/lib/stripe-currencies` en
- * cuanto exista (la tabla de exponentes de Stripe, no la de `Intl`).
+ * `formatCents` toma los decimales de la tabla de Stripe
+ * (`stripe-currencies.ts`), no de `Intl`: 500 JPY son 500 yenes.
  */
 function formatMoney(amountMinor: number, currency: string): string {
   return formatCents(amountMinor, currency.toUpperCase());

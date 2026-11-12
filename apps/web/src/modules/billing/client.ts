@@ -31,7 +31,7 @@
 
 import { apiFetch } from '@/lib/api-client';
 import { authStorage } from '@/lib/auth-storage';
-import { formatCurrency } from '@/lib/i18n/format';
+import { formatCentsExact } from '@/lib/i18n/format';
 
 /**
  * Forma exacta del retorno del backend `BillingService.startCheckout`:
@@ -145,14 +145,12 @@ export const billingApi = {
  * A diferencia de `formatCents`, conserva SIEMPRE los dos decimales (es la
  * vista de administración de precios de Stripe: ahí "99 €" y "99,00 €" no son
  * lo mismo de un vistazo). El locale sale de las preferencias del usuario
- * vía `formatCurrency`; el catch cubre un `currency` que Intl no reconozca.
+ * vía `formatCentsExact`, que también cubre un `currency` que Intl no reconozca.
  */
 export function formatPrice(unitAmount: number, currency: string): string {
-  try {
-    return formatCurrency(unitAmount / 100, currency.toUpperCase());
-  } catch {
-    return `${(unitAmount / 100).toFixed(2)} ${currency.toUpperCase()}`;
-  }
+  // Decimales según Stripe (`stripe-currencies.ts`), no `Intl`: 500 JPY son
+  // 500 yenes y 3990000 HUF son 39.900,00 forintos.
+  return formatCentsExact(unitAmount, currency.toUpperCase());
 }
 
 /** Una opción de compra del curso ("Curso", "Curso Intermedio", "Curso Avanzado"). */

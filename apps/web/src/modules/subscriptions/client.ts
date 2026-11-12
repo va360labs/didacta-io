@@ -17,7 +17,7 @@
  */
 
 import { apiFetch } from '@/lib/api-client';
-import { formatCurrency } from '@/lib/i18n/format';
+import { formatCentsExact } from '@/lib/i18n/format';
 
 export type SubscriptionStatus =
   | 'PENDING'
@@ -163,12 +163,8 @@ export const subscriptionsApi = {
  * código de moneda inválido, que haría reventar a `Intl`.
  */
 export function formatAmount(unitAmount: number, currency: string): string {
-  const value = unitAmount / 100;
-  try {
-    return formatCurrency(value, currency.toUpperCase());
-  } catch {
-    return `${value.toFixed(2)} ${currency.toUpperCase()}`;
-  }
+  // Decimales según Stripe (`stripe-currencies.ts`), no `Intl`.
+  return formatCentsExact(unitAmount, currency.toUpperCase());
 }
 
 export function formatInterval(interval: string): string {

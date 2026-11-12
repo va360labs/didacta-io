@@ -28,7 +28,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { ApiHttpError } from '@/lib/api-client';
 import { authStorage } from '@/lib/auth-storage';
 import { apiErrorMessage } from '@/lib/i18n/api-error';
-import { formatCurrency, formatDate, formatDateTime } from '@/lib/i18n/format';
+import { formatCentsExact, formatDate, formatDateTime } from '@/lib/i18n/format';
 import {
   subscriptionStatusLabel,
   subscriptionsDashboardApi,
@@ -85,11 +85,8 @@ function fmtDate(iso: string | null): string {
 /** Importe en céntimos + moneda → moneda formateada según el locale activo. */
 function fmtAmount(unitAmount: number, currency: string | null): string {
   const cur = (currency ?? 'eur').toUpperCase();
-  try {
-    return formatCurrency(unitAmount / 100, cur);
-  } catch {
-    return `${(unitAmount / 100).toFixed(2)} ${cur}`;
-  }
+  // Decimales según Stripe (`stripe-currencies.ts`), no `Intl`.
+  return formatCentsExact(unitAmount, cur);
 }
 
 export function SubscriptionsDashboard() {
