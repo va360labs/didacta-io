@@ -101,6 +101,7 @@ function seedRealInvoice(form: 'A' | 'B' | 'C') {
         ? facturas.formaB_invoice_endive_expand_payments
         : facturas.formaC_invoice_endive_sin_payments;
   fake.seed(structuredClone(invoice) as Obj);
+  fake.seed({ id: 'prod_Vc84wez10Dm2BP', object: 'product', name: 'Membresía Academia Prueba' });
   fake.on('GET', '/v1/invoice_payments', (req) => ({
     object: 'list',
     data: (facturas.invoice_payments_por_factura.data as Obj[]).filter(
@@ -130,6 +131,8 @@ describe('alta de 29 € (respuestas reales del sandbox): venta 2900, comisión 
         stripeInvoiceId: REAL.invoice,
         stripeChargeId: REAL.charge,
         stripePaymentIntentId: REAL.pi,
+        // El nombre del producto, no la línea en inglés que redacta Stripe.
+        description: 'Membresía Academia Prueba',
         buyerEmail: 'alumno-con_obo@example.com',
         presentmentAmount: 2900,
         presentmentCurrency: 'eur',
@@ -311,6 +314,25 @@ describe('ciclo de vida de la membresía', () => {
       force: true,
     });
     expect(settled).toMatchObject({ outcome: 'transferred', transferAmount: 2686 });
+  });
+
+  it('sin producto legible, el concepto es la línea que redacta Stripe', async () => {
+    registerSubscription(A, 'sub_1SinProducto');
+    const ids = seedPaidInvoice({ sub: 'sub_1SinProducto', amount: 2900, fee: 69 });
+    fake.patch(ids.invoice, {
+      lines: {
+        object: 'list',
+        data: [
+          {
+            description: '1 × Membresía (at €29.00 / month)',
+            pricing: { price_details: { product: 'prod_NoExiste' } },
+          },
+        ],
+      },
+    });
+    expect(saleOf(await record(A, ids.invoice))).toMatchObject({
+      description: '1 × Membresía (at €29.00 / month)',
+    });
   });
 
   it('factura abierta o impagada → sin venta (el impago no mueve dinero)', async () => {

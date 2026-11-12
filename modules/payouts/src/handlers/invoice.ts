@@ -98,9 +98,17 @@ interface InvoiceFromApi {
   readonly livemode?: boolean;
   readonly customer_email?: string | null;
   readonly on_behalf_of?: unknown;
-  readonly lines?: { readonly data?: ReadonlyArray<{ readonly description?: string | null }> };
+  readonly lines?: { readonly data?: ReadonlyArray<InvoiceLineFromApi> };
   readonly status_transitions?: { readonly paid_at?: number | null } | null;
   readonly [key: string]: unknown;
+}
+
+interface InvoiceLineFromApi {
+  readonly description?: string | null;
+  /** Desde `basil`: el precio y el producto de la línea. */
+  readonly pricing?: { readonly price_details?: { readonly product?: unknown } | null } | null;
+  /** Antes de `basil`. */
+  readonly price?: { readonly product?: unknown } | null;
 }
 
 interface ChargeFromApi {
@@ -234,7 +242,7 @@ export async function recordInvoiceSale(
   const chargedAt = Number.isInteger(charge.created)
     ? new Date(charge.created! * 1000)
     : new Date();
-  const description = invoice.lines?.data?.[0]?.description?.slice(0, 500) ?? null;
+  const description = await describeInvoice(deps.stripe, invoice);
 
   return deps.db.inTenant(input.tenantId, async (tx) => {
     const account = await tx.modPayoutsAccount.findFirst({
@@ -305,4 +313,31 @@ async function readCharge(
   return stripe.v1<ChargeFromApi>('GET', `/v1/charges/${encodeURIComponent(latestId)}`, {
     expand: ['balance_transaction'],
   });
+}
+
+/**
+ * Concepto de la venta: el nombre del producto de la primera línea (el del plan
+ * de la membresía, el que ve el alumno en el checkout). La `description` de la
+ * línea la redacta Stripe en inglés («1 × Mensual (at €29.00 / month)») y solo
+ * se usa si el producto no se puede leer.
+ */
+async function describeInvoice(
+  stripe: PlatformStripeClient,
+  invoice: InvoiceFromApi,
+): Promise<string | null> {
+  const line = invoice.lines?.data?.[0];
+  const fallback = line?.description?.slice(0, 500) ?? null;
+  const productId = idOf(line?.pricing?.price_details?.product) ?? idOf(line?.price?.product);
+  if (!productId) return fallback;
+  try {
+    const product = await stripe.v1<{ name?: unknown }>(
+      'GET',
+      `/v1/products/${encodeURIComponent(productId)}`,
+    );
+    return typeof product.name === 'string' && product.name.trim()
+      ? product.name.trim().slice(0, 500)
+      : fallback;
+  } catch {
+    return fallback;
+  }
 }
