@@ -311,6 +311,7 @@ export class FetchPlatformStripeClient implements PlatformStripeClient {
         message?: unknown;
         type?: unknown;
         code?: unknown;
+        param?: unknown;
       };
       throw new PlatformStripeApiError(
         typeof error.message === 'string' ? error.message : `HTTP ${response.status}`,
@@ -320,6 +321,7 @@ export class FetchPlatformStripeClient implements PlatformStripeClient {
           stripeCode: typeof error.code === 'string' ? error.code : undefined,
           requestId,
           operation,
+          param: typeof error.param === 'string' ? error.param : undefined,
         },
       );
     }

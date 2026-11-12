@@ -128,6 +128,98 @@ export class PayoutsInvalidObjectRefError extends PayoutsError {
   }
 }
 
+/**
+ * El país del creador no está en la lista de países admitidos de la
+ * plataforma, o Stripe rechazó crear la cuenta por el país. Las dos cosas son
+ * lo mismo para el creador: «todavía no podemos pagar a cuentas de {país}».
+ * `detail` lleva el código ISO del país.
+ */
+export class PayoutsCountryUnsupportedError extends PayoutsError {
+  constructor(country: string) {
+    super(`Todavía no se puede pagar a cuentas de ${country}.`, 'PAYOUTS_COUNTRY_UNSUPPORTED', {
+      detail: country,
+    });
+    this.name = 'PayoutsCountryUnsupportedError';
+  }
+}
+
+/** El tipo de titular no es `individual` (particular/autónomo) ni `company`. */
+export class PayoutsInvalidEntityTypeError extends PayoutsError {
+  constructor(value: unknown) {
+    const shown = String(value);
+    super(
+      `Tipo de titular no válido: ${shown}. Debe ser individual o company.`,
+      'PAYOUTS_ENTITY_TYPE_INVALID',
+      { detail: shown },
+    );
+    this.name = 'PayoutsInvalidEntityTypeError';
+  }
+}
+
+/** El tenant no tiene ninguna cuenta conectada viva. */
+export class PayoutsAccountNotFoundError extends PayoutsError {
+  constructor() {
+    super('Esta academia todavía no ha conectado sus cobros.', 'PAYOUTS_ACCOUNT_NOT_FOUND');
+    this.name = 'PayoutsAccountNotFoundError';
+  }
+}
+
+/**
+ * Ya hay un alta empezada con OTRO país u otro tipo de titular. El país de una
+ * cuenta de Stripe no se puede cambiar: no se crea una segunda cuenta a
+ * escondidas. `detail` lleva el país de la cuenta que ya existe.
+ */
+export class PayoutsAccountAlreadyStartedError extends PayoutsError {
+  constructor(existingCountry: string) {
+    super(
+      `Ya hay un alta de cobros empezada para ${existingCountry}. Termínala desde «Completar».`,
+      'PAYOUTS_ACCOUNT_ALREADY_STARTED',
+      { detail: existingCountry },
+    );
+    this.name = 'PayoutsAccountAlreadyStartedError';
+  }
+}
+
+/**
+ * La cuenta existe pero aún no ha terminado el alta: Stripe no da acceso a su
+ * panel («Cannot create a login link for an account that has not completed
+ * onboarding»).
+ */
+export class PayoutsAccountOnboardingIncompleteError extends PayoutsError {
+  constructor() {
+    super(
+      'Termina de conectar tus cobros para poder ver tus pagos en Stripe.',
+      'PAYOUTS_ACCOUNT_ONBOARDING_INCOMPLETE',
+    );
+    this.name = 'PayoutsAccountOnboardingIncompleteError';
+  }
+}
+
+/** El evento del webhook no es JSON o no tiene la forma de un evento de Stripe. */
+export class PayoutsWebhookPayloadInvalidError extends PayoutsError {
+  constructor(what: string) {
+    super(`Evento de Stripe no válido: ${what}`, 'PAYOUTS_WEBHOOK_PAYLOAD_INVALID', {
+      detail: what,
+    });
+    this.name = 'PayoutsWebhookPayloadInvalidError';
+  }
+}
+
+/**
+ * El evento es de prueba y la clave de plataforma de producción, o al revés.
+ * No es un fallo de firma (la firma es buena): es un endpoint mal cableado.
+ */
+export class PayoutsWebhookLivemodeMismatchError extends PayoutsError {
+  constructor(eventLivemode: boolean) {
+    super(
+      `El evento es de modo ${eventLivemode ? 'real' : 'prueba'} y la plataforma está en el otro modo.`,
+      'PAYOUTS_WEBHOOK_LIVEMODE_MISMATCH',
+      { detail: eventLivemode ? 'live' : 'test' },
+    );
+    this.name = 'PayoutsWebhookLivemodeMismatchError';
+  }
+}
+
 /** La clave de Stripe de plataforma no tiene el formato esperado. */
 export class PlatformStripeConfigError extends PayoutsError {
   constructor(what: string) {
@@ -149,6 +241,8 @@ export interface PlatformStripeApiErrorInfo {
   readonly requestId?: string;
   /** Método y ruta de la llamada (sin parámetros: pueden llevar datos). */
   readonly operation: string;
+  /** `error.param` de Stripe: el campo que rechazó (`defaults.profile.business_url`…). */
+  readonly param?: string;
 }
 
 /**
@@ -162,6 +256,7 @@ export class PlatformStripeApiError extends PayoutsError {
   readonly stripeCode?: string;
   readonly requestId?: string;
   readonly operation: string;
+  readonly param?: string;
 
   constructor(stripeMessage: string, info: PlatformStripeApiErrorInfo) {
     super(`Error de Stripe (${info.operation}): ${stripeMessage}`, 'PAYOUTS_STRIPE_API_ERROR', {
@@ -173,6 +268,7 @@ export class PlatformStripeApiError extends PayoutsError {
     this.stripeCode = info.stripeCode;
     this.requestId = info.requestId;
     this.operation = info.operation;
+    this.param = info.param;
   }
 
   /** ¿Tiene sentido reintentar? (sin respuesta, 409 de bloqueo, 429 o 5xx). */

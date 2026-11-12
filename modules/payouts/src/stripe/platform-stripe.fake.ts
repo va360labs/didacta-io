@@ -138,6 +138,7 @@ export class InMemoryPlatformStripeClient implements PlatformStripeClient {
       stripeCode?: string;
       type?: string;
       method?: StripeHttpMethod;
+      param?: string;
     },
   ): this {
     const operation = `${error.method ?? '*'} ${typeof path === 'string' ? path : path.source}`;
@@ -149,6 +150,7 @@ export class InMemoryPlatformStripeClient implements PlatformStripeClient {
         type: error.type ?? 'invalid_request_error',
         stripeCode: error.stripeCode,
         operation,
+        param: error.param,
       }),
     });
     return this;

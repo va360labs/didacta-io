@@ -77,6 +77,55 @@ export type {
   StripeRequestOptions,
 } from './stripe/platform-stripe.client.js';
 
+export {
+  ACCOUNT_ENTITY_TYPES,
+  EDUCATION_MCC,
+  assertStripeAccountId,
+  createConnectedAccountsApi,
+  defaultCurrencyForCountry,
+  isCountryRejection,
+  sanitizeStatementDescriptor,
+  translateCountryRejection,
+} from './stripe/accounts-api.js';
+export type {
+  AccountEntityType,
+  AccountsApiFlavor,
+  ConnectedAccountsApi,
+  CreateConnectedAccountInput,
+  CreatedConnectedAccount,
+  StripeBalanceSettings,
+  StripeConnectedAccount,
+  StripePayoutScheduleV1,
+  UpdateBalanceSettingsInput,
+} from './stripe/accounts-api.js';
+
+export {
+  COUNTRY_NOT_SUPPORTED_REASON,
+  PayoutsAccountsService,
+  deriveStatus,
+  publicBusinessUrl,
+  requirementCategory,
+  scheduleFromAccount,
+} from './accounts.service.js';
+export type {
+  AccountToSync,
+  DerivedAccountStatus,
+  OnboardingPrefill,
+  OnboardingUrls,
+  PayoutScheduleView,
+  PayoutsAccountView,
+  PayoutsAccountsConfig,
+  PayoutsAccountsServiceOptions,
+  PayoutsDbPort,
+  PayoutsLogger,
+  PayoutsPayoutInterval,
+  PayoutsRequirementCategory,
+  PayoutsTx,
+} from './accounts.service.js';
+
+export { PayoutsSettingsService } from './settings.service.js';
+export type { PayoutsSettingsView } from './settings.service.js';
+
 export { InMemoryPlatformStripeClient } from './stripe/platform-stripe.fake.js';
 export type {
   FakeStripeCall,
@@ -106,6 +155,13 @@ export {
   PayoutsWebhookSignatureInvalidError,
   PayoutsObjectRefConflictError,
   PayoutsLedgerIdempotencyConflictError,
+  PayoutsCountryUnsupportedError,
+  PayoutsInvalidEntityTypeError,
+  PayoutsAccountNotFoundError,
+  PayoutsAccountAlreadyStartedError,
+  PayoutsAccountOnboardingIncompleteError,
+  PayoutsWebhookPayloadInvalidError,
+  PayoutsWebhookLivemodeMismatchError,
   PlatformStripeConfigError,
   PlatformStripeApiError,
 } from './errors.js';
