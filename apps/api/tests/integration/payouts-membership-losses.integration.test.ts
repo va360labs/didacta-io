@@ -76,7 +76,7 @@ describeWithDb('Membresías × reembolsos, disputas y desconexión — Postgres 
   const B = randomUUID();
   const C = randomUUID();
   const D = randomUUID();
-  const TENANTS = [A, B, C, D];
+  const TENANTS: string[] = [A, B, C, D];
   const stamp = Date.now();
   const ACCT: Record<string, string> = Object.fromEntries(
     TENANTS.map((id, i) => [id, `acct_1E56${'ABCD'[i]}${stamp}`]),
@@ -676,11 +676,12 @@ describeWithDb('Membresías × reembolsos, disputas y desconexión — Postgres 
     expect(ofInvoice).toEqual(await lossEntries(course.saleId));
     expect(ofInvoice).toMatchObject({ REFUND: -1000 });
     expect(ofInvoice['TRANSFER_REVERSAL']).toBeGreaterThan(0);
-    const [saleInvoice, saleCourse] = await Promise.all(
-      [invoice.saleId, course.saleId].map((id) =>
-        admin.modPayoutsSale.findUniqueOrThrow({ where: { id } }),
-      ),
-    );
+    const saleInvoice = await admin.modPayoutsSale.findUniqueOrThrow({
+      where: { id: invoice.saleId },
+    });
+    const saleCourse = await admin.modPayoutsSale.findUniqueOrThrow({
+      where: { id: course.saleId },
+    });
     expect([saleInvoice.refundedAmount, saleInvoice.reversedAmount]).toEqual([
       saleCourse.refundedAmount,
       saleCourse.reversedAmount,
