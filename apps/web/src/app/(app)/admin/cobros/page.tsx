@@ -21,11 +21,9 @@
 
 import { useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useTranslations } from 'next-intl';
 import { PaymentsConnectCard } from '@/components/admin/payments-connect-card';
 
 export default function CobrosPage(): React.JSX.Element {
-  const t = useTranslations('adminPagos.payouts');
   const router = useRouter();
   const searchParams = useSearchParams();
   const returnAction =
@@ -43,18 +41,14 @@ export default function CobrosPage(): React.JSX.Element {
   }, [router]);
 
   return (
-    <div className="flex flex-col gap-6">
-      <header>
-        <h1 className="font-display text-2xl font-bold tracking-tight">{t('title')}</h1>
-      </header>
-      <div className="max-w-3xl">
-        <PaymentsConnectCard
-          whenPlatformOff={null}
-          onPlatformUnavailable={toLegacyPayments}
-          returnAction={returnAction}
-          onReturnHandled={clearQuery}
-        />
-      </div>
+    <div className="max-w-3xl">
+      <PaymentsConnectCard
+        asPage
+        whenPlatformOff={null}
+        onPlatformUnavailable={toLegacyPayments}
+        returnAction={returnAction}
+        onReturnHandled={clearQuery}
+      />
     </div>
   );
 }
