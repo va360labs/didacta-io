@@ -11,6 +11,7 @@ import {
   formatDuration,
   formatNumber,
   formatTime,
+  regionNameFormatter,
 } from './format';
 import { resetUserFormatPrefs, setUserFormatPrefs } from './user-prefs';
 
@@ -215,5 +216,13 @@ describe('formatDuration (ICU, sucesora de lib/format)', () => {
 
   it('resuelve contra el catálogo del locale activo', () => {
     expect(formatDuration(90, tEn)).toBe('1 h 30 min');
+  });
+});
+
+describe('regionNameFormatter', () => {
+  it('traduce códigos de país al idioma pedido y devuelve el código si no lo conoce', () => {
+    expect(regionNameFormatter('es')('ES')).toBe('España');
+    expect(regionNameFormatter('en')('es')).toBe('Spain');
+    expect(regionNameFormatter('es')('ZZ9')).toBe('ZZ9');
   });
 });

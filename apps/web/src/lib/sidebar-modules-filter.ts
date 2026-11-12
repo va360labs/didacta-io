@@ -13,7 +13,8 @@ import type { SidebarGroup } from '@/components/app-sidebar';
  * aquí — esas siguen el patrón EeGate (visible-pero-bloqueado).
  *
  * Mientras `activeModules` sea `null` (carga pendiente) devolvemos los grupos
- * sin tocar — evita que el sidebar parpadee al primer render. El backend
+ * sin tocar —salvo los items `strictModule`— para que el sidebar no parpadee
+ * al primer render. El backend
  * sigue protegiendo cada endpoint vía `ModuleAccessInterceptor` aunque el
  * usuario haga clic en un item que estaba caché-stale.
  */
@@ -21,7 +22,19 @@ export function filterByActiveModules(
   groups: SidebarGroup[],
   activeModules: Set<string> | null,
 ): SidebarGroup[] {
-  if (activeModules === null) return groups;
+  if (activeModules === null) {
+    // Sin saber qué módulos hay: todo visible salvo lo que exige saberlo.
+    const hasStrict = groups.some((g) =>
+      g.items.some((it) => it.requiresModule && it.strictModule),
+    );
+    if (!hasStrict) return groups;
+    return groups
+      .map((g) => ({
+        ...g,
+        items: g.items.filter((it) => !(it.requiresModule && it.strictModule)),
+      }))
+      .filter((g) => g.items.length > 0);
+  }
   return groups
     .map((g) => ({
       ...g,

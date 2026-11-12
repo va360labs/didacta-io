@@ -318,5 +318,63 @@
     "runCta": "Probar envío ahora",
     "runningCta": "Enviando…",
     "runHint": "Envía de verdad los emails pendientes."
+  },
+  "payouts": {
+    "title": "Cobros",
+    "subtitle": "Tus alumnos pagan a {operator} y {operator} te transfiere tu parte. Sin claves ni webhooks.",
+    "loading": "Cargando el estado de tus cobros…",
+    "loadError": "No se pudo cargar el estado de tus cobros.",
+    "notConnected": "Aún no puedes cobrar. Conecta tus cobros: son unos 5 minutos y no tienes que pegar ninguna clave.",
+    "countryLabel": "País",
+    "entityLabel": "¿Cómo vas a cobrar?",
+    "entityIndividual": "Particular o autónomo",
+    "entityCompany": "Empresa",
+    "connectCta": "Conectar cobros",
+    "connectingCta": "Abriendo Stripe…",
+    "countryUnsupported": "Todavía no podemos pagar a cuentas de {country}. Te avisamos cuando se pueda.",
+    "missing": "Falta un dato para poder pagarte: {requirement}. Hasta entonces no puedes vender.",
+    "finishCta": "Completar",
+    "review": "Stripe está revisando tus datos. Cuando termine podrás vender; no tienes que hacer nada más.",
+    "rejected": "Stripe no ha aprobado esta cuenta de cobro, así que de momento no puedes vender. Escríbenos y lo revisamos.",
+    "ready": "Todo listo. Cobras en {currency} y te pagamos cada {day}.",
+    "readyNoSchedule": "Todo listo. Cobras en {currency}.",
+    "dashboardCta": "Ver mis pagos en Stripe",
+    "openingCta": "Abriendo…",
+    "returnSyncing": "Comprobando con Stripe lo que acabas de completar…",
+    "ownKeysNote": "Hoy cobras con tus propias claves de Stripe. Cuando termines de conectar tus cobros, las ventas nuevas pasarán por {operator}.",
+    "alreadyStarted": "Ya empezaste a conectar tus cobros para {country}. Termínalo con «Completar».",
+    "requirements": {
+      "bank_account": "tu cuenta bancaria",
+      "identity_document": "un documento de identidad",
+      "personal_details": "tus datos personales",
+      "business_details": "los datos de tu actividad",
+      "terms": "aceptar las condiciones de Stripe",
+      "other": "unos datos que pide Stripe"
+    },
+    "currencies": {
+      "eur": "euros",
+      "usd": "dólares estadounidenses",
+      "gbp": "libras esterlinas",
+      "chf": "francos suizos",
+      "cad": "dólares canadienses",
+      "sek": "coronas suecas",
+      "dkk": "coronas danesas",
+      "nok": "coronas noruegas",
+      "pln": "złotys",
+      "czk": "coronas checas",
+      "huf": "forintos",
+      "ron": "leus rumanos"
+    },
+    "days": {
+      "monday": "lunes",
+      "tuesday": "martes",
+      "wednesday": "miércoles",
+      "thursday": "jueves",
+      "friday": "viernes",
+      "saturday": "sábado",
+      "sunday": "domingo",
+      "daily": "día",
+      "monthly": "mes"
+    }
   }
 }

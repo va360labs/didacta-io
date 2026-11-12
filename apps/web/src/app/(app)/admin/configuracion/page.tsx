@@ -6,7 +6,7 @@
  */
 
 import { useEffect, useState, type FormEvent } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -126,6 +126,7 @@ export default function ConfiguracionPage() {
   /// sin configurar del shell, que si no dejaba al super_admin en "general"
   /// justo cuando se le acaba de decir dónde tiene que ir.
   const searchParams = useSearchParams();
+  const router = useRouter();
   const tabPedido = searchParams?.get('tab')?.trim() || null;
   const [tab, setTab] = useState<TabKey>(tabPedido || (isSuperAdmin ? 'general' : 'notifications'));
 
@@ -168,12 +169,21 @@ export default function ConfiguracionPage() {
   /// mostraba durante el flash) y el operador veía el tab incluso con el
   /// módulo desactivado. Tabs del core (sin `requiresModule`) siempre
   /// visibles.
+  /// Modo plataforma (Didacta Cloud): los cobros viven en Administración →
+  /// Cobros y aquí no se pegan claves. Una sola puerta: la pestaña desaparece y
+  /// `?tab=pagos` lleva allí. Sin el módulo (Community), nada cambia.
+  const platformPayouts = activeModules?.has('mod.payouts') ?? false;
   const visibleTabs = ALL_TABS.filter((spec) => {
     if (spec.key === 'general') return isSuperAdmin;
+    if (spec.key === 'pagos') return !platformPayouts;
     if (!spec.requiresModule) return true;
     if (!activeModules) return false;
     return activeModules.has(spec.requiresModule);
   });
+
+  useEffect(() => {
+    if (platformPayouts && tabPedido === 'pagos') router.replace('/admin/cobros');
+  }, [platformPayouts, tabPedido, router]);
 
   // Si la tab seleccionada queda oculta tras el filtro (ej. el admin
   // desactivó mod.zoom-live mientras estaba en el tab "Aula virtual"),

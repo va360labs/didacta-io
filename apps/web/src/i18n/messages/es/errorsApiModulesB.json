@@ -186,5 +186,10 @@
   "TEMPLATE_IN_USE": "No se puede eliminar: {detail} curso(s) están usando esta plantilla.",
   "TEMPLATE_IS_DEFAULT": "No se puede eliminar la plantilla default. Marcá otra como default antes.",
   "TEMPLATE_NAME_TAKEN": "Ya existe una plantilla con nombre \"{detail}\" en este tenant.",
-  "TEMPLATE_NOT_FOUND": "Plantilla de certificado no encontrada"
+  "TEMPLATE_NOT_FOUND": "Plantilla de certificado no encontrada",
+  "PAYOUTS_ACCOUNT_NOT_FOUND": "Esta academia todavía no ha conectado sus cobros.",
+  "PAYOUTS_ACCOUNT_ONBOARDING_INCOMPLETE": "Termina de conectar tus cobros para poder ver tus pagos en Stripe.",
+  "PAYOUTS_ADMIN_ROLE_REQUIRED": "Solo la administración de la academia puede gestionar los cobros.",
+  "PAYOUTS_SUPPORT_SESSION_FORBIDDEN": "Una sesión de soporte no puede conectar los cobros ni abrir el panel de pagos.",
+  "PAYOUTS_STRIPE_API_ERROR": "Stripe no ha respondido como esperábamos. Vuelve a intentarlo en unos minutos."
 }

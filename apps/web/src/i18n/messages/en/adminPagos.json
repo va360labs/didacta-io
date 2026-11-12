@@ -318,5 +318,63 @@
     "runCta": "Test send now",
     "runningCta": "Sending…",
     "runHint": "It actually sends the pending emails."
+  },
+  "payouts": {
+    "title": "Payouts",
+    "subtitle": "Your students pay {operator} and {operator} sends you your share. No keys, no webhooks.",
+    "loading": "Loading your payouts status…",
+    "loadError": "Couldn't load your payouts status.",
+    "notConnected": "You can't take payments yet. Connect payouts: about 5 minutes, no keys to paste.",
+    "countryLabel": "Country",
+    "entityLabel": "How will you get paid?",
+    "entityIndividual": "Individual or sole trader",
+    "entityCompany": "Company",
+    "connectCta": "Connect payouts",
+    "connectingCta": "Opening Stripe…",
+    "countryUnsupported": "We can't pay out to accounts in {country} yet. We'll let you know when we can.",
+    "missing": "We need one more thing before we can pay you: {requirement}.",
+    "finishCta": "Finish",
+    "review": "Stripe is reviewing your details. Once it's done you can start selling; there's nothing else you need to do.",
+    "rejected": "Stripe hasn't approved this payouts account, so you can't sell for now. Write to us and we'll look into it.",
+    "ready": "All set. You're paid in {currency} every {day}.",
+    "readyNoSchedule": "All set. You're paid in {currency}.",
+    "dashboardCta": "See my payouts on Stripe",
+    "openingCta": "Opening…",
+    "returnSyncing": "Checking with Stripe what you just completed…",
+    "ownKeysNote": "You're currently paid with your own Stripe keys. Once you finish connecting payouts, new sales will go through {operator}.",
+    "alreadyStarted": "You already started connecting payouts for {country}. Use \"Finish\" to complete it.",
+    "requirements": {
+      "bank_account": "your bank account",
+      "identity_document": "an identity document",
+      "personal_details": "your personal details",
+      "business_details": "your business details",
+      "terms": "accepting Stripe's terms",
+      "other": "some details Stripe needs"
+    },
+    "currencies": {
+      "eur": "euros",
+      "usd": "US dollars",
+      "gbp": "pounds sterling",
+      "chf": "Swiss francs",
+      "cad": "Canadian dollars",
+      "sek": "Swedish kronor",
+      "dkk": "Danish kroner",
+      "nok": "Norwegian kroner",
+      "pln": "złoty",
+      "czk": "Czech korunas",
+      "huf": "forints",
+      "ron": "Romanian lei"
+    },
+    "days": {
+      "monday": "Monday",
+      "tuesday": "Tuesday",
+      "wednesday": "Wednesday",
+      "thursday": "Thursday",
+      "friday": "Friday",
+      "saturday": "Saturday",
+      "sunday": "Sunday",
+      "daily": "day",
+      "monthly": "month"
+    }
   }
 }

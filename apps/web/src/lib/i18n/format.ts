@@ -238,3 +238,23 @@ export function formatDuration(
   if (mins === 0) return t('durationHours', { hours });
   return t('durationHoursMinutes', { hours, minutes: mins });
 }
+
+/**
+ * Traductor de códigos de país ISO 3166-1 (`ES` → «España» / "Spain") en el
+ * idioma dado. Si el entorno no tiene `Intl.DisplayNames`, devuelve el código.
+ */
+export function regionNameFormatter(locale: string): (code: string) => string {
+  let names: Intl.DisplayNames | null = null;
+  try {
+    names = new Intl.DisplayNames([locale], { type: 'region' });
+  } catch {
+    names = null;
+  }
+  return (code: string) => {
+    try {
+      return names?.of(code.toUpperCase()) ?? code;
+    } catch {
+      return code;
+    }
+  };
+}

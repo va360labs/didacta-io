@@ -27,6 +27,13 @@ export interface SidebarItem {
   dot?: boolean;
   exactMatch?: boolean;
   requiresModule?: string;
+  /**
+   * Con `requiresModule`: el item NO se pinta mientras no se sepa qué módulos
+   * están activos (o si esa consulta falla). Para entradas que solo existen en
+   * ciertas instalaciones (Cobros, en modo plataforma): sin esto aparecerían
+   * un instante en Community, o para siempre si `/me/modules` fallase.
+   */
+  strictModule?: boolean;
   avatar?: { letter: string; color: string };
 }
 

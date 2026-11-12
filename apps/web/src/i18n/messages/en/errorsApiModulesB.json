@@ -215,5 +215,10 @@
   "TEMPLATE_IN_USE": "It cannot be deleted: {detail} course(s) are using this template.",
   "TEMPLATE_IS_DEFAULT": "The default template cannot be deleted. Mark another one as default first.",
   "TEMPLATE_NAME_TAKEN": "A template named \"{detail}\" already exists in this tenant.",
-  "TEMPLATE_NOT_FOUND": "Certificate template not found"
+  "TEMPLATE_NOT_FOUND": "Certificate template not found",
+  "PAYOUTS_ACCOUNT_NOT_FOUND": "This academy hasn't connected payouts yet.",
+  "PAYOUTS_ACCOUNT_ONBOARDING_INCOMPLETE": "Finish connecting payouts to see your payouts on Stripe.",
+  "PAYOUTS_ADMIN_ROLE_REQUIRED": "Only the academy's administrators can manage payouts.",
+  "PAYOUTS_SUPPORT_SESSION_FORBIDDEN": "A support session can't connect payouts or open the payouts dashboard.",
+  "PAYOUTS_STRIPE_API_ERROR": "Stripe didn't respond as expected. Try again in a few minutes."
 }

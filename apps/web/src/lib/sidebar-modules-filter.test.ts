@@ -57,3 +57,34 @@ describe('filterByActiveModules', () => {
     expect(result[0].items.map((i) => i.label)).toEqual(['Catálogo', 'Notificaciones']);
   });
 });
+
+describe('filterByActiveModules · strictModule (entradas que solo existen en algunas instalaciones)', () => {
+  const groups: SidebarGroup[] = [
+    {
+      label: 'Ingresos',
+      items: [
+        { href: '/admin/membresia', label: 'Membresía', icon: 'sparkles' },
+        {
+          href: '/admin/cobros',
+          label: 'Cobros',
+          icon: 'briefcase',
+          requiresModule: 'mod.payouts',
+          strictModule: true,
+        },
+      ],
+    },
+  ];
+
+  it('mientras no se sabe qué módulos hay (null), NO se pinta', () => {
+    expect(filterByActiveModules(groups, null)[0]!.items.map((i) => i.label)).toEqual([
+      'Membresía',
+    ]);
+  });
+
+  it('sin mod.payouts (Community) no aparece; con él, sí', () => {
+    expect(filterByActiveModules(groups, new Set())[0]!.items).toHaveLength(1);
+    expect(
+      filterByActiveModules(groups, new Set(['mod.payouts']))[0]!.items.map((i) => i.label),
+    ).toEqual(['Membresía', 'Cobros']);
+  });
+});
