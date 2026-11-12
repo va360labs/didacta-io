@@ -492,11 +492,13 @@ function SaleLinkCard({ view, origin }: { view: StartHereView; origin: string })
       className="rounded-2xl border border-border bg-surface p-4 shadow-sm"
       data-testid="enlace-venta"
     >
-      <div className="flex items-center justify-between gap-2">
-        <h2 className="text-[15px] font-bold text-text">{t('empieza.enlace.titulo')}</h2>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h2 className="text-[15px] font-bold whitespace-nowrap text-text">
+          {t('empieza.enlace.titulo')}
+        </h2>
         <span
           className={cn(
-            'inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-bold',
+            'inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-bold whitespace-nowrap',
             onSale
               ? 'bg-success-50 text-success-700'
               : state === 'not-purchasable'
