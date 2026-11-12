@@ -5,6 +5,7 @@
 
 import { Injectable } from '@nestjs/common';
 import type { BillingService } from '@didacta/mod-billing';
+import type { MembershipService } from '@didacta/mod-subscriptions';
 import { PayoutsNotReadyError } from '@didacta/mod-payouts';
 import { runAsTenant, runGlobalWithoutTenant } from '../../tenancy/tenant-context.storage';
 import type { PaymentModeNotReadyReason } from '../payment-mode.resolver';
@@ -15,7 +16,7 @@ export const PAYOUTS_NOT_READY_OFFER_REASON = 'payouts_not_ready';
 
 /**
  * Puerta de la VENTA en modo plataforma, para los controladores de compra de
- * `mod.billing` (público y de alumno).
+ * `mod.billing` (público y de alumno) y, desde E5, de la membresía (`/unete`).
  *
  *  - Oferta: si el tenant cobra por la plataforma y su cuenta conectada aún no
  *    puede vender, el curso no está a la venta (`forSale: false` con motivo).
@@ -59,5 +60,41 @@ export class PlatformCheckoutGate {
           runGlobalWithoutTenant(() => this.runtime.refs.isPlatformObject([stripePriceId])),
       }),
     );
+  }
+
+  /**
+   * E5 — antes de `startMembershipCheckout`. Lo mismo que `prepareCheckout`
+   * para un plan de membresía: 409 si la cuenta no puede vender; si puede, el
+   * precio del plan (y su Product) en la cuenta del operador.
+   */
+  async prepareMembershipCheckout(
+    tenantId: string,
+    planId: string,
+    membership: Pick<MembershipService, 'resyncStripeCatalog'>,
+  ): Promise<void> {
+    const mode = await runAsTenant(tenantId, () => this.runtime.mode.resolve(tenantId));
+    if (mode.mode !== 'platform') return;
+    if (!mode.ready) throw new PayoutsNotReadyError(mode.reason);
+    await runAsTenant(tenantId, () =>
+      membership.resyncStripeCatalog(tenantId, {
+        planId,
+        isCurrent: (stripeId) =>
+          runGlobalWithoutTenant(() => this.runtime.refs.isPlatformObject([stripeId])),
+      }),
+    );
+  }
+
+  /**
+   * E5 — cuáles de estos clientes de Stripe son de la cuenta del operador (su
+   * portal lleva la configuración del creador). Acceso sancionado al registro.
+   */
+  async platformObjects(stripeObjectIds: readonly string[]): Promise<Set<string>> {
+    const found = new Set<string>();
+    for (const id of new Set(stripeObjectIds.filter((x) => x.length > 0))) {
+      if (await runGlobalWithoutTenant(() => this.runtime.refs.isPlatformObject([id]))) {
+        found.add(id);
+      }
+    }
+    return found;
   }
 }

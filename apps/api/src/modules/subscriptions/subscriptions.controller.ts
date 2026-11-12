@@ -11,19 +11,24 @@ import {
   Get,
   HttpCode,
   NotFoundException,
+  Optional,
   Param,
   Post,
+  Req,
   UnauthorizedException,
   UseGuards,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import type { FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { CurrentUser } from '../../auth/decorators';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import type { SessionClaims } from '../../auth/token.service';
 import { ZodValidationPipe } from '../../auth/zod-validation.pipe';
 import { PrismaService } from '../../prisma/prisma.service';
+import { TenantResolverService } from '../../tenancy/tenant-resolver.service';
 import { ModuleRegistryService } from '../module-registry.service';
+import { PlatformCheckoutGate } from '../payouts/platform-checkout-gate';
 import { SubscriptionsGraceExpirationWorker } from './subscriptions-grace-expiration.worker';
 
 /**
@@ -32,6 +37,7 @@ import { SubscriptionsGraceExpirationWorker } from './subscriptions-grace-expira
  *   GET  /modules/subscriptions/me                  → lista propias
  *   GET  /modules/subscriptions/me/:id/invoices     → historial de facturas
  *   POST /modules/subscriptions/me/:id/cancel       → cancelar
+ *   POST /modules/subscriptions/me/portal           → portal de cliente de Stripe
  *
  * El admin endpoint de gestión de productos lo dejamos para una iteración
  * posterior — en MVP el admin configura el priceId desde mod.billing-admin
@@ -50,6 +56,13 @@ const startCheckoutSchema = z
   })
   .strict();
 
+const portalSchema = z
+  .object({
+    subscriptionId: z.string().uuid().optional(),
+  })
+  .strict()
+  .optional();
+
 const cancelSchema = z
   .object({
     immediate: z.boolean().optional(),
@@ -65,6 +78,12 @@ export class SubscriptionsController {
     private readonly registry: ModuleRegistryService,
     private readonly prisma: PrismaService,
     private readonly graceExpiration: SubscriptionsGraceExpirationWorker,
+    private readonly tenantResolver: TenantResolverService,
+    /**
+     * Solo con el modo plataforma encendido (E5): dice qué clientes de Stripe
+     * son de la cuenta del operador, cuyo portal lleva el nombre del creador.
+     */
+    @Optional() private readonly payoutsGate?: PlatformCheckoutGate,
   ) {}
 
   @Post('checkout/:courseId')
@@ -124,13 +143,42 @@ export class SubscriptionsController {
     ]);
     const planName = new Map(plans.map((p) => [p.id, p.name]));
     const courseTitle = new Map(courses.map((c) => [c.id, c.title]));
+    // Portal de cliente: solo se ofrece donde sabemos que está configurado —
+    // los clientes cobrados por la plataforma, cuyo portal crea Didacta con el
+    // nombre del creador—. Con claves propias depende de que el aula lo haya
+    // configurado en su Stripe: ahí la pestaña sigue como siempre.
+    const platformCustomers = this.payoutsGate
+      ? await this.payoutsGate.platformObjects(subs.map((s) => s.stripeCustomerId))
+      : new Set<string>();
     return {
       subscriptions: subs.map((s) => ({
         ...s,
         planName: s.planId ? (planName.get(s.planId) ?? null) : null,
         courseTitle: s.courseId ? (courseTitle.get(s.courseId) ?? null) : null,
+        billingPortal: platformCustomers.has(s.stripeCustomerId),
       })),
     };
+  }
+
+  @Post('me/portal')
+  @ApiOperation({
+    summary:
+      'Abre el portal de cliente de Stripe del alumno (cambiar la tarjeta, ver sus facturas, ' +
+      'darse de baja). Sin subscriptionId, el de su membresía viva más reciente. Devuelve la URL.',
+  })
+  async portal(
+    @CurrentUser() user: SessionClaims | undefined,
+    @Req() req: FastifyRequest,
+    @Body(new ZodValidationPipe(portalSchema)) body: { subscriptionId?: string } | undefined,
+  ): Promise<{ url: string; subscriptionId: string }> {
+    if (!user) throw new UnauthorizedException();
+    const base = await this.tenantResolver.resolveTenantWebBaseUrl(user.tenantId, req);
+    return this.registry
+      .getSubscriptionsService()
+      .createBillingPortalSession(user.tenantId, user.sub, {
+        subscriptionId: body?.subscriptionId,
+        returnUrl: `${base}/cuenta?tab=suscripcion`,
+      });
   }
 
   @Post('me/membership/pay-now')
