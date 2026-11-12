@@ -179,6 +179,7 @@ export function LessonContentEditor({
             videoUrl={videoUrl}
             savedVideoUrl={typeof content['videoUrl'] === 'string' ? content['videoUrl'] : ''}
             onVideoUrl={setVideoUrl}
+            onDuration={(minutes) => setDuration((d) => d || String(minutes))}
           />
           <Label htmlFor={`videoUrl-${lesson.id}`}>{t('videoUrlLabel')}</Label>
           <Input

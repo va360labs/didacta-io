@@ -13,6 +13,7 @@ import { Progress } from '@/components/ui/progress';
 import { useQuotaLines } from '@/components/video-quota';
 import { ApiHttpError } from '@/lib/api-client';
 import { apiErrorMessage } from '@/lib/i18n/api-error';
+import { formatSeconds } from '@/lib/video';
 import {
   formatBytes,
   formatDuration,
@@ -36,9 +37,7 @@ type Phase =
       total: number;
       paused: boolean;
       cut: boolean;
-    }
-  | { kind: 'processing'; asset: VideoAsset }
-  | { kind: 'ready'; asset: VideoAsset };
+    };
 
 const POLL_MS = 5000;
 
@@ -55,6 +54,7 @@ export function VideoUploadField({
   videoUrl,
   savedVideoUrl,
   onVideoUrl,
+  onDuration,
 }: {
   lessonId: string;
   /** El enlace del formulario (aún sin guardar). */
@@ -62,11 +62,16 @@ export function VideoUploadField({
   /** El enlace guardado en la lección. */
   savedVideoUrl: string;
   onVideoUrl: (url: string) => void;
+  /** Duración real (minutos) cuando el vídeo está listo, para la ficha de la lección. */
+  onDuration?: (minutes: number) => void;
 }) {
   const t = useTranslations('formadorCursos.videoUpload');
   const tErrors = useTranslations('errors');
   const [quota, setQuota] = useState<VideoQuota | null>(null);
+  // La subida en curso (si la hay) y, aparte, el vídeo subido que enseña la
+  // ficha: un error al intentar sustituirlo no hace desaparecer el que hay.
   const [phase, setPhase] = useState<Phase>({ kind: 'idle' });
+  const [current, setCurrent] = useState<VideoAsset | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
   const handle = useRef<UploadHandle | null>(null);
@@ -82,11 +87,14 @@ export function VideoUploadField({
       setQuota(q);
       // ¿La lección ya usa un vídeo subido? Se enseña su estado.
       const assets = await videoUploadApi.listForLesson(lessonId).catch(() => []);
-      const current = assets.find((a) => a.embedUrl === savedVideoUrl);
-      if (cancelled || !current) return;
-      if (current.status === 'READY') setPhase({ kind: 'ready', asset: current });
-      else if (current.status === 'PROCESSING' || current.status === 'UPLOADING') {
-        setPhase({ kind: 'processing', asset: current });
+      const found = assets.find((a) => a.embedUrl === savedVideoUrl);
+      if (cancelled || !found) return;
+      if (
+        found.status === 'READY' ||
+        found.status === 'PROCESSING' ||
+        found.status === 'UPLOADING'
+      ) {
+        setCurrent(found);
       }
     })();
     return () => {
@@ -99,7 +107,10 @@ export function VideoUploadField({
   }, [lessonId]);
 
   // Mientras se procesa, se pregunta cada 5 s.
-  const processingId = phase.kind === 'processing' ? phase.asset.id : null;
+  const processingId =
+    current && (current.status === 'PROCESSING' || current.status === 'UPLOADING')
+      ? current.id
+      : null;
   useEffect(() => {
     if (!processingId) return;
     const timer = window.setInterval(() => {
@@ -108,10 +119,13 @@ export function VideoUploadField({
         .then((asset) => {
           if (!mounted.current) return;
           if (asset.status === 'READY') {
-            setPhase({ kind: 'ready', asset });
+            setCurrent(asset);
+            if (asset.durationSeconds) {
+              onDuration?.(Math.max(1, Math.round(asset.durationSeconds / 60)));
+            }
             void refreshQuota();
           } else if (asset.status === 'FAILED' || asset.status === 'DELETED') {
-            setPhase({ kind: 'idle' });
+            setCurrent(null);
             setError(failureMessage(asset));
             if (videoUrl === asset.embedUrl) onVideoUrl('');
             void refreshQuota();
@@ -199,6 +213,7 @@ export function VideoUploadField({
       return;
     }
     const { asset, upload } = created;
+    void refreshQuota();
     setPhase({ kind: 'uploading', asset, sent: 0, total: file.size, paused: false, cut: false });
     handle.current = await startTusUpload({
       file,
@@ -214,7 +229,8 @@ export function VideoUploadField({
         handle.current = null;
         if (!mounted.current) return;
         onVideoUrl(asset.embedUrl);
-        setPhase({ kind: 'processing', asset: { ...asset, status: 'PROCESSING' } });
+        setCurrent({ ...asset, status: 'PROCESSING' });
+        setPhase({ kind: 'idle' });
       },
       onError: () => {
         if (!mounted.current) return;
@@ -254,7 +270,7 @@ export function VideoUploadField({
 
   const busy = phase.kind === 'reading' || phase.kind === 'preparing' || phase.kind === 'uploading';
   const inputId = `video-upload-${lessonId}`;
-  const shown = phase.kind === 'ready' || phase.kind === 'processing' ? phase.asset : null;
+  const shown = current;
   const attached = shown !== null && videoUrl === shown.embedUrl;
 
   return (
@@ -262,13 +278,10 @@ export function VideoUploadField({
       {shown && attached ? (
         <UploadedCard
           asset={shown}
-          processing={phase.kind === 'processing'}
+          processing={shown.status !== 'READY'}
           unsaved={savedVideoUrl !== shown.embedUrl}
           onReplace={() => inputRef.current?.click()}
-          onRemove={() => {
-            onVideoUrl('');
-            setPhase({ kind: 'idle' });
-          }}
+          onRemove={() => onVideoUrl('')}
         />
       ) : null}
 
@@ -414,7 +427,7 @@ function UploadedCard({
           {processing
             ? t('processing')
             : t('ready', {
-                duration: formatDuration(asset.durationSeconds ?? 0),
+                duration: formatSeconds(asset.durationSeconds ?? 0),
                 resolution: asset.maxResolution,
               })}
         </p>
