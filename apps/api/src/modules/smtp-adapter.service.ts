@@ -62,6 +62,11 @@ export interface SmtpSendInput {
    * contraseña).
    */
   unsubscribeUrl?: string;
+  /**
+   * Adjuntos (p. ej. el PDF de una factura). Sin ellos el correo sale
+   * exactamente igual que antes.
+   */
+  attachments?: ReadonlyArray<{ filename: string; content: Buffer; contentType?: string }>;
 }
 
 export interface SmtpSendResult {
@@ -128,6 +133,15 @@ export class SmtpAdapterService {
           ? {
               list: { unsubscribe: input.unsubscribeUrl },
               headers: { 'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click' },
+            }
+          : {}),
+        ...(input.attachments && input.attachments.length > 0
+          ? {
+              attachments: input.attachments.map((a) => ({
+                filename: a.filename,
+                content: a.content,
+                ...(a.contentType ? { contentType: a.contentType } : {}),
+              })),
             }
           : {}),
       });

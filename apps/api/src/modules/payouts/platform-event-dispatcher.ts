@@ -16,6 +16,7 @@ import {
   type StripeDispatchLogger,
   type StripeEventConsumers,
 } from '../stripe-event-dispatch';
+import { PurchaseConsentService } from '../purchase-consent/purchase-consent.service';
 import { MembershipProvisioningService } from '../subscriptions/membership-provisioning.service';
 
 /**
@@ -91,5 +92,17 @@ export class ModulesPlatformEventDispatcher implements PlatformEventDispatcher {
       provisionBuyer: (input) => billingProvisioning.provision(input),
       logger: args.logger,
     });
+    // Pago confirmado: correo con el texto que aceptó el comprador (renuncia al
+    // desistimiento). Nunca lanza; sin el servicio (pruebas que montan solo
+    // este módulo), no hay nada que confirmar.
+    await this.consents()?.confirmCheckout(args.tenantId, args.event);
+  }
+
+  private consents(): PurchaseConsentService | null {
+    try {
+      return this.moduleRef.get(PurchaseConsentService, { strict: false }) ?? null;
+    } catch {
+      return null;
+    }
   }
 }

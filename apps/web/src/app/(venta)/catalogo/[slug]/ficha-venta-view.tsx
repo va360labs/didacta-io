@@ -21,6 +21,12 @@ import { useParams } from 'next/navigation';
 import { useLocale, useTranslations } from 'next-intl';
 import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/icon';
+import {
+  WithdrawalWaiverCheckbox,
+  useWithdrawalWaiver,
+} from '@/components/withdrawal-waiver-checkbox';
+import { ApiHttpError } from '@/lib/api-client';
+import { apiErrorMessage } from '@/lib/i18n/api-error';
 import { authStorage } from '@/lib/auth-storage';
 import { formatDuration } from '@/lib/i18n/format';
 import { useTenantContext } from '@/lib/tenant-context';
@@ -37,6 +43,9 @@ import {
 export function FichaVentaView() {
   const t = useTranslations('publicSite');
   const tCommon = useTranslations('common');
+  const tErrors = useTranslations('errors');
+  // Renuncia al desistimiento: sin marcarla no se puede pagar.
+  const waiver = useWithdrawalWaiver('course');
   // Área pública: se pinta en SSR, donde el singleton de `user-prefs` está
   // vacío. Sin `locale` explícito el importe del servidor y el del cliente no
   // coinciden → mismatch de hidratación.
@@ -73,20 +82,26 @@ export function FichaVentaView() {
   const selected = course?.options.find((o) => o.id === selectedId) ?? null;
 
   const comprar = useCallback(async () => {
-    if (!course || !selected) return;
+    if (!course || !selected || !waiver.acceptance) return;
     setPaying(true);
     setPayError(null);
     try {
       const { url } = await startPublicCheckout(course.id, {
         optionId: selected.id,
         email: session?.user.email,
+        withdrawalWaiver: waiver.acceptance,
       });
       window.location.assign(url);
-    } catch {
-      setPayError(t('ficha.payError'));
+    } catch (err) {
+      if (err instanceof ApiHttpError && err.code?.startsWith('CHECKOUT_WITHDRAWAL_WAIVER')) {
+        setPayError(apiErrorMessage(err, tErrors));
+        waiver.reload();
+      } else {
+        setPayError(t('ficha.payError'));
+      }
       setPaying(false);
     }
-  }, [course, selected, session, t]);
+  }, [course, selected, session, t, tErrors, waiver]);
 
   if (course === undefined) {
     return (
@@ -275,13 +290,26 @@ export function FichaVentaView() {
               </p>
             ) : null}
 
+            <WithdrawalWaiverCheckbox
+              waiver={waiver.waiver}
+              failed={waiver.failed}
+              checked={waiver.checked}
+              onCheckedChange={waiver.setChecked}
+              onRetry={waiver.reload}
+            />
+
             {payError ? (
               <p className="rounded-xl border border-danger/40 bg-danger/5 px-4 py-3 text-sm text-danger">
                 {payError}
               </p>
             ) : null}
 
-            <Button size="lg" onClick={comprar} disabled={!selected || paying}>
+            <Button
+              size="lg"
+              onClick={comprar}
+              disabled={!selected || paying || !waiver.acceptance}
+              title={!waiver.acceptance ? t('withdrawalWaiver.mustTick') : undefined}
+            >
               {paying ? t('ficha.openingPayment') : t('ficha.buyNow')}
             </Button>
             <p className="text-center text-xs text-text-subtle">{t('ficha.securePayment')}</p>

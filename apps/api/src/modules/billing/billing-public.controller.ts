@@ -26,6 +26,11 @@ import { assertSignupsAllowed } from '../../tenancy/signup-freeze';
 import { runAsTenant } from '../../tenancy/tenant-context.storage';
 import { TenantResolverService } from '../../tenancy/tenant-resolver.service';
 import { ModuleRegistryService } from '../module-registry.service';
+import { PurchaseConsentService } from '../purchase-consent/purchase-consent.service';
+import {
+  withdrawalWaiverSchema,
+  type WithdrawalWaiverDto,
+} from '../purchase-consent/withdrawal-waiver';
 import {
   PAYOUTS_NOT_READY_OFFER_REASON,
   PlatformCheckoutGate,
@@ -60,11 +65,20 @@ const publicCheckoutSchema = z
      * propio checkout (session.customer_details.email del webhook).
      */
     email: z.string().email().max(200).optional(),
+    /**
+     * La casilla marcada antes de pagar: pide acceso inmediato y reconoce que
+     * pierde el desistimiento de 14 días. Obligatoria (422 si falta).
+     */
+    withdrawalWaiver: withdrawalWaiverSchema.optional(),
   })
   .strict()
   .optional()
   .transform((v) => v ?? {});
-type PublicCheckoutDto = { optionId?: string; email?: string };
+type PublicCheckoutDto = {
+  optionId?: string;
+  email?: string;
+  withdrawalWaiver?: WithdrawalWaiverDto;
+};
 
 /** Curso del catálogo público, con lo justo para la ficha de venta. */
 interface PublicCatalogCourse {
@@ -103,6 +117,8 @@ export class BillingPublicController {
     private readonly registry: ModuleRegistryService,
     private readonly tenantResolver: TenantResolverService,
     private readonly prisma: PrismaService,
+    /** Renuncia al desistimiento: prueba antes de pagar y confirmación después. */
+    private readonly consents: PurchaseConsentService,
     /**
      * Solo con el modo plataforma encendido: si el aula cobra por la plataforma
      * y su cuenta aún no puede vender, nada está a la venta.
@@ -216,7 +232,7 @@ export class BillingPublicController {
       // matriculación posterior fallaría siempre.
       const curso = await this.prisma.modCoursesCourse.findFirst({
         where: { id: courseId, tenantId, deletedAt: null },
-        select: { status: true },
+        select: { status: true, title: true },
       });
       if (!curso)
         throw new NotFoundException({
@@ -234,6 +250,19 @@ export class BillingPublicController {
       // Modo plataforma: 409 PAYOUTS_NOT_READY si la cuenta no puede vender
       // (antes de crear la orden), y precios del curso en la cuenta del operador.
       await this.payoutsGate?.prepareCheckout(tenantId, courseId, billing);
+
+      // La casilla de la renuncia al desistimiento, con el texto vigente: sin
+      // ella no se crea la orden ni la sesión de pago (422/409).
+      const consentId = await this.consents.accept({
+        req,
+        tenantId,
+        purchaseKind: 'course',
+        itemRef: courseId,
+        itemName: curso.title,
+        userId: null,
+        buyerEmail: dto.email ?? null,
+        waiver: dto.withdrawalWaiver,
+      });
 
       const base = (await this.tenantResolver.resolveTenantWebBaseUrl(tenantId, req)).replace(
         /\/$/,
@@ -253,6 +282,10 @@ export class BillingPublicController {
         // sesión y las de /cursos/checkout viven tras el gate de login.
         successUrl: `${base}/catalogo/checkout/success?session_id={CHECKOUT_SESSION_ID}`,
         cancelUrl: `${base}/catalogo/checkout/cancel`,
+      });
+      await this.consents.attachSession(tenantId, consentId, {
+        sessionId: result.sessionId,
+        orderId: result.orderId,
       });
       // Client context solo para trazabilidad en logs de acceso (no se persiste aquí).
       void extractClientContext(req);

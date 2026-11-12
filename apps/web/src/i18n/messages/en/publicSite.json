@@ -199,5 +199,11 @@
     "issuedAt": "Issue date",
     "certNumber": "Certificate no.",
     "verifiedBy": "Verified by {name}"
+  },
+  "withdrawalWaiver": {
+    "loading": "Loading the purchase terms…",
+    "loadError": "We couldn't load the purchase terms, and you can't pay without them.",
+    "retry": "Try again",
+    "mustTick": "Tick the box to continue"
   }
 }

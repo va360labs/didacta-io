@@ -23,6 +23,8 @@ import { SecretCipherService } from '../modules/secret-cipher.service';
  *                             Zoom, storage S3 propio…
  *  - `core_instance_setting`  ajustes cifrados de la instalación.
  *  - `mod_secret`             secretos de los módulos del marketplace.
+ *  - `mod_payouts_tax_profile` datos fiscales del creador (cobros de plataforma).
+ *  - `mod_payouts_invoice`    destinatario y PDF de cada factura de la comisión.
  *
  * NO entra `tenant_ai_provider_config`: sus claves de API se cifran con OTRA
  * clave (`AI_CONFIG_ENCRYPTION_KEY`, que solo existe como variable de entorno).
@@ -93,6 +95,24 @@ export const ENCRYPTED_TABLES: readonly EncryptedTable[] = [
     iv: 'iv',
     tag: 'tag',
     ref: `tenant_id::text || '/' || module_id || '/' || secret_key`,
+  },
+  {
+    // Datos fiscales del creador (NIF, NIF-IVA, dirección, nacimiento).
+    table: 'mod_payouts_tax_profile',
+    cipher: 'sensitive_cipher',
+    iv: 'sensitive_iv',
+    tag: 'sensitive_tag',
+    ref: `tenant_id::text || '/datos-fiscales'`,
+  },
+  {
+    // Factura emitida: datos del destinatario y el PDF. El trigger de
+    // inmutabilidad deja cambiar SOLO este bloque (el texto en claro no cambia,
+    // y la verificación de abajo lo comprueba).
+    table: 'mod_payouts_invoice',
+    cipher: 'document_cipher',
+    iv: 'document_iv',
+    tag: 'document_tag',
+    ref: `tenant_id::text || '/' || full_number`,
   },
 ];
 

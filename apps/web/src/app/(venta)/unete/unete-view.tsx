@@ -38,6 +38,11 @@ import {
   type MembershipPage,
 } from '@/lib/membership';
 import { couponsAtCheckout, showLocalCurrencyNote } from '@/lib/checkout-hints';
+import {
+  WithdrawalWaiverCheckbox,
+  useWithdrawalWaiver,
+} from '@/components/withdrawal-waiver-checkbox';
+import { apiErrorMessage } from '@/lib/i18n/api-error';
 import { getStoredReferralCode, referralsApi, storeReferralCode } from '@/lib/referrals';
 import { richHtmlToPlainText } from '@/lib/sanitize-html';
 
@@ -92,6 +97,9 @@ export function UneteView() {
   const [filter, setFilter] = useState<string>('Todos');
   const [paying, setPaying] = useState(false);
   const [payError, setPayError] = useState<string | null>(null);
+  const tErrors = useTranslations('errors');
+  // Renuncia al desistimiento: sin marcarla no se puede pagar.
+  const waiver = useWithdrawalWaiver('membership');
 
   const session = useMemo(() => authStorage.getSession(), []);
 
@@ -132,7 +140,7 @@ export function UneteView() {
   const selected = page?.plans.find((p) => p.id === selectedId) ?? null;
 
   const checkout = useCallback(async () => {
-    if (!selected) return;
+    if (!selected || !waiver.acceptance) return;
     setPaying(true);
     setPayError(null);
     try {
@@ -140,13 +148,19 @@ export function UneteView() {
         selected.id,
         session?.user.email,
         getStoredReferralCode() ?? undefined,
+        waiver.acceptance,
       );
       window.location.assign(url);
-    } catch {
-      setPayError(t('unete.payError'));
+    } catch (err) {
+      if (err instanceof ApiHttpError && err.code?.startsWith('CHECKOUT_WITHDRAWAL_WAIVER')) {
+        setPayError(apiErrorMessage(err, tErrors));
+        waiver.reload();
+      } else {
+        setPayError(t('unete.payError'));
+      }
       setPaying(false);
     }
-  }, [selected, session, t]);
+  }, [selected, session, t, tErrors, waiver]);
 
   // ── Estados de retorno del checkout ────────────────────────────────────────
   if (status === 'success') {
@@ -401,6 +415,15 @@ export function UneteView() {
               </>
             ) : null}
 
+            <WithdrawalWaiverCheckbox
+              className="mt-4"
+              waiver={waiver.waiver}
+              failed={waiver.failed}
+              checked={waiver.checked}
+              onCheckedChange={waiver.setChecked}
+              onRetry={waiver.reload}
+            />
+
             {payError && (
               <p className="mt-3 rounded-lg border border-danger-500/40 bg-danger-50 px-3 py-2 text-sm text-danger-700">
                 {payError}
@@ -410,7 +433,8 @@ export function UneteView() {
             <Button
               size="lg"
               className="mt-4 w-full"
-              disabled={!selected || paying}
+              disabled={!selected || paying || !waiver.acceptance}
+              title={!waiver.acceptance ? t('withdrawalWaiver.mustTick') : undefined}
               onClick={() => void checkout()}
             >
               <Icon name="lock" className="mr-2 h-4 w-4" />

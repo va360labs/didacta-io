@@ -111,21 +111,21 @@ enum TenantDomainSurface {
 }
 
 model TenantDomain {
-  id         String   @id @default(uuid()) @db.Uuid
-  tenantId   String   @map("tenant_id") @db.Uuid
+  id         String              @id @default(uuid()) @db.Uuid
+  tenantId   String              @map("tenant_id") @db.Uuid
   /// Host completo en lowercase, sin puerto ni path.
   /// Ejemplos: "aula.academia.com", "didacta.local", "localhost".
-  hostname   String   @unique @db.VarChar(253)
+  hostname   String              @unique @db.VarChar(253)
   /// El primary identifica el dominio canónico para emails y enlaces.
   /// Solo uno por tenant tiene `isPrimary=true`.
-  isPrimary  Boolean  @default(false) @map("is_primary")
+  isPrimary  Boolean             @default(false) @map("is_primary")
   /// Para custom domains de clientes: requiere validación DNS antes de activar.
   /// `localhost` y dominios default del seed nacen verified=true.
-  isVerified Boolean  @default(false) @map("is_verified")
+  isVerified Boolean             @default(false) @map("is_verified")
   /// Qué superficie sirve este dominio. Ver `TenantDomainSurface`.
   surface    TenantDomainSurface @default(APP)
-  createdAt  DateTime @default(now()) @map("created_at")
-  updatedAt  DateTime @updatedAt @map("updated_at")
+  createdAt  DateTime            @default(now()) @map("created_at")
+  updatedAt  DateTime            @updatedAt @map("updated_at")
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
@@ -484,7 +484,7 @@ model SupportAccessGrant {
 
   /// Nunca mas de 15 minutos por delante de `created_at`. Lo impone el codigo
   /// (`support-access.ts`), no un default de columna.
-  expiresAt DateTime  @map("expires_at")
+  expiresAt  DateTime  @map("expires_at")
   /// Se sella al canjear. Un solo uso: con esto puesto, el token ya no vale.
   redeemedAt DateTime? @map("redeemed_at")
   /// Sesion que abrio el canje, para poder cortarla al revocar.
@@ -574,6 +574,60 @@ model AuditLog {
   @@index([actorId])
   @@index([resourceType, resourceId])
   @@map("audit_log")
+}
+
+// ============================================================================
+// CONSENTIMIENTOS DE COMPRA (consumidores)
+// ----------------------------------------------------------------------------
+// Prueba del consentimiento que da el comprador ANTES de pagar contenido
+// digital: pide empezar ya y reconoce que pierde el derecho de desistimiento
+// de 14 días (art. 103.m TRLGDCU; art. 16.m Directiva 2011/83/UE). Lo recogen
+// los controladores de compra del host (curso suelto, membresía, suscripción a
+// un curso) en cualquier modo de cobro, y el webhook marca el pago y manda la
+// confirmación por correo (art. 98.7 TRLGDCU) con el texto aceptado.
+//
+// Sin FK: los ids de orden, curso o plan son lógicos (viven en módulos). Un
+// trigger de `rls.sql` congela la prueba (texto, versión, fecha, IP…): solo
+// se pueden rellenar después la sesión de Stripe, el pago y el envío.
+// ============================================================================
+
+model PurchaseConsent {
+  id                      String    @id @default(uuid()) @db.Uuid
+  tenantId                String    @map("tenant_id") @db.Uuid
+  /// `withdrawal_waiver`: renuncia al desistimiento por empezar ya.
+  kind                    String
+  /// `course` | `membership` | `course_subscription`.
+  purchaseKind            String    @map("purchase_kind")
+  /// Curso o plan comprado (id lógico).
+  itemRef                 String    @map("item_ref")
+  itemName                String?   @map("item_name")
+  /// Orden de mod.billing (curso suelto). Lógico, sin FK.
+  orderId                 String?   @map("order_id") @db.Uuid
+  stripeCheckoutSessionId String?   @unique @map("stripe_checkout_session_id")
+  /// Comprador con sesión iniciada, si la tenía. Lógico, sin FK.
+  userId                  String?   @map("user_id") @db.Uuid
+  /// Correo del comprador: el que escribió o, tras pagar, el confirmado en Stripe.
+  buyerEmail              String?   @map("buyer_email")
+  /// Vendedor tal como se le mostró al comprador (el nombre del aula).
+  sellerName              String    @map("seller_name")
+  /// `platform` (cobra el operador en nombre del creador) | `own` (claves del aula).
+  paymentMode             String    @map("payment_mode")
+  /// Versión del texto (`withdrawal-waiver.ts`).
+  version                 String
+  locale                  String    @db.VarChar(16)
+  /// Texto EXACTO que se mostró junto a la casilla.
+  text                    String
+  ip                      String?
+  userAgent               String?   @map("user_agent")
+  acceptedAt              DateTime  @map("accepted_at")
+  /// Cuándo confirmó Stripe el pago (o el alta, en una prueba gratis).
+  paidAt                  DateTime? @map("paid_at")
+  confirmationSentAt      DateTime? @map("confirmation_sent_at")
+  createdAt               DateTime  @default(now()) @map("created_at")
+
+  @@index([tenantId, acceptedAt])
+  @@index([orderId])
+  @@map("purchase_consent")
 }
 
 // ============================================================================
@@ -796,7 +850,7 @@ model ExternalOrder {
   invoiceIssuedAt DateTime? @map("invoice_issued_at")
   /// URL absoluta al PDF. **Didacta no guarda el documento**, solo por dónde se
   /// pide; quien lo sirve es quien lo emitió.
-  invoiceUrl String? @map("invoice_url")
+  invoiceUrl      String?   @map("invoice_url")
 
   /// El pedido en la tienda, para el botón "verlo allí".
   orderUrl String? @map("order_url")
@@ -1342,23 +1396,23 @@ enum LessonCompletionSource {
 }
 
 model ModLearningProgress {
-  id                String    @id @default(uuid()) @db.Uuid
-  tenantId          String    @map("tenant_id") @db.Uuid
-  enrollmentId      String    @map("enrollment_id") @db.Uuid
+  id                String                  @id @default(uuid()) @db.Uuid
+  tenantId          String                  @map("tenant_id") @db.Uuid
+  enrollmentId      String                  @map("enrollment_id") @db.Uuid
   /// ID lógico de la lección (sin FK cross-module)
-  lessonId          String    @map("lesson_id") @db.Uuid
+  lessonId          String                  @map("lesson_id") @db.Uuid
   /// Tiempo total visto/leído en segundos
-  watchedSeconds    Int       @default(0) @map("watched_seconds")
+  watchedSeconds    Int                     @default(0) @map("watched_seconds")
   /// Posición exacta para reanudación (segundo dentro del vídeo, scroll en HTML, etc.)
-  resumePositionSec Int       @default(0) @map("resume_position_sec")
-  completed         Boolean   @default(false)
+  resumePositionSec Int                     @default(0) @map("resume_position_sec")
+  completed         Boolean                 @default(false)
   /// Qué respalda el `completed`. NULL en las filas anteriores a LMS-121: no
   /// sabemos cómo se cerraron, y decir SELF sería inventarse una evidencia que
   /// nadie registró. El exportador Fundae las trata como no verificadas.
   completionSource  LessonCompletionSource? @map("completion_source")
-  firstAccessedAt   DateTime  @default(now()) @map("first_accessed_at")
-  lastAccessedAt    DateTime  @updatedAt @map("last_accessed_at")
-  completedAt       DateTime? @map("completed_at")
+  firstAccessedAt   DateTime                @default(now()) @map("first_accessed_at")
+  lastAccessedAt    DateTime                @updatedAt @map("last_accessed_at")
+  completedAt       DateTime?               @map("completed_at")
 
   enrollment ModLearningEnrollment @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
 
@@ -1751,19 +1805,19 @@ model ModThemingTenantTheme {
   /// URL pública del logo principal del tenant. Usado en header y emails.
   /// Si `logoStorageKey` está set, esto apunta al endpoint público de
   /// branding del backend; si no, puede ser una URL externa pegada por el admin.
-  logoUrl        String? @map("logo_url")
+  logoUrl           String? @map("logo_url")
   /// Key del blob en el StorageService (S3 o disco) cuando el logo se subió
   /// vía el uploader del panel de branding. NULL si el admin pegó una URL
   /// externa directamente.
-  logoStorageKey String? @map("logo_storage_key")
+  logoStorageKey    String? @map("logo_storage_key")
   /// MIME type del logo subido (image/png, image/svg+xml, etc.). Necesario
   /// para servir el blob con el Content-Type correcto desde el endpoint público.
-  logoMimeType   String? @map("logo_mime_type")
+  logoMimeType      String? @map("logo_mime_type")
   /// Cómo se presenta la marca donde aparece (sidebar, /signin, bienvenida):
   /// 'logo_only' = el logo sustituye al nombre a su ancho natural (logos
   /// horizontales con wordmark); 'logo_and_name' = logo compacto + nombre en
   /// texto (isotipos cuadrados). Default = el comportamiento previo del shell.
-  logoDisplayMode String @default("logo_only") @map("logo_display_mode")
+  logoDisplayMode   String  @default("logo_only") @map("logo_display_mode")
   /// URL del favicon (suele ser cuadrado, 32x32 o 512x512 para PWA).
   /// Si `faviconStorageKey` está set, apunta al endpoint público del backend;
   /// si no, puede ser una URL externa pegada por el admin.
@@ -2008,23 +2062,23 @@ enum FundaeCriterioFinalizacion {
 }
 
 model ModFundaeAction {
-  id             String   @id @default(uuid()) @db.Uuid
-  tenantId       String   @map("tenant_id") @db.Uuid
-  courseId       String?  @map("course_id") @db.Uuid
-  codigoAccion   String   @map("codigo_accion")
-  nombre         String
-  modalidad      String /// PRESENCIAL | TELEFORMACION | MIXTA
-  horasFormacion Float    @map("horas_formacion")
-  fechaInicio    String   @map("fecha_inicio") /// YYYY-MM-DD
-  fechaFin       String   @map("fecha_fin") /// YYYY-MM-DD
-  lugar          String?
-  cifCentro      String?  @map("cif_centro")
-  notas          String?
-  status         String   @default("DRAFT") /// DRAFT | ACTIVE | CLOSED | ARCHIVED
+  id                   String                     @id @default(uuid()) @db.Uuid
+  tenantId             String                     @map("tenant_id") @db.Uuid
+  courseId             String?                    @map("course_id") @db.Uuid
+  codigoAccion         String                     @map("codigo_accion")
+  nombre               String
+  modalidad            String /// PRESENCIAL | TELEFORMACION | MIXTA
+  horasFormacion       Float                      @map("horas_formacion")
+  fechaInicio          String                     @map("fecha_inicio") /// YYYY-MM-DD
+  fechaFin             String                     @map("fecha_fin") /// YYYY-MM-DD
+  lugar                String?
+  cifCentro            String?                    @map("cif_centro")
+  notas                String?
+  status               String                     @default("DRAFT") /// DRAFT | ACTIVE | CLOSED | ARCHIVED
   /// Regla de finalización de esta acción. Ver el enum.
   criterioFinalizacion FundaeCriterioFinalizacion @default(UMBRAL_PROGRESO) @map("criterio_finalizacion")
-  createdAt      DateTime @default(now()) @map("created_at")
-  updatedAt      DateTime @updatedAt @map("updated_at")
+  createdAt            DateTime                   @default(now()) @map("created_at")
+  updatedAt            DateTime                   @updatedAt @map("updated_at")
 
   @@unique([tenantId, codigoAccion], map: "mod_fundae_action_codigo_per_tenant_idx")
   @@index([tenantId, fechaInicio(sort: Desc)], map: "mod_fundae_action_tenant_inicio_idx")
@@ -5008,4 +5062,168 @@ model ModPayoutsWebhookEvent {
   @@index([type])
   @@index([processedAt, receivedAt])
   @@map("mod_payouts_webhook_event")
+}
+
+/// Datos fiscales del creador: los que necesita la factura de la comisión
+/// (RD 1619/2012) y los que pide DAC7 (Ley 13/2023, RD 117/2024). Lo
+/// identificativo va CIFRADO (`SecretCipherService`, AES-256-GCM) en un solo
+/// bloque: NIF, NIF-IVA, dirección y fecha de nacimiento. En claro solo lo que
+/// hace falta para decidir sin descifrar (tipo, nombre, país, estado VIES).
+model ModPayoutsTaxProfile {
+  id              String    @id @default(uuid()) @db.Uuid
+  tenantId        String    @unique @map("tenant_id") @db.Uuid
+  /// `individual` (particular o autónomo) | `company`.
+  entityType      String    @map("entity_type")
+  /// Nombre y apellidos, o razón social.
+  legalName       String    @map("legal_name")
+  /// ISO 3166-1 alfa-2 de la residencia fiscal.
+  country         String    @db.VarChar(2)
+  /// JSON cifrado: `{ taxId, vatId, address, birthDate }`.
+  sensitiveCipher Bytes     @map("sensitive_cipher")
+  sensitiveIv     Bytes     @map("sensitive_iv")
+  sensitiveTag    Bytes     @map("sensitive_tag")
+  /// Últimos caracteres del NIF, para enseñarlo enmascarado.
+  taxIdHint       String?   @map("tax_id_hint")
+  hasVatId        Boolean   @default(false) @map("has_vat_id")
+  /// VIES: `valid` | `invalid` | `pending` (no se pudo comprobar) | `not_applicable`.
+  vatStatus       String    @default("not_applicable") @map("vat_status")
+  vatCheckedAt    DateTime? @map("vat_checked_at")
+  /// sha256 del NIF-IVA comprobado: la caché solo vale para ESE número.
+  vatCheckedHash  String?   @map("vat_checked_hash")
+  /// Número de consulta de VIES (prueba de la comprobación), si lo dio.
+  vatConsultation String?   @map("vat_consultation")
+  /// Está todo lo que exigen la factura y DAC7.
+  complete        Boolean   @default(false)
+  /// Usuario que confirmó los datos por última vez. Lógico, sin FK.
+  confirmedBy     String?   @map("confirmed_by")
+  confirmedAt     DateTime? @map("confirmed_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  @@map("mod_payouts_tax_profile")
+}
+
+/// Ordinaria o rectificativa (RD 1619/2012, art. 15: serie propia).
+enum PayoutsInvoiceKind {
+  ORDINARY
+  RECTIFYING
+}
+
+/// Cómo tributa la comisión según dónde está el creador.
+enum PayoutsVatRegime {
+  /// Creador en España (península y Baleares): IVA del 21 % incluido en el 5 %.
+  ES_VAT
+  /// Creador en otro país de la UE con NIF-IVA válido en VIES: sin IVA,
+  /// inversión del sujeto pasivo (art. 196 Directiva 2006/112/CE).
+  EU_REVERSE_CHARGE
+  /// Creador en otro país de la UE sin NIF-IVA válido: IVA español del 21 %
+  /// incluido (criterio prudente; ver `vat.ts`).
+  ES_VAT_EU_NO_VAT_ID
+  /// Creador fuera de la UE: no sujeta al IVA español (art. 69.Uno.1.º LIVA).
+  NOT_SUBJECT_OUTSIDE_EU
+  /// Creador en Canarias, Ceuta o Melilla: fuera del territorio de aplicación
+  /// del IVA (art. 3 y 69 LIVA).
+  NOT_SUBJECT_ES_SPECIAL_TERRITORY
+}
+
+/// Factura de la comisión del operador al creador, una por mes, creador y
+/// moneda (más rectificativas). INMUTABLE una vez emitida: un trigger de
+/// `rls.sql` congela número, fechas, importes y datos, y prohíbe borrarla. Lo
+/// identificativo del destinatario y el PDF emitido van cifrados en un bloque.
+model ModPayoutsInvoice {
+  id                  String             @id @default(uuid()) @db.Uuid
+  tenantId            String             @map("tenant_id") @db.Uuid
+  accountId           String             @map("account_id") @db.Uuid
+  kind                PayoutsInvoiceKind
+  /// Serie con el año: `DC-2026`, `DCR-2026` (rectificativas).
+  series              String
+  number              Int
+  /// `DC-2026-000001`.
+  fullNumber          String             @unique @map("full_number")
+  /// Hueco que ocupa (idempotencia del proceso mensual): `ord:2026-11:eur`,
+  /// `ref:2026-11:eur`, `sub:<id de la factura sustituida>`.
+  slot                String
+  issueDate           DateTime           @map("issue_date") @db.Date
+  periodStart         DateTime           @map("period_start") @db.Date
+  periodEnd           DateTime           @map("period_end") @db.Date
+  currency            String             @db.VarChar(3)
+  regime              PayoutsVatRegime
+  /// 2100 = 21 %; 0 sin IVA.
+  vatRateBps          Int                @map("vat_rate_bps")
+  /// Con signo (negativo en una rectificativa por devoluciones). IVA incluido.
+  total               Int
+  taxBase             Int                @map("tax_base")
+  vatAmount           Int                @map("vat_amount")
+  /// Emisor tal como salió en la factura.
+  issuer              Json
+  recipientLegalName  String             @map("recipient_legal_name")
+  recipientCountry    String             @map("recipient_country") @db.VarChar(2)
+  recipientEntityType String             @map("recipient_entity_type")
+  /// `false`: se emitió con los datos que había y queda por completar
+  /// (cuando se completen, la sustituye una rectificativa).
+  recipientComplete   Boolean            @map("recipient_complete")
+  /// Facturas que rectifica: `[{ id, fullNumber, issueDate }]`.
+  rectifies           Json               @default("[]")
+  rectificationReason String?            @map("rectification_reason")
+  /// Rectificativa que la sustituye entera (datos completados).
+  replacedById        String?            @map("replaced_by_id") @db.Uuid
+  /// JSON cifrado: `{ recipient: { taxId, vatId, address }, pdf: base64 }`.
+  documentCipher      Bytes              @map("document_cipher")
+  documentIv          Bytes              @map("document_iv")
+  documentTag         Bytes              @map("document_tag")
+  livemode            Boolean            @default(false)
+  emailedAt           DateTime?          @map("emailed_at")
+  emailAttempts       Int                @default(0) @map("email_attempts")
+  createdAt           DateTime           @default(now()) @map("created_at")
+
+  items ModPayoutsInvoiceItem[]
+
+  @@unique([series, number])
+  @@unique([tenantId, slot])
+  @@index([tenantId, issueDate(sort: Desc)])
+  @@index([emailedAt])
+  @@map("mod_payouts_invoice")
+}
+
+/// Línea de una factura: un asiento de comisión (`PLATFORM_FEE`) o de
+/// devolución de comisión (`PLATFORM_FEE_REFUND`) del libro. Solo inserción.
+model ModPayoutsInvoiceItem {
+  id                    String   @id @default(uuid()) @db.Uuid
+  tenantId              String   @map("tenant_id") @db.Uuid
+  invoiceId             String   @map("invoice_id") @db.Uuid
+  saleId                String?  @map("sale_id") @db.Uuid
+  /// Asiento del libro al que corresponde la línea.
+  ledgerEntryId         String   @map("ledger_entry_id") @db.Uuid
+  /// El asiento que esta línea FACTURA por primera vez. Único: un asiento se
+  /// factura una sola vez aunque dos procesos corran a la vez. Nulo en las
+  /// copias de una rectificativa por sustitución.
+  consumesLedgerEntryId String?  @unique @map("consumes_ledger_entry_id") @db.Uuid
+  /// `COMMISSION` | `COMMISSION_REFUND`.
+  type                  String
+  occurredAt            DateTime @map("occurred_at")
+  description           String?
+  /// Importe de la venta (lo que pagó el alumno, en la moneda de la factura).
+  saleGross             Int?     @map("sale_gross")
+  /// Con signo, IVA incluido.
+  amount                Int
+  /// Factura que cobró la comisión que aquí se devuelve.
+  originalInvoiceId     String?  @map("original_invoice_id") @db.Uuid
+  createdAt             DateTime @default(now()) @map("created_at")
+
+  invoice ModPayoutsInvoice @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
+
+  @@index([tenantId, invoiceId])
+  @@index([saleId])
+  @@map("mod_payouts_invoice_item")
+}
+
+/// Contador de cada serie de facturas del operador. GLOBAL (sin `tenant_id`):
+/// la numeración es del emisor, correlativa para todas las aulas. Se avanza en
+/// la MISMA transacción que inserta la factura, así que un fallo no deja hueco.
+model ModPayoutsInvoiceCounter {
+  series     String   @id
+  lastNumber Int      @map("last_number")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  @@map("mod_payouts_invoice_counter")
 }

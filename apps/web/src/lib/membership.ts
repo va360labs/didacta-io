@@ -11,6 +11,7 @@
  * Importes SIEMPRE en céntimos.
  */
 
+import type { WithdrawalWaiverAcceptance } from '@/lib/purchase-consent';
 import { apiFetch } from './api-client';
 import { formatCents as formatCentsI18n, type FmtOverrides } from './i18n/format';
 
@@ -136,6 +137,8 @@ export async function startMembershipCheckout(
   planId: string,
   email?: string,
   referralCode?: string,
+  /** La casilla de la renuncia al desistimiento (la API la exige). */
+  withdrawalWaiver?: WithdrawalWaiverAcceptance,
 ): Promise<{ url: string }> {
   return apiFetch<{ url: string }>(`${PUBLIC_BASE}/checkout`, {
     method: 'POST',
@@ -143,6 +146,7 @@ export async function startMembershipCheckout(
       planId,
       ...(email ? { email } : {}),
       ...(referralCode ? { referralCode } : {}),
+      ...(withdrawalWaiver ? { withdrawalWaiver } : {}),
     }),
   });
 }

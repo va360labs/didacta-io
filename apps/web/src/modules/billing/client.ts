@@ -29,6 +29,7 @@
  * El módulo es CE — sin `<EeGate>`.
  */
 
+import type { WithdrawalWaiverAcceptance } from '@/lib/purchase-consent';
 import { apiFetch } from '@/lib/api-client';
 import { authStorage } from '@/lib/auth-storage';
 import { formatCentsExact } from '@/lib/i18n/format';
@@ -110,12 +111,18 @@ export const billingApi = {
     accessToken: string,
     /** Opción de compra elegida. Sin ella el backend usa la destacada. */
     optionId?: string,
+    /** La casilla de la renuncia al desistimiento (la API la exige). */
+    withdrawalWaiver?: WithdrawalWaiverAcceptance,
   ): Promise<StartCheckoutResult> {
+    const body = {
+      ...(optionId ? { optionId } : {}),
+      ...(withdrawalWaiver ? { withdrawalWaiver } : {}),
+    };
     return apiFetch<StartCheckoutResult>(
       `${BASE}/checkout/${encodeURIComponent(courseId)}`,
       {
         method: 'POST',
-        ...(optionId ? { body: JSON.stringify({ optionId }) } : {}),
+        ...(Object.keys(body).length > 0 ? { body: JSON.stringify(body) } : {}),
       },
       accessToken,
     );

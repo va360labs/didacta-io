@@ -106,6 +106,97 @@ CREATE TRIGGER mod_payouts_ledger_no_delete
   EXECUTE FUNCTION mod_payouts_ledger_block_mutation();
 
 -- ----------------------------------------------------------------------------
+-- Facturas de mod.payouts: inmutables una vez emitidas (RD 1619/2012)
+-- ----------------------------------------------------------------------------
+-- Una factura emitida no se borra ni se cambia: una corrección es una
+-- rectificativa nueva. Lo único que se puede tocar después es el estado del
+-- envío por correo, el enlace a la rectificativa que la sustituye (una sola
+-- vez) y el bloque cifrado cuando se rota la clave maestra (el texto en claro
+-- no cambia: lo verifica `rotate-cipher-key.ts`). Las líneas son de solo
+-- inserción. Igual que el libro: BEFORE + FOR EACH ROW, también para el dueño.
+CREATE OR REPLACE FUNCTION mod_payouts_invoice_block_mutation() RETURNS trigger AS $$
+BEGIN
+  IF TG_OP = 'DELETE' THEN
+    RAISE EXCEPTION 'mod_payouts_invoice: una factura emitida no se borra (se rectifica)';
+  END IF;
+  IF (NEW.id, NEW.tenant_id, NEW.account_id, NEW.kind, NEW.series, NEW.number, NEW.full_number,
+      NEW.slot, NEW.issue_date, NEW.period_start, NEW.period_end, NEW.currency, NEW.regime,
+      NEW.vat_rate_bps, NEW.total, NEW.tax_base, NEW.vat_amount, NEW.issuer,
+      NEW.recipient_legal_name, NEW.recipient_country, NEW.recipient_entity_type,
+      NEW.recipient_complete, NEW.rectifies, NEW.rectification_reason, NEW.livemode,
+      NEW.created_at)
+     IS DISTINCT FROM
+     (OLD.id, OLD.tenant_id, OLD.account_id, OLD.kind, OLD.series, OLD.number, OLD.full_number,
+      OLD.slot, OLD.issue_date, OLD.period_start, OLD.period_end, OLD.currency, OLD.regime,
+      OLD.vat_rate_bps, OLD.total, OLD.tax_base, OLD.vat_amount, OLD.issuer,
+      OLD.recipient_legal_name, OLD.recipient_country, OLD.recipient_entity_type,
+      OLD.recipient_complete, OLD.rectifies, OLD.rectification_reason, OLD.livemode,
+      OLD.created_at) THEN
+    RAISE EXCEPTION 'mod_payouts_invoice: una factura emitida es inmutable (se rectifica con otra)';
+  END IF;
+  IF OLD.replaced_by_id IS NOT NULL AND NEW.replaced_by_id IS DISTINCT FROM OLD.replaced_by_id THEN
+    RAISE EXCEPTION 'mod_payouts_invoice: la factura ya está sustituida por una rectificativa';
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS mod_payouts_invoice_immutable ON mod_payouts_invoice;
+CREATE TRIGGER mod_payouts_invoice_immutable
+  BEFORE UPDATE OR DELETE ON mod_payouts_invoice
+  FOR EACH ROW
+  EXECUTE FUNCTION mod_payouts_invoice_block_mutation();
+
+CREATE OR REPLACE FUNCTION mod_payouts_invoice_item_block_mutation() RETURNS trigger AS $$
+BEGIN
+  RAISE EXCEPTION 'mod_payouts_invoice_item es de solo inserción (intento: %)', TG_OP;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS mod_payouts_invoice_item_no_update ON mod_payouts_invoice_item;
+DROP TRIGGER IF EXISTS mod_payouts_invoice_item_no_delete ON mod_payouts_invoice_item;
+CREATE TRIGGER mod_payouts_invoice_item_no_update
+  BEFORE UPDATE ON mod_payouts_invoice_item
+  FOR EACH ROW
+  EXECUTE FUNCTION mod_payouts_invoice_item_block_mutation();
+CREATE TRIGGER mod_payouts_invoice_item_no_delete
+  BEFORE DELETE ON mod_payouts_invoice_item
+  FOR EACH ROW
+  EXECUTE FUNCTION mod_payouts_invoice_item_block_mutation();
+
+-- ----------------------------------------------------------------------------
+-- Consentimientos de compra: la prueba no se reescribe
+-- ----------------------------------------------------------------------------
+-- Lo que el comprador aceptó (texto, versión, idioma, fecha, IP, qué compraba
+-- y a quién) queda congelado al insertarse. Después solo se rellenan la sesión
+-- de Stripe, la orden, el correo confirmado, el pago y el envío de la
+-- confirmación. Borrar sí se puede (supresión de datos a petición del interesado).
+CREATE OR REPLACE FUNCTION purchase_consent_block_rewrite() RETURNS trigger AS $$
+BEGIN
+  IF (NEW.id, NEW.tenant_id, NEW.kind, NEW.purchase_kind, NEW.item_ref, NEW.item_name,
+      NEW.user_id, NEW.seller_name, NEW.payment_mode, NEW.version, NEW.locale, NEW.text,
+      NEW.ip, NEW.user_agent, NEW.accepted_at, NEW.created_at)
+     IS DISTINCT FROM
+     (OLD.id, OLD.tenant_id, OLD.kind, OLD.purchase_kind, OLD.item_ref, OLD.item_name,
+      OLD.user_id, OLD.seller_name, OLD.payment_mode, OLD.version, OLD.locale, OLD.text,
+      OLD.ip, OLD.user_agent, OLD.accepted_at, OLD.created_at) THEN
+    RAISE EXCEPTION 'purchase_consent: la prueba del consentimiento no se puede reescribir';
+  END IF;
+  IF OLD.stripe_checkout_session_id IS NOT NULL
+     AND NEW.stripe_checkout_session_id IS DISTINCT FROM OLD.stripe_checkout_session_id THEN
+    RAISE EXCEPTION 'purchase_consent: la sesión de pago ya estaba asociada';
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS purchase_consent_no_rewrite ON purchase_consent;
+CREATE TRIGGER purchase_consent_no_rewrite
+  BEFORE UPDATE ON purchase_consent
+  FOR EACH ROW
+  EXECUTE FUNCTION purchase_consent_block_rewrite();
+
+-- ----------------------------------------------------------------------------
 -- Rol de aplicación: exento de RLS solo para super_admin (migraciones, jobs globales)
 -- ----------------------------------------------------------------------------
 -- Los workers/superadmin usan este rol cuando necesitan saltarse RLS (seeders, cron jobs).

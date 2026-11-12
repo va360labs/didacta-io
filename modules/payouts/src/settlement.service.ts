@@ -66,6 +66,11 @@ export const SALE_HOLD_REASONS = {
   chargeRefunded: 'charge_refunded',
   /** El cargo tiene una disputa sin decidir: no se transfiere hasta que se decida. */
   chargeDisputed: 'charge_disputed',
+  /**
+   * Faltan los datos fiscales del creador (factura y DAC7). Se libera sola en
+   * cuanto los completa (`tax-profile.service.ts`).
+   */
+  taxProfileIncomplete: 'tax_profile_incomplete',
 } as const;
 export type SaleHoldReason = (typeof SALE_HOLD_REASONS)[keyof typeof SALE_HOLD_REASONS];
 
@@ -142,6 +147,11 @@ export interface SettlementServiceOptions {
   readonly heldRetryMs?: number;
   /** Cuándo se reintenta tras un error transitorio de Stripe. */
   readonly transientRetryMs?: number;
+  /**
+   * ¿Se puede transferir a este creador? Devuelve el motivo para retener
+   * (`tax_profile_incomplete`) o `null`. Sin él, no se retiene por esto.
+   */
+  readonly transferGate?: { transferBlockReason(tenantId: string): Promise<string | null> };
 }
 
 const FINAL_STATUSES: ReadonlySet<PayoutsSaleStatus> = new Set([
@@ -214,6 +224,7 @@ export class SettlementService {
   private readonly leaseMs: number;
   private readonly heldRetryMs: number;
   private readonly transientRetryMs: number;
+  private readonly transferGate: SettlementServiceOptions['transferGate'];
 
   constructor(
     private readonly db: PayoutsDbPort,
@@ -226,6 +237,7 @@ export class SettlementService {
     this.leaseMs = options.leaseMs ?? DEFAULT_LEASE_MS;
     this.heldRetryMs = options.heldRetryMs ?? DEFAULT_HELD_RETRY_MS;
     this.transientRetryMs = options.transientRetryMs ?? DEFAULT_TRANSIENT_RETRY_MS;
+    this.transferGate = options.transferGate;
   }
 
   /**
@@ -543,6 +555,19 @@ export class SettlementService {
         `cuenta ${account.status}`,
         leaseUntil,
       );
+    }
+
+    if (this.transferGate) {
+      const gated = await this.transferGate.transferBlockReason(tenantId);
+      if (gated === SALE_HOLD_REASONS.taxProfileIncomplete) {
+        return this.hold(
+          tenantId,
+          sale,
+          SALE_HOLD_REASONS.taxProfileIncomplete,
+          'faltan los datos fiscales del creador',
+          leaseUntil,
+        );
+      }
     }
 
     const charge = chargeRead ?? (await this.readCharge(sale.stripeChargeId));

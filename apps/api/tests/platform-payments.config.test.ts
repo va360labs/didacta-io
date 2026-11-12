@@ -123,7 +123,69 @@ describe('modo plataforma ENCENDIDO — valores por defecto del plan', () => {
         disputeWonFeeBearer: 'creator',
       },
       operatorAlertEmail: null,
+      // Condiciones legales: por defecto se retienen las transferencias sin
+      // datos fiscales, y sin datos del emisor no se factura.
+      taxProfileRequired: true,
+      invoicing: null,
     });
+  });
+
+  it('facturas: con los datos del emisor completos se factura (NIF y NIF-IVA validados)', () => {
+    const config = cargar(
+      encendido({
+        PAYMENTS_PLATFORM_INVOICE_ISSUER_NAME: 'VA360 LABS, S.L.',
+        PAYMENTS_PLATFORM_INVOICE_ISSUER_TAX_ID: 'B24805335',
+        PAYMENTS_PLATFORM_INVOICE_ISSUER_VAT_ID: 'ESB24805335',
+        PAYMENTS_PLATFORM_INVOICE_ISSUER_ADDRESS_LINE1: 'C/ Juan José Sánchez Rodríguez, 24',
+        PAYMENTS_PLATFORM_INVOICE_ISSUER_POSTAL_CODE: '11630',
+        PAYMENTS_PLATFORM_INVOICE_ISSUER_CITY: 'Arcos de la Frontera',
+        PAYMENTS_PLATFORM_INVOICE_ISSUER_REGION: 'Cádiz',
+        PAYMENTS_PLATFORM_INVOICE_ISSUER_EMAIL: 'hola@didacta.io',
+        PAYMENTS_PLATFORM_TAX_PROFILE_REQUIRED: 'false',
+      }),
+    );
+    expect(config).toMatchObject({
+      taxProfileRequired: false,
+      invoicing: {
+        issuer: {
+          name: 'VA360 LABS, S.L.',
+          taxId: 'B24805335',
+          vatId: 'ESB24805335',
+          address: {
+            line1: 'C/ Juan José Sánchez Rodríguez, 24',
+            postalCode: '11630',
+            city: 'Arcos de la Frontera',
+            region: 'Cádiz',
+          },
+          country: 'ES',
+          email: 'hola@didacta.io',
+        },
+        seriesPrefix: 'DC',
+        serviceName: 'Didacta Cloud',
+      },
+    });
+  });
+
+  it('facturas: datos del emisor a medias o con un NIF que no vale → no arranca', () => {
+    expect(() =>
+      loadPlatformPaymentsConfig(
+        encendido({ PAYMENTS_PLATFORM_INVOICE_ISSUER_NAME: 'VA360 LABS, S.L.' }),
+      ),
+    ).toThrow(/PAYMENTS_PLATFORM_INVOICE_ISSUER_TAX_ID/);
+    expect(() =>
+      loadPlatformPaymentsConfig(
+        encendido({
+          PAYMENTS_PLATFORM_INVOICE_ISSUER_NAME: 'VA360 LABS, S.L.',
+          PAYMENTS_PLATFORM_INVOICE_ISSUER_TAX_ID: 'B24805336',
+          PAYMENTS_PLATFORM_INVOICE_ISSUER_ADDRESS_LINE1: 'Calle',
+          PAYMENTS_PLATFORM_INVOICE_ISSUER_POSTAL_CODE: '11630',
+          PAYMENTS_PLATFORM_INVOICE_ISSUER_CITY: 'Arcos',
+        }),
+      ),
+    ).toThrow(/no es un NIF español válido/);
+    expect(() =>
+      loadPlatformPaymentsConfig(encendido({ PAYMENTS_PLATFORM_INVOICE_SERIES: 'dc-1' })),
+    ).toThrow(/PAYMENTS_PLATFORM_INVOICE_SERIES/);
   });
 
   it('E6: la política de devoluciones y el correo de alertas son configurables', () => {

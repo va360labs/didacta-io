@@ -29,6 +29,11 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { TenantResolverService } from '../../tenancy/tenant-resolver.service';
 import { ModuleRegistryService } from '../module-registry.service';
 import { PlatformCheckoutGate } from '../payouts/platform-checkout-gate';
+import { PurchaseConsentService } from '../purchase-consent/purchase-consent.service';
+import {
+  withdrawalWaiverSchema,
+  type WithdrawalWaiverDto,
+} from '../purchase-consent/withdrawal-waiver';
 import { SubscriptionsGraceExpirationWorker } from './subscriptions-grace-expiration.worker';
 
 /**
@@ -53,6 +58,8 @@ const startCheckoutSchema = z
       .min(1)
       .max(255)
       .regex(/^price_[A-Za-z0-9]+$/, 'stripePriceId debe ser un Stripe Price ID válido'),
+    /** Renuncia al desistimiento (obligatoria: 422 si falta). */
+    withdrawalWaiver: withdrawalWaiverSchema.optional(),
   })
   .strict();
 
@@ -79,6 +86,8 @@ export class SubscriptionsController {
     private readonly prisma: PrismaService,
     private readonly graceExpiration: SubscriptionsGraceExpirationWorker,
     private readonly tenantResolver: TenantResolverService,
+    /** Renuncia al desistimiento: prueba antes de pagar y confirmación después. */
+    private readonly consents: PurchaseConsentService,
     /**
      * Solo con el modo plataforma encendido (E5): dice qué clientes de Stripe
      * son de la cuenta del operador, cuyo portal lleva el nombre del creador.
@@ -95,20 +104,42 @@ export class SubscriptionsController {
   async startCheckout(
     @Param('courseId') courseId: string,
     @CurrentUser() user: SessionClaims | undefined,
-    @Body(new ZodValidationPipe(startCheckoutSchema)) body: { stripePriceId: string },
+    @Req() req: FastifyRequest,
+    @Body(new ZodValidationPipe(startCheckoutSchema))
+    body: { stripePriceId: string; withdrawalWaiver?: WithdrawalWaiverDto },
   ) {
     if (!user) throw new UnauthorizedException();
     const account = await this.prisma.user.findUnique({
       where: { id: user.sub },
       select: { email: true },
     });
-    return this.registry.getSubscriptionsService().startSubscription({
+    const course = await this.prisma.modCoursesCourse.findFirst({
+      where: { id: courseId, tenantId: user.tenantId, deletedAt: null },
+      select: { title: true },
+    });
+    // La casilla de la renuncia al desistimiento (422 sin ella, 409 si el
+    // texto cambió), guardada antes de crear la sesión de pago.
+    const consentId = await this.consents.accept({
+      req,
+      tenantId: user.tenantId,
+      purchaseKind: 'course_subscription',
+      itemRef: courseId,
+      itemName: course?.title ?? null,
+      userId: user.sub,
+      buyerEmail: account?.email ?? null,
+      waiver: body.withdrawalWaiver,
+    });
+    const result = await this.registry.getSubscriptionsService().startSubscription({
       tenantId: user.tenantId,
       userId: user.sub,
       userEmail: account?.email ?? '',
       courseId,
       stripePriceId: body.stripePriceId,
     });
+    if (result.sessionId) {
+      await this.consents.attachSession(user.tenantId, consentId, { sessionId: result.sessionId });
+    }
+    return result;
   }
 
   @Get('me')

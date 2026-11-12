@@ -427,6 +427,47 @@ describe('retenciones y reintentos', () => {
     expect(transferPosts()[0]!.options.idempotencyKey).toBe(`payouts:transfer:${saleId}`);
   });
 
+  it('sin datos fiscales completos → HELD tax_profile_incomplete sin llamar a Stripe; completos → se transfiere', async () => {
+    let complete = false;
+    const gated = new SettlementService(db.port(), fake, settings, {
+      now: () => new Date(clock),
+      transferGate: {
+        transferBlockReason: async () => (complete ? null : 'tax_profile_incomplete'),
+      },
+    });
+    const { saleId } = newSale({ bt: { amount: 10000, fee: 175, currency: 'eur' } });
+    await expect(gated.settleSale(A, saleId)).resolves.toMatchObject({
+      outcome: 'held',
+      reason: 'tax_profile_incomplete',
+    });
+    expect(transferPosts()).toHaveLength(0);
+    // El reparto queda sellado: lo que se retiene es solo la transferencia.
+    expect(sale(saleId)).toMatchObject({
+      status: 'HELD',
+      transferAmount: 9325,
+      platformFee: 500,
+    });
+    expect(String(sale(saleId)['lastError'])).toMatch(/^tax_profile_incomplete:/);
+    complete = true;
+    // (Al completar los datos, el perfil adelanta el reintento a «ya»; aquí,
+    // con la base en memoria, basta con llegar al reintento programado.)
+    clock += 24 * HOUR + 1;
+    await expect(gated.settleSale(A, saleId)).resolves.toMatchObject({
+      outcome: 'transferred',
+      transferAmount: 9325,
+    });
+    expect(await invariantViolations()).toEqual([]);
+  });
+
+  it('el permiso de transferir solo retiene por datos fiscales, no por otros motivos', async () => {
+    const gated = new SettlementService(db.port(), fake, settings, {
+      now: () => new Date(clock),
+      transferGate: { transferBlockReason: async () => 'otra_cosa' },
+    });
+    const { saleId } = newSale({ bt: { amount: 10000, fee: 175, currency: 'eur' } });
+    await expect(gated.settleSale(A, saleId)).resolves.toMatchObject({ outcome: 'transferred' });
+  });
+
   it('cargo reembolsado en Stripe sin anotar → sella el reparto pero HELD sin transferir (E6 lo anota)', async () => {
     const { saleId, chargeId } = newSale({ bt: { amount: 10000, fee: 175, currency: 'eur' } });
     fake.patch(chargeId, { amount_refunded: 10000, refunded: true });

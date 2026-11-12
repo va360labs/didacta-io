@@ -198,5 +198,11 @@
   "PAYOUTS_REFUND_EXCEEDS_REMAINING": "Ese importe es mayor que lo que queda por devolver de esta venta.",
   "PAYOUTS_REFUND_REJECTED": "El banco no ha aceptado el reembolso. No se ha devuelto nada; inténtalo de nuevo más tarde.",
   "PAYOUTS_PRICE_CURRENCY": "No se puede poner ese precio en {detail}. Elige una moneda de la lista y un importe que se pueda cobrar en ella.",
-  "BILLING_PRICE_ID_NOT_ALLOWED": "Aquí el precio se escribe como importe: no hace falta crear nada en Stripe."
+  "BILLING_PRICE_ID_NOT_ALLOWED": "Aquí el precio se escribe como importe: no hace falta crear nada en Stripe.",
+  "CHECKOUT_WITHDRAWAL_WAIVER_REQUIRED": "Para comprar tienes que marcar la casilla: pides acceso inmediato y aceptas que pierdes el derecho a desistir en 14 días.",
+  "CHECKOUT_WITHDRAWAL_WAIVER_OUTDATED": "El texto de la casilla ha cambiado. Recarga la página y vuelve a marcarla.",
+  "PURCHASE_CONSENT_TENANT_NOT_FOUND": "No encontramos esta academia.",
+  "PAYOUTS_TAX_PROFILE_INVALID": "Revisa tus datos fiscales: hay campos que faltan o no son válidos.",
+  "PAYOUTS_INVOICE_NOT_FOUND": "No encontramos esa factura.",
+  "PAYOUTS_INVOICING_DISABLED": "La facturación de la comisión no está activada en esta instalación."
 }

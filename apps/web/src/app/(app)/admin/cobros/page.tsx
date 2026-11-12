@@ -18,14 +18,17 @@
  * Stripe devuelve aquí al terminar el alta (`?vuelta=1`) y cuando el enlace
  * del alta caducó (`?renovar=1`).
  *
- * Debajo, «Tus ventas»: cada venta con lo que te llega y cuándo, y el resumen
- * por moneda.
+ * Debajo, «Tus datos fiscales» (factura y DAC7), «Tus ventas» (cada venta
+ * con lo que te llega y cuándo, y el resumen por moneda) y «Tus facturas» (la
+ * factura mensual de la comisión).
  */
 
-import { useCallback } from 'react';
+import { useCallback, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { PaymentsConnectCard } from '@/components/admin/payments-connect-card';
+import { PayoutsInvoicesSection } from '@/components/admin/payouts-invoices-section';
 import { PayoutsSalesSection } from '@/components/admin/payouts-sales-section';
+import { PayoutsTaxProfileCard } from '@/components/admin/payouts-tax-profile-card';
 
 export default function CobrosPage(): React.JSX.Element {
   const router = useRouter();
@@ -43,6 +46,10 @@ export default function CobrosPage(): React.JSX.Element {
   const clearQuery = useCallback(() => {
     router.replace('/admin/cobros');
   }, [router]);
+  // Al guardar los datos fiscales se liberan ventas retenidas y pueden salir
+  // facturas que los sustituyen: se recargan las dos secciones.
+  const [refreshKey, setRefreshKey] = useState(0);
+  const refresh = useCallback(() => setRefreshKey((n) => n + 1), []);
 
   return (
     <div className="max-w-5xl space-y-10">
@@ -55,7 +62,11 @@ export default function CobrosPage(): React.JSX.Element {
           onReturnHandled={clearQuery}
         />
       </div>
-      <PayoutsSalesSection />
+      <div className="max-w-3xl">
+        <PayoutsTaxProfileCard onSaved={refresh} />
+      </div>
+      <PayoutsSalesSection key={`ventas-${refreshKey}`} />
+      <PayoutsInvoicesSection refreshKey={refreshKey} />
     </div>
   );
 }

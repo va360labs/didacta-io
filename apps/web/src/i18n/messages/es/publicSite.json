@@ -199,5 +199,11 @@
     "issuedAt": "Fecha de emisión",
     "certNumber": "Nº de certificado",
     "verifiedBy": "Verificado por {name}"
+  },
+  "withdrawalWaiver": {
+    "loading": "Cargando las condiciones de la compra…",
+    "loadError": "No hemos podido cargar las condiciones de la compra y sin ellas no se puede pagar.",
+    "retry": "Reintentar",
+    "mustTick": "Marca la casilla para continuar"
   }
 }

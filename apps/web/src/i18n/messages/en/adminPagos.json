@@ -422,9 +422,11 @@
         "review": "We’re looking into it and will email you if we need anything",
         "refundedPartial": "Partly refunded",
         "disputeWon": "Dispute won: we sent it back to you",
-        "disputeLost": "Dispute lost: the bank gave it back to the student"
+        "disputeLost": "Dispute lost: the bank gave it back to the student",
+        "heldTaxData": "On hold until you complete your tax details"
       },
       "noticeHeld": "Some of your sales are on hold: the money is safe and we try again every day. If it says “until you finish setting up how you get paid”, click “Finish” above.",
+      "noticeHeldTaxData": "You have sales on hold until you complete your tax details (above). The money is safe and reaches you as soon as you complete them.",
       "noticeDebt": "You have {amount} to be taken from your next sales.",
       "summaryTitle": "Summary in {currency}",
       "summarySold": "Sold",
@@ -481,6 +483,96 @@
       "disputeNoteOpen": "On hold while the bank decides",
       "disputeNoteWon": "Sent back to you after we won the dispute",
       "disputeNoteLost": "The bank gave it back to the student"
+    },
+    "tax": {
+      "title": "Your tax details",
+      "intro": "We need them to invoice you our fee, and because the tax authorities require us to collect and report them (DAC7 rules). What Stripe already knew is filled in; you only need to add your tax ID.",
+      "status": {
+        "missing": "Missing",
+        "incomplete": "Incomplete",
+        "complete": "Complete"
+      },
+      "requiredNotice": "Until you complete them, your sales are still collected, but we don't transfer the money to you. It's kept safe and reaches you as soon as you complete them.",
+      "heldNotice": "You have {count, plural, one {# sale} other {# sales}} on hold because these details are missing. The money is safe: we transfer it as soon as you complete them.",
+      "savedComplete": "Details saved. Any sales on hold because of this are on their way.",
+      "prefillNote": "We've filled in what Stripe gave us. Check it and add your tax ID.",
+      "entityLabel": "How do you sell?",
+      "entity": {
+        "individual": "Individual or sole trader",
+        "company": "Company"
+      },
+      "legalNameLabel": "Name or company name",
+      "personNameLabel": "Full name",
+      "companyNameLabel": "Company name",
+      "countryLabel": "Country of tax residence",
+      "taxIdLabel": "Tax ID",
+      "taxIdHintEs": "Your Spanish DNI or NIE with the letter, or your company NIF.",
+      "taxIdHintOther": "Your tax identification number in your country.",
+      "taxIdSavedHint": "Saved: •••• {hint}. Only type it if it changes.",
+      "vatIdOptionalLabel": "EU VAT number (optional)",
+      "vatIdLabel": "EU VAT number",
+      "vatIdHintEs": "If you are registered for intra-EU operations (ES + your NIF).",
+      "vatIdHintEu": "If you have one, the invoice has no VAT (you account for it). Without it, our 5% includes Spanish VAT.",
+      "vatIdSavedHint": "Saved: •••• {hint}. Only type it if it changes.",
+      "vatStatus": {
+        "valid": "(checked in VIES)",
+        "invalid": "(VIES says it isn't valid)",
+        "pending": "(waiting to be checked in VIES)"
+      },
+      "addressLabel": "Tax address",
+      "line1Label": "Address",
+      "line2Label": "Flat, door… (optional)",
+      "postalCodeLabel": "Postal code",
+      "cityLabel": "City",
+      "regionLabel": "State or region (optional)",
+      "birthDateLabel": "Date of birth",
+      "birthDateHint": "The tax authorities ask for it for individuals selling on platforms.",
+      "privacyNote": "We store these details encrypted and only use them for your invoices and what the tax authorities require.",
+      "fieldErrors": {
+        "required": "This is missing.",
+        "invalid": "This isn't valid.",
+        "format": "Check the format.",
+        "check_digit": "The check letter or digit doesn't match.",
+        "entity_mismatch": "Doesn't match «How do you sell?».",
+        "not_eu": "Only for EU countries.",
+        "country_mismatch": "It isn't from your country.",
+        "underage": "You must be of legal age."
+      },
+      "save": "Save tax details",
+      "saving": "Saving…",
+      "edit": "Change",
+      "cancel": "Cancel",
+      "loadError": "We couldn't load your tax details.",
+      "saveError": "We couldn't save your details. Please try again."
+    },
+    "invoices": {
+      "title": "Your invoices",
+      "intro": "Every month we invoice you our fee, with VAT shown separately. There's nothing to pay: it was already deducted from your sales.",
+      "empty": "No invoices yet. The first one arrives early in the month after your first sale.",
+      "disabled": "Fee invoicing isn't turned on in this installation (issuer details missing).",
+      "line": "Issued on {date} · sales from {from} to {to}",
+      "rectifying": "Corrective",
+      "replaced": "Replaced by {number}",
+      "pendingData": "Your tax details are missing",
+      "testMode": "Test mode",
+      "rectifies": "Corrects: {numbers}",
+      "vatBreakdown": "{base} + {rate}% VAT ({vat})",
+      "regime": {
+        "ES_VAT": "VAT included",
+        "ES_VAT_EU_NO_VAT_ID": "Spanish VAT included",
+        "EU_REVERSE_CHARGE": "No VAT: reverse charge",
+        "NOT_SUBJECT_OUTSIDE_EU": "No VAT: outside the EU",
+        "NOT_SUBJECT_ES_SPECIAL_TERRITORY": "No VAT: Canary Islands, Ceuta or Melilla"
+      },
+      "download": "Download PDF",
+      "downloading": "Downloading…",
+      "downloadError": "We couldn't download the invoice.",
+      "loadError": "We couldn't load your invoices.",
+      "runMonthLabel": "Month to invoice (all academies)",
+      "run": "Issue the month's invoices",
+      "running": "Issuing…",
+      "runDone": "{month}: {issued} invoices issued, {sent} emails sent, {errors} errors.",
+      "runError": "Couldn't issue them."
     }
   }
 }

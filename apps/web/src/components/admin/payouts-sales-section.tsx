@@ -112,7 +112,12 @@ export function PayoutsSalesSection({
       s.status === 'HELD' &&
       s.reason !== 'charge_refunded' &&
       s.reason !== 'charge_disputed' &&
+      s.reason !== 'tax_profile_incomplete' &&
       !s.disputeOpen,
+  );
+  // Retenidas por faltar los datos fiscales: se arregla en la tarjeta de arriba.
+  const anyTaxHeld = sales?.items.some(
+    (s) => s.status === 'HELD' && s.reason === 'tax_profile_incomplete',
   );
   const debts = summary?.debts ?? [];
   const disputes = summary?.disputes ?? [];
@@ -167,6 +172,11 @@ export function PayoutsSalesSection({
         <Notice tone="info">{t('awaiting', { count: summary.awaitingFeeCount })}</Notice>
       ) : null}
       {anyHeld ? <Notice tone="warning">{t('noticeHeld')}</Notice> : null}
+      {anyTaxHeld ? (
+        <Notice tone="warning" testId="payouts-notice-tax-held">
+          {t('noticeHeldTaxData')}
+        </Notice>
+      ) : null}
       {disputes.map((d) => (
         <Notice key={d.id} tone="warning" testId="payouts-notice-dispute">
           {d.evidenceDueBy
