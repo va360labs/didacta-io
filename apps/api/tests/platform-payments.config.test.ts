@@ -113,7 +113,38 @@ describe('modo plataforma ENCENDIDO — valores por defecto del plan', () => {
       accountsApi: 'v2',
       displayName: 'Didacta',
       debtAlertMinor: 10000,
+      // E6: lo decidido por el dueño — el operador devuelve su 5 % en
+      // proporción; la comisión de la tarjeta y la disputa perdida, el creador.
+      lossPolicy: {
+        refundPlatformFee: true,
+        refundCardFeeBearer: 'creator',
+        disputeLossBearer: 'creator',
+      },
+      operatorAlertEmail: null,
     });
+  });
+
+  it('E6: la política de devoluciones y el correo de alertas son configurables', () => {
+    const config = cargar(
+      encendido({
+        PAYMENTS_PLATFORM_REFUND_PLATFORM_FEE: 'none',
+        PAYMENTS_PLATFORM_REFUND_CARD_FEE_BEARER: 'platform',
+        PAYMENTS_PLATFORM_DISPUTE_LOSS_BEARER: 'platform',
+        PAYMENTS_PLATFORM_OPERATOR_ALERT_EMAIL: 'cobros@example.com',
+      }),
+    ) as Extract<ReturnType<typeof cargar>, { enabled: true }>;
+    expect(config.lossPolicy).toEqual({
+      refundPlatformFee: false,
+      refundCardFeeBearer: 'platform',
+      disputeLossBearer: 'platform',
+    });
+    expect(config.operatorAlertEmail).toBe('cobros@example.com');
+    expect(() => cargar(encendido({ PAYMENTS_PLATFORM_REFUND_CARD_FEE_BEARER: 'alumno' }))).toThrow(
+      /PAYMENTS_PLATFORM_REFUND_CARD_FEE_BEARER/,
+    );
+    expect(() =>
+      cargar(encendido({ PAYMENTS_PLATFORM_OPERATOR_ALERT_EMAIL: 'no-es-un-correo' })),
+    ).toThrow(/PAYMENTS_PLATFORM_OPERATOR_ALERT_EMAIL/);
   });
 
   it('la lista de países por defecto: ES, UE/EEE, GB, CH, US y CA; sin Latinoamérica', () => {

@@ -1,0 +1,176 @@
+/**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ *
+ * Avisos de dinero de los cobros de plataforma (E6): textos en llano (es/en),
+ * a quién van y por qué SMTP. Nunca lanzan.
+ */
+
+import { describe, expect, it, vi } from 'vitest';
+import {
+  PayoutsEmailNotifier,
+  debtChargedTexts,
+  disputeOpenedTexts,
+  formatMinor,
+} from '../src/modules/payouts/payouts-notifier';
+
+const TENANT = '11111111-1111-4111-8111-111111111111';
+
+function deps(overrides: Record<string, unknown> = {}) {
+  const sent: Array<{ to: string; subject: string; text: string }> = [];
+  const smtp = {
+    send: vi.fn(async (_config: unknown, input: { to: string; subject: string; text: string }) => {
+      sent.push(input);
+      return { ok: true };
+    }),
+  };
+  const smtpResolver = {
+    resolve: vi.fn(async () => ({
+      config: { host: 'smtp.aula' },
+      source: 'tenant',
+      verified: true,
+    })),
+    resolveGlobal: vi.fn(() => ({
+      config: { host: 'smtp.global' },
+      source: 'global',
+      verified: false,
+    })),
+  };
+  const prisma = {
+    user: {
+      findMany: vi.fn(async () => [
+        { email: 'creadora@aula.test', locale: 'es' },
+        { email: 'socio@aula.test', locale: 'en-GB' },
+      ]),
+    },
+    tenant: { findUnique: vi.fn(async () => ({ name: 'Aula de Ana' })) },
+    modThemingTenantTheme: { findUnique: vi.fn(async () => null) },
+  };
+  const logger = { warn: vi.fn(), log: vi.fn(), error: vi.fn() };
+  const notifier = new PayoutsEmailNotifier({
+    prisma: prisma as never,
+    logger: logger as never,
+    operatorName: 'Didacta',
+    operatorAlertEmail: 'cobros@didacta.test',
+    smtpResolver: smtpResolver as never,
+    smtp: smtp as never,
+    tenantResolver: {
+      resolveTenantWebBaseUrlForBackground: async () => 'https://ana.test',
+    } as never,
+    ...overrides,
+  });
+  return { notifier, sent, smtp, smtpResolver, prisma, logger };
+}
+
+describe('textos', () => {
+  it('importes con sus decimales, como en el panel de Stripe', () => {
+    expect(formatMinor(17500, 'eur', 'es')).toMatch(/175,00\s€/);
+    expect(formatMinor(9325, 'eur', 'en')).toBe('€93.25');
+    expect(formatMinor(1000, 'jpy', 'en')).toBe('JP¥1,000');
+  });
+
+  it('deuda: «Te descontaremos {importe} de tus próximos cobros por {motivo}»', () => {
+    const es = debtChargedTexts({
+      lang: 'es',
+      description: 'Curso de Excel',
+      amount: '1,75 €',
+      cause: 'refund',
+    });
+    expect(es.subject).toBe('Te descontaremos 1,75 € de tus próximos cobros');
+    expect(es.body).toContain(
+      'Por el reembolso de «Curso de Excel», te descontaremos 1,75 € de tus próximos cobros.',
+    );
+    const lost = debtChargedTexts({
+      lang: 'es',
+      description: 'Curso',
+      amount: '23,40 €',
+      cause: 'dispute_lost',
+    });
+    expect(lost.body).toContain('tasa del banco y comisión de la tarjeta');
+    const en = debtChargedTexts({
+      lang: 'en',
+      description: 'Excel',
+      amount: '€1.75',
+      cause: 'refund',
+    });
+    expect(en.subject).toBe("We'll take €1.75 from your next payouts");
+  });
+
+  it('disputa: fecha límite y qué pasa con el dinero, sin jerga', () => {
+    const es = disputeOpenedTexts({
+      lang: 'es',
+      operator: 'Didacta',
+      description: 'Curso de Excel',
+      amount: '100,00 €',
+      dueBy: '22 de noviembre de 2026',
+    });
+    expect(es.body).toContain('antes del 22 de noviembre de 2026');
+    expect(es.body).toContain('Si el banco nos da la razón, te lo devolvemos entero');
+    for (const word of ['chargeback', 'dispute', 'Stripe', 'transfer']) {
+      expect(es.body).not.toContain(word);
+    }
+  });
+});
+
+describe('envío', () => {
+  it('al creador: a cada administrador en su idioma, con el SMTP del aula', async () => {
+    const { notifier, sent, smtpResolver } = deps();
+    await notifier.debtCharged({
+      tenantId: TENANT,
+      saleId: null,
+      description: 'Curso de Excel',
+      amount: 175,
+      currency: 'eur',
+      cause: 'refund',
+    });
+    expect(smtpResolver.resolve).toHaveBeenCalledWith(TENANT);
+    expect(sent.map((m) => [m.to, m.subject])).toEqual([
+      ['creadora@aula.test', expect.stringMatching(/^Te descontaremos 1,75\s€/)],
+      ['socio@aula.test', "We'll take €1.75 from your next payouts"],
+    ]);
+    expect(sent[0]!.text).toContain('https://ana.test/admin/cobros');
+  });
+
+  it('al operador: solo con correo configurado y por el SMTP global', async () => {
+    const { notifier, sent, smtpResolver } = deps();
+    await notifier.operatorAlert('payouts.debt_alert', { tenantId: TENANT, outstanding: 20000 });
+    expect(smtpResolver.resolveGlobal).toHaveBeenCalled();
+    expect(sent).toEqual([
+      expect.objectContaining({
+        to: 'cobros@didacta.test',
+        subject: '[Didacta · cobros] payouts.debt_alert',
+      }),
+    ]);
+    const without = deps({ operatorAlertEmail: null });
+    await without.notifier.operatorAlert('payouts.debt_alert', {});
+    expect(without.sent).toEqual([]);
+  });
+
+  it('sin SMTP o con un fallo, no lanza: queda en el log', async () => {
+    const { notifier, smtpResolver, logger } = deps();
+    smtpResolver.resolve.mockResolvedValueOnce(null as never);
+    await expect(
+      notifier.disputeOpened({
+        tenantId: TENANT,
+        saleId: 's',
+        description: null,
+        amount: 10000,
+        currency: 'eur',
+        evidenceDueBy: null,
+      }),
+    ).resolves.toBeUndefined();
+    expect(logger.warn).toHaveBeenCalled();
+    const broken = deps();
+    broken.prisma.user.findMany.mockRejectedValueOnce(new Error('base caída'));
+    await expect(
+      broken.notifier.debtCharged({
+        tenantId: TENANT,
+        saleId: null,
+        description: null,
+        amount: 1,
+        currency: 'eur',
+        cause: 'refund',
+      }),
+    ).resolves.toBeUndefined();
+  });
+});

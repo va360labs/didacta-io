@@ -5,8 +5,12 @@
 
 import type { Prisma } from '@didacta/database';
 import {
+  DISPUTE_EVENT_TYPES,
+  REFUND_EVENT_TYPES,
   checkTransferEvent,
   handleChargeEvent,
+  handleDisputeEvent,
+  handleRefundEvent,
   minimalEventPayload,
   recordCheckoutSale,
   resolvePlatformEventTenant,
@@ -46,6 +50,10 @@ export interface PlatformWebhookResult {
    * `no_sale`… o `pending` si falló (la recoge el barrido).
    */
   readonly settlement?: SettleOutcome['outcome'] | 'no_sale' | 'pending';
+  /** E6: qué pasó con un reembolso (`synced`, `no_sale`…) o `pending` si falló. */
+  readonly refund?: string;
+  /** E6: qué pasó con una disputa (`synced`, `no_sale`…) o `pending` si falló. */
+  readonly dispute?: string;
 }
 
 /** Alerta que buscan los operadores en los logs. */
@@ -201,6 +209,8 @@ export class PlatformEventProcessor {
           outcome: 'processed',
           ...(money.sale ? { sale: money.sale } : {}),
           ...(money.settlement ? { settlement: money.settlement } : {}),
+          ...(money.refund ? { refund: money.refund } : {}),
+          ...(money.dispute ? { dispute: money.dispute } : {}),
         } as const;
       },
       { traceLabel: 'payouts-webhook' },
@@ -219,6 +229,8 @@ export class PlatformEventProcessor {
   ): Promise<{
     sale?: PlatformWebhookResult['sale'];
     settlement?: PlatformWebhookResult['settlement'];
+    refund?: string;
+    dispute?: string;
     error: string | null;
   }> {
     const fail = (stage: string, err: unknown, extra: Record<string, unknown>) => {
@@ -259,6 +271,39 @@ export class PlatformEventProcessor {
       }
       return { sale: recorded.outcome, error: null };
     }
+
+    // ── E6: reembolsos y disputas (antes que `charge`: `charge.refunded` es suyo).
+    if (REFUND_EVENT_TYPES.has(event.type)) {
+      try {
+        const result = await handleRefundEvent(
+          { refunds: this.runtime.refunds },
+          {
+            tenantId,
+            eventType: event.type,
+            object: (event.data?.object ?? {}) as Record<string, unknown>,
+          },
+        );
+        return { refund: result.outcome, error: null };
+      } catch (err) {
+        return { refund: 'pending', error: fail('refund', err, { objectId: route.primaryId }) };
+      }
+    }
+    if (DISPUTE_EVENT_TYPES.has(event.type)) {
+      try {
+        const result = await handleDisputeEvent(
+          { disputes: this.runtime.disputes },
+          {
+            tenantId,
+            eventType: event.type,
+            object: (event.data?.object ?? {}) as Record<string, unknown>,
+          },
+        );
+        return { dispute: result.outcome, error: null };
+      } catch (err) {
+        return { dispute: 'pending', error: fail('dispute', err, { disputeId: route.primaryId }) };
+      }
+    }
+    // ── fin E6
 
     if (route.family === 'charge') {
       try {

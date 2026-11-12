@@ -4,7 +4,13 @@
  */
 
 import { z } from 'zod';
-import { DEFAULT_FEE_BPS, MAX_FEE_BPS, stripeKeyLivemode } from '@didacta/mod-payouts';
+import {
+  DEFAULT_FEE_BPS,
+  DEFAULT_LOSS_POLICY,
+  MAX_FEE_BPS,
+  stripeKeyLivemode,
+  type PayoutsLossPolicy,
+} from '@didacta/mod-payouts';
 
 /**
  * Configuración del MODO PLATAFORMA de cobros (variables `PAYMENTS_PLATFORM_*`).
@@ -40,6 +46,14 @@ export const PLATFORM_PAYMENTS_ENV = {
   accountsApi: 'PAYMENTS_PLATFORM_ACCOUNTS_API',
   displayName: 'PAYMENTS_PLATFORM_DISPLAY_NAME',
   debtAlertMinor: 'PAYMENTS_PLATFORM_DEBT_ALERT_MINOR',
+  // E6 — quién asume qué cuando el dinero vuelve (por defecto, lo decidido
+  // por el dueño: el operador devuelve su 5 % en proporción; la comisión de
+  // la tarjeta no devuelta y la tasa de una disputa perdida, el creador).
+  refundPlatformFee: 'PAYMENTS_PLATFORM_REFUND_PLATFORM_FEE',
+  refundCardFeeBearer: 'PAYMENTS_PLATFORM_REFUND_CARD_FEE_BEARER',
+  disputeLossBearer: 'PAYMENTS_PLATFORM_DISPUTE_LOSS_BEARER',
+  /** Correo del operador para las alertas de dinero (opcional). */
+  operatorAlertEmail: 'PAYMENTS_PLATFORM_OPERATOR_ALERT_EMAIL',
 } as const;
 
 /**
@@ -141,6 +155,10 @@ export interface PlatformPaymentsEnabled {
   readonly displayName: string;
   /** Deuda abierta (unidad mínima) a partir de la cual se avisa al operador. */
   readonly debtAlertMinor: number;
+  /** Quién asume qué en reembolsos y disputas (E6). */
+  readonly lossPolicy: PayoutsLossPolicy;
+  /** Adónde van las alertas de dinero por correo. `null`: solo al log. */
+  readonly operatorAlertEmail: string | null;
 }
 
 export type PlatformPaymentsConfig = PlatformPaymentsDisabled | PlatformPaymentsEnabled;
@@ -258,6 +276,10 @@ const enabledSchema = z.object({
   accountsApi: z.enum(['v2', 'v1']).default('v2'),
   displayName: z.string().max(80).default('Didacta'),
   debtAlertMinor: integerFromEnv(0, 2_147_483_647).default('10000'),
+  refundPlatformFee: z.enum(['proportional', 'none']).default('proportional'),
+  refundCardFeeBearer: z.enum(['creator', 'platform']).default('creator'),
+  disputeLossBearer: z.enum(['creator', 'platform']).default('creator'),
+  operatorAlertEmail: z.string().email('debe ser un correo electrónico').optional(),
 });
 
 type EnvKey = keyof typeof PLATFORM_PAYMENTS_ENV;
@@ -325,8 +347,17 @@ export function loadPlatformPaymentsConfig(
     accountsApi: data.accountsApi,
     displayName: data.displayName,
     debtAlertMinor: data.debtAlertMinor,
+    lossPolicy: Object.freeze({
+      refundPlatformFee: data.refundPlatformFee === 'proportional',
+      refundCardFeeBearer: data.refundCardFeeBearer,
+      disputeLossBearer: data.disputeLossBearer,
+    }),
+    operatorAlertEmail: data.operatorAlertEmail ?? null,
   });
 }
+
+/** La política por defecto, para quien construye la configuración a mano (tests). */
+export const DEFAULT_PLATFORM_LOSS_POLICY: PayoutsLossPolicy = DEFAULT_LOSS_POLICY;
 
 /** Mensaje de un fallo de zod sin el valor recibido. */
 function describeIssue(issue: z.ZodIssue): string {

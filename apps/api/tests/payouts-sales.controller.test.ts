@@ -13,6 +13,8 @@ import type { SessionClaims } from '../src/auth/token.service';
 import {
   PayoutsSalesController,
   reconcileRunSchema,
+  refundPreviewQuerySchema,
+  refundSchema,
   salesQuerySchema,
 } from '../src/modules/payouts/payouts-sales.controller';
 import { tenantContextStorage } from '../src/tenancy/tenant-context.storage';
@@ -40,11 +42,86 @@ function build() {
       }),
     },
     settings: { get: vi.fn(async () => ({ tenantId: A, feeBps: 500, updatedAt: null })) },
+    refunds: {
+      preview: vi.fn(async (tenantId: string, saleId: string, amount?: number) => {
+        seen.push({ op: 'preview', tenantId, contextTenant: currentTenantId() ?? null });
+        return { saleId, amount: amount ?? 10000 };
+      }),
+      refund: vi.fn(async (input: { tenantId: string; saleId: string; amount?: number }) => {
+        seen.push({
+          op: 'refund',
+          tenantId: input.tenantId,
+          contextTenant: currentTenantId() ?? null,
+        });
+        return {
+          refundId: 'r-1',
+          saleId: input.saleId,
+          stripeRefundId: 're_1',
+          amount: input.amount ?? 10000,
+          currency: 'eur',
+          status: 'succeeded',
+          accounting: 'accounted',
+        };
+      }),
+    },
   };
   const reconcile = { run: vi.fn(async (options: unknown) => ({ ok: true, options })) };
-  const controller = new PayoutsSalesController(runtime as never, reconcile as never);
-  return { controller, runtime, reconcile, seen };
+  const audit = { record: vi.fn(async () => undefined) };
+  const controller = new PayoutsSalesController(
+    runtime as never,
+    reconcile as never,
+    audit as never,
+  );
+  return { controller, runtime, reconcile, seen, audit };
 }
+
+const SALE = '44444444-4444-4444-8444-444444444444';
+const REQ = { headers: {}, ip: '127.0.0.1' } as never;
+
+describe('Reembolsar (E6)', () => {
+  it('el aula sale del token, corre con su contexto, y queda en la auditoría', async () => {
+    const { controller, runtime, seen, audit } = build();
+    const result = await controller.refund(REQ, claims(['tenant_admin']), SALE, { amount: 4000 });
+    expect(result).toMatchObject({ refundId: 'r-1', amount: 4000 });
+    expect(runtime.refunds.refund).toHaveBeenCalledWith(
+      expect.objectContaining({ tenantId: A, saleId: SALE, amount: 4000, initiatedBy: 'user-1' }),
+    );
+    expect(seen).toEqual([{ op: 'refund', tenantId: A, contextTenant: A }]);
+    expect(audit.record).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tenantId: A,
+        action: 'payouts.sale.refunded',
+        resourceId: SALE,
+        metadata: expect.objectContaining({ refundId: 'r-1', stripeRefundId: 're_1' }),
+      }),
+    );
+    await controller.refundPreview(claims(['tenant_admin']), SALE, { amount: 4000 });
+    expect(runtime.refunds.preview).toHaveBeenCalledWith(A, SALE, 4000);
+  });
+
+  it('sin sesión → 401; un alumno → 403; una sesión de soporte no reembolsa', async () => {
+    const { controller, runtime } = build();
+    await expect(controller.refund(REQ, undefined, SALE, {})).rejects.toBeInstanceOf(
+      UnauthorizedException,
+    );
+    await expect(controller.refund(REQ, claims(['student']), SALE, {})).rejects.toBeInstanceOf(
+      ForbiddenException,
+    );
+    await expect(
+      controller.refund(REQ, claims(['tenant_admin'], { sup: true } as never), SALE, {}),
+    ).rejects.toMatchObject({ response: { code: 'PAYOUTS_SUPPORT_SESSION_FORBIDDEN' } });
+    expect(runtime.refunds.refund).not.toHaveBeenCalled();
+  });
+
+  it('el cuerpo se valida: importe entero > 0 y requestId UUID', () => {
+    expect(refundSchema.parse(undefined)).toEqual({});
+    expect(refundSchema.parse({ amount: '4000' })).toEqual({ amount: 4000 });
+    expect(() => refundSchema.parse({ amount: 0 })).toThrow();
+    expect(() => refundSchema.parse({ amount: 12.5 })).toThrow();
+    expect(() => refundSchema.parse({ requestId: 'no-es-uuid' })).toThrow();
+    expect(refundPreviewQuerySchema.parse({ amount: '250' })).toEqual({ amount: 250 });
+  });
+});
 
 describe('GET sales / summary', () => {
   it('el aula sale del token y la consulta corre con su contexto (RLS)', async () => {

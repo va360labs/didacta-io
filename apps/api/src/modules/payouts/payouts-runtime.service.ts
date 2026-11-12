@@ -3,16 +3,22 @@
  * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
  */
 
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Optional } from '@nestjs/common';
 import type { PrismaClient } from '@didacta/database';
 import {
   PayoutsAccountsService,
+  PayoutsDebtsService,
+  PayoutsDisputesService,
+  PayoutsOffboardingService,
+  PayoutsRefundsService,
   PayoutsReportsService,
   PayoutsSettingsService,
   RefsService,
   SettlementService,
   createConnectedAccountsApi,
   type PayoutsDbPort,
+  type PayoutsLogger,
+  type PayoutsNotifier,
   type PayoutsTx,
   type PlatformStripeClient,
   type RegisterObjectRefInput,
@@ -20,8 +26,12 @@ import {
 import { Logger as PinoLogger } from 'nestjs-pino';
 import { PrismaService } from '../../prisma/prisma.service';
 import { runAsTenant, runGlobalWithoutTenant } from '../../tenancy/tenant-context.storage';
+import { TenantResolverService } from '../../tenancy/tenant-resolver.service';
 import { PaymentModeResolver } from '../payment-mode.resolver';
+import { SmtpAdapterService } from '../smtp-adapter.service';
+import { TenantSmtpResolverService } from '../tenant-smtp-resolver.service';
 import { TenantStripeResolverService } from '../tenant-stripe-resolver.service';
+import { PayoutsEmailNotifier } from './payouts-notifier';
 import type { PlatformPaymentsEnabled } from './platform-payments.config';
 import type { PlatformRefsPort } from './platform-stripe-adapters';
 
@@ -54,6 +64,11 @@ export class PayoutsRuntime {
     readonly prisma: PrismaService,
     stripeResolver: TenantStripeResolverService,
     logger: PinoLogger,
+    // Correo de los avisos de E6. Opcionales: los tests que montan el runtime
+    // a mano no los traen y los avisos quedan solo en el log.
+    @Optional() smtpResolver?: TenantSmtpResolverService,
+    @Optional() smtp?: SmtpAdapterService,
+    @Optional() tenantResolver?: TenantResolverService,
   ) {
     const db: PayoutsDbPort = (this.db = {
       // La extensión RLS del cliente inyecta el `set_config` del tenant como
@@ -93,6 +108,42 @@ export class PayoutsRuntime {
       },
     });
     this.reports = new PayoutsReportsService(db);
+
+    // E6: reembolsos, disputas, deudas y desconexión.
+    const moneyLogger: PayoutsLogger = {
+      warn: (obj, msg) => logger.warn(obj, msg),
+      log: (obj, msg) => logger.log(obj, msg),
+      error: (obj, msg) => logger.error(obj, msg),
+    };
+    this.notifier = new PayoutsEmailNotifier({
+      prisma,
+      logger,
+      operatorName: config.displayName,
+      operatorAlertEmail: config.operatorAlertEmail,
+      smtpResolver,
+      smtp,
+      tenantResolver,
+    });
+    // Tras anotar un reembolso o una disputa de una venta aún sin transferir,
+    // que la venta siga su camino (con su importe ya rebajado).
+    const onSaleChanged = (tenantId: string, saleId: string) =>
+      this.settlement.settleSale(tenantId, saleId, { force: true });
+    const lossOptions = {
+      policy: config.lossPolicy,
+      notifier: this.notifier,
+      logger: moneyLogger,
+      onSaleChanged,
+    };
+    this.refunds = new PayoutsRefundsService(db, stripe, lossOptions);
+    this.disputes = new PayoutsDisputesService(db, stripe, lossOptions);
+    this.debts = new PayoutsDebtsService(db, stripe, {
+      logger: moneyLogger,
+      notifier: this.notifier,
+      alertThresholdMinor: config.debtAlertMinor,
+    });
+    this.offboarding = new PayoutsOffboardingService(db, stripe, this.accounts, {
+      logger: moneyLogger,
+    });
     // Sin Redis no hay barrido cada minuto: la compra y `charge.updated` se
     // liquidan en línea desde el webhook.
     this.settleInline = !process.env['REDIS_URL'];
@@ -104,6 +155,16 @@ export class PayoutsRuntime {
   readonly reports: PayoutsReportsService;
   /** `true` sin `REDIS_URL`: el webhook liquida en línea. */
   readonly settleInline: boolean;
+  /** Avisos de dinero al creador y al operador (E6). */
+  readonly notifier: PayoutsNotifier;
+  /** Reembolsos desde el panel y detectados en Stripe (E6). */
+  readonly refunds: PayoutsRefundsService;
+  /** Disputas (E6). */
+  readonly disputes: PayoutsDisputesService;
+  /** Deudas: recobro y avisos (E6). */
+  readonly debts: PayoutsDebtsService;
+  /** Desconexión de cobros y baja del aula (E6). */
+  readonly offboarding: PayoutsOffboardingService;
 
   /**
    * Registro de objetos para los adaptadores de Stripe de los módulos

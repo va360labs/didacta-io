@@ -19,16 +19,19 @@ import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import {
   PayoutsAccountNotFoundError,
   PayoutsCountryUnsupportedError,
+  type DisconnectResult,
   type PayoutsAccountView,
 } from '@didacta/mod-payouts';
 import type { FastifyRequest } from 'fastify';
 import { z } from 'zod';
+import { extractClientContext } from '../../auth/client-context';
 import { CurrentUser } from '../../auth/decorators';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import type { SessionClaims } from '../../auth/token.service';
 import { ZodValidationPipe } from '../../auth/zod-validation.pipe';
 import { runAsTenant } from '../../tenancy/tenant-context.storage';
 import { TenantResolverService } from '../../tenancy/tenant-resolver.service';
+import { PrismaAuditLogService } from '../prisma-audit-log.service';
 import { PayoutsRuntime } from './payouts-runtime.service';
 
 /**
@@ -106,6 +109,7 @@ export class PayoutsController {
   constructor(
     private readonly runtime: PayoutsRuntime,
     private readonly tenantResolver: TenantResolverService,
+    private readonly auditLog: PrismaAuditLogService,
   ) {}
 
   @Get('status')
@@ -201,6 +205,39 @@ export class PayoutsController {
     const u = requireAdmin(user);
     forbidSupportSession(u);
     return runAsTenant(u.tenantId, () => this.runtime.accounts.dashboardLink(u.tenantId));
+  }
+
+  @Post('disconnect')
+  @HttpCode(200)
+  @ApiOperation({
+    summary:
+      'Desconectar cobros: el aula deja de vender (checkout cerrado) y sus suscripciones vivas se cancelan a final de periodo. La cuenta de Stripe NO se cierra (lo pendiente se sigue pagando). Conectar de nuevo la reactiva.',
+  })
+  async disconnect(
+    @Req() req: FastifyRequest,
+    @CurrentUser() user: SessionClaims | undefined,
+  ): Promise<DisconnectResult> {
+    const u = requireAdmin(user);
+    forbidSupportSession(u);
+    const result = await runAsTenant(u.tenantId, () =>
+      this.runtime.offboarding.disconnect(u.tenantId, { reason: 'creator' }),
+    );
+    const client = extractClientContext(req);
+    await this.auditLog.record({
+      tenantId: u.tenantId,
+      actorId: u.sub,
+      action: 'payouts.account.disconnected',
+      resourceType: 'payouts_account',
+      resourceId: result.account?.stripeAccountId ?? u.tenantId,
+      metadata: {
+        changed: result.changed,
+        subscriptionsScheduled: result.subscriptionsScheduled,
+        subscriptionsFailed: result.subscriptionsFailed,
+      },
+      ip: client.ip ?? undefined,
+      userAgent: client.userAgent ?? undefined,
+    });
+    return result;
   }
 
   /** Datos con los que se prerrellena el alta: correo de quien conecta, nombre y dominio del aula. */
