@@ -6,7 +6,13 @@
 import { Injectable } from '@nestjs/common';
 import type { BillingService } from '@didacta/mod-billing';
 import type { MembershipService } from '@didacta/mod-subscriptions';
-import { PayoutsNotReadyError } from '@didacta/mod-payouts';
+import {
+  PLATFORM_PRICE_CURRENCIES,
+  PayoutsNotReadyError,
+  assertPlatformPrice,
+  settlementCurrencyOf,
+  type PriceCurrencyCheck,
+} from '@didacta/mod-payouts';
 import { runAsTenant, runGlobalWithoutTenant } from '../../tenancy/tenant-context.storage';
 import type { PaymentModeNotReadyReason } from '../payment-mode.resolver';
 import { PayoutsRuntime } from './payouts-runtime.service';
@@ -33,6 +39,37 @@ export const PAYOUTS_NOT_READY_OFFER_REASON = 'payouts_not_ready';
 @Injectable()
 export class PlatformCheckoutGate {
   constructor(private readonly runtime: PayoutsRuntime) {}
+
+  /**
+   * E8 — ¿Con qué monedas puede poner precios este aula? `null` si no cobra por
+   * la plataforma (claves propias): ahí nada cambia. En modo plataforma, la
+   * moneda de liquidación del creador (la de sus precios por defecto; `null`
+   * si aún no ha conectado) y la lista de monedas admitidas.
+   */
+  async pricePolicy(
+    tenantId: string,
+  ): Promise<{ settlementCurrency: string | null; currencies: readonly string[] } | null> {
+    const mode = await runAsTenant(tenantId, () => this.runtime.mode.resolve(tenantId));
+    if (mode.mode === 'own') return null;
+    const account = await runAsTenant(tenantId, () => this.runtime.accounts.getAccount(tenantId));
+    return {
+      settlementCurrency: settlementCurrencyOf(account),
+      currencies: PLATFORM_PRICE_CURRENCIES,
+    };
+  }
+
+  /**
+   * E8 — valida un precio antes de crearlo o cambiarlo. Con claves propias no
+   * hace nada (las monedas de siempre); en modo plataforma lanza
+   * `PayoutsPriceCurrencyError` (422) si la moneda no es de la lista, el
+   * importe no se puede cobrar en ella (5,50 ISK) o un precio extra por
+   * mercado está mal. Una moneda de la lista distinta de la del creador NO es
+   * un error: la interfaz le avisa de la conversión.
+   */
+  async assertPrice(tenantId: string, check: PriceCurrencyCheck): Promise<void> {
+    if ((await this.pricePolicy(tenantId)) === null) return;
+    assertPlatformPrice(check);
+  }
 
   /** `null` si puede vender (o no cobra por la plataforma); si no, por qué. */
   async saleBlockedReason(tenantId: string): Promise<PaymentModeNotReadyReason | null> {

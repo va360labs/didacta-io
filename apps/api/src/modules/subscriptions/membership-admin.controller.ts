@@ -9,6 +9,7 @@ import {
   Delete,
   ForbiddenException,
   Get,
+  Optional,
   Param,
   ParseUUIDPipe,
   Patch,
@@ -23,6 +24,7 @@ import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import type { SessionClaims } from '../../auth/token.service';
 import { ZodValidationPipe } from '../../auth/zod-validation.pipe';
 import { ModuleRegistryService } from '../module-registry.service';
+import { PlatformCheckoutGate } from '../payouts/platform-checkout-gate';
 import {
   createPlanSchema,
   membershipConfigSchema,
@@ -43,7 +45,33 @@ const ADMIN_ROLES = new Set(['super_admin', 'tenant_admin']);
 @Controller('membership/admin')
 @UseGuards(JwtAuthGuard)
 export class MembershipAdminController {
-  constructor(private readonly registry: ModuleRegistryService) {}
+  constructor(
+    private readonly registry: ModuleRegistryService,
+    // Solo con cobros de plataforma encendidos: valida monedas e importes.
+    @Optional() private readonly payoutsGate?: PlatformCheckoutGate,
+  ) {}
+
+  /**
+   * Cobros de plataforma: la moneda del plan es una de la lista y el importe se
+   * puede cobrar en ella (plan §9). Con claves propias, todo como siempre.
+   */
+  private async assertPlatformPlanPrice(
+    tenantId: string,
+    plan: {
+      amountCents: number;
+      compareAtCents?: number | null;
+      currency: string;
+      currencyOptions?: Record<string, number> | null;
+    },
+  ): Promise<void> {
+    if (!this.payoutsGate) return;
+    await this.payoutsGate.assertPrice(tenantId, {
+      currency: plan.currency,
+      // Un plan gratis (0) no pasa por Stripe: no hay importe que validar.
+      amounts: [plan.amountCents, plan.compareAtCents ?? 0].filter((a) => a > 0),
+      currencyOptions: plan.currencyOptions ?? null,
+    });
+  }
 
   private requireAdmin(user: SessionClaims | undefined): SessionClaims {
     if (!user) throw new UnauthorizedException();
@@ -71,6 +99,12 @@ export class MembershipAdminController {
     @Body(new ZodValidationPipe(createPlanSchema)) dto: CreatePlanDto,
   ) {
     const user = this.requireAdmin(rawUser);
+    await this.assertPlatformPlanPrice(user.tenantId, {
+      amountCents: dto.amountCents,
+      compareAtCents: dto.compareAtCents,
+      currency: dto.currency ?? 'eur',
+      currencyOptions: dto.currencyOptions,
+    });
     return this.registry.getMembershipService().createPlan(user.tenantId, dto);
   }
 
@@ -85,6 +119,28 @@ export class MembershipAdminController {
     @Body(new ZodValidationPipe(updatePlanSchema)) dto: UpdatePlanDto,
   ) {
     const user = this.requireAdmin(rawUser);
+    if (
+      dto.amountCents !== undefined ||
+      dto.currency !== undefined ||
+      dto.currencyOptions !== undefined ||
+      dto.compareAtCents !== undefined
+    ) {
+      const current = (await this.registry.getMembershipService().listPlans(user.tenantId)).find(
+        (p) => p.id === id,
+      );
+      if (current) {
+        await this.assertPlatformPlanPrice(user.tenantId, {
+          amountCents: dto.amountCents ?? current.amountCents,
+          compareAtCents:
+            dto.compareAtCents === undefined ? current.compareAtCents : dto.compareAtCents,
+          currency: dto.currency ?? current.currency,
+          currencyOptions:
+            dto.currencyOptions === undefined
+              ? (current.currencyOptions as Record<string, number> | null)
+              : dto.currencyOptions,
+        });
+      }
+    }
     return this.registry.getMembershipService().updatePlan(user.tenantId, id, dto);
   }
 

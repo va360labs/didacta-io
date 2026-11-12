@@ -45,6 +45,20 @@ const planShape = {
     .toLowerCase()
     .regex(/^[a-z]{3}$/)
     .optional(),
+  /**
+   * Precios fijos extra por mercado (`currency_options`): moneda ISO → importe
+   * en su unidad mínima. Opción avanzada; `null` = ninguno.
+   */
+  currencyOptions: z
+    .record(
+      z
+        .string()
+        .regex(/^[a-zA-Z]{3}$/)
+        .transform((c) => c.toLowerCase()),
+      z.number().int().positive().max(100_000_000_00),
+    )
+    .nullable()
+    .optional(),
   compareAtCents: z.number().int().min(1).max(100_000_000).nullable().optional(),
   trialDays: z.number().int().min(0).max(365).optional(),
   active: z.boolean().optional(),

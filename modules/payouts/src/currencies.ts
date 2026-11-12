@@ -74,12 +74,14 @@ export function isValidStripeAmount(minor: number, currency: string): boolean {
  * su país si Stripe aún no la ha dicho. `null` sin cuenta.
  */
 export function settlementCurrencyOf(
-  account: { readonly defaultCurrency: string | null; readonly country: string } | null,
+  account: {
+    readonly defaultCurrency?: string | null;
+    readonly country?: string | null;
+  } | null,
 ): string | null {
   if (!account) return null;
-  return (
-    (account.defaultCurrency ?? defaultCurrencyForCountry(account.country))?.toLowerCase() ?? null
-  );
+  const fromCountry = account.country ? defaultCurrencyForCountry(account.country) : null;
+  return (account.defaultCurrency ?? fromCountry)?.toLowerCase() ?? null;
 }
 
 export interface PriceCurrencyCheck {

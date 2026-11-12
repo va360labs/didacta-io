@@ -17,8 +17,10 @@ import {
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import {
+  PLATFORM_PRICE_CURRENCIES,
   PayoutsAccountNotFoundError,
   PayoutsCountryUnsupportedError,
+  settlementCurrencyOf,
   type DisconnectResult,
   type PayoutsAccountView,
 } from '@didacta/mod-payouts';
@@ -68,6 +70,13 @@ export interface PayoutsStatusResponse {
   readonly supportedCountries: readonly string[];
   /** Comisión del operador vigente para este aula, en puntos básicos. */
   readonly feeBps: number;
+  /**
+   * Moneda en la que Stripe le liquida al creador (la de su cuenta o la de su
+   * país): la de sus precios por defecto. `null` sin cuenta.
+   */
+  readonly settlementCurrency: string | null;
+  /** Monedas en las que puede poner precio en modo plataforma (plan §9). */
+  readonly priceCurrencies: readonly string[];
 }
 
 function requireAdmin(user: SessionClaims | undefined): SessionClaims {
@@ -146,6 +155,8 @@ export class PayoutsController {
         account,
         supportedCountries: this.runtime.accounts.supportedCountries,
         feeBps: settings.feeBps,
+        settlementCurrency: settlementCurrencyOf(account),
+        priceCurrencies: PLATFORM_PRICE_CURRENCIES,
       };
     });
   }
