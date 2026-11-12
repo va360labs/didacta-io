@@ -15,7 +15,10 @@
  *  - `POST /api/v1/modules/payouts/connect/link` → `{ url }` («Completar»).
  *  - `GET  /api/v1/modules/payouts/dashboard-link` → `{ url }` (panel Express).
  *  - `GET  /api/v1/modules/payouts/sales?page&pageSize` → ventas («Tus ventas»).
- *  - `GET  /api/v1/modules/payouts/summary` → resumen por divisa.
+ *  - `GET  /api/v1/modules/payouts/summary` → resumen por divisa, deudas y disputas.
+ *  - `GET  /api/v1/modules/payouts/sales/:id/refund-preview?amount` → qué pasaría al reembolsar.
+ *  - `POST /api/v1/modules/payouts/sales/:id/refund` → reembolsar (E6).
+ *  - `POST /api/v1/modules/payouts/disconnect` → desconectar cobros (E6).
  */
 
 import { ApiHttpError, apiFetch } from './api-client';
@@ -136,6 +139,34 @@ export const payoutsApi = {
       throw err;
     }
   },
+  /** Qué pasaría al reembolsar `amount` (moneda del cargo; sin él, todo lo que queda). */
+  refundPreview(saleId: string, amount?: number) {
+    const query = amount === undefined ? '' : `?amount=${amount}`;
+    return apiFetch<PayoutsRefundPreviewDto>(
+      `/api/v1/modules/payouts/sales/${encodeURIComponent(saleId)}/refund-preview${query}`,
+      { method: 'GET' },
+      withAuth(),
+    );
+  },
+  /**
+   * Reembolsa. `requestId` lo genera el diálogo al abrirse: un doble clic o
+   * un reintento con el mismo acaban en UN solo reembolso.
+   */
+  refund(saleId: string, input: { amount?: number; requestId: string }) {
+    return apiFetch<PayoutsRefundResultDto>(
+      `/api/v1/modules/payouts/sales/${encodeURIComponent(saleId)}/refund`,
+      { method: 'POST', body: JSON.stringify(input) },
+      withAuth(),
+    );
+  },
+  /** Desconectar cobros: el aula deja de vender; la cuenta de Stripe no se cierra. */
+  disconnect() {
+    return apiFetch<{ changed: boolean; subscriptionsScheduled: number }>(
+      '/api/v1/modules/payouts/disconnect',
+      { method: 'POST', body: JSON.stringify({}) },
+      withAuth(),
+    );
+  },
   /** Resumen por divisa. `null` = sin modo plataforma. */
   async summary(): Promise<PayoutsSummaryDto | null> {
     try {
@@ -182,7 +213,15 @@ export interface PayoutsSaleDto {
   creatorNet: number | null;
   debtNetted: number;
   transferAmount: number | null;
+  /** Devuelto al alumno, en la moneda en la que cobra el creador. */
   refundedAmount: number;
+  /** Retirado de lo que ya se le había enviado (reembolsos, reclamaciones). */
+  reversedAmount: number;
+  refundState: 'none' | 'partial' | 'full';
+  /** El alumno reclamó el pago a su banco y aún no se ha decidido. */
+  disputeOpen: boolean;
+  /** Se puede reembolsar desde aquí ahora mismo. */
+  canRefund: boolean;
   transferredAt: string | null;
   availableOn: string | null;
   /** `YYYY-MM-DD` (UTC): día estimado del pago al banco. */
@@ -206,6 +245,41 @@ export interface PayoutsCurrencySummaryDto {
   pending: number;
   debtNetted: number;
   debtOutstanding: number;
+  refunded: number;
+  reversed: number;
+}
+
+export type PayoutsDebtReason =
+  | 'REFUND_FEE'
+  | 'DISPUTE'
+  | 'DISPUTE_FEE'
+  | 'REVERSAL_FAILED'
+  | 'MANUAL';
+
+/** Una deuda abierta: se descuenta sola de las próximas ventas en su moneda. */
+export interface PayoutsDebtDto {
+  id: string;
+  reason: PayoutsDebtReason;
+  amountOriginal: number;
+  amountOutstanding: number;
+  currency: string;
+  createdAt: string;
+  saleId: string | null;
+  saleDescription: string | null;
+  /** De una reclamación aún sin decidir: no se descuenta hasta que se decida. */
+  frozen: boolean;
+}
+
+/** Una reclamación del alumno a su banco, aún sin decidir. */
+export interface PayoutsDisputeDto {
+  id: string;
+  saleId: string;
+  saleDescription: string | null;
+  status: string;
+  amount: number;
+  currency: string;
+  reason: string | null;
+  evidenceDueBy: string | null;
 }
 
 export interface PayoutsSummaryDto {
@@ -213,6 +287,70 @@ export interface PayoutsSummaryDto {
   awaitingFeeCount: number;
   operatorName: string;
   feeBps: number;
+  /** E6. Ausentes en una API anterior: se tratan como vacías. */
+  debts?: PayoutsDebtDto[];
+  disputes?: PayoutsDisputeDto[];
+}
+
+/** `GET …/refund-preview`: lo calcula la API; aquí no se calcula ningún importe. */
+export interface PayoutsRefundPreviewDto {
+  saleId: string;
+  chargeCurrency: string;
+  refundable: number;
+  amount: number;
+  currency: string;
+  settlementAmount: number;
+  creatorShare: number;
+  cardFee: number;
+  cardFeeToCreator: number;
+  platformFeeReturned: number;
+  platformFeeToCreator: number;
+  creatorTotal: number;
+  alreadyPaidOut: boolean;
+}
+
+export interface PayoutsRefundResultDto {
+  refundId: string;
+  saleId: string;
+  stripeRefundId: string | null;
+  amount: number;
+  currency: string;
+  status: string;
+  accounting: string;
+}
+
+/**
+ * Lo que escribe el creador («40», «40,50», «40.5») → unidad mínima de Stripe
+ * (4050). `null` si no es un importe válido y positivo. Sin redondeos: más de
+ * los decimales de la moneda es un error, no se recorta en silencio.
+ */
+export function parseRefundAmount(input: string, currency: string): number | null {
+  const trimmed = input.trim().replace(/\s/g, '');
+  const zero = STRIPE_ZERO_DECIMAL_CURRENCIES.has(currency.toLowerCase());
+  const match = zero ? /^(\d{1,9})$/.exec(trimmed) : /^(\d{1,9})(?:[.,](\d{1,2}))?$/.exec(trimmed);
+  if (!match) return null;
+  const units = Number(match[1]);
+  const cents = zero ? 0 : Number((match[2] ?? '').padEnd(2, '0') || '0');
+  const minor = zero ? units : units * 100 + cents;
+  return minor > 0 ? minor : null;
+}
+
+/** Unidad mínima → texto editable en el campo del diálogo («40,50» / «40.50»). */
+export function refundAmountInput(amount: number, currency: string, locale: string): string {
+  if (STRIPE_ZERO_DECIMAL_CURRENCIES.has(currency.toLowerCase())) return String(amount);
+  const text = (amount / 100).toFixed(2);
+  return locale.startsWith('es') ? text.replace('.', ',') : text;
+}
+
+/** Clave del motivo de una deuda en `adminPagos.payouts.sales.debtReasons.*`. */
+export function debtReasonKey(reason: string): PayoutsDebtReason {
+  const known: readonly PayoutsDebtReason[] = [
+    'REFUND_FEE',
+    'DISPUTE',
+    'DISPUTE_FEE',
+    'REVERSAL_FAILED',
+  ];
+  return (known as readonly string[]).includes(reason) ? (reason as PayoutsDebtReason) : 'MANUAL';
 }
 
 /**
@@ -238,6 +376,8 @@ const STRIPE_ZERO_DECIMAL = new Set([
   'xof',
   'xpf',
 ]);
+
+const STRIPE_ZERO_DECIMAL_CURRENCIES: ReadonlySet<string> = STRIPE_ZERO_DECIMAL;
 
 /** Importe de Stripe (unidad mínima) → unidades de la divisa. */
 export function stripeMinorToMajor(amount: number, currency: string): number {
@@ -268,6 +408,7 @@ export type PayoutsSaleStatusKey =
   | 'heldAccount'
   | 'heldRetry'
   | 'refunded'
+  | 'refundedPartial'
   | 'disputed'
   | 'review';
 
@@ -277,8 +418,15 @@ export interface PayoutsSaleStatusView {
 }
 
 export function saleStatusView(
-  sale: Pick<PayoutsSaleDto, 'status' | 'reason'>,
+  sale: Pick<PayoutsSaleDto, 'status' | 'reason'> &
+    Partial<Pick<PayoutsSaleDto, 'refundState' | 'disputeOpen'>>,
 ): PayoutsSaleStatusView {
+  // Lo que le pasó a la venta después de cobrarse manda sobre cómo va su envío.
+  if (sale.disputeOpen) return { key: 'disputed', tone: 'danger' };
+  if (sale.refundState === 'full') return { key: 'refunded', tone: 'neutral' };
+  if (sale.refundState === 'partial' && sale.status !== 'HELD') {
+    return { key: 'refundedPartial', tone: 'neutral' };
+  }
   switch (sale.status) {
     case 'AWAITING_FEE':
       return { key: 'calculating', tone: 'neutral' };

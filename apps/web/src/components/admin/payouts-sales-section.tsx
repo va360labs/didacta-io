@@ -16,10 +16,15 @@
  * importe.
  *
  * Sin modo plataforma las rutas no existen (404) y la sección no se pinta.
- * El reembolso desde aquí llega con la etapa de reembolsos (E6).
+ *
+ * E6: botón «Reembolsar» en cada venta que se pueda (diálogo con lo que
+ * recibe el alumno y lo que se descuenta al creador), avisos de deuda («Te
+ * descontaremos {importe} de tus próximos cobros por {motivo}») y de
+ * reclamaciones abiertas con su fecha límite.
  */
 
 import { useCallback, useEffect, useState } from 'react';
+import { PayoutsRefundDialog } from '@/components/admin/payouts-refund-dialog';
 import { useLocale, useTranslations } from 'next-intl';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -29,6 +34,7 @@ import { apiErrorMessage } from '@/lib/i18n/api-error';
 import { formatDate } from '@/lib/i18n/format';
 import { labelOr } from '@/lib/i18n/labels';
 import {
+  debtReasonKey,
   feePercent,
   formatStripeAmount,
   payoutsApi,
@@ -51,7 +57,7 @@ const BADGE_BY_TONE = {
 
 export interface PayoutsSalesSectionProps {
   /** Inyectable para tests. */
-  api?: Pick<typeof payoutsApi, 'sales' | 'summary'>;
+  api?: Pick<typeof payoutsApi, 'sales' | 'summary' | 'refundPreview' | 'refund'>;
 }
 
 export function PayoutsSalesSection({
@@ -66,6 +72,7 @@ export function PayoutsSalesSection({
   const [sales, setSales] = useState<PayoutsSalesPageDto | null | undefined>(undefined);
   const [summary, setSummary] = useState<PayoutsSummaryDto | null | undefined>(undefined);
   const [error, setError] = useState<string | null>(null);
+  const [refunding, setRefunding] = useState<PayoutsSaleDto | null>(null);
 
   const load = useCallback(
     async (target: number) => {
@@ -99,8 +106,17 @@ export function PayoutsSalesSection({
   const currencyName = (code: string) =>
     labelOr(tPayouts, `currencies.${code.toLowerCase()}`, code.toUpperCase());
   const pages = sales ? Math.max(1, Math.ceil(sales.total / sales.pageSize)) : 1;
-  const anyHeld = sales?.items.some((s) => s.status === 'HELD' && s.reason !== 'charge_refunded');
-  const debts = (summary?.currencies ?? []).filter((c) => c.debtOutstanding > 0);
+  const anyHeld = sales?.items.some(
+    (s) =>
+      s.status === 'HELD' &&
+      s.reason !== 'charge_refunded' &&
+      s.reason !== 'charge_disputed' &&
+      !s.disputeOpen,
+  );
+  const debts = summary?.debts ?? [];
+  const disputes = summary?.disputes ?? [];
+  const date = (iso: string) =>
+    formatDate(iso, { locale, day: 'numeric', month: 'long', year: 'numeric' });
 
   return (
     <section
@@ -150,9 +166,29 @@ export function PayoutsSalesSection({
         <Notice tone="info">{t('awaiting', { count: summary.awaitingFeeCount })}</Notice>
       ) : null}
       {anyHeld ? <Notice tone="warning">{t('noticeHeld')}</Notice> : null}
+      {disputes.map((d) => (
+        <Notice key={d.id} tone="warning" testId="payouts-notice-dispute">
+          {d.evidenceDueBy
+            ? t('noticeDispute', {
+                item: d.saleDescription ?? t('noDescription'),
+                amount: money(d.amount, d.currency) ?? '',
+                date: date(d.evidenceDueBy),
+              })
+            : t('noticeDisputeNoDate', {
+                item: d.saleDescription ?? t('noDescription'),
+                amount: money(d.amount, d.currency) ?? '',
+              })}
+        </Notice>
+      ))}
       {debts.map((d) => (
-        <Notice key={d.currency} tone="warning">
-          {t('noticeDebt', { amount: money(d.debtOutstanding, d.currency) ?? '' })}
+        <Notice key={d.id} tone="warning" testId="payouts-notice-debt">
+          {t('noticeDebtItem', {
+            amount: money(d.amountOutstanding, d.currency) ?? '',
+            reason: t(`debtReasons.${debtReasonKey(d.reason)}`, {
+              item: d.saleDescription ?? t('noDescription'),
+            }),
+          })}
+          {d.frozen ? ` ${t('noticeDebtFrozen')}` : null}
         </Notice>
       ))}
 
@@ -181,7 +217,10 @@ export function PayoutsSalesSection({
                     </th>
                     <th className="py-2 pr-3 text-right font-medium">{t('colYouGet')}</th>
                     <th className="py-2 pr-3 font-medium">{t('colArrives')}</th>
-                    <th className="py-2 font-medium">{t('colStatus')}</th>
+                    <th className="py-2 pr-3 font-medium">{t('colStatus')}</th>
+                    <th className="py-2 font-medium">
+                      <span className="sr-only">{t('refundCta')}</span>
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
@@ -212,17 +251,35 @@ export function PayoutsSalesSection({
                               {row.debtNote}
                             </span>
                           ) : null}
+                          {row.refundNote ? (
+                            <span className="block text-xs font-normal text-text-subtle">
+                              {row.refundNote}
+                            </span>
+                          ) : null}
                         </td>
                         <td className="whitespace-nowrap py-3 pr-3 text-text-muted">
                           {row.arrives}
                         </td>
-                        <td className="py-3">
+                        <td className="py-3 pr-3">
                           <Badge
                             variant={BADGE_BY_TONE[row.status.tone]}
                             className="whitespace-nowrap"
                           >
                             {t(`status.${row.status.key}`)}
                           </Badge>
+                        </td>
+                        <td className="py-3 text-right">
+                          {sale.canRefund ? (
+                            <Button
+                              type="button"
+                              variant="secondary"
+                              size="sm"
+                              onClick={() => setRefunding(sale)}
+                              data-testid="refund-open"
+                            >
+                              {t('refundCta')}
+                            </Button>
+                          ) : null}
                         </td>
                       </tr>
                     );
@@ -268,10 +325,25 @@ export function PayoutsSalesSection({
                             {row.debtNote}
                           </span>
                         ) : null}
+                        {row.refundNote ? (
+                          <span className="block text-xs font-normal text-text-subtle">
+                            {row.refundNote}
+                          </span>
+                        ) : null}
                       </dd>
                       <dt className="text-text-muted">{t('colArrives')}</dt>
                       <dd className="text-right text-text-muted">{row.arrives}</dd>
                     </dl>
+                    {sale.canRefund ? (
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => setRefunding(sale)}
+                      >
+                        {t('refundCta')}
+                      </Button>
+                    ) : null}
                   </li>
                 );
               })}
@@ -302,6 +374,19 @@ export function PayoutsSalesSection({
             ) : null}
           </CardContent>
         </Card>
+      ) : null}
+
+      {refunding ? (
+        <PayoutsRefundDialog
+          sale={refunding}
+          operatorName={operator}
+          open
+          onOpenChange={(open) => {
+            if (!open) setRefunding(null);
+          }}
+          onRefunded={() => void load(page)}
+          api={api}
+        />
       ) : null}
     </section>
   );
@@ -362,6 +447,10 @@ export function describeSale(
       sale.debtNetted > 0
         ? t('debtPaid', { amount: money(sale.debtNetted, sale.currency)! })
         : null,
+    refundNote:
+      (sale.refundedAmount ?? 0) > 0
+        ? t('refundedNote', { amount: money(sale.refundedAmount, sale.currency)! })
+        : null,
     arrives,
   };
 }
@@ -385,6 +474,8 @@ function CurrencySummaryCard({
     [t('summaryReceived'), summary.received, true],
     [t('summaryPending'), summary.pending],
   ];
+  if ((summary.refunded ?? 0) > 0) rows.push([t('summaryRefunded'), summary.refunded]);
+  if ((summary.reversed ?? 0) > 0) rows.push([t('summaryReversed'), summary.reversed]);
   if (summary.debtNetted > 0) rows.push([t('summaryDebtNetted'), summary.debtNetted]);
   if (summary.debtOutstanding > 0) rows.push([t('summaryDebt'), summary.debtOutstanding]);
   return (
@@ -414,9 +505,11 @@ function CurrencySummaryCard({
 function Notice({
   tone,
   children,
+  testId,
 }: {
   tone: 'info' | 'warning';
   children: React.ReactNode;
+  testId?: string;
 }): React.JSX.Element {
   const styles =
     tone === 'info'
@@ -425,6 +518,7 @@ function Notice({
   return (
     <p
       role="status"
+      data-testid={testId}
       className={`rounded-lg border p-3.5 text-[0.9375rem] leading-relaxed ${styles}`}
     >
       {children}

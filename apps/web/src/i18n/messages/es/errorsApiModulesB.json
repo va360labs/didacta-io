@@ -192,5 +192,9 @@
   "PAYOUTS_ADMIN_ROLE_REQUIRED": "Solo la administración de la academia puede gestionar los cobros.",
   "PAYOUTS_SUPPORT_SESSION_FORBIDDEN": "Una sesión de soporte no puede conectar los cobros ni abrir el panel de pagos.",
   "PAYOUTS_STRIPE_API_ERROR": "Stripe no ha respondido como esperábamos. Vuelve a intentarlo en unos minutos.",
-  "PAYOUTS_NOT_READY": "Esta academia todavía no puede cobrar. Vuelve a intentarlo más adelante."
+  "PAYOUTS_NOT_READY": "Esta academia todavía no puede cobrar. Vuelve a intentarlo más adelante.",
+  "PAYOUTS_SALE_NOT_FOUND": "No encontramos esa venta.",
+  "PAYOUTS_SALE_NOT_REFUNDABLE": "Esta venta no se puede reembolsar ahora: puede que aún se esté procesando el pago, que ya esté devuelta entera o que el alumno la haya reclamado a su banco.",
+  "PAYOUTS_REFUND_EXCEEDS_REMAINING": "Ese importe es mayor que lo que queda por devolver de esta venta.",
+  "PAYOUTS_REFUND_REJECTED": "El banco no ha aceptado el reembolso. No se ha devuelto nada; inténtalo de nuevo más tarde."
 }

@@ -8,9 +8,18 @@
  */
 
 import { describe, expect, it } from 'vitest';
+import enPagos from '@/i18n/messages/en/adminPagos.json';
 import esPagos from '@/i18n/messages/es/adminPagos.json';
+import { refundExplanation, type RefundTranslator } from '@/components/admin/payouts-refund-dialog';
 import { describeSale, type SalesTranslator } from '@/components/admin/payouts-sales-section';
-import { formatStripeAmount, type PayoutsSaleDto } from '@/lib/payouts';
+import {
+  debtReasonKey,
+  formatStripeAmount,
+  parseRefundAmount,
+  refundAmountInput,
+  type PayoutsRefundPreviewDto,
+  type PayoutsSaleDto,
+} from '@/lib/payouts';
 
 const texts = esPagos.payouts.sales as unknown as Record<string, unknown>;
 const t: SalesTranslator = (key, values = {}) => {
@@ -40,6 +49,10 @@ const sale = (over: Partial<PayoutsSaleDto>): PayoutsSaleDto => ({
   debtNetted: 0,
   transferAmount: 9325,
   refundedAmount: 0,
+  reversedAmount: 0,
+  refundState: 'none',
+  disputeOpen: false,
+  canRefund: true,
   transferredAt: '2026-11-12T10:01:00.000Z',
   availableOn: '2026-11-19T00:00:00.000Z',
   estimatedArrival: '2026-11-23',
@@ -155,5 +168,143 @@ describe('describeSale', () => {
         t,
       ).youGet,
     ).toBe('37.221,50 HUF');
+  });
+});
+
+/** `Intl` separa el importe y el símbolo con un espacio duro. */
+const plain = (text: string | null) => (text ?? '').replace(/[\u00a0\u202f]/g, ' ');
+
+describe('E6: reembolsos y reclamaciones en las filas', () => {
+  it('reembolso parcial: estado y nota con lo devuelto', () => {
+    const row = describeSale(
+      sale({ refundedAmount: 4000, reversedAmount: 3730, refundState: 'partial' }),
+      money,
+      'es',
+      t,
+    );
+    expect(t(`status.${row.status.key}`)).toBe('Reembolsada en parte');
+    expect(plain(row.refundNote)).toBe('Devuelto al alumno: 40,00 €');
+  });
+
+  it('reembolsada entera y reclamada al banco mandan sobre el envío', () => {
+    expect(
+      describeSale(sale({ refundState: 'full', refundedAmount: 10000 }), money, 'es', t).status,
+    ).toEqual({ key: 'refunded', tone: 'neutral' });
+    expect(describeSale(sale({ disputeOpen: true }), money, 'es', t).status).toEqual({
+      key: 'disputed',
+      tone: 'danger',
+    });
+  });
+});
+
+describe('E6: explicación del reembolso', () => {
+  const tr: RefundTranslator = (key, values = {}) => t(`refund.${key}`, values);
+  const m = (amount: number, currency: string) => formatStripeAmount(amount, currency, 'es');
+  const preview: PayoutsRefundPreviewDto = {
+    saleId: 's1',
+    chargeCurrency: 'eur',
+    refundable: 10000,
+    amount: 4000,
+    currency: 'eur',
+    settlementAmount: 4000,
+    creatorShare: 3730,
+    cardFee: 70,
+    cardFeeToCreator: 70,
+    platformFeeReturned: 200,
+    platformFeeToCreator: 0,
+    creatorTotal: 3800,
+    alreadyPaidOut: true,
+  };
+
+  it('parcial de 40 € de una venta ya enviada: frases en llano con los importes de la API', () => {
+    const lines = refundExplanation(preview, { refundedAmount: 0, gross: 10000 }, 'Didacta', m, tr);
+    expect(lines.map((l) => plain(l.text))).toEqual([
+      'El alumno recibe 40,00 € en su tarjeta. Suele verlo en 5 a 10 días.',
+      'Se te descuentan 37,30 € de lo que recibiste por esta venta.',
+      'Como ya te lo habíamos enviado, lo retiramos de tu saldo en Stripe. Si no hay bastante, lo descontamos de tus próximos cobros.',
+      'El banco no devuelve la comisión de la tarjeta (0,70 €): la pagas tú y se descuenta de tus próximos cobros.',
+      'Didacta te devuelve su parte (2,00 €).',
+      'En total se te descuentan 38,00 €.',
+      'Con un reembolso parcial, el alumno conserva el acceso al curso.',
+    ]);
+  });
+
+  it('total de una venta aún no enviada, con la comisión a cargo del operador', () => {
+    const lines = refundExplanation(
+      {
+        ...preview,
+        amount: 10000,
+        settlementAmount: 10000,
+        creatorShare: 9325,
+        cardFee: 175,
+        cardFeeToCreator: 0,
+        platformFeeReturned: 500,
+        creatorTotal: 9325,
+        alreadyPaidOut: false,
+      },
+      { refundedAmount: 0, gross: 10000 },
+      'Didacta',
+      m,
+      tr,
+    ).map((l) => plain(l.text));
+    expect(lines).toContain(
+      'Como aún no te lo habíamos enviado, se resta de lo que te íbamos a enviar.',
+    );
+    expect(lines).toContain(
+      'El banco no devuelve la comisión de la tarjeta (1,75 €): la asume Didacta.',
+    );
+    expect(lines).toContain('Al devolverlo todo, el alumno pierde el acceso al curso.');
+  });
+});
+
+describe('E6: importe escrito por el creador', () => {
+  it('acepta coma o punto y no redondea en silencio', () => {
+    expect(parseRefundAmount('40', 'eur')).toBe(4000);
+    expect(parseRefundAmount('40,5', 'eur')).toBe(4050);
+    expect(parseRefundAmount(' 40.05 ', 'eur')).toBe(4005);
+    expect(parseRefundAmount('40,555', 'eur')).toBeNull();
+    expect(parseRefundAmount('0', 'eur')).toBeNull();
+    expect(parseRefundAmount('-3', 'eur')).toBeNull();
+    expect(parseRefundAmount('abc', 'eur')).toBeNull();
+    expect(parseRefundAmount('1000', 'jpy')).toBe(1000);
+    expect(parseRefundAmount('10,5', 'jpy')).toBeNull();
+    expect(refundAmountInput(4050, 'eur', 'es')).toBe('40,50');
+    expect(refundAmountInput(4050, 'eur', 'en')).toBe('40.50');
+  });
+
+  it('motivo de deuda: los conocidos tal cual, el resto como ajuste', () => {
+    expect(debtReasonKey('REFUND_FEE')).toBe('REFUND_FEE');
+    expect(debtReasonKey('DISPUTE_FEE')).toBe('DISPUTE_FEE');
+    expect(debtReasonKey('ALGO_NUEVO')).toBe('MANUAL');
+  });
+});
+
+describe('E6: avisos', () => {
+  it('«Te descontaremos {importe} de tus próximos cobros por {motivo}»', () => {
+    const reason = t(`debtReasons.${debtReasonKey('REFUND_FEE')}`, { item: 'Curso de IA' });
+    expect(t('noticeDebtItem', { amount: '1,75 €', reason })).toBe(
+      'Te descontaremos 1,75 € de tus próximos cobros por la comisión de la tarjeta de un reembolso («Curso de IA»).',
+    );
+  });
+
+  it('los textos nuevos existen en los dos idiomas (mismas claves)', () => {
+    const keys = (node: unknown, prefix = ''): string[] =>
+      node && typeof node === 'object'
+        ? Object.entries(node as Record<string, unknown>).flatMap(([k, v]) =>
+            keys(v, `${prefix}${k}.`),
+          )
+        : [prefix.slice(0, -1)];
+    const es = keys(esPagos.payouts.sales);
+    const en = keys(enPagos.payouts.sales);
+    expect(new Set(es)).toEqual(new Set(en));
+    for (const key of [
+      'refundCta',
+      'refund.confirm',
+      'noticeDebtItem',
+      'noticeDispute',
+      'debtReasons.DISPUTE_FEE',
+    ]) {
+      expect(es).toContain(key);
+    }
   });
 });

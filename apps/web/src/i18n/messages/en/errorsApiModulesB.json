@@ -221,5 +221,9 @@
   "PAYOUTS_ADMIN_ROLE_REQUIRED": "Only the academy's administrators can manage payouts.",
   "PAYOUTS_SUPPORT_SESSION_FORBIDDEN": "A support session can't connect payouts or open the payouts dashboard.",
   "PAYOUTS_STRIPE_API_ERROR": "Stripe didn't respond as expected. Try again in a few minutes.",
-  "PAYOUTS_NOT_READY": "This academy can't take payments yet. Please try again later."
+  "PAYOUTS_NOT_READY": "This academy can't take payments yet. Please try again later.",
+  "PAYOUTS_SALE_NOT_FOUND": "We couldn't find that sale.",
+  "PAYOUTS_SALE_NOT_REFUNDABLE": "This sale can't be refunded right now: the payment may still be processing, it may already be fully refunded, or the student may have disputed it with their bank.",
+  "PAYOUTS_REFUND_EXCEEDS_REMAINING": "That's more than what's left to refund on this sale.",
+  "PAYOUTS_REFUND_REJECTED": "The bank didn't accept the refund. Nothing was refunded; please try again later."
 }
