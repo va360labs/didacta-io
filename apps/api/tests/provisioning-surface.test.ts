@@ -16,7 +16,10 @@ import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
 import { METHOD_METADATA, PATH_METADATA } from '@nestjs/common/constants';
 import { describe, expect, it } from 'vitest';
-import { AdminTenantsController } from '../src/admin/admin-tenants.controller';
+import {
+  AdminTenantsController,
+  AdminTenantsPayoutsController,
+} from '../src/admin/admin-tenants.controller';
 import { AdminSystemController } from '../src/modules/admin-system.controller';
 import { ALLOW_PROVISIONING_KEY } from '../src/auth/jwt-or-provisioning.guard';
 
@@ -131,6 +134,16 @@ describe('UC-C103 AC2 · superficie de la credencial de provisioning', () => {
   it('las rutas denegadas no llevan la marca', () => {
     for (const handler of DENIED) {
       expect(isAllowed(AdminTenantsController, handler)).toBe(false);
+    }
+  });
+
+  it('abre exactamente las 2 rutas de cobros de plataforma en AdminTenantsPayoutsController, y no hay más', () => {
+    // Solo existen con el modo plataforma (las registra PayoutsModule). Fijar
+    // la comisión de un aula y leer su estado de cobro: el contrato con Cloud.
+    const todas = routeHandlersOf(AdminTenantsPayoutsController).sort();
+    expect(todas).toEqual(['getPayouts', 'setPayoutsSettings']);
+    for (const handler of todas) {
+      expect(isAllowed(AdminTenantsPayoutsController, handler)).toBe(true);
     }
   });
 

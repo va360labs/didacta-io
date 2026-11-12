@@ -64,6 +64,7 @@ import {
   type UserDirectoryPort as PaymentConnectionsUserDirectoryPort,
 } from '@didacta/mod-payment-connections';
 import { buildCertificatesModule, CertificatesService } from '@didacta/mod-certificates';
+import { buildPayoutsModule } from '@didacta/mod-payouts';
 import { buildAccessGroupsModule } from '@didacta/mod-access-groups';
 import { buildMemberRegistrationModule } from '@didacta/mod-member-registration';
 import {
@@ -119,6 +120,7 @@ import { AiGatewayService } from '../ai/ai-gateway.service';
 import { runSanctionedGlobalAccess } from '../tenancy/tenant-context.storage';
 import { resolveCoreContractVersion } from '../core-version';
 import { buildCourseSaleChecker } from './course-sale-checker';
+import { getPlatformPaymentsConfig } from './payouts/platform-payments.config';
 import { ModuleContextFactory } from './module-context.factory';
 import {
   TenantStripeResolverService,
@@ -773,6 +775,10 @@ export class ModuleRegistryService implements OnModuleInit {
       surveysModule,
       resourcesModule,
       gamificationModule,
+      // Cobros de plataforma: SOLO con el modo encendido. Sin
+      // PAYMENTS_PLATFORM_STRIPE_SECRET_KEY no entra en el registro, no se
+      // persiste su manifiesto y el listado de módulos es el de siempre.
+      ...(getPlatformPaymentsConfig().enabled ? [buildPayoutsModule()] : []),
     ]);
 
     await this.persistManifests();

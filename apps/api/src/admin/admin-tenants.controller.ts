@@ -10,6 +10,7 @@ import {
   Delete,
   ForbiddenException,
   Get,
+  NotFoundException,
   Param,
   Patch,
   Post,
@@ -23,13 +24,16 @@ import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { resolveWebBaseUrl } from '../common/resolve-web-base-url';
-import type { AdminActor } from '../auth/admin-actor';
+import { auditActorId, auditActorTrace, type AdminActor } from '../auth/admin-actor';
 import { extractClientContext } from '../auth/client-context';
 import { AllowProvisioning, CurrentUser } from '../auth/decorators';
 import { JwtOrProvisioningGuard } from '../auth/jwt-or-provisioning.guard';
 import type { SessionClaims } from '../auth/token.service';
 import { ZodValidationPipe } from '../auth/zod-validation.pipe';
+import { PrismaAuditLogService } from '../modules/prisma-audit-log.service';
+import { PayoutsRuntime } from '../modules/payouts/payouts-runtime.service';
 import { SUBSCRIPTION_GATE_STATES } from '../tenancy/subscription-gate';
+import { runAsTenant, runGlobalWithoutTenant } from '../tenancy/tenant-context.storage';
 import { TenantResolverService } from '../tenancy/tenant-resolver.service';
 import { AdminTenantsService, type TenantUsageItem } from './admin-tenants.service';
 import { SupportAccessService } from './support-access.service';
@@ -457,5 +461,142 @@ export class AdminTenantsController {
   ) {
     const actor = requireAdminActor(user, req);
     return this.service.removeDomain(actor, id, hostname, extractClientContext(req));
+  }
+}
+
+// ============================================================================
+// Cobros de plataforma — contrato del pool con `didacta-cloud`
+// ============================================================================
+
+/** `PUT /admin/tenants/:id/payouts-settings`. Contrato con `didacta-cloud`. */
+export const payoutsSettingsSchema = z.object({
+  /** Comisión del operador en puntos básicos: 500 = 5 %. */
+  feeBps: z.number().int().min(0).max(3000),
+});
+type PayoutsSettingsDto = z.infer<typeof payoutsSettingsSchema>;
+
+/** Respuesta de `PUT /admin/tenants/:id/payouts-settings`. */
+export interface TenantPayoutsSettingsResponse {
+  readonly tenantId: string;
+  readonly feeBps: number;
+  readonly updatedAt: string;
+}
+
+/** Respuesta de `GET /admin/tenants/:id/payouts`. */
+export interface TenantPayoutsResponse {
+  readonly tenantId: string;
+  /** `platform` | `own` (claves propias heredadas) | `none`. */
+  readonly mode: 'platform' | 'own' | 'none';
+  /** Estado de la cuenta conectada (`NOT_CONNECTED` si no hay). */
+  readonly status: string;
+  /** País de la cuenta conectada, o `null`. */
+  readonly country: string | null;
+  readonly feeBps: number;
+  /** Deuda abierta del creador por divisa, en unidad mínima. */
+  readonly debtOutstanding: ReadonlyArray<{ currency: string; amount: number }>;
+}
+
+/**
+ * Las dos rutas de cobros de plataforma del contrato del pool. Viven en una
+ * clase APARTE de `AdminTenantsController` porque solo existen con el modo
+ * plataforma encendido: las registra `PayoutsModule.register()`, y sin
+ * `PAYMENTS_PLATFORM_STRIPE_SECRET_KEY` la instalación tiene exactamente las
+ * mismas rutas que antes. Mismo guard, misma regla de actor y misma marca
+ * `@AllowProvisioning()` que el resto del contrato.
+ */
+@ApiTags('Admin · Tenants · Cobros')
+@ApiBearerAuth()
+@Controller('admin/tenants')
+@UseGuards(JwtOrProvisioningGuard)
+export class AdminTenantsPayoutsController {
+  constructor(
+    private readonly runtime: PayoutsRuntime,
+    private readonly auditLog: PrismaAuditLogService,
+  ) {}
+
+  @Put(':id/payouts-settings')
+  @AllowProvisioning()
+  @ApiOperation({
+    summary: 'Fijar la comisión del operador de un aula (puntos básicos, 0–3000).',
+    description:
+      'Idempotente: repetir el mismo valor no escribe ni mueve `updatedAt`. Solo existe con el modo plataforma encendido.',
+  })
+  async setPayoutsSettings(
+    @Req() req: FastifyRequest,
+    @CurrentUser() user: SessionClaims | undefined,
+    @Param('id') id: string,
+    @Body(new ZodValidationPipe(payoutsSettingsSchema)) dto: PayoutsSettingsDto,
+  ): Promise<TenantPayoutsSettingsResponse> {
+    const actor = requireAdminActor(user, req);
+    await this.requireTenant(id);
+    const result = await this.runtime.settings.setFeeBps(id, dto.feeBps, auditActorId(actor));
+    if (result.changed) {
+      const client = extractClientContext(req);
+      await runAsTenant(id, () =>
+        this.auditLog.record({
+          tenantId: id,
+          actorId: auditActorId(actor),
+          action: 'payouts.settings.fee_changed',
+          resourceType: 'tenant',
+          resourceId: id,
+          metadata: {
+            previousFeeBps: result.previousFeeBps,
+            feeBps: result.feeBps,
+            ...auditActorTrace(actor),
+          },
+          ip: client.ip ?? undefined,
+          userAgent: client.userAgent ?? undefined,
+        }),
+      );
+    }
+    return { tenantId: id, feeBps: result.feeBps, updatedAt: result.updatedAt! };
+  }
+
+  @Get(':id/payouts')
+  @AllowProvisioning()
+  @ApiOperation({
+    summary: 'Modo de cobro, estado de la cuenta conectada, comisión y deuda abierta de un aula.',
+  })
+  async getPayouts(
+    @Req() req: FastifyRequest,
+    @CurrentUser() user: SessionClaims | undefined,
+    @Param('id') id: string,
+  ): Promise<TenantPayoutsResponse> {
+    requireAdminActor(user, req);
+    await this.requireTenant(id);
+    return runAsTenant(id, async () => {
+      const [mode, account, settings, debtOutstanding] = await Promise.all([
+        this.runtime.mode.resolve(id),
+        this.runtime.accounts.getAccount(id),
+        this.runtime.settings.get(id),
+        this.runtime.settings.debtOutstanding(id),
+      ]);
+      return {
+        tenantId: id,
+        mode: mode.mode,
+        status: account?.status ?? 'NOT_CONNECTED',
+        country: account?.country ?? null,
+        feeBps: settings.feeBps,
+        debtOutstanding,
+      };
+    });
+  }
+
+  private async requireTenant(id: string): Promise<void> {
+    const uuid = z.string().uuid().safeParse(id);
+    const tenant = uuid.success
+      ? await runGlobalWithoutTenant(() =>
+          this.runtime.prisma.tenant.findFirst({
+            where: { id, deletedAt: null },
+            select: { id: true },
+          }),
+        )
+      : null;
+    if (!tenant) {
+      throw new NotFoundException({
+        message: 'Tenant no encontrado.',
+        code: 'ADMIN_TENANT_NOT_FOUND',
+      });
+    }
   }
 }

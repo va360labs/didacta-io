@@ -27,11 +27,13 @@
  */
 
 import { LicenseService } from '@didacta/license-sdk';
-import { RequestMethod } from '@nestjs/common';
+import { RequestMethod, UnauthorizedException } from '@nestjs/common';
 import { METHOD_METADATA, PATH_METADATA } from '@nestjs/common/constants';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   AdminTenantsController,
+  AdminTenantsPayoutsController,
+  payoutsSettingsSchema,
   createTenantSchema,
   domainSchema,
   setStatusSchema,
@@ -45,6 +47,9 @@ import { SIGNUPS_FROZEN_CODE } from '../../src/tenancy/signup-freeze';
 import { SUPPORT_ACCESS_CODES } from '../../src/tenancy/support-access';
 import { SUBSCRIPTION_LOCKED_CODE } from '../../src/tenancy/subscription-gate';
 import { AdminTenantsService } from '../../src/admin/admin-tenants.service';
+import { ALLOW_PROVISIONING_KEY } from '../../src/auth/jwt-or-provisioning.guard';
+import { PayoutsModule } from '../../src/modules/payouts/payouts.module';
+import { loadPlatformPaymentsConfig } from '../../src/modules/payouts/platform-payments.config';
 
 const ACTOR = { kind: 'user' as const, userId: 'user-super-1' };
 const TENANT_ID = '99999999-8888-7777-6666-555555555555';
@@ -519,5 +524,153 @@ describe('CONTRATO · admin/tenants ↔ didacta-cloud', () => {
         'ADMIN_TENANT_USAGE_ASOF_IN_FUTURE',
       );
     });
+  });
+});
+
+// ============================================================================
+// Cobros de plataforma (E2): dos rutas más del contrato, SOLO con el modo
+// plataforma encendido. Las consume `didacta-cloud` (`pool-contract.ts`) para
+// empujar la comisión de cada aula y leer su estado de cobro.
+// ============================================================================
+
+const PAYOUTS_ROUTES: Array<{ handler: string; method: number; path: string }> = [
+  { handler: 'setPayoutsSettings', method: RequestMethod.PUT, path: ':id/payouts-settings' },
+  { handler: 'getPayouts', method: RequestMethod.GET, path: ':id/payouts' },
+];
+
+describe('CONTRATO · admin/tenants (cobros de plataforma) ↔ didacta-cloud', () => {
+  const PAYOUTS_TENANT = '11111111-2222-4333-8444-555555555555';
+  const machineReq = {
+    provisioningActor: { credentialId: 'cred-1' },
+    headers: {},
+    ip: '127.0.0.1',
+  };
+
+  function buildController(overrides: { tenantExists?: boolean } = {}) {
+    const settings = {
+      setFeeBps: vi.fn(async (tenantId: string, feeBps: number) => ({
+        tenantId,
+        feeBps,
+        updatedAt: '2026-11-12T10:00:00.000Z',
+        changed: true,
+        previousFeeBps: 500,
+      })),
+      get: vi.fn(async (tenantId: string) => ({
+        tenantId,
+        feeBps: 500,
+        updatedAt: null,
+      })),
+      debtOutstanding: vi.fn(async () => []),
+    };
+    const runtime = {
+      settings,
+      accounts: {
+        getAccount: vi.fn(async () => ({ status: 'ONBOARDING', country: 'ES' })),
+      },
+      mode: {
+        resolve: vi.fn(async () => ({
+          mode: 'platform',
+          ready: false,
+          reason: 'onboarding_incomplete',
+        })),
+      },
+      prisma: {
+        tenant: {
+          findFirst: vi.fn(async () =>
+            overrides.tenantExists === false ? null : { id: PAYOUTS_TENANT },
+          ),
+        },
+      },
+    };
+    const audit = { record: vi.fn(async () => undefined) };
+    const controller = new AdminTenantsPayoutsController(
+      runtime as unknown as ConstructorParameters<typeof AdminTenantsPayoutsController>[0],
+      audit as unknown as ConstructorParameters<typeof AdminTenantsPayoutsController>[1],
+    );
+    return { controller, settings, audit };
+  }
+
+  it('cuelgan de admin/tenants, en un controller aparte del de siempre', () => {
+    expect(Reflect.getMetadata(PATH_METADATA, AdminTenantsPayoutsController)).toBe('admin/tenants');
+  });
+
+  it.each(PAYOUTS_ROUTES)('$handler → $path, abierta a la credencial de provisioning', (r) => {
+    const fn = (AdminTenantsPayoutsController.prototype as unknown as Record<string, unknown>)[
+      r.handler
+    ];
+    expect(fn, `falta el handler ${r.handler}`).toBeTypeOf('function');
+    expect(Reflect.getMetadata(PATH_METADATA, fn as object)).toBe(r.path);
+    expect(Reflect.getMetadata(METHOD_METADATA, fn as object)).toBe(r.method);
+    expect(Reflect.getMetadata(ALLOW_PROVISIONING_KEY, fn as object)).toBe(true);
+  });
+
+  it('solo existen con el modo plataforma: el módulo apagado no las registra', () => {
+    const off = PayoutsModule.register({ enabled: false });
+    expect(off.controllers ?? []).toEqual([]);
+    const on = PayoutsModule.register(
+      loadPlatformPaymentsConfig({
+        PAYMENTS_PLATFORM_STRIPE_SECRET_KEY: 'sk_test_inventada',
+        PAYMENTS_PLATFORM_STRIPE_WEBHOOK_SECRETS: 'whsec_inventado1',
+      }),
+    );
+    expect(on.controllers).toContain(AdminTenantsPayoutsController);
+  });
+
+  it('la petición lleva solo `feeBps`, entero de 0 a 3000', () => {
+    expect(Object.keys(payoutsSettingsSchema.shape)).toEqual(['feeBps']);
+    for (const ok of [0, 500, 3000]) {
+      expect(payoutsSettingsSchema.parse({ feeBps: ok })).toEqual({ feeBps: ok });
+    }
+    for (const bad of [3001, -1, 2.5, '500', null]) {
+      expect(payoutsSettingsSchema.safeParse({ feeBps: bad }).success, String(bad)).toBe(false);
+    }
+    expect(payoutsSettingsSchema.safeParse({}).success).toBe(false);
+  });
+
+  it('PUT payouts-settings responde tenantId, feeBps y updatedAt', async () => {
+    const { controller, audit } = buildController();
+    const res = await controller.setPayoutsSettings(
+      machineReq as never,
+      undefined,
+      PAYOUTS_TENANT,
+      { feeBps: 300 },
+    );
+    expect(res).toEqual({
+      tenantId: PAYOUTS_TENANT,
+      feeBps: 300,
+      updatedAt: '2026-11-12T10:00:00.000Z',
+    });
+    expect(audit.record).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'payouts.settings.fee_changed', tenantId: PAYOUTS_TENANT }),
+    );
+  });
+
+  it('GET payouts responde tenantId, mode, status, country, feeBps y debtOutstanding', async () => {
+    const { controller } = buildController();
+    const res = await controller.getPayouts(machineReq as never, undefined, PAYOUTS_TENANT);
+    expect(Object.keys(res).sort()).toEqual(
+      ['country', 'debtOutstanding', 'feeBps', 'mode', 'status', 'tenantId'].sort(),
+    );
+    expect(res).toEqual({
+      tenantId: PAYOUTS_TENANT,
+      mode: 'platform',
+      status: 'ONBOARDING',
+      country: 'ES',
+      feeBps: 500,
+      debtOutstanding: [],
+    });
+  });
+
+  it('sin credencial ni super_admin → 401; tenant inexistente → ADMIN_TENANT_NOT_FOUND', async () => {
+    const { controller } = buildController();
+    await expect(
+      controller.getPayouts({ headers: {} } as never, undefined, PAYOUTS_TENANT),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
+    const missing = buildController({ tenantExists: false });
+    await expect(
+      errorCodeOf(() =>
+        missing.controller.getPayouts(machineReq as never, undefined, PAYOUTS_TENANT),
+      ),
+    ).resolves.toBe('ADMIN_TENANT_NOT_FOUND');
   });
 });

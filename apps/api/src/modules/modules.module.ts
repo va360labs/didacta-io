@@ -19,6 +19,7 @@ import { SubscriptionsModule } from './subscriptions/subscriptions.module';
 import { ReferralsModule } from './referrals/referrals.module';
 import { MessagingModule } from './messaging/messaging.module';
 import { PaymentConnectionsModule } from './payment-connections/payment-connections.module';
+import { PayoutsModule } from './payouts/payouts.module';
 import { CertificatesModule } from './certificates/certificates.module';
 import { CommunityModule } from './community/community.module';
 import { CoursesController } from './courses.controller';
@@ -78,6 +79,9 @@ import { OutboxMetrics, outboxMetricsProviders } from './outbox.metrics';
     forwardRef(() => SurveysModule),
     forwardRef(() => ResourcesModule),
     forwardRef(() => GamificationModule),
+    // Cobros de plataforma: vacío (sin rutas) salvo con
+    // PAYMENTS_PLATFORM_STRIPE_SECRET_KEY. Ver payouts.module.ts.
+    PayoutsModule.register(),
   ],
   controllers: [
     CoursesController,

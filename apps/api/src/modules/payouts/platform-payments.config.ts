@@ -337,3 +337,28 @@ function describeIssue(issue: z.ZodIssue): string {
   if (issue.code === 'too_small') return `no puede ser menor que ${String(issue.minimum)}`;
   return issue.message;
 }
+
+let cachedConfig: PlatformPaymentsConfig | undefined;
+
+/**
+ * La configuración de ESTE proceso, leída una vez de `process.env`. Es la que
+ * decide si existen las rutas de `mod.payouts` (`PayoutsModule.register()`) y
+ * si el módulo entra en el registro: las dos cosas se evalúan al cargar el
+ * grafo de Nest, antes de que `main.ts` valide. Si la configuración es
+ * inválida, `main.ts` aborta el arranque con el mensaje bueno; aquí no se
+ * lanza para no adelantarse con una traza de importación.
+ */
+export function getPlatformPaymentsConfig(): PlatformPaymentsConfig {
+  if (cachedConfig) return cachedConfig;
+  try {
+    cachedConfig = loadPlatformPaymentsConfig(process.env);
+  } catch {
+    return Object.freeze({ enabled: false });
+  }
+  return cachedConfig;
+}
+
+/** Solo tests: olvida la configuración memoizada. */
+export function resetPlatformPaymentsConfigForTests(): void {
+  cachedConfig = undefined;
+}
