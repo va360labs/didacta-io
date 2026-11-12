@@ -52,7 +52,7 @@
   "referidos": {
     "titulo": "Tus alumnos venden por ti",
     "texto": "Cada alumno tiene su enlace. Cuando alguien entra con él y paga, quien lo invitó se lleva un % de lo que pague.",
-    "soloMembresia": "Funciona con la membresía: cuando vendas una, cada alumno tendrá su enlace y ganará un % de cada cuota de quien traiga. Un curso de pago único no genera comisión.",
+    "nadaALaVenta": "Funciona con todo lo que vendes: cuando tengas un curso o una membresía a la venta, cada alumno tendrá su enlace y ganará un % de lo que paguen las personas que traiga.",
     "activar": "Activar los referidos",
     "activando": "Activando…",
     "activo": "Programa activo",

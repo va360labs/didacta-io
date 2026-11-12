@@ -625,8 +625,13 @@ function Resumen({ view }: { view: StartHereView }) {
           )}
         </div>
       </div>
-      {view.offer?.kind === 'membership' ? (
-        <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-brand-100 bg-brand-50/60 p-4">
+      {/* Referidos para todo: sugerencia en cuanto hay CUALQUIER cosa a la venta
+          (curso suelto o membresía), no solo con membresía. */}
+      {saleState(view) === 'on-sale' ? (
+        <div
+          className="flex flex-wrap items-center gap-3 rounded-2xl border border-brand-100 bg-brand-50/60 p-4"
+          data-testid="empieza-sugerencia-referidos"
+        >
           <span className="grid h-9 w-9 place-items-center rounded-full bg-brand-600 text-white">
             <Icon name="sparkles" size={18} />
           </span>
