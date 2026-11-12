@@ -4,6 +4,7 @@
  */
 
 import { z } from 'zod';
+import { withdrawalWaiverSchema } from '../purchase-consent/withdrawal-waiver';
 
 /**
  * DTOs zod de la membresía (página pública /unete + admin).
@@ -28,6 +29,11 @@ export const membershipCheckoutSchema = z.object({
     .trim()
     .regex(/^[a-z0-9]{3,32}$/i)
     .optional(),
+  /**
+   * La casilla marcada antes de pagar: pide acceso inmediato y reconoce que
+   * pierde el desistimiento de 14 días. Obligatoria (422 si falta).
+   */
+  withdrawalWaiver: withdrawalWaiverSchema.optional(),
 });
 export type MembershipCheckoutDto = z.infer<typeof membershipCheckoutSchema>;
 

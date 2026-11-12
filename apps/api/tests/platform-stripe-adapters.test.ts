@@ -27,6 +27,7 @@ import { PlatformObjectGuard } from '../src/modules/payouts/platform-object-guar
 import { PAYOUTS_STATUS_BY_CODE } from '../src/modules/payouts/payouts-error.filter';
 import { PlatformStripeAdapters } from '../src/modules/payouts/platform-stripe-adapters';
 import { PayoutsRuntime } from '../src/modules/payouts/payouts-runtime.service';
+import { fakeConsents } from './helpers/fake-purchase-consent';
 
 const TENANT = '11111111-1111-4111-8111-111111111111';
 const OWN = { secretKey: 'sk_test_propia', webhookSecret: 'whsec_propio' };
@@ -267,6 +268,7 @@ describe('PlatformCheckoutGate en el controlador público de compra', () => {
         resolveTenantWebBaseUrl: async () => 'https://aula.test',
       } as never,
       prisma as never,
+      fakeConsents() as never,
       gate,
     );
     return { ctrl, billing, resync };
@@ -343,6 +345,7 @@ describe('PlatformCheckoutGate en el controlador del alumno', () => {
         user: { findUnique: async () => ({ email: 'a@example.test' }) },
       } as never,
       { resolveTenantWebBaseUrl: async () => 'https://aula.test' } as never,
+      fakeConsents() as never,
       gate,
     );
     const user = { sub: 'u1', tenantId: TENANT } as never;

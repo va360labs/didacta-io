@@ -12,6 +12,7 @@ import { ZodValidationPipe } from '../../auth/zod-validation.pipe';
 import { runAsTenant } from '../../tenancy/tenant-context.storage';
 import { TenantResolverService } from '../../tenancy/tenant-resolver.service';
 import { ModuleRegistryService } from '../module-registry.service';
+import { PurchaseConsentService } from '../purchase-consent/purchase-consent.service';
 import {
   PAYOUTS_NOT_READY_OFFER_REASON,
   PlatformCheckoutGate,
@@ -33,6 +34,8 @@ export class MembershipPublicController {
   constructor(
     private readonly registry: ModuleRegistryService,
     private readonly tenantResolver: TenantResolverService,
+    /** Renuncia al desistimiento: prueba antes de pagar y confirmación después. */
+    private readonly consents: PurchaseConsentService,
     /**
      * Solo con el modo plataforma encendido (E5): si el aula cobra por la
      * plataforma y su cuenta aún no puede vender, la página no ofrece planes y
@@ -86,6 +89,18 @@ export class MembershipPublicController {
       // Modo plataforma: 409 si la cuenta no puede vender; si puede, el precio
       // del plan en la cuenta del operador (antes de crear nada).
       await this.payoutsGate?.prepareMembershipCheckout(tenantId, dto.planId, membership);
+      // La casilla de la renuncia al desistimiento (422 sin ella, 409 si el
+      // texto cambió), guardada antes de crear la sesión de pago.
+      const consentId = await this.consents.accept({
+        req,
+        tenantId,
+        purchaseKind: 'membership',
+        itemRef: dto.planId,
+        itemName: await this.planName(tenantId, dto.planId),
+        userId: null,
+        buyerEmail: dto.email ?? null,
+        waiver: dto.withdrawalWaiver,
+      });
       const { url, sessionId } = await membership.startMembershipCheckout({
         tenantId,
         planId: dto.planId,
@@ -98,10 +113,21 @@ export class MembershipPublicController {
         successUrl: `${base}/unete?status=success`,
         cancelUrl: `${base}/unete?status=cancel`,
       });
+      await this.consents.attachSession(tenantId, consentId, { sessionId });
       // Client context solo para trazabilidad en logs de acceso (no se persiste aquí).
       void extractClientContext(req);
       return { url, sessionId };
     });
+  }
+
+  /** Nombre del plan para la prueba y el correo (lectura del propio módulo). */
+  private async planName(tenantId: string, planId: string): Promise<string | null> {
+    try {
+      const page = await this.registry.getMembershipService().getPublicPage(tenantId);
+      return page.plans.find((plan) => plan.id === planId)?.name ?? null;
+    } catch {
+      return null;
+    }
   }
 
   /** Tenant por dominio (Host / X-Forwarded-Host), como InscripcionController. */

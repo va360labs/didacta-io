@@ -4,6 +4,7 @@ import { StripeConfigMissingError } from '@didacta/mod-billing';
 import { BillingPublicController } from '../src/modules/billing/billing-public.controller';
 import { PlatformCheckoutGate } from '../src/modules/payouts/platform-checkout-gate';
 import { resolveWebBaseUrl, type RequestLike } from '../src/common/resolve-web-base-url';
+import { fakeConsents } from './helpers/fake-purchase-consent';
 
 /**
  * Tests unit del controller PÚBLICO de mod.billing (viaje 2): tenant por Host,
@@ -62,7 +63,13 @@ function makeController(opts?: {
     },
   } as never;
   return {
-    controller: new BillingPublicController(registry, tenantResolver, prisma, opts?.gate),
+    controller: new BillingPublicController(
+      registry,
+      tenantResolver,
+      prisma,
+      fakeConsents() as never,
+      opts?.gate,
+    ),
     billing,
     prisma,
   };

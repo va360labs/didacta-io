@@ -47,6 +47,7 @@ import { MembershipPublicController } from '../src/modules/subscriptions/members
 import { SubscriptionsController } from '../src/modules/subscriptions/subscriptions.controller';
 import { SubscriptionsWebhookController } from '../src/modules/subscriptions/subscriptions-webhook.controller';
 import { TenantStripeResolverService } from '../src/modules/tenant-stripe-resolver.service';
+import { fakeConsents } from './helpers/fake-purchase-consent';
 
 const A = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const B = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
@@ -389,6 +390,7 @@ describe('PlatformCheckoutGate en /unete (MembershipPublicController)', () => {
         resolveByHost: async () => ({ id: A }),
         resolveTenantWebBaseUrl: async () => 'https://aula.test',
       } as never,
+      fakeConsents() as never,
       withGate ? gate : undefined,
     );
     return { ctrl, membership, isPlatformObject };
@@ -508,6 +510,7 @@ describe('POST /modules/subscriptions/me/portal y la marca billingPortal', () =>
       prisma as never,
       {} as never,
       { resolveTenantWebBaseUrl: async () => 'https://aula.test' } as never,
+      fakeConsents() as never,
       gate,
     );
     return { ctrl, subs };

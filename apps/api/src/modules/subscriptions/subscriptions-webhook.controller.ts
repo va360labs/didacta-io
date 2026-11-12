@@ -29,6 +29,7 @@ import { ModuleRegistryService } from '../module-registry.service';
 import { PlatformObjectGuard } from '../payouts/platform-object-guard';
 import { PrismaAuditLogService } from '../prisma-audit-log.service';
 import { collectStripeEventClaims, dispatchStripeEventToAll } from '../stripe-event-dispatch';
+import { PurchaseConsentService } from '../purchase-consent/purchase-consent.service';
 import { resolveStripeEventTenant } from '../stripe-webhook-tenant';
 import { TenantStripeResolverService } from '../tenant-stripe-resolver.service';
 import { MembershipProvisioningService } from './membership-provisioning.service';
@@ -67,6 +68,12 @@ export class SubscriptionsWebhookController {
      * global en ese modo). Sin él, este endpoint es el de siempre.
      */
     @Optional() private readonly platformObjects?: PlatformObjectGuard,
+    /**
+     * Confirmación por correo de la compra con la casilla aceptada (renuncia al
+     * desistimiento). Opcional solo para los tests que montan el controlador
+     * a mano; en la aplicación siempre está (módulo global).
+     */
+    @Optional() private readonly consents?: PurchaseConsentService,
   ) {}
 
   @Post('webhook')
@@ -192,6 +199,8 @@ export class SubscriptionsWebhookController {
       provisionBuyer: (args) => this.billingProvisioning.provision(args),
       logger: this.logger,
     });
+    // Pago confirmado: correo con el texto que aceptó el comprador. Nunca lanza.
+    await this.consents?.confirmCheckout(tenantId, event);
 
     return { received: true, type: event.type, id: event.id };
   }
