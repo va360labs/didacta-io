@@ -18,8 +18,9 @@ import { getRequestConfig } from 'next-intl/server';
 import { catalogOf, LOCALE_COOKIE, toSupportedLocale } from './config';
 import en from './messages/en';
 import es from './messages/es';
+import id from './messages/id';
 
-const CATALOGS = { es, en } as const;
+const CATALOGS = { es, en, id } as const;
 
 export default getRequestConfig(async () => {
   const store = await cookies();

@@ -17,14 +17,14 @@ describe('PATCH /me/profile · locale', () => {
     expect(parsed.success).toBe(false);
   });
 
-  it('acepta los tres idiomas que la UI sabe pintar', () => {
-    for (const locale of ['es-ES', 'es-AR', 'en-US']) {
+  it('acepta los idiomas que la UI sabe pintar', () => {
+    for (const locale of ['es-ES', 'es-AR', 'en-US', 'id-ID']) {
       expect(updateProfileSchema.safeParse({ locale }).success, locale).toBe(true);
     }
   });
 
   it('la lista permitida es exactamente esa (guarda contra reintroducirlo)', () => {
-    expect([...ALLOWED_LOCALES]).toEqual(['es-ES', 'es-AR', 'en-US']);
+    expect([...ALLOWED_LOCALES]).toEqual(['es-ES', 'es-AR', 'en-US', 'id-ID']);
   });
 
   it('sigue rechazando cualquier otro tag', () => {

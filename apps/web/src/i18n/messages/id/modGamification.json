@@ -1,0 +1,44 @@
+{
+  "file": {
+    "change": "Ubah file",
+    "pick": "Pilih file",
+    "remove": "hapus",
+    "none": "Tidak ada file yang dipilih"
+  },
+  "perk": {
+    "eyebrow": "Minta keuntungan",
+    "unlockedWith": "Terbuka di level {level}.",
+    "noteLabel": "Ada yang perlu kami ketahui sebelumnya? (opsional)",
+    "notePlaceholder": "Misalnya, materi apa yang ingin Anda pelajari atau kapan waktu yang pas.",
+    "pendingNotice": "Setelah dikirim, ini akan menjadi permintaan tertunda: kami akan menghubungi Anda untuk mengaturnya.",
+    "pendingNoticeWithQuota": "Setelah dikirim, ini akan menjadi permintaan tertunda: kami akan menghubungi Anda untuk mengaturnya. Tersisa {count, plural, other {#}}.",
+    "cancel": "Batal",
+    "sending": "Mengirim…",
+    "send": "Kirim permintaan"
+  },
+  "submit": {
+    "eyebrow": "Kirim tantangan",
+    "worth": "Bernilai {points} poin. Tim akan memeriksanya sebelum menambahkan poin.",
+    "noteLabel": "Ceritakan apa yang telah Anda lakukan",
+    "notePlaceholder": "Beberapa baris tentang hasilnya.",
+    "proofLabel": "Unggah bukti Anda",
+    "proofLabelOptional": "Unggah bukti Anda (opsional)",
+    "linkLabel": "…atau tempel tautan",
+    "linkPlaceholder": "https://…",
+    "uploadError": "Gagal mengunggah file. Coba gunakan format atau ukuran lain.",
+    "proofRequired": "Tantangan ini memerlukan bukti: unggah file atau tempel tautan.",
+    "cancel": "Batal",
+    "uploading": "Mengunggah…",
+    "continue": "Lanjutkan",
+    "confirmEyebrow": "Konfirmasi pengiriman",
+    "confirmIntro": "Berikut yang akan Anda kirimkan:",
+    "confirmProofTerm": "Bukti:",
+    "confirmNoProof": "tidak dilampirkan",
+    "confirmNoteTerm": "Catatan:",
+    "confirmNoNote": "tanpa catatan",
+    "confirmWarning": "Anda hanya dapat mengirimkan tantangan ini satu kali, jadi periksa kembali sebelum mengirim.",
+    "back": "Kembali",
+    "sending": "Mengirim…",
+    "confirmSend": "Konfirmasi dan kirim"
+  }
+}

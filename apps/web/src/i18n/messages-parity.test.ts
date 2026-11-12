@@ -151,7 +151,7 @@ import { describe, expect, it } from 'vitest';
 import { CODES_WITH_DETAIL, CODES_WITH_PARAMS } from '@/lib/i18n/api-error';
 
 const MESSAGES_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), 'messages');
-const LOCALES = ['es', 'en'] as const;
+const LOCALES = ['es', 'en', 'id'] as const;
 
 /** Namespaces con permiso para declarar keys solo-EN (ver cabecera). */
 const ASYMMETRY_ALLOWED_PREFIX = 'errorsApi';
@@ -420,8 +420,37 @@ describe('catálogo i18n · paridad es ↔ en', () => {
   });
 });
 
+describe('catálogo i18n · paridad es ↔ id', () => {
+  it('el catálogo indonesio declara exactamente los mismos namespaces que el español', () => {
+    expect(namespacesOf('id')).toEqual(NAMESPACES);
+  });
+
+  it('el catálogo indonesio tiene paridad 1:1 estricta con el español en todas las keys', () => {
+    const huerfanas: string[] = [];
+    const sobrantes: string[] = [];
+    for (const ns of NAMESPACES) {
+      const es = keysOf('es', ns);
+      const id = keysOf('id', ns);
+      for (const k of es) {
+        if (!id.has(k)) huerfanas.push(`${ns}.${k}`);
+      }
+      for (const k of id) {
+        if (!es.has(k)) sobrantes.push(`${ns}.${k}`);
+      }
+    }
+    expect(
+      huerfanas,
+      `keys en es/ sin gemela en id/ (falta traducción):\n  ${huerfanas.join('\n  ')}`,
+    ).toEqual([]);
+    expect(
+      sobrantes,
+      `keys en id/ que no existen en es/ (sobrantes):\n  ${sobrantes.join('\n  ')}`,
+    ).toEqual([]);
+  });
+});
+
 describe('catálogo i18n · integridad', () => {
-  it('ningún valor está vacío en ninguno de los dos idiomas', () => {
+  it('ningún valor está vacío en ninguno de los idiomas soportados', () => {
     const vacias: string[] = [];
     for (const locale of LOCALES) {
       for (const ns of NAMESPACES) {

@@ -1,0 +1,5 @@
+{
+  "durationMinutes": "{minutes, plural, other {# mnt}}",
+  "durationHours": "{hours, plural, other {# jam}}",
+  "durationHoursMinutes": "{hours} jam {minutes} mnt"
+}

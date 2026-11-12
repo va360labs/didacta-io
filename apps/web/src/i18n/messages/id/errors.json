@@ -1,0 +1,6 @@
+{
+  "unknown": "Terjadi kesalahan. Silakan coba lagi.",
+  "sessionExpired": "Sesi telah kedaluwarsa",
+  "mfa_required": "Verifikasi dua langkah diperlukan untuk melanjutkan.",
+  "AMBIGUOUS_TENANT": "Akun Anda terdaftar di beberapa akademi. Masuk dari domain akademi Anda."
+}

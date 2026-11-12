@@ -49,7 +49,7 @@ import { ZodValidationPipe } from './zod-validation.pipe';
  * (apps/api/src/modules/notifications/email-template-catalog.ts) sigue
  * cubriéndolos, y siguen pudiendo cambiar de idioma a cualquiera de éstos.
  */
-export const ALLOWED_LOCALES = ['es-ES', 'es-AR', 'en-US'] as const;
+export const ALLOWED_LOCALES = ['es-ES', 'es-AR', 'en-US', 'id-ID'] as const;
 
 export const updateProfileSchema = z.object({
   name: z.string().min(1).max(120).optional(),

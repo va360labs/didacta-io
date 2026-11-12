@@ -1,0 +1,46 @@
+{
+  "modal": {
+    "close": "Tutup"
+  },
+  "share": {
+    "label": "Bagikan sumber daya",
+    "title": "Bagikan sumber daya",
+    "subtitle": "Alur kerja, keahlian, alat, atau templat yang bermanfaat bagi komunitas.",
+    "titleLabel": "Judul",
+    "titlePlaceholder": "Alur kerja penangkapan prospek",
+    "collectionLabel": "Koleksi",
+    "kindLabel": "Jenis",
+    "kindFile": "File",
+    "kindLink": "Tautan",
+    "fileLabel": "File (PDF, Word, Excel, ZIP, JSON…)",
+    "linkLabel": "Tautan",
+    "linkPlaceholder": "https://…",
+    "descriptionLabel": "Deskripsi (opsional)",
+    "descriptionPlaceholder": "Apa isinya dan kegunaannya",
+    "cancel": "Batal",
+    "sharing": "Membagikan…",
+    "submit": "Bagikan sumber daya",
+    "titleTooShort": "Judul harus minimal 3 karakter.",
+    "pickCollection": "Pilih sebuah koleksi.",
+    "pickFile": "Pilih file yang ingin diunggah."
+  },
+  "collection": {
+    "label": "Koleksi",
+    "titleNew": "Koleksi baru",
+    "titleEdit": "Edit koleksi",
+    "subtitle": "Koleksi mengelompokkan sumber daya dan memiliki gambar sampulnya sendiri.",
+    "titleLabel": "Judul",
+    "titlePlaceholder": "Alur kerja kelas",
+    "descriptionLabel": "Deskripsi",
+    "descriptionPlaceholder": "Apa yang ada di dalamnya",
+    "coverLabel": "Sampul",
+    "coverEmpty": "Tanpa sampul: gradien merek akan digunakan",
+    "coverRemove": "Hapus",
+    "coverUploading": "Mengunggah sampul…",
+    "cancel": "Batal",
+    "saving": "Menyimpan…",
+    "save": "Simpan perubahan",
+    "create": "Buat koleksi",
+    "titleTooShort": "Judul harus minimal 3 karakter."
+  }
+}

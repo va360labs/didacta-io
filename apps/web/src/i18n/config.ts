@@ -11,7 +11,7 @@
  *   cookie `didacta_locale` → user.locale (la sincroniza LocaleSync) → es-ES.
  *
  * `SUPPORTED_LOCALES` son los tags que la UI puede ACTIVAR; los catálogos de
- * mensajes son solo dos (`es`, `en`): es-AR comparte el catálogo español y
+ * mensajes son tres (`es`, `en`, `id`): es-AR comparte el catálogo español y
  * únicamente cambia el formato de fechas/números.
  *
  * Esta lista es la ÚNICA fuente de verdad del idioma elegible: `LOCALE_OPTIONS`
@@ -29,7 +29,7 @@
 
 export const LOCALE_COOKIE = 'didacta_locale';
 
-export const SUPPORTED_LOCALES = ['es-ES', 'es-AR', 'en-US'] as const;
+export const SUPPORTED_LOCALES = ['es-ES', 'es-AR', 'en-US', 'id-ID'] as const;
 export type SupportedLocale = (typeof SUPPORTED_LOCALES)[number];
 
 export const DEFAULT_LOCALE: SupportedLocale = 'es-ES';
@@ -41,10 +41,13 @@ export function toSupportedLocale(raw: string | null | undefined): SupportedLoca
   const base = raw.toLowerCase().split('-')[0];
   if (base === 'es') return 'es-ES';
   if (base === 'en') return 'en-US';
+  if (base === 'id') return 'id-ID';
   return DEFAULT_LOCALE;
 }
 
 /** Catálogo de mensajes que corresponde a un tag soportado. */
-export function catalogOf(locale: SupportedLocale): 'es' | 'en' {
-  return locale.startsWith('en') ? 'en' : 'es';
+export function catalogOf(locale: SupportedLocale): 'es' | 'en' | 'id' {
+  if (locale.startsWith('en')) return 'en';
+  if (locale.startsWith('id')) return 'id';
+  return 'es';
 }

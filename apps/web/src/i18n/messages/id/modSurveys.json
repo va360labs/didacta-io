@@ -1,0 +1,12 @@
+{
+  "panelTitle": "Beri nilai kelas ini",
+  "panelNote": "30 detik. Tanggapan Anda bersifat <strong>anonim</strong> — ini membantu kami menentukan apa yang perlu direkam dan ditingkatkan.",
+  "thanks": "Terima kasih atas tanggapan Anda! Kami akan menjadikannya bahan evaluasi untuk kelas-kelas berikutnya.",
+  "submit": "Kirim penilaian",
+  "submitting": "Mengirim…",
+  "errorSubmit": "Gagal mengirim tanggapan Anda.",
+  "textPlaceholder": "Tanggapan Anda (opsional)",
+  "scaleHint": "(1 = buruk · 5 = luar biasa)",
+  "npsHint": "0 = sangat tidak mungkin · 10 = pasti",
+  "optionLabel": "{label}: {value}"
+}

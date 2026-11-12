@@ -12,12 +12,15 @@ describe('toSupportedLocale', () => {
     expect(toSupportedLocale('es-ES')).toBe('es-ES');
     expect(toSupportedLocale('es-AR')).toBe('es-AR');
     expect(toSupportedLocale('en-US')).toBe('en-US');
+    expect(toSupportedLocale('id-ID')).toBe('id-ID');
   });
 
   it('idioma base sin región → variante canónica', () => {
     expect(toSupportedLocale('es')).toBe('es-ES');
     expect(toSupportedLocale('en')).toBe('en-US');
     expect(toSupportedLocale('EN-gb')).toBe('en-US');
+    expect(toSupportedLocale('id')).toBe('id-ID');
+    expect(toSupportedLocale('ID-id')).toBe('id-ID');
   });
 
   it('CAMINO DEGRADADO: pt-BR (retirado, pero guardado en perfiles viejos) → es-ES', () => {
@@ -43,5 +46,9 @@ describe('catalogOf', () => {
 
   it('en-US usa catálogo en', () => {
     expect(catalogOf('en-US')).toBe('en');
+  });
+
+  it('id-ID usa catálogo id', () => {
+    expect(catalogOf('id-ID')).toBe('id');
   });
 });

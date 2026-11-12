@@ -1,0 +1,43 @@
+{
+  "channel": {
+    "EMAIL": "Email",
+    "IN_APP": "Dalam aplikasi",
+    "WEBHOOK": "Webhook"
+  },
+  "category": {
+    "account": "Akun dan akses",
+    "members": "Pendaftaran anggota",
+    "billing": "Keanggotaan dan pembayaran",
+    "learning": "Pembelajaran",
+    "community": "Komunitas",
+    "system": "Sistem"
+  },
+  "errorLoad": "Gagal memuat email.",
+  "errorSave": "Gagal menyimpan templat.",
+  "errorTest": "Gagal mengirim email uji coba.",
+  "errorRestore": "Gagal memulihkan templat.",
+  "noticeSaved": "Templat untuk «{name}» berhasil disesuaikan.",
+  "noticeTestSent": "Email uji coba dikirim ke {email}. Jika tidak masuk, periksa folder spam.",
+  "noticeRestored": "«{name}» dikembalikan ke teks bawaan.",
+  "promptTestAddress": "Ke alamat mana uji coba untuk «{name}» harus dikirim?",
+  "confirmRestore": "Pulihkan «{name}» ({channel} · {locale}) ke teks bawaan produk?",
+  "editorTitle": "Sesuaikan «{name}»",
+  "variablesTitle": "Variabel yang tersedia (variabel yang tidak terisi akan dikosongkan):",
+  "channelLabel": "Saluran",
+  "localeLabel": "Bahasa",
+  "localeOption": "{label} ({code})",
+  "transactionalNote": "Email transaksional — penyesuaian saluran Email dalam bahasa Spanyol (es-ES).",
+  "subjectLabel": "Subjek",
+  "bodyLabel": "Isi pesan",
+  "restoreDefault": "Pulihkan bawaan",
+  "sendTest": "Kirim uji coba",
+  "cancel": "Batal",
+  "saving": "Menyimpan…",
+  "save": "Simpan",
+  "customized": "Disesuaikan",
+  "subjectPrefix": "Subjek:",
+  "noSubject": "(tanpa subjek)",
+  "edit": "Edit",
+  "restore": "Pulihkan",
+  "customize": "Sesuaikan"
+}
