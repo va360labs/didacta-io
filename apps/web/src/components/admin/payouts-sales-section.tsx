@@ -209,7 +209,7 @@ export function PayoutsSalesSection({
                 <thead>
                   <tr className="border-b border-border-soft text-left text-xs text-text-subtle">
                     <th className="py-2 pr-3 font-medium">{t('colDate')}</th>
-                    <th className="py-2 pr-3 font-medium">{t('colItem')}</th>
+                    <th className="min-w-[12rem] py-2 pr-3 font-medium">{t('colItem')}</th>
                     <th className="py-2 pr-3 text-right font-medium">{t('colPaid')}</th>
                     <th className="py-2 pr-3 text-right font-medium">{t('colCardFee')}</th>
                     <th className="py-2 pr-3 text-right font-medium">
@@ -229,7 +229,9 @@ export function PayoutsSalesSection({
                     return (
                       <tr key={sale.id} className="border-b border-border-soft align-top">
                         <td className="whitespace-nowrap py-3 pr-3 text-text-muted">{row.date}</td>
-                        <td className="py-3 pr-3 font-medium text-text">{row.item}</td>
+                        <td className="min-w-[12rem] py-3 pr-3 font-medium text-text">
+                          {row.item}
+                        </td>
                         <td className="whitespace-nowrap py-3 pr-3 text-right tabular-nums text-text">
                           {row.paid}
                           {row.studentPaid ? (
