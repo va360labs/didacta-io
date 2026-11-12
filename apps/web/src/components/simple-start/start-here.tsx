@@ -602,21 +602,23 @@ function Resumen({ view }: { view: StartHereView }) {
           )}
         </div>
       </div>
-      <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-brand-100 bg-brand-50/60 p-4">
-        <span className="grid h-9 w-9 place-items-center rounded-full bg-brand-600 text-white">
-          <Icon name="sparkles" size={18} />
-        </span>
-        <div className="min-w-0 flex-1">
-          <strong className="block text-[15px] text-text">{t('referidos.titulo')}</strong>
-          <span className="text-sm text-text-muted">{t('referidos.texto')}</span>
+      {view.offer?.kind === 'membership' ? (
+        <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-brand-100 bg-brand-50/60 p-4">
+          <span className="grid h-9 w-9 place-items-center rounded-full bg-brand-600 text-white">
+            <Icon name="sparkles" size={18} />
+          </span>
+          <div className="min-w-0 flex-1">
+            <strong className="block text-[15px] text-text">{t('referidos.titulo')}</strong>
+            <span className="text-sm text-text-muted">{t('referidos.texto')}</span>
+          </div>
+          <Link
+            href="/admin/cobros#referidos"
+            className="inline-flex h-10 items-center rounded-xl bg-brand-600 px-4 text-sm font-semibold text-white hover:bg-brand-700"
+          >
+            {t('referidos.boton')}
+          </Link>
         </div>
-        <Link
-          href="/admin/cobros#referidos"
-          className="inline-flex h-10 items-center rounded-xl bg-brand-600 px-4 text-sm font-semibold text-white hover:bg-brand-700"
-        >
-          {t('referidos.boton')}
-        </Link>
-      </div>
+      ) : null}
     </div>
   );
 }

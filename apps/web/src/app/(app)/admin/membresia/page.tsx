@@ -13,6 +13,9 @@
  * Todos los selectores usan datos reales (grupos y cursos del tenant).
  */
 
+import { SimpleSales } from '@/components/simple-ventas/simple-sales';
+import { useSimpleMode } from '@/lib/simple-mode';
+import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
@@ -96,7 +99,22 @@ const EMPTY_DRAFT: PlanDraft = {
   marketPrices: [],
 };
 
+/**
+ * Modo sencillo sin cobros de plataforma: la pestaña «Ventas» llega aquí y
+ * enseña lo sencillo (enlace, precio y referidos). La configuración completa
+ * de la membresía sigue en la misma ruta con `?completo=1`.
+ */
 export default function MembresiaAdminPage() {
+  const simple = useSimpleMode();
+  const searchParams = useSearchParams();
+  if (simple === null) return null;
+  if (simple && searchParams?.get('completo') !== '1') {
+    return <SimpleSales mode="own" completeHref="/admin/membresia?completo=1" />;
+  }
+  return <MembresiaCompleta />;
+}
+
+function MembresiaCompleta() {
   const t = useTranslations('adminMonetizacion.membership');
   const tInterval = useTranslations('adminMonetizacion.interval');
   const tSub = useTranslations('adminMonetizacion.subscription');

@@ -29,8 +29,42 @@ import { PaymentsConnectCard } from '@/components/admin/payments-connect-card';
 import { PayoutsInvoicesSection } from '@/components/admin/payouts-invoices-section';
 import { PayoutsSalesSection } from '@/components/admin/payouts-sales-section';
 import { PayoutsTaxProfileCard } from '@/components/admin/payouts-tax-profile-card';
+import { SimpleSales } from '@/components/simple-ventas/simple-sales';
+import { useSimpleMode } from '@/lib/simple-mode';
 
-export default function CobrosPage(): React.JSX.Element {
+/**
+ * Modo sencillo: «Ventas» (lo vendido, el enlace, el precio y los referidos).
+ * La vista de siempre sigue en la misma ruta con `?completo=1`, y es la única
+ * en modo completo.
+ */
+export default function CobrosPage(): React.JSX.Element | null {
+  const simple = useSimpleMode();
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const clearQuery = useCallback(() => {
+    router.replace('/admin/cobros');
+  }, [router]);
+  if (simple === null) return null;
+  if (simple && searchParams?.get('completo') !== '1') {
+    const returnAction =
+      searchParams?.get('vuelta') === '1'
+        ? 'sync'
+        : searchParams?.get('renovar') === '1'
+          ? 'renew'
+          : null;
+    return (
+      <SimpleSales
+        mode="platform"
+        completeHref="/admin/cobros?completo=1"
+        returnAction={returnAction}
+        onReturnHandled={clearQuery}
+      />
+    );
+  }
+  return <CobrosCompleto />;
+}
+
+function CobrosCompleto(): React.JSX.Element {
   const router = useRouter();
   const searchParams = useSearchParams();
   const returnAction =

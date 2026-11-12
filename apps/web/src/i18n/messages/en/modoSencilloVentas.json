@@ -1,3 +1,84 @@
 {
-  "seccion": "Sales"
+  "seccion": "Sales",
+  "titulo": "Sales",
+  "sub": "What you have sold and what reaches your bank.",
+  "cargando": "Loading…",
+  "error": "Could not load. Try again.",
+  "cobros": {
+    "conectarTitulo": "Connect your payouts to start selling",
+    "conectarTexto": "Without payouts connected nobody can pay you. We will ask for your details and your account number.",
+    "listos": "Payouts connected: the money from each sale reaches your bank.",
+    "propios": "You get paid with your own payment account.",
+    "detalles": "See details"
+  },
+  "resumen": {
+    "vendido": "Sold",
+    "ventas": "{n, plural, one {# sale} other {# sales}}",
+    "enBanco": "Already in your bank",
+    "enCamino": "On its way",
+    "enCaminoNota": "Arrives in the next few days"
+  },
+  "vacio": {
+    "titulo": "Your sales will show up here",
+    "texto": "Every time someone buys, it shows up here with what reaches your bank and when.",
+    "botonPublicar": "Go to Start here",
+    "botonCompartir": "Share your link to get the first one"
+  },
+  "lista": {
+    "titulo": "Latest sales",
+    "verTodas": "See all",
+    "sinDescripcion": "Sale"
+  },
+  "enlace": {
+    "titulo": "Your sales link",
+    "sinPublicar": "Not published",
+    "aLaVenta": "On sale",
+    "copiar": "Copy link",
+    "copiado": "Copied",
+    "verAlumno": "View as a student",
+    "notaAntes": "It switches on when you publish from Start here.",
+    "precio": "Price",
+    "pagoUnico": "one-off payment",
+    "alMes": "per month",
+    "cambiar": "Change",
+    "guardar": "Save price",
+    "cancelar": "Cancel",
+    "precioInvalido": "Write a price greater than zero.",
+    "precioError": "Could not change the price. Try again.",
+    "comision": "Didacta keeps {percent}% of each sale. You see it broken down on each payment."
+  },
+  "referidos": {
+    "titulo": "Your students sell for you",
+    "texto": "Each student has their own link. When someone joins through it and pays, the person who invited them gets a % of what they pay.",
+    "soloMembresia": "It counts on your membership payments (every month, while they stay). One-off course purchases do not earn a commission.",
+    "activar": "Turn on referrals",
+    "activando": "Turning on…",
+    "activo": "Programme on",
+    "inactivo": "Programme off",
+    "encender": "Turn on",
+    "apagar": "Turn off",
+    "porcentaje": "What the person who invites gets (%)",
+    "guardar": "Save",
+    "guardado": "Saved",
+    "porcentajeInvalido": "Write a % between 0 and 100.",
+    "error": "Could not save. Try again.",
+    "ventasTitulo": "Sales that came from referrals",
+    "ventasVacio": "None yet. When someone pays through a student's link, you will see it here.",
+    "ventasResumen": "{n, plural, one {# payment brought} other {# payments brought}} by your students",
+    "pago": "Payment of {base}",
+    "comisionDe": "{amount} for the person who invited",
+    "estado": {
+      "PENDING": "Pending",
+      "APPROVED": "Approved",
+      "PAID": "Paid",
+      "REVOKED": "Cancelled"
+    },
+    "verDetalle": "See referral details"
+  },
+  "propias": {
+    "titulo": "Sales",
+    "texto": "Payments for your course or membership collected with your own payment account.",
+    "vacio": "This is where you will see how many sales you have. Share your sales link to get the first one.",
+    "detalle": "See income details"
+  }
 }

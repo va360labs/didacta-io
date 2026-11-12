@@ -1,3 +1,84 @@
 {
-  "seccion": "Ventas"
+  "seccion": "Ventas",
+  "titulo": "Ventas",
+  "sub": "Lo que has vendido y lo que llega a tu banco.",
+  "cargando": "Cargando…",
+  "error": "No se ha podido cargar. Inténtalo de nuevo.",
+  "cobros": {
+    "conectarTitulo": "Conecta tus cobros para empezar a vender",
+    "conectarTexto": "Sin cobros conectados nadie puede pagarte. Te pediremos tus datos y tu número de cuenta.",
+    "listos": "Cobros conectados: el dinero de cada venta llega a tu banco.",
+    "propios": "Cobras con tu propia cuenta de pagos.",
+    "detalles": "Ver detalles"
+  },
+  "resumen": {
+    "vendido": "Vendido",
+    "ventas": "{n, plural, one {# venta} other {# ventas}}",
+    "enBanco": "Ya en tu banco",
+    "enCamino": "En camino",
+    "enCaminoNota": "Llega en los próximos días"
+  },
+  "vacio": {
+    "titulo": "Aquí verás tus ventas",
+    "texto": "Cada vez que alguien compre, aparecerá aquí con lo que te llega a tu banco y cuándo.",
+    "botonPublicar": "Ir a Empieza aquí",
+    "botonCompartir": "Comparte tu enlace para conseguir la primera"
+  },
+  "lista": {
+    "titulo": "Últimas ventas",
+    "verTodas": "Ver todas",
+    "sinDescripcion": "Venta"
+  },
+  "enlace": {
+    "titulo": "Tu enlace de venta",
+    "sinPublicar": "Sin publicar",
+    "aLaVenta": "A la venta",
+    "copiar": "Copiar enlace",
+    "copiado": "Copiado",
+    "verAlumno": "Ver como alumno",
+    "notaAntes": "Se enciende al publicar desde Empieza aquí.",
+    "precio": "Precio",
+    "pagoUnico": "pago único",
+    "alMes": "al mes",
+    "cambiar": "Cambiar",
+    "guardar": "Guardar precio",
+    "cancelar": "Cancelar",
+    "precioInvalido": "Escribe un precio mayor que cero.",
+    "precioError": "No se ha podido cambiar el precio. Inténtalo de nuevo.",
+    "comision": "Didacta se queda el {percent} % de cada venta. Lo ves desglosado en cada cobro."
+  },
+  "referidos": {
+    "titulo": "Tus alumnos venden por ti",
+    "texto": "Cada alumno tiene su enlace. Cuando alguien entra con él y paga, quien lo invitó se lleva un % de lo que pague.",
+    "soloMembresia": "Cuenta en los pagos de tu membresía (cada mes, mientras siga dentro). Las compras de un curso suelto no generan comisión.",
+    "activar": "Activar los referidos",
+    "activando": "Activando…",
+    "activo": "Programa activo",
+    "inactivo": "Programa apagado",
+    "encender": "Encender",
+    "apagar": "Apagar",
+    "porcentaje": "Lo que se lleva quien invita (%)",
+    "guardar": "Guardar",
+    "guardado": "Guardado",
+    "porcentajeInvalido": "Escribe un % entre 0 y 100.",
+    "error": "No se ha podido guardar. Inténtalo de nuevo.",
+    "ventasTitulo": "Ventas que vinieron de referidos",
+    "ventasVacio": "Todavía ninguna. Cuando alguien pague con el enlace de un alumno, lo verás aquí.",
+    "ventasResumen": "{n, plural, one {# pago traído} other {# pagos traídos}} por tus alumnos",
+    "pago": "Pago de {base}",
+    "comisionDe": "{amount} para quien invitó",
+    "estado": {
+      "PENDING": "Pendiente",
+      "APPROVED": "Aprobada",
+      "PAID": "Pagada",
+      "REVOKED": "Anulada"
+    },
+    "verDetalle": "Ver el detalle de los referidos"
+  },
+  "propias": {
+    "titulo": "Ventas",
+    "texto": "Pagos de tu curso o tu membresía cobrados con tu cuenta de pagos.",
+    "vacio": "Aquí verás cuántas ventas llevas. Comparte tu enlace de venta para conseguir la primera.",
+    "detalle": "Ver el detalle de ingresos"
+  }
 }
