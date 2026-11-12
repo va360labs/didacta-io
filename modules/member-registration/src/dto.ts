@@ -122,6 +122,12 @@ export interface TelegramTicketClaims {
   telegramId: string;
   inGroup: TelegramMembership;
   purpose: 'telegram';
+  /**
+   * Tenant en el que se emitió. El ticket se firma con un secreto de TODA la
+   * instancia, así que sin esto el de un aula valía en cualquier otra. Quien lo
+   * verifica exige que sea el suyo; un ticket sin él no vale.
+   */
+  tenantId?: string;
   exp: number;
 }
 
@@ -131,5 +137,7 @@ export interface VerificationTokenClaims {
   inGroup: TelegramMembership;
   email: string;
   purpose: 'member-register';
+  /** Tenant en el que se emitió (ver `TelegramTicketClaims.tenantId`). */
+  tenantId?: string;
   exp: number;
 }

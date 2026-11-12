@@ -179,7 +179,14 @@ export class MemberRegistrationPublicController {
       }
 
       const inGroup = await this.telegram.getChatMember(telegramConfig, dto.id);
-      const ticket = signTicket({ telegramId: dto.id, inGroup, purpose: 'telegram' }, secret, 900);
+      // El ticket lleva el aula en la que se emitió: se firma con un secreto
+      // de toda la instancia, y sin el tenant dentro el de un aula (con SU bot
+      // y SU grupo de Telegram) servía de evidencia en cualquier otra.
+      const ticket = signTicket(
+        { telegramId: dto.id, inGroup, purpose: 'telegram', tenantId },
+        secret,
+        900,
+      );
       return { ok: true, inGroup, ticket };
     });
   }
@@ -204,7 +211,7 @@ export class MemberRegistrationPublicController {
           code: 'MEMBER_REG_OTP_NOT_ENABLED',
         });
       }
-      this.requireTelegramClaims(policy, secret, dto.ticket);
+      this.requireTelegramClaims(policy, secret, dto.ticket, tenantId);
 
       const expiresInSeconds = await this.emailVerification.requestCode(
         tenantId,
@@ -235,7 +242,7 @@ export class MemberRegistrationPublicController {
           code: 'MEMBER_REG_OTP_NOT_ENABLED',
         });
       }
-      const telegramClaims = this.requireTelegramClaims(policy, secret, dto.ticket);
+      const telegramClaims = this.requireTelegramClaims(policy, secret, dto.ticket, tenantId);
 
       const ok = await this.emailVerification.verifyCode(
         tenantId,
@@ -256,6 +263,10 @@ export class MemberRegistrationPublicController {
           inGroup: telegramClaims?.inGroup ?? 'unknown',
           email: dto.email,
           purpose: 'member-register',
+          // Mismo motivo que en el ticket de Telegram: el código OTP sale por
+          // el SMTP del aula que lo pide, así que su admin puede «verificar» el
+          // correo de cualquiera. Ese token no puede valer en otra aula.
+          tenantId,
         },
         secret,
         1800,
@@ -294,7 +305,7 @@ export class MemberRegistrationPublicController {
           });
         }
         const claims = verifyTicket<VerificationTokenClaims>(dto.verificationToken, secret);
-        if (!claims || claims.purpose !== 'member-register') {
+        if (!claims || claims.purpose !== 'member-register' || claims.tenantId !== tenantId) {
           throw new UnauthorizedException({
             message: 'Token de verificación inválido o expirado.',
             code: 'MEMBER_REG_VERIFICATION_TOKEN_INVALID',
@@ -313,7 +324,7 @@ export class MemberRegistrationPublicController {
         // Solo Telegram: el ticket del widget es la evidencia; el email viene
         // del formulario (sin verificar — la aprobación manual sigue delante).
         const claims = dto.ticket ? verifyTicket<TelegramTicketClaims>(dto.ticket, secret) : null;
-        if (!claims || claims.purpose !== 'telegram') {
+        if (!claims || claims.purpose !== 'telegram' || claims.tenantId !== tenantId) {
           throw new UnauthorizedException({
             message: 'Ticket de Telegram inválido o expirado.',
             code: 'MEMBER_REG_TELEGRAM_TICKET_INVALID',
@@ -428,15 +439,19 @@ export class MemberRegistrationPublicController {
    * Si la política exige `telegram`, valida el ticket del widget y devuelve sus
    * claims; si no lo exige, devuelve null e ignora cualquier ticket recibido
    * (el desacople OTP↔Telegram vive exactamente aquí).
+   *
+   * El ticket tiene que haberse emitido en ESTE tenant: la firma es de toda la
+   * instancia y no distingue aulas.
    */
   private requireTelegramClaims(
     policy: EffectiveRegistrationPolicy,
     secret: string,
     ticket: string | undefined,
+    tenantId: string,
   ): TelegramTicketClaims | null {
     if (!policy.verifiers.includes('telegram')) return null;
     const claims = ticket ? verifyTicket<TelegramTicketClaims>(ticket, secret) : null;
-    if (!claims || claims.purpose !== 'telegram') {
+    if (!claims || claims.purpose !== 'telegram' || claims.tenantId !== tenantId) {
       throw new UnauthorizedException({
         message: 'Ticket de Telegram inválido o expirado.',
         code: 'MEMBER_REG_TELEGRAM_TICKET_INVALID',

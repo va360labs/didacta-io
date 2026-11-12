@@ -177,7 +177,7 @@ describe('MemberRegistrationPublicController · otp/request', () => {
       policy({ verifiers: ['telegram', 'otp'] }),
     );
     const ticket = signTicket(
-      { telegramId: '42', inGroup: 'true', purpose: 'telegram' },
+      { telegramId: '42', inGroup: 'true', purpose: 'telegram', tenantId: TENANT_ID },
       AUTH_SECRET,
       900,
     );
@@ -260,7 +260,13 @@ describe('MemberRegistrationPublicController · register', () => {
     // Token emitido "sin Telegram" (p.ej. de cuando la política era solo-otp):
     // no vale si ahora la política exige telegram.
     const token = signTicket(
-      { telegramId: null, inGroup: 'unknown', email: 'a@x.com', purpose: 'member-register' },
+      {
+        telegramId: null,
+        inGroup: 'unknown',
+        email: 'a@x.com',
+        purpose: 'member-register',
+        tenantId: TENANT_ID,
+      },
       AUTH_SECRET,
       1800,
     );
@@ -276,7 +282,7 @@ describe('MemberRegistrationPublicController · register', () => {
   it('política solo-telegram: ticket del widget + email del formulario', async () => {
     const { controller, registration } = makeController(policy({ verifiers: ['telegram'] }));
     const ticket = signTicket(
-      { telegramId: '42', inGroup: 'false', purpose: 'telegram' },
+      { telegramId: '42', inGroup: 'false', purpose: 'telegram', tenantId: TENANT_ID },
       AUTH_SECRET,
       900,
     );
@@ -306,7 +312,7 @@ describe('MemberRegistrationPublicController · register', () => {
   it('un ticket con purpose equivocado no sirve como evidencia', async () => {
     const { controller } = makeController(policy({ verifiers: ['telegram'] }));
     const wrong = signTicket(
-      { telegramId: '42', inGroup: 'true', purpose: 'member-register' },
+      { telegramId: '42', inGroup: 'true', purpose: 'member-register', tenantId: TENANT_ID },
       AUTH_SECRET,
       900,
     );
@@ -318,5 +324,102 @@ describe('MemberRegistrationPublicController · register', () => {
         ticket: wrong,
       } as never),
     ).rejects.toBeInstanceOf(UnauthorizedException);
+  });
+});
+
+/**
+ * Los tickets se firman con `AUTH_SECRET`, que es de TODA la instancia. Sin el
+ * tenant dentro, la evidencia conseguida en un aula —con SU bot y SU grupo de
+ * Telegram, o con un código OTP que sale por SU servidor de correo y que su
+ * admin puede leer— servía para inscribirse en cualquier otra: llegaba a la
+ * bandeja del aprobador de la víctima un alta con «correo verificado» y «está
+ * en el grupo» que nadie había comprobado ahí.
+ */
+describe('MemberRegistrationPublicController · un ticket de otra aula no vale', () => {
+  const OTRA_AULA = 'tenant-atacante';
+
+  it('los tickets que emite este aula llevan su tenant', async () => {
+    const { controller } = makeController(policy({ verifiers: ['telegram', 'otp'] }));
+    const { ticket } = await controller.telegramVerify(REQ, { id: '42', hash: 'h' } as never);
+    const { verificationToken } = await controller.otpVerify(REQ, {
+      email: 'a@x.com',
+      code: '123456',
+      ticket,
+    } as never);
+    const claims = (t: string) =>
+      JSON.parse(Buffer.from(t.split('.')[0]!, 'base64url').toString('utf8')) as {
+        tenantId?: string;
+      };
+    expect(claims(ticket).tenantId).toBe(TENANT_ID);
+    expect(claims(verificationToken).tenantId).toBe(TENANT_ID);
+  });
+
+  it('verificationToken emitido en OTRA aula → 401 y no se crea la solicitud', async () => {
+    const { controller, registration } = makeController(policy({ verifiers: ['otp'] }));
+    const ajeno = signTicket(
+      {
+        telegramId: null,
+        inGroup: 'unknown',
+        email: 'victima@empresa.com',
+        purpose: 'member-register',
+        tenantId: OTRA_AULA,
+      },
+      AUTH_SECRET,
+      1800,
+    );
+    await expect(
+      controller.register(REQ, {
+        name: 'Ana',
+        password: 'x'.repeat(12),
+        verificationToken: ajeno,
+      } as never),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
+    expect(registration.createPending).not.toHaveBeenCalled();
+  });
+
+  it('ticket de Telegram emitido en OTRA aula → 401 en registro, en otp/request y en otp/verify', async () => {
+    const ajeno = signTicket(
+      { telegramId: '42', inGroup: 'true', purpose: 'telegram', tenantId: OTRA_AULA },
+      AUTH_SECRET,
+      900,
+    );
+
+    const soloTelegram = makeController(policy({ verifiers: ['telegram'] }));
+    await expect(
+      soloTelegram.controller.register(REQ, {
+        name: 'Ana',
+        password: 'x'.repeat(12),
+        email: 'a@x.com',
+        ticket: ajeno,
+      } as never),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
+    expect(soloTelegram.registration.createPending).not.toHaveBeenCalled();
+
+    const ambos = makeController(policy({ verifiers: ['telegram', 'otp'] }));
+    await expect(
+      ambos.controller.otpRequest(REQ, { email: 'a@x.com', ticket: ajeno } as never),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
+    expect(ambos.emailVerification.requestCode).not.toHaveBeenCalled();
+    await expect(
+      ambos.controller.otpVerify(REQ, { email: 'a@x.com', code: '123456', ticket: ajeno } as never),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
+    expect(ambos.emailVerification.verifyCode).not.toHaveBeenCalled();
+  });
+
+  it('un ticket SIN tenant (formato anterior) tampoco vale: no se puede saber de qué aula es', async () => {
+    const { controller, registration } = makeController(policy({ verifiers: ['otp'] }));
+    const viejo = signTicket(
+      { telegramId: null, inGroup: 'unknown', email: 'a@x.com', purpose: 'member-register' },
+      AUTH_SECRET,
+      1800,
+    );
+    await expect(
+      controller.register(REQ, {
+        name: 'Ana',
+        password: 'x'.repeat(12),
+        verificationToken: viejo,
+      } as never),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
+    expect(registration.createPending).not.toHaveBeenCalled();
   });
 });

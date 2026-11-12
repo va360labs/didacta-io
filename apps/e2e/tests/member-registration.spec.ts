@@ -1,6 +1,6 @@
 import { createHash, createHmac } from 'node:crypto';
 import { expect, test } from '@playwright/test';
-import { adminTokenForBootstrap, API_URL } from '../helpers/api';
+import { adminSessionForBootstrap, adminTokenForBootstrap, API_URL } from '../helpers/api';
 
 /**
  * Spec end-to-end del flujo de inscripción de miembros (verificadores
@@ -185,9 +185,19 @@ test.describe('Inscripción de miembros · gate Telegram + OTP + validación man
     );
 
     // Reproducimos el ticket que telegram/verify emite (purpose 'telegram',
-    // TTL 900s), firmado con el mismo AUTH_SECRET que usa el backend.
+    // TTL 900s), firmado con el mismo AUTH_SECRET que usa el backend. Lleva el
+    // aula en la que se emite: la firma es de toda la instancia, y el backend
+    // solo acepta el ticket en el aula que lo dio (la de `localhost`, que es la
+    // de arranque).
+    const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'demo';
+    const { user } = await adminSessionForBootstrap(tenantSlug);
     const ticket = signTicket(
-      { telegramId: '987654321', inGroup: 'unknown', purpose: 'telegram' },
+      {
+        telegramId: '987654321',
+        inGroup: 'unknown',
+        purpose: 'telegram',
+        tenantId: user.tenantId,
+      },
       AUTH_SECRET,
       900,
     );
