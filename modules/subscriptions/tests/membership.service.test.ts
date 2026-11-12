@@ -44,6 +44,8 @@ interface PlanRow {
   amountCents: number;
   currency: string;
   compareAtCents: number | null;
+  /** Precios fijos por mercado (`currency_options`). */
+  currencyOptions?: Record<string, number> | null;
   trialDays: number;
   active: boolean;
   isFeatured: boolean;
