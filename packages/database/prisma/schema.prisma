@@ -4616,8 +4616,9 @@ model ModGamificationSubmission {
 //
 // Reglas comunes:
 //  - Importes `Int` en la unidad mínima de la divisa + `currency` ISO 4217 en
-//    minúsculas. Las SUMAS se hacen en `bigint` (SQL crudo o `BigInt` en JS):
-//    un `_sum` de Prisma sobre `Int` desborda a partir de 2^31.
+//    minúsculas. Las SUMAS se llevan en `bigint`: Postgres suma un INTEGER
+//    en BIGINT y el módulo convierte el total a `BigInt` (un total no cabe en
+//    una columna `Int` en cuanto pasa de 21 millones de euros).
 //  - Todas llevan `tenant_id`, así que `prisma/rls.sql` les aplica sola la
 //    política de aislamiento por tenant.
 //  - Sin FK hacia tablas de otros módulos ni del core (contrato modular): los
