@@ -36,7 +36,7 @@
     "@types/archiver": "^6.0.3",
     "@types/node": "^22.10.2",
     "@types/pdfkit": "^0.13.9",
-    "adm-zip": "^0.6.0",
+    "adm-zip": "^0.6.1",
     "typescript": "^5.7.2",
     "vitest": "^3.2.7"
   }
