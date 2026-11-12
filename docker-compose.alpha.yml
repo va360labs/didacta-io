@@ -154,9 +154,10 @@ services:
       REDIS_URL: redis://redis:6379
       AUTH_SECRET: ${AUTH_SECRET}
       # TENANT_SETTINGS_ENC_KEY es opcional: si se omite, Didacta genera y
-      # persiste una clave en /app/data/.didacta-secret-key (volumen didacta_data
-      # abajo). Setealo explícitamente solo si querés controlarlo desde tu
-      # secrets manager.
+      # persiste una clave en /app/data/secrets/.didacta-secret-key (volumen
+      # didacta_data abajo; fuera de STORAGE_ROOT, que se sirve por HTTP).
+      # Setealo explícitamente solo si querés controlarlo desde tu secrets
+      # manager.
       TENANT_SETTINGS_ENC_KEY: ${TENANT_SETTINGS_ENC_KEY:-}
       # Clave maestra HMAC del export firmado de audit log (capability EE
       # `reports.advanced_signed`). Como este compose arranca con
@@ -191,9 +192,10 @@ services:
       DIDACTA_LICENSE_KEY: ${DIDACTA_LICENSE_KEY:-}
       DIDACTA_DEV_BYPASS: ${DIDACTA_DEV_BYPASS:-false}
     volumes:
-      # Persiste el storage local (uploads de cursos/certificados/evidencias)
-      # + la clave de cifrado autogenerada (.didacta-secret-key). Sobrevive
-      # a `docker compose up/down/restart` sin perder datos.
+      # Persiste el storage local (uploads de cursos/certificados/evidencias,
+      # en /app/data/storage) + la clave de cifrado autogenerada (en
+      # /app/data/secrets, que NO se sirve). Sobrevive a
+      # `docker compose up/down/restart` sin perder datos.
       - didacta_data:/app/data
     ports:
       - '${API_PORT:-4000}:4000'
