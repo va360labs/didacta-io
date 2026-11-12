@@ -25,6 +25,18 @@ export interface WeeklyPoint {
   value: number;
 }
 
+export interface CurrencyRevenue {
+  /** Código ISO 4217 en minúsculas, como lo guarda Stripe (`eur`, `chf`…). */
+  currency: string;
+  /**
+   * Cobrado en 30 días (cursos + membresía) en la unidad mínima de la moneda
+   * según Stripe (céntimos en EUR; yenes en JPY, que no tiene decimales).
+   */
+  totalMinor30d: number;
+  /** Serie de 12 semanas en la misma unidad mínima. */
+  weekly: WeeklyPoint[];
+}
+
 export interface BusinessMetrics {
   generatedAt: string;
   nps: {
@@ -36,10 +48,12 @@ export interface BusinessMetrics {
     detractors: number;
   };
   revenue: {
-    /** Céntimos cobrados en 30 días (cursos + membresía). */
-    totalCents30d: number;
-    currency: string;
-    weekly: WeeklyPoint[];
+    /**
+     * Una entrada por moneda cobrada en la ventana de 12 semanas. Nunca se
+     * suman importes de monedas distintas. Lista vacía si no hubo cobros.
+     * Orden: ver `revenueByCurrency`.
+     */
+    byCurrency: CurrencyRevenue[];
   };
   arrears: {
     /** Suscripciones locales PAST_DUE/UNPAID (mod.subscriptions). */
@@ -93,6 +107,37 @@ export function bucketByWeek(
     if (buckets.has(key)) buckets.set(key, buckets.get(key)! + e.value);
   }
   return [...buckets.entries()].map(([weekStart, value]) => ({ weekStart, value }));
+}
+
+/**
+ * Agrupa los cobros por moneda sin sumar monedas entre sí: cada moneda lleva
+ * su total de 30 días y su serie semanal, en su propia unidad mínima.
+ *
+ * Orden estable: primero la moneda con MÁS COBROS en la ventana de 12 semanas
+ * (la principal del aula) y, a igualdad, alfabético por código. No se ordena
+ * por importe porque comparar unidades mínimas de monedas distintas no tiene
+ * sentido (1.000 JPY ≈ 6 EUR, pero 1.000 > 600 céntimos).
+ */
+export function revenueByCurrency(
+  events: Array<{ at: Date; value: number; currency: string }>,
+  weeks: number,
+  now: Date,
+  since30d: Date,
+): CurrencyRevenue[] {
+  const groups = new Map<string, Array<{ at: Date; value: number }>>();
+  for (const e of events) {
+    const currency = e.currency.trim().toLowerCase();
+    const list = groups.get(currency) ?? [];
+    list.push({ at: e.at, value: e.value });
+    groups.set(currency, list);
+  }
+  return [...groups.entries()]
+    .sort(([a, ea], [b, eb]) => eb.length - ea.length || a.localeCompare(b))
+    .map(([currency, list]) => ({
+      currency,
+      totalMinor30d: list.filter((e) => e.at >= since30d).reduce((sum, e) => sum + e.value, 0),
+      weekly: bucketByWeek(list, weeks, now),
+    }));
 }
 
 /** NPS clásico sobre valores 0-10: %promotores(9-10) − %detractores(0-6). */
@@ -149,12 +194,12 @@ export class AdminBusinessMetricsService {
       // Ventas: pagos únicos de cursos (completados y no reembolsados)…
       this.prisma.modBillingOrder.findMany({
         where: { tenantId, completedAt: { not: null, gte: sinceWeeks }, refundedAt: null },
-        select: { amountPaid: true, completedAt: true },
+        select: { amountPaid: true, currency: true, completedAt: true },
       }),
       // …más facturas de membresía cobradas.
       this.prisma.modSubscriptionsInvoice.findMany({
         where: { tenantId, paidAt: { not: null, gte: sinceWeeks } },
-        select: { amount: true, paidAt: true },
+        select: { amount: true, currency: true, paidAt: true },
       }),
       this.prisma.modSubscriptionsSubscription.count({
         where: { tenantId, status: { in: ['PAST_DUE', 'UNPAID'] } },
@@ -192,19 +237,21 @@ export class AdminBusinessMetricsService {
       }),
     ]);
 
+    // Cada cobro con SU moneda: un aula con cobros de plataforma puede vender
+    // en EUR, CHF, USD… y sumarlas daría una cifra sin sentido.
     const revenueEvents = [
-      ...orders.map((o) => ({ at: o.completedAt!, value: o.amountPaid ?? 0 })),
-      ...invoices.map((i) => ({ at: i.paidAt!, value: i.amount })),
+      ...orders.map((o) => ({
+        at: o.completedAt!,
+        value: o.amountPaid ?? 0,
+        currency: o.currency,
+      })),
+      ...invoices.map((i) => ({ at: i.paidAt!, value: i.amount, currency: i.currency })),
     ];
-    const revenueWeekly = bucketByWeek(revenueEvents, WEEKS, now);
-    const totalCents30d = revenueEvents
-      .filter((e) => e.at >= since30d)
-      .reduce((sum, e) => sum + e.value, 0);
 
     return {
       generatedAt: now.toISOString(),
       nps: computeNps(npsAnswers.map((a) => a.valueInt!)),
-      revenue: { totalCents30d, currency: 'eur', weekly: revenueWeekly },
+      revenue: { byCurrency: revenueByCurrency(revenueEvents, WEEKS, now, since30d) },
       arrears: {
         subscriptions: arrearsSubscriptions,
         external: arrearsExternal,
