@@ -7,8 +7,10 @@ import { Inject, Injectable } from '@nestjs/common';
 import type { PrismaClient } from '@didacta/database';
 import {
   PayoutsAccountsService,
+  PayoutsReportsService,
   PayoutsSettingsService,
   RefsService,
+  SettlementService,
   createConnectedAccountsApi,
   type PayoutsDbPort,
   type PayoutsTx,
@@ -83,7 +85,25 @@ export class PayoutsRuntime {
     this.settings = new PayoutsSettingsService(db, config.defaultFeeBps);
     this.refs = new RefsService(prisma as unknown as PrismaClient);
     this.mode = new PaymentModeResolver(config, stripeResolver, () => prisma);
+    this.settlement = new SettlementService(db, stripe, this.settings, {
+      logger: {
+        warn: (obj, msg) => logger.warn(obj, msg),
+        log: (obj, msg) => logger.log(obj, msg),
+        error: (obj, msg) => logger.error(obj, msg),
+      },
+    });
+    this.reports = new PayoutsReportsService(db);
+    // Sin Redis no hay barrido cada minuto: la compra y `charge.updated` se
+    // liquidan en línea desde el webhook.
+    this.settleInline = !process.env['REDIS_URL'];
   }
+
+  /** Liquidación de ventas (E4). */
+  readonly settlement: SettlementService;
+  /** «Tus ventas», resumen por divisa y volumen del pool. */
+  readonly reports: PayoutsReportsService;
+  /** `true` sin `REDIS_URL`: el webhook liquida en línea. */
+  readonly settleInline: boolean;
 
   /**
    * Registro de objetos para los adaptadores de Stripe de los módulos

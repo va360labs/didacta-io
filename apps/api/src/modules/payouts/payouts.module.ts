@@ -9,6 +9,9 @@ import { FetchPlatformStripeClient, type PlatformStripeClient } from '@didacta/m
 import { AdminTenantsPayoutsController } from '../../admin/admin-tenants.controller';
 import { AuthModule } from '../../auth/auth.module';
 import { PayoutsAccountsWorker } from './payouts-accounts.worker';
+import { PayoutsReconcileWorker } from './payouts-reconcile.worker';
+import { PayoutsSalesController } from './payouts-sales.controller';
+import { PayoutsSettleWorker } from './payouts-settle.worker';
 import { PayoutsController } from './payouts.controller';
 import { PayoutsErrorFilter } from './payouts-error.filter';
 import {
@@ -35,9 +38,10 @@ import { getPlatformPaymentsConfig, type PlatformPaymentsConfig } from './platfo
  *    Community): módulo vacío. Ni controladores, ni worker, ni filtro, ni
  *    cliente de Stripe. Las rutas `/modules/payouts/*` y las dos del pool no
  *    existen: la instalación tiene las mismas rutas que antes.
- *  - Modo plataforma ENCENDIDO: el webhook único, las rutas del creador, las
- *    dos del contrato del pool (`AdminTenantsPayoutsController`) y el
- *    conciliador de cuentas. Y el módulo es GLOBAL: lo que exporta lo
+ *  - Modo plataforma ENCENDIDO: el webhook único, las rutas del creador
+ *    («Tus ventas» incluidas), las tres del contrato del pool
+ *    (`AdminTenantsPayoutsController`), el conciliador de cuentas, el barrido
+ *    de liquidación y el conciliador de cobros. Y el módulo es GLOBAL: lo que exporta lo
  *    reciben con `@Optional()` piezas del host que no lo importan —
  *    `ModuleRegistryService` (adaptadores de Stripe por modo de cobro), los
  *    webhooks heredados (`PlatformObjectGuard`: 403 a eventos de plataforma)
@@ -68,7 +72,12 @@ export class PayoutsModule {
       module: PayoutsModule,
       global: true,
       imports: [AuthModule],
-      controllers: [PayoutsController, PlatformWebhookController, AdminTenantsPayoutsController],
+      controllers: [
+        PayoutsController,
+        PayoutsSalesController,
+        PlatformWebhookController,
+        AdminTenantsPayoutsController,
+      ],
       providers: [
         { provide: PLATFORM_PAYMENTS_CONFIG, useValue: config },
         {
@@ -78,6 +87,8 @@ export class PayoutsModule {
         },
         PayoutsRuntime,
         PayoutsAccountsWorker,
+        PayoutsSettleWorker,
+        PayoutsReconcileWorker,
         PlatformObjectGuard,
         PlatformCheckoutGate,
         overrides.dispatcher

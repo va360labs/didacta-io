@@ -495,7 +495,14 @@ describeWithDb('Webhook de plataforma — Postgres real como didacta_app (RLS fo
       );
 
     const first = await platform.handle(req());
-    expect(first).toEqual({ received: true, outcome: 'processed', sale: 'created' });
+    // Sin REDIS_URL el webhook liquida en línea (E4): el cargo aún no tiene
+    // balance_transaction, así que la venta se queda esperando la comisión.
+    expect(first).toEqual({
+      received: true,
+      outcome: 'processed',
+      sale: 'created',
+      settlement: 'awaiting_fee',
+    });
     const rest = await Promise.all(Array.from({ length: 4 }, () => platform.handle(req())));
     expect(rest.every((r) => r.outcome === 'duplicate')).toBe(true);
     // Otro evento (otro id) de la misma sesión, en paralelo ×3: sigue habiendo una venta.
