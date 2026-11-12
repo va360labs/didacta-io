@@ -59,8 +59,11 @@ export function ThreadCard({
   onOpen,
   onTagClick,
   onReactionToggle,
+  tagLabel,
 }: {
   post: Post;
+  /** Nombre visible de una etiqueta (modo sencillo: el título del espacio). */
+  tagLabel?: (tag: string) => string;
   viewerUserId: string | null;
   tagsByName: ReadonlyMap<string, CommunityTag>;
   /** Avatar del autor resuelto por la página (por authorId). Null = iniciales. */
@@ -127,7 +130,7 @@ export function ThreadCard({
                 {post.tags.slice(0, 2).map((tag) => (
                   <CommunityTagChip
                     key={tag}
-                    name={tag}
+                    name={tagLabel ? tagLabel(tag) : tag}
                     tag={tagsByName.get(tag)}
                     onClick={(e) => {
                       e.stopPropagation();
