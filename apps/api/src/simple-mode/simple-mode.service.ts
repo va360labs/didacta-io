@@ -204,6 +204,7 @@ export class SimpleModeService {
     );
 
     await this.writeState(tenantId, creator.id, { quickStartAt: new Date().toISOString() });
+    await this.completeLegacyWizard(tenantId, creator.id);
     return { offer };
   }
 
@@ -402,6 +403,30 @@ export class SimpleModeService {
   private async writeState(tenantId: string, actorId: string, patch: SimpleModeState) {
     const current = await this.readState(tenantId);
     await this.writeSetting(tenantId, actorId, STATE_KEY, { ...current, ...patch });
+  }
+
+  /**
+   * El alta en 3 preguntas SUSTITUYE al asistente de academia de 12 pantallas:
+   * se marca como terminado (`onboarding/academy`, el mismo ajuste que lee el
+   * shell) para que el aula no vuelva a mandar al creador a él.
+   */
+  private async completeLegacyWizard(tenantId: string, actorId: string) {
+    const where = {
+      tenantId_moduleName_key: { tenantId, moduleName: 'onboarding', key: 'academy' },
+    };
+    const value = { step: 'resumen', done: [], skipped: [], completedAt: new Date().toISOString() };
+    await this.prisma.tenantSetting.upsert({
+      where,
+      create: {
+        tenantId,
+        moduleName: 'onboarding',
+        key: 'academy',
+        isSecret: false,
+        valueJson: value,
+        updatedById: actorId,
+      },
+      update: { valueJson: value, updatedById: actorId },
+    });
   }
 
   private async writeSetting(tenantId: string, actorId: string, key: string, value: object) {

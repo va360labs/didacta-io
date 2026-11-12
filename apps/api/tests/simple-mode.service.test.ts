@@ -262,6 +262,8 @@ describe('alta en 3 preguntas', () => {
     // Sin nombre de persona inventado: el creador firma con el nombre de su academia.
     expect(db.user.name).toBe('Taller de Acuarela');
     expect(db.user.onboardingCompletedAt).toBeInstanceOf(Date);
+    // Sustituye al asistente antiguo: el shell ya no manda a /bienvenida.
+    expect(db.settings.get('academy')).toMatchObject({ completedAt: expect.any(String) });
   });
 
   it('repetirla no duplica el curso ni el post: actualiza nombre y precio', async () => {
