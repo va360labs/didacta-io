@@ -314,6 +314,20 @@
     "bannerFallback": "Usando SMTP global del host (fallback). Si quieres un remitente propio, guarda una configuración de tenant.",
     "bannerNone": "Sin SMTP configurado — los emails (activación, reset de contraseña, notificaciones) no se envían."
   },
+  "replyTo": {
+    "title": "Correo para respuestas",
+    "description": "Los correos que reciben tus alumnos salen con el nombre de tu academia. Si alguien contesta a uno, la respuesta llega a esta dirección.",
+    "label": "Correo para respuestas",
+    "placeholder": "contacto@tuacademia.com",
+    "effective": "Ahora mismo las respuestas llegan a {email}.",
+    "effectiveNone": "Ahora mismo las respuestas no llegan a nadie. Escribe aquí tu correo.",
+    "invalid": "Escribe una sola dirección de correo, por ejemplo contacto@tuacademia.com.",
+    "save": "Guardar correo",
+    "saving": "Guardando…",
+    "saved": "Guardado. Las respuestas de tus alumnos llegarán a esta dirección.",
+    "saveError": "No se ha podido guardar. Inténtalo de nuevo.",
+    "loadError": "No se ha podido cargar. Recarga la página."
+  },
   "validation": {
     "hostRequired": "Host requerido",
     "portInvalid": "Puerto inválido",

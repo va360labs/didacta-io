@@ -14,6 +14,10 @@ import { SecretCipherService } from '../modules/secret-cipher.service';
 import { SmtpAdapterService } from '../modules/smtp-adapter.service';
 import { TenantSmtpResolverService } from '../modules/tenant-smtp-resolver.service';
 import {
+  prismaTenantSenderDirectory,
+  type SenderDirectoryPrisma,
+} from '../modules/prisma-tenant-sender-directory';
+import {
   TenantStripeResolverService,
   buildGlobalFallbackFlagReader,
   type GlobalFallbackPolicyStore,
@@ -124,9 +128,17 @@ function loadCipherKeyForAuth(): string {
     // del kernel (TenantConfigService) y NestJS no resuelve interfaces.
     {
       provide: TenantSmtpResolverService,
-      inject: [PrismaTenantConfigService, SmtpAdapterService],
-      useFactory: (config: PrismaTenantConfigService, smtp: SmtpAdapterService) =>
-        new TenantSmtpResolverService(config, smtp),
+      inject: [PrismaTenantConfigService, SmtpAdapterService, PrismaService],
+      useFactory: (
+        config: PrismaTenantConfigService,
+        smtp: SmtpAdapterService,
+        prisma: PrismaService,
+      ) =>
+        new TenantSmtpResolverService(
+          config,
+          smtp,
+          prismaTenantSenderDirectory(prisma as unknown as SenderDirectoryPrisma),
+        ),
     },
     // TenantStripeResolverService — cascada tenant→global→none para Stripe
     // (mod.billing/mod.subscriptions/webhooks/admin-stripe). Mismo criterio

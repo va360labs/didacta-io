@@ -22,6 +22,7 @@ import { ModuleContextFactory } from './module-context.factory';
 import { OutboxQueueService } from './outbox-queue.service';
 import { OutboxRecoveryWorker } from './outbox-recovery.worker';
 import { resolveCoreVersion } from '../core-version';
+import { runSanctionedGlobalAccess, tenantContextStorage } from '../tenancy/tenant-context.storage';
 
 const ADMIN_ROLES = new Set(['super_admin', 'tenant_admin']);
 
@@ -53,8 +54,16 @@ interface StorageCheck {
 }
 
 interface SmtpCheck {
+  /**
+   * `ready`: hay SMTP compartido del despliegue, así que TODAS las aulas tienen
+   * salida. `configured`: no lo hay, pero alguna aula puso el suyo.
+   * `unconfigured`: ningún correo saldrá.
+   */
   status: 'ready' | 'configured' | 'unconfigured';
+  /** Aulas con SMTP PROPIO (modo avanzado), no las que tienen correo. */
   configuredTenants: number;
+  /** True si hay SMTP compartido (`SMTP_HOST`/`SMTP_PORT`/`SMTP_FROM`). */
+  globalFallback: boolean;
 }
 
 interface OutboxCheck {
@@ -254,15 +263,25 @@ export class AdminSystemController {
   }
 
   private async checkSmtp(): Promise<SmtpCheck> {
-    // El SmtpAdapterService es stateless y per-tenant. La señal útil de
-    // salud es cuántos tenants tienen credenciales SMTP configuradas: 0
-    // significa que ningún email saldrá hasta que un admin las complete.
-    const configuredTenants = await this.prisma.tenantSetting.count({
-      where: { moduleName: 'notifications', key: 'smtp', valueCipher: { not: null } },
-    });
+    // Con SMTP compartido del despliegue, todas las aulas tienen salida aunque
+    // ninguna haya puesto el suyo: antes esto decía «sin configurar, 0 aulas»
+    // en un pool que enviaba sin problema.
+    const globalFallback = this.modules.getSmtpResolver().hasGlobalConfig();
+    const count = () =>
+      this.prisma.tenantSetting.count({
+        where: { moduleName: 'notifications', key: 'smtp', valueCipher: { not: null } },
+      });
+    // Con sesión de un aula el recuento queda acotado por RLS a esa aula, como
+    // debe. Sin contexto (la credencial de provisioning del plano de control)
+    // es un agregado de operación: sin sanción, RLS forzada devolvía 0 filas y
+    // dejaba un error de «hueco» en el log en cada consulta.
+    const configuredTenants = tenantContextStorage.getStore()?.tenantId
+      ? await count()
+      : await runSanctionedGlobalAccess(count);
     return {
-      status: configuredTenants > 0 ? 'configured' : 'unconfigured',
+      status: globalFallback ? 'ready' : configuredTenants > 0 ? 'configured' : 'unconfigured',
       configuredTenants,
+      globalFallback,
     };
   }
 

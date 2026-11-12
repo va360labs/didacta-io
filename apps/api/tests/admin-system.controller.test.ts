@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { ForbiddenException, UnauthorizedException } from '@nestjs/common';
 import { AdminSystemController } from '../src/modules/admin-system.controller';
+import { isSanctionedGlobalAccess, runAsTenant } from '../src/tenancy/tenant-context.storage';
 
 interface SmtpRow {
   moduleName: string;
@@ -14,6 +15,10 @@ function makeController(opts: {
   storageKind?: 's3' | 'local';
   storagePingResult?: boolean;
   smtpConfigured?: number;
+  /** SMTP compartido del despliegue (env globales). */
+  smtpGlobal?: boolean;
+  /** Se rellena con si cada `count` corrió bajo acceso global sancionado. */
+  smtpCountSanctioned?: boolean[];
   pending?: number;
   oldestAgeSeconds?: number;
   outboxThrows?: boolean;
@@ -40,6 +45,7 @@ function makeController(opts: {
     },
     tenantSetting: {
       async count(args: { where: { moduleName: string; key: string; valueCipher: unknown } }) {
+        opts.smtpCountSanctioned?.push(isSanctionedGlobalAccess());
         return smtpRows.filter(
           (r) => r.moduleName === args.where.moduleName && r.key === args.where.key,
         ).length;
@@ -64,6 +70,7 @@ function makeController(opts: {
   };
 
   const modules = {
+    getSmtpResolver: () => ({ hasGlobalConfig: () => opts.smtpGlobal ?? false }),
     isS3Storage: () => opts.storageKind === 's3',
     getStorage: () => ({
       ping: opts.storagePingResult !== undefined ? async () => !!opts.storagePingResult : undefined,
@@ -178,6 +185,37 @@ describe('AdminSystemController.healthDetail', () => {
     const r = await c.healthDetail(ADMIN as never);
     expect(r.checks.smtp.status).toBe('unconfigured');
     expect(r.checks.smtp.configuredTenants).toBe(0);
+    expect(r.checks.smtp.globalFallback).toBe(false);
+  });
+
+  it('con SMTP compartido del despliegue es `ready` aunque ningún aula ponga el suyo', async () => {
+    const c = makeController({
+      redisStatus: 'disabled',
+      storageKind: 'local',
+      smtpConfigured: 0,
+      smtpGlobal: true,
+    });
+    const r = await c.healthDetail(ADMIN as never);
+    expect(r.checks.smtp).toEqual({ status: 'ready', configuredTenants: 0, globalFallback: true });
+  });
+
+  it('sin contexto de aula (plano de control) el recuento va sancionado; con aula, acotado por RLS', async () => {
+    const sanctioned: boolean[] = [];
+    const c = makeController({
+      redisStatus: 'ok',
+      storageKind: 'local',
+      smtpConfigured: 2,
+      smtpCountSanctioned: sanctioned,
+    });
+    // Provisioning: sin sesión de aula. Antes contaba sin sanción → 0 filas
+    // con RLS forzada y un error de «hueco» en el log en cada consulta.
+    const r = await c.healthDetail(undefined, {
+      provisioningActor: { credentialId: 'cred-1' },
+    } as never);
+    expect(r.checks.smtp.configuredTenants).toBe(2);
+    // Control: con contexto de aula NO se sanciona (RLS acota a esa aula).
+    await runAsTenant('t', () => c.healthDetail(ADMIN as never));
+    expect(sanctioned).toEqual([true, false]);
   });
 
   it('outbox.error si sampleLag falla — agrega a unhealthy', async () => {

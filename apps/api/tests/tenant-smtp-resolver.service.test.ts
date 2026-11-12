@@ -257,4 +257,111 @@ describe('TenantSmtpResolverService', () => {
       expect(await r.hasTenantConfig(TENANT_A)).toBe(false);
     });
   });
+
+  describe('identidad del remitente (nombre visible y Reply-To)', () => {
+    function withGlobal() {
+      process.env['SMTP_HOST'] = 'email-smtp.eu-west-1.amazonaws.com';
+      process.env['SMTP_PORT'] = '587';
+      process.env['SMTP_USER'] = 'u';
+      process.env['SMTP_PASS'] = 'p';
+      process.env['SMTP_FROM'] = 'Didacta <hola@didacta.io>';
+    }
+    const directory = (emails: Record<string, string | null>) => {
+      const calls: string[] = [];
+      return {
+        calls,
+        async primaryAdminEmail(t: string) {
+          calls.push(t);
+          return emails[t] ?? null;
+        },
+      };
+    };
+
+    it('SMTP compartido: dirección de la plataforma, nombre de la plataforma de respaldo y Reply-To al «correo para respuestas»', async () => {
+      withGlobal();
+      const config = makeTenantConfig();
+      config.seed(TENANT_A, 'notifications', 'sender', { replyToEmail: 'contacto@nandu.es' });
+      const dir = directory({ [TENANT_A]: 'admin@nandu.es' });
+      const r = new TenantSmtpResolverService(config as never, smtp, dir);
+      const res = (await r.resolve(TENANT_A))!;
+      expect(res.source).toBe('global');
+      expect(res.config.from).toBe('hola@didacta.io');
+      expect(res.config.sender).toEqual({ fallbackName: 'Didacta', replyTo: 'contacto@nandu.es' });
+      // Con correo propio configurado ni se pregunta por el administrador.
+      expect(dir.calls).toEqual([]);
+    });
+
+    it('SMTP compartido sin «correo para respuestas»: Reply-To al administrador principal del aula', async () => {
+      withGlobal();
+      const dir = directory({ [TENANT_A]: 'admin@nandu.es', [TENANT_B]: 'otra@b.es' });
+      const r = new TenantSmtpResolverService(makeTenantConfig() as never, smtp, dir);
+      expect((await r.resolve(TENANT_A))!.config.sender?.replyTo).toBe('admin@nandu.es');
+      // Control: cada aula el suyo, nunca el de otra.
+      expect((await r.resolve(TENANT_B))!.config.sender?.replyTo).toBe('otra@b.es');
+    });
+
+    it('sin contacto ni administrador (o si la consulta falla): sin Reply-To', async () => {
+      withGlobal();
+      const r1 = new TenantSmtpResolverService(makeTenantConfig() as never, smtp, directory({}));
+      expect((await r1.resolve(TENANT_A))!.config.sender).toEqual({ fallbackName: 'Didacta' });
+      const failing = {
+        async primaryAdminEmail(): Promise<string | null> {
+          throw new Error('db down');
+        },
+      };
+      const r2 = new TenantSmtpResolverService(makeTenantConfig() as never, smtp, failing);
+      expect((await r2.resolve(TENANT_A))!.config.sender?.replyTo).toBeUndefined();
+    });
+
+    it('un «correo para respuestas» guardado con inyección se ignora y cae al administrador', async () => {
+      withGlobal();
+      const config = makeTenantConfig();
+      config.seed(TENANT_A, 'notifications', 'sender', {
+        replyToEmail: ['a@x.com', 'Bcc: b@y.com'].join(String.fromCharCode(13, 10)),
+      });
+      const r = new TenantSmtpResolverService(
+        config as never,
+        smtp,
+        directory({ [TENANT_A]: 'admin@nandu.es' }),
+      );
+      expect((await r.resolve(TENANT_A))!.config.sender?.replyTo).toBe('admin@nandu.es');
+    });
+
+    it('SMTP propio: se respeta su nombre del remitente y NO se añade el Reply-To del administrador', async () => {
+      withGlobal();
+      const config = makeTenantConfig();
+      config.seed(TENANT_A, 'notifications', 'smtp', VALID_TENANT_CFG);
+      config.seed(TENANT_A, 'notifications', 'smtp_meta', {
+        fromName: 'Mi Marca',
+        verifiedAt: null,
+      });
+      const dir = directory({ [TENANT_A]: 'admin@nandu.es' });
+      const r = new TenantSmtpResolverService(config as never, smtp, dir);
+      const res = (await r.resolve(TENANT_A))!;
+      expect(res.source).toBe('tenant_unverified');
+      expect(res.config.from).toBe('no-reply@tenant-a.example');
+      expect(res.config.sender).toEqual({ fixedName: 'Mi Marca' });
+      expect(dir.calls).toEqual([]);
+      // Con «correo para respuestas» puesto a mano, sí lo lleva.
+      config.seed(TENANT_A, 'notifications', 'sender', { replyToEmail: 'contacto@nandu.es' });
+      expect((await r.resolve(TENANT_A))!.config.sender).toEqual({
+        fixedName: 'Mi Marca',
+        replyTo: 'contacto@nandu.es',
+      });
+    });
+
+    it('SMTP_FROM sin nombre: no hay nombre de respaldo', async () => {
+      withGlobal();
+      process.env['SMTP_FROM'] = 'hola@didacta.io';
+      const r = new TenantSmtpResolverService(makeTenantConfig() as never, smtp);
+      expect((await r.resolve(TENANT_A))!.config.sender).toEqual({});
+    });
+
+    it('hasGlobalConfig refleja las env globales', () => {
+      const r = new TenantSmtpResolverService(makeTenantConfig() as never, smtp);
+      expect(r.hasGlobalConfig()).toBe(false);
+      withGlobal();
+      expect(r.hasGlobalConfig()).toBe(true);
+    });
+  });
 });
