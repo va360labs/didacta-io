@@ -446,6 +446,46 @@ describe('MembershipService · planes', () => {
     expect(repriced.stripePriceId).toBeNull();
   });
 
+  it('precios por mercado: viajan al Price de Stripe y cambiarlos rota el stripePriceId', async () => {
+    await ctx.service.updateConfig(TENANT, { active: true });
+    const plan = await ctx.service.createPlan(TENANT, {
+      name: 'Mensual MX',
+      intervalMonths: 1,
+      amountCents: 2_900,
+      currency: 'eur',
+      currencyOptions: { MXN: 59_900 },
+    });
+    expect(ctx.prisma.plans.get(plan.id)!.currencyOptions).toEqual({ mxn: 59_900 });
+    await ctx.service.startMembershipCheckout({
+      tenantId: TENANT,
+      planId: plan.id,
+      successUrl: 'https://x/s',
+      cancelUrl: 'https://x/c',
+    });
+    expect(ctx.stripe.createRecurringPrice).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        amountCents: 2_900,
+        currency: 'eur',
+        currencyOptions: { mxn: 59_900 },
+      }),
+    );
+    const priced = ctx.prisma.plans.get(plan.id)!.stripePriceId;
+    expect(priced).toMatch(/^price_/);
+
+    // El mismo mapa (otro orden de claves y mayúsculas) no toca el Price.
+    const same = await ctx.service.updatePlan(TENANT, plan.id, {
+      currencyOptions: { mxn: 59_900 },
+    });
+    expect(same.stripePriceId).toBe(priced);
+
+    // Otro importe en MXN: Stripe no deja editarlo → el Price se re-crea.
+    const changed = await ctx.service.updatePlan(TENANT, plan.id, {
+      currencyOptions: { mxn: 49_900 },
+    });
+    expect(changed.stripePriceId).toBeNull();
+    expect(changed.currencyOptions).toEqual({ mxn: 49_900 });
+  });
+
   it('borrar un plan CON ventas lo desactiva (historial); sin ventas lo borra', async () => {
     const vendido = await ctx.service.createPlan(TENANT, {
       name: 'Anual',

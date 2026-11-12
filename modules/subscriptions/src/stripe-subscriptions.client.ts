@@ -101,6 +101,11 @@ export interface CreateRecurringPriceParams {
   productId: string;
   amountCents: number;
   currency: string;
+  /**
+   * Precios fijos extra por mercado (`currency_options`): moneda → importe en
+   * su unidad mínima. Inmutables en Stripe: cambiarlos exige un Price nuevo.
+   */
+  currencyOptions?: Readonly<Record<string, number>> | null;
   intervalMonths: number;
   /** Etiqueta interna del price (nombre del plan). Solo visible en el dashboard. */
   nickname?: string;
@@ -259,10 +264,18 @@ export class SubscriptionsStripeSdkAdapter implements SubscriptionsStripeAdapter
       // en el dashboard que month × 12).
       const interval = p.intervalMonths === 12 ? 'year' : 'month';
       const intervalCount = p.intervalMonths === 12 ? 1 : p.intervalMonths;
+      const currencyOptions = Object.entries(p.currencyOptions ?? {});
       const price = await this.client.prices.create({
         product: p.productId,
         unit_amount: p.amountCents,
         currency: p.currency,
+        ...(currencyOptions.length
+          ? {
+              currency_options: Object.fromEntries(
+                currencyOptions.map(([code, amount]) => [code, { unit_amount: amount }]),
+              ),
+            }
+          : {}),
         recurring: { interval, interval_count: intervalCount },
         ...(p.nickname ? { nickname: p.nickname } : {}),
         metadata: p.metadata,

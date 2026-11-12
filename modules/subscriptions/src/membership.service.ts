@@ -27,7 +27,7 @@
  * MISMA tabla `mod_subscriptions_subscription` (courseId NULL + planId).
  */
 
-import type { PrismaClient } from '@didacta/database';
+import { Prisma, type PrismaClient } from '@didacta/database';
 import type Stripe from 'stripe';
 import {
   MembershipAlreadySubscribedError,
@@ -98,6 +98,11 @@ export interface PlanInput {
   intervalMonths: number;
   amountCents: number;
   currency?: string;
+  /**
+   * Precios fijos extra por mercado (`currency_options`): moneda → importe en
+   * su unidad mínima. `null`/`{}` = ninguno. Cambiarlos rota el Price.
+   */
+  currencyOptions?: Readonly<Record<string, number>> | null;
   compareAtCents?: number | null;
   trialDays?: number;
   active?: boolean;
@@ -211,6 +216,9 @@ export class MembershipService {
         intervalMonths: input.intervalMonths,
         amountCents: input.amountCents,
         currency: input.currency ?? PLAN_DEFAULT_CURRENCY,
+        ...(normalizeCurrencyOptions(input.currencyOptions)
+          ? { currencyOptions: normalizeCurrencyOptions(input.currencyOptions)! }
+          : {}),
         compareAtCents: input.compareAtCents ?? null,
         trialDays: input.trialDays ?? 0,
         active: input.active ?? true,
@@ -229,7 +237,16 @@ export class MembershipService {
 
     // Si cambia el importe, la moneda o la periodicidad, el price de Stripe
     // deja de valer (inmutable) → se limpia y se re-crea en el próximo checkout.
+    const optionsBefore = normalizeCurrencyOptions(
+      plan.currencyOptions as Record<string, number> | null,
+    );
+    const optionsAfter =
+      input.currencyOptions === undefined
+        ? optionsBefore
+        : normalizeCurrencyOptions(input.currencyOptions);
+    const optionsChanged = JSON.stringify(optionsBefore) !== JSON.stringify(optionsAfter);
     const priceChanged =
+      optionsChanged ||
       (input.amountCents !== undefined && input.amountCents !== plan.amountCents) ||
       (input.currency !== undefined && input.currency !== plan.currency) ||
       (input.intervalMonths !== undefined && input.intervalMonths !== plan.intervalMonths);
@@ -242,6 +259,7 @@ export class MembershipService {
         ...(input.intervalMonths !== undefined ? { intervalMonths: input.intervalMonths } : {}),
         ...(input.amountCents !== undefined ? { amountCents: input.amountCents } : {}),
         ...(input.currency !== undefined ? { currency: input.currency } : {}),
+        ...(optionsChanged ? { currencyOptions: optionsAfter ?? Prisma.DbNull } : {}),
         ...(input.compareAtCents !== undefined ? { compareAtCents: input.compareAtCents } : {}),
         ...(input.trialDays !== undefined ? { trialDays: input.trialDays } : {}),
         ...(input.active !== undefined ? { active: input.active } : {}),
@@ -621,6 +639,9 @@ export class MembershipService {
       productId,
       amountCents: plan.amountCents,
       currency: plan.currency,
+      currencyOptions: normalizeCurrencyOptions(
+        plan.currencyOptions as Record<string, number> | null,
+      ),
       intervalMonths: plan.intervalMonths,
       nickname: plan.name,
       metadata: { tenantId: plan.tenantId, planId: plan.id },
@@ -1013,4 +1034,18 @@ function parseCoursePrices(value: unknown): Array<{ courseId: string; amountCent
       typeof (x as Record<string, unknown>)['courseId'] === 'string' &&
       typeof (x as Record<string, unknown>)['amountCents'] === 'number',
   );
+}
+
+/**
+ * Precios extra por mercado normalizados (moneda en minúsculas, ordenadas) o
+ * `null` si no hay ninguno: dos mapas iguales dan el mismo JSON, y así se sabe
+ * si hace falta un Price nuevo.
+ */
+export function normalizeCurrencyOptions(
+  options: Readonly<Record<string, number>> | null | undefined,
+): Record<string, number> | null {
+  const entries = Object.entries(options ?? {})
+    .map(([code, amount]) => [code.toLowerCase(), amount] as const)
+    .sort(([a], [b]) => a.localeCompare(b));
+  return entries.length ? Object.fromEntries(entries) : null;
 }

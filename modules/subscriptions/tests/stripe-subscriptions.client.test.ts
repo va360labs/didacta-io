@@ -179,3 +179,42 @@ describe('SubscriptionsStripeSdkAdapter.createPortalSession', () => {
     });
   });
 });
+
+describe('SubscriptionsStripeSdkAdapter.createRecurringPrice — precios extra por mercado', () => {
+  function capturePrices() {
+    const prices: Array<Record<string, unknown>> = [];
+    class FakeStripe {
+      prices = {
+        create: async (params: Record<string, unknown>) => {
+          prices.push(params);
+          return { id: 'price_1' };
+        },
+      };
+    }
+    const adapter = new SubscriptionsStripeSdkAdapter('sk_test_x', 'whsec_x', FakeStripe as never);
+    return { adapter, prices };
+  }
+  const base = {
+    productId: 'prod_1',
+    amountCents: 2_900,
+    currency: 'eur',
+    intervalMonths: 1,
+    metadata: {},
+  };
+
+  it('sin opciones: el Price de siempre, sin currency_options', async () => {
+    const { adapter, prices } = capturePrices();
+    await adapter.createRecurringPrice(base);
+    expect(prices[0]).not.toHaveProperty('currency_options');
+    expect(prices[0]).toMatchObject({ unit_amount: 2_900, currency: 'eur' });
+  });
+
+  it('con opciones: currency_options con el importe en la unidad mínima de cada moneda', async () => {
+    const { adapter, prices } = capturePrices();
+    await adapter.createRecurringPrice({ ...base, currencyOptions: { mxn: 59_900, jpy: 4_900 } });
+    expect(prices[0]?.['currency_options']).toEqual({
+      mxn: { unit_amount: 59_900 },
+      jpy: { unit_amount: 4_900 },
+    });
+  });
+});
