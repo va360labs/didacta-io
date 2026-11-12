@@ -110,6 +110,16 @@ export function formatDuration(seconds: number): string {
   return m === 0 ? `${h} h` : `${h} h ${m} min`;
 }
 
+/**
+ * Como `formatDuration`, pero redondeando HACIA ARRIBA al minuto: para lo que
+ * se ha gastado o lo que dura un vídeo. Truncar decía «Has usado 0 min» con un
+ * vídeo de 32 s subido, y «dura 2 h y el máximo es 2 h» con uno de 2 h 0 min
+ * 30 s. Los límites y el espacio libre siguen truncando (no prometen de más).
+ */
+export function formatUsedDuration(seconds: number): string {
+  return formatDuration(Math.ceil(Math.max(0, seconds) / 60) * 60);
+}
+
 /** «1,2 GB», «850 MB» (en la unidad del explorador de archivos). */
 export function formatBytes(bytes: number): string {
   const gb = bytes / 1024 ** 3;

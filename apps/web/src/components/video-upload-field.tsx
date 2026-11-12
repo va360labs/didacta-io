@@ -17,6 +17,7 @@ import { formatSeconds } from '@/lib/video';
 import {
   formatBytes,
   formatDuration,
+  formatUsedDuration,
   preflight,
   readVideoDuration,
   startTusUpload,
@@ -181,14 +182,14 @@ export function VideoUploadField({
       } else if (problem.kind === 'too_long') {
         setError(
           t('errors.tooLong', {
-            duration: formatDuration(duration),
+            duration: formatUsedDuration(duration),
             limit: formatDuration(problem.limitSeconds),
           }),
         );
       } else {
         setError(
           t('errors.noRoom', {
-            duration: formatDuration(duration),
+            duration: formatUsedDuration(duration),
             free: formatDuration(Math.max(0, quota.stored.limitSeconds - quota.stored.usedSeconds)),
           }),
         );
