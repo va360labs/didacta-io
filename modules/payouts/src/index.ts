@@ -147,6 +147,44 @@ export type {
 export { recordCheckoutSale } from './handlers/checkout.js';
 export type { CheckoutSaleInput, CheckoutSaleOutcome } from './handlers/checkout.js';
 
+export { handleChargeEvent, SETTLEMENT_TRIGGER_EVENT_TYPES } from './handlers/charge.js';
+export type { ChargeEventOutcome } from './handlers/charge.js';
+export { checkTransferEvent, TRANSFER_EVENT_TYPES } from './handlers/transfer.js';
+export type { TransferCheckOutcome } from './handlers/transfer.js';
+
+export {
+  PAYOUTS_ALERTS,
+  SALE_FAILURE_REASONS,
+  SALE_HOLD_REASONS,
+  SettlementService,
+  awaitingFeeBackoffMs,
+  saleReasonCode,
+} from './settlement.service.js';
+export type {
+  SaleFailureReason,
+  SaleHoldReason,
+  SettleOutcome,
+  SettleSweepResult,
+  SettlementServiceOptions,
+} from './settlement.service.js';
+
+export { PayoutsReconcilerService } from './reconciler.service.js';
+export type {
+  InvariantViolation,
+  ReconcileOptions,
+  ReconcileReport,
+  ReconcilerDeps,
+} from './reconciler.service.js';
+
+export { PayoutsReportsService, estimatePayoutDate } from './reports.service.js';
+export type {
+  CurrencySummary,
+  SaleView,
+  SalesPage,
+  SalesSummary,
+  VolumeRow,
+} from './reports.service.js';
+
 export { PayoutsSettingsService } from './settings.service.js';
 export type { PayoutsSettingsView } from './settings.service.js';
 
@@ -188,6 +226,7 @@ export {
   PayoutsWebhookLivemodeMismatchError,
   PayoutsNotReadyError,
   PayoutsSaleUnrecordableError,
+  PayoutsSettlementConflictError,
   PlatformStripeConfigError,
   PlatformStripeApiError,
 } from './errors.js';

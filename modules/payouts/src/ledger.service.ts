@@ -20,6 +20,25 @@ import { assertSignedMinorAmount, normalizeCurrency } from './money.js';
  * Una corrección es OTRO asiento, nunca una edición: un trigger de `rls.sql`
  * rechaza UPDATE y DELETE sobre la tabla, también al dueño.
  *
+ * Signos y grupos (fijados en E4; E5 y E6 deben respetarlos):
+ *
+ *  - Venta liquidada: `SALE_GROSS` (+bruto), `STRIPE_FEE` (−comisión de
+ *    Stripe), `PLATFORM_FEE` (−comisión del operador), `DEBT_RECOVERED`
+ *    (−lo compensado, uno por deuda) y `TRANSFER` (−lo transferido). Suman 0.
+ *    Los cuatro primeros se anotan al SELLAR el reparto (con la deuda ya
+ *    descontada, en la misma transacción); `TRANSFER`, con la transferencia.
+ *  - Deuda: `DEBT_CREATED` lleva +X y acompaña a los asientos económicos que
+ *    dejan al creador debiendo X (reembolso, disputa…, que suman −X): el grupo
+ *    suma 0 y el descubierto pasa a la deuda. `DEBT_RECOVERED` (−Y) lo cancela.
+ *
+ * Invariantes que comprueba el conciliador, por cuenta y divisa (nunca se
+ * suman divisas distintas):
+ *
+ *  1. Σ de todos los asientos = Σ `transfer_amount` de las ventas con reparto
+ *     sellado y aún sin transferir (`READY`/`HELD`): lo que se le debe ahora.
+ *  2. Σ (`DEBT_CREATED` + `DEBT_RECOVERED`) = Σ `amount_outstanding` de las
+ *     deudas abiertas.
+ *
  * Idempotencia: `idempotency_key` es única en toda la tabla y es la MISMA
  * cadena que la cabecera `Idempotency-Key` enviada a Stripe por la operación
  * que originó el asiento. Reintentar un asiento idéntico no lanza y no
@@ -94,6 +113,12 @@ export const IDEMPOTENCY_KEYS = {
   reversal: (refundId: string) => `payouts:reversal:${refundId}`,
   disputeReversal: (disputeId: string) => `payouts:reversal:dispute:${disputeId}`,
   debtRecovery: (debtId: string, attempt: number) => `payouts:debt-recovery:${debtId}:${attempt}`,
+  /**
+   * Parte de una deuda que se cobra compensándola con el neto de una venta
+   * (liquidación, E4). Una por deuda y venta: la misma venta no puede
+   * compensar dos veces la misma deuda.
+   */
+  debtNetting: (debtId: string, saleId: string) => `payouts:debt-recovery:${debtId}:sale:${saleId}`,
   /**
    * Asientos de una venta que no nacen de una llamada propia a Stripe (bruto,
    * comisión de Stripe, comisión del operador): uno por tipo y venta.

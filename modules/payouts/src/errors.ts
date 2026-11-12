@@ -248,6 +248,18 @@ export class PayoutsSaleUnrecordableError extends PayoutsError {
   }
 }
 
+/**
+ * Dos liquidaciones de la misma venta (o de dos ventas sobre la misma deuda)
+ * se cruzaron. La transacción se deshace entera y la venta se vuelve a
+ * intentar: nunca se compensa dos veces la misma deuda.
+ */
+export class PayoutsSettlementConflictError extends PayoutsError {
+  constructor(what: string) {
+    super(`Liquidación concurrente: ${what}`, 'PAYOUTS_SETTLEMENT_CONFLICT', { detail: what });
+    this.name = 'PayoutsSettlementConflictError';
+  }
+}
+
 /** La clave de Stripe de plataforma no tiene el formato esperado. */
 export class PlatformStripeConfigError extends PayoutsError {
   constructor(what: string) {

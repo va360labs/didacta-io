@@ -1,0 +1,601 @@
+/**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
+import type { PrismaClient } from '@didacta/database';
+import type { PayoutsDbPort, PayoutsLogger } from './accounts.service.js';
+import type { PlatformStripeEvent } from './account-events.js';
+import { idOf, routePlatformEvent } from './event-router.js';
+import { recordCheckoutSale } from './handlers/checkout.js';
+import { computePlatformFee } from './money.js';
+import { RefsService } from './refs.service.js';
+import {
+  PAYOUTS_ALERTS,
+  type SettleSweepResult,
+  type SettlementService,
+} from './settlement.service.js';
+import type { PlatformStripeClient } from './stripe/platform-stripe.client.js';
+
+/**
+ * Conciliador de cobros de plataforma (etapa E4). Red de seguridad de todo lo
+ * que el webhook y la liquidación pueden perder; corre cada hora y una pasada
+ * profunda al día (`payouts-reconcile.worker.ts`).
+ *
+ *  1. **Eventos perdidos.** Lista `GET /v1/events` de la ventana y reproduce
+ *     los que no constan como procesados en `mod_payouts_webhook_event`, por
+ *     el MISMO camino que el webhook (el host lo inyecta): un pedido cobrado
+ *     cuyo `checkout.session.completed` nunca llegó recibe su acceso y su
+ *     venta.
+ *  2. **Ventas atascadas.** El barrido de liquidación (`AWAITING_FEE`,
+ *     `READY`, `HELD` vencidas).
+ *  3. **Cobros sin venta.** Lista `GET /v1/charges` de la ventana: un cargo
+ *     cobrado en nombre de una cuenta conectada que no tiene fila de venta se
+ *     anota si el registro lo atribuye (su sesión de checkout está registrada);
+ *     si no, alerta. Un cargo sin `on_behalf_of` no es de un creador (p. ej.
+ *     la facturación propia del operador) y se ignora.
+ *  4. **Transferencias sin asiento.** Lista `GET /v1/transfers` de la
+ *     ventana: la que no tiene venta ni asiento `TRANSFER` es una ALERTA. No
+ *     se toca nunca: mover dinero por una transferencia que no hicimos
+ *     nosotros es justo lo que no hay que hacer.
+ *  5. **Invariantes del libro**, por venta y por cuenta y divisa (ver
+ *     `ledger.service.ts`).
+ *  6. **`balance_transaction` que no llega**: venta `AWAITING_FEE` con más de
+ *     90 minutos → alerta.
+ *
+ * Nada de esto decide importes: lo que crea o avanza pasa por
+ * `recordCheckoutSale` y `SettlementService`, que releen Stripe.
+ *
+ * Fuera de E4 (puntos de enganche): la recuperación activa de deudas (E6) y
+ * las facturas de suscripción sin venta (E5, hoy solo alerta).
+ */
+
+export interface ReconcilerDeps {
+  readonly db: PayoutsDbPort;
+  readonly stripe: PlatformStripeClient;
+  readonly settlement: SettlementService;
+  /** Procesa un evento por el mismo camino que el webhook de plataforma. */
+  readonly replayEvent: (event: PlatformStripeEvent) => Promise<{ readonly outcome: string }>;
+  readonly logger?: PayoutsLogger;
+  readonly now?: () => Date;
+}
+
+export interface ReconcileOptions {
+  /** Pasada profunda: ventana larga e invariantes de todas las ventas. */
+  readonly deep: boolean;
+  /** Horas hacia atrás. Por defecto 6 (horaria) o 72 (profunda). */
+  readonly windowHours?: number;
+  /** Tope de páginas de 100 por listado (protección). Por defecto 50. */
+  readonly maxPages?: number;
+}
+
+export interface InvariantViolation {
+  readonly kind: 'sale' | 'account_balance' | 'debt_balance';
+  readonly tenantId: string;
+  readonly accountId: string;
+  readonly saleId?: string;
+  readonly currency: string | null;
+  readonly detail: string;
+}
+
+export interface ReconcileReport {
+  readonly deep: boolean;
+  readonly windowHours: number;
+  readonly startedAt: string;
+  readonly finishedAt: string;
+  readonly events: {
+    listed: number;
+    replayed: number;
+    failed: number;
+    outcomes: Record<string, number>;
+  };
+  readonly sales: SettleSweepResult;
+  readonly charges: {
+    listed: number;
+    withoutSale: number;
+    created: number;
+    unattributed: number;
+    unhandled: number;
+  };
+  readonly transfers: { listed: number; unrecorded: number; inFlight: number; mismatched: number };
+  readonly invariants: { salesChecked: number; violations: InvariantViolation[] };
+  readonly lateBalanceTransactions: number;
+}
+
+const LATE_BALANCE_TRANSACTION_MS = 90 * 60_000;
+/** Una transferencia recién creada puede no estar anotada aún. */
+const TRANSFER_IN_FLIGHT_MS = 15 * 60_000;
+const MAX_REPORTED_VIOLATIONS = 100;
+
+interface StripeList<T> {
+  readonly data?: T[];
+  readonly has_more?: boolean;
+}
+
+interface ChargeListItem {
+  readonly id: string;
+  readonly status?: string;
+  readonly paid?: boolean;
+  readonly on_behalf_of?: unknown;
+  readonly payment_intent?: unknown;
+  readonly invoice?: unknown;
+}
+
+interface TransferListItem {
+  readonly id: string;
+  readonly amount?: number;
+  readonly currency?: string;
+  readonly destination?: unknown;
+  readonly created?: number;
+  readonly metadata?: Record<string, unknown> | null;
+}
+
+export class PayoutsReconcilerService {
+  private readonly now: () => Date;
+
+  constructor(private readonly deps: ReconcilerDeps) {
+    this.now = deps.now ?? (() => new Date());
+  }
+
+  async run(options: ReconcileOptions): Promise<ReconcileReport> {
+    const started = this.now();
+    const windowHours = options.windowHours ?? (options.deep ? 72 : 6);
+    const since = Math.floor(started.getTime() / 1000) - windowHours * 3600;
+    const maxPages = options.maxPages ?? 50;
+
+    const events = await this.replayEvents(since, maxPages);
+    const sales = await this.deps.settlement.sweep(200);
+    const charges = await this.chargesWithoutSale(since, maxPages);
+    const transfers = await this.transfersWithoutEntry(since, maxPages);
+    const invariants = await this.checkInvariants(options.deep ? null : new Date(since * 1000));
+    const lateBalanceTransactions = await this.lateBalanceTransactions();
+
+    const report: ReconcileReport = {
+      deep: options.deep,
+      windowHours,
+      startedAt: started.toISOString(),
+      finishedAt: this.now().toISOString(),
+      events,
+      sales,
+      charges,
+      transfers,
+      invariants,
+      lateBalanceTransactions,
+    };
+    this.deps.logger?.log?.(
+      {
+        deep: report.deep,
+        windowHours,
+        events: report.events,
+        sales: report.sales,
+        charges: report.charges,
+        transfers: report.transfers,
+        violations: report.invariants.violations.length,
+        lateBalanceTransactions,
+      },
+      'payouts.reconcile: pasada completada',
+    );
+    return report;
+  }
+
+  // ── 1. Eventos ─────────────────────────────────────────────────────────
+
+  private async replayEvents(since: number, maxPages: number) {
+    const listed = await this.listAll<PlatformStripeEvent>(
+      '/v1/events',
+      { created: { gte: since } },
+      maxPages,
+    );
+    // Stripe lista del más nuevo al más viejo; se reproducen en el orden en
+    // que ocurrieron (el `completed` antes que el `charge.updated`).
+    const candidates = listed
+      .filter((event) => {
+        const route = routePlatformEvent(event);
+        return route.kind === 'objects';
+      })
+      .reverse();
+    let replayed = 0;
+    let failed = 0;
+    const outcomes: Record<string, number> = {};
+    for (const event of candidates) {
+      const row = await this.deps.db.global((tx) =>
+        tx.modPayoutsWebhookEvent.findUnique({
+          where: { stripeEventId: event.id },
+          select: { processedAt: true },
+        }),
+      );
+      if (row?.processedAt) continue;
+      try {
+        const result = await this.deps.replayEvent(event);
+        replayed += 1;
+        outcomes[result.outcome] = (outcomes[result.outcome] ?? 0) + 1;
+      } catch (err) {
+        failed += 1;
+        this.alert(
+          PAYOUTS_ALERTS.eventReplayFailed,
+          { eventId: event.id, type: event.type, err: describe(err) },
+          'no se pudo reproducir un evento (se reintenta en la próxima pasada)',
+        );
+      }
+    }
+    return { listed: listed.length, replayed, failed, outcomes };
+  }
+
+  // ── 3. Cobros sin venta ────────────────────────────────────────────────
+
+  private async chargesWithoutSale(since: number, maxPages: number) {
+    const charges = await this.listAll<ChargeListItem>(
+      '/v1/charges',
+      { created: { gte: since } },
+      maxPages,
+    );
+    let withoutSale = 0;
+    let created = 0;
+    let unattributed = 0;
+    let unhandled = 0;
+    for (const charge of charges) {
+      if (charge.status !== 'succeeded' || charge.paid !== true) continue;
+      if (!idOf(charge.on_behalf_of)) continue;
+      const existing = await this.deps.db.global((tx) =>
+        tx.modPayoutsSale.findUnique({
+          where: { stripeChargeId: charge.id },
+          select: { id: true },
+        }),
+      );
+      if (existing) continue;
+      withoutSale += 1;
+
+      if (idOf(charge.invoice)) {
+        // Factura de suscripción: su venta es de E5.
+        unhandled += 1;
+        this.alert(
+          PAYOUTS_ALERTS.chargeUnhandled,
+          { chargeId: charge.id, invoiceId: idOf(charge.invoice) },
+          'cargo de factura sin venta (las membresías llegan en E5)',
+        );
+        continue;
+      }
+
+      const paymentIntentId = idOf(charge.payment_intent);
+      const sessions = paymentIntentId
+        ? await this.deps.stripe.v1<StripeList<{ id?: unknown }>>('GET', '/v1/checkout/sessions', {
+            payment_intent: paymentIntentId,
+            limit: 1,
+          })
+        : null;
+      const sessionId = idOf(sessions?.data?.[0]?.id);
+      const ref = sessionId
+        ? await this.deps.db.global((tx) =>
+            new RefsService(tx as unknown as PrismaClient).find(sessionId),
+          )
+        : null;
+      if (!ref || ref.kind !== 'checkout_session' || ref.source !== 'billing' || !ref.localRef) {
+        unattributed += 1;
+        this.alert(
+          PAYOUTS_ALERTS.chargeUnattributed,
+          {
+            chargeId: charge.id,
+            paymentIntentId,
+            sessionId,
+            onBehalfOf: idOf(charge.on_behalf_of),
+          },
+          'cargo en nombre de una cuenta conectada que el registro no atribuye a ningún aula',
+        );
+        continue;
+      }
+      try {
+        const result = await recordCheckoutSale(
+          { db: this.deps.db, stripe: this.deps.stripe },
+          { tenantId: ref.tenantId, sessionId: ref.stripeObjectId, orderId: ref.localRef },
+        );
+        if (result.outcome === 'created') created += 1;
+      } catch (err) {
+        unattributed += 1;
+        this.alert(
+          PAYOUTS_ALERTS.chargeUnattributed,
+          { chargeId: charge.id, sessionId, tenantId: ref.tenantId, err: describe(err) },
+          'cargo atribuido cuya venta no se pudo anotar',
+        );
+      }
+    }
+    return { listed: charges.length, withoutSale, created, unattributed, unhandled };
+  }
+
+  // ── 4. Transferencias sin asiento ──────────────────────────────────────
+
+  private async transfersWithoutEntry(since: number, maxPages: number) {
+    const transfers = await this.listAll<TransferListItem>(
+      '/v1/transfers',
+      { created: { gte: since } },
+      maxPages,
+    );
+    const nowMs = this.now().getTime();
+    let unrecorded = 0;
+    let inFlight = 0;
+    let mismatched = 0;
+    for (const transfer of transfers) {
+      const known = await this.deps.db.global(async (tx) => ({
+        sale: await tx.modPayoutsSale.findFirst({
+          where: { stripeTransferId: transfer.id },
+          select: { id: true, tenantId: true, transferAmount: true, currency: true },
+        }),
+        entry: await tx.modPayoutsLedgerEntry.findFirst({
+          where: { stripeObjectId: transfer.id, type: 'TRANSFER' },
+          select: { amount: true, currency: true },
+        }),
+      }));
+      if (known.sale && known.entry) {
+        if (
+          known.entry.amount !== -(transfer.amount ?? NaN) ||
+          known.entry.currency !== (transfer.currency ?? '').toLowerCase() ||
+          known.sale.transferAmount !== transfer.amount
+        ) {
+          mismatched += 1;
+          this.alert(
+            PAYOUTS_ALERTS.transferMismatch,
+            {
+              transferId: transfer.id,
+              saleId: known.sale.id,
+              tenantId: known.sale.tenantId,
+              stripeAmount: transfer.amount,
+              ledgerAmount: known.entry.amount,
+            },
+            'la transferencia de Stripe no casa con su asiento (no se toca)',
+          );
+        }
+        continue;
+      }
+      const metaSaleId = transfer.metadata?.['didacta_sale_id'];
+      const recent =
+        typeof transfer.created === 'number' &&
+        nowMs - transfer.created * 1000 < TRANSFER_IN_FLIGHT_MS;
+      if (recent && typeof metaSaleId === 'string') {
+        inFlight += 1;
+        continue;
+      }
+      unrecorded += 1;
+      this.alert(
+        PAYOUTS_ALERTS.transferUnrecorded,
+        {
+          transferId: transfer.id,
+          amount: transfer.amount,
+          currency: transfer.currency,
+          destination: idOf(transfer.destination),
+          saleId: typeof metaSaleId === 'string' ? metaSaleId : null,
+        },
+        'transferencia en Stripe sin venta ni asiento (no se toca)',
+      );
+    }
+    return { listed: transfers.length, unrecorded, inFlight, mismatched };
+  }
+
+  // ── 5. Invariantes ─────────────────────────────────────────────────────
+
+  /**
+   * @param updatedSince `null` = todas las ventas (pasada profunda); si no,
+   *   las tocadas desde entonces. Los saldos por cuenta se miran siempre.
+   */
+  async checkInvariants(
+    updatedSince: Date | null,
+  ): Promise<{ salesChecked: number; violations: InvariantViolation[] }> {
+    const violations: InvariantViolation[] = [];
+    const data = await this.deps.db.global(async (tx) => {
+      const sales = await tx.modPayoutsSale.findMany({
+        where: {
+          transferAmount: { not: null },
+          status: { in: ['READY', 'HELD', 'TRANSFERRED', 'SETTLED_NETTED'] },
+          ...(updatedSince ? { updatedAt: { gte: updatedSince } } : {}),
+        },
+        select: {
+          id: true,
+          tenantId: true,
+          accountId: true,
+          status: true,
+          currency: true,
+          gross: true,
+          stripeFee: true,
+          feeBpsApplied: true,
+          platformFee: true,
+          creatorNet: true,
+          debtNetted: true,
+          transferAmount: true,
+          stripeTransferId: true,
+        },
+      });
+      const entries = sales.length
+        ? await tx.modPayoutsLedgerEntry.groupBy({
+            by: ['saleId', 'type'],
+            where: { saleId: { in: sales.map((s) => s.id) } },
+            _sum: { amount: true },
+            orderBy: [{ saleId: 'asc' }, { type: 'asc' }],
+          })
+        : [];
+      const balances = await tx.modPayoutsLedgerEntry.groupBy({
+        by: ['tenantId', 'accountId', 'currency'],
+        _sum: { amount: true },
+        orderBy: [{ tenantId: 'asc' }, { accountId: 'asc' }, { currency: 'asc' }],
+      });
+      const debtEntries = await tx.modPayoutsLedgerEntry.groupBy({
+        by: ['tenantId', 'accountId', 'currency'],
+        where: { type: { in: ['DEBT_CREATED', 'DEBT_RECOVERED'] } },
+        _sum: { amount: true },
+        orderBy: [{ tenantId: 'asc' }, { accountId: 'asc' }, { currency: 'asc' }],
+      });
+      const pending = await tx.modPayoutsSale.groupBy({
+        by: ['tenantId', 'accountId', 'currency'],
+        where: { status: { in: ['READY', 'HELD'] }, transferAmount: { not: null } },
+        _sum: { transferAmount: true },
+        orderBy: [{ tenantId: 'asc' }, { accountId: 'asc' }, { currency: 'asc' }],
+      });
+      const debts = await tx.modPayoutsDebt.groupBy({
+        by: ['tenantId', 'accountId', 'currency'],
+        where: { status: 'OPEN' },
+        _sum: { amountOutstanding: true },
+        orderBy: [{ tenantId: 'asc' }, { accountId: 'asc' }, { currency: 'asc' }],
+      });
+      return { sales, entries, balances, debtEntries, pending, debts };
+    });
+
+    // Por venta.
+    const bySale = new Map<string, Map<string, number>>();
+    for (const entry of data.entries) {
+      if (!entry.saleId) continue;
+      const types = bySale.get(entry.saleId) ?? new Map<string, number>();
+      types.set(entry.type, Number(entry._sum.amount ?? 0));
+      bySale.set(entry.saleId, types);
+    }
+    for (const sale of data.sales) {
+      const problems: string[] = [];
+      const gross = sale.gross ?? 0;
+      const fee = sale.stripeFee ?? 0;
+      const platformFee = sale.platformFee ?? 0;
+      const net = sale.creatorNet ?? 0;
+      const transfer = sale.transferAmount ?? 0;
+      if (gross - fee - platformFee !== net) problems.push(`bruto − comisiones ≠ neto (${net})`);
+      if (net !== transfer + sale.debtNetted) problems.push(`neto ≠ transferencia + deuda`);
+      if (
+        sale.feeBpsApplied !== null &&
+        computePlatformFee(gross, sale.feeBpsApplied) !== platformFee
+      ) {
+        problems.push(`comisión del operador ≠ ${sale.feeBpsApplied} pb del bruto`);
+      }
+      const types = bySale.get(sale.id) ?? new Map<string, number>();
+      const expect = (type: string, value: number) => {
+        const actual = types.get(type) ?? 0;
+        if (actual !== value) problems.push(`asiento ${type} ${actual} ≠ ${value}`);
+      };
+      expect('SALE_GROSS', gross);
+      expect('STRIPE_FEE', -fee);
+      expect('PLATFORM_FEE', -platformFee);
+      expect('DEBT_RECOVERED', -sale.debtNetted);
+      expect('TRANSFER', sale.status === 'TRANSFERRED' ? -transfer : 0);
+      if (sale.status === 'TRANSFERRED' && !sale.stripeTransferId) {
+        problems.push('transferida sin id de transferencia');
+      }
+      if (problems.length > 0) {
+        violations.push({
+          kind: 'sale',
+          tenantId: sale.tenantId,
+          accountId: sale.accountId,
+          saleId: sale.id,
+          currency: sale.currency,
+          detail: problems.join('; '),
+        });
+      }
+    }
+
+    // Por cuenta y divisa.
+    const key = (g: { tenantId: string; accountId: string; currency: string | null }) =>
+      `${g.tenantId}|${g.accountId}|${g.currency ?? ''}`;
+    const pendingBy = new Map(
+      data.pending.map((g) => [key(g), Number(g._sum.transferAmount ?? 0)]),
+    );
+    const debtBy = new Map(data.debts.map((g) => [key(g), Number(g._sum.amountOutstanding ?? 0)]));
+    const debtEntriesBy = new Map(
+      data.debtEntries.map((g) => [key(g), Number(g._sum.amount ?? 0)]),
+    );
+    const accounts = new Set([
+      ...data.balances.map(key),
+      ...pendingBy.keys(),
+      ...debtBy.keys(),
+      ...debtEntriesBy.keys(),
+    ]);
+    const balanceBy = new Map(data.balances.map((g) => [key(g), Number(g._sum.amount ?? 0)]));
+    for (const k of accounts) {
+      const [tenantId, accountId, currency] = k.split('|') as [string, string, string];
+      const balance = balanceBy.get(k) ?? 0;
+      const owed = pendingBy.get(k) ?? 0;
+      if (balance !== owed) {
+        violations.push({
+          kind: 'account_balance',
+          tenantId,
+          accountId,
+          currency,
+          detail: `libro ${balance} ≠ pendiente de transferir ${owed}`,
+        });
+      }
+      const debtLedger = debtEntriesBy.get(k) ?? 0;
+      const debtOpen = debtBy.get(k) ?? 0;
+      if (debtLedger !== debtOpen) {
+        violations.push({
+          kind: 'debt_balance',
+          tenantId,
+          accountId,
+          currency,
+          detail: `asientos de deuda ${debtLedger} ≠ deuda abierta ${debtOpen}`,
+        });
+      }
+    }
+
+    for (const violation of violations.slice(0, MAX_REPORTED_VIOLATIONS)) {
+      this.alert(PAYOUTS_ALERTS.ledgerInvariant, { ...violation }, 'el libro no cuadra');
+    }
+    return {
+      salesChecked: data.sales.length,
+      violations: violations.slice(0, MAX_REPORTED_VIOLATIONS),
+    };
+  }
+
+  // ── 6. `balance_transaction` que no llega ──────────────────────────────
+
+  private async lateBalanceTransactions(): Promise<number> {
+    const limit = new Date(this.now().getTime() - LATE_BALANCE_TRANSACTION_MS);
+    const late = await this.deps.db.global((tx) =>
+      tx.modPayoutsSale.findMany({
+        where: { status: 'AWAITING_FEE', chargedAt: { lt: limit } },
+        select: { id: true, tenantId: true, stripeChargeId: true, chargedAt: true },
+        take: MAX_REPORTED_VIOLATIONS,
+      }),
+    );
+    for (const sale of late) {
+      this.alert(
+        PAYOUTS_ALERTS.balanceTransactionLate,
+        {
+          saleId: sale.id,
+          tenantId: sale.tenantId,
+          chargeId: sale.stripeChargeId,
+          chargedAt: sale.chargedAt?.toISOString(),
+        },
+        'cobro de hace más de 90 minutos sin comisión de Stripe asentada',
+      );
+    }
+    return late.length;
+  }
+
+  // ── Utilidades ─────────────────────────────────────────────────────────
+
+  private async listAll<T extends { id: string }>(
+    path: string,
+    params: Record<string, unknown>,
+    maxPages: number,
+  ): Promise<T[]> {
+    const out: T[] = [];
+    let startingAfter: string | undefined;
+    for (let page = 0; page < maxPages; page += 1) {
+      const list = await this.deps.stripe.v1<StripeList<T>>('GET', path, {
+        ...params,
+        limit: 100,
+        ...(startingAfter ? { starting_after: startingAfter } : {}),
+      });
+      const data = list.data ?? [];
+      out.push(...data);
+      if (!list.has_more || data.length === 0) return out;
+      startingAfter = data[data.length - 1]!.id;
+    }
+    this.deps.logger?.warn(
+      { path, pages: maxPages },
+      'payouts.reconcile: listado cortado por el tope de páginas (ventana demasiado grande)',
+    );
+    return out;
+  }
+
+  private alert(alert: string, obj: Record<string, unknown>, msg: string): void {
+    const logger = this.deps.logger;
+    if (!logger) return;
+    (logger.error ?? logger.warn).call(logger, { alert, ...obj }, `${alert}: ${msg}`);
+  }
+}
+
+function describe(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
+}

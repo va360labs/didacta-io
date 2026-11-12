@@ -374,6 +374,8 @@ function pendingRequirementOf(
 export interface PayoutsLogger {
   warn(obj: Record<string, unknown>, msg: string): void;
   log?(obj: Record<string, unknown>, msg: string): void;
+  /** Alertas (`{ alert: 'payouts.…' }`). Sin él, van a `warn`. */
+  error?(obj: Record<string, unknown>, msg: string): void;
 }
 
 const SILENT_LOGGER: PayoutsLogger = { warn: () => undefined };
