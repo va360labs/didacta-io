@@ -56,6 +56,11 @@ export interface PaymentsConnectCardProps {
   returnAction?: 'sync' | 'renew' | null;
   /** Para limpiar la query de la URL tras procesarla. */
   onReturnHandled?: () => void;
+  /**
+   * Pantalla propia (Administración → Cobros): el título va como cabecera de
+   * la página (h1) y la tarjeta no lo repite.
+   */
+  asPage?: boolean;
 }
 
 type Busy = 'connect' | 'finish' | 'dashboard' | 'sync' | null;
@@ -70,6 +75,7 @@ export function PaymentsConnectCard({
   onPlatformUnavailable,
   returnAction = null,
   onReturnHandled,
+  asPage = false,
 }: PaymentsConnectCardProps): React.JSX.Element {
   const t = useTranslations('adminPagos.payouts');
   const tErrors = useTranslations('errors');
@@ -216,12 +222,22 @@ export function PaymentsConnectCard({
 
   return (
     <div className="space-y-6">
+      {asPage ? (
+        <header>
+          <h1 className="font-display text-2xl font-bold tracking-tight">{t('title')}</h1>
+          {status ? (
+            <p className="mt-1 max-w-2xl text-text-muted">{t('subtitle', { operator })}</p>
+          ) : null}
+        </header>
+      ) : null}
       <Card data-testid="payouts-card" data-state={status ? view.kind : 'loading'}>
-        <CardHeader>
-          <CardTitle>{t('title')}</CardTitle>
-          {status ? <CardDescription>{t('subtitle', { operator })}</CardDescription> : null}
-        </CardHeader>
-        <CardContent className="space-y-5">
+        {asPage ? null : (
+          <CardHeader>
+            <CardTitle>{t('title')}</CardTitle>
+            {status ? <CardDescription>{t('subtitle', { operator })}</CardDescription> : null}
+          </CardHeader>
+        )}
+        <CardContent className={asPage ? 'space-y-5 pt-6' : 'space-y-5'}>
           {loadError ? (
             <div
               role="alert"
@@ -297,7 +313,7 @@ export function PaymentsConnectCard({
 
           {status && view.kind === 'missing' ? (
             <div className="space-y-4">
-              <StatusLine tone="warning">
+              <StatusLine tone="info">
                 {t('missing', { requirement: t(`requirements.${view.requirement}`) })}
               </StatusLine>
               <Button type="button" onClick={() => void handleFinish()} disabled={busy !== null}>
@@ -307,7 +323,7 @@ export function PaymentsConnectCard({
           ) : null}
 
           {status && view.kind === 'review' ? (
-            <StatusLine tone="neutral">{t('review')}</StatusLine>
+            <StatusLine tone="info">{t('review')}</StatusLine>
           ) : null}
 
           {status && view.kind === 'rejected' ? (
@@ -385,12 +401,14 @@ function StatusLine({
   children,
   testId,
 }: {
-  tone: 'neutral' | 'warning' | 'success' | 'danger';
+  /** `info`: algo que hacer o esperar (no es un error); `warning`: un «no» que no se arregla aquí. */
+  tone: 'neutral' | 'info' | 'warning' | 'success' | 'danger';
   children: ReactNode;
   testId?: string;
 }): React.JSX.Element {
   const styles = {
     neutral: 'border-border-soft bg-surface-2 text-text',
+    info: 'border-brand-100 bg-brand-50 text-brand-800',
     warning: 'border-warning-200 bg-warning-50 text-warning-700',
     success: 'border-success-200 bg-success-50 text-success-700',
     danger: 'border-danger-100 bg-danger-50 text-danger-700',
