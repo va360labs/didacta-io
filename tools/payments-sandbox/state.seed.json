@@ -1,0 +1,421 @@
+{
+  "v1_express_app_stripe_preview": "acct_1UatgCGVelb9MfRq",
+  "v1_express_account_stripe_preview": "acct_1UatgEGgGxqrkgiL",
+  "v1_none_app_stripe": "acct_1UatgHGa3Umcdqrg",
+  "v2_es_express_fees-application_losses-stripe": "acct_1Uath8GVFs5dcmlF",
+  "v2_es_none_fees-application_losses-stripe": "acct_1UathDGVFsBhupic",
+  "v2_es_express_fees-stripe_losses-stripe": "acct_1UathIGVFsXiq014",
+  "v2_es_none_fees-stripe_losses-stripe": "acct_1UathMGVFs2lyqcX",
+  "pais_v2_mx": "acct_1UathTGVFsaIXSys",
+  "pais_v1_mx": "acct_1UathYGTzNwQ1ho0",
+  "pais_v1_recipient_mx_err": "The recipient ToS agreement is not supported for platforms in ES creating accounts in MX. See https://stripe.com/docs/connect/cross-border-payouts for more details.",
+  "pais_v2_br_err": "Connected accounts in BR cannot be created by platforms in ES. Please contact us via https://support.stripe.com/contact if you need further assistance.",
+  "pais_v1_br_err": "Connected accounts in BR cannot be created by platforms in ES. Please contact us via https://support.stripe.com/contact if you need further assistance.",
+  "pais_v1_recipient_br_err": "The recipient ToS agreement is not supported for platforms in ES creating accounts in BR. See https://stripe.com/docs/connect/cross-border-payouts for more details.",
+  "pais_v2_us": "acct_1UathcGVFslZWqqE",
+  "pais_v1_us": "acct_1UathgGi2YvMXQGb",
+  "pais_v1_recipient_us_err": "The recipient ToS agreement is not supported for platforms in ES creating accounts in US. See https://stripe.com/docs/connect/cross-border-payouts for more details.",
+  "pais_v2_gb": "acct_1UathiGVFsCyCr7e",
+  "pais_v1_gb": "acct_1UathnK0gP1AOIyp",
+  "pais_v1_recipient_gb_err": "The recipient ToS agreement is not supported for platforms in ES creating accounts in GB. See https://stripe.com/docs/connect/cross-border-payouts for more details.",
+  "pais_v2_ch": "acct_1UathqGVFs5KbO7Y",
+  "pais_v1_ch": "acct_1UathvGfH1BZxLhT",
+  "pais_v1_recipient_ch_err": "The recipient ToS agreement is not supported for platforms in ES creating accounts in CH. See https://stripe.com/docs/connect/cross-border-payouts for more details.",
+  "pais_v2_ca": "acct_1UathyGVFsVQpqqT",
+  "pais_v1_ca": "acct_1Uati2GypqPvBOXD",
+  "pais_v1_recipient_ca_err": "The recipient ToS agreement is not supported for platforms in ES creating accounts in CA. See https://stripe.com/docs/connect/cross-border-payouts for more details.",
+  "pais_v2_fr": "acct_1Uati5GVFsFM1xbi",
+  "pais_v1_fr": "acct_1UatiAK9ErVtDknV",
+  "pais_v1_recipient_fr_err": "The recipient ToS agreement is not supported for platforms in ES creating accounts in FR. See https://stripe.com/docs/connect/cross-border-payouts for more details.",
+  "pais_v2_ar_err": "Capability stripe_balance.stripe_transfers is not available in country AR.",
+  "pais_v1_ar_err": "AR is not currently supported by Stripe.",
+  "pais_v1_recipient_ar_err": "The recipient ToS agreement is not supported for platforms in ES creating accounts in AR. See https://stripe.com/docs/connect/cross-border-payouts for more details.",
+  "pais_v2_co_err": "Capability stripe_balance.stripe_transfers is not available in country CO.",
+  "pais_v1_co_err": "CO is not currently supported by Stripe.",
+  "pais_v1_recipient_co_err": "The recipient ToS agreement is not supported for platforms in ES creating accounts in CO. See https://stripe.com/docs/connect/cross-border-payouts for more details.",
+  "pais_v2_cl_err": "Capability stripe_balance.stripe_transfers is not available in country CL.",
+  "pais_v1_cl_err": "CL is not currently supported by Stripe.",
+  "pais_v1_recipient_cl_err": "The recipient ToS agreement is not supported for platforms in ES creating accounts in CL. See https://stripe.com/docs/connect/cross-border-payouts for more details.",
+  "pais_v2_pe_err": "Capability stripe_balance.stripe_transfers is not available in country PE.",
+  "pais_v1_pe_err": "PE is not currently supported by Stripe.",
+  "pais_v1_recipient_pe_err": "PE is not currently supported by Stripe.",
+  "creador_ES": "acct_1Uatj9GgKZOTeRsE",
+  "creador_US": "acct_1UatjHGWZIxjwA5l",
+  "creador_GB": "acct_1UatjLGhwH3d1sUI",
+  "creador_MX": "acct_1UatjOGV72RzfwY2",
+  "fondeo": "pi_3UatnHGVFsqqzpBi2xpGt5EW",
+  "t_unica100_tarjeta_US": {
+    "pi": "pi_3UatnRGVFsqqzpBi3HiErY5Z",
+    "charge": "ch_3UatnRGVFsqqzpBi3eKi7A5r",
+    "transfer": "tr_3UatnRGVFsqqzpBi3HPU9DyX",
+    "bruto": 10000,
+    "fee": 340,
+    "comision": 500,
+    "paraCreador": 9160,
+    "bt_cobro": "txn_3UatnRGVFsqqzpBi3XiLL2EO",
+    "bt_transfer": "txn_3UatnRGVFsqqzpBi3vUvoq3a",
+    "dest": "acct_1Uatj9GgKZOTeRsE"
+  },
+  "t_unica100_tarjeta_ES": {
+    "pi": "pi_3UatnVGVFsqqzpBi3fOh64QI",
+    "charge": "ch_3UatnVGVFsqqzpBi3EgpJMXf",
+    "transfer": "tr_3UatnVGVFsqqzpBi3JmQAYbN",
+    "bruto": 10000,
+    "fee": 175,
+    "comision": 500,
+    "paraCreador": 9325,
+    "bt_cobro": "txn_3UatnVGVFsqqzpBi32exdI2k",
+    "bt_transfer": "txn_3UatnVGVFsqqzpBi3w5matMS",
+    "dest": "acct_1Uatj9GgKZOTeRsE"
+  },
+  "t_unica30_tarjeta_ES": {
+    "pi": "pi_3UatnaGVFsqqzpBi2bfuyBYO",
+    "charge": "ch_3UatnaGVFsqqzpBi2OX1rB5N",
+    "transfer": "tr_3UatnaGVFsqqzpBi2WVWwr3U",
+    "bruto": 3000,
+    "fee": 70,
+    "comision": 150,
+    "paraCreador": 2780,
+    "bt_cobro": "txn_3UatnaGVFsqqzpBi2LAjy0eB",
+    "bt_transfer": "txn_3UatnaGVFsqqzpBi2kmYzFkj",
+    "dest": "acct_1Uatj9GgKZOTeRsE"
+  },
+  "t_unica100_tarjeta_GB": {
+    "pi": "pi_3UatnfGVFsqqzpBi0DgvpqIJ",
+    "charge": "ch_3UatnfGVFsqqzpBi0LhRQKhu",
+    "transfer": "tr_3UatnfGVFsqqzpBi0WKLorwx",
+    "bruto": 10000,
+    "fee": 275,
+    "comision": 500,
+    "paraCreador": 9225,
+    "bt_cobro": "txn_3UatnfGVFsqqzpBi07HhNhee",
+    "bt_transfer": "txn_3UatnfGVFsqqzpBi0FCpfEvr",
+    "dest": "acct_1Uatj9GgKZOTeRsE"
+  },
+  "precio29": "price_1UatoDGVFsqqzpBiW8rUTOxc",
+  "sub_sin_obo": {
+    "sub": "sub_1UatoEGVFsqqzpBi7jOFinSa",
+    "clock": "clock_1UatoDGVFsqqzpBi9aQkvccD",
+    "customer": "cus_Vc84z0ITkuGc4e",
+    "facturas": [
+      {
+        "invoice": "in_1UatoEGVFsqqzpBizlLsSGZr",
+        "charge": "ch_3UatoFGVFsqqzpBi3A4SwnUn",
+        "bt": "txn_3UatoFGVFsqqzpBi3vwniGq1",
+        "fee": 69,
+        "transfer": "tr_3UatoFGVFsqqzpBi3JS0bcNE",
+        "bt_transfer": "txn_3UatoFGVFsqqzpBi3EbWGZre"
+      },
+      {
+        "invoice": "in_1UatoMGVFsqqzpBi8f5gS6xO",
+        "charge": "ch_3UatoSGVFsqqzpBi0gAL0uEL",
+        "bt": "txn_3UatoSGVFsqqzpBi0nygNFuL",
+        "fee": 69,
+        "transfer": "tr_3UatoSGVFsqqzpBi0SEEXUu4",
+        "bt_transfer": "txn_3UatoSGVFsqqzpBi0dFkTe6J"
+      }
+    ]
+  },
+  "sub_con_obo": {
+    "sub": "sub_1UatoiGVFsqqzpBio5vcWfRW",
+    "clock": "clock_1UatohGVFsqqzpBi6gbgw4WQ",
+    "customer": "cus_Vc843250NchQV1",
+    "facturas": [
+      {
+        "invoice": "in_1UatoiGVFsqqzpBiAvOm3OUe",
+        "charge": "ch_3UatojGVFsqqzpBi1wnKzuX2",
+        "bt": "txn_3UatojGVFsqqzpBi19cQJEf9",
+        "fee": 69,
+        "transfer": "tr_3UatojGVFsqqzpBi1pkmgyWi",
+        "bt_transfer": "txn_3UatojGVFsqqzpBi1EK1kV8u"
+      },
+      {
+        "invoice": "in_1UatotGVFsqqzpBiLt3ublDm",
+        "charge": "ch_3UatoyGVFsqqzpBi0HMKm5nZ",
+        "bt": "txn_3UatoyGVFsqqzpBi0IwRGZxE",
+        "fee": 69,
+        "transfer": "tr_3UatoyGVFsqqzpBi0NofsfU6",
+        "bt_transfer": "txn_3UatoyGVFsqqzpBi0OtYMbcY"
+      }
+    ]
+  },
+  "sub_trial": {
+    "sub": "sub_1UatpAGVFsqqzpBiKSXREUJZ",
+    "clock": "clock_1Uatp9GVFsqqzpBivnVAhlP3",
+    "customer": "cus_Vc85VokjltcwQm",
+    "facturas": [
+      {
+        "invoice": "in_1UatpFGVFsqqzpBiY9elhTKo",
+        "charge": "ch_3UatpKGVFsqqzpBi2QLradO1",
+        "bt": "txn_3UatpKGVFsqqzpBi2wEOIkvt",
+        "fee": 69,
+        "transfer": "tr_3UatpKGVFsqqzpBi2tU7UfKn",
+        "bt_transfer": "txn_3UatpKGVFsqqzpBi2IobxcVv"
+      }
+    ]
+  },
+  "t_reemb_total": {
+    "pi": "pi_3UatpxGVFsqqzpBi0RFWqsGk",
+    "charge": "ch_3UatpxGVFsqqzpBi0tHNbmUZ",
+    "transfer": "tr_3UatpxGVFsqqzpBi0JA6rh7j",
+    "bruto": 10000,
+    "fee": 175,
+    "comision": 500,
+    "paraCreador": 9325,
+    "bt_cobro": "txn_3UatpxGVFsqqzpBi0zVFZi8g",
+    "bt_transfer": "txn_3UatpxGVFsqqzpBi0qzafBHW",
+    "dest": "acct_1Uatj9GgKZOTeRsE"
+  },
+  "t_reemb_parcial": {
+    "pi": "pi_3Uatq3GVFsqqzpBi3bbVoCXM",
+    "charge": "ch_3Uatq3GVFsqqzpBi34JWLmFN",
+    "transfer": "tr_3Uatq3GVFsqqzpBi3jSwAx6X",
+    "bruto": 10000,
+    "fee": 175,
+    "comision": 500,
+    "paraCreador": 9325,
+    "bt_cobro": "txn_3Uatq3GVFsqqzpBi3fcvYZJR",
+    "bt_transfer": "txn_3Uatq3GVFsqqzpBi3F6KkwwM",
+    "dest": "acct_1Uatj9GgKZOTeRsE"
+  },
+  "t_reemb_rt": {
+    "pi": "pi_3UatqAGVFsqqzpBi26TbLvSZ",
+    "charge": "ch_3UatqAGVFsqqzpBi2AV9kGVC",
+    "transfer": "tr_3UatqAGVFsqqzpBi21wY0mpw",
+    "bruto": 10000,
+    "fee": 175,
+    "comision": 500,
+    "paraCreador": 9325,
+    "bt_cobro": "txn_3UatqAGVFsqqzpBi20Ji40un",
+    "bt_transfer": "txn_3UatqAGVFsqqzpBi2jjAcJEg",
+    "dest": "acct_1Uatj9GgKZOTeRsE"
+  },
+  "t_disputa": {
+    "pi": "pi_3UatqGGVFsqqzpBi30QyYsjF",
+    "charge": "ch_3UatqGGVFsqqzpBi3nCFNtpf",
+    "transfer": "tr_3UatqGGVFsqqzpBi3caCAXgD",
+    "bruto": 10000,
+    "fee": 340,
+    "comision": 500,
+    "paraCreador": 9160,
+    "bt_cobro": "txn_3UatqGGVFsqqzpBi3ofsRnj6",
+    "bt_transfer": "txn_3UatqGGVFsqqzpBi38KZguqZ",
+    "dest": "acct_1Uatj9GgKZOTeRsE"
+  },
+  "creador_ES2": "acct_1UatqsGVFsn6IQLd",
+  "t_pagado_luego_reembolso": {
+    "pi": "pi_3UatrxGVFsqqzpBi1Gp3fP6c",
+    "charge": "ch_3UatrxGVFsqqzpBi13lS7lMw",
+    "transfer": "tr_3UatrxGVFsqqzpBi1dP7ETSU",
+    "bruto": 10000,
+    "fee": 340,
+    "comision": 500,
+    "paraCreador": 9160,
+    "bt_cobro": "txn_3UatrxGVFsqqzpBi14PXCaZN",
+    "bt_transfer": "txn_3UatrxGVFsqqzpBi1DFNCCY3",
+    "dest": "acct_1UatqsGVFsn6IQLd"
+  },
+  "t_usd100_creador_ES": {
+    "pi": "pi_3UatsmGVFsqqzpBi2PHUuICt",
+    "charge": "ch_3UatsmGVFsqqzpBi2L3lWo2F",
+    "transfer": "tr_3UatsmGVFsqqzpBi2W0eoKY7",
+    "bruto": 9021,
+    "fee": 489,
+    "comision": 451,
+    "paraCreador": 8081,
+    "bt_cobro": "txn_3UatsmGVFsqqzpBi2sRLEnkK",
+    "bt_transfer": "txn_3UatsmGVFsqqzpBi2JdwE4VW",
+    "dest": "acct_1Uatj9GgKZOTeRsE"
+  },
+  "t_mxn2000_creador_ES": {
+    "pi": "pi_3UatsrGVFsqqzpBi2FhSPxa3",
+    "charge": "ch_3UatsrGVFsqqzpBi2rxlDfMI",
+    "transfer": "tr_3UatsrGVFsqqzpBi2UGa9HQ3",
+    "bruto": 9692,
+    "fee": 524,
+    "comision": 485,
+    "paraCreador": 8683,
+    "bt_cobro": "txn_3UatsrGVFsqqzpBi21GMX6Ui",
+    "bt_transfer": "txn_3UatsrGVFsqqzpBi2Zujg89m",
+    "dest": "acct_1Uatj9GgKZOTeRsE"
+  },
+  "t_brl500_creador_ES": {
+    "pi": "pi_3UatswGVFsqqzpBi3Oc3P5U6",
+    "charge": "ch_3UatswGVFsqqzpBi3PO7Efuj",
+    "transfer": "tr_3UatswGVFsqqzpBi3UhTxzP3",
+    "bruto": 8071,
+    "fee": 440,
+    "comision": 404,
+    "paraCreador": 7227,
+    "bt_cobro": "txn_3UatswGVFsqqzpBi3UslPJNf",
+    "bt_transfer": "txn_3UatswGVFsqqzpBi3bdt5bUh",
+    "dest": "acct_1Uatj9GgKZOTeRsE"
+  },
+  "t_gbp100_creador_ES": {
+    "pi": "pi_3Uatt1GVFsqqzpBi2SS3ffyR",
+    "charge": "ch_3Uatt1GVFsqqzpBi2780QH1M",
+    "transfer": "tr_3Uatt1GVFsqqzpBi2GIwHA3v",
+    "bruto": 11971,
+    "fee": 563,
+    "comision": 599,
+    "paraCreador": 10809,
+    "bt_cobro": "txn_3Uatt1GVFsqqzpBi2akUUyvi",
+    "bt_transfer": "txn_3Uatt1GVFsqqzpBi2VHtBTpX",
+    "dest": "acct_1Uatj9GgKZOTeRsE"
+  },
+  "t_eur100_creador_US": {
+    "pi": "pi_3UattLGVFsqqzpBi33Yux2cw",
+    "charge": "ch_3UattLGVFsqqzpBi3ei2U6eX",
+    "transfer": "tr_3UattLGVFsqqzpBi3sYYL2cf",
+    "bruto": 10000,
+    "fee": 175,
+    "comision": 500,
+    "paraCreador": 9325,
+    "bt_cobro": "txn_3UattLGVFsqqzpBi3AlOILBM",
+    "bt_transfer": "txn_3UattLGVFsqqzpBi3hgB1mXm",
+    "dest": "acct_1UatjHGWZIxjwA5l"
+  },
+  "t_usd100_creador_US": {
+    "pi": "pi_3UattQGVFsqqzpBi2ETLa4TB",
+    "charge": "ch_3UattQGVFsqqzpBi2fVmOxLC",
+    "transfer": "tr_3UattQGVFsqqzpBi2CCsBrYA",
+    "bruto": 9021,
+    "fee": 489,
+    "comision": 451,
+    "paraCreador": 8081,
+    "bt_cobro": "txn_3UattQGVFsqqzpBi2ekagksD",
+    "bt_transfer": "txn_3UattQGVFsqqzpBi2hnez3ss",
+    "dest": "acct_1UatjHGWZIxjwA5l"
+  },
+  "t_gbp100_creador_GB": {
+    "pi": "pi_3UattYGVFsqqzpBi2QEbZXkt",
+    "charge": "ch_3UattYGVFsqqzpBi2s9VlOeu",
+    "transfer": "tr_3UattYGVFsqqzpBi2UO72sFk",
+    "bruto": 11971,
+    "fee": 563,
+    "comision": 599,
+    "paraCreador": 10809,
+    "bt_cobro": "txn_3UattYGVFsqqzpBi2hH42E6q",
+    "bt_transfer": "txn_3UattYGVFsqqzpBi2zV2fi37",
+    "dest": "acct_1UatjLGhwH3d1sUI"
+  },
+  "t_eur100_obo_ES": {
+    "pi": "pi_3UattpGVFsqqzpBi0RLVzYip",
+    "charge": "ch_3UattpGVFsqqzpBi0hGE6tTL",
+    "transfer": "tr_3UattpGVFsqqzpBi0EbSWwpd",
+    "bruto": 10000,
+    "fee": 175,
+    "comision": 500,
+    "paraCreador": 9325,
+    "bt_cobro": "txn_3UattpGVFsqqzpBi0538YvBR",
+    "bt_transfer": "txn_3UattpGVFsqqzpBi07qZwKJH",
+    "dest": "acct_1Uatj9GgKZOTeRsE"
+  },
+  "t_eur100_obo_ES_tarjetaUS": {
+    "pi": "pi_3UattuGVFsqqzpBi1kY7UL2b",
+    "charge": "ch_3UattuGVFsqqzpBi1Mu1La2v",
+    "transfer": "tr_3UattuGVFsqqzpBi1AXaimln",
+    "bruto": 10000,
+    "fee": 340,
+    "comision": 500,
+    "paraCreador": 9160,
+    "bt_cobro": "txn_3UattuGVFsqqzpBi1xriq8gY",
+    "bt_transfer": "txn_3UattuGVFsqqzpBi1AE34YQs",
+    "dest": "acct_1Uatj9GgKZOTeRsE"
+  },
+  "t_usd100_obo_US": {
+    "pi": "pi_3UattzGVFsqqzpBi1ZKXnKDv",
+    "charge": "ch_3UattzGVFsqqzpBi1Nz7zHhh",
+    "transfer": "tr_3UattzGVFsqqzpBi1n4v1AbR",
+    "bruto": 10000,
+    "fee": 320,
+    "comision": 500,
+    "paraCreador": 9180,
+    "bt_cobro": "txn_3UattzGVFsqqzpBi1P5ndTpE",
+    "bt_transfer": "txn_3UattzGVFsqqzpBi1Bot6aq1",
+    "dest": "acct_1UatjHGWZIxjwA5l"
+  },
+  "t_usd100_obo_US_transfer_usd": {
+    "pi": "pi_3Uatu4GVFsqqzpBi2wecoR6I",
+    "charge": "ch_3Uatu4GVFsqqzpBi2TEi5Cyq",
+    "transfer": "tr_3Uatu4GVFsqqzpBi2TQkBVxD",
+    "bruto": 10000,
+    "fee": 320,
+    "comision": 500,
+    "paraCreador": 9180,
+    "bt_cobro": "txn_3Uatu4GVFsqqzpBi270M82sa",
+    "bt_transfer": "txn_3Uatu4GVFsqqzpBi2B7ZPNSL",
+    "dest": "acct_1UatjHGWZIxjwA5l"
+  },
+  "t_gbp100_obo_GB": {
+    "pi": "pi_3Uatu9GVFsqqzpBi1n9TffdR",
+    "charge": "ch_3Uatu9GVFsqqzpBi1U6CrplJ",
+    "transfer": "tr_3Uatu9GVFsqqzpBi1gsuOwCN",
+    "bruto": 10000,
+    "fee": 170,
+    "comision": 500,
+    "paraCreador": 9330,
+    "bt_cobro": "txn_3Uatu9GVFsqqzpBi1gm5mMls",
+    "bt_transfer": "txn_3Uatu9GVFsqqzpBi1nUZbLXG",
+    "dest": "acct_1UatjLGhwH3d1sUI"
+  },
+  "t_eur100_obo_US": {
+    "pi": "pi_3UatuEGVFsqqzpBi0UPys3IW",
+    "charge": "ch_3UatuEGVFsqqzpBi0sbcJL6K",
+    "transfer": "tr_3UatuEGVFsqqzpBi0J4mYKYn",
+    "bruto": 11085,
+    "fee": 629,
+    "comision": 554,
+    "paraCreador": 9902,
+    "bt_cobro": "txn_3UatuEGVFsqqzpBi0lZl61d6",
+    "bt_transfer": "txn_3UatuEGVFsqqzpBi0jV5x133",
+    "dest": "acct_1UatjHGWZIxjwA5l"
+  },
+  "dest_a_app_fee": {
+    "pi": "pi_3UatuKGVFsqqzpBi3KS7IGRU",
+    "charge": "ch_3UatuKGVFsqqzpBi3S2bkmaH",
+    "transfer": "tr_3UatuKGVFsqqzpBi3Fk7CdVr"
+  },
+  "dest_b_transfer_amount": {
+    "pi": "pi_3UatuQGVFsqqzpBi0HAWHjjB",
+    "charge": "ch_3UatuQGVFsqqzpBi0JJVkUxi",
+    "transfer": "tr_3UatuQGVFsqqzpBi0sbU2M1Y"
+  },
+  "dest_a_obo": {
+    "pi": "pi_3UatuVGVFsqqzpBi0tLEbYWy",
+    "charge": "ch_3UatuVGVFsqqzpBi0BQwQcmd",
+    "transfer": "tr_3UatuVGVFsqqzpBi01lRe1TS"
+  },
+  "precio100": "price_1Uatv4GVFsqqzpBixifYaG3L",
+  "cs": {
+    "cs_pago_obo": {
+      "id": "cs_test_a04EJwCQX5ALtQRjKjfcSMsqu5Re2P68QQ6apQDTlSEkVeWgloAKb6Kr5M",
+      "customer": null
+    },
+    "cs_pago_obo_factura": {
+      "id": "cs_test_a0KGzlNBa5MpYBCJHTz8YxQdZIEMMqoDcAlGfAvwmCFwOJFtnEt15xKfS7"
+    },
+    "cs_pago_obo_tax": {
+      "id": "cs_test_a0gsGGhECxxnqbqAV1YYQzZ0HxTqHT6lgCCd3QtmFY9kJtVH5P51Rueak9"
+    },
+    "cs_pago_sin_obo_tax_cuenta": {
+      "id": "cs_test_a08qhOoOv1S3iQ7kFgFDBN6Xyb0R5zLTqkyT8Wkv56iJ5a4kBm7c70YnO5"
+    },
+    "cs_pago_marca": {
+      "id": "cs_test_a0GciTfwgHajiV79SEbdtOyr6mCdb9q8Tj86AFqd8VCGKyduMwgWjEdHrq"
+    },
+    "cs_sub_obo": {
+      "id": "cs_test_a0jfoMeCR5Q63Arztzy6dLhODMkc0jOgbc8xg13NjxXZQs0oUiE4FQ71Ct",
+      "customer": "cus_Vc8CJbNWcSJ1GW"
+    },
+    "cs_sub_obo_trial_issuer": {
+      "id": "cs_test_a0VUu4HO4n3rQKRK6NzKvjdUfLkQscAHiXBNnTErfAbfhoFukhcVXyLdco"
+    },
+    "cs_sub_obo_tax": {
+      "id": "cs_test_a0kXi7XJowz65ARILcbjSxGsZWympLeJkeLYsvJLVMkLb6Lt5eiYaFgbLP"
+    },
+    "cs_sub_sin_obo": {
+      "id": "cs_test_a0JfdLcGRYSFIYTZRwlFJVdtd9yPtwvzi9rplPCYkmoBThSYdNpUnpGFp2"
+    }
+  }
+}

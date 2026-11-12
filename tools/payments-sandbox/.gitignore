@@ -1,0 +1,6 @@
+# Estado de trabajo de los scripts: acaba con URLs de alta, de checkout y de
+# portal que caducan y dan acceso. Lo que se versiona es state.seed.json.
+state.json
+c-state.json
+*.png
+*.log

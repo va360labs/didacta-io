@@ -174,6 +174,13 @@ export default [
       ],
     },
   },
+  // ── Scripts del sandbox de cobros (tools/payments-sandbox) ───────────────
+  // Hablan con la API de prueba de Stripe y su trabajo es contar por pantalla
+  // lo que Stripe responde: `console.log` es la salida, no un descuido.
+  {
+    files: ['tools/payments-sandbox/**/*.{mjs,cjs,js}'],
+    rules: { 'no-console': 'off' },
+  },
   // ── Guardarraíl i18n (apps/web) ──────────────────────────────────────────
   // Prohíbe formateo con locale cableado fuera de los helpers de
   // `apps/web/src/lib/i18n/**` (único sitio permitido para toLocale*/Intl.*).
