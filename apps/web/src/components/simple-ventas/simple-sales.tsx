@@ -109,173 +109,179 @@ export function SimpleSales({
       </h1>
       <p className="mt-1.5 text-text-muted">{t('sub')}</p>
 
-      {/* Cobros: si no están listos, lo primero es conectarlos. */}
-      {mode === 'platform' && !ready ? (
-        <section className="mt-5 max-w-3xl">
-          <h2 className="text-base font-bold text-text">{t('cobros.conectarTitulo')}</h2>
-          <p className="mt-1 text-sm text-text-muted">{t('cobros.conectarTexto')}</p>
-          <div className="mt-3">
-            <PaymentsConnectCard
-              whenPlatformOff={null}
-              returnAction={returnAction}
-              onReturnHandled={() => {
-                onReturnHandled?.();
-                void load();
-              }}
-            />
-          </div>
-        </section>
-      ) : (
-        <p className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-text-muted">
-          <span className="inline-flex items-center gap-1.5">
-            <span className="grid h-5 w-5 place-items-center rounded-full bg-success-50 text-success-700">
-              <Icon name="check" size={12} />
-            </span>
-            {cardKind === 'ready' ? t('cobros.listos') : t('cobros.propios')}
-          </span>
-          <Link href={completeHref} className="font-semibold text-brand-600 hover:underline">
-            {t('cobros.detalles')}
-          </Link>
-        </p>
-      )}
-
-      {/* Resumen o estado vacío (solo con cobros de plataforma hay cifras). */}
-      {mode === 'platform' ? (
-        headline ? (
-          <section
-            aria-label={t('resumen.vendido')}
-            className="mt-5 grid grid-cols-2 overflow-hidden rounded-2xl border border-border bg-surface lg:grid-cols-3"
-          >
-            <div className="col-span-2 border-b border-border p-4 lg:col-span-1 lg:border-r lg:border-b-0 lg:p-5">
-              <div className="text-sm font-semibold text-text-muted">{t('resumen.vendido')}</div>
-              <div className="mt-0.5 text-[28px] font-extrabold tracking-tight text-text tabular-nums">
-                {formatStripeAmount(headline.gross, headline.currency)}
-              </div>
-              <div className="text-[13px] text-text-subtle">
-                {t('resumen.ventas', { n: headline.salesCount })}
-              </div>
-            </div>
-            <div className="border-r border-border p-4 lg:p-5">
-              <div className="text-sm font-semibold text-text-muted">{t('resumen.enBanco')}</div>
-              <div className="mt-0.5 text-[21px] font-extrabold tracking-tight text-text tabular-nums lg:text-[28px]">
-                {formatStripeAmount(headline.received, headline.currency)}
-              </div>
-            </div>
-            <div className="p-4 lg:p-5">
-              <div className="text-sm font-semibold text-text-muted">{t('resumen.enCamino')}</div>
-              <div className="mt-0.5 text-[21px] font-extrabold tracking-tight text-text tabular-nums lg:text-[28px]">
-                {formatStripeAmount(headline.pending, headline.currency)}
-              </div>
-              <div className="text-[13px] text-text-subtle">{t('resumen.enCaminoNota')}</div>
-            </div>
-          </section>
-        ) : (
-          <section className="mt-5 flex flex-col items-start gap-3 rounded-2xl border border-dashed border-border-strong bg-surface p-6 sm:flex-row sm:items-center">
-            <span
-              className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-brand-50 text-brand-700"
-              aria-hidden
-            >
-              <Icon name="briefcase" size={22} />
-            </span>
-            <div className="min-w-0 flex-1">
-              <h2 className="text-base font-bold text-text">{t('vacio.titulo')}</h2>
-              <p className="mt-0.5 max-w-[60ch] text-sm text-text-muted">{t('vacio.texto')}</p>
-            </div>
-            {!ready ? null : view.salePath ? (
-              <a
-                href="#enlace"
-                className="inline-flex h-10 items-center rounded-xl bg-brand-600 px-4 text-sm font-semibold text-white hover:bg-brand-700"
-              >
-                {t('vacio.botonCompartir')}
-              </a>
-            ) : (
-              <Link
-                href="/empieza"
-                className="inline-flex h-10 items-center rounded-xl bg-brand-600 px-4 text-sm font-semibold text-white hover:bg-brand-700"
-              >
-                {t('vacio.botonPublicar')}
-              </Link>
-            )}
-          </section>
-        )
-      ) : null}
-
+      {/* Dos columnas: a la izquierda cobros, resumen y ventas; a la derecha,
+          en la misma fila, el enlace de venta y el precio. */}
       <div className="mt-5 grid grid-cols-[minmax(0,1fr)] gap-5 lg:grid-cols-[minmax(0,1fr)_360px] lg:items-start">
-        {mode === 'platform' && sales.length > 0 ? (
-          <section
-            className="min-w-0 rounded-2xl border border-border bg-surface"
-            aria-label={t('lista.titulo')}
-          >
-            <div className="flex items-center justify-between px-4 pt-4 pb-1">
-              <h2 className="text-base font-bold text-text">{t('lista.titulo')}</h2>
-              <Link
-                href={completeHref}
-                className="text-sm font-bold text-brand-600 hover:underline"
-              >
-                {t('lista.verTodas')}
+        <div className="flex min-w-0 flex-col gap-5">
+          {/* Cobros: si no están listos, lo primero es conectarlos. */}
+          {mode === 'platform' && !ready ? (
+            <section>
+              <h2 className="text-base font-bold text-text">{t('cobros.conectarTitulo')}</h2>
+              <p className="mt-1 text-sm text-text-muted">{t('cobros.conectarTexto')}</p>
+              <div className="mt-3">
+                <PaymentsConnectCard
+                  whenPlatformOff={null}
+                  returnAction={returnAction}
+                  onReturnHandled={() => {
+                    onReturnHandled?.();
+                    void load();
+                  }}
+                />
+              </div>
+            </section>
+          ) : (
+            <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-text-muted">
+              <span className="inline-flex items-center gap-1.5">
+                <span className="grid h-5 w-5 place-items-center rounded-full bg-success-50 text-success-700">
+                  <Icon name="check" size={12} />
+                </span>
+                {cardKind === 'ready' ? t('cobros.listos') : t('cobros.propios')}
+              </span>
+              <Link href={completeHref} className="font-semibold text-brand-600 hover:underline">
+                {t('cobros.detalles')}
               </Link>
-            </div>
-            <ul>
-              {sales.map((s) => {
-                const st = saleStatusView(s);
-                return (
-                  <li
-                    key={s.id}
-                    className="flex items-center gap-3 border-t border-border-soft px-4 py-3 first:border-t-0"
-                  >
-                    <div className="min-w-0 flex-1">
-                      <div className="truncate font-semibold text-text">
-                        {s.description ?? t('lista.sinDescripcion')}
-                      </div>
-                      {s.chargedAt ? (
-                        <div className="text-[13px] text-text-subtle">
-                          {formatDate(s.chargedAt, { dateStyle: 'medium' })}
-                        </div>
-                      ) : null}
-                    </div>
-                    <div className="text-right">
-                      <div className="font-bold text-text tabular-nums">
-                        {formatStripeAmount(s.presentmentAmount, s.presentmentCurrency)}
-                      </div>
-                      <span
-                        className={cn(
-                          'mt-0.5 inline-block rounded-full px-2 py-0.5 text-[11px] font-bold',
-                          TONE[st.tone],
-                        )}
-                      >
-                        {tPagos(`status.${st.key}`)}
-                      </span>
-                    </div>
-                  </li>
-                );
-              })}
-            </ul>
-          </section>
-        ) : mode !== 'platform' && view ? (
-          // Con la cuenta de pagos propia no hay lista de cobros de la
-          // plataforma: el número de ventas real (pedidos pagados y
-          // suscripciones) y el detalle en el panel de negocio.
-          <section
-            className="min-w-0 rounded-2xl border border-border bg-surface p-5"
-            aria-label={t('propias.titulo')}
-          >
-            <div className="text-sm font-semibold text-text-muted">{t('propias.titulo')}</div>
-            <div className="mt-1 text-[32px] leading-none font-extrabold tracking-tight text-text tabular-nums">
-              {view.sales.count}
-            </div>
-            <p className="mt-2 max-w-[52ch] text-sm text-text-muted">
-              {view.sales.count > 0 ? t('propias.texto') : t('propias.vacio')}
             </p>
-            <Link
-              href="/admin?tab=negocio"
-              className="mt-3 inline-block text-sm font-bold text-brand-600 hover:underline"
+          )}
+          {/* Resumen o estado vacío (solo con cobros de plataforma hay cifras). */}
+          {mode === 'platform' ? (
+            headline ? (
+              <section
+                aria-label={t('resumen.vendido')}
+                className="grid grid-cols-2 overflow-hidden rounded-2xl border border-border bg-surface lg:grid-cols-3"
+              >
+                <div className="col-span-2 border-b border-border p-4 lg:col-span-1 lg:border-r lg:border-b-0 lg:p-5">
+                  <div className="text-sm font-semibold text-text-muted">
+                    {t('resumen.vendido')}
+                  </div>
+                  <div className="mt-0.5 text-[28px] font-extrabold tracking-tight text-text tabular-nums">
+                    {formatStripeAmount(headline.gross, headline.currency)}
+                  </div>
+                  <div className="text-[13px] text-text-subtle">
+                    {t('resumen.ventas', { n: headline.salesCount })}
+                  </div>
+                </div>
+                <div className="border-r border-border p-4 lg:p-5">
+                  <div className="text-sm font-semibold text-text-muted">
+                    {t('resumen.enBanco')}
+                  </div>
+                  <div className="mt-0.5 text-[21px] font-extrabold tracking-tight text-text tabular-nums lg:text-[28px]">
+                    {formatStripeAmount(headline.received, headline.currency)}
+                  </div>
+                </div>
+                <div className="p-4 lg:p-5">
+                  <div className="text-sm font-semibold text-text-muted">
+                    {t('resumen.enCamino')}
+                  </div>
+                  <div className="mt-0.5 text-[21px] font-extrabold tracking-tight text-text tabular-nums lg:text-[28px]">
+                    {formatStripeAmount(headline.pending, headline.currency)}
+                  </div>
+                  <div className="text-[13px] text-text-subtle">{t('resumen.enCaminoNota')}</div>
+                </div>
+              </section>
+            ) : (
+              <section className="flex flex-col items-start gap-3 rounded-2xl border border-dashed border-border-strong bg-surface p-6 sm:flex-row sm:items-center">
+                <span
+                  className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-brand-50 text-brand-700"
+                  aria-hidden
+                >
+                  <Icon name="briefcase" size={22} />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <h2 className="text-base font-bold text-text">{t('vacio.titulo')}</h2>
+                  <p className="mt-0.5 max-w-[60ch] text-sm text-text-muted">{t('vacio.texto')}</p>
+                </div>
+                {!ready ? null : view.salePath ? (
+                  <a
+                    href="#enlace"
+                    className="inline-flex h-10 items-center rounded-xl bg-brand-600 px-4 text-sm font-semibold text-white hover:bg-brand-700"
+                  >
+                    {t('vacio.botonCompartir')}
+                  </a>
+                ) : (
+                  <Link
+                    href="/empieza"
+                    className="inline-flex h-10 items-center rounded-xl bg-brand-600 px-4 text-sm font-semibold text-white hover:bg-brand-700"
+                  >
+                    {t('vacio.botonPublicar')}
+                  </Link>
+                )}
+              </section>
+            )
+          ) : null}
+          {mode === 'platform' && sales.length > 0 ? (
+            <section
+              className="min-w-0 rounded-2xl border border-border bg-surface"
+              aria-label={t('lista.titulo')}
             >
-              {t('propias.detalle')}
-            </Link>
-          </section>
-        ) : (
-          <div className="hidden lg:block" />
-        )}
+              <div className="flex items-center justify-between px-4 pt-4 pb-1">
+                <h2 className="text-base font-bold text-text">{t('lista.titulo')}</h2>
+                <Link
+                  href={completeHref}
+                  className="text-sm font-bold text-brand-600 hover:underline"
+                >
+                  {t('lista.verTodas')}
+                </Link>
+              </div>
+              <ul>
+                {sales.map((s) => {
+                  const st = saleStatusView(s);
+                  return (
+                    <li
+                      key={s.id}
+                      className="flex items-center gap-3 border-t border-border-soft px-4 py-3 first:border-t-0"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate font-semibold text-text">
+                          {s.description ?? t('lista.sinDescripcion')}
+                        </div>
+                        {s.chargedAt ? (
+                          <div className="text-[13px] text-text-subtle">
+                            {formatDate(s.chargedAt, { dateStyle: 'medium' })}
+                          </div>
+                        ) : null}
+                      </div>
+                      <div className="text-right">
+                        <div className="font-bold text-text tabular-nums">
+                          {formatStripeAmount(s.presentmentAmount, s.presentmentCurrency)}
+                        </div>
+                        <span
+                          className={cn(
+                            'mt-0.5 inline-block rounded-full px-2 py-0.5 text-[11px] font-bold',
+                            TONE[st.tone],
+                          )}
+                        >
+                          {tPagos(`status.${st.key}`)}
+                        </span>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            </section>
+          ) : mode !== 'platform' && view ? (
+            // Con la cuenta de pagos propia no hay lista de cobros de la
+            // plataforma: el número de ventas real (pedidos pagados y
+            // suscripciones) y el detalle en el panel de negocio.
+            <section
+              className="min-w-0 rounded-2xl border border-border bg-surface p-5"
+              aria-label={t('propias.titulo')}
+            >
+              <div className="text-sm font-semibold text-text-muted">{t('propias.titulo')}</div>
+              <div className="mt-1 text-[32px] leading-none font-extrabold tracking-tight text-text tabular-nums">
+                {view.sales.count}
+              </div>
+              <p className="mt-2 max-w-[52ch] text-sm text-text-muted">
+                {view.sales.count > 0 ? t('propias.texto') : t('propias.vacio')}
+              </p>
+              <Link
+                href="/admin?tab=negocio"
+                className="mt-3 inline-block text-sm font-bold text-brand-600 hover:underline"
+              >
+                {t('propias.detalle')}
+              </Link>
+            </section>
+          ) : null}
+        </div>
 
         <SaleLinkCard
           view={view}
