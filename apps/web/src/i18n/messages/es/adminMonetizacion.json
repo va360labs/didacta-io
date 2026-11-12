@@ -7,7 +7,7 @@
     "payoutsWarning": "Aún no puedes vender la membresía: conecta tus cobros en <link>Cobros</link>. Mientras tanto puedes preparar los planes y la página.",
     "stripeWarning": "Stripe no está configurado para esta academia — puedes preparar planes y página, pero el checkout real fallará hasta que <link>configures Stripe en Administración → Pagos</link>.",
     "plansTitle": "Planes",
-    "plansDescription": "Precio, periodicidad, precio tachado y días de prueba. El price de Stripe se crea solo en el primer pago (y se rota al cambiar el precio).",
+    "plansDescription": "Precio, periodicidad, precio tachado y días de prueba. No hace falta preparar nada en Stripe: el precio se crea solo con el primer pago, y si lo cambias, quien ya paga sigue con el suyo.",
     "loading": "Cargando…",
     "plansEmpty": "Aún no hay planes. Crea el primero abajo.",
     "featured": "Destacado",

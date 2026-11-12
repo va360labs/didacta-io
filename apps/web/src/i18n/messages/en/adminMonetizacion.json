@@ -7,7 +7,7 @@
     "payoutsWarning": "You can't sell the membership yet: connect payouts in <link>Payouts</link>. Meanwhile you can prepare the plans and the page.",
     "stripeWarning": "Stripe is not configured for this academy — you can prepare plans and the page, but real checkout will fail until you <link>configure Stripe in Administration → Payments</link>.",
     "plansTitle": "Plans",
-    "plansDescription": "Price, billing interval, strikethrough price and trial days. The Stripe price is created only on the first payment (and rotated when the price changes).",
+    "plansDescription": "Price, billing interval, strikethrough price and trial days. Nothing to set up in Stripe: the price is created with the first payment, and if you change it, current members keep theirs.",
     "loading": "Loading…",
     "plansEmpty": "There are no plans yet. Create the first one below.",
     "featured": "Featured",
