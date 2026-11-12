@@ -65,6 +65,24 @@ export function referralFigures(
   };
 }
 
+/** Lo que vende el aula, para hablar de «compras», de «cuotas» o de las dos. */
+export type OnSaleKind = 'courses' | 'membership' | 'both';
+
+export function onSaleKind(onSale: { membership: boolean; courses: number }): OnSaleKind {
+  if (onSale.membership && onSale.courses > 0) return 'both';
+  return onSale.membership ? 'membership' : 'courses';
+}
+
+/** Clave del texto del paso «Ganas tu parte» según el alcance y lo que se vende. */
+export function earnTextKey(
+  scope: MemberReferralStats['scope'],
+  recurringMonths: number | null,
+  kind: OnSaleKind,
+): string {
+  if (scope === 'FIRST_PAYMENT') return `pasos.ganaPrimerPago.${kind}`;
+  return recurringMonths ? `pasos.ganaMeses.${kind}` : `pasos.ganaCadaPago.${kind}`;
+}
+
 const STATUS_TONE: Record<ReferralCommissionStatus, string> = {
   PENDING: 'bg-warning-50 text-warning-700',
   APPROVED: 'bg-brand-50 text-brand-700',
@@ -99,6 +117,7 @@ export function SimpleReferrals() {
   const [inviteesError, setInviteesError] = useState(false);
   const [link, setLink] = useState<string | null>(null);
   const [products, setProducts] = useState<ReferralProductLink[]>([]);
+  const [onSale, setOnSale] = useState<OnSaleKind>('both');
   const [linkError, setLinkError] = useState<string | null>(null);
   const [error, setError] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
@@ -132,6 +151,7 @@ export function SimpleReferrals() {
             }
             setLink(links.general);
             setProducts(links.products);
+            setOnSale(onSaleKind(links.onSale));
           })
           .catch((e) => {
             if (cancelled) return;
@@ -189,12 +209,10 @@ export function SimpleReferrals() {
   const creditMoney = (c: number) =>
     formatCents(c, (credit?.currency ?? fig.currency).toUpperCase());
 
-  const ganas =
-    stats.scope === 'FIRST_PAYMENT'
-      ? t('pasos.ganaPrimerPago', { percent })
-      : stats.recurringMonths
-        ? t('pasos.ganaMeses', { percent, months: stats.recurringMonths })
-        : t('pasos.ganaCadaPago', { percent });
+  const ganas = (t as unknown as (k: string, v: Record<string, unknown>) => string)(
+    earnTextKey(stats.scope, stats.recurringMonths, onSale),
+    { percent, months: stats.recurringMonths ?? 0 },
+  );
 
   return (
     <div className="mx-auto max-w-[1080px]" data-testid="referidos-sencillo">

@@ -7,7 +7,7 @@ import { describe, expect, it } from 'vitest';
 import { linkedInAddUrl } from '@/lib/certificate-linkedin';
 import type { MemberReferralStats } from '@/lib/referrals';
 import { showCourseCertificateCard } from './course-certificate-card';
-import { referralFigures } from './simple-referrals';
+import { earnTextKey, onSaleKind, referralFigures } from './simple-referrals';
 
 describe('certificado dentro del curso (modo sencillo)', () => {
   it('solo con el curso terminado, el certificado emitido y en modo sencillo', () => {
@@ -141,5 +141,14 @@ describe('cifras de «Invita y gana» (solo datos reales del módulo)', () => {
       new Date('2026-11-12T12:00:00.000Z'),
     );
     expect(f).toMatchObject({ earnedCents: 1470, pendingCents: 1470, thisMonthCents: 1470 });
+  });
+
+  it('el paso «Ganas tu parte» habla de compras, de cuotas o de las dos según lo que se vende', () => {
+    expect(onSaleKind({ membership: false, courses: 2 })).toBe('courses');
+    expect(onSaleKind({ membership: true, courses: 0 })).toBe('membership');
+    expect(onSaleKind({ membership: true, courses: 1 })).toBe('both');
+    expect(earnTextKey('RECURRING', null, 'courses')).toBe('pasos.ganaCadaPago.courses');
+    expect(earnTextKey('RECURRING', 6, 'both')).toBe('pasos.ganaMeses.both');
+    expect(earnTextKey('FIRST_PAYMENT', 6, 'membership')).toBe('pasos.ganaPrimerPago.membership');
   });
 });

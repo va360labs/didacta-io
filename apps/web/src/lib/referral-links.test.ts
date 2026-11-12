@@ -14,7 +14,7 @@ describe('buildReferralLinks (Invita y gana para todo lo que se vende)', () => {
   it('sin nada a la venta no hay enlace', () => {
     expect(
       buildReferralLinks({ personalUrl, code: 'abc23xyz', membershipOnSale: false, courses: [] }),
-    ).toEqual({ general: null, products: [] });
+    ).toEqual({ general: null, products: [], onSale: { membership: false, courses: 0 } });
   });
 
   it('solo un curso suelto: el general es la ficha de ese curso y no hay lista', () => {
@@ -28,13 +28,18 @@ describe('buildReferralLinks (Invita y gana para todo lo que se vende)', () => {
     ).toEqual({
       general: 'https://aula.ejemplo.test/catalogo/acuarela-desde-cero?ref=abc23xyz',
       products: [],
+      onSale: { membership: false, courses: 1 },
     });
   });
 
   it('solo la membresía: el general es /unete', () => {
     expect(
       buildReferralLinks({ personalUrl, code: 'abc23xyz', membershipOnSale: true, courses: [] }),
-    ).toEqual({ general: 'https://aula.ejemplo.test/unete?ref=abc23xyz', products: [] });
+    ).toEqual({
+      general: 'https://aula.ejemplo.test/unete?ref=abc23xyz',
+      products: [],
+      onSale: { membership: true, courses: 0 },
+    });
   });
 
   it('varios cursos sin membresía: general al catálogo y uno por curso', () => {

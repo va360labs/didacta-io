@@ -67,9 +67,21 @@
       "entra": "Alguien entra con él",
       "entraTexto": "Queda unido a ti durante {days} días desde que lo abre.",
       "ganas": "Ganas tu parte",
-      "ganaPrimerPago": "El {percent} % de su primer pago.",
-      "ganaCadaPago": "El {percent} % de cada pago suyo, mientras siga pagando.",
-      "ganaMeses": "El {percent} % de cada pago suyo durante sus primeros {months} meses."
+      "ganaPrimerPago": {
+        "courses": "El {percent} % de su primera compra.",
+        "membership": "El {percent} % de su primera cuota.",
+        "both": "El {percent} % de su primer pago, sea una compra o una cuota."
+      },
+      "ganaCadaPago": {
+        "courses": "El {percent} % de cada compra suya.",
+        "membership": "El {percent} % de cada cuota suya, mientras siga dentro.",
+        "both": "El {percent} % de cada compra suya y de cada cuota, mientras siga dentro."
+      },
+      "ganaMeses": {
+        "courses": "El {percent} % de cada compra suya durante sus primeros {months} meses.",
+        "membership": "El {percent} % de cada cuota suya durante sus primeros {months} meses.",
+        "both": "El {percent} % de cada compra suya y de cada cuota durante sus primeros {months} meses."
+      }
     },
     "cobro": "Lo que ganas se confirma cuando pasa el plazo de devolución y te lo paga {academia}.",
     "cobroMinimo": "Lo que ganas se confirma cuando pasa el plazo de devolución y te lo paga {academia} cuando llegas a {min}.",

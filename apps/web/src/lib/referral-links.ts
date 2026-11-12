@@ -25,6 +25,8 @@ export interface ReferralLinks {
   general: string | null;
   /** Uno por producto, solo cuando hay MÁS de uno a la venta. */
   products: ReferralProductLink[];
+  /** Qué hay a la venta (para hablar de compras, de cuotas o de las dos). */
+  onSale: { membership: boolean; courses: number };
 }
 
 /** Formato del código (mismo que valida la API). */
@@ -61,14 +63,15 @@ export function buildReferralLinks(input: {
       url: withRef(`/catalogo/${encodeURIComponent(c.slug)}`),
     })),
   ];
-  if (products.length === 0) return { general: null, products: [] };
+  const onSale = { membership: input.membershipOnSale, courses: input.courses.length };
+  if (products.length === 0) return { general: null, products: [], onSale };
 
   const general = input.membershipOnSale
     ? withRef('/unete')
     : products.length === 1
       ? products[0]!.url
       : withRef('/catalogo');
-  return { general, products: products.length > 1 ? products : [] };
+  return { general, products: products.length > 1 ? products : [], onSale };
 }
 
 /**

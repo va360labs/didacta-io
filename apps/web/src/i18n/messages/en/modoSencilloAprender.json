@@ -67,9 +67,21 @@
       "entra": "Someone joins through it",
       "entraTexto": "They stay linked to you for {days} days after opening it.",
       "ganas": "You earn your share",
-      "ganaPrimerPago": "{percent}% of their first payment.",
-      "ganaCadaPago": "{percent}% of each payment, for as long as they keep paying.",
-      "ganaMeses": "{percent}% of each payment during their first {months} months."
+      "ganaPrimerPago": {
+        "courses": "{percent}% of their first purchase.",
+        "membership": "{percent}% of their first fee.",
+        "both": "{percent}% of their first payment, whether a purchase or a fee."
+      },
+      "ganaCadaPago": {
+        "courses": "{percent}% of each purchase they make.",
+        "membership": "{percent}% of each fee they pay, for as long as they stay.",
+        "both": "{percent}% of each purchase and each fee they pay, for as long as they stay."
+      },
+      "ganaMeses": {
+        "courses": "{percent}% of each purchase they make during their first {months} months.",
+        "membership": "{percent}% of each fee they pay during their first {months} months.",
+        "both": "{percent}% of each purchase and each fee they pay during their first {months} months."
+      }
     },
     "cobro": "What you earn is confirmed once the refund period is over and {academia} pays it to you.",
     "cobroMinimo": "What you earn is confirmed once the refund period is over and {academia} pays it to you when you reach {min}.",
