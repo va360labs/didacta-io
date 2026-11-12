@@ -45,6 +45,8 @@ export interface StartHereView {
   /** Personas del aula que no son del equipo (invitadas o ya dentro). */
   students: number;
   nextLive: { id: string; topic: string; startTime: string } | null;
+  /** Dónde se conectan los cobros: la tarjeta de la plataforma o las claves propias. */
+  paymentsSetupPath: string;
 }
 
 /** Monedas con claves propias de Stripe (Community): las de siempre. */

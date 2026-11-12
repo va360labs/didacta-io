@@ -368,7 +368,8 @@ describe('Empieza aquí', () => {
     await service.quickStart(T, { id: U }, ALTA);
     let view = await service.startHere(T);
     expect(Object.fromEntries(view.steps.map((s) => [s.id, s.done]))).toEqual({
-      academy: false,
+      // El alta ya le dio nombre; logo y color son opcionales (Didacta por defecto).
+      academy: true,
       course: false,
       price: true,
       payments: false,
@@ -376,6 +377,8 @@ describe('Empieza aquí', () => {
       invite: false,
     });
     expect(view.salePath).toBeNull();
+    // Sin cobros de plataforma, los cobros se conectan con las claves propias.
+    expect(view.paymentsSetupPath).toBe('/admin/configuracion?tab=pagos');
 
     // Una lección VACÍA no completa el paso; con texto, sí.
     db.lessons.push({ type: 'TEXT', content: {}, module: { courseId: 'c1' } });
@@ -385,6 +388,9 @@ describe('Empieza aquí', () => {
     view = await service.startHere(T);
     expect(view.steps.find((s) => s.id === 'course')?.done).toBe(true);
 
+    // Sin alta, la academia no está hecha hasta confirmarla o personalizarla.
+    db.settings.set('state', {});
+    expect((await service.startHere(T)).steps.find((s) => s.id === 'academy')?.done).toBe(false);
     await service.confirmAcademy(T, U);
     expect((await service.startHere(T)).steps.find((s) => s.id === 'academy')?.done).toBe(true);
   });

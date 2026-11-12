@@ -358,6 +358,7 @@ export class SimpleModeService {
       sales,
       students: invited,
       nextLive,
+      paymentsSetupPath: this.payoutsGate ? '/admin/cobros' : '/admin/configuracion?tab=pagos',
     };
   }
 
@@ -545,8 +546,14 @@ export class SimpleModeService {
     });
   }
 
+  /**
+   * «Tu academia» queda hecha con el alta (ya tiene nombre y, mientras no suba
+   * los suyos, el logo y el color de Didacta): vender no necesita más, y
+   * dejarla como paso abierto frenaba al creador antes de su curso. El logo y
+   * el color se cambian desde «Cambiar».
+   */
   private async academyDone(tenantId: string, state: SimpleModeState): Promise<boolean> {
-    if (state.academyConfirmedAt) return true;
+    if (state.academyConfirmedAt || state.quickStartAt) return true;
     const theme = await this.prisma.modThemingTenantTheme.findUnique({
       where: { tenantId },
       select: { logoUrl: true, brandHue: true },
