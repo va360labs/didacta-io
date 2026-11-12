@@ -172,6 +172,14 @@ export class SubscriptionsController {
     @Body(new ZodValidationPipe(portalSchema)) body: { subscriptionId?: string } | undefined,
   ): Promise<{ url: string; subscriptionId: string }> {
     if (!user) throw new UnauthorizedException();
+    // Solo existe con cobros de plataforma, que crean el portal con el nombre
+    // del creador. En Community (claves propias) el portal depende de que el
+    // aula lo haya configurado en su Stripe y la interfaz no lo ofrece: la
+    // ruta responde como si no existiera, igual que antes de los cobros de
+    // plataforma.
+    if (!this.payoutsGate) {
+      throw new NotFoundException({ message: 'Not Found', code: 'SUBS_PORTAL_UNAVAILABLE' });
+    }
     const base = await this.tenantResolver.resolveTenantWebBaseUrl(user.tenantId, req);
     return this.registry
       .getSubscriptionsService()

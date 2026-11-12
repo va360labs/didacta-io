@@ -19,7 +19,7 @@
  * `didacta_app`: `integration/payouts-membership.integration.test.ts`.
  */
 
-import { HttpException } from '@nestjs/common';
+import { HttpException, NotFoundException } from '@nestjs/common';
 import Stripe from 'stripe';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
@@ -464,8 +464,12 @@ describe('POST /modules/subscriptions/me/portal y la marca billingPortal', () =>
   }
   const user = { sub: 'alumna', tenantId: A, roles: ['student'] } as never;
 
+  const anyGate = new PlatformCheckoutGate({
+    refs: { isPlatformObject: async () => true },
+  } as never);
+
   it('el portal vuelve a la pestaña de suscripción del aula', async () => {
-    const { ctrl, subs } = controller(undefined);
+    const { ctrl, subs } = controller(anyGate);
     expect(await ctrl.portal(user, { headers: {} } as never, { subscriptionId: 's1' })).toEqual({
       url: 'https://billing.test/x',
       subscriptionId: 's1',
@@ -479,6 +483,14 @@ describe('POST /modules/subscriptions/me/portal y la marca billingPortal', () =>
       subscriptionId: undefined,
       returnUrl: 'https://aula.test/cuenta?tab=suscripcion',
     });
+  });
+
+  it('sin cobros de plataforma (Community) la ruta responde 404 y no toca Stripe, como en beta.12', async () => {
+    const { ctrl, subs } = controller(undefined);
+    await expect(
+      ctrl.portal(user, { headers: {} } as never, { subscriptionId: 's1' }),
+    ).rejects.toBeInstanceOf(NotFoundException);
+    expect(subs.createBillingPortalSession).not.toHaveBeenCalled();
   });
 
   it('billingPortal solo en las suscripciones cobradas por la plataforma; sin modo plataforma, en ninguna', async () => {
