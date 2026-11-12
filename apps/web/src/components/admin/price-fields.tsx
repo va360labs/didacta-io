@@ -61,7 +61,7 @@ export function PriceFields({
   const amountError = errors.some((e) => e.field === 'amount');
   return (
     <div className="flex flex-col gap-3">
-      <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_10rem]">
+      <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_15rem]">
         <div className="flex flex-col gap-1.5">
           <Label htmlFor={`${idPrefix}-amount`}>{t('amountLabel')}</Label>
           <Input
