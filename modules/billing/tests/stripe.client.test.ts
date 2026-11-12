@@ -127,3 +127,57 @@ describe('StripeSdkAdapter.createCheckoutSession — cuenta compartida (Connect)
     expect(sent['payment_intent_data']).toEqual({ metadata: PARAMS.metadata });
   });
 });
+
+describe('StripeSdkAdapter.createOneOffPrice — precios extra por mercado', () => {
+  function capturePrices() {
+    const prices: Array<Record<string, unknown>> = [];
+    class FakeStripe {
+      products = { create: async () => ({ id: 'prod_1' }) };
+      prices = {
+        create: async (params: Record<string, unknown>) => {
+          prices.push(params);
+          return {
+            id: 'price_1',
+            unit_amount: params['unit_amount'],
+            currency: params['currency'],
+            active: true,
+          };
+        },
+      };
+    }
+    const adapter = new StripeSdkAdapter('sk_test_x', 'whsec_x', FakeStripe as never);
+    return { adapter, prices };
+  }
+
+  it('sin opciones: el Price es el de siempre (sin currency_options)', async () => {
+    const { adapter, prices } = capturePrices();
+    await adapter.createOneOffPrice({
+      name: 'Curso',
+      unitAmount: 4900,
+      currency: 'eur',
+      metadata: {},
+    });
+    expect(prices[0]).toEqual({
+      product: 'prod_1',
+      unit_amount: 4900,
+      currency: 'eur',
+      metadata: {},
+    });
+  });
+
+  it('con opciones: currency_options con su unit_amount en la unidad mínima de cada moneda', async () => {
+    const { adapter, prices } = capturePrices();
+    await adapter.createOneOffPrice({
+      name: 'Curso',
+      unitAmount: 4900,
+      currency: 'eur',
+      currencyOptions: { mxn: 99_900, jpy: 7_900, cop: 22_900_000 },
+      metadata: {},
+    });
+    expect(prices[0]?.['currency_options']).toEqual({
+      mxn: { unit_amount: 99_900 },
+      jpy: { unit_amount: 7_900 },
+      cop: { unit_amount: 22_900_000 },
+    });
+  });
+});

@@ -2827,6 +2827,11 @@ model ModBillingProduct {
   /// Null = sin oferta: la ficha no pinta ni el tachado ni el porcentaje. Mismo
   /// patrón que `ModSubscriptionsPlan.compareAtCents`.
   compareAtAmount Int?     @map("compare_at_amount")
+  /// Precios fijos extra por mercado (`currency_options` de Stripe), en la
+  /// unidad mínima de cada moneda: { "mxn": 99900 }. NULL = sin ninguno (lo
+  /// normal: Adaptive Pricing ya enseña el precio en la moneda del alumno).
+  /// Inmutables en Stripe: cambiarlos crea un Price nuevo.
+  currencyOptions Json?    @map("currency_options")
   /// Nombre de la OPCIÓN de compra ("Curso", "Curso Intermedio", "Curso
   /// Avanzado"…). Un curso puede tener varias, igual que la membresía tiene
   /// varios planes; cadena vacía = la única opción (cursos con precio único).
@@ -3036,6 +3041,11 @@ model ModSubscriptionsPlan {
   currency        String   @default("eur")
   /// Precio "antes" tachado en céntimos (marketing). NULL = sin tachado.
   compareAtCents  Int?     @map("compare_at_cents")
+  /// Precios fijos extra por mercado (`currency_options` de Stripe), en la
+  /// unidad mínima de cada moneda: { "mxn": 99900 }. NULL = sin ninguno (lo
+  /// normal: Adaptive Pricing ya enseña el precio en la moneda del alumno).
+  /// Inmutables en Stripe: cambiarlos crea un Price nuevo.
+  currencyOptions Json?    @map("currency_options")
   /// Días de prueba gratis del checkout (0 = sin trial).
   trialDays       Int      @default(0) @map("trial_days")
   active          Boolean  @default(true)

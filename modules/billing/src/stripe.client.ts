@@ -93,6 +93,11 @@ export interface CreateOneOffPriceParams {
   /** Importe en la unidad mínima (céntimos). */
   unitAmount: number;
   currency: string;
+  /**
+   * Precios fijos extra por mercado (`currency_options`): moneda → importe en
+   * su unidad mínima. Inmutables en Stripe: cambiarlos exige un Price nuevo.
+   */
+  currencyOptions?: Readonly<Record<string, number>> | null;
   metadata: Record<string, string>;
 }
 
@@ -245,10 +250,18 @@ export class StripeSdkAdapter implements StripeAdapter {
             metadata: params.metadata,
           })
         ).id;
+      const currencyOptions = Object.entries(params.currencyOptions ?? {});
       const price = await this.client.prices.create({
         product: productId,
         unit_amount: params.unitAmount,
         currency: params.currency,
+        ...(currencyOptions.length
+          ? {
+              currency_options: Object.fromEntries(
+                currencyOptions.map(([code, amount]) => [code, { unit_amount: amount }]),
+              ),
+            }
+          : {}),
         metadata: params.metadata,
       });
       return {

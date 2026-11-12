@@ -29,7 +29,7 @@
  *  - Validación de input: lo hace el controller con zod.
  */
 
-import type { PrismaClient } from '@didacta/database';
+import { Prisma, type PrismaClient } from '@didacta/database';
 import type Stripe from 'stripe';
 import {
   OrderNotFoundError,
@@ -77,6 +77,12 @@ export interface CreateProductInput {
    */
   unitAmount?: number;
   currency?: string;
+  /**
+   * Precios fijos extra por mercado (`currency_options`, solo con `unitAmount`):
+   * moneda → importe en su unidad mínima. Sin esto, Adaptive Pricing ya enseña
+   * el precio convertido a la moneda del alumno.
+   */
+  currencyOptions?: Readonly<Record<string, number>> | null;
   /** Nombre visible en la pantalla de pago de Stripe (título del curso). */
   name?: string;
   /** Precio anterior (tachado) para la ficha de venta. Debe ser mayor que el real. */
@@ -299,6 +305,7 @@ export class BillingService {
         name: input.name?.trim() || 'Curso',
         unitAmount: input.unitAmount,
         currency: (input.currency ?? 'eur').toLowerCase(),
+        currencyOptions: normalizeCurrencyOptions(input.currencyOptions),
         metadata: {
           tenantId: input.tenantId,
           courseId: input.courseId,
@@ -314,6 +321,10 @@ export class BillingService {
         stripePriceId: price.id,
         unitAmount: price.unitAmount,
         currency: price.currency,
+        // Solo con importe nuestro: un `price_…` pegado trae los suyos de Stripe.
+        ...(!input.stripePriceId && normalizeCurrencyOptions(input.currencyOptions)
+          ? { currencyOptions: normalizeCurrencyOptions(input.currencyOptions)! }
+          : {}),
         // Solo tiene sentido si es MAYOR que el precio real: un "antes" más
         // barato que el "ahora" sería publicidad engañosa.
         compareAtAmount:
@@ -343,6 +354,11 @@ export class BillingService {
     courseId: string;
     unitAmount: number;
     currency?: string;
+    /**
+     * Precios fijos extra por mercado. `undefined` = se quedan los que hubiera;
+     * `null` o `{}` = sin ninguno. Cambiarlos crea un Price nuevo (inmutables).
+     */
+    currencyOptions?: Readonly<Record<string, number>> | null;
     compareAtAmount?: number | null;
     /** Titulo del curso: es lo que ve el comprador en la pantalla de pago. */
     name?: string;
@@ -376,6 +392,7 @@ export class BillingService {
         courseId: input.courseId,
         unitAmount: input.unitAmount,
         currency,
+        currencyOptions: input.currencyOptions,
         name: input.name,
         compareAtAmount: input.compareAtAmount ?? undefined,
         optionName,
@@ -390,8 +407,19 @@ export class BillingService {
       input.compareAtAmount && input.compareAtAmount > input.unitAmount
         ? input.compareAtAmount
         : null;
+    const opcionesAntes = normalizeCurrencyOptions(
+      existente.currencyOptions as Record<string, number> | null,
+    );
+    const opciones =
+      input.currencyOptions === undefined
+        ? opcionesAntes
+        : normalizeCurrencyOptions(input.currencyOptions);
+    // Los `currency_options` de un Price de Stripe no se pueden editar: si
+    // cambian, hace falta un Price nuevo igual que si cambia el importe.
     const mismoImporte =
-      existente.unitAmount === input.unitAmount && existente.currency === currency;
+      existente.unitAmount === input.unitAmount &&
+      existente.currency === currency &&
+      JSON.stringify(opcionesAntes) === JSON.stringify(opciones);
     const mismaPresentacion =
       existente.name === optionName &&
       existente.sortOrder === (input.sortOrder ?? existente.sortOrder) &&
@@ -416,6 +444,7 @@ export class BillingService {
         productId: existente.stripeProductId,
         unitAmount: input.unitAmount,
         currency,
+        currencyOptions: opciones,
         metadata: {
           tenantId: input.tenantId,
           courseId: input.courseId,
@@ -433,6 +462,7 @@ export class BillingService {
         stripeProductId,
         unitAmount: input.unitAmount,
         currency,
+        currencyOptions: opciones ?? Prisma.DbNull,
         compareAtAmount: compareAt,
         name: optionName,
         sortOrder: input.sortOrder ?? existente.sortOrder,
@@ -450,7 +480,7 @@ export class BillingService {
     });
     if (!product) throw new ProductNotFoundError(input.productId);
 
-    const data: Partial<BillingProductRow> = {};
+    const data: Prisma.ModBillingProductUncheckedUpdateInput = {};
     if (typeof input.patch.active === 'boolean') {
       data.active = input.patch.active;
     }
@@ -464,6 +494,8 @@ export class BillingService {
       data.stripeProductId = price.productId;
       data.unitAmount = price.unitAmount;
       data.currency = price.currency;
+      // Un `price_…` pegado trae sus propios precios por mercado (o ninguno).
+      data.currencyOptions = Prisma.DbNull;
     }
     return this.prisma.modBillingProduct.update({
       where: { id: product.id },
@@ -523,6 +555,9 @@ export class BillingService {
         name,
         unitAmount: producto.unitAmount,
         currency: producto.currency,
+        currencyOptions: normalizeCurrencyOptions(
+          producto.currencyOptions as Record<string, number> | null,
+        ),
         metadata: {
           tenantId,
           courseId: producto.courseId,
@@ -1139,4 +1174,18 @@ function cryptoRandomId(): string {
 function isUniqueViolation(err: unknown): boolean {
   if ((err as { code?: string } | null)?.code === 'P2002') return true;
   return ((err as Error | null)?.message ?? '').includes('Unique constraint');
+}
+
+/**
+ * Precios extra por mercado normalizados (moneda en minúsculas, ordenadas) o
+ * `null` si no hay ninguno: dos mapas iguales dan el mismo JSON, y así se sabe
+ * si hace falta un Price nuevo.
+ */
+export function normalizeCurrencyOptions(
+  options: Readonly<Record<string, number>> | null | undefined,
+): Record<string, number> | null {
+  const entries = Object.entries(options ?? {})
+    .map(([code, amount]) => [code.toLowerCase(), amount] as const)
+    .sort(([a], [b]) => a.localeCompare(b));
+  return entries.length ? Object.fromEntries(entries) : null;
 }

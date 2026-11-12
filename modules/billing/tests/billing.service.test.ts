@@ -279,12 +279,14 @@ class MockStripe implements StripeAdapter {
     productId?: string;
     unitAmount: number;
     currency: string;
+    currencyOptions?: Readonly<Record<string, number>> | null;
     metadata: Record<string, string>;
   }) {
     this.lastOneOffPrice = {
       name: params.name,
       unitAmount: params.unitAmount,
       currency: params.currency,
+      currencyOptions: params.currencyOptions ?? null,
     };
     this.sessionCounter += 1;
     const created = {
@@ -543,6 +545,92 @@ describe('BillingService — alta de producto por importe y URLs por petición',
     // Price nuevo, pero MISMO Product de Stripe: no se duplican productos.
     expect(tercera.product.stripePriceId).not.toBe(priceInicial);
     expect(tercera.product.stripeProductId).toBe(productStripe);
+  });
+
+  it('precios por mercado: se guardan, viajan a Stripe y cambiarlos crea un Price nuevo en el MISMO Product', async () => {
+    const primera = await svc.upsertCoursePrice({
+      tenantId: 't1',
+      courseId: 'course-1',
+      unitAmount: 4900,
+      currency: 'eur',
+      currencyOptions: { MXN: 99_900 },
+      name: 'Curso multidivisa',
+    });
+    expect(primera.accion).toBe('creado');
+    expect(primera.product.currencyOptions).toEqual({ mxn: 99_900 });
+    expect(stripe.lastOneOffPrice?.currencyOptions).toEqual({ mxn: 99_900 });
+    const price1 = String(primera.product.stripePriceId);
+    const product1 = String(primera.product.stripeProductId);
+
+    // Mismo mapa con otro orden y mayúsculas: no se toca Stripe.
+    const igual = await svc.upsertCoursePrice({
+      tenantId: 't1',
+      courseId: 'course-1',
+      unitAmount: 4900,
+      currency: 'eur',
+      currencyOptions: { mxn: 99_900 },
+      name: 'Curso multidivisa',
+    });
+    expect(igual.accion).toBe('sin-cambios');
+
+    // Sin decir nada de los precios por mercado: se quedan.
+    const sinTocar = await svc.upsertCoursePrice({
+      tenantId: 't1',
+      courseId: 'course-1',
+      unitAmount: 4900,
+      currency: 'eur',
+      name: 'Curso multidivisa',
+    });
+    expect(sinTocar.accion).toBe('sin-cambios');
+
+    // Mismo importe, otro precio en MXN: Stripe no deja editarlo → Price nuevo.
+    const cambio = await svc.upsertCoursePrice({
+      tenantId: 't1',
+      courseId: 'course-1',
+      unitAmount: 4900,
+      currency: 'eur',
+      currencyOptions: { mxn: 89_900, cop: 22_900_000 },
+      name: 'Curso multidivisa',
+    });
+    expect(cambio.accion).toBe('actualizado');
+    expect(cambio.product.stripePriceId).not.toBe(price1);
+    expect(cambio.product.stripeProductId).toBe(product1);
+    expect(cambio.product.currencyOptions).toEqual({ cop: 22_900_000, mxn: 89_900 });
+
+    // Quitarlos todos también es un Price nuevo, sin currency_options.
+    const quitar = await svc.upsertCoursePrice({
+      tenantId: 't1',
+      courseId: 'course-1',
+      unitAmount: 4900,
+      currency: 'eur',
+      currencyOptions: null,
+      name: 'Curso multidivisa',
+    });
+    expect(quitar.accion).toBe('actualizado');
+    expect(stripe.lastOneOffPrice?.currencyOptions).toBeNull();
+  });
+
+  it('cambiar de moneda (EUR → CHF) rota el Price y mantiene el Product', async () => {
+    const eur = await svc.upsertCoursePrice({
+      tenantId: 't1',
+      courseId: 'course-1',
+      unitAmount: 4900,
+      currency: 'eur',
+      name: 'Curso',
+    });
+    const product = String(eur.product.stripeProductId);
+    const price = String(eur.product.stripePriceId);
+    const chf = await svc.upsertCoursePrice({
+      tenantId: 't1',
+      courseId: 'course-1',
+      unitAmount: 10_000,
+      currency: 'CHF',
+      name: 'Curso',
+    });
+    expect(chf.accion).toBe('actualizado');
+    expect([chf.product.unitAmount, chf.product.currency]).toEqual([10_000, 'chf']);
+    expect(chf.product.stripeProductId).toBe(product);
+    expect(chf.product.stripePriceId).not.toBe(price);
   });
 
   it('un curso puede tener VARIAS opciones de compra y el checkout cobra la elegida', async () => {
@@ -1803,6 +1891,8 @@ describe('BillingService — resyncStripeCatalog (el tenant cambia de cuenta de 
       name: 'Test product',
       unitAmount: 4900,
       currency: 'eur',
+      // Sin precios por mercado guardados, el Price nuevo tampoco los lleva.
+      currencyOptions: null,
     });
     expect(fila.unitAmount).toBe(4900);
     expect(fila.currency).toBe('eur');
