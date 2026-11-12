@@ -88,6 +88,7 @@ describe('AdminStripeController', () => {
         verifiedByUserId: null,
         hasTenantConfig: false,
         hasGlobalFallback: false,
+        globalFallbackBlocked: false,
       });
     });
 
@@ -97,6 +98,35 @@ describe('AdminStripeController', () => {
       const dto = await controller.getCurrent(ADMIN_USER as never);
       expect(dto.hasTenantConfig).toBe(false);
       expect(dto.hasGlobalFallback).toBe(true);
+      expect(dto.globalFallbackBlocked).toBe(false);
+    });
+
+    /**
+     * Servidor con varias aulas y cuenta de Stripe de instancia: el aula sin
+     * credenciales propias ya no la hereda. El panel tiene que poder decirle
+     * «no estás cobrando y por qué», no un «sin configurar» genérico.
+     */
+    it('globalFallbackBlocked=true cuando hay cuenta de instancia pero la política no deja heredarla', async () => {
+      process.env['STRIPE_SECRET_KEY'] = 'sk_test_global';
+      process.env['STRIPE_WEBHOOK_SECRET'] = 'whsec_global';
+      const blocked = new AdminStripeController(
+        factory as never,
+        new TenantStripeResolverService(configStub as never, async () => ({
+          allowed: false,
+          reason: 'multiple-tenants',
+          tenants: 2,
+        })),
+      );
+
+      const dto = await blocked.getCurrent(ADMIN_USER as never);
+
+      expect(dto.hasGlobalFallback).toBe(false);
+      expect(dto.globalFallbackBlocked).toBe(true);
+
+      // En cuanto el aula guarda lo suyo, deja de estar bloqueada.
+      const saved = await blocked.upsert(ADMIN_USER as never, VALID_BODY);
+      expect(saved.hasTenantConfig).toBe(true);
+      expect(saved.globalFallbackBlocked).toBe(false);
     });
   });
 

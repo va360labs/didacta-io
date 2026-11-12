@@ -15,6 +15,7 @@ import { LICENSE_CAPABILITIES, LicenseService } from '@didacta/license-sdk';
 import { type AdminActor, auditActorId, auditActorTrace } from '../auth/admin-actor';
 import type { ClientContext } from '../auth/client-context';
 import { PasswordResetService } from '../auth/password-reset.service';
+import { TenantStripeResolverService } from '../modules/tenant-stripe-resolver.service';
 import { PrismaAuditLogService } from '../modules/prisma-audit-log.service';
 import { PrismaService } from '../prisma/prisma.service';
 import type { GateState } from '../tenancy/subscription-gate';
@@ -122,6 +123,9 @@ export class AdminTenantsService {
     // Opcional para que los tests que montan el servicio a mano no tengan que
     // traerlo; en la app siempre está (TenancyModule es global).
     @Optional() private readonly subscriptionGate?: SubscriptionGateService,
+    // Para avisar de que la cuenta de Stripe de instancia deja de heredarse al
+    // pasar de una aula a varias. Opcional por lo mismo que el anterior.
+    @Optional() private readonly stripeResolver?: TenantStripeResolverService,
   ) {}
 
   /**
@@ -413,6 +417,11 @@ export class AdminTenantsService {
       ip: ctx.ip ?? undefined,
       userAgent: ctx.userAgent ?? undefined,
     });
+
+    // Con una segunda aula, la cuenta de Stripe de instancia deja de heredarse
+    // por defecto y la PRIMERA deja de cobrar. Que quede dicho en el log en el
+    // momento en que pasa, no cuando un alumno no pueda pagar.
+    await this.stripeResolver?.reportGlobalFallback('tenant-created').catch(() => undefined);
 
     // Email de bienvenida al tenant_admin para definir su contraseña.
     try {

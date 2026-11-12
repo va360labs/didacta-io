@@ -368,6 +368,9 @@ export class ModuleRegistryService implements OnModuleInit {
         this.factory.getPrisma() as unknown as GlobalFallbackPolicyStore,
       ),
     );
+    // Aviso de arranque: si hay cuenta de instancia y varias aulas (el fallback
+    // está apagado por defecto), o una sola (se apagará al crear la segunda).
+    void this.stripeResolver.reportGlobalFallback('startup');
     // OJO con `??`: la plantilla del .env declara `STRIPE_WEBHOOK_SECRET=` y un
     // env_file convierte eso en CADENA VACÍA, no en undefined — con `??` el
     // respaldo no entraría. Por eso `||` sobre el valor ya recortado.

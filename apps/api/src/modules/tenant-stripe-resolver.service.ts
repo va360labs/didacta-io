@@ -39,7 +39,24 @@ export interface ResolvedStripeCredentials {
  * `ModuleRegistryService` y con una factory en `AuthModule`. Las dos lo montan
  * con `buildGlobalFallbackFlagReader`, que es donde vive la política.
  */
-export type GlobalFallbackFlagReader = () => Promise<boolean>;
+export type GlobalFallbackFlagReader = () => Promise<boolean | GlobalFallbackDecision>;
+
+/**
+ * La decisión y POR QUÉ. El porqué es lo que permite avisar del único caso que
+ * nadie ha decidido: que el valor por defecto se apague solo al crear la
+ * segunda aula.
+ */
+export interface GlobalFallbackDecision {
+  allowed: boolean;
+  reason:
+    | 'instance-setting' // lo dice `billing.allowGlobalStripeFallback`
+    | 'env' // lo dice STRIPE_ALLOW_GLOBAL_FALLBACK
+    | 'single-tenant' // por defecto: una sola aula
+    | 'multiple-tenants' // por defecto: varias aulas
+    | 'unknown'; // lector antiguo que solo devuelve un booleano
+  /** Aulas no archivadas, cuando la decisión salió del recuento. */
+  tenants?: number;
+}
 
 /** Subconjunto de Prisma que necesita la política del fallback global. */
 export interface GlobalFallbackPolicyStore {
@@ -82,20 +99,24 @@ export function buildGlobalFallbackFlagReader(
   store: GlobalFallbackPolicyStore,
   env: NodeJS.ProcessEnv = process.env,
 ): GlobalFallbackFlagReader {
-  return async () => {
+  return async (): Promise<GlobalFallbackDecision> => {
     const row = await store.instanceSetting.findUnique({
       where: { scope_key: { scope: 'billing', key: 'allowGlobalStripeFallback' } },
     });
-    if (row?.valueJson === true || row?.valueJson === false) return row.valueJson;
+    if (row?.valueJson === true || row?.valueJson === false) {
+      return { allowed: row.valueJson, reason: 'instance-setting' };
+    }
 
     const fromEnv = env[STRIPE_ALLOW_GLOBAL_FALLBACK_ENV]?.trim().toLowerCase();
-    if (fromEnv === 'true' || fromEnv === '1') return true;
-    if (fromEnv === 'false' || fromEnv === '0') return false;
+    if (fromEnv === 'true' || fromEnv === '1') return { allowed: true, reason: 'env' };
+    if (fromEnv === 'false' || fromEnv === '0') return { allowed: false, reason: 'env' };
 
-    const aulas = await store.tenant.count({
+    const tenants = await store.tenant.count({
       where: { status: { not: 'ARCHIVED' }, deletedAt: null },
     });
-    return aulas <= 1;
+    return tenants <= 1
+      ? { allowed: true, reason: 'single-tenant', tenants }
+      : { allowed: false, reason: 'multiple-tenants', tenants };
   };
 }
 
@@ -128,7 +149,7 @@ const FLAG_CACHE_MS = 60_000;
 export class TenantStripeResolverService {
   private readonly logger = new Logger(TenantStripeResolverService.name);
 
-  private flagCache?: { value: boolean; expiresAt: number };
+  private flagCache?: { value: GlobalFallbackDecision; expiresAt: number };
 
   constructor(
     private readonly tenantConfig: TenantConfigService,
@@ -168,14 +189,22 @@ export class TenantStripeResolverService {
    * equivocada, no. El fallo no se cachea: la siguiente llamada vuelve a leer.
    */
   private async globalFallbackAllowed(): Promise<boolean> {
-    if (!this.readGlobalFallbackFlag) return true;
+    return (await this.globalFallbackDecision()).allowed;
+  }
+
+  private async globalFallbackDecision(): Promise<GlobalFallbackDecision> {
+    if (!this.readGlobalFallbackFlag) return { allowed: true, reason: 'unknown' };
 
     const now = Date.now();
     if (this.flagCache && this.flagCache.expiresAt > now) return this.flagCache.value;
 
     try {
-      const value = await this.readGlobalFallbackFlag();
+      const read = await this.readGlobalFallbackFlag();
+      const value: GlobalFallbackDecision =
+        typeof read === 'boolean' ? { allowed: read, reason: 'unknown' } : read;
+      const previous = this.flagCache?.value;
       this.flagCache = { value, expiresAt: now + FLAG_CACHE_MS };
+      if (previous && previous.allowed !== value.allowed) this.reportChange(previous, value);
       return value;
     } catch (err) {
       const stale = this.flagCache?.value;
@@ -184,9 +213,85 @@ export class TenantStripeResolverService {
           `${(err as Error).message.slice(0, 200)}. ` +
           (stale === undefined
             ? 'Sin valor previo: NO se hereda la cuenta de instancia.'
-            : `Se mantiene el último valor conocido (${stale ? 'permitido' : 'no permitido'}).`),
+            : `Se mantiene el último valor conocido (${stale.allowed ? 'permitido' : 'no permitido'}).`),
       );
-      return stale ?? false;
+      return stale ?? { allowed: false, reason: 'unknown' };
+    }
+  }
+
+  /**
+   * Estado del fallback de instancia para quien tenga que contarlo (el panel de
+   * pagos, el arranque): si hay cuenta de instancia y si las aulas sin Stripe
+   * propio la heredan.
+   */
+  async describeGlobalFallback(): Promise<
+    GlobalFallbackDecision & { instanceCredentials: boolean }
+  > {
+    return {
+      ...(await this.globalFallbackDecision()),
+      instanceCredentials: this.readGlobalConfig() !== null,
+    };
+  }
+
+  /**
+   * Deja en el log, bien visible, el estado del fallback cuando hay algo que
+   * decir. Se llama al arrancar y justo después de crear un aula.
+   *
+   * Lo que se quiere evitar es el corte SILENCIOSO: una instalación de una
+   * sola aula que cobra con las `STRIPE_*` de instancia y a la que le crean una
+   * segunda. El valor por defecto se apaga —es lo seguro: nadie ha dicho que
+   * las dos aulas sean del mismo dueño— y la PRIMERA deja de cobrar. Eso no
+   * puede enterarse nadie por un cliente que no pudo pagar.
+   */
+  async reportGlobalFallback(when: 'startup' | 'tenant-created'): Promise<void> {
+    if (when === 'tenant-created') this.invalidateGlobalFallbackFlag();
+    let state: Awaited<ReturnType<TenantStripeResolverService['describeGlobalFallback']>>;
+    try {
+      state = await this.describeGlobalFallback();
+    } catch {
+      return;
+    }
+    // Sin cuenta de instancia no hay nada que heredar ni que cortar.
+    if (!state.instanceCredentials) return;
+
+    if (!state.allowed && state.reason === 'multiple-tenants') {
+      this.logger.error(
+        `[stripe-resolver] COBROS: esta instancia tiene ${state.tenants ?? 'varias'} aulas y una cuenta de Stripe de instancia ` +
+          `(STRIPE_SECRET_KEY). Con más de un aula la cuenta de instancia YA NO se hereda por defecto: las aulas que no ` +
+          `tengan Stripe propio en Administración → Pagos NO PUEDEN COBRAR (el checkout responde 503 y su webhook 401). ` +
+          `Si todas las aulas son del mismo dueño y deben cobrar con esa cuenta, define ${STRIPE_ALLOW_GLOBAL_FALLBACK_ENV}=true ` +
+          `y reinicia. Si no, cada aula tiene que configurar la suya.`,
+      );
+      return;
+    }
+    if (state.allowed && state.reason === 'single-tenant' && when === 'startup') {
+      this.logger.warn(
+        `[stripe-resolver] El aula cobra con la cuenta de Stripe de instancia (STRIPE_SECRET_KEY) porque es la única. ` +
+          `Si se crea una segunda aula dejará de heredarse por defecto y ESTA dejará de cobrar: antes de crearla, ` +
+          `guarda las credenciales en Administración → Pagos o define ${STRIPE_ALLOW_GLOBAL_FALLBACK_ENV}=true.`,
+      );
+    }
+  }
+
+  /** El valor efectivo ha cambiado mientras la aplicación estaba en marcha. */
+  private reportChange(previous: GlobalFallbackDecision, current: GlobalFallbackDecision): void {
+    if (this.readGlobalConfig() === null) return;
+    const why =
+      current.reason === 'multiple-tenants'
+        ? `ahora hay ${current.tenants ?? 'varias'} aulas`
+        : current.reason === 'single-tenant'
+          ? 'vuelve a haber una sola aula'
+          : `lo dice ${current.reason === 'env' ? STRIPE_ALLOW_GLOBAL_FALLBACK_ENV : 'el ajuste de instancia billing.allowGlobalStripeFallback'}`;
+    if (!current.allowed) {
+      this.logger.error(
+        `[stripe-resolver] COBROS: la cuenta de Stripe de instancia HA DEJADO de heredarse (${why}; antes: ${previous.reason}). ` +
+          `Las aulas sin Stripe propio ya NO PUEDEN COBRAR. Si deben seguir cobrando con la cuenta de instancia, ` +
+          `define ${STRIPE_ALLOW_GLOBAL_FALLBACK_ENV}=true y reinicia.`,
+      );
+    } else {
+      this.logger.warn(
+        `[stripe-resolver] La cuenta de Stripe de instancia vuelve a heredarse (${why}): las aulas sin Stripe propio cobran con ella.`,
+      );
     }
   }
 

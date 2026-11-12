@@ -1,4 +1,5 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { Logger } from '@nestjs/common';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   TenantStripeResolverService,
   buildGlobalFallbackFlagReader,
@@ -331,17 +332,25 @@ describe('TenantStripeResolverService', () => {
 
     it('UNA sola aula y nadie ha dicho nada → permitido (la edición Community no cambia)', async () => {
       const { s } = store({ aulas: 1 });
-      expect(await buildGlobalFallbackFlagReader(s, {})()).toBe(true);
+      expect(await buildGlobalFallbackFlagReader(s, {})()).toEqual({
+        allowed: true,
+        reason: 'single-tenant',
+        tenants: 1,
+      });
     });
 
     it('instancia recién creada, aún sin aulas → permitido', async () => {
       const { s } = store({ aulas: 0 });
-      expect(await buildGlobalFallbackFlagReader(s, {})()).toBe(true);
+      expect(await buildGlobalFallbackFlagReader(s, {})()).toMatchObject({ allowed: true });
     });
 
     it('VARIAS aulas y nadie ha dicho nada → NO permitido', async () => {
       const { s, calls } = store({ aulas: 2 });
-      expect(await buildGlobalFallbackFlagReader(s, {})()).toBe(false);
+      expect(await buildGlobalFallbackFlagReader(s, {})()).toEqual({
+        allowed: false,
+        reason: 'multiple-tenants',
+        tenants: 2,
+      });
       // Las archivadas no cuentan: un aula dada de baja no convierte la
       // instancia en multi-aula.
       expect(calls.where).toEqual({ status: { not: 'ARCHIVED' }, deletedAt: null });
@@ -350,14 +359,20 @@ describe('TenantStripeResolverService', () => {
     it('VARIAS aulas con STRIPE_ALLOW_GLOBAL_FALLBACK=true → permitido (mismo dueño, decisión explícita)', async () => {
       const { s, calls } = store({ aulas: 5 });
       const env = { STRIPE_ALLOW_GLOBAL_FALLBACK: ' TRUE ' };
-      expect(await buildGlobalFallbackFlagReader(s, env)()).toBe(true);
+      expect(await buildGlobalFallbackFlagReader(s, env)()).toEqual({
+        allowed: true,
+        reason: 'env',
+      });
       expect(calls.count).toBe(0);
     });
 
     it('UNA aula con STRIPE_ALLOW_GLOBAL_FALLBACK=false → NO permitido', async () => {
       const { s } = store({ aulas: 1 });
       const env = { STRIPE_ALLOW_GLOBAL_FALLBACK: 'false' };
-      expect(await buildGlobalFallbackFlagReader(s, env)()).toBe(false);
+      expect(await buildGlobalFallbackFlagReader(s, env)()).toEqual({
+        allowed: false,
+        reason: 'env',
+      });
     });
 
     it('el setting de instancia manda sobre la variable y sobre el recuento', async () => {
@@ -366,20 +381,23 @@ describe('TenantStripeResolverService', () => {
         await buildGlobalFallbackFlagReader(permitido.s, {
           STRIPE_ALLOW_GLOBAL_FALLBACK: 'false',
         })(),
-      ).toBe(true);
+      ).toEqual({ allowed: true, reason: 'instance-setting' });
 
       const prohibido = store({ setting: false, aulas: 1 });
       expect(
         await buildGlobalFallbackFlagReader(prohibido.s, {
           STRIPE_ALLOW_GLOBAL_FALLBACK: 'true',
         })(),
-      ).toBe(false);
+      ).toEqual({ allowed: false, reason: 'instance-setting' });
     });
 
     it('un setting que no es booleano o una variable ilegible no deciden nada: se cae al recuento', async () => {
       const { s } = store({ setting: 'sí', aulas: 3 });
       const env = { STRIPE_ALLOW_GLOBAL_FALLBACK: 'quizá' };
-      expect(await buildGlobalFallbackFlagReader(s, env)()).toBe(false);
+      expect(await buildGlobalFallbackFlagReader(s, env)()).toMatchObject({
+        allowed: false,
+        reason: 'multiple-tenants',
+      });
     });
 
     it('integrado con el resolutor: en un servidor con dos aulas, la que no tiene Stripe NO hereda el de instancia', async () => {
@@ -404,6 +422,130 @@ describe('TenantStripeResolverService', () => {
         buildGlobalFallbackFlagReader(store({ aulas: 1 }).s, {}),
       );
       expect(((await single.resolve(TENANT_B)) as ResolvedStripeCredentials).source).toBe('global');
+    });
+  });
+
+  /**
+   * El valor por defecto se apaga SOLO al crear la segunda aula: es lo seguro
+   * (nadie ha dicho que las dos sean del mismo dueño), pero la primera deja de
+   * cobrar. Eso no puede enterarse nadie por un alumno que no pudo pagar: se
+   * dice en el log, bien alto, al arrancar, al crear el aula y en el momento en
+   * que el valor efectivo cambia.
+   */
+  describe('el corte del fallback no es silencioso', () => {
+    let errorLog: ReturnType<typeof vi.spyOn>;
+    let warnLog: ReturnType<typeof vi.spyOn>;
+
+    beforeEach(() => {
+      process.env['STRIPE_SECRET_KEY'] = 'sk_test_global';
+      process.env['STRIPE_WEBHOOK_SECRET'] = 'whsec_global';
+      errorLog = vi.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
+      warnLog = vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+    });
+
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    /** Un recuento de aulas que se puede cambiar en caliente. */
+    function instancia(aulas: number) {
+      const estado = { aulas };
+      const store: GlobalFallbackPolicyStore = {
+        instanceSetting: { findUnique: async () => null },
+        tenant: { count: async () => estado.aulas },
+      };
+      const r = new TenantStripeResolverService(
+        makeTenantConfig() as never,
+        buildGlobalFallbackFlagReader(store, {}),
+      );
+      return { r, estado };
+    }
+
+    it('al arrancar con VARIAS aulas y cuenta de instancia: error que dice qué pasa y qué definir', async () => {
+      const { r } = instancia(3);
+
+      await r.reportGlobalFallback('startup');
+
+      expect(errorLog).toHaveBeenCalledTimes(1);
+      const msg = String(errorLog.mock.calls[0]![0]);
+      expect(msg).toContain('COBROS');
+      expect(msg).toContain('3 aulas');
+      expect(msg).toContain('NO PUEDEN COBRAR');
+      expect(msg).toContain('STRIPE_ALLOW_GLOBAL_FALLBACK=true');
+    });
+
+    it('al arrancar con UNA aula: aviso de que crear la segunda cortará sus cobros', async () => {
+      const { r } = instancia(1);
+
+      await r.reportGlobalFallback('startup');
+
+      expect(errorLog).not.toHaveBeenCalled();
+      expect(warnLog).toHaveBeenCalledTimes(1);
+      expect(String(warnLog.mock.calls[0]![0])).toContain('segunda aula');
+    });
+
+    it('al CREAR la segunda aula: se reevalúa al momento (sin esperar al cache) y sale el error', async () => {
+      const { r, estado } = instancia(1);
+      // La instancia venía cobrando con la cuenta de instancia.
+      expect(((await r.resolve(TENANT_B)) as ResolvedStripeCredentials).source).toBe('global');
+
+      estado.aulas = 2;
+      await r.reportGlobalFallback('tenant-created');
+
+      expect(errorLog).toHaveBeenCalled();
+      expect(errorLog.mock.calls.map((c) => String(c[0])).join(' ')).toContain('NO PUEDEN COBRAR');
+      // Y desde ese momento ya no se hereda.
+      expect(await r.resolve(TENANT_B)).toBeNull();
+    });
+
+    it('si el valor cambia en marcha (cache caducado), el propio cambio se registra como error', async () => {
+      const { r, estado } = instancia(1);
+      await r.resolve(TENANT_B);
+      expect(errorLog).not.toHaveBeenCalled();
+
+      estado.aulas = 2;
+      (r as unknown as { flagCache: { expiresAt: number } }).flagCache.expiresAt = 0;
+      expect(await r.resolve(TENANT_B)).toBeNull();
+
+      expect(errorLog).toHaveBeenCalledTimes(1);
+      expect(String(errorLog.mock.calls[0]![0])).toContain('HA DEJADO de heredarse');
+    });
+
+    it('con la decisión explícita del operador no hay nada que avisar', async () => {
+      const store: GlobalFallbackPolicyStore = {
+        instanceSetting: { findUnique: async () => null },
+        tenant: { count: async () => 5 },
+      };
+      const r = new TenantStripeResolverService(
+        makeTenantConfig() as never,
+        buildGlobalFallbackFlagReader(store, { STRIPE_ALLOW_GLOBAL_FALLBACK: 'true' }),
+      );
+
+      await r.reportGlobalFallback('startup');
+
+      expect(errorLog).not.toHaveBeenCalled();
+      expect(warnLog).not.toHaveBeenCalled();
+    });
+
+    it('sin cuenta de instancia no hay nada que heredar ni que avisar', async () => {
+      delete process.env['STRIPE_SECRET_KEY'];
+      const { r } = instancia(3);
+
+      await r.reportGlobalFallback('startup');
+
+      expect(errorLog).not.toHaveBeenCalled();
+      expect(warnLog).not.toHaveBeenCalled();
+    });
+
+    it('describeGlobalFallback: lo que necesita el panel de pagos', async () => {
+      expect(await instancia(2).r.describeGlobalFallback()).toEqual({
+        allowed: false,
+        reason: 'multiple-tenants',
+        tenants: 2,
+        instanceCredentials: true,
+      });
+      delete process.env['STRIPE_SECRET_KEY'];
+      expect((await instancia(2).r.describeGlobalFallback()).instanceCredentials).toBe(false);
     });
   });
 });

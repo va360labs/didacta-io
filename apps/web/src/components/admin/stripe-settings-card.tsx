@@ -356,7 +356,7 @@ export function StripeSettingsCard({
 
 /**
  * Banner superior con el estado actual de Stripe. Se renderiza siempre, con
- * uno de 4 estilos según `deriveStripeStatus(dto)`.
+ * uno de 5 estilos según `deriveStripeStatus(dto)`.
  */
 export function StripeStatusBanner({ dto }: { dto: AdminStripeDto }): React.JSX.Element {
   const t = useTranslations('adminPagos');
@@ -412,6 +412,19 @@ export function StripeStatusBanner({ dto }: { dto: AdminStripeDto }): React.JSX.
       >
         <span aria-hidden="true">●</span>
         <span>{t('stripe.fallbackBanner')}</span>
+      </div>
+    );
+  }
+
+  if (status === 'fallback-blocked') {
+    return (
+      <div
+        role="alert"
+        data-testid="stripe-banner-fallback-blocked"
+        className="flex items-center gap-2 rounded-lg border border-danger-100 bg-danger-50 px-3 py-2 text-sm text-danger-700"
+      >
+        <span aria-hidden="true">●</span>
+        <span>{t('stripe.fallbackBlockedBanner')}</span>
       </div>
     );
   }

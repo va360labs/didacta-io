@@ -299,6 +299,7 @@
     "verifiedBanner": "{mode, select, live {<strong>Verified</strong> on {date} (LIVE mode).} test {<strong>Verified</strong> on {date} (test mode).} other {<strong>Verified</strong> on {date}.}}",
     "unverifiedBanner": "Configured but not verified — use the <em>Test connection</em> button to confirm the keys are valid.",
     "fallbackBanner": "Using the host global Stripe (fallback). If you want to charge into your own account, save a tenant configuration.",
+    "fallbackBlockedBanner": "This academy is NOT taking payments. The server has a shared Stripe account, but with several academies it is no longer used automatically. Save your own Stripe credentials here, or ask whoever runs the server to allow the shared account (STRIPE_ALLOW_GLOBAL_FALLBACK=true).",
     "noneBanner": "Stripe is not configured — one-off course sales and subscriptions/membership do not work."
   },
   "alerts": {
