@@ -107,7 +107,7 @@
   "empieza": {
     "titulo": "Tu academia está casi lista para vender",
     "tituloListo": "Tu academia ya está a la venta",
-    "sub": "Te quedan {n, plural, one {# paso} other {# pasos}}.",
+    "sub": "{n, plural, one {Te queda # paso.} other {Te quedan # pasos.}}",
     "progresoAria": "{done} de {total} pasos hechos",
     "cambiar": "Cambiar",
     "editar": "Editar",
