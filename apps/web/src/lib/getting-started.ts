@@ -39,6 +39,13 @@ export interface ChecklistInputs {
   /** `hasSecretKey` del DTO de Stripe. */
   stripeConfigured: boolean | null;
   progress: OnboardingProgress | null;
+  /**
+   * Cobros de plataforma (Didacta Cloud): `ready` de `GET /modules/payouts/status`
+   * si el aula cobra por la plataforma; `null`/ausente en cualquier otro caso.
+   * Con él, «cobros» es conectar los cobros (no pegar claves) y el correo no se
+   * reclama: sale de la plataforma.
+   */
+  platformPayoutsReady?: boolean | null;
 }
 
 /**
@@ -92,10 +99,26 @@ export function deriveChecklist(inputs: ChecklistInputs): ChecklistItem[] {
   // de Stripe: tiene una decisión tomada. El ítem se OMITE — pintarlo como
   // hecho sería mentir y dejarlo pendiente sería reclamar eternamente algo
   // que dijo que no quiere (feedback de Valen, 15-ago).
-  if (inputs.stripeConfigured !== null && !dijoQueNoVende(inputs)) {
+  const platform = typeof inputs.platformPayoutsReady === 'boolean';
+  if (platform) {
+    // Igual que con claves: quien dijo «No vendo cursos» (paso hecho sin
+    // cobros listos) no tiene un pendiente, tiene una decisión tomada.
+    const saidNoSales =
+      inputs.progress !== null &&
+      pasoHecho(inputs.progress, 'cobros') &&
+      inputs.platformPayoutsReady === false;
+    if (!saidNoSales) {
+      items.push({
+        key: 'cobros',
+        done: inputs.platformPayoutsReady === true,
+        href: '/admin/cobros',
+      });
+    }
+  } else if (inputs.stripeConfigured !== null && !dijoQueNoVende(inputs)) {
     items.push({ key: 'cobros', done: inputs.stripeConfigured, href: DESTINOS.cobros! });
   }
-  if (inputs.smtpStatus !== null) {
+  // Cobros de plataforma: el correo sale de la plataforma; no hay nada que reclamar.
+  if (inputs.smtpStatus !== null && !platform) {
     // `fallback` cuenta como hecho: el correo SALE (por el SMTP global del
     // despliegue). Reclamar aquí sería contradecir al banner del shell, que
     // solo avisa en `none` por el mismo motivo.

@@ -37,6 +37,7 @@ import {
   isChecklistComplete,
   type ChecklistItem,
 } from '@/lib/getting-started';
+import { payoutsApi } from '@/lib/payouts';
 import { themingApi } from '@/lib/theming';
 
 const ADMIN_ROLES = ['super_admin', 'tenant_admin'];
@@ -59,12 +60,14 @@ export function GettingStartedChecklist(): React.JSX.Element | null {
     void (async () => {
       // El progreso decide si la tarjeta aplica; el resto de fuentes solo
       // aportan ítems. Todas best-effort.
-      const [progress, academy, theme, smtp, stripe] = await Promise.all([
+      const [progress, academy, theme, smtp, stripe, payouts] = await Promise.all([
         onboardingApi.read().catch(() => null),
         academyApi.getMine(token).catch(() => null),
         themingApi.getMine(token).catch(() => null),
         adminSmtpApi.get().catch(() => null),
         adminStripeApi.get().catch(() => null),
+        // Cobros de plataforma (Cloud): conectar cobros en vez de pegar claves.
+        payoutsApi.status().catch(() => null),
       ]);
       if (cancelled) return;
       // Sin progreso legible o con el asistente a medias, no hay tarjeta.
@@ -77,6 +80,7 @@ export function GettingStartedChecklist(): React.JSX.Element | null {
           smtpStatus: smtp ? deriveSmtpStatus(smtp) : null,
           stripeConfigured: stripe ? stripe.hasSecretKey : null,
           progress,
+          platformPayoutsReady: payouts?.mode === 'platform' ? payouts.ready : null,
         }),
       );
     })();
