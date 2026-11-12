@@ -207,6 +207,8 @@ function seedPaidInvoice(opts: {
   presentment?: { amount: number; currency: string };
   billingReason?: string;
   status?: string;
+  /** Saldo a favor del cliente gastado en la factura (descuento por referidos). */
+  creditApplied?: number;
 }) {
   seq += 1;
   const tag = `${seq}x${randomUUID().replace(/-/g, '').slice(0, 10)}`;
@@ -238,6 +240,9 @@ function seedPaidInvoice(opts: {
     currency,
     livemode: false,
     billing_reason: opts.billingReason ?? 'subscription_cycle',
+    ...(opts.creditApplied
+      ? { starting_balance: -opts.creditApplied, ending_balance: 0 }
+      : { starting_balance: 0, ending_balance: 0 }),
     customer_email: 'alumna@example.com',
     on_behalf_of: onBehalfOf,
     parent: { type: 'subscription_details', subscription_details: { subscription: opts.sub } },
@@ -314,6 +319,80 @@ describe('ciclo de vida de la membresía', () => {
       force: true,
     });
     expect(settled).toMatchObject({ outcome: 'transferred', transferAmount: 2686 });
+  });
+
+  it('descuento por referidos: cuota 3000 con 600 de saldo a favor → el alumno paga 2400, el operador cobra el 5 % de 3000 (150) y el creador asume los 600', async () => {
+    registerSubscription(A, 'sub_1Descuento');
+    // Mismo cargo sin descuento como referencia: 3000 con 69 de Stripe.
+    const sinDescuento = seedPaidInvoice({ sub: 'sub_1Descuento', amount: 3000, fee: 69 });
+    const conDescuento = seedPaidInvoice({
+      sub: 'sub_1Descuento',
+      amount: 2400,
+      fee: 60,
+      creditApplied: 600,
+    });
+    const settled: Record<string, Obj> = {};
+    for (const [name, invoice] of [
+      ['sin', sinDescuento.invoice],
+      ['con', conDescuento.invoice],
+    ] as const) {
+      const recorded = await record(A, invoice);
+      expect(recorded.outcome).toBe('created');
+      await settlement.settleSale(A, (recorded as { saleId: string }).saleId, { force: true });
+      settled[name] = saleOf(recorded);
+    }
+    expect(settled['sin']).toMatchObject({
+      customerCreditApplied: 0,
+      gross: 3000,
+      feeBase: null,
+      platformFee: 150,
+      creatorNet: 2781,
+      transferAmount: 2781,
+    });
+    expect(settled['con']).toMatchObject({
+      customerCreditApplied: 600,
+      presentmentAmount: 2400,
+      gross: 2400,
+      feeBase: 3000,
+      platformFee: 150,
+      creatorNet: 2190,
+      transferAmount: 2190,
+      status: 'TRANSFERRED',
+    });
+    // El operador gana lo mismo con y sin descuento; el creador deja de
+    // recibir los 600 (menos los 9 que Stripe cobra de menos por un cargo menor).
+    expect(Number(settled['sin']!['platformFee'])).toBe(Number(settled['con']!['platformFee']));
+    expect(Number(settled['sin']!['creatorNet']) - Number(settled['con']!['creatorNet'])).toBe(
+      600 - 9,
+    );
+    // Libro: bruto − Stripe − operador = neto, también con descuento.
+    const entries = db.rows('modPayoutsLedgerEntry', { saleId: settled['con']!['id'] });
+    expect(entries.reduce((sum, e) => sum + Number(e['amount']), 0)).toBe(0);
+    expect(entries.find((e) => e['type'] === 'PLATFORM_FEE')?.['amount']).toBe(-150);
+  });
+
+  it('saldo a favor en otra divisa (Adaptive Pricing): la base se pasa a la de liquidación en proporción', async () => {
+    registerSubscription(A, 'sub_1DescuentoMxn');
+    // Factura en MXN: 60000 de cuota, 12000 de saldo a favor, 48000 pagados →
+    // 2400 eur de bruto. La base es 2400 × 60000 / 48000 = 3000.
+    const factura = seedPaidInvoice({
+      sub: 'sub_1DescuentoMxn',
+      amount: 2400,
+      fee: 60,
+      presentment: { amount: 48000, currency: 'mxn' },
+      creditApplied: 12000,
+    });
+    fake.patch(factura.invoice, { currency: 'mxn', amount_paid: 48000 });
+    const recorded = await record(A, factura.invoice);
+    await settlement.settleSale(A, (recorded as { saleId: string }).saleId, { force: true });
+    expect(saleOf(recorded)).toMatchObject({
+      presentmentCurrency: 'mxn',
+      customerCreditApplied: 12000,
+      gross: 2400,
+      currency: 'eur',
+      feeBase: 3000,
+      platformFee: 150,
+    });
   });
 
   it('sin producto legible, el concepto es la línea que redacta Stripe', async () => {

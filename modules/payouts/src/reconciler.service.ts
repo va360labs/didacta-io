@@ -616,6 +616,7 @@ export class PayoutsReconcilerService {
           gross: true,
           stripeFee: true,
           feeBpsApplied: true,
+          feeBase: true,
           platformFee: true,
           creatorNet: true,
           debtNetted: true,
@@ -685,9 +686,12 @@ export class PayoutsReconcilerService {
       if (net !== transfer + sale.debtNetted) problems.push(`neto ≠ transferencia + deuda`);
       if (
         sale.feeBpsApplied !== null &&
-        computePlatformFee(gross, sale.feeBpsApplied) !== platformFee
+        computePlatformFee(sale.feeBase ?? gross, sale.feeBpsApplied) !== platformFee
       ) {
         problems.push(`comisión del operador ≠ ${sale.feeBpsApplied} pb del bruto`);
+      }
+      if (sale.feeBase !== null && sale.feeBase < gross) {
+        problems.push(`base de la comisión (${sale.feeBase}) < bruto (${gross})`);
       }
       const types = bySale.get(sale.id) ?? new Map<string, number>();
       const expect = (type: string, value: number) => {

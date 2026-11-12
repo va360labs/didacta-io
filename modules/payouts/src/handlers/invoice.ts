@@ -95,6 +95,9 @@ interface InvoiceFromApi {
   readonly status?: string;
   readonly amount_paid?: number;
   readonly currency?: string;
+  /** Saldo del cliente antes y después de la factura (negativo = a su favor). */
+  readonly starting_balance?: number | null;
+  readonly ending_balance?: number | null;
   readonly livemode?: boolean;
   readonly customer_email?: string | null;
   readonly on_behalf_of?: unknown;
@@ -239,6 +242,11 @@ export async function recordInvoiceSale(
           currency: bt.currency.toLowerCase(),
         }
       : {};
+  const customerCreditApplied = creditAppliedInPresentment(
+    invoice,
+    presentmentAmount,
+    presentmentCurrency,
+  );
   const chargedAt = Number.isInteger(charge.created)
     ? new Date(charge.created! * 1000)
     : new Date();
@@ -268,6 +276,7 @@ export async function recordInvoiceSale(
           stripeInvoiceId: invoice.id,
           presentmentAmount,
           presentmentCurrency,
+          customerCreditApplied,
           ...settled,
           status: 'AWAITING_FEE',
           chargedAt,
@@ -289,6 +298,30 @@ export async function recordInvoiceSale(
       accountStatus: String(account.status),
     } as const;
   });
+}
+
+/**
+ * Saldo a favor del cliente que Stripe gastó en esta factura (el descuento por
+ * referidos): `ending_balance − starting_balance` cuando el saldo de partida
+ * era a favor (negativo), nunca más de lo que había. Va en la divisa de la
+ * factura; si el alumno pagó en otra, se pasa en la proporción de lo cobrado.
+ */
+export function creditAppliedInPresentment(
+  invoice: Pick<InvoiceFromApi, 'starting_balance' | 'ending_balance' | 'amount_paid' | 'currency'>,
+  presentmentAmount: number,
+  presentmentCurrency: string,
+): number {
+  const starting = invoice.starting_balance;
+  const ending = invoice.ending_balance;
+  if (!Number.isInteger(starting) || (starting ?? 0) >= 0) return 0;
+  if (!Number.isInteger(ending)) return 0;
+  const applied = Math.min(-starting!, ending! - starting!);
+  if (applied <= 0) return 0;
+  const invoiceCurrency = invoice.currency?.toLowerCase();
+  if (!invoiceCurrency || invoiceCurrency === presentmentCurrency) return applied;
+  const paid = invoice.amount_paid ?? 0;
+  if (paid <= 0) return 0;
+  return Math.round((applied * presentmentAmount) / paid);
 }
 
 /** El cargo del cobro, con su `balance_transaction` expandido. */

@@ -218,6 +218,27 @@ type AccountRow = Awaited<ReturnType<PayoutsTx['modPayoutsAccount']['findFirstOr
 
 const SILENT_LOGGER: PayoutsLogger = { warn: () => undefined };
 
+/**
+ * El saldo a favor que Stripe aplicó a la factura (descuento por referidos),
+ * pasado a la divisa de liquidación. Misma divisa → tal cual; si el alumno
+ * pagó en otra, en la proporción del cargo (`bruto × saldo / lo cobrado`), con
+ * el mismo redondeo que el resto del reparto.
+ */
+export function creditInSettlementCurrency(
+  sale: Pick<SaleRow, 'customerCreditApplied' | 'presentmentAmount' | 'presentmentCurrency'>,
+  gross: number,
+  settlementCurrency: string,
+): number {
+  const credit = sale.customerCreditApplied;
+  if (!credit || credit <= 0) return 0;
+  if (sale.presentmentCurrency.toLowerCase() === settlementCurrency.toLowerCase()) return credit;
+  if (sale.presentmentAmount <= 0) return 0;
+  return Number(
+    (BigInt(gross) * BigInt(credit) * 2n + BigInt(sale.presentmentAmount)) /
+      (2n * BigInt(sale.presentmentAmount)),
+  );
+}
+
 export class SettlementService {
   private readonly now: () => Date;
   private readonly logger: PayoutsLogger;
@@ -362,12 +383,16 @@ export class SettlementService {
     // Comisión sellada en un intento anterior, o la vigente del tenant.
     const feeBps = sale.feeBpsApplied ?? (await this.settings.get(tenantId)).feeBps;
     assertFeeBps(feeBps);
-    const split = computeSplit({ gross: bt.amount, stripeFee: bt.fee, feeBps });
+    // Descuento por referidos (saldo a favor del alumno): la comisión del
+    // operador va sobre la cuota entera; el descuento sale del neto del creador.
+    const feeBase = bt.amount + creditInSettlementCurrency(sale, bt.amount, bt.currency);
+    const split = computeSplit({ gross: bt.amount, stripeFee: bt.fee, feeBps, feeBase });
     const currency = bt.currency;
     const splitColumns = {
       gross: split.gross,
       stripeFee: split.stripeFee,
       feeBpsApplied: split.feeBpsApplied,
+      feeBase: feeBase === split.gross ? null : feeBase,
       platformFee: split.platformFee,
       creatorNet: split.creatorNet,
       currency,

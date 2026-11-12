@@ -436,3 +436,25 @@ describe('normalizeCurrency', () => {
     expect(() => normalizeCurrency(valor)).toThrow(PayoutsInvalidCurrencyError);
   });
 });
+
+describe('computeSplit — descuento por referidos (feeBase)', () => {
+  it('cuota 3000 con 600 de saldo a favor: el operador cobra el 5 % de 3000, no de 2400', () => {
+    expect(computeSplit({ gross: 2400, stripeFee: 60, feeBps: 500, feeBase: 3000 })).toEqual({
+      gross: 2400,
+      stripeFee: 60,
+      feeBpsApplied: 500,
+      platformFee: 150,
+      creatorNet: 2190,
+    });
+  });
+
+  it('sin feeBase, la base es el bruto (como siempre)', () => {
+    expect(computeSplit({ gross: 2400, stripeFee: 60, feeBps: 500 }).platformFee).toBe(120);
+  });
+
+  it('una base menor que el bruto es un error (el descuento nunca rebaja la comisión)', () => {
+    expect(() => computeSplit({ gross: 2400, stripeFee: 60, feeBps: 500, feeBase: 2000 })).toThrow(
+      /feeBase/,
+    );
+  });
+});

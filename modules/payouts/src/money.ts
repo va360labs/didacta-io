@@ -92,6 +92,13 @@ export interface ComputeSplitInput {
   readonly stripeFee: number;
   /** Comisión del operador en puntos básicos (500 = 5 %). */
   readonly feeBps: number;
+  /**
+   * Base de la comisión del operador si no es el bruto: el bruto más el saldo
+   * a favor que Stripe aplicó a la factura (descuento por referidos). Así el
+   * descuento sale del neto del creador y el operador cobra lo mismo que sin
+   * él. Nunca menor que el bruto.
+   */
+  readonly feeBase?: number;
 }
 
 export interface Split {
@@ -115,11 +122,20 @@ export interface Split {
  * La comisión del operador se calcula sobre el BRUTO, no sobre el neto de
  * Stripe: 100 € con 1,75 € de Stripe dejan 5,00 € al operador y 93,25 € al
  * creador.
+ *
+ * Con saldo a favor del alumno (`feeBase` > bruto): cuota de 30 € con 6 € de
+ * descuento → el alumno paga 24 €, el operador se queda el 5 % de 30 (1,50 €)
+ * y el creador 24 − Stripe − 1,50. El descuento lo paga el creador entero.
  */
 export function computeSplit(input: ComputeSplitInput): Split {
   assertMinorAmount(input.gross, 'gross');
   assertMinorAmount(input.stripeFee, 'stripeFee');
-  const platformFee = computePlatformFee(input.gross, input.feeBps);
+  const feeBase = input.feeBase ?? input.gross;
+  assertMinorAmount(feeBase, 'feeBase');
+  if (feeBase < input.gross) {
+    throw new PayoutsInvalidAmountError(`feeBase ${feeBase} < gross ${input.gross}`);
+  }
+  const platformFee = computePlatformFee(feeBase, input.feeBps);
   return {
     gross: input.gross,
     stripeFee: input.stripeFee,
