@@ -132,6 +132,7 @@ export function SimpleSettings() {
         <p className="mt-1 text-sm text-text-muted">{t('marcaAyuda')}</p>
         <div className="mt-4">
           <PasoMarca
+            compact
             academia={academia}
             theme={theme}
             hue={hue}

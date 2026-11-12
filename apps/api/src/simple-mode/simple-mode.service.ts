@@ -123,7 +123,6 @@ export class SimpleModeService {
     creator: { id: string },
     input: QuickStartInput,
   ): Promise<{ offer: OfferIntent }> {
-    const texts = textsFor(input.locale);
     const academyName = input.academyName.trim();
     const offerTitle = (input.title ?? '').trim() || academyName;
     await this.assertCurrency(tenantId, input.currency, input.amountCents);

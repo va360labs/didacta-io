@@ -56,6 +56,11 @@ interface Props {
   modo: LogoDisplayMode;
   onModo: (modo: LogoDisplayMode) => void;
   onTheme: (theme: TenantTheme) => void;
+  /**
+   * Sin título propio ni la pista de «Administración → Marca»: para cuando se
+   * pinta dentro de otra pantalla (Ajustes del modo sencillo).
+   */
+  compact?: boolean;
 }
 
 /**
@@ -77,6 +82,7 @@ export function PasoMarca({
   modo,
   onModo,
   onTheme,
+  compact = false,
 }: Props) {
   const t = useTranslations('bienvenida');
   const inputRef = useRef<HTMLInputElement>(null);
@@ -147,10 +153,12 @@ export function PasoMarca({
 
   return (
     <div className="space-y-6">
-      <header className="space-y-1.5">
-        <h1 className="font-display text-2xl font-bold tracking-tight">{t('marcaTitulo')}</h1>
-        <p className="text-text-muted">{t('marcaCuerpo')}</p>
-      </header>
+      {compact ? null : (
+        <header className="space-y-1.5">
+          <h1 className="font-display text-2xl font-bold tracking-tight">{t('marcaTitulo')}</h1>
+          <p className="text-text-muted">{t('marcaCuerpo')}</p>
+        </header>
+      )}
 
       {/* ------------------------------------------------ Logo */}
       <section className="space-y-2">
@@ -278,7 +286,9 @@ export function PasoMarca({
             {errorLogo}
           </p>
         )}
-        {!logoUrl && <p className="text-xs text-text-subtle">{t('marcaLogoOpcional')}</p>}
+        {!logoUrl && !compact && (
+          <p className="text-xs text-text-subtle">{t('marcaLogoOpcional')}</p>
+        )}
       </section>
 
       {/* ------------------------------------------------ Color */}
