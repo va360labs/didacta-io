@@ -27,13 +27,13 @@ describe('ajustes de la biblioteca de Cloud', () => {
         EnableMP4Fallback: true,
         AllowDirectPlay: true,
         PlayerTokenAuthenticationEnabled: false,
-        EnableTokenAuthentication: false,
         WebhookUrl: null,
         ApiKey: 'api-key',
         ReadOnlyApiKey: 'read-only',
       },
       pullZone: {
         Type: 0,
+        ZoneSecurityEnabled: false,
         ZoneSecurityKey: 'token-key',
         EdgeRules: [],
         Hostnames: [{ Value: 'vz-abc.b-cdn.net' }],
@@ -67,13 +67,13 @@ describe('ajustes de la biblioteca de Cloud', () => {
         EnableMP4Fallback: false,
         AllowDirectPlay: false,
         PlayerTokenAuthenticationEnabled: true,
-        EnableTokenAuthentication: true,
         WebhookUrl: WEBHOOK,
         ApiKey: 'api-key',
         ReadOnlyApiKey: 'read-only',
       },
       pullZone: {
         Type: 'Volume',
+        ZoneSecurityEnabled: true,
         ZoneSecurityKey: 'token-key',
         EdgeRules: [
           { Description: 'block_original', ActionType: 4, Enabled: true },
@@ -87,6 +87,48 @@ describe('ajustes de la biblioteca de Cloud', () => {
     expect(plan.library).toEqual({});
     expect(plan.pullZone).toEqual({});
     expect(plan.edgeRules).toEqual([]);
+  });
+
+  it('el token de la CDN se lee en la zona: la biblioteca no devuelve EnableTokenAuthentication', () => {
+    // Forma real de `GET /videolibrary/{id}`: sin el campo de escritura.
+    const library = {
+      EnabledResolutions: DESIRED_RESOLUTIONS,
+      KeepOriginalFiles: false,
+      EnableMP4Fallback: false,
+      AllowDirectPlay: false,
+      PlayerTokenAuthenticationEnabled: true,
+      WebhookUrl: WEBHOOK,
+      ApiKey: 'api-key',
+      ReadOnlyApiKey: 'read-only',
+    };
+    const rules = [
+      { Description: 'block_original', ActionType: 4, Enabled: true },
+      { Description: 'block_mp4', ActionType: 4, Enabled: true },
+    ];
+    const off = planLibrarySetup({
+      library,
+      pullZone: {
+        Type: 1,
+        ZoneSecurityEnabled: false,
+        ZoneSecurityKey: 'token-key',
+        EdgeRules: rules,
+      },
+      webhookUrl: WEBHOOK,
+      env,
+    });
+    expect(off.library).toEqual({ EnableTokenAuthentication: true });
+    const on = planLibrarySetup({
+      library,
+      pullZone: {
+        Type: 1,
+        ZoneSecurityEnabled: true,
+        ZoneSecurityKey: 'token-key',
+        EdgeRules: rules,
+      },
+      webhookUrl: WEBHOOK,
+      env,
+    });
+    expect(on.library).toEqual({});
   });
 
   it('variables equivocadas: lo dice, sin imprimir ninguna clave', () => {

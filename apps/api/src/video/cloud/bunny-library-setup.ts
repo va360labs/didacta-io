@@ -38,7 +38,6 @@ export interface LibraryState {
   EnableMP4Fallback?: boolean;
   AllowDirectPlay?: boolean;
   PlayerTokenAuthenticationEnabled?: boolean;
-  EnableTokenAuthentication?: boolean;
   WebhookUrl?: string | null;
   PullZoneId?: number;
   ApiKey?: string;
@@ -47,6 +46,8 @@ export interface LibraryState {
 
 export interface PullZoneState {
   Type?: number | string;
+  /** El «CDN token authentication» de la biblioteca, tal como se LEE. */
+  ZoneSecurityEnabled?: boolean;
   ZoneSecurityKey?: string;
   EdgeRules?: Array<{ Description?: string; ActionType?: number | string; Enabled?: boolean }>;
   Hostnames?: Array<{ Value?: string }>;
@@ -90,7 +91,12 @@ export function planLibrarySetup(input: {
   if (lib.PlayerTokenAuthenticationEnabled !== true) {
     library['PlayerTokenAuthenticationEnabled'] = true;
   }
-  if (lib.EnableTokenAuthentication !== true) library['EnableTokenAuthentication'] = true;
+  // El token de la CDN se ESCRIBE en la biblioteca (`EnableTokenAuthentication`,
+  // que Bunny no devuelve nunca al leerla) y se LEE en la zona
+  // (`ZoneSecurityEnabled`). Comparado contra la biblioteca, el plan pedía el
+  // cambio para siempre y no podía confirmar que estaba hecho (prueba real
+  // contra la biblioteca 807608, 2026-11-12).
+  if (pz.ZoneSecurityEnabled !== true) library['EnableTokenAuthentication'] = true;
   if ((lib.WebhookUrl ?? '') !== input.webhookUrl) library['WebhookUrl'] = input.webhookUrl;
 
   const pullZone: Record<string, unknown> = {};
