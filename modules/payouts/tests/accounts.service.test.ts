@@ -46,7 +46,13 @@ const CONFIG: PayoutsAccountsConfig = {
   supportedCountries: SUPPORTED,
   lossesCollector: 'stripe',
   livemode: false,
-  payout: { interval: 'weekly', weeklyDay: 'monday', delayDays: 7, minBalance: { eur: 5000 } },
+  payout: {
+    interval: 'weekly',
+    weeklyDay: 'monday',
+    delayDays: 7,
+    // Como la variable por defecto: varias divisas. Solo se manda la de la cuenta.
+    minBalance: { eur: 5000, usd: 5000, gbp: 5000 },
+  },
 };
 
 const recorded = accountsFixture.accounts as unknown as Record<
@@ -626,6 +632,23 @@ describe('PayoutsAccountsService', () => {
         source: 'payouts',
       }),
     ]);
+  });
+
+  it('el colchón va solo en la divisa de la cuenta (Stripe rechaza el lote con una ajena)', async () => {
+    const { account } = await service.startOnboarding({
+      tenantId: TENANT_A,
+      country: 'GB',
+      entityType: 'company',
+      prefill: PREFILL,
+      urls: URLS,
+    });
+    const [schedule] = fake.callsTo('POST', '/v1/balance_settings');
+    expect(schedule!.options.account).toBe(account.stripeAccountId);
+    expect(
+      (schedule!.params['payments'] as { payouts: Record<string, unknown> }).payouts[
+        'minimum_balance_by_currency'
+      ],
+    ).toEqual({ gbp: 5000 });
   });
 
   it('dos connect seguidos → UNA cuenta en Stripe y una fila', async () => {

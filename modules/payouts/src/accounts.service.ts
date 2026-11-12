@@ -636,10 +636,18 @@ export class PayoutsAccountsService {
 
     const current = await this.api.getBalanceSettings(acct);
     const currentDelay = current.payments?.settlement_timing?.delay_days ?? null;
+    // Colchón SOLO en la divisa de la cuenta: Stripe rechaza el lote entero si
+    // lleva una que la cuenta no maneja («Cannot set minimum balance for
+    // currency gbp» en una cuenta española, visto en el sandbox).
+    const currency = (row.defaultCurrency ?? defaultCurrencyForCountry(row.country))?.toLowerCase();
+    const minimum =
+      currency && payout.minBalance[currency] !== undefined
+        ? { [currency]: payout.minBalance[currency]! }
+        : undefined;
     const base = {
       interval: payout.interval,
       ...(payout.interval === 'weekly' ? { weeklyDay: payout.weeklyDay } : {}),
-      minimumBalanceByCurrency: payout.minBalance,
+      ...(minimum ? { minimumBalanceByCurrency: minimum } : {}),
     } as const;
 
     let applied: StripeBalanceSettings;
