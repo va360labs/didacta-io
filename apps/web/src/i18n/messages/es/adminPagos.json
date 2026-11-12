@@ -411,7 +411,9 @@
         "refunded": "Reembolsada",
         "disputed": "El alumno ha reclamado el pago a su banco",
         "review": "La estamos revisando; te escribimos si hace falta algo",
-        "refundedPartial": "Reembolsada en parte"
+        "refundedPartial": "Reembolsada en parte",
+        "disputeWon": "Reclamación ganada: te lo devolvimos",
+        "disputeLost": "Reclamación perdida: el banco lo devolvió al alumno"
       },
       "noticeHeld": "Tienes ventas retenidas: el dinero está a salvo y lo volvemos a intentar cada día. Si dice «hasta que completes tus datos de cobro», pulsa «Completar» arriba.",
       "noticeDebt": "Tienes {amount} pendientes de descontar de tus próximas ventas.",
@@ -465,7 +467,10 @@
       "noticeDispute": "Un alumno ha reclamado a su banco el pago de «{item}» ({amount}). Le respondemos nosotros antes del {date}. Si tienes pruebas de que recibió el curso (accesos, mensajes, factura), envíanoslas. Mientras se decide, esa venta queda retenida.",
       "noticeDisputeNoDate": "Un alumno ha reclamado a su banco el pago de «{item}» ({amount}). Le respondemos nosotros. Si tienes pruebas de que recibió el curso (accesos, mensajes, factura), envíanoslas. Mientras se decide, esa venta queda retenida.",
       "summaryRefunded": "Devuelto a alumnos",
-      "summaryReversed": "Retirado de lo que ya te enviamos"
+      "summaryReversed": "Retirado de lo que ya te enviamos",
+      "disputeNoteOpen": "Retenido mientras el banco decide",
+      "disputeNoteWon": "Te lo devolvimos al ganar la reclamación",
+      "disputeNoteLost": "El banco se lo devolvió al alumno"
     }
   }
 }

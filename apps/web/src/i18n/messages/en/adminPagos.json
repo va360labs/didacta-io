@@ -411,7 +411,9 @@
         "refunded": "Refunded",
         "disputed": "The student disputed the payment with their bank",
         "review": "We’re looking into it and will email you if we need anything",
-        "refundedPartial": "Partly refunded"
+        "refundedPartial": "Partly refunded",
+        "disputeWon": "Dispute won: we sent it back to you",
+        "disputeLost": "Dispute lost: the bank gave it back to the student"
       },
       "noticeHeld": "Some of your sales are on hold: the money is safe and we try again every day. If it says “until you finish setting up how you get paid”, click “Finish” above.",
       "noticeDebt": "You have {amount} to be taken from your next sales.",
@@ -465,7 +467,10 @@
       "noticeDispute": "A student has disputed the payment for \"{item}\" ({amount}) with their bank. We'll answer the bank before {date}. If you have proof they received the course (access history, messages, invoice), send it to us. Until it's decided, this sale is on hold.",
       "noticeDisputeNoDate": "A student has disputed the payment for \"{item}\" ({amount}) with their bank. We'll answer the bank. If you have proof they received the course (access history, messages, invoice), send it to us. Until it's decided, this sale is on hold.",
       "summaryRefunded": "Refunded to students",
-      "summaryReversed": "Taken back from what we sent you"
+      "summaryReversed": "Taken back from what we sent you",
+      "disputeNoteOpen": "On hold while the bank decides",
+      "disputeNoteWon": "Sent back to you after we won the dispute",
+      "disputeNoteLost": "The bank gave it back to the student"
     }
   }
 }

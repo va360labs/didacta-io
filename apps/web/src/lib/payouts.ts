@@ -222,6 +222,10 @@ export interface PayoutsSaleDto {
   disputeOpen: boolean;
   /** Se puede reembolsar desde aquí ahora mismo. */
   canRefund: boolean;
+  /** Reclamación ya decidida (`won`: se le devolvió al creador). Ausente en una API anterior. */
+  disputeOutcome?: 'won' | 'lost' | null;
+  /** Lo que se le devolvió al ganar la reclamación. */
+  reinstatedAmount?: number;
   transferredAt: string | null;
   availableOn: string | null;
   /** `YYYY-MM-DD` (UTC): día estimado del pago al banco. */
@@ -410,6 +414,8 @@ export type PayoutsSaleStatusKey =
   | 'refunded'
   | 'refundedPartial'
   | 'disputed'
+  | 'disputeWon'
+  | 'disputeLost'
   | 'review';
 
 export interface PayoutsSaleStatusView {
@@ -419,10 +425,12 @@ export interface PayoutsSaleStatusView {
 
 export function saleStatusView(
   sale: Pick<PayoutsSaleDto, 'status' | 'reason'> &
-    Partial<Pick<PayoutsSaleDto, 'refundState' | 'disputeOpen'>>,
+    Partial<Pick<PayoutsSaleDto, 'refundState' | 'disputeOpen' | 'disputeOutcome'>>,
 ): PayoutsSaleStatusView {
   // Lo que le pasó a la venta después de cobrarse manda sobre cómo va su envío.
   if (sale.disputeOpen) return { key: 'disputed', tone: 'danger' };
+  if (sale.disputeOutcome === 'lost') return { key: 'disputeLost', tone: 'danger' };
+  if (sale.disputeOutcome === 'won') return { key: 'disputeWon', tone: 'success' };
   if (sale.refundState === 'full') return { key: 'refunded', tone: 'neutral' };
   if (sale.refundState === 'partial' && sale.status !== 'HELD') {
     return { key: 'refundedPartial', tone: 'neutral' };

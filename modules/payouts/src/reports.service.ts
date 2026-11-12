@@ -47,6 +47,10 @@ export interface SaleView {
   readonly disputeOpen: boolean;
   /** ¿Se puede pedir un reembolso desde el panel ahora? */
   readonly canRefund: boolean;
+  /** Reclamación ya decidida: `won` (se le devolvió al creador) o `lost`. */
+  readonly disputeOutcome: 'won' | 'lost' | null;
+  /** Lo que se le transfirió de nuevo al ganar una reclamación. */
+  readonly reinstatedAmount: number;
   readonly transferredAt: string | null;
   /** Cuándo quedan disponibles los fondos (`available_on`). */
   readonly availableOn: string | null;
@@ -163,29 +167,54 @@ export class PayoutsReportsService {
   ): Promise<SalesPage> {
     const pageSize = Math.min(Math.max(Math.trunc(options.pageSize ?? 20), 1), 100);
     const page = Math.max(Math.trunc(options.page ?? 1), 1);
-    const { rows, total, schedule, disputed } = await this.db.inTenant(tenantId, async (tx) => {
-      const [rows, total, account] = await Promise.all([
-        tx.modPayoutsSale.findMany({
-          where: { tenantId },
-          orderBy: [{ chargedAt: { sort: 'desc', nulls: 'last' } }, { createdAt: 'desc' }],
-          skip: (page - 1) * pageSize,
-          take: pageSize,
-        }),
-        tx.modPayoutsSale.count({ where: { tenantId } }),
-        tx.modPayoutsAccount.findFirst({
-          where: { tenantId, closedAt: null },
-          orderBy: { createdAt: 'desc' },
-          select: { payoutSchedule: true },
-        }),
-      ]);
-      const disputed = new Set(await frozenDisputeSaleIds(tx, tenantId));
-      return {
-        rows,
-        total,
-        schedule: (account?.payoutSchedule as PayoutScheduleView | null | undefined) ?? null,
-        disputed,
-      };
-    });
+    const { rows, total, schedule, disputed, outcomes, reinstated } = await this.db.inTenant(
+      tenantId,
+      async (tx) => {
+        const [rows, total, account] = await Promise.all([
+          tx.modPayoutsSale.findMany({
+            where: { tenantId },
+            orderBy: [{ chargedAt: { sort: 'desc', nulls: 'last' } }, { createdAt: 'desc' }],
+            skip: (page - 1) * pageSize,
+            take: pageSize,
+          }),
+          tx.modPayoutsSale.count({ where: { tenantId } }),
+          tx.modPayoutsAccount.findFirst({
+            where: { tenantId, closedAt: null },
+            orderBy: { createdAt: 'desc' },
+            select: { payoutSchedule: true },
+          }),
+        ]);
+        const disputed = new Set(await frozenDisputeSaleIds(tx, tenantId));
+        const ids = rows.map((r) => r.id);
+        const decided = ids.length
+          ? await tx.modPayoutsDispute.findMany({
+              where: { tenantId, saleId: { in: ids }, outcome: { not: null } },
+              select: { saleId: true, outcome: true },
+            })
+          : [];
+        const reinstated = ids.length
+          ? await tx.modPayoutsLedgerEntry.groupBy({
+              by: ['saleId'],
+              where: {
+                tenantId,
+                saleId: { in: ids },
+                type: 'TRANSFER',
+                idempotencyKey: { startsWith: 'payouts:reinstate:' },
+              },
+              _sum: { amount: true },
+              orderBy: { saleId: 'asc' },
+            })
+          : [];
+        return {
+          rows,
+          total,
+          schedule: (account?.payoutSchedule as PayoutScheduleView | null | undefined) ?? null,
+          disputed,
+          outcomes: new Map(decided.map((d) => [d.saleId, d.outcome])),
+          reinstated: new Map(reinstated.map((r) => [r.saleId, -(r._sum.amount ?? 0)])),
+        };
+      },
+    );
     const items = rows.map((row): SaleView => {
       const arrival = ARRIVAL_STATUSES.has(row.status)
         ? estimatePayoutDate(row.availableOn, schedule)
@@ -217,6 +246,14 @@ export class PayoutsReportsService {
               ? 'full'
               : 'partial',
         disputeOpen: disputed.has(row.id),
+        disputeOutcome: disputed.has(row.id)
+          ? null
+          : outcomes.get(row.id) === 'won'
+            ? 'won'
+            : outcomes.get(row.id) === 'lost'
+              ? 'lost'
+              : null,
+        reinstatedAmount: reinstated.get(row.id) ?? 0,
         canRefund:
           row.status !== 'AWAITING_FEE' &&
           row.status !== 'FAILED' &&

@@ -197,6 +197,44 @@ describe('E6: reembolsos y reclamaciones en las filas', () => {
   });
 });
 
+describe('E6: reclamaciones decididas', () => {
+  it('ganada con la venta compensada: lo que recibes es lo devuelto, con su nota', () => {
+    const row = describeSale(
+      sale({
+        status: 'SETTLED_NETTED',
+        transferAmount: 0,
+        debtNetted: 9160,
+        creatorNet: 9160,
+        disputeOutcome: 'won',
+        reinstatedAmount: 9160,
+      }),
+      money,
+      'es',
+      t,
+    );
+    expect(plain(row.youGet)).toBe('91,60 €');
+    expect(row.debtNote).toBe('Te lo devolvimos al ganar la reclamación');
+    expect(t(`status.${row.status.key}`)).toBe('Reclamación ganada: te lo devolvimos');
+  });
+
+  it('perdida: 0 y por qué, sin hablar de deudas', () => {
+    const row = describeSale(
+      sale({
+        status: 'SETTLED_NETTED',
+        transferAmount: 0,
+        debtNetted: 9160,
+        disputeOutcome: 'lost',
+      }),
+      money,
+      'es',
+      t,
+    );
+    expect(plain(row.youGet)).toBe('0,00 €');
+    expect(row.debtNote).toBe('El banco se lo devolvió al alumno');
+    expect(row.status).toEqual({ key: 'disputeLost', tone: 'danger' });
+  });
+});
+
 describe('E6: explicación del reembolso', () => {
   const tr: RefundTranslator = (key, values = {}) => t(`refund.${key}`, values);
   const m = (amount: number, currency: string) => formatStripeAmount(amount, currency, 'es');

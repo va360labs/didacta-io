@@ -649,6 +649,14 @@ describe('Disputas', () => {
     expect(db.rows('modPayoutsDispute')[0]).toMatchObject({ outcome: 'won' });
     expect(await invariantViolations()).toEqual([]);
     expect(ledgerTotal()).toBe(0);
+    // «Tus ventas»: reclamación ganada y lo que se le devolvió.
+    const page = await new PayoutsReportsService(db.port()).listSales(A);
+    expect(page.items.find((i) => i.id === s.saleId)).toMatchObject({
+      disputeOpen: false,
+      disputeOutcome: 'won',
+      reinstatedAmount: 5000,
+      canRefund: true,
+    });
   });
 
   it('ganada sin que Stripe devuelva la tasa: la asume la plataforma, con asiento y alerta', async () => {

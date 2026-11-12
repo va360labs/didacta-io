@@ -209,7 +209,7 @@ export function PayoutsSalesSection({
                 <thead>
                   <tr className="border-b border-border-soft text-left text-xs text-text-subtle">
                     <th className="py-2 pr-3 font-medium">{t('colDate')}</th>
-                    <th className="min-w-[12rem] py-2 pr-3 font-medium">{t('colItem')}</th>
+                    <th className="min-w-[10rem] py-2 pr-3 font-medium">{t('colItem')}</th>
                     <th className="py-2 pr-3 text-right font-medium">{t('colPaid')}</th>
                     <th className="py-2 pr-3 text-right font-medium">{t('colCardFee')}</th>
                     <th className="py-2 pr-3 text-right font-medium">
@@ -229,7 +229,7 @@ export function PayoutsSalesSection({
                     return (
                       <tr key={sale.id} className="border-b border-border-soft align-top">
                         <td className="whitespace-nowrap py-3 pr-3 text-text-muted">{row.date}</td>
-                        <td className="min-w-[12rem] py-3 pr-3 font-medium text-text">
+                        <td className="min-w-[10rem] py-3 pr-3 font-medium text-text">
                           {row.item}
                         </td>
                         <td className="whitespace-nowrap py-3 pr-3 text-right tabular-nums text-text">
@@ -262,10 +262,10 @@ export function PayoutsSalesSection({
                         <td className="whitespace-nowrap py-3 pr-3 text-text-muted">
                           {row.arrives}
                         </td>
-                        <td className="py-3 pr-3">
+                        <td className="min-w-[8.5rem] py-3 pr-3">
                           <Badge
                             variant={BADGE_BY_TONE[row.status.tone]}
-                            className="whitespace-nowrap"
+                            className="whitespace-normal text-left leading-snug"
                           >
                             {t(`status.${row.status.key}`)}
                           </Badge>
@@ -418,10 +418,14 @@ export function describeSale(
       ? t('studentPaid', { amount: money(sale.presentmentAmount, sale.presentmentCurrency)! })
       : null;
   const pending = t('pending');
+  const disputed = sale.disputeOpen || (sale.disputeOutcome ?? null) !== null;
+  const reinstated = sale.reinstatedAmount ?? 0;
   const youGet =
     sale.status === 'SETTLED_NETTED'
-      ? money(0, sale.currency)!
-      : (money(sale.transferAmount ?? sale.creatorNet, sale.currency) ?? pending);
+      ? money(reinstated, sale.currency)!
+      : sale.transferAmount === null
+        ? (money(sale.creatorNet, sale.currency) ?? pending)
+        : money(sale.transferAmount + reinstated, sale.currency)!;
   let arrives: string;
   if (sale.status === 'AWAITING_FEE') arrives = t('arrivesPending');
   else if ((sale.status === 'TRANSFERRED' || sale.status === 'READY') && sale.estimatedArrival) {
@@ -445,8 +449,16 @@ export function describeSale(
     cardFee: money(sale.stripeFee, sale.currency) ?? pending,
     operatorFee: money(sale.platformFee, sale.currency) ?? pending,
     youGet,
-    debtNote:
-      sale.debtNetted > 0
+    // Con reclamación, lo retenido NO es «para saldar lo que debías»: se explica aparte.
+    debtNote: disputed
+      ? t(
+          sale.disputeOpen
+            ? 'disputeNoteOpen'
+            : sale.disputeOutcome === 'won'
+              ? 'disputeNoteWon'
+              : 'disputeNoteLost',
+        )
+      : sale.debtNetted > 0
         ? t('debtPaid', { amount: money(sale.debtNetted, sale.currency)! })
         : null,
     refundNote:
