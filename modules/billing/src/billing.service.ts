@@ -37,6 +37,7 @@ import {
   ProductInactiveError,
   ProductNotFoundError,
   StripeApiError,
+  WebhookTenantMismatchError,
 } from './errors.js';
 import type { StripeAdapter } from './stripe.client.js';
 
@@ -573,18 +574,26 @@ export class BillingService {
   // ---------------- Webhook handler (idempotente) ----------------
 
   /**
-   * Resuelve el tenant dueño de un evento webhook SIN procesarlo. Es la mitad
-   * «lookup» del patrón F3: el host la invoca bajo acceso global sancionado y
-   * después ejecuta `handleWebhookEvent` bajo el contexto del tenant resuelto.
+   * Tenants a los que un evento webhook NOMBRA o TOCA, sin procesarlo: el
+   * `tenantId` de la metadata y el dueño de cada fila local que el procesado
+   * iría a buscar por id (orden por `orderId`, orden por PaymentIntent).
    *
-   * Devuelve null cuando el evento no trae marca nuestra o la entidad no
-   * existe localmente (evento ajeno al módulo): el host procesa esos casos en
-   * modo sancionado — solo persisten para auditoría.
+   * Es la mitad «lookup» del webhook. El host la invoca bajo acceso global
+   * sancionado y decide con el resultado: el evento solo se procesa si todo
+   * lo que nombra pertenece al tenant cuyo secreto verificó la firma.
    *
-   * La metadata es de confianza: el evento llega verificado por la firma HMAC
-   * de Stripe y la metadata la escribió nuestro propio checkout.
+   * ⚠️ La metadata NO es de confianza por sí sola. La firma HMAC demuestra
+   * quién envía el evento —quien conoce el secreto del endpoint—, no a quién
+   * se refiere su contenido: un administrador del aula B configura SUS
+   * credenciales de Stripe y puede firmar con ellas un evento que nombre al
+   * aula A. Antes esta función devolvía ese `tenantId` y el host procesaba el
+   * evento para él: orden COMPLETED y matrícula en un aula ajena, sin pagar.
+   *
+   * Lista vacía = el evento no trae marca nuestra ni toca ninguna fila local
+   * (evento ajeno al módulo): solo se archiva.
    */
-  async resolveWebhookTenantId(event: Stripe.Event): Promise<string | null> {
+  async resolveWebhookTenantClaims(event: Stripe.Event): Promise<string[]> {
+    const claims = new Set<string>();
     switch (event.type) {
       case 'checkout.session.completed':
       case 'checkout.session.async_payment_succeeded':
@@ -592,10 +601,20 @@ export class BillingService {
       case 'checkout.session.async_payment_failed': {
         const session = event.data.object as Stripe.Checkout.Session;
         const metadata = session.metadata ?? {};
-        // Misma pertenencia POSITIVA que onCheckoutCompleted: sin nuestra
-        // marca (orderId + productId) el checkout es de otro módulo.
-        if (!metadata['orderId'] || !metadata['productId']) return null;
-        return metadata['tenantId'] ?? null;
+        // Sin `orderId` ningún handler toca una fila: el checkout es de otro
+        // módulo (p.ej. la membresía de mod.subscriptions).
+        const orderId = metadata['orderId'];
+        if (!orderId) break;
+        if (metadata['tenantId']) claims.add(metadata['tenantId']);
+        // La FILA manda sobre la metadata: es a ella a la que se le cambia el
+        // estado. Un evento con `tenantId` propio y `orderId` ajeno tiene que
+        // salir de aquí con los dos tenants para que el host lo rechace.
+        const order = await this.prisma.modBillingOrder.findUnique({
+          where: { id: orderId },
+          select: { tenantId: true },
+        });
+        if (order) claims.add(order.tenantId);
+        break;
       }
       case 'charge.refunded': {
         const charge = event.data.object as Stripe.Charge;
@@ -603,21 +622,30 @@ export class BillingService {
           typeof charge.payment_intent === 'string'
             ? charge.payment_intent
             : (charge.payment_intent?.id ?? null);
-        if (!paymentIntentId) return null;
+        if (!paymentIntentId) break;
         const order = await this.prisma.modBillingOrder.findFirst({
           where: { stripePaymentIntentId: paymentIntentId },
           select: { tenantId: true },
         });
-        return order?.tenantId ?? null;
+        if (order) claims.add(order.tenantId);
+        break;
       }
       default:
-        return null; // evento sin lógica de dominio: solo se archiva.
+        break; // evento sin lógica de dominio: solo se archiva.
     }
+    return [...claims];
   }
 
   /**
    * Procesa un evento de Stripe ya validado por firma. Garantiza idempotencia:
    * si el evento ya se procesó, devuelve sin tocar nada.
+   *
+   * `opts.tenantId` es OBLIGATORIO: el tenant para el que el host verificó el
+   * evento (el dueño del secreto que validó la firma). Todo lo que el procesado
+   * lea o escriba tiene que ser de ese tenant; una orden de otro —o una
+   * metadata que nombre a otro— lanza `WebhookTenantMismatchError` sin tocar
+   * nada. No se fía de RLS: el runtime puede conectar con un rol que no filtra,
+   * y el contexto de tenant del host no protege por sí solo.
    *
    * `opts.provisionUser` lo inyecta el HOST para materializar al comprador del
    * checkout PÚBLICO (order con user_id null). Sin él, un fulfillment anónimo
@@ -626,14 +654,21 @@ export class BillingService {
   async handleWebhookEvent(
     event: Stripe.Event,
     rawPayload: unknown,
-    opts?: { provisionUser?: BillingUserProvisioner },
+    opts: { tenantId: string; provisionUser?: BillingUserProvisioner },
   ): Promise<void> {
+    const tenantId = opts?.tenantId;
+    if (!tenantId) throw new WebhookTenantMismatchError('evento sin tenant verificado');
+
     // Idempotencia: insertar el row del evento ANTES de hacer trabajo. Si el
     // unique constraint salta, otro worker ya lo procesó.
     try {
       await this.prisma.modBillingWebhookEvent.create({
         data: {
           stripeEventId: event.id,
+          // El tenant verificado, no el que diga el evento: deja rastro de por
+          // qué endpoint entró y cumple la policy RLS de la tabla, que exige
+          // `tenant_id = current_tenant_id()` también al insertar.
+          tenantId,
           type: event.type,
           // payload lo redactamos: guardamos el evento completo (sin tarjeta —
           // Stripe nunca envía PAN; solo last4 si el invoice se expandió).
@@ -672,15 +707,16 @@ export class BillingService {
         case 'checkout.session.async_payment_succeeded':
           await this.onCheckoutCompleted(
             event.data.object as Stripe.Checkout.Session,
-            opts?.provisionUser,
+            tenantId,
+            opts.provisionUser,
           );
           break;
         case 'checkout.session.expired':
         case 'checkout.session.async_payment_failed':
-          await this.onCheckoutFailed(event.data.object as Stripe.Checkout.Session);
+          await this.onCheckoutFailed(event.data.object as Stripe.Checkout.Session, tenantId);
           break;
         case 'charge.refunded':
-          await this.onChargeRefunded(event.data.object as Stripe.Charge);
+          await this.onChargeRefunded(event.data.object as Stripe.Charge, tenantId);
           break;
         default:
           // Eventos no relevantes para mod.billing — los persistimos pero no
@@ -703,11 +739,12 @@ export class BillingService {
 
   private async onCheckoutCompleted(
     session: Stripe.Checkout.Session,
+    /** Tenant VERIFICADO por el host. Es el único con el que se escribe. */
+    tenantId: string,
     provisionUser?: BillingUserProvisioner,
   ): Promise<void> {
     const metadata = session.metadata ?? {};
     const orderId = metadata.orderId ?? session.client_reference_id;
-    const tenantId = metadata.tenantId;
     const courseId = metadata.courseId;
 
     // Pertenencia POSITIVA: una sola cuenta de Stripe alimenta a varios módulos
@@ -719,14 +756,23 @@ export class BillingService {
     // nunca fue nuestro. Queda archivado para auditoría.
     if (!metadata.orderId || !metadata.productId) return;
 
-    if (!orderId || !tenantId || !courseId) {
+    if (!orderId || !metadata.tenantId || !courseId) {
       throw new StripeApiError(
         `checkout.session.completed sin metadata mínimo (orderId/tenantId/courseId): ${session.id}`,
       );
     }
+    // La metadata nombra un aula y el host verificó el evento para otra.
+    if (metadata.tenantId !== tenantId) {
+      throw new WebhookTenantMismatchError(`metadata de la session ${session.id}`);
+    }
 
     const order = await this.prisma.modBillingOrder.findUnique({ where: { id: orderId } });
     if (!order) throw new OrderNotFoundError(orderId);
+    // Y la orden a la que apunta tiene que ser de esa misma aula: el `orderId`
+    // también lo escribe quien firma.
+    if (order.tenantId !== tenantId) {
+      throw new WebhookTenantMismatchError(`orden de la session ${session.id}`);
+    }
 
     // Order ya COMPLETED (reentrega de Stripe, o reintento tras una caída).
     //
@@ -845,13 +891,21 @@ export class BillingService {
     });
   }
 
-  private async onCheckoutFailed(session: Stripe.Checkout.Session): Promise<void> {
+  private async onCheckoutFailed(
+    session: Stripe.Checkout.Session,
+    tenantId: string,
+  ): Promise<void> {
     // Misma pertenencia positiva que en onCheckoutCompleted: en un endpoint
     // compartido, `client_reference_id` puede ser el id de OTRO módulo.
     const orderId = session.metadata?.orderId;
     if (!orderId) return;
     const order = await this.prisma.modBillingOrder.findUnique({ where: { id: orderId } });
     if (!order) return;
+    // Sin esto, un `async_payment_failed` firmado por otra aula dejaba FAILED
+    // una compra pagada de esta y le retiraba la matrícula al alumno.
+    if (order.tenantId !== tenantId) {
+      throw new WebhookTenantMismatchError(`orden de la session ${session.id}`);
+    }
 
     // Red de seguridad: un pago que falla sobre una compra YA completada.
     // Con la guarda de `isPaymentSettled` esto no debería ocurrir nunca —
@@ -911,7 +965,7 @@ export class BillingService {
    * posteriori, una devolución de gastos) deja la compra en pie: marcarla como
    * reembolsada expulsaría del curso a alguien que sigue habiendo pagado.
    */
-  private async onChargeRefunded(charge: Stripe.Charge): Promise<void> {
+  private async onChargeRefunded(charge: Stripe.Charge, tenantId: string): Promise<void> {
     const paymentIntentId =
       typeof charge.payment_intent === 'string'
         ? charge.payment_intent
@@ -922,6 +976,10 @@ export class BillingService {
       where: { stripePaymentIntentId: paymentIntentId },
     });
     if (!order) return; // cobro de otro módulo (p.ej. membresía) o ajeno.
+    // Un reembolso firmado por otra aula no puede retirar el acceso de esta.
+    if (order.tenantId !== tenantId) {
+      throw new WebhookTenantMismatchError(`orden del cargo ${charge.id}`);
+    }
     if (order.status === 'REFUNDED') return;
 
     const total = charge.amount ?? 0;

@@ -34,6 +34,7 @@ import {
   SubscriptionPriceNotRecurringError,
   StripeApiError,
   WebhookOutOfOrderError,
+  WebhookTenantMismatchError,
 } from '../src/errors.js';
 import type {
   SubscriptionsStripeAdapter,
@@ -692,8 +693,8 @@ describe('SubscriptionsService.handleWebhookEvent', () => {
       type: 'customer.subscription.created',
       data: { object: makeStripeSub() },
     } as unknown as Stripe.Event;
-    await service.handleWebhookEvent(event, {});
-    await service.handleWebhookEvent(event, {});
+    await service.handleWebhookEvent(event, {}, { tenantId: 't' });
+    await service.handleWebhookEvent(event, {}, { tenantId: 't' });
     expect(prisma.webhookEvents.size).toBe(1);
   });
 
@@ -738,14 +739,16 @@ describe('SubscriptionsService.handleWebhookEvent', () => {
       return updateOriginal.call(prisma.modSubscriptionsSubscription, args);
     }) as typeof updateOriginal;
 
-    await expect(service.handleWebhookEvent(event, {})).rejects.toThrow('conexion caida');
+    await expect(service.handleWebhookEvent(event, {}, { tenantId: 't' })).rejects.toThrow(
+      'conexion caida',
+    );
     expect(prisma.webhookEvents.get('evt_deleted')!.processedAt).toBeNull();
     expect(prisma.subs.get('s1')!.status).toBe('ACTIVE'); // sigue viva en local
 
     // Stripe reintenta. Antes, el choque con la PK devolvia 200 en silencio y
     // la sub se quedaba ACTIVE para siempre con la sub muerta en Stripe.
     fallar = false;
-    await service.handleWebhookEvent(event, {});
+    await service.handleWebhookEvent(event, {}, { tenantId: 't' });
 
     expect(prisma.subs.get('s1')!.status).toBe('CANCELED');
     expect(prisma.webhookEvents.get('evt_deleted')!.processedAt).not.toBeNull();
@@ -760,9 +763,9 @@ describe('SubscriptionsService.handleWebhookEvent', () => {
       data: { object: makeStripeSub() },
     } as unknown as Stripe.Event;
 
-    await service.handleWebhookEvent(event, {});
+    await service.handleWebhookEvent(event, {}, { tenantId: 't' });
     const publicadosTrasElPrimero = publisher.events.length;
-    await service.handleWebhookEvent(event, {});
+    await service.handleWebhookEvent(event, {}, { tenantId: 't' });
 
     expect(publisher.events.length).toBe(publicadosTrasElPrimero);
   });
@@ -795,7 +798,7 @@ describe('SubscriptionsService.handleWebhookEvent', () => {
       type: 'customer.subscription.created',
       data: { object: stripeSub },
     } as unknown as Stripe.Event;
-    await service.handleWebhookEvent(event, {});
+    await service.handleWebhookEvent(event, {}, { tenantId: 't' });
     expect(prisma.subs.get('s1')!.status).toBe('ACTIVE');
     expect(prisma.subs.get('s1')!.stripeSubscriptionId).toBe('sub_stripe_1');
     const ev = publisher.events.find((e) => e.name === 'subscriptions.subscription.activated');
@@ -829,7 +832,7 @@ describe('SubscriptionsService.handleWebhookEvent', () => {
       type: 'invoice.payment_failed',
       data: { object: makeStripeInvoice() },
     } as unknown as Stripe.Event;
-    await service.handleWebhookEvent(event, {});
+    await service.handleWebhookEvent(event, {}, { tenantId: 't' });
     const sub = prisma.subs.get('s1')!;
     expect(sub.status).toBe('PAST_DUE');
     expect(sub.gracePeriodEndsAt).toBeInstanceOf(Date);
@@ -864,7 +867,7 @@ describe('SubscriptionsService.handleWebhookEvent', () => {
       type: 'invoice.paid',
       data: { object: makeStripeInvoice() },
     } as unknown as Stripe.Event;
-    await service.handleWebhookEvent(event, {});
+    await service.handleWebhookEvent(event, {}, { tenantId: 't' });
     const sub = prisma.subs.get('s1')!;
     expect(sub.status).toBe('ACTIVE');
     expect(sub.gracePeriodEndsAt).toBeNull();
@@ -914,6 +917,7 @@ describe('SubscriptionsService.handleWebhookEvent', () => {
         data: { object: makeStripeInvoice() },
       } as unknown as Stripe.Event,
       {},
+      { tenantId: 't' },
     );
 
     expect(prisma.subs.get('s1')!.status).toBe('ACTIVE');
@@ -943,6 +947,7 @@ describe('SubscriptionsService.handleWebhookEvent', () => {
         },
       } as unknown as Stripe.Event,
       {},
+      { tenantId: 't' },
     );
 
     expect(prisma.subs.get('s1')!.status).toBe('ACTIVE');
@@ -971,6 +976,7 @@ describe('SubscriptionsService.handleWebhookEvent', () => {
         data: { object: makeStripeInvoiceFormaNueva() },
       } as unknown as Stripe.Event,
       {},
+      { tenantId: 't' },
     );
 
     expect(prisma.subs.get('s1')!.status).toBe('ACTIVE');
@@ -1008,6 +1014,7 @@ describe('SubscriptionsService.handleWebhookEvent', () => {
         data: { object: makeStripeInvoiceFormaNueva() },
       } as unknown as Stripe.Event,
       {},
+      { tenantId: 't' },
     );
 
     expect(prisma.subs.get('s1')!.status).toBe('PAST_DUE');
@@ -1036,6 +1043,7 @@ describe('SubscriptionsService.handleWebhookEvent', () => {
         },
       } as unknown as Stripe.Event,
       {},
+      { tenantId: 't' },
     );
 
     const sub = prisma.subs.get('s1')!;
@@ -1070,7 +1078,7 @@ describe('SubscriptionsService.handleWebhookEvent', () => {
       type: 'customer.subscription.deleted',
       data: { object: makeStripeSub({ status: 'canceled' }) },
     } as unknown as Stripe.Event;
-    await service.handleWebhookEvent(event, {});
+    await service.handleWebhookEvent(event, {}, { tenantId: 't' });
     expect(prisma.subs.get('s1')!.status).toBe('CANCELED');
     expect(publisher.events.some((e) => e.name === 'subscriptions.subscription.canceled')).toBe(
       true,
@@ -1119,7 +1127,7 @@ describe('SubscriptionsService — periodo de prueba (TRIALING)', () => {
       type: 'customer.subscription.updated',
       data: { object: makeStripeSub({ status: 'trialing', trial_end: trialEnd }) },
     } as unknown as Stripe.Event;
-    await service.handleWebhookEvent(event, {});
+    await service.handleWebhookEvent(event, {}, { tenantId: 't' });
     const sub = prisma.subs.get('s_trial')!;
     expect(sub.status).toBe('TRIALING');
     expect(sub.trialEndsAt?.getTime()).toBe(trialEnd * 1000);
@@ -1138,6 +1146,7 @@ describe('SubscriptionsService — periodo de prueba (TRIALING)', () => {
         data: { object: makeStripeSub({ status: 'active', trial_end: null }) },
       } as unknown as Stripe.Event,
       {},
+      { tenantId: 't' },
     );
     const sub = prisma.subs.get('s_trial')!;
     expect(sub.status).toBe('TRIALING');
@@ -1170,6 +1179,7 @@ describe('SubscriptionsService — periodo de prueba (TRIALING)', () => {
         data: { object: makeStripeSub({ status: 'active', trial_end: null }) },
       } as unknown as Stripe.Event,
       {},
+      { tenantId: 't' },
     );
     expect(prisma.subs.get('s_trial')!.status).toBe('ACTIVE');
     expect(prisma.subs.get('s_trial')!.trialEndsAt).toBeNull();
@@ -1185,6 +1195,7 @@ describe('SubscriptionsService — periodo de prueba (TRIALING)', () => {
         data: { object: makeStripeSub({ status: 'canceled' }) },
       } as unknown as Stripe.Event,
       {},
+      { tenantId: 't' },
     );
     expect(prisma.subs.get('s_trial')!.status).toBe('CANCELED');
     const canceled = publisher.events.find(
@@ -1201,7 +1212,7 @@ describe('SubscriptionsService — periodo de prueba (TRIALING)', () => {
       type: 'invoice.payment_failed',
       data: { object: makeStripeInvoice() },
     } as unknown as Stripe.Event;
-    await service.handleWebhookEvent(event, {});
+    await service.handleWebhookEvent(event, {}, { tenantId: 't' });
     const sub = prisma.subs.get('s_trial')!;
     // Pierde el acceso YA: nada de PAST_DUE ni 3 días de gracia — la gracia es
     // para quien ya pagó alguna vez, no para un trial que nunca pagó.
@@ -1226,7 +1237,7 @@ describe('SubscriptionsService — periodo de prueba (TRIALING)', () => {
       type: 'invoice.paid',
       data: { object: makeStripeInvoice({ amount_paid: 3990 }) },
     } as unknown as Stripe.Event;
-    await service.handleWebhookEvent(event, {});
+    await service.handleWebhookEvent(event, {}, { tenantId: 't' });
     const sub = prisma.subs.get('s_trial')!;
     expect(sub.status).toBe('ACTIVE');
     expect(sub.trialEndsAt).toBeNull();
@@ -1240,7 +1251,7 @@ describe('SubscriptionsService — periodo de prueba (TRIALING)', () => {
       type: 'invoice.paid',
       data: { object: makeStripeInvoice({ amount_paid: 3990 }) },
     } as unknown as Stripe.Event;
-    await service.handleWebhookEvent(event, {});
+    await service.handleWebhookEvent(event, {}, { tenantId: 't' });
     expect(prisma.subs.get('s_trial')!.status).toBe('ACTIVE');
     const ev = publisher.events.find(
       (e) => e.name === 'subscriptions.subscription.activated' && e.payload['recovery'] === true,
@@ -1259,6 +1270,7 @@ describe('SubscriptionsService — periodo de prueba (TRIALING)', () => {
         data: { object: makeStripeSub({ status: 'unpaid' }) },
       } as unknown as Stripe.Event,
       {},
+      { tenantId: 't' },
     );
     const unpaid = publisher.events.find((e) => e.name === 'subscriptions.subscription.unpaid');
     expect(unpaid).toBeTruthy();
@@ -1278,6 +1290,7 @@ describe('SubscriptionsService — periodo de prueba (TRIALING)', () => {
         data: { object: makeStripeSub({ id: 'sub_stripe_2', status: 'canceled' }) },
       } as unknown as Stripe.Event,
       {},
+      { tenantId: 't' },
     );
     const canceled = publisher.events.find(
       (e) => e.name === 'subscriptions.subscription.canceled' && e.payload['immediate'] === true,
@@ -1296,6 +1309,7 @@ describe('SubscriptionsService — periodo de prueba (TRIALING)', () => {
         data: { object: makeStripeSub({ status: 'unpaid' }) },
       } as unknown as Stripe.Event,
       {},
+      { tenantId: 't' },
     );
     expect(prisma.subs.get('s_trial')!.status).toBe('TRIALING');
     expect(publisher.events.some((e) => e.name === 'subscriptions.subscription.unpaid')).toBe(
@@ -1309,6 +1323,7 @@ describe('SubscriptionsService — periodo de prueba (TRIALING)', () => {
         data: { object: makeStripeInvoice() },
       } as unknown as Stripe.Event,
       {},
+      { tenantId: 't' },
     );
     expect(prisma.subs.get('s_trial')!.status).toBe('UNPAID');
     expect(publisher.events.some((e) => e.name === 'subscriptions.subscription.unpaid')).toBe(true);
@@ -1449,30 +1464,30 @@ function makeSubRow(overrides: Partial<SubRow> & { id: string; tenantId: string 
   };
 }
 
-describe('SubscriptionsService.resolveWebhookTenantId (mitad lookup del patrón F3)', () => {
+describe('SubscriptionsService.resolveWebhookTenantClaims (mitad lookup del webhook)', () => {
   it('customer.subscription.updated → tenant de la sub por stripeSubscriptionId', async () => {
     const { service, prisma } = buildSystem();
     prisma.subs.set(
       's1',
       makeSubRow({ id: 's1', tenantId: 't-sub', stripeSubscriptionId: 'sub_stripe_1' }),
     );
-    const tenantId = await service.resolveWebhookTenantId({
+    const claims = await service.resolveWebhookTenantClaims({
       id: 'evt_r1',
       type: 'customer.subscription.updated',
       data: { object: { id: 'sub_stripe_1' } },
     } as unknown as Stripe.Event);
-    expect(tenantId).toBe('t-sub');
+    expect(claims).toEqual(['t-sub']);
   });
 
   it('customer.subscription.created → tenant por metadata.subscriptionLocalId', async () => {
     const { service, prisma } = buildSystem();
     prisma.subs.set('sub-local-9', makeSubRow({ id: 'sub-local-9', tenantId: 't-created' }));
-    const tenantId = await service.resolveWebhookTenantId({
+    const claims = await service.resolveWebhookTenantClaims({
       id: 'evt_r2',
       type: 'customer.subscription.created',
       data: { object: { id: 'sub_stripe_9', metadata: { subscriptionLocalId: 'sub-local-9' } } },
     } as unknown as Stripe.Event);
-    expect(tenantId).toBe('t-created');
+    expect(claims).toEqual(['t-created']);
   });
 
   it('invoice.paid → tenant de la sub referenciada por el invoice', async () => {
@@ -1481,12 +1496,12 @@ describe('SubscriptionsService.resolveWebhookTenantId (mitad lookup del patrón 
       's2',
       makeSubRow({ id: 's2', tenantId: 't-inv', stripeSubscriptionId: 'sub_stripe_2' }),
     );
-    const tenantId = await service.resolveWebhookTenantId({
+    const claims = await service.resolveWebhookTenantClaims({
       id: 'evt_r3',
       type: 'invoice.paid',
       data: { object: { subscription: 'sub_stripe_2' } },
     } as unknown as Stripe.Event);
-    expect(tenantId).toBe('t-inv');
+    expect(claims).toEqual(['t-inv']);
   });
 
   it('charge.refunded → tenant de la invoice local por stripeInvoiceId', async () => {
@@ -1506,30 +1521,30 @@ describe('SubscriptionsService.resolveWebhookTenantId (mitad lookup del patrón 
       createdAt: new Date(),
       updatedAt: new Date(),
     });
-    const tenantId = await service.resolveWebhookTenantId({
+    const claims = await service.resolveWebhookTenantClaims({
       id: 'evt_r4',
       type: 'charge.refunded',
       data: { object: { invoice: 'in_ref_1' } },
     } as unknown as Stripe.Event);
-    expect(tenantId).toBe('t-refund');
+    expect(claims).toEqual(['t-refund']);
   });
 
-  it('entidad desconocida o evento sin lógica de dominio → null (procesado sancionado)', async () => {
+  it('entidad desconocida o evento sin lógica de dominio → sin claims (solo se archiva)', async () => {
     const { service } = buildSystem();
     expect(
-      await service.resolveWebhookTenantId({
+      await service.resolveWebhookTenantClaims({
         id: 'evt_r5',
         type: 'customer.subscription.updated',
         data: { object: { id: 'sub_stripe_desconocida' } },
       } as unknown as Stripe.Event),
-    ).toBeNull();
+    ).toEqual([]);
     expect(
-      await service.resolveWebhookTenantId({
+      await service.resolveWebhookTenantClaims({
         id: 'evt_r6',
         type: 'payment_method.attached',
         data: { object: {} },
       } as unknown as Stripe.Event),
-    ).toBeNull();
+    ).toEqual([]);
   });
 });
 
@@ -1627,7 +1642,7 @@ describe('SubscriptionsService — el webhook desordenado no se pierde (H11)', (
       },
     } as unknown as Stripe.Event;
 
-    await expect(service.handleWebhookEvent(event, {})).rejects.toBeInstanceOf(
+    await expect(service.handleWebhookEvent(event, {}, { tenantId: 't' })).rejects.toBeInstanceOf(
       WebhookOutOfOrderError,
     );
   });
@@ -1650,7 +1665,7 @@ describe('SubscriptionsService — el webhook desordenado no se pierde (H11)', (
       },
     } as unknown as Stripe.Event;
 
-    await expect(service.handleWebhookEvent(event, {})).resolves.toBeUndefined();
+    await expect(service.handleWebhookEvent(event, {}, { tenantId: 't' })).resolves.toBeUndefined();
     expect(prisma.webhookEvents.get('evt_ajeno')!.processedAt).not.toBeNull();
   });
 });
@@ -1717,7 +1732,7 @@ describe('SubscriptionsService — un checkout abandonado no bloquea la compra (
       data: { object: { id: 'cs_1', metadata: { subscriptionLocalId: 'vieja' } } },
     } as unknown as Stripe.Event;
 
-    await service.handleWebhookEvent(event, {});
+    await service.handleWebhookEvent(event, {}, { tenantId: 't' });
 
     expect(prisma.subs.get('vieja')!.status).toBe('CANCELED');
     expect(prisma.subs.get('vieja')!.canceledReason).toBe('checkout_caducado');
@@ -1733,7 +1748,7 @@ describe('SubscriptionsService — un checkout abandonado no bloquea la compra (
       data: { object: { id: 'cs_2', metadata: { subscriptionLocalId: 'vieja' } } },
     } as unknown as Stripe.Event;
 
-    await service.handleWebhookEvent(event, {});
+    await service.handleWebhookEvent(event, {}, { tenantId: 't' });
 
     expect(prisma.subs.get('vieja')!.status).toBe('ACTIVE');
   });
@@ -1800,7 +1815,7 @@ describe('SubscriptionsService — reembolsos y barrido de gracia', () => {
       },
     } as unknown as Stripe.Event;
 
-    await service.handleWebhookEvent(event, {});
+    await service.handleWebhookEvent(event, {}, { tenantId: 't' });
 
     expect(publisher.events.some((e) => e.name.includes('refunded'))).toBe(false);
   });
@@ -1823,7 +1838,7 @@ describe('SubscriptionsService — reembolsos y barrido de gracia', () => {
       },
     } as unknown as Stripe.Event;
 
-    await service.handleWebhookEvent(event, {});
+    await service.handleWebhookEvent(event, {}, { tenantId: 't' });
 
     expect(publisher.events.some((e) => e.name.includes('refunded'))).toBe(true);
   });
@@ -1850,5 +1865,239 @@ describe('SubscriptionsService — reembolsos y barrido de gracia', () => {
     expect(prisma.subs.get('s1')!.status).toBe('ACTIVE'); // no lo machaca
     expect(procesadas).toHaveLength(0);
     expect(publisher.events.some((e) => e.name.includes('unpaid'))).toBe(false);
+  });
+});
+
+/**
+ * Segunda cerradura del aislamiento entre aulas (la primera es el host, que
+ * rechaza el evento antes de llamar aquí): el módulo no toca una suscripción ni
+ * una factura que no sean del tenant para el que el host verificó el evento.
+ * Los ids los escribe quien firma, y la base puede no filtrar.
+ */
+describe('SubscriptionsService — el webhook solo toca filas del tenant verificado', () => {
+  function sistemaConSubDe(tenantId: string, over: Partial<SubRow> = {}) {
+    const sys = buildSystem();
+    sys.prisma.subs.set(
+      's-ajena',
+      makeSubRow({ id: 's-ajena', tenantId, stripeSubscriptionId: 'sub_ajena', ...over }),
+    );
+    return sys;
+  }
+  const ev = (type: string, object: unknown): Stripe.Event =>
+    ({ id: `evt_x_${type}`, type, data: { object } }) as unknown as Stripe.Event;
+
+  it('subscription.deleted de otra aula → lanza y la sub sigue ACTIVE', async () => {
+    const { service, prisma, publisher } = sistemaConSubDe('victima');
+    await expect(
+      service.handleWebhookEvent(
+        ev('customer.subscription.deleted', makeStripeSub({ id: 'sub_ajena', status: 'canceled' })),
+        {},
+        { tenantId: 'atacante' },
+      ),
+    ).rejects.toBeInstanceOf(WebhookTenantMismatchError);
+    expect(prisma.subs.get('s-ajena')!.status).toBe('ACTIVE');
+    expect(publisher.events).toHaveLength(0);
+  });
+
+  it('subscription.updated de otra aula → lanza y no cambia el estado', async () => {
+    const { service, prisma, publisher } = sistemaConSubDe('victima', { status: 'PAST_DUE' });
+    await expect(
+      service.handleWebhookEvent(
+        ev('customer.subscription.updated', makeStripeSub({ id: 'sub_ajena', status: 'active' })),
+        {},
+        { tenantId: 'atacante' },
+      ),
+    ).rejects.toBeInstanceOf(WebhookTenantMismatchError);
+    expect(prisma.subs.get('s-ajena')!.status).toBe('PAST_DUE');
+    expect(publisher.events).toHaveLength(0);
+  });
+
+  it('subscription.created con el id LOCAL de una sub PENDING de otra aula → lanza y sigue PENDING', async () => {
+    const { service, prisma, publisher } = sistemaConSubDe('victima', {
+      status: 'PENDING',
+      stripeSubscriptionId: null,
+    });
+    await expect(
+      service.handleWebhookEvent(
+        ev(
+          'customer.subscription.created',
+          makeStripeSub({ id: 'sub_inventada', metadata: { subscriptionLocalId: 's-ajena' } }),
+        ),
+        {},
+        { tenantId: 'atacante' },
+      ),
+    ).rejects.toBeInstanceOf(WebhookTenantMismatchError);
+    expect(prisma.subs.get('s-ajena')!.status).toBe('PENDING');
+    expect(prisma.subs.get('s-ajena')!.stripeSubscriptionId).toBeNull();
+    expect(publisher.events).toHaveLength(0);
+  });
+
+  it('invoice.paid de otra aula sobre una sub impagada → lanza y no se reactiva ni se crea factura', async () => {
+    const { service, prisma, publisher } = sistemaConSubDe('victima', { status: 'UNPAID' });
+    await expect(
+      service.handleWebhookEvent(
+        ev('invoice.paid', makeStripeInvoice({ subscription: 'sub_ajena' } as never)),
+        {},
+        { tenantId: 'atacante' },
+      ),
+    ).rejects.toBeInstanceOf(WebhookTenantMismatchError);
+    expect(prisma.subs.get('s-ajena')!.status).toBe('UNPAID');
+    expect(prisma.invoices.size).toBe(0);
+    expect(publisher.events).toHaveLength(0);
+  });
+
+  it('invoice.payment_failed de otra aula → lanza y no la deja PAST_DUE', async () => {
+    const { service, prisma, publisher } = sistemaConSubDe('victima');
+    await expect(
+      service.handleWebhookEvent(
+        ev('invoice.payment_failed', makeStripeInvoice({ subscription: 'sub_ajena' } as never)),
+        {},
+        { tenantId: 'atacante' },
+      ),
+    ).rejects.toBeInstanceOf(WebhookTenantMismatchError);
+    expect(prisma.subs.get('s-ajena')!.status).toBe('ACTIVE');
+    expect(publisher.events).toHaveLength(0);
+  });
+
+  it('checkout.session.expired con el id local de una sub PENDING de otra aula → lanza y no se cancela', async () => {
+    const { service, prisma } = sistemaConSubDe('victima', { status: 'PENDING' });
+    await expect(
+      service.handleWebhookEvent(
+        ev('checkout.session.expired', {
+          id: 'cs_x',
+          metadata: { subscriptionLocalId: 's-ajena' },
+        }),
+        {},
+        { tenantId: 'atacante' },
+      ),
+    ).rejects.toBeInstanceOf(WebhookTenantMismatchError);
+    expect(prisma.subs.get('s-ajena')!.status).toBe('PENDING');
+  });
+
+  it('invoice.paid sobre una sub PROPIA con el id de una factura AJENA → lanza y la factura no cambia de dueño', async () => {
+    const { service, prisma } = buildSystem();
+    prisma.subs.set(
+      's-propia',
+      makeSubRow({ id: 's-propia', tenantId: 'atacante', stripeSubscriptionId: 'sub_propia' }),
+    );
+    prisma.invoices.set('inv-victima', {
+      id: 'inv-victima',
+      tenantId: 'victima',
+      subscriptionId: 's-victima',
+      stripeInvoiceId: 'in_victima',
+      status: 'PAID',
+      amount: 1999,
+      currency: 'eur',
+      hostedInvoiceUrl: null,
+      paidAt: new Date(),
+      periodStart: new Date(),
+      periodEnd: new Date(),
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+
+    await expect(
+      service.handleWebhookEvent(
+        ev(
+          'invoice.paid',
+          makeStripeInvoice({
+            id: 'in_victima',
+            subscription: 'sub_propia',
+            amount_paid: 1,
+          } as never),
+        ),
+        {},
+        { tenantId: 'atacante' },
+      ),
+    ).rejects.toBeInstanceOf(WebhookTenantMismatchError);
+
+    const factura = prisma.invoices.get('inv-victima')!;
+    expect(factura.tenantId).toBe('victima');
+    expect(factura.subscriptionId).toBe('s-victima');
+    expect(factura.amount).toBe(1999);
+  });
+
+  it('charge.refunded de otra aula sobre una factura ajena → lanza y no publica el reembolso', async () => {
+    const { service, prisma, publisher } = buildSystem();
+    prisma.invoices.set('inv-victima', {
+      id: 'inv-victima',
+      tenantId: 'victima',
+      subscriptionId: 's-victima',
+      stripeInvoiceId: 'in_victima',
+      status: 'PAID',
+      amount: 1999,
+      currency: 'eur',
+      hostedInvoiceUrl: null,
+      paidAt: new Date(),
+      periodStart: new Date(),
+      periodEnd: new Date(),
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+    await expect(
+      service.handleWebhookEvent(
+        ev('charge.refunded', {
+          id: 'ch_x',
+          invoice: 'in_victima',
+          amount: 1999,
+          amount_refunded: 1999,
+          currency: 'eur',
+        }),
+        {},
+        { tenantId: 'atacante' },
+      ),
+    ).rejects.toBeInstanceOf(WebhookTenantMismatchError);
+    expect(publisher.events).toHaveLength(0);
+  });
+
+  it('sin tenant verificado no se procesa nada (ni se archiva)', async () => {
+    const { service, prisma } = sistemaConSubDe('victima');
+    await expect(
+      service.handleWebhookEvent(
+        ev('customer.subscription.deleted', makeStripeSub({ id: 'sub_ajena' })),
+        {},
+        {} as never,
+      ),
+    ).rejects.toBeInstanceOf(WebhookTenantMismatchError);
+    expect(prisma.webhookEvents.size).toBe(0);
+    expect(prisma.subs.get('s-ajena')!.status).toBe('ACTIVE');
+  });
+
+  it('claims: invoice.paid delata a la vez al dueño de la sub y al de la factura que reescribiría', async () => {
+    const { service, prisma } = buildSystem();
+    prisma.subs.set(
+      's-propia',
+      makeSubRow({ id: 's-propia', tenantId: 'atacante', stripeSubscriptionId: 'sub_propia' }),
+    );
+    prisma.invoices.set('inv-victima', {
+      id: 'inv-victima',
+      tenantId: 'victima',
+      subscriptionId: 's-victima',
+      stripeInvoiceId: 'in_victima',
+      status: 'PAID',
+      amount: 1999,
+      currency: 'eur',
+      hostedInvoiceUrl: null,
+      paidAt: new Date(),
+      periodStart: new Date(),
+      periodEnd: new Date(),
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+    const claims = await service.resolveWebhookTenantClaims(
+      ev(
+        'invoice.paid',
+        makeStripeInvoice({ id: 'in_victima', subscription: 'sub_propia' } as never),
+      ),
+    );
+    expect(claims.sort()).toEqual(['atacante', 'victima']);
+  });
+
+  it('claims: checkout.session.expired delata la sub PENDING que iría a cancelar', async () => {
+    const { service } = sistemaConSubDe('victima', { status: 'PENDING' });
+    const claims = await service.resolveWebhookTenantClaims(
+      ev('checkout.session.expired', { id: 'cs_x', metadata: { subscriptionLocalId: 's-ajena' } }),
+    );
+    expect(claims).toEqual(['victima']);
   });
 });

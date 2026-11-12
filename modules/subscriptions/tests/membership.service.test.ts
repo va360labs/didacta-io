@@ -24,6 +24,7 @@ import {
   MembershipPlanIntervalInvalidError,
   MembershipPlanNotFoundError,
   StripeConfigMissingError,
+  WebhookTenantMismatchError,
 } from '../src/errors.js';
 import type {
   SubscriptionsStripeAdapter,
@@ -930,6 +931,7 @@ describe('MembershipService · fulfillment (webhook)', () => {
     const res = await ctx.service.fulfillMembershipCheckout(
       membershipSession({ metadata: {} as never }),
       provision,
+      { tenantId: TENANT },
     );
     expect(res).toBeNull();
     expect(provision).not.toHaveBeenCalled();
@@ -940,6 +942,7 @@ describe('MembershipService · fulfillment (webhook)', () => {
     const res = await ctx.service.fulfillMembershipCheckout(
       membershipSession({ metadata: { membership: '1', tenantId: TENANT, planId } as never }),
       provision,
+      { tenantId: TENANT },
     );
 
     expect(provision).toHaveBeenCalledWith({
@@ -979,6 +982,7 @@ describe('MembershipService · fulfillment (webhook)', () => {
         payment_status: 'unpaid' as never,
       }),
       provision,
+      { tenantId: TENANT },
     );
 
     expect([...ctx.prisma.subs.values()][0]).toMatchObject({ status: 'PENDING' });
@@ -993,6 +997,7 @@ describe('MembershipService · fulfillment (webhook)', () => {
         payment_status: 'no_payment_required' as never,
       }),
       provision,
+      { tenantId: TENANT },
     );
 
     expect([...ctx.prisma.subs.values()][0]).toMatchObject({ status: 'ACTIVE' });
@@ -1004,8 +1009,10 @@ describe('MembershipService · fulfillment (webhook)', () => {
     const session = membershipSession({
       metadata: { membership: '1', tenantId: TENANT, planId } as never,
     });
-    await ctx.service.fulfillMembershipCheckout(session, provision);
-    const again = await ctx.service.fulfillMembershipCheckout(session, provision);
+    await ctx.service.fulfillMembershipCheckout(session, provision, { tenantId: TENANT });
+    const again = await ctx.service.fulfillMembershipCheckout(session, provision, {
+      tenantId: TENANT,
+    });
 
     expect(provision).toHaveBeenCalledTimes(1);
     expect(ctx.prisma.subs.size).toBe(1);
@@ -1023,6 +1030,7 @@ describe('MembershipService · fulfillment (webhook)', () => {
         metadata: { membership: '1', tenantId: TENANT, planId, locale: 'en-US' } as never,
       }),
       provision,
+      { tenantId: TENANT },
     );
     expect(provision).toHaveBeenCalledWith(expect.objectContaining({ locale: 'en-US' }));
   });
@@ -1032,6 +1040,7 @@ describe('MembershipService · fulfillment (webhook)', () => {
     await ctx.service.fulfillMembershipCheckout(
       membershipSession({ metadata: { membership: '1', tenantId: TENANT, planId } as never }),
       provision,
+      { tenantId: TENANT },
     );
     expect(provision).toHaveBeenCalledWith(expect.objectContaining({ locale: undefined }));
   });
@@ -1044,6 +1053,7 @@ describe('MembershipService · fulfillment (webhook)', () => {
         customer_details: { email: ' BUYER@X.com ', name: null } as never,
       }),
       provision,
+      { tenantId: TENANT },
     );
     expect(provision).toHaveBeenCalledWith(expect.objectContaining({ email: 'buyer@x.com' }));
   });
@@ -1062,6 +1072,7 @@ describe('MembershipService · fulfillment (webhook)', () => {
         subscription: 'sub_stripe_trial' as never,
       }),
       provision,
+      { tenantId: TENANT },
     );
     const sub = [...ctx.prisma.subs.values()].find(
       (s) => s.stripeSubscriptionId === 'sub_stripe_trial',
@@ -1090,6 +1101,7 @@ describe('MembershipService · payNow (terminar el trial y cobrar ya)', () => {
     await ctx.service.fulfillMembershipCheckout(
       membershipSession({ metadata: { membership: '1', tenantId: TENANT, planId } as never }),
       async () => ({ userId: 'user_1', created: true }),
+      { tenantId: TENANT },
     );
     ctx.pub.events.length = 0; // limpiar el activated del fulfillment
   });
@@ -1142,5 +1154,121 @@ describe('MembershipService · payNow (terminar el trial y cobrar ya)', () => {
     await expect(ctx.service.payNow(TENANT, 'user_sin_trial')).rejects.toBeInstanceOf(
       MembershipNotTrialingError,
     );
+  });
+});
+
+/**
+ * Aislamiento entre aulas en el alta de membresía. La metadata de la session la
+ * escribe quien firma el evento: NO decide a qué aula se le crea la membresía.
+ * Era el agujero — un admin de otra aula firmaba con su secreto una session con
+ * el `tenantId` y el `planId` de esta y obtenía aquí una membresía ACTIVE sin
+ * pagar.
+ */
+describe('MembershipService · el fulfillment solo crea en el tenant verificado', () => {
+  const ATACANTE = 'bbbbbbbb-0000-0000-0000-000000000002';
+  let ctx: ReturnType<typeof build>;
+  let planId: string;
+  beforeEach(async () => {
+    ctx = build();
+    await ctx.service.updateConfig(TENANT, { active: true });
+    const plan = await ctx.service.createPlan(TENANT, {
+      name: 'Anual',
+      intervalMonths: 12,
+      amountCents: 99_900,
+    });
+    planId = plan.id;
+  });
+
+  it('metadata que nombra a la víctima, evento verificado para el atacante → lanza antes de crear nada', async () => {
+    const provision = vi.fn(async () => ({ userId: 'user_1', created: true }));
+    await expect(
+      ctx.service.fulfillMembershipCheckout(
+        membershipSession({ metadata: { membership: '1', tenantId: TENANT, planId } as never }),
+        provision,
+        { tenantId: ATACANTE },
+      ),
+    ).rejects.toBeInstanceOf(WebhookTenantMismatchError);
+
+    expect(provision).not.toHaveBeenCalled();
+    expect(ctx.prisma.subs.size).toBe(0);
+    expect(ctx.pub.events).toHaveLength(0);
+  });
+
+  it('metadata que dice «soy el atacante» con el plan de la víctima → el plan no es suyo, no se crea nada', async () => {
+    const provision = vi.fn(async () => ({ userId: 'user_1', created: true }));
+    await expect(
+      ctx.service.fulfillMembershipCheckout(
+        membershipSession({ metadata: { membership: '1', tenantId: ATACANTE, planId } as never }),
+        provision,
+        { tenantId: ATACANTE },
+      ),
+    ).rejects.toBeInstanceOf(MembershipPlanNotFoundError);
+
+    expect(provision).not.toHaveBeenCalled();
+    expect(ctx.prisma.subs.size).toBe(0);
+  });
+
+  it('suscripción de Stripe que ya existe en OTRA aula → lanza, no se devuelve como «ya estaba»', async () => {
+    const provision = vi.fn(async () => ({ userId: 'user_1', created: true }));
+    const session = membershipSession({
+      metadata: { membership: '1', tenantId: TENANT, planId } as never,
+    });
+    await ctx.service.fulfillMembershipCheckout(session, provision, { tenantId: TENANT });
+    expect(ctx.prisma.subs.size).toBe(1);
+
+    await expect(
+      ctx.service.fulfillMembershipCheckout(
+        membershipSession({ metadata: { membership: '1', tenantId: ATACANTE, planId } as never }),
+        provision,
+        { tenantId: ATACANTE },
+      ),
+    ).rejects.toBeInstanceOf(WebhookTenantMismatchError);
+    expect(ctx.prisma.subs.size).toBe(1);
+  });
+
+  it('sin tenant verificado no se crea nada', async () => {
+    const provision = vi.fn(async () => ({ userId: 'user_1', created: true }));
+    await expect(
+      ctx.service.fulfillMembershipCheckout(
+        membershipSession({ metadata: { membership: '1', tenantId: TENANT, planId } as never }),
+        provision,
+        {} as never,
+      ),
+    ).rejects.toBeInstanceOf(WebhookTenantMismatchError);
+    expect(provision).not.toHaveBeenCalled();
+    expect(ctx.prisma.subs.size).toBe(0);
+  });
+
+  it('claims: el tenant de la metadata y el dueño de la suscripción que ya exista', async () => {
+    const evento = (metadataTenantId: string) =>
+      ({
+        id: 'evt_m',
+        type: 'checkout.session.completed',
+        data: {
+          object: membershipSession({
+            metadata: { membership: '1', tenantId: metadataTenantId, planId } as never,
+          }),
+        },
+      }) as unknown as Stripe.Event;
+
+    expect(await ctx.service.resolveWebhookTenantClaims(evento(TENANT))).toEqual([TENANT]);
+
+    await ctx.service.fulfillMembershipCheckout(
+      membershipSession({ metadata: { membership: '1', tenantId: TENANT, planId } as never }),
+      async () => ({ userId: 'user_1', created: true }),
+      { tenantId: TENANT },
+    );
+    expect((await ctx.service.resolveWebhookTenantClaims(evento(ATACANTE))).sort()).toEqual(
+      [ATACANTE, TENANT].sort(),
+    );
+  });
+
+  it('claims: un checkout que no es de membresía no nombra a nadie', async () => {
+    const claims = await ctx.service.resolveWebhookTenantClaims({
+      id: 'evt_curso',
+      type: 'checkout.session.completed',
+      data: { object: membershipSession({ metadata: { orderId: 'o1' } as never }) },
+    } as unknown as Stripe.Event);
+    expect(claims).toEqual([]);
   });
 });

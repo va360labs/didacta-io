@@ -14,15 +14,19 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
+import { Logger as PinoLogger } from 'nestjs-pino';
 import { StripeSdkAdapter, WebhookSignatureInvalidError } from '@didacta/mod-billing';
 import type { FastifyRequest } from 'fastify';
 import { extractClientContext } from '../../auth/client-context';
 import {
-  runAsTenantOrSanctioned,
+  runAsTenant,
+  runGlobalWithoutTenant,
   runSanctionedGlobalAccess,
 } from '../../tenancy/tenant-context.storage';
 import { TenantResolverService } from '../../tenancy/tenant-resolver.service';
 import { ModuleRegistryService } from '../module-registry.service';
+import { PrismaAuditLogService } from '../prisma-audit-log.service';
+import { resolveStripeEventTenant } from '../stripe-webhook-tenant';
 import { TenantStripeResolverService } from '../tenant-stripe-resolver.service';
 import { BillingProvisioningService } from './billing-provisioning.service';
 import { resolvePublicHost } from '../../common/resolve-public-host';
@@ -40,6 +44,11 @@ import { resolvePublicHost } from '../../common/resolve-public-host';
  * pertenece la llamada ANTES de leer ningún secret, que es lo que hace falta
  * para saber qué secret probar al verificar la firma.
  *
+ * ⚠️ Ese mismo tenant —el dueño del secreto que verificó la firma— es PARA EL
+ * QUE SE PROCESA el evento. Lo que el evento diga de sí mismo (`metadata`,
+ * ids de órdenes) lo escribe quien firma y no decide nada: si nombra a otra
+ * aula se rechaza con 403 sin tocar nada. Ver `stripe-webhook-tenant.ts`.
+ *
  * Stripe espera 2xx en menos de 30s o reintenta hasta 3 días. El handler
  * persiste el evento ANTES de procesar, así que un timeout intermedio no
  * causa duplicación: la siguiente entrega encuentra el row y skip silencioso.
@@ -52,6 +61,8 @@ export class BillingWebhookController {
     private readonly provisioning: BillingProvisioningService,
     private readonly tenantResolver: TenantResolverService,
     private readonly stripeResolver: TenantStripeResolverService,
+    private readonly auditLog: PrismaAuditLogService,
+    private readonly logger: PinoLogger,
   ) {}
 
   @Post('webhook')
@@ -74,9 +85,7 @@ export class BillingWebhookController {
       });
     }
 
-    const resolved = await runAsTenantOrSanctioned(tenant.id, () =>
-      this.stripeResolver.resolve(tenant.id),
-    );
+    const resolved = await runAsTenant(tenant.id, () => this.stripeResolver.resolve(tenant.id));
     if (!resolved) {
       throw new UnauthorizedException({
         message: 'Stripe no está configurado para este tenant.',
@@ -133,20 +142,40 @@ export class BillingWebhookController {
     // (comprador anónimo), el fulfillment materializa la cuenta con el email
     // confirmado en Stripe y envía la bienvenida con el enlace de contraseña.
     const ctx = extractClientContext(req);
-    // RLS F3: lookup sancionado (metadata / order por id global) + procesado
-    // bajo el contexto del tenant resuelto. Sin tenant (evento ajeno) el
-    // procesado degrada a sancionado: solo archiva para auditoría.
-    const tenantId = await runSanctionedGlobalAccess(() => billing.resolveWebhookTenantId(event));
+    // 1) LOOKUP (sancionado, fuera de cualquier contexto de tenant): a qué
+    //    tenants nombra o toca el evento. Solo lee.
+    const claims = await runGlobalWithoutTenant(() => billing.resolveWebhookTenantClaims(event));
+    // 2) DECISIÓN: el evento se procesa para el tenant cuyo secreto verificó la
+    //    firma. Si nombra a otro, 403 + rastro, y aquí se acaba — antes de
+    //    archivar el evento siquiera.
+    const tenantId = await resolveStripeEventTenant({
+      endpoint: 'billing',
+      errorCode: 'BILLING_WEBHOOK_FOREIGN_TENANT',
+      verifiedTenantId: tenant.id,
+      verified: resolved,
+      claims,
+      event,
+      resolveCredentials: (id) => this.stripeResolver.resolve(id),
+      audit: (entry) => this.auditLog.record(entry),
+      logger: this.logger,
+      host: hostStr,
+      client: ctx,
+    });
     // El Host de este request es el de la API (Stripe), no el del frontend
     // del tenant — con el tenant ya resuelto, preferimos su dominio primario.
     const webBaseUrl = await this.tenantResolver.resolveTenantWebBaseUrl(tenantId, req);
-    await runAsTenantOrSanctioned(
+    // 3) PROCESADO: siempre bajo el contexto de ESE tenant (nunca sancionado:
+    //    un evento sin dueño reconocible se archiva en el del dominio) y
+    //    diciéndole al módulo cuál es, para que compruebe cada fila que toque.
+    await runAsTenant(
       tenantId,
       () =>
         billing.handleWebhookEvent(event, parsedBody, {
-          provisionUser: ({ tenantId: provisionTenantId, email, name, locale }) =>
+          tenantId,
+          provisionUser: ({ email, name, locale }) =>
             this.provisioning.provision({
-              tenantId: provisionTenantId,
+              // El tenant verificado, no el que devuelva el módulo.
+              tenantId,
               email,
               name,
               // Idioma con el que compró, capturado al iniciar el checkout y

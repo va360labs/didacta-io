@@ -27,6 +27,7 @@ import {
   ProductInactiveError,
   ProductNotFoundError,
   StripeApiError,
+  WebhookTenantMismatchError,
 } from '../src/errors.js';
 import type { StripeAdapter } from '../src/stripe.client.js';
 
@@ -710,7 +711,11 @@ describe('BillingService — handleWebhookEvent (idempotente)', () => {
     });
     publisher.events = []; // limpiamos el created para asertar solo el completed
 
-    await svc.handleWebhookEvent(buildSessionCompletedEvent(checkout.orderId), { foo: 'bar' });
+    await svc.handleWebhookEvent(
+      buildSessionCompletedEvent(checkout.orderId),
+      { foo: 'bar' },
+      { tenantId: 't1' },
+    );
 
     const updated = prisma.orders.get(checkout.orderId)!;
     expect(updated.status).toBe('COMPLETED');
@@ -734,7 +739,7 @@ describe('BillingService — handleWebhookEvent (idempotente)', () => {
     });
     const ev = buildSessionCompletedEvent(checkout.orderId);
     (ev.data.object as unknown as { payment_intent: string }).payment_intent = 'pi_test_1';
-    await svc.handleWebhookEvent(ev, {});
+    await svc.handleWebhookEvent(ev, {}, { tenantId: 't1' });
     publisher.events = [];
     return checkout.orderId;
   }
@@ -757,7 +762,11 @@ describe('BillingService — handleWebhookEvent (idempotente)', () => {
   it('un reembolso TOTAL marca la orden como REFUNDED y emite el evento para retirar el acceso', async () => {
     const orderId = await comprarYCobrar();
 
-    await svc.handleWebhookEvent(refundEvent('evt_refund_total', 1999, 1999), {});
+    await svc.handleWebhookEvent(
+      refundEvent('evt_refund_total', 1999, 1999),
+      {},
+      { tenantId: 't1' },
+    );
 
     expect(prisma.orders.get(orderId)!.status).toBe('REFUNDED');
     expect(prisma.orders.get(orderId)!.refundedAt).toBeInstanceOf(Date);
@@ -769,7 +778,11 @@ describe('BillingService — handleWebhookEvent (idempotente)', () => {
   it('un reembolso PARCIAL no retira el acceso ni marca la orden', async () => {
     const orderId = await comprarYCobrar();
 
-    await svc.handleWebhookEvent(refundEvent('evt_refund_parcial', 1999, 500), {});
+    await svc.handleWebhookEvent(
+      refundEvent('evt_refund_parcial', 1999, 500),
+      {},
+      { tenantId: 't1' },
+    );
 
     expect(prisma.orders.get(orderId)!.status).toBe('COMPLETED');
     expect(publisher.events).toHaveLength(0);
@@ -780,7 +793,7 @@ describe('BillingService — handleWebhookEvent (idempotente)', () => {
     const ajeno = refundEvent('evt_refund_ajeno', 39900, 39900);
     (ajeno.data.object as unknown as { payment_intent: string }).payment_intent = 'pi_membresia';
 
-    await svc.handleWebhookEvent(ajeno, {});
+    await svc.handleWebhookEvent(ajeno, {}, { tenantId: 't1' });
 
     expect(prisma.orders.get(orderId)!.status).toBe('COMPLETED');
     expect(publisher.events).toHaveLength(0);
@@ -800,14 +813,14 @@ describe('BillingService — handleWebhookEvent (idempotente)', () => {
     // Primer intento: el trabajo de dominio falla a mitad (simulamos borrando
     // la order justo después de que el evento quede registrado).
     const event = buildSessionCompletedEvent('order-inexistente');
-    await expect(svc.handleWebhookEvent(event, {})).rejects.toThrow();
+    await expect(svc.handleWebhookEvent(event, {}, { tenantId: 't1' })).rejects.toThrow();
     expect(publisher.events).toHaveLength(0);
 
     // Segundo intento con el MISMO id de evento (reintento de Stripe), esta vez
     // con la order correcta: debe volver a intentarlo, no salir por idempotencia.
     const reintento = buildSessionCompletedEvent(checkout.orderId);
     reintento.id = event.id;
-    await svc.handleWebhookEvent(reintento, {});
+    await svc.handleWebhookEvent(reintento, {}, { tenantId: 't1' });
 
     expect(publisher.events).toHaveLength(1);
     expect(publisher.events[0]!.name).toBe('billing.order.completed');
@@ -832,7 +845,9 @@ describe('BillingService — handleWebhookEvent (idempotente)', () => {
       },
     } as Stripe.Event;
 
-    await expect(svc.handleWebhookEvent(membershipEvent, {})).resolves.toBeUndefined();
+    await expect(
+      svc.handleWebhookEvent(membershipEvent, {}, { tenantId: 't1' }),
+    ).resolves.toBeUndefined();
 
     // Ni emite eventos de dominio ni deja el webhook marcado como fallido.
     expect(publisher.events).toHaveLength(0);
@@ -853,8 +868,8 @@ describe('BillingService — handleWebhookEvent (idempotente)', () => {
     publisher.events = [];
 
     const event = buildSessionCompletedEvent(checkout.orderId);
-    await svc.handleWebhookEvent(event, {});
-    await svc.handleWebhookEvent(event, {}); // re-entrega de Stripe
+    await svc.handleWebhookEvent(event, {}, { tenantId: 't1' });
+    await svc.handleWebhookEvent(event, {}, { tenantId: 't1' }); // re-entrega de Stripe
 
     expect(publisher.events).toHaveLength(1); // NO se emitió dos veces
   });
@@ -883,6 +898,7 @@ describe('BillingService — handleWebhookEvent (idempotente)', () => {
         },
       } as Stripe.Event,
       {},
+      { tenantId: 't1' },
     );
 
     expect(prisma.orders.get(checkout.orderId)!.status).toBe('CANCELLED');
@@ -913,6 +929,7 @@ describe('BillingService — handleWebhookEvent (idempotente)', () => {
         },
       } as Stripe.Event,
       {},
+      { tenantId: 't1' },
     );
 
     expect(prisma.orders.get(checkout.orderId)!.status).toBe('FAILED');
@@ -963,7 +980,11 @@ describe('BillingService — handleWebhookEvent (idempotente)', () => {
       courseId: 'course-1',
     });
     publisher.events = [];
-    await svc.handleWebhookEvent(unpaidCompletedEvent(checkout.orderId, 'evt_unpaid'), {});
+    await svc.handleWebhookEvent(
+      unpaidCompletedEvent(checkout.orderId, 'evt_unpaid'),
+      {},
+      { tenantId: 't1' },
+    );
     return checkout.orderId;
   }
 
@@ -988,7 +1009,7 @@ describe('BillingService — handleWebhookEvent (idempotente)', () => {
     const cobrado = unpaidCompletedEvent(orderId, 'evt_sepa_ok');
     (cobrado as { type: string }).type = 'checkout.session.async_payment_succeeded';
     (cobrado.data.object as { payment_status: string }).payment_status = 'paid';
-    await svc.handleWebhookEvent(cobrado, {});
+    await svc.handleWebhookEvent(cobrado, {}, { tenantId: 't1' });
 
     expect(prisma.orders.get(orderId)!.status).toBe('COMPLETED');
     expect(publisher.events).toHaveLength(1);
@@ -1004,7 +1025,11 @@ describe('BillingService — handleWebhookEvent (idempotente)', () => {
       userEmail: 'u@test',
       courseId: 'course-1',
     });
-    await svc.handleWebhookEvent(buildSessionCompletedEvent(checkout.orderId), {});
+    await svc.handleWebhookEvent(
+      buildSessionCompletedEvent(checkout.orderId),
+      {},
+      { tenantId: 't1' },
+    );
     publisher.events = [];
 
     await svc.handleWebhookEvent(
@@ -1020,6 +1045,7 @@ describe('BillingService — handleWebhookEvent (idempotente)', () => {
         },
       } as Stripe.Event,
       {},
+      { tenantId: 't1' },
     );
 
     expect(prisma.orders.get(checkout.orderId)!.status).toBe('FAILED');
@@ -1045,7 +1071,7 @@ describe('BillingService — handleWebhookEvent (idempotente)', () => {
     (gratis.data.object as { payment_status: string; amount_total: number }).payment_status =
       'no_payment_required';
     (gratis.data.object as { payment_status: string; amount_total: number }).amount_total = 0;
-    await svc.handleWebhookEvent(gratis, {});
+    await svc.handleWebhookEvent(gratis, {}, { tenantId: 't1' });
 
     expect(prisma.orders.get(checkout.orderId)!.status).toBe('COMPLETED');
     expect(publisher.events[0]!.name).toBe('billing.order.completed');
@@ -1066,9 +1092,7 @@ describe('BillingService — handleWebhookEvent (idempotente)', () => {
     await svc.handleWebhookEvent(
       buildSessionCompletedEvent(checkout.orderId),
       {},
-      {
-        provisionUser: provision,
-      },
+      { tenantId: 't1', provisionUser: provision },
     );
 
     expect(provision).not.toHaveBeenCalled();
@@ -1087,6 +1111,7 @@ describe('BillingService — handleWebhookEvent (idempotente)', () => {
         data: { object: {} as unknown as Stripe.Invoice },
       } as Stripe.Event,
       {},
+      { tenantId: 't1' },
     );
 
     expect(prisma.webhookEvents.has('evt_invoice')).toBe(true);
@@ -1166,9 +1191,7 @@ describe('BillingService — checkout PÚBLICO (viaje 2: visitante sin cuenta)',
     await svc.handleWebhookEvent(
       anonymousCompletedEvent(checkout.orderId),
       {},
-      {
-        provisionUser: provision,
-      },
+      { tenantId: 't1', provisionUser: provision },
     );
 
     // Email normalizado (trim + lowercase) y nombre de Stripe.
@@ -1202,7 +1225,7 @@ describe('BillingService — checkout PÚBLICO (viaje 2: visitante sin cuenta)',
     const provision = vi.fn().mockResolvedValue({ userId: 'u-nueva', created: true });
     const event = anonymousCompletedEvent(checkout.orderId);
     (event.data.object as { metadata: Record<string, string> }).metadata.locale = 'en-US';
-    await svc.handleWebhookEvent(event, {}, { provisionUser: provision });
+    await svc.handleWebhookEvent(event, {}, { tenantId: 't1', provisionUser: provision });
     expect(provision).toHaveBeenCalledWith(expect.objectContaining({ locale: 'en-US' }));
   });
 
@@ -1214,7 +1237,7 @@ describe('BillingService — checkout PÚBLICO (viaje 2: visitante sin cuenta)',
     await svc.handleWebhookEvent(
       anonymousCompletedEvent(checkout.orderId),
       {},
-      { provisionUser: provision },
+      { tenantId: 't1', provisionUser: provision },
     );
     expect(provision).toHaveBeenCalledWith(expect.objectContaining({ locale: undefined }));
   });
@@ -1225,8 +1248,8 @@ describe('BillingService — checkout PÚBLICO (viaje 2: visitante sin cuenta)',
     const provision = vi.fn().mockResolvedValue({ userId: 'u-nueva', created: true });
     const event = anonymousCompletedEvent(checkout.orderId);
 
-    await svc.handleWebhookEvent(event, {}, { provisionUser: provision });
-    await svc.handleWebhookEvent(event, {}, { provisionUser: provision });
+    await svc.handleWebhookEvent(event, {}, { tenantId: 't1', provisionUser: provision });
+    await svc.handleWebhookEvent(event, {}, { tenantId: 't1', provisionUser: provision });
 
     expect(provision).toHaveBeenCalledTimes(1);
     expect(publisher.events).toHaveLength(1);
@@ -1237,12 +1260,14 @@ describe('BillingService — checkout PÚBLICO (viaje 2: visitante sin cuenta)',
     publisher.events = [];
     const event = anonymousCompletedEvent(checkout.orderId);
 
-    await expect(svc.handleWebhookEvent(event, {})).rejects.toThrow(/provisioner/);
+    await expect(svc.handleWebhookEvent(event, {}, { tenantId: 't1' })).rejects.toThrow(
+      /provisioner/,
+    );
     expect(prisma.orders.get(checkout.orderId)!.status).toBe('PENDING');
 
     // El reintento de Stripe (mismo event id), esta vez con provisioner, completa.
     const provision = vi.fn().mockResolvedValue({ userId: 'u-nueva', created: true });
-    await svc.handleWebhookEvent(event, {}, { provisionUser: provision });
+    await svc.handleWebhookEvent(event, {}, { tenantId: 't1', provisionUser: provision });
     expect(prisma.orders.get(checkout.orderId)!.status).toBe('COMPLETED');
     expect(publisher.events).toHaveLength(1);
   });
@@ -1255,9 +1280,7 @@ describe('BillingService — checkout PÚBLICO (viaje 2: visitante sin cuenta)',
       svc.handleWebhookEvent(
         anonymousCompletedEvent(checkout.orderId, { email: null }),
         {},
-        {
-          provisionUser: provision,
-        },
+        { tenantId: 't1', provisionUser: provision },
       ),
     ).rejects.toThrow(/email/);
     expect(provision).not.toHaveBeenCalled();
@@ -1272,9 +1295,7 @@ describe('BillingService — checkout PÚBLICO (viaje 2: visitante sin cuenta)',
     await svc.handleWebhookEvent(
       anonymousCompletedEvent(checkout.orderId),
       {},
-      {
-        provisionUser: provision,
-      },
+      { tenantId: 't1', provisionUser: provision },
     );
 
     expect(prisma.orders.get(checkout.orderId)!.userId).toBe('u-existente');
@@ -1336,7 +1357,7 @@ describe('BillingService — checkout PÚBLICO (viaje 2: visitante sin cuenta)',
         },
       } as Stripe.Event,
       {},
-      { provisionUser: provision },
+      { tenantId: 't1', provisionUser: provision },
     );
 
     expect(prisma.orders.get(checkout.orderId)!.status).toBe('CANCELLED');
@@ -1345,7 +1366,7 @@ describe('BillingService — checkout PÚBLICO (viaje 2: visitante sin cuenta)',
   });
 });
 
-describe('BillingService — resolveWebhookTenantId (mitad lookup del patrón F3)', () => {
+describe('BillingService — resolveWebhookTenantClaims (mitad lookup del webhook)', () => {
   let prisma: MockPrisma;
   let stripe: MockStripe;
   let publisher: MockPublisher;
@@ -1358,8 +1379,8 @@ describe('BillingService — resolveWebhookTenantId (mitad lookup del patrón F3
     svc = new BillingService(prisma as unknown as never, async () => stripe, publisher, urls);
   });
 
-  it('checkout con NUESTRA marca (orderId+productId) → tenant de la metadata', async () => {
-    const tenantId = await svc.resolveWebhookTenantId({
+  it('checkout con orderId → el tenant que nombra la metadata (la orden aún no existe en local)', async () => {
+    const claims = await svc.resolveWebhookTenantClaims({
       id: 'evt_res_1',
       type: 'checkout.session.completed',
       data: {
@@ -1369,11 +1390,11 @@ describe('BillingService — resolveWebhookTenantId (mitad lookup del patrón F3
         } as unknown as Stripe.Checkout.Session,
       },
     } as Stripe.Event);
-    expect(tenantId).toBe('t-meta');
+    expect(claims).toEqual(['t-meta']);
   });
 
-  it('checkout SIN nuestra marca (p.ej. membresía de mod.subscriptions) → null', async () => {
-    const tenantId = await svc.resolveWebhookTenantId({
+  it('checkout SIN orderId (p.ej. membresía de mod.subscriptions) → sin claims', async () => {
+    const claims = await svc.resolveWebhookTenantClaims({
       id: 'evt_res_2',
       type: 'checkout.session.completed',
       data: {
@@ -1383,7 +1404,7 @@ describe('BillingService — resolveWebhookTenantId (mitad lookup del patrón F3
         } as unknown as Stripe.Checkout.Session,
       },
     } as Stripe.Event);
-    expect(tenantId).toBeNull();
+    expect(claims).toEqual([]);
   });
 
   it('charge.refunded → tenant de la order por stripePaymentIntentId', async () => {
@@ -1397,34 +1418,195 @@ describe('BillingService — resolveWebhookTenantId (mitad lookup del patrón F3
     });
     prisma.orders.get(checkout.orderId)!.stripePaymentIntentId = 'pi_res_1';
 
-    const tenantId = await svc.resolveWebhookTenantId({
+    const claims = await svc.resolveWebhookTenantClaims({
       id: 'evt_res_3',
       type: 'charge.refunded',
       data: {
         object: { id: 'ch_1', payment_intent: 'pi_res_1' } as unknown as Stripe.Charge,
       },
     } as Stripe.Event);
-    expect(tenantId).toBe('t1');
+    expect(claims).toEqual(['t1']);
 
-    // PaymentIntent desconocido (cobro ajeno) → null.
+    // PaymentIntent desconocido (cobro ajeno) → sin claims.
     expect(
-      await svc.resolveWebhookTenantId({
+      await svc.resolveWebhookTenantClaims({
         id: 'evt_res_4',
         type: 'charge.refunded',
         data: {
           object: { id: 'ch_2', payment_intent: 'pi_desconocido' } as unknown as Stripe.Charge,
         },
       } as Stripe.Event),
-    ).toBeNull();
+    ).toEqual([]);
   });
 
-  it('evento sin lógica de dominio → null (el host lo procesa sancionado)', async () => {
+  it('evento sin lógica de dominio → sin claims (solo se archiva)', async () => {
     expect(
-      await svc.resolveWebhookTenantId({
+      await svc.resolveWebhookTenantClaims({
         id: 'evt_res_5',
         type: 'payment_method.attached',
         data: { object: {} },
       } as unknown as Stripe.Event),
-    ).toBeNull();
+    ).toEqual([]);
+  });
+});
+
+/**
+ * Segunda cerradura del aislamiento entre aulas (la primera es el host, que
+ * rechaza el evento antes de llamar aquí): el módulo no toca una orden que no
+ * sea del tenant para el que el host verificó el evento, diga lo que diga la
+ * metadata y sin fiarse de que la base filtre.
+ */
+describe('BillingService — el webhook solo toca órdenes del tenant verificado', () => {
+  let prisma: MockPrisma;
+  let stripe: MockStripe;
+  let publisher: MockPublisher;
+  let svc: BillingService;
+  let orderId: string;
+
+  beforeEach(async () => {
+    prisma = new MockPrisma();
+    stripe = new MockStripe();
+    publisher = new MockPublisher();
+    svc = new BillingService(prisma as unknown as never, async () => stripe, publisher, urls);
+    stripe.setPrice('price_a');
+    await svc.createProduct({ tenantId: 't1', courseId: 'course-1', stripePriceId: 'price_a' });
+    const checkout = await svc.startCheckout({
+      tenantId: 't1',
+      userId: 'u1',
+      userEmail: 'u@test',
+      courseId: 'course-1',
+    });
+    orderId = checkout.orderId;
+    publisher.events = [];
+  });
+
+  function completed(metadataTenantId: string): Stripe.Event {
+    return {
+      id: `evt_cruzado_${metadataTenantId}`,
+      type: 'checkout.session.completed',
+      data: {
+        object: {
+          id: 'cs_cruzada',
+          metadata: {
+            orderId,
+            tenantId: metadataTenantId,
+            courseId: 'course-1',
+            productId: 'prod-1',
+          },
+          amount_total: 1999,
+          customer_details: { email: 'u@test' },
+          payment_status: 'paid',
+          status: 'complete',
+        } as unknown as Stripe.Checkout.Session,
+      },
+    } as Stripe.Event;
+  }
+
+  it('completed de una orden de t1 procesado para OTRO tenant → lanza y la orden sigue PENDING', async () => {
+    // La metadata dice la verdad (t1) pero el host lo verificó para `t-otro`.
+    await expect(
+      svc.handleWebhookEvent(completed('t1'), {}, { tenantId: 't-otro' }),
+    ).rejects.toBeInstanceOf(WebhookTenantMismatchError);
+
+    expect(prisma.orders.get(orderId)!.status).toBe('PENDING');
+    expect(publisher.events).toHaveLength(0);
+  });
+
+  it('metadata que dice «es de t-otro» apuntando a una orden de t1 → lanza y no se toca', async () => {
+    // Quien firma escribe la metadata Y el orderId: que la metadata coincida
+    // con el tenant verificado no basta, la orden tiene que ser suya.
+    const provision = vi.fn();
+    await expect(
+      svc.handleWebhookEvent(
+        completed('t-otro'),
+        {},
+        { tenantId: 't-otro', provisionUser: provision },
+      ),
+    ).rejects.toBeInstanceOf(WebhookTenantMismatchError);
+
+    expect(prisma.orders.get(orderId)!.status).toBe('PENDING');
+    expect(provision).not.toHaveBeenCalled();
+    expect(publisher.events).toHaveLength(0);
+  });
+
+  it('async_payment_failed de otra aula sobre una compra pagada → lanza y sigue COMPLETED', async () => {
+    await svc.handleWebhookEvent(completed('t1'), {}, { tenantId: 't1' });
+    publisher.events = [];
+
+    await expect(
+      svc.handleWebhookEvent(
+        {
+          id: 'evt_fallo_cruzado',
+          type: 'checkout.session.async_payment_failed',
+          data: {
+            object: {
+              id: 'cs_cruzada',
+              status: 'complete',
+              metadata: { orderId },
+            } as unknown as Stripe.Checkout.Session,
+          },
+        } as Stripe.Event,
+        {},
+        { tenantId: 't-otro' },
+      ),
+    ).rejects.toBeInstanceOf(WebhookTenantMismatchError);
+
+    expect(prisma.orders.get(orderId)!.status).toBe('COMPLETED');
+    expect(publisher.events).toHaveLength(0);
+  });
+
+  it('charge.refunded de otra aula sobre una compra de t1 → lanza y no se reembolsa', async () => {
+    const ev = completed('t1');
+    (ev.data.object as unknown as { payment_intent: string }).payment_intent = 'pi_de_t1';
+    await svc.handleWebhookEvent(ev, {}, { tenantId: 't1' });
+    publisher.events = [];
+
+    await expect(
+      svc.handleWebhookEvent(
+        {
+          id: 'evt_reembolso_cruzado',
+          type: 'charge.refunded',
+          data: {
+            object: {
+              id: 'ch_x',
+              payment_intent: 'pi_de_t1',
+              amount: 1999,
+              amount_refunded: 1999,
+            } as unknown as Stripe.Charge,
+          },
+        } as Stripe.Event,
+        {},
+        { tenantId: 't-otro' },
+      ),
+    ).rejects.toBeInstanceOf(WebhookTenantMismatchError);
+
+    expect(prisma.orders.get(orderId)!.status).toBe('COMPLETED');
+    expect(publisher.events).toHaveLength(0);
+  });
+
+  it('sin tenant verificado no se procesa nada (ni se archiva)', async () => {
+    await expect(svc.handleWebhookEvent(completed('t1'), {}, {} as never)).rejects.toBeInstanceOf(
+      WebhookTenantMismatchError,
+    );
+    expect(prisma.webhookEvents.size).toBe(0);
+    expect(prisma.orders.get(orderId)!.status).toBe('PENDING');
+  });
+
+  it('claims: metadata propia + orden ajena → salen LOS DOS tenants (el host lo rechaza)', async () => {
+    expect((await svc.resolveWebhookTenantClaims(completed('t-otro'))).sort()).toEqual([
+      't-otro',
+      't1',
+    ]);
+  });
+
+  it('claims: un orderId basta para delatar la orden, aunque el evento no traiga más marca', async () => {
+    const claims = await svc.resolveWebhookTenantClaims({
+      id: 'evt_solo_order',
+      type: 'checkout.session.async_payment_failed',
+      data: {
+        object: { id: 'cs_y', metadata: { orderId } } as unknown as Stripe.Checkout.Session,
+      },
+    } as Stripe.Event);
+    expect(claims).toEqual(['t1']);
   });
 });

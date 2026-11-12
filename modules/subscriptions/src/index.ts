@@ -63,6 +63,7 @@ export {
   SubscriptionPriceNotRecurringError,
   SubscriptionAccessDeniedError,
   WebhookSignatureInvalidError,
+  WebhookTenantMismatchError,
   StripeConfigMissingError,
   StripeApiError,
   MembershipPlanIntervalInvalidError,

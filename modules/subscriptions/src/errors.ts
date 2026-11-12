@@ -199,3 +199,21 @@ export class WebhookOutOfOrderError extends SubscriptionsError {
     );
   }
 }
+
+/**
+ * El evento de Stripe toca una fila (suscripción, factura) o nombra un tenant
+ * que NO es el tenant para el que el host lo verificó. La firma demuestra quién
+ * envía, no a quién se refiere el contenido: un admin del aula B puede firmar
+ * con SU secreto un evento que nombre una suscripción del aula A. Se rechaza
+ * sin tocar nada.
+ */
+export class WebhookTenantMismatchError extends SubscriptionsError {
+  constructor(que: string) {
+    super(
+      `El evento de Stripe no pertenece al tenant verificado (${que}).`,
+      'SUBSCRIPTIONS_WEBHOOK_TENANT_MISMATCH',
+      { detail: que },
+    );
+    this.name = 'WebhookTenantMismatchError';
+  }
+}

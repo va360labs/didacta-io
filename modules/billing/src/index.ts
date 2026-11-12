@@ -48,6 +48,7 @@ export {
   ProductInactiveError,
   OrderNotFoundError,
   WebhookSignatureInvalidError,
+  WebhookTenantMismatchError,
   StripeConfigMissingError,
   StripeApiError,
 } from './errors.js';

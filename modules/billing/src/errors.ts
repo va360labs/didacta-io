@@ -98,3 +98,20 @@ export class StripeApiError extends BillingError {
     this.name = 'StripeApiError';
   }
 }
+
+/**
+ * El evento de Stripe toca una fila (orden) o nombra un tenant que NO es el
+ * tenant para el que el host lo verificó. La firma demuestra quién envía, no a
+ * quién se refiere el contenido: un admin del aula B puede firmar con SU
+ * secreto un evento que nombre una orden del aula A. Se rechaza sin tocar nada.
+ */
+export class WebhookTenantMismatchError extends BillingError {
+  constructor(que: string) {
+    super(
+      `El evento de Stripe no pertenece al tenant verificado (${que}).`,
+      'BILLING_WEBHOOK_TENANT_MISMATCH',
+      { detail: que },
+    );
+    this.name = 'WebhookTenantMismatchError';
+  }
+}

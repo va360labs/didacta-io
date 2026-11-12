@@ -36,6 +36,7 @@ import {
   MembershipPageInactiveError,
   MembershipPlanIntervalInvalidError,
   MembershipPlanNotFoundError,
+  WebhookTenantMismatchError,
 } from './errors.js';
 import type { SubscriptionsStripeAdapter } from './stripe-subscriptions.client.js';
 import type {
@@ -575,15 +576,50 @@ export class MembershipService {
   // ---------------- Fulfillment (webhook checkout.session.completed) ----------------
 
   /**
+   * Tenants a los que un `checkout.session.completed` de MEMBRESÍA nombra o
+   * toca, sin procesarlo: el `tenantId` de su metadata y el dueño de la
+   * suscripción local que ya exista con ese id de Stripe. Mismo contrato que
+   * `SubscriptionsService.resolveWebhookTenantClaims`: el host solo procesa el
+   * evento si todo pertenece al tenant cuyo secreto verificó la firma.
+   */
+  async resolveWebhookTenantClaims(event: Stripe.Event): Promise<string[]> {
+    if (event.type !== 'checkout.session.completed') return [];
+    const session = event.data.object as Stripe.Checkout.Session;
+    const meta = (session.metadata ?? {}) as Record<string, string>;
+    if (meta['membership'] !== '1') return [];
+    const claims = new Set<string>();
+    if (meta['tenantId']) claims.add(meta['tenantId']);
+    const stripeSubscriptionId =
+      typeof session.subscription === 'string' ? session.subscription : session.subscription?.id;
+    if (stripeSubscriptionId) {
+      const existing = await this.prisma.modSubscriptionsSubscription.findUnique({
+        where: { stripeSubscriptionId },
+        select: { tenantId: true },
+      });
+      if (existing) claims.add(existing.tenantId);
+    }
+    return [...claims];
+  }
+
+  /**
    * Procesa un `checkout.session.completed` de MEMBRESÍA (metadata.membership).
    * Idempotente por stripeSubscriptionId. El host inyecta `provisionUser` para
    * crear/buscar el user (el módulo no escribe la tabla user).
    *
    * Devuelve null si la session no es de membresía o le faltan datos.
+   *
+   * `opts.tenantId` es OBLIGATORIO: el tenant para el que el host verificó el
+   * evento (el dueño del secreto que validó la firma). La metadata de la
+   * session lo escribe quien firma, así que NO decide a qué aula se le crea la
+   * membresía: si nombra a otra, se lanza `WebhookTenantMismatchError` antes de
+   * crear usuario ni suscripción. Era el agujero: un admin de otra aula firmaba
+   * con su secreto una session con `tenantId` de esta y obtenía aquí una
+   * membresía ACTIVE sin pagar.
    */
   async fulfillMembershipCheckout(
     session: Stripe.Checkout.Session,
     provisionUser: UserProvisioner,
+    opts: { tenantId: string },
   ): Promise<{
     subscriptionId: string;
     userId: string;
@@ -600,21 +636,29 @@ export class MembershipService {
   } | null> {
     const meta = (session.metadata ?? {}) as Record<string, string>;
     if (meta['membership'] !== '1') return null;
-    const tenantId = meta['tenantId'];
+    const tenantId = opts?.tenantId;
+    if (!tenantId) throw new WebhookTenantMismatchError('membresía sin tenant verificado');
     const planId = meta['planId'];
     const stripeSubscriptionId =
       typeof session.subscription === 'string' ? session.subscription : session.subscription?.id;
     const email = session.customer_details?.email ?? session.customer_email ?? null;
-    if (!tenantId || !planId || !stripeSubscriptionId || !email) {
+    if (!meta['tenantId'] || !planId || !stripeSubscriptionId || !email) {
       throw new MembershipConfigIncompleteError(
-        `checkout.session.completed de membresía sin datos: tenantId=${tenantId ?? '∅'} planId=${planId ?? '∅'} sub=${stripeSubscriptionId ?? '∅'} email=${email ?? '∅'}`,
+        `checkout.session.completed de membresía sin datos: tenantId=${meta['tenantId'] ?? '∅'} planId=${planId ?? '∅'} sub=${stripeSubscriptionId ?? '∅'} email=${email ?? '∅'}`,
       );
+    }
+    // La metadata nombra un aula y el host verificó el evento para otra.
+    if (meta['tenantId'] !== tenantId) {
+      throw new WebhookTenantMismatchError(`metadata de la session ${session.id}`);
     }
 
     // Idempotencia: si ya materializamos esta suscripción de Stripe, no-op.
     const existing = await this.prisma.modSubscriptionsSubscription.findUnique({
       where: { stripeSubscriptionId },
     });
+    if (existing && existing.tenantId !== tenantId) {
+      throw new WebhookTenantMismatchError(`suscripción ${stripeSubscriptionId}`);
+    }
     if (existing) {
       return { subscriptionId: existing.id, userId: existing.userId, userCreated: false };
     }

@@ -15,6 +15,7 @@ import {
 } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Logger as PinoLogger } from 'nestjs-pino';
+import { WebhookTenantMismatchError as BillingWebhookTenantMismatchError } from '@didacta/mod-billing';
 import {
   SubscriptionsStripeSdkAdapter,
   WebhookSignatureInvalidError,
@@ -24,12 +25,15 @@ import type { FastifyRequest } from 'fastify';
 import { extractClientContext } from '../../auth/client-context';
 import type { ClientContext } from '../../auth/client-context';
 import {
-  runAsTenantOrSanctioned,
+  runAsTenant,
+  runGlobalWithoutTenant,
   runSanctionedGlobalAccess,
 } from '../../tenancy/tenant-context.storage';
 import { TenantResolverService } from '../../tenancy/tenant-resolver.service';
 import { BillingProvisioningService } from '../billing/billing-provisioning.service';
 import { ModuleRegistryService } from '../module-registry.service';
+import { PrismaAuditLogService } from '../prisma-audit-log.service';
+import { resolveStripeEventTenant } from '../stripe-webhook-tenant';
 import { TenantStripeResolverService } from '../tenant-stripe-resolver.service';
 import { MembershipProvisioningService } from './membership-provisioning.service';
 import { resolvePublicHost } from '../../common/resolve-public-host';
@@ -43,6 +47,13 @@ import { resolvePublicHost } from '../../common/resolve-public-host';
  * distintos secrets).
  *
  * Idempotencia: PK natural `stripe_event_id` en `mod_subscriptions_webhook_event`.
+ *
+ * ⚠️ El tenant del dominio —el dueño del secreto que verificó la firma— es PARA
+ * EL QUE SE PROCESA el evento, en los tres consumidores (suscripciones,
+ * membresía y el fan-out a billing). Lo que el evento diga de sí mismo
+ * (`metadata.tenantId`, ids de suscripción o de factura) lo escribe quien firma
+ * y no decide nada: si nombra a otra aula se rechaza con 403 sin tocar nada.
+ * Ver `stripe-webhook-tenant.ts`.
  */
 @ApiTags('Webhooks · Subscriptions')
 @Controller('modules/subscriptions')
@@ -54,6 +65,7 @@ export class SubscriptionsWebhookController {
     private readonly logger: PinoLogger,
     private readonly tenantResolver: TenantResolverService,
     private readonly stripeResolver: TenantStripeResolverService,
+    private readonly auditLog: PrismaAuditLogService,
   ) {}
 
   @Post('webhook')
@@ -76,9 +88,7 @@ export class SubscriptionsWebhookController {
       });
     }
 
-    const resolved = await runAsTenantOrSanctioned(tenant.id, () =>
-      this.stripeResolver.resolve(tenant.id),
-    );
+    const resolved = await runAsTenant(tenant.id, () => this.stripeResolver.resolve(tenant.id));
     if (!resolved) {
       throw new UnauthorizedException({
         message: 'Stripe no está configurado para este tenant.',
@@ -128,11 +138,39 @@ export class SubscriptionsWebhookController {
       parsedBody = { raw: rawBody };
     }
 
-    // RLS F3: lookup sancionado (sub/invoice por id global de Stripe) +
-    // procesado bajo el contexto del tenant resuelto. Sin tenant (entidad
-    // desconocida, evento sin dominio) degrada a sancionado: solo archiva.
-    const tenantId = await runSanctionedGlobalAccess(() => subs.resolveWebhookTenantId(event));
-    await runAsTenantOrSanctioned(tenantId, () => subs.handleWebhookEvent(event, parsedBody), {
+    const ctx = extractClientContext(req);
+    const membership = this.registry.getMembershipService();
+    const billing = this.registry.getBillingService();
+
+    // 1) LOOKUP (sancionado, fuera de cualquier contexto de tenant): a qué
+    //    tenants nombra o toca el evento, sumando los TRES consumidores que lo
+    //    van a procesar aquí abajo. Solo lee.
+    const claims = await runGlobalWithoutTenant(async () => [
+      ...(await subs.resolveWebhookTenantClaims(event)),
+      ...(await membership.resolveWebhookTenantClaims(event)),
+      ...(await billing.resolveWebhookTenantClaims(event)),
+    ]);
+    // 2) DECISIÓN: el evento se procesa para el tenant cuyo secreto verificó la
+    //    firma. Si nombra a otro, 403 + rastro, y aquí se acaba — antes de
+    //    archivar el evento siquiera.
+    const tenantId = await resolveStripeEventTenant({
+      endpoint: 'subscriptions',
+      errorCode: 'SUBS_WEBHOOK_FOREIGN_TENANT',
+      verifiedTenantId: tenant.id,
+      verified: resolved,
+      claims,
+      event,
+      resolveCredentials: (id) => this.stripeResolver.resolve(id),
+      audit: (entry) => this.auditLog.record(entry),
+      logger: this.logger,
+      host: hostStr,
+      client: ctx,
+    });
+
+    // 3) PROCESADO: siempre bajo el contexto de ESE tenant (nunca sancionado:
+    //    un evento sin dueño reconocible se archiva en el del dominio) y
+    //    diciéndole a cada módulo cuál es, para que compruebe cada fila.
+    await runAsTenant(tenantId, () => subs.handleWebhookEvent(event, parsedBody, { tenantId }), {
       traceLabel: 'subscriptions-webhook',
     });
 
@@ -141,38 +179,35 @@ export class SubscriptionsWebhookController {
     // suscripción local. Idempotente por stripeSubscriptionId — un retry de
     // Stripe no duplica user ni sub. Va DESPUÉS de handleWebhookEvent (que
     // persiste el evento para auditoría) y es independiente de su dedupe.
-    const ctx = extractClientContext(req);
     // El Host de este request es el de la API (Stripe), no el del frontend
     // del tenant — con el tenant ya resuelto arriba, preferimos su dominio
-    // primario (puede ser null si el evento no tiene tenant reconocible).
+    // primario.
     const webBaseUrl = await this.tenantResolver.resolveTenantWebBaseUrl(tenantId, req);
     if (event.type === 'checkout.session.completed') {
       const session = event.data.object as Stripe.Checkout.Session;
-      // RLS F3: el tenant de la membresía viaja en la metadata de la session
-      // (la escribió nuestro startMembershipCheckout; el evento llega firmado).
-      // Sin tenantId degrada a sancionado y el service conserva su semántica
-      // (no-op si no es membresía; error si es membresía con metadata coja).
-      const membershipTenantId = session.metadata?.['tenantId'] ?? null;
-      const fulfilled = await runAsTenantOrSanctioned(
-        membershipTenantId,
+      // La membresía se crea en el tenant VERIFICADO. Antes salía de
+      // `session.metadata.tenantId`, que escribe quien firma el evento: era el
+      // agujero por el que un aula se regalaba membresías en otra.
+      const fulfilled = await runAsTenant(
+        tenantId,
         () =>
-          this.registry
-            .getMembershipService()
-            .fulfillMembershipCheckout(
-              session,
-              ({ tenantId: provisionTenantId, email, name, locale }) =>
-                this.provisioning.provision({
-                  tenantId: provisionTenantId,
-                  email,
-                  name,
-                  // Idioma con el que compró, capturado al iniciar el checkout
-                  // y transportado en la metadata de la session. El service lo
-                  // valida y solo lo escribe si CREA la fila.
-                  locale,
-                  webBaseUrl,
-                  ctx,
-                }),
-            ),
+          membership.fulfillMembershipCheckout(
+            session,
+            ({ email, name, locale }) =>
+              this.provisioning.provision({
+                // El tenant verificado, no el que devuelva el módulo.
+                tenantId,
+                email,
+                name,
+                // Idioma con el que compró, capturado al iniciar el checkout
+                // y transportado en la metadata de la session. El service lo
+                // valida y solo lo escribe si CREA la fila.
+                locale,
+                webBaseUrl,
+                ctx,
+              }),
+            { tenantId },
+          ),
         { traceLabel: 'membership-fulfillment' },
       );
 
@@ -185,7 +220,7 @@ export class SubscriptionsWebhookController {
       if (fulfilled?.duplicateOf) {
         this.logger.warn(
           {
-            tenantId: membershipTenantId,
+            tenantId,
             userId: fulfilled.userId,
             nueva: fulfilled.subscriptionId,
             existente: fulfilled.duplicateOf,
@@ -204,7 +239,7 @@ export class SubscriptionsWebhookController {
     // Best-effort: un fallo de billing NO puede tumbar el fulfillment de la
     // membresía ya hecho arriba, ni provocar que Stripe reintente el evento
     // durante días. Queda registrado en `mod_billing_webhook_event`.
-    await this.dispatchToBilling(event, parsedBody, webBaseUrl, ctx);
+    await this.dispatchToBilling(event, parsedBody, webBaseUrl, ctx, tenantId);
 
     return { received: true, type: event.type, id: event.id };
   }
@@ -214,23 +249,23 @@ export class SubscriptionsWebhookController {
     parsedBody: unknown,
     webBaseUrl: string,
     ctx: ClientContext,
+    /** Tenant VERIFICADO (el mismo para los tres consumidores del evento). */
+    tenantId: string,
   ): Promise<void> {
     const billing = this.registry.getBillingService();
     try {
       // Mismo provisioner que el endpoint propio de billing: una compra
-      // ANÓNIMA de curso puede entrar por este webhook compartido.
-      // RLS F3: mismo patrón que el webhook propio de billing — lookup
-      // sancionado + procesado bajo el tenant resuelto.
-      const billingTenantId = await runSanctionedGlobalAccess(() =>
-        billing.resolveWebhookTenantId(event),
-      );
-      await runAsTenantOrSanctioned(
-        billingTenantId,
+      // ANÓNIMA de curso puede entrar por este webhook compartido. Y mismo
+      // tenant: el verificado, ya decidido arriba con los claims de billing
+      // incluidos — aquí no se vuelve a preguntar al evento de quién es.
+      await runAsTenant(
+        tenantId,
         () =>
           billing.handleWebhookEvent(event, parsedBody, {
-            provisionUser: ({ tenantId: provisionTenantId, email, name, locale }) =>
+            tenantId,
+            provisionUser: ({ email, name, locale }) =>
               this.billingProvisioning.provision({
-                tenantId: provisionTenantId,
+                tenantId,
                 email,
                 name,
                 locale,
@@ -241,6 +276,9 @@ export class SubscriptionsWebhookController {
         { traceLabel: 'billing-webhook' },
       );
     } catch (err) {
+      // Un evento que toca filas de otra aula NUNCA se traga, sea del tipo que
+      // sea: es la segunda cerradura del módulo saltando.
+      if (err instanceof BillingWebhookTenantMismatchError) throw err;
       // Si el evento ERA de una compra de curso, propagamos: Stripe verá un
       // 5xx y reintentará, que es la única red de seguridad que evita cobrar
       // sin dar acceso. Es seguro reintentar todo el handler porque el trabajo

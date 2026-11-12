@@ -51,6 +51,7 @@ import {
   WebhookOutOfOrderError,
   SubscriptionPriceNotRecurringError,
   StripeApiError,
+  WebhookTenantMismatchError,
 } from './errors.js';
 import type { SubscriptionsStripeAdapter } from './stripe-subscriptions.client.js';
 import {
@@ -358,67 +359,108 @@ export class SubscriptionsService {
   // ---------------- Webhook handler (idempotente) ----------------
 
   /**
-   * Resuelve el tenant dueño de un evento webhook SIN procesarlo. Mitad
-   * «lookup» del patrón F3: el host la invoca bajo acceso global sancionado y
-   * después ejecuta `handleWebhookEvent` bajo el contexto del tenant resuelto.
-   * Devuelve null si la entidad no existe localmente o el evento no tiene
-   * lógica de dominio (el host lo procesa sancionado: solo se archiva).
+   * Tenants a los que un evento webhook NOMBRA o TOCA, sin procesarlo: el dueño
+   * de cada fila local que el procesado iría a buscar por id (suscripción por
+   * id local o por id de Stripe, factura por id de Stripe).
+   *
+   * Mitad «lookup» del webhook: el host la invoca bajo acceso global
+   * sancionado y solo procesa el evento si todo lo que toca pertenece al
+   * tenant cuyo secreto verificó la firma. Los ids los escribe quien firma, así
+   * que un administrador de otra aula puede poner aquí los de esta: antes el
+   * host procesaba el evento para el dueño de la fila sin comprobar que quien
+   * firmaba tuviera nada que ver con él.
+   *
+   * Lista vacía = entidad desconocida o evento sin lógica de dominio: solo se
+   * archiva.
    */
-  async resolveWebhookTenantId(event: Stripe.Event): Promise<string | null> {
+  async resolveWebhookTenantClaims(event: Stripe.Event): Promise<string[]> {
+    const claims = new Set<string>();
+    const porIdLocal = async (localId: string | null | undefined): Promise<void> => {
+      if (!localId) return;
+      const sub = await this.prisma.modSubscriptionsSubscription.findUnique({
+        where: { id: localId },
+        select: { tenantId: true },
+      });
+      if (sub) claims.add(sub.tenantId);
+    };
+    const porIdDeStripe = async (
+      stripeSubscriptionId: string | null | undefined,
+    ): Promise<void> => {
+      if (!stripeSubscriptionId) return;
+      const sub = await this.prisma.modSubscriptionsSubscription.findUnique({
+        where: { stripeSubscriptionId },
+        select: { tenantId: true },
+      });
+      if (sub) claims.add(sub.tenantId);
+    };
+    const porFactura = async (stripeInvoiceId: string | null | undefined): Promise<void> => {
+      if (!stripeInvoiceId) return;
+      const invoice = await this.prisma.modSubscriptionsInvoice.findUnique({
+        where: { stripeInvoiceId },
+        select: { tenantId: true },
+      });
+      if (invoice) claims.add(invoice.tenantId);
+    };
+
     switch (event.type) {
-      case 'customer.subscription.created': {
-        const localId = this.extractLocalId(event.data.object as Stripe.Subscription);
-        if (!localId) return null;
-        const sub = await this.prisma.modSubscriptionsSubscription.findUnique({
-          where: { id: localId },
-          select: { tenantId: true },
-        });
-        return sub?.tenantId ?? null;
-      }
+      case 'customer.subscription.created':
+        await porIdLocal(this.extractLocalId(event.data.object as Stripe.Subscription));
+        break;
       case 'customer.subscription.updated':
-      case 'customer.subscription.deleted': {
-        const stripeSub = event.data.object as Stripe.Subscription;
-        const sub = await this.prisma.modSubscriptionsSubscription.findUnique({
-          where: { stripeSubscriptionId: stripeSub.id },
-          select: { tenantId: true },
-        });
-        return sub?.tenantId ?? null;
-      }
+      case 'customer.subscription.deleted':
+        await porIdDeStripe((event.data.object as Stripe.Subscription).id);
+        break;
       case 'invoice.paid':
       case 'invoice.payment_failed': {
         const invoice = event.data.object as Stripe.Invoice;
-        const stripeSubId = subscriptionIdFromInvoice(invoice);
-        if (!stripeSubId) return null;
-        const sub = await this.prisma.modSubscriptionsSubscription.findUnique({
-          where: { stripeSubscriptionId: stripeSubId },
-          select: { tenantId: true },
-        });
-        return sub?.tenantId ?? null;
+        await porIdDeStripe(subscriptionIdFromInvoice(invoice));
+        // `upsertInvoice` reescribe la fila que ya exista con ese id de Stripe:
+        // si es de otra aula, el evento la estaría tocando.
+        await porFactura(invoice.id);
+        break;
       }
       case 'charge.refunded': {
         const charge = event.data.object as Stripe.Charge;
-        const stripeInvoiceId =
-          typeof charge.invoice === 'string' ? charge.invoice : (charge.invoice?.id ?? null);
-        if (!stripeInvoiceId) return null;
-        const invoice = await this.prisma.modSubscriptionsInvoice.findUnique({
-          where: { stripeInvoiceId },
-          select: { tenantId: true },
-        });
-        return invoice?.tenantId ?? null;
+        await porFactura(
+          typeof charge.invoice === 'string' ? charge.invoice : (charge.invoice?.id ?? null),
+        );
+        break;
       }
+      case 'checkout.session.expired':
+        await porIdLocal(
+          (event.data.object as Stripe.Checkout.Session).metadata?.['subscriptionLocalId'],
+        );
+        break;
       default:
-        return null;
+        break;
     }
+    return [...claims];
   }
 
   /**
    * Procesa un evento Stripe ya validado por firma. Idempotente.
+   *
+   * `opts.tenantId` es OBLIGATORIO: el tenant para el que el host verificó el
+   * evento (el dueño del secreto que validó la firma). Cada fila que el
+   * procesado lea tiene que ser suya; una de otro tenant lanza
+   * `WebhookTenantMismatchError` sin tocar nada. No se fía de RLS: el runtime
+   * puede conectar con un rol que no filtra.
    */
-  async handleWebhookEvent(event: Stripe.Event, rawPayload: unknown): Promise<void> {
+  async handleWebhookEvent(
+    event: Stripe.Event,
+    rawPayload: unknown,
+    opts: { tenantId: string },
+  ): Promise<void> {
+    const tenantId = opts?.tenantId;
+    if (!tenantId) throw new WebhookTenantMismatchError('evento sin tenant verificado');
+
     try {
       await this.prisma.modSubscriptionsWebhookEvent.create({
         data: {
           stripeEventId: event.id,
+          // El tenant verificado, no el que diga el evento: deja rastro de por
+          // qué endpoint entró y cumple la policy RLS de la tabla.
+          tenantId,
           type: event.type,
           payload: rawPayload as never,
         },
@@ -456,27 +498,27 @@ export class SubscriptionsService {
     try {
       switch (event.type) {
         case 'customer.subscription.created':
-          await this.onSubscriptionCreated(event.data.object as Stripe.Subscription);
+          await this.onSubscriptionCreated(event.data.object as Stripe.Subscription, tenantId);
           break;
         case 'customer.subscription.updated':
-          await this.onSubscriptionUpdated(event.data.object as Stripe.Subscription);
+          await this.onSubscriptionUpdated(event.data.object as Stripe.Subscription, tenantId);
           break;
         case 'customer.subscription.deleted':
-          await this.onSubscriptionDeleted(event.data.object as Stripe.Subscription);
+          await this.onSubscriptionDeleted(event.data.object as Stripe.Subscription, tenantId);
           break;
         case 'invoice.paid':
-          await this.onInvoicePaid(event.data.object as Stripe.Invoice);
+          await this.onInvoicePaid(event.data.object as Stripe.Invoice, tenantId);
           break;
         case 'invoice.payment_failed':
-          await this.onInvoicePaymentFailed(event.data.object as Stripe.Invoice);
+          await this.onInvoicePaymentFailed(event.data.object as Stripe.Invoice, tenantId);
           break;
         case 'charge.refunded':
-          await this.onChargeRefunded(event.data.object as Stripe.Charge);
+          await this.onChargeRefunded(event.data.object as Stripe.Charge, tenantId);
           break;
         // Checkout abandonado: Stripe caduca la sesion y avisa. Sin este caso
         // la fila PENDING se quedaba viva y bloqueaba la compra para siempre.
         case 'checkout.session.expired':
-          await this.onCheckoutExpired(event.data.object as Stripe.Checkout.Session);
+          await this.onCheckoutExpired(event.data.object as Stripe.Checkout.Session, tenantId);
           break;
         default:
           // Otros eventos (invoice.created, etc.) los persistimos para audit
@@ -570,13 +612,27 @@ export class SubscriptionsService {
 
   // ---------------- Webhook event handlers (privados) ----------------
 
-  private async onSubscriptionCreated(stripeSub: Stripe.Subscription): Promise<void> {
+  /**
+   * La fila que el evento manda tocar tiene que ser del tenant verificado. El
+   * host ya lo comprueba antes de llamar (`resolveWebhookTenantClaims`); esto
+   * es la segunda cerradura, pegada a cada escritura, para que un camino nuevo
+   * que se olvide de la primera no reabra el agujero.
+   */
+  private assertSameTenant(rowTenantId: string, tenantId: string, que: string): void {
+    if (rowTenantId !== tenantId) throw new WebhookTenantMismatchError(que);
+  }
+
+  private async onSubscriptionCreated(
+    stripeSub: Stripe.Subscription,
+    tenantId: string,
+  ): Promise<void> {
     const localId = this.extractLocalId(stripeSub);
     if (!localId) return;
     const sub = await this.prisma.modSubscriptionsSubscription.findUnique({
       where: { id: localId },
     });
     if (!sub) return;
+    this.assertSameTenant(sub.tenantId, tenantId, `suscripción ${stripeSub.id}`);
     if (sub.status === 'CANCELED') {
       // El alumno canceló entre que abrió el checkout y se confirmó Stripe.
       // Cancelamos en Stripe sin esperar al evento `deleted`.
@@ -613,11 +669,15 @@ export class SubscriptionsService {
     }
   }
 
-  private async onSubscriptionUpdated(stripeSub: Stripe.Subscription): Promise<void> {
+  private async onSubscriptionUpdated(
+    stripeSub: Stripe.Subscription,
+    tenantId: string,
+  ): Promise<void> {
     const sub = await this.prisma.modSubscriptionsSubscription.findUnique({
       where: { stripeSubscriptionId: stripeSub.id },
     });
     if (!sub) return;
+    this.assertSameTenant(sub.tenantId, tenantId, `suscripción ${stripeSub.id}`);
 
     let newStatus = mapStripeStatus(stripeSub.status);
 
@@ -716,11 +776,15 @@ export class SubscriptionsService {
     }
   }
 
-  private async onSubscriptionDeleted(stripeSub: Stripe.Subscription): Promise<void> {
+  private async onSubscriptionDeleted(
+    stripeSub: Stripe.Subscription,
+    tenantId: string,
+  ): Promise<void> {
     const sub = await this.prisma.modSubscriptionsSubscription.findUnique({
       where: { stripeSubscriptionId: stripeSub.id },
     });
     if (!sub) return;
+    this.assertSameTenant(sub.tenantId, tenantId, `suscripción ${stripeSub.id}`);
     if (sub.status === 'CANCELED') return;
 
     await this.prisma.modSubscriptionsSubscription.update({
@@ -740,12 +804,13 @@ export class SubscriptionsService {
     });
   }
 
-  private async onInvoicePaid(invoice: Stripe.Invoice): Promise<void> {
+  private async onInvoicePaid(invoice: Stripe.Invoice, tenantId: string): Promise<void> {
     const stripeSubId = subscriptionIdFromInvoice(invoice);
     if (!stripeSubId) return;
     const sub = await this.prisma.modSubscriptionsSubscription.findUnique({
       where: { stripeSubscriptionId: stripeSubId },
     });
+    if (sub) this.assertSameTenant(sub.tenantId, tenantId, `factura ${invoice.id}`);
     if (!sub) {
       // Stripe no garantiza orden de entrega. En un checkout de membresia la
       // fila local solo la crea `checkout.session.completed`: si `invoice.paid`
@@ -831,13 +896,18 @@ export class SubscriptionsService {
    * Checkout caducado sin completar. Solo toca la fila si sigue PENDING: si ya
    * se activo por otra via, no se degrada nada.
    */
-  private async onCheckoutExpired(session: Stripe.Checkout.Session): Promise<void> {
+  private async onCheckoutExpired(
+    session: Stripe.Checkout.Session,
+    tenantId: string,
+  ): Promise<void> {
     const localId = session.metadata?.['subscriptionLocalId'];
     if (!localId) return;
     const sub = await this.prisma.modSubscriptionsSubscription.findUnique({
       where: { id: localId },
     });
-    if (!sub || sub.status !== 'PENDING') return;
+    if (!sub) return;
+    this.assertSameTenant(sub.tenantId, tenantId, `checkout ${session.id}`);
+    if (sub.status !== 'PENDING') return;
     await this.expirarPendiente(sub.id, 'checkout_caducado');
   }
 
@@ -848,7 +918,7 @@ export class SubscriptionsService {
    * la invoice local: el ciclo de vida de la suscripción lo gobiernan los
    * eventos de subscription/invoice de Stripe, no el refund.
    */
-  private async onChargeRefunded(charge: Stripe.Charge): Promise<void> {
+  private async onChargeRefunded(charge: Stripe.Charge, tenantId: string): Promise<void> {
     const stripeInvoiceId =
       typeof charge.invoice === 'string' ? charge.invoice : (charge.invoice?.id ?? null);
     if (!stripeInvoiceId) return;
@@ -856,6 +926,7 @@ export class SubscriptionsService {
       where: { stripeInvoiceId },
     });
     if (!invoice) return;
+    this.assertSameTenant(invoice.tenantId, tenantId, `cargo ${charge.id}`);
 
     // Solo un reembolso TOTAL revoca. Uno parcial (un descuento a posteriori,
     // una devolucion de gastos de 1 €) dejaba sin comision ENTERA al referidor
@@ -873,13 +944,14 @@ export class SubscriptionsService {
     });
   }
 
-  private async onInvoicePaymentFailed(invoice: Stripe.Invoice): Promise<void> {
+  private async onInvoicePaymentFailed(invoice: Stripe.Invoice, tenantId: string): Promise<void> {
     const stripeSubId = subscriptionIdFromInvoice(invoice);
     if (!stripeSubId) return;
     const sub = await this.prisma.modSubscriptionsSubscription.findUnique({
       where: { stripeSubscriptionId: stripeSubId },
     });
     if (!sub) return;
+    this.assertSameTenant(sub.tenantId, tenantId, `factura ${invoice.id}`);
 
     await this.upsertInvoice(sub.id, sub.tenantId, invoice, 'OPEN');
 
@@ -950,6 +1022,10 @@ export class SubscriptionsService {
     const existing = await this.prisma.modSubscriptionsInvoice.findUnique({
       where: { stripeInvoiceId: invoice.id },
     });
+    // El id de la factura también lo escribe quien firma. Sin esto, un evento
+    // sobre una suscripción PROPIA con el id de una factura AJENA reescribía
+    // esa fila y se la llevaba a su tenant.
+    if (existing) this.assertSameTenant(existing.tenantId, tenantId, `factura ${invoice.id}`);
     const data = {
       tenantId,
       subscriptionId: subscriptionLocalId,
