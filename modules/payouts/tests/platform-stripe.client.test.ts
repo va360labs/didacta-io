@@ -20,7 +20,7 @@ import {
 // La clave es una cadena de test con la forma de una clave, no una clave.
 // ============================================================================
 
-const CLAVE = 'sk_test_claveDePruebaInventada0000';
+const CLAVE = 'sk_test_inventada0000';
 
 interface Grabada {
   url: string;

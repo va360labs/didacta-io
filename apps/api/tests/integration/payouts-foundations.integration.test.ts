@@ -802,7 +802,7 @@ describeWithDb('mod.payouts — cimientos contra Postgres como didacta_app', () 
 
   describe('PaymentModeResolver', () => {
     const CLAVES = {
-      secretKey: 'sk_test_claveDelCreadorInventada0000',
+      secretKey: 'sk_test_delCreador0000',
       webhookSecret: 'whsec_test_delCreador_0001',
     };
     const VARIABLES = [
@@ -912,7 +912,7 @@ describeWithDb('mod.payouts — cimientos contra Postgres como didacta_app', () 
       it('tenant sin claves, con claves de instancia y fallback permitido → own / global', async () => {
         await conEntorno(
           {
-            STRIPE_SECRET_KEY: 'sk_test_deInstanciaInventada0000',
+            STRIPE_SECRET_KEY: 'sk_test_deInstancia0000',
             STRIPE_WEBHOOK_SECRET: 'whsec_test_deInstancia_0001',
             STRIPE_ALLOW_GLOBAL_FALLBACK: 'true',
           },
@@ -932,7 +932,7 @@ describeWithDb('mod.payouts — cimientos contra Postgres como didacta_app', () 
       it('tenant sin claves, con claves de instancia y fallback cerrado (varias aulas) → none', async () => {
         await conEntorno(
           {
-            STRIPE_SECRET_KEY: 'sk_test_deInstanciaInventada0000',
+            STRIPE_SECRET_KEY: 'sk_test_deInstancia0000',
             STRIPE_WEBHOOK_SECRET: 'whsec_test_deInstancia_0001',
           },
           async () => {
@@ -964,7 +964,7 @@ describeWithDb('mod.payouts — cimientos contra Postgres como didacta_app', () 
 
     describe('con el modo plataforma encendido, contra las tablas reales', () => {
       const encendido = loadPlatformPaymentsConfig({
-        PAYMENTS_PLATFORM_STRIPE_SECRET_KEY: 'sk_test_deLaPlataformaInventada0000',
+        PAYMENTS_PLATFORM_STRIPE_SECRET_KEY: 'sk_test_dePlataforma0000',
         PAYMENTS_PLATFORM_STRIPE_WEBHOOK_SECRETS: 'whsec_test_plataforma_0001',
       });
 
@@ -1021,7 +1021,7 @@ describeWithDb('mod.payouts — cimientos contra Postgres como didacta_app', () 
       it('las claves de instancia NO hacen de respaldo con el modo encendido', async () => {
         const modo = await conEntorno(
           {
-            STRIPE_SECRET_KEY: 'sk_test_deInstanciaInventada0000',
+            STRIPE_SECRET_KEY: 'sk_test_deInstancia0000',
             STRIPE_WEBHOOK_SECRET: 'whsec_test_deInstancia_0001',
             STRIPE_ALLOW_GLOBAL_FALLBACK: 'true',
           },

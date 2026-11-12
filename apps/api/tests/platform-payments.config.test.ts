@@ -26,7 +26,7 @@ import {
  * Las claves y secretos son cadenas de test con la forma de los reales.
  */
 
-const CLAVE = 'sk_test_claveDePruebaInventada0000';
+const CLAVE = 'sk_test_inventada0000';
 const SECRETO_1 = 'whsec_test_plataforma_0001';
 const SECRETO_2 = 'whsec_test_conectadas_0002';
 
