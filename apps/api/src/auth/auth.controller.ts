@@ -143,13 +143,19 @@ export class AuthController {
     @Body(new ZodValidationPipe(forgotPasswordSchema)) dto: ForgotPasswordDto,
   ) {
     const resolvedTenantId = await this.resolveTenantIdFromHost(req);
-    const webBaseUrl = await this.tenantResolver.resolveTenantWebBaseUrl(
-      resolvedTenantId ?? null,
-      req,
-    );
     await this.passwordReset.requestAndSendEmail(
       { email: dto.email, tenantSlug: dto.tenantSlug, resolvedTenantId },
-      webBaseUrl,
+      // La base del enlace sale del tenant en el que se ENCUENTRA la cuenta.
+      //
+      // Antes se calculaba aquí, con el tenant del dominio. Si el dominio de la
+      // petición no era de ningún aula (lo pone quien llama) la cuenta se
+      // resolvía igual —por el `tenantSlug` del cuerpo o por el correo— pero la
+      // base se calculaba sin tenant: caía a `WEB_PUBLIC_URL` y, sin ella, al
+      // propio `Host` de la petición. Un enlace de restablecer contraseña con
+      // su token, enviado al buzón de la víctima y apuntando al dominio de un
+      // tercero. Con el tenant de la cuenta, su dominio primario verificado
+      // (que sale de nuestra base, no de la petición) va por delante.
+      (accountTenantId) => this.tenantResolver.resolveTenantWebBaseUrl(accountTenantId, req),
       extractClientContext(req),
     );
     return {

@@ -292,7 +292,13 @@ export class PasswordResetService {
    */
   async requestAndSendEmail(
     args: { email: string; tenantSlug?: string; resolvedTenantId?: string },
-    webBaseUrl: string,
+    /**
+     * Base del enlace. Como función recibe el tenant en el que se ENCONTRÓ la
+     * cuenta, que es el único dato fiable para decidir adónde apunta un enlace
+     * con token: el flujo público no lo conoce hasta aquí (lo puede haber
+     * resuelto por el slug del cuerpo o por el correo, no por el dominio).
+     */
+    webBaseUrl: string | ((tenantId: string) => Promise<string> | string),
     ctx: ClientContext = NO_CLIENT_CONTEXT,
     // `ttlMinutes` se propaga a `request`: el alta de un alumno necesita un
     // enlace que dure días, no los 60 minutos de un reset que el usuario acaba
@@ -306,12 +312,14 @@ export class PasswordResetService {
     const result = await this.request(args, ctx, opts);
     if (!result) return;
 
+    const base = typeof webBaseUrl === 'function' ? await webBaseUrl(result.tenantId) : webBaseUrl;
+
     // RLS F2: branding/override/SMTP del tenant bajo su ALS.
     return runAsTenant(
       result.tenantId,
       // A la dirección GUARDADA, no a la tecleada: el enlace abre la cuenta,
       // así que solo puede salir hacia el buzón que consta en ella.
-      () => this.sendResetEmail(result, result.email, webBaseUrl, opts),
+      () => this.sendResetEmail(result, result.email, base, opts),
       { traceLabel: 'pwd-email' },
     );
   }

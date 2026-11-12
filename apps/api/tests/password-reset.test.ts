@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { UnauthorizedException } from '@nestjs/common';
 import { PasswordResetService } from '../src/auth/password-reset.service';
 
@@ -508,6 +508,52 @@ describe('PasswordResetService.requestAndSendEmail', () => {
 
     expect(sent).toHaveLength(1);
     expect(sent[0]!.to).toBe('ana@example.com');
+  });
+
+  /**
+   * El flujo público no sabe en qué aula está la cuenta hasta que este servicio
+   * la encuentra (puede venir por el slug del cuerpo o por el correo). La base
+   * del enlace se pide ENTONCES, con el tenant de la cuenta: calcularla antes,
+   * con el dominio de la petición, dejaba que un `Host` cualquiera decidiera
+   * adónde apunta un enlace que lleva el token.
+   */
+  it('la base del enlace se pide con el tenant en el que se ENCONTRÓ la cuenta', async () => {
+    const prisma = makeFakePrisma();
+    const sent: Array<Record<string, unknown>> = [];
+    const smtp = {
+      ...fakeSmtp,
+      async send(_config: unknown, message: Record<string, unknown>) {
+        sent.push(message);
+        return { ok: true, messageId: 'fake' };
+      },
+    };
+    const smtpResolver = { resolve: async () => ({ config: {}, source: 'tenant' }) };
+    const service = new PasswordResetService(
+      prisma as never,
+      fakePasswords as never,
+      fakeAuditLog as never,
+      smtp as never,
+      fakeTenantConfig as never,
+      fakeLogger as never,
+      smtpResolver as never,
+    );
+    const baseFor = vi.fn(async (tenantId: string) => `https://${tenantId}.aula.example`);
+
+    await service.requestAndSendEmail({ tenantSlug: 'demo', email: 'ana@example.com' }, baseFor);
+
+    expect(baseFor).toHaveBeenCalledTimes(1);
+    expect(baseFor).toHaveBeenCalledWith('tenant-1');
+    expect(sent).toHaveLength(1);
+    expect(JSON.stringify(sent[0])).toContain(
+      'https://tenant-1.aula.example/reset-password?token=',
+    );
+  });
+
+  it('si la cuenta no existe, ni se pide la base ni se envía nada', async () => {
+    const { service } = makeService();
+    const baseFor = vi.fn(async () => 'https://x.example');
+    await service.requestAndSendEmail({ tenantSlug: 'demo', email: 'nadie@example.com' }, baseFor);
+    expect(baseFor).not.toHaveBeenCalled();
   });
 });
 
