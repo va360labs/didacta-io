@@ -1221,19 +1221,23 @@ export class ReferralsService {
       // La fila sigue PENDING: el próximo intento repite la misma llamada.
       throw new ReferralsCreditFailedError();
     }
-    await this.prisma.modReferralsPayout.updateMany({
+    const closed = await this.prisma.modReferralsPayout.updateMany({
       where: { id: p.payoutId, tenantId, status: 'PENDING' },
       data: { status: 'DONE', externalReference: tx.id },
     });
-    await this.publisher.publish(tenantId, userId, REFERRALS_EVENT.PAYOUT_RECORDED, {
-      payoutId: p.payoutId,
-      referrerUserId: userId,
-      totalCents: p.totalCents,
-      currency: p.currency,
-      commissionCount: p.count,
-      externalReference: tx.id,
-      method: 'CREDIT',
-    });
+    // Dos reintentos a la vez: Stripe devuelve el mismo abono a los dos y solo
+    // el que cierra la fila avisa.
+    if (closed.count === 1) {
+      await this.publisher.publish(tenantId, userId, REFERRALS_EVENT.PAYOUT_RECORDED, {
+        payoutId: p.payoutId,
+        referrerUserId: userId,
+        totalCents: p.totalCents,
+        currency: p.currency,
+        commissionCount: p.count,
+        externalReference: tx.id,
+        method: 'CREDIT',
+      });
+    }
     return {
       payoutId: p.payoutId,
       totalCents: p.totalCents,
