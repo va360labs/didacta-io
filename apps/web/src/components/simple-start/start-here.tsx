@@ -19,6 +19,7 @@ import {
   type StartHereView,
   type StepId,
 } from '@/lib/simple-mode';
+import { referralsAdminApi } from '@/lib/referrals';
 import { cn } from '@/lib/utils';
 
 /** Primer paso pendiente: el único que se abre. `null` = todos hechos. */
@@ -76,7 +77,11 @@ export function StartHere() {
     <div className="grid grid-cols-[minmax(0,1fr)] gap-8 lg:grid-cols-[minmax(0,1fr)_340px] lg:items-start">
       <section className="min-w-0 max-w-[720px]" data-testid="empieza-aqui">
         <h1 className="text-[26px] leading-tight font-extrabold tracking-tight text-text lg:text-[30px]">
-          {sold ? t('celebra') : pending === 0 ? t('tituloListo') : t('titulo')}
+          {sold
+            ? t('celebra', { n: view.sales.count })
+            : pending === 0
+              ? t('tituloListo')
+              : t('titulo')}
         </h1>
         {!sold && pending > 0 ? (
           <p className="mt-1.5 text-text-muted">{t('sub', { n: pending })}</p>
@@ -582,6 +587,19 @@ function SaleLinkCard({ view, origin }: { view: StartHereView; origin: string })
 
 function Resumen({ view }: { view: StartHereView }) {
   const t = useTranslations('modoSencillo.empieza');
+  // Con el programa ya encendido la sugerencia sobra. Si no se puede leer
+  // (módulo apagado), se sugiere: es justo lo que activa el botón.
+  const [referralsOn, setReferralsOn] = useState<boolean | null>(null);
+  useEffect(() => {
+    let alive = true;
+    referralsAdminApi
+      .getConfig()
+      .then((c) => alive && setReferralsOn(c.active === true))
+      .catch(() => alive && setReferralsOn(false));
+    return () => {
+      alive = false;
+    };
+  }, []);
   return (
     <div className="mt-6 grid gap-3">
       <div className="grid grid-cols-2 overflow-hidden rounded-2xl border border-border bg-surface sm:grid-cols-3">
@@ -627,15 +645,17 @@ function Resumen({ view }: { view: StartHereView }) {
       </div>
       {/* Referidos para todo: sugerencia en cuanto hay CUALQUIER cosa a la venta
           (curso suelto o membresía), no solo con membresía. */}
-      {saleState(view) === 'on-sale' ? (
+      {saleState(view) === 'on-sale' && referralsOn === false ? (
         <div
           className="flex flex-wrap items-center gap-3 rounded-2xl border border-brand-100 bg-brand-50/60 p-4"
           data-testid="empieza-sugerencia-referidos"
         >
-          <span className="grid h-9 w-9 place-items-center rounded-full bg-brand-600 text-white">
+          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-brand-600 text-white">
             <Icon name="sparkles" size={18} />
           </span>
-          <div className="min-w-0 flex-1">
+          {/* Ancho mínimo: en el móvil el botón baja a su propia línea en vez
+              de estrujar el texto en una columna estrecha. */}
+          <div className="min-w-[13rem] flex-1">
             <strong className="block text-[15px] text-text">{t('referidos.titulo')}</strong>
             <span className="text-sm text-text-muted">{t('referidos.texto')}</span>
           </div>

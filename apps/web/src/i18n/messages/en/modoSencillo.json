@@ -174,7 +174,7 @@
     "ayudaTitulo": "Stuck on a step?",
     "ayudaTexto": "Write to us and we will help you get it ready.",
     "ayudaBoton": "Get help",
-    "celebra": "Your first sale! You are now selling.",
+    "celebra": "{n, plural, one {Your first sale! You are now selling.} other {You are selling: # sales so far.}}",
     "resumen": {
       "ventas": "Sales",
       "alumnos": "Students",

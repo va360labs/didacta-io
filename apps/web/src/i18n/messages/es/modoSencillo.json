@@ -174,7 +174,7 @@
     "ayudaTitulo": "¿Te atascas en algún paso?",
     "ayudaTexto": "Escríbenos y te ayudamos a dejarlo listo.",
     "ayudaBoton": "Pedir ayuda",
-    "celebra": "¡Tu primera venta! Ya estás vendiendo.",
+    "celebra": "{n, plural, one {¡Tu primera venta! Ya estás vendiendo.} other {Ya estás vendiendo: llevas # ventas.}}",
     "resumen": {
       "ventas": "Ventas",
       "alumnos": "Alumnos",
