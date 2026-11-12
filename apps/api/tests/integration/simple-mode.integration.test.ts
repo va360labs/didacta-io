@@ -11,6 +11,7 @@
 import { randomUUID } from 'node:crypto';
 import { Test } from '@nestjs/testing';
 import { PrismaClient } from '@didacta/database';
+import { revisar } from '../../scripts/activar-modo-sencillo-cloud';
 import { CoursesService } from '@didacta/mod-courses';
 import { CommunityService } from '@didacta/mod-community';
 import { BillingService } from '@didacta/mod-billing';
@@ -20,7 +21,7 @@ import { PrismaModule } from '../../src/prisma/prisma.module';
 import { PrismaService } from '../../src/prisma/prisma.service';
 import { SimpleModeService } from '../../src/simple-mode/simple-mode.service';
 import { runAsTenant } from '../../src/tenancy/tenant-context.storage';
-import { ADMIN_DATABASE_URL, prepareDidactaAppRole } from './helpers/didacta-app-db';
+import { ADMIN_DATABASE_URL, didactaAppUrl, prepareDidactaAppRole } from './helpers/didacta-app-db';
 
 const describeWithDb = ADMIN_DATABASE_URL ? describe : describe.skip;
 
@@ -31,6 +32,7 @@ describeWithDb('Modo sencillo — Postgres real como didacta_app (RLS forzada)',
   let service: SimpleModeService;
   let tenantA: string;
   let tenantB: string;
+  let tenantC: string;
   let creadoraA: string;
   let creadoraB: string;
 
@@ -124,7 +126,7 @@ describeWithDb('Modo sencillo — Postgres real como didacta_app (RLS forzada)',
   }, 120_000);
 
   afterAll(async () => {
-    for (const t of [tenantA, tenantB].filter(Boolean)) {
+    for (const t of [tenantA, tenantB, tenantC].filter(Boolean)) {
       await admin.tenant.delete({ where: { id: t } }).catch(() => undefined);
     }
     await admin?.$disconnect();
@@ -260,5 +262,139 @@ describeWithDb('Modo sencillo — Postgres real como didacta_app (RLS forzada)',
     });
     const curso = await admin.modCoursesCourse.findFirstOrThrow({ where: { tenantId: tenantA } });
     expect(curso.status).toBe('DRAFT');
+  });
+
+  /**
+   * (e) Aula de Cloud que ya vendía en modo completo antes de existir el modo
+   * sencillo: curso publicado con precio, una alumna y una venta. Ni rastro
+   * del modo sencillo en sus ajustes.
+   */
+  async function aulaQueYaVendia(): Promise<string> {
+    const stamp = Date.now();
+    const t = (
+      await admin.tenant.create({
+        data: { id: randomUUID(), slug: `cloud-vieja-${stamp}`, name: 'Escuela de Cerámica' },
+      })
+    ).id;
+    const curso = await admin.modCoursesCourse.create({
+      data: { tenantId: t, slug: 'torno-basico', title: 'Torno básico', status: 'PUBLISHED' },
+    });
+    const modulo = await admin.modCoursesModule.create({
+      data: { tenantId: t, courseId: curso.id, title: 'Primeros pasos', position: 0 } as never,
+    });
+    await admin.modCoursesLesson.create({
+      data: {
+        tenantId: t,
+        moduleId: modulo.id,
+        type: 'TEXT',
+        title: 'Bienvenida',
+        content: { text: 'Hola' },
+        position: 0,
+      } as never,
+    });
+    const producto = await admin.modBillingProduct.create({
+      data: {
+        tenantId: t,
+        courseId: curso.id,
+        stripeProductId: `prod_${stamp}`,
+        stripePriceId: `price_${stamp}`,
+        unitAmount: 8900,
+        currency: 'eur',
+      },
+    });
+    const alumna = await admin.user.create({
+      data: { tenantId: t, email: `alumna-${stamp}@example.test`, status: 'ACTIVE' },
+    });
+    await admin.modBillingOrder.create({
+      data: {
+        tenantId: t,
+        userId: alumna.id,
+        productId: producto.id,
+        courseId: curso.id,
+        stripeSessionId: `cs_${stamp}`,
+        status: 'COMPLETED',
+        amountPaid: 8900,
+        currency: 'eur',
+        completedAt: new Date(),
+      },
+    });
+    await admin.auditLog.create({
+      data: {
+        tenantId: t,
+        action: 'admin.tenant.created',
+        resourceType: 'tenant',
+        resourceId: t,
+        metadata: { slug: `cloud-vieja-${stamp}`, actorKind: 'provisioning' },
+      },
+    });
+    return t;
+  }
+
+  it('(e) un aula de Cloud que ya vendía: Empieza aquí deduce la oferta y no empieza de cero; B no ve nada', async () => {
+    tenantC = await aulaQueYaVendia();
+    const conCobros = new SimpleModeService(
+      prisma,
+      (service as unknown as { registry: never }).registry,
+      { resolve: async () => ({ secretKey: 'sk_test_x' }) } as never,
+    );
+
+    const vista = await runAsTenant(tenantC, () => conCobros.startHere(tenantC));
+    expect(vista.steps.every((s) => s.done)).toBe(true);
+    expect(vista.offer).toMatchObject({
+      kind: 'course',
+      amountCents: 8900,
+      courseSlug: 'torno-basico',
+    });
+    expect(vista.salePath).toBe('/catalogo/torno-basico');
+    expect(vista.sales.count).toBe(1);
+    expect(vista.students).toBe(1);
+
+    // Aislamiento: desde B (vacía) no se deduce la oferta de C ni se la adopta.
+    const vistaB = await runAsTenant(tenantB, () => conCobros.startHere(tenantB));
+    expect(vistaB.offer).toBeNull();
+    expect(vistaB.sales.count).toBe(0);
+    expect(await runAsTenant(tenantB, () => conCobros.adoptExisting(tenantB, creadoraB))).toEqual({
+      adopted: false,
+    });
+
+    // C se adopta (sin alta en 3 preguntas) y deja el asistente por terminado.
+    const creadoraC = (
+      await admin.user.create({
+        data: {
+          tenantId: tenantC,
+          email: `creadora-c-${Date.now()}@example.test`,
+          status: 'ACTIVE',
+        },
+      })
+    ).id;
+    expect(await runAsTenant(tenantC, () => conCobros.adoptExisting(tenantC, creadoraC))).toEqual({
+      adopted: true,
+    });
+    const asistente = await admin.tenantSetting.findFirst({
+      where: { tenantId: tenantC, moduleName: 'onboarding', key: 'academy' },
+    });
+    expect((asistente?.valueJson as { completedAt?: string }).completedAt).toEqual(
+      expect.any(String),
+    );
+    expect(await admin.modCoursesCourse.count({ where: { tenantId: tenantC } })).toBe(1);
+    expect((await admin.tenant.findUnique({ where: { id: tenantC } }))?.name).toBe(
+      'Escuela de Cerámica',
+    );
+  });
+
+  it('(f) el script de Cloud, como didacta_app, solo señala las aulas con la marca de provisioning', async () => {
+    const app = new PrismaClient({
+      datasources: { db: { url: didactaAppUrl(ADMIN_DATABASE_URL!) } },
+    });
+    try {
+      const [c] = await revisar(app, tenantC);
+      expect(c).toMatchObject({ id: tenantC, creadaPorCloud: true, simpleMode: false });
+      const [a] = await revisar(app, tenantA);
+      expect(a).toMatchObject({ id: tenantA, creadaPorCloud: false });
+      const [b] = await revisar(app, tenantB);
+      expect(b).toMatchObject({ id: tenantB, creadaPorCloud: false });
+    } finally {
+      await app.$disconnect();
+    }
   });
 });
