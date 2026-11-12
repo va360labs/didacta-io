@@ -1753,3 +1753,114 @@ describe('BillingService — el evento ya lo archivó OTRA aula (fila que existe
     ).rejects.toThrow(/row-level security/);
   });
 });
+
+describe('BillingService — resyncStripeCatalog (el tenant cambia de cuenta de Stripe)', () => {
+  let prisma: MockPrisma;
+  let stripe: MockStripe;
+  let svc: BillingService;
+
+  function seed(id: string, extra: Partial<ProductRow> = {}) {
+    prisma.products.set(id, {
+      id,
+      tenantId: 'tenant-1',
+      courseId: 'course-1',
+      stripeProductId: `prod_viejo_${id}`,
+      stripePriceId: `price_viejo_${id}`,
+      unitAmount: 4900,
+      currency: 'eur',
+      compareAtAmount: null,
+      name: '',
+      perks: [],
+      sortOrder: 0,
+      isFeatured: false,
+      externalRef: null,
+      active: true,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      ...extra,
+    });
+  }
+
+  beforeEach(() => {
+    prisma = new MockPrisma();
+    stripe = new MockStripe();
+    svc = new BillingService(
+      prisma as unknown as never,
+      async () => stripe,
+      new MockPublisher(),
+      urls,
+    );
+  });
+
+  it('recrea Product y Price en la cuenta actual con el mismo importe y apunta la fila al nuevo', async () => {
+    seed('p1');
+    expect(await svc.resyncStripeCatalog('tenant-1')).toEqual({ resynced: 1, skipped: 0 });
+    const fila = prisma.products.get('p1')!;
+    expect(fila.stripePriceId).toMatch(/^price_auto_/);
+    expect(fila.stripeProductId).toMatch(/^prod_auto_/);
+    // El nombre del Product sale del viejo: es lo que veía el comprador.
+    expect(stripe.lastOneOffPrice).toEqual({
+      name: 'Test product',
+      unitAmount: 4900,
+      currency: 'eur',
+    });
+    expect(fila.unitAmount).toBe(4900);
+    expect(fila.currency).toBe('eur');
+  });
+
+  it('no toca los precios que ya están en la cuenta actual (isCurrent) y una segunda pasada no hace nada', async () => {
+    seed('p1');
+    seed('p2', { courseId: 'course-2' });
+    const actuales = new Set<string>();
+    const isCurrent = async (id: string) => actuales.has(id);
+
+    expect(await svc.resyncStripeCatalog('tenant-1', { isCurrent })).toEqual({
+      resynced: 2,
+      skipped: 0,
+    });
+    for (const p of prisma.products.values()) actuales.add(p.stripePriceId);
+    expect(await svc.resyncStripeCatalog('tenant-1', { isCurrent })).toEqual({
+      resynced: 0,
+      skipped: 2,
+    });
+  });
+
+  it('acota por curso e ignora las opciones inactivas y las de otros tenants', async () => {
+    seed('p1');
+    seed('p2', { courseId: 'course-2' });
+    seed('p3', { active: false });
+    seed('p4', { tenantId: 'tenant-2' });
+    expect(await svc.resyncStripeCatalog('tenant-1', { courseId: 'course-1' })).toEqual({
+      resynced: 1,
+      skipped: 0,
+    });
+    expect(prisma.products.get('p1')!.stripePriceId).toMatch(/^price_auto_/);
+    expect(prisma.products.get('p2')!.stripePriceId).toBe('price_viejo_p2');
+    expect(prisma.products.get('p3')!.stripePriceId).toBe('price_viejo_p3');
+    expect(prisma.products.get('p4')!.stripePriceId).toBe('price_viejo_p4');
+  });
+
+  it('si el Product viejo no se puede leer, usa el nombre de la opción', async () => {
+    seed('p1', { name: 'Curso Avanzado' });
+    stripe.retrieveProduct = async () => {
+      throw new StripeApiError('No such product');
+    };
+    await svc.resyncStripeCatalog('tenant-1');
+    expect(stripe.lastOneOffPrice?.name).toBe('Curso Avanzado');
+  });
+
+  it('sin opciones activas no pide el adaptador de Stripe', async () => {
+    const sinStripe = new BillingService(
+      prisma as unknown as never,
+      async () => {
+        throw new Error('no debería resolver Stripe');
+      },
+      new MockPublisher(),
+      urls,
+    );
+    await expect(sinStripe.resyncStripeCatalog('tenant-1')).resolves.toEqual({
+      resynced: 0,
+      skipped: 0,
+    });
+  });
+});

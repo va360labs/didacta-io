@@ -471,6 +471,73 @@ export class BillingService {
     });
   }
 
+  /**
+   * Vuelve a crear en la cuenta de Stripe ACTUAL del tenant el Product y el
+   * Price de cada opción de compra activa, y apunta la fila local a los nuevos.
+   *
+   * Para qué: cuando un tenant cambia de cuenta de Stripe (p. ej. deja de cobrar
+   * con sus claves y pasa a cobrar a través del operador de la instalación),
+   * sus `price_…` siguen en la cuenta vieja y un checkout con ellos fallaría con
+   * «No such price». `stripePriceId` es obligatorio: no se puede dejar vacío.
+   *
+   * El módulo no sabe en qué cuenta vive cada precio. Lo dice quien llama con
+   * `isCurrent(priceId)`: `true` = ya está en la cuenta actual, no se toca. Sin
+   * `isCurrent`, se recrean todas.
+   *
+   * El nombre del Product nuevo se lee del viejo (`retrieveProduct`, que el
+   * adaptador del host enruta a la cuenta donde vive); si no se puede leer, se
+   * usa el nombre de la opción. Idempotente en la práctica: una segunda pasada
+   * con el mismo `isCurrent` no encuentra nada que recrear.
+   */
+  async resyncStripeCatalog(
+    tenantId: string,
+    opts: {
+      /** Limita la pasada a las opciones de un curso. */
+      courseId?: string;
+      isCurrent?: (stripePriceId: string) => Promise<boolean>;
+    } = {},
+  ): Promise<{ resynced: number; skipped: number }> {
+    const productos = await this.prisma.modBillingProduct.findMany({
+      where: { tenantId, active: true, ...(opts.courseId ? { courseId: opts.courseId } : {}) },
+      orderBy: [{ courseId: 'asc' }, { sortOrder: 'asc' }],
+    });
+    let resynced = 0;
+    let skipped = 0;
+    if (productos.length === 0) return { resynced, skipped };
+
+    const stripe = await this.stripeFor(tenantId);
+    for (const producto of productos) {
+      if (opts.isCurrent && (await opts.isCurrent(producto.stripePriceId))) {
+        skipped += 1;
+        continue;
+      }
+      let name = producto.name.trim() || 'Curso';
+      try {
+        const viejo = await stripe.retrieveProduct(producto.stripeProductId);
+        if (viejo.name.trim()) name = viejo.name.trim();
+      } catch {
+        // El Product viejo no se puede leer (otra cuenta sin claves, borrado…):
+        // el nombre de la opción vale para la pantalla de pago.
+      }
+      const price = await stripe.createOneOffPrice({
+        name,
+        unitAmount: producto.unitAmount,
+        currency: producto.currency,
+        metadata: {
+          tenantId,
+          courseId: producto.courseId,
+          didacta: 'course',
+        },
+      });
+      await this.prisma.modBillingProduct.update({
+        where: { id: producto.id },
+        data: { stripePriceId: price.id, stripeProductId: price.productId },
+      });
+      resynced += 1;
+    }
+    return { resynced, skipped };
+  }
+
   async deleteProduct(tenantId: string, productId: string): Promise<void> {
     const product = await this.prisma.modBillingProduct.findFirst({
       where: { id: productId, tenantId },

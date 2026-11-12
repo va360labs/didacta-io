@@ -33,9 +33,11 @@ export type {
   StartCheckoutResult,
   StripeAdapterResolver,
 } from './billing.service.js';
-export { StripeSdkAdapter } from './stripe.client.js';
+export { StripeSdkAdapter, TRANSFER_GROUP_PREFIX } from './stripe.client.js';
 export type {
   StripeAdapter,
+  StripeAdapterOptions,
+  CreateOneOffPriceParams,
   CreateCheckoutSessionParams,
   StripeCheckoutSessionResult,
   StripePriceResult,

@@ -111,6 +111,33 @@ export interface StripeProductResult {
 }
 
 /**
+ * Opciones con las que el HOST monta el adaptador. Este módulo no sabe de
+ * quién es la cuenta de Stripe ni por qué: solo aplica lo que le dicen.
+ *
+ * Sin opciones (lo de siempre: el tenant cobra en SU cuenta), los parámetros de
+ * la sesión son exactamente los de antes — hay un test de instantánea que lo
+ * vigila.
+ */
+export interface StripeAdapterOptions {
+  /**
+   * Cobro en una cuenta COMPARTIDA en nombre de otra. Con esto la sesión añade
+   * `payment_intent_data.on_behalf_of` (el comercio que ve el comprador y el que
+   * figura en el extracto es esa cuenta) y `transfer_group: 'didacta_<orderId>'`,
+   * que agrupa en Stripe el cargo y la transferencia posterior de su parte.
+   */
+  readonly connect?: { readonly onBehalfOf: string };
+  /**
+   * `'deny'` ignora `allowPromotionCodes`. En una cuenta compartida un código
+   * promocional creado para una academia valdría en todas las demás.
+   * Por defecto `'allow'`: manda lo que pida el servicio.
+   */
+  readonly promotionCodes?: 'allow' | 'deny';
+}
+
+/** Prefijo del `transfer_group` de una venta: agrupa cargo y transferencia en Stripe. */
+export const TRANSFER_GROUP_PREFIX = 'didacta_';
+
+/**
  * Implementación real basada en el SDK oficial de Stripe.
  *
  * Construir solo si hay STRIPE_SECRET_KEY. En tests puedes pasar un
@@ -123,6 +150,7 @@ export class StripeSdkAdapter implements StripeAdapter {
     private readonly secretKey: string,
     private readonly webhookSecret: string,
     StripeCtor: new (key: string, opts?: Stripe.StripeConfig) => Stripe,
+    private readonly options: StripeAdapterOptions = {},
   ) {
     if (!secretKey) throw new StripeConfigMissingError('secretKey');
     if (!webhookSecret) throw new StripeConfigMissingError('webhookSecret');
@@ -158,12 +186,22 @@ export class StripeSdkAdapter implements StripeAdapter {
         success_url: p.successUrl,
         cancel_url: p.cancelUrl,
         customer_email: p.customerEmail,
-        ...(p.allowPromotionCodes ? { allow_promotion_codes: true } : {}),
+        ...(p.allowPromotionCodes && this.options.promotionCodes !== 'deny'
+          ? { allow_promotion_codes: true }
+          : {}),
         client_reference_id: p.metadata.orderId,
         metadata: { ...p.metadata },
         // Importante para reconciliar invoicing: pasamos el orderId en
         // payment_intent.metadata también, que sobrevive al checkout.
-        payment_intent_data: { metadata: { ...p.metadata } },
+        payment_intent_data: {
+          metadata: { ...p.metadata },
+          ...(this.options.connect
+            ? {
+                on_behalf_of: this.options.connect.onBehalfOf,
+                transfer_group: `${TRANSFER_GROUP_PREFIX}${p.metadata.orderId}`,
+              }
+            : {}),
+        },
       });
       if (!session.url) {
         throw new StripeApiError('Stripe devolvió session sin URL hosted');
