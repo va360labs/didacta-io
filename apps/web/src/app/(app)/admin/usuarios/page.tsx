@@ -5,6 +5,8 @@
  * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
  */
 
+import { SimpleStudents } from '@/components/simple-gestion/simple-students';
+import { useSimpleMode } from '@/lib/simple-mode';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
@@ -39,7 +41,14 @@ const STATUS_VARIANT: Record<UserStatus, 'success' | 'warning' | 'muted' | 'dang
   DEACTIVATED: 'muted',
 };
 
+/** En modo sencillo, la variante sencilla; en modo completo, la de siempre. */
 export default function UsuariosPage() {
+  const simple = useSimpleMode();
+  if (simple === null) return null;
+  return simple ? <SimpleStudents /> : <UsuariosCompleta />;
+}
+
+function UsuariosCompleta() {
   const t = useTranslations('adminUsuarios');
   const tErrors = useTranslations('errors');
   const [users, setUsers] = useState<UserListItem[] | null>(null);

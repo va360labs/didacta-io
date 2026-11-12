@@ -236,6 +236,11 @@ export const zoomLiveApi = {
     description?: string;
     /** Publica un anuncio de la clase en el feed de la comunidad. */
     announce?: boolean;
+    /**
+     * Enlace de una videollamada propia (Zoom, Meet, Teams…; solo https). Con
+     * él no se habla con Zoom y no hacen falta credenciales.
+     */
+    externalJoinUrl?: string;
   }): Promise<ZoomSession> {
     return apiFetch<ZoomSession>(
       '/api/v1/modules/zoom-live/sessions',
@@ -259,6 +264,8 @@ export const zoomLiveApi = {
       description?: string | null;
       /** Publica el anuncio en la comunidad si aún no existe. */
       announce?: boolean;
+      /** Cambiar el enlace propio de una clase creada con él. */
+      externalJoinUrl?: string;
     },
   ): Promise<ZoomSession> {
     return apiFetch<ZoomSession>(

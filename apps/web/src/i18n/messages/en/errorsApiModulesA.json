@@ -124,5 +124,6 @@
   "ZOOM_SESSION_ALREADY_ENDED": "The session has already ended; it cannot be modified.",
   "ZOOM_SESSION_NOT_FOUND": "Session not found.",
   "ZOOM_SESSION_NOT_OPEN_FOR_REGISTRATION": "The session no longer accepts registrations.",
-  "ZOOM_WEBHOOK_FOREIGN_TENANT": "This webhook only accepts notices for the academy this domain belongs to."
+  "ZOOM_WEBHOOK_FOREIGN_TENANT": "This webhook only accepts notices for the academy this domain belongs to.",
+  "ZOOM_NOT_CONFIGURED": "Paste the link to your video call (Zoom, Google Meet or Teams) or connect your Zoom account in Settings."
 }

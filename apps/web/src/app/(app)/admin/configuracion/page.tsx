@@ -5,6 +5,9 @@
  * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
  */
 
+import { SimpleSettings } from '@/components/simple-gestion/simple-settings';
+import { wantsFullSettings } from '@/components/simple-gestion/helpers';
+import { useSimpleMode } from '@/lib/simple-mode';
 import { useEffect, useState, type FormEvent } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
@@ -106,7 +109,18 @@ const ALL_TABS: ConfigTabSpec[] = [
 
 type TabKey = string;
 
+/**
+ * En modo sencillo, «Ajustes» (tu academia y el paso al modo completo); la
+ * configuración completa sigue aquí mismo con `?completo=1` o un `?tab=`.
+ */
 export default function ConfiguracionPage() {
+  const simple = useSimpleMode();
+  const params = useSearchParams();
+  if (simple === null) return null;
+  return simple && !wantsFullSettings(params) ? <SimpleSettings /> : <ConfiguracionCompleta />;
+}
+
+function ConfiguracionCompleta() {
   const t = useTranslations('adminMarca');
   const tErrors = useTranslations('errors');
   const [items, setItems] = useState<TenantSettingMetadata[] | null>(null);
