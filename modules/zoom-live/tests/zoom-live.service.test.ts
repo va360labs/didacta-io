@@ -686,6 +686,15 @@ describe('ZoomLiveService.handleWebhookEvent', () => {
 
     expect(started).toEqual({ result: 'IGNORED' });
     expect(recording).toEqual({ result: 'IGNORED' });
+    // El aviso se archiva A NOMBRE DEL AULA VERIFICADA, desde que se reclama y
+    // también al cerrarlo sin clase local. La tabla tiene RLS: una fila sin
+    // `tenant_id` en contexto de aula la rechaza la base (era un 500).
+    expect(
+      prisma._webhookEvents.map((e) => [e.eventId, e.tenantId, e.sessionId, e.result]),
+    ).toEqual([
+      ['evt-ajeno-1', 'otra-aula', null, 'IGNORED'],
+      ['evt-ajeno-2', 'otra-aula', null, 'IGNORED'],
+    ]);
     const after = await service.get(TENANT, created.id);
     expect(after.status).toBe('SCHEDULED');
     expect(after.recordingUrl ?? null).toBeNull();
