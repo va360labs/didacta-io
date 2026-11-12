@@ -471,7 +471,10 @@ export function derivePayoutsCardView(status: PayoutsStatusDto | null): PayoutsC
     case 'READY':
       return {
         kind: 'ready',
-        currency: account.defaultCurrency,
+        // La que diga Stripe; si aún no la ha dicho, la del país (la API la
+        // calcula igual que para los precios). Nunca «euros» por defecto: un
+        // creador suizo cobra en francos.
+        currency: account.defaultCurrency ?? status.settlementCurrency ?? null,
         schedule: account.payoutSchedule,
       };
     case 'PENDING_REVIEW':

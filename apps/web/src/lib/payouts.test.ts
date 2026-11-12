@@ -71,6 +71,16 @@ describe('derivePayoutsCardView: los tres estados del plan y sus variantes', () 
     ).toEqual({ kind: 'missing', requirement: 'other' });
   });
 
+  it('lista sin moneda de Stripe todavía → la de su país (un creador suizo cobra en francos, no en euros)', () => {
+    expect(
+      derivePayoutsCardView({
+        ...base,
+        settlementCurrency: 'chf',
+        account: account({ status: 'READY', defaultCurrency: null, country: 'CH' }),
+      }),
+    ).toMatchObject({ kind: 'ready', currency: 'chf' });
+  });
+
   it('lista → «Todo listo» con divisa y calendario', () => {
     const schedule = {
       interval: 'weekly',
