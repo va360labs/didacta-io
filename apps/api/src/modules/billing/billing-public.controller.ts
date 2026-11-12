@@ -9,6 +9,7 @@ import {
   Controller,
   Get,
   NotFoundException,
+  Optional,
   Param,
   Post,
   Req,
@@ -25,6 +26,10 @@ import { assertSignupsAllowed } from '../../tenancy/signup-freeze';
 import { runAsTenant } from '../../tenancy/tenant-context.storage';
 import { TenantResolverService } from '../../tenancy/tenant-resolver.service';
 import { ModuleRegistryService } from '../module-registry.service';
+import {
+  PAYOUTS_NOT_READY_OFFER_REASON,
+  PlatformCheckoutGate,
+} from '../payouts/platform-checkout-gate';
 import { resolvePublicHost } from '../../common/resolve-public-host';
 
 const uuidSchema = z.string().uuid();
@@ -92,6 +97,11 @@ export class BillingPublicController {
     private readonly registry: ModuleRegistryService,
     private readonly tenantResolver: TenantResolverService,
     private readonly prisma: PrismaService,
+    /**
+     * Solo con el modo plataforma encendido: si el aula cobra por la plataforma
+     * y su cuenta aún no puede vender, nada está a la venta.
+     */
+    @Optional() private readonly payoutsGate?: PlatformCheckoutGate,
   ) {}
 
   @Get('catalog')
@@ -104,6 +114,8 @@ export class BillingPublicController {
     // RLS F2: ruta pública sin middleware de tenant — el cuerpo corre bajo el
     // ALS del tenant resuelto por Host para que cada query quede escopada.
     return runAsTenant(tenantId, async () => {
+      // Cobros de plataforma sin terminar de conectar: no se ofrece nada.
+      if (await this.payoutsGate?.saleBlockedReason(tenantId)) return { courses: [] };
       const billing = this.registry.getBillingService();
       const ofertas = await billing.getCatalog(tenantId);
       if (ofertas.length === 0) return { courses: [] };
@@ -161,6 +173,10 @@ export class BillingPublicController {
         select: { id: true },
       });
       if (!curso) return { forSale: false, options: [] };
+      // El aula cobra por la plataforma y su cuenta aún no puede vender.
+      if (await this.payoutsGate?.saleBlockedReason(tenantId)) {
+        return { forSale: false, options: [], reason: PAYOUTS_NOT_READY_OFFER_REASON };
+      }
       return this.registry.getBillingService().getCourseOffer(tenantId, courseId);
     });
   }
@@ -201,6 +217,9 @@ export class BillingPublicController {
       }
 
       const billing = this.registry.getBillingService();
+      // Modo plataforma: 409 PAYOUTS_NOT_READY si la cuenta no puede vender
+      // (antes de crear la orden), y precios del curso en la cuenta del operador.
+      await this.payoutsGate?.prepareCheckout(tenantId, courseId, billing);
 
       const base = (await this.tenantResolver.resolveTenantWebBaseUrl(tenantId, req)).replace(
         /\/$/,

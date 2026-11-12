@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
  */
 
-import { Injectable, type OnModuleInit } from '@nestjs/common';
+import { Injectable, Optional, type OnModuleInit } from '@nestjs/common';
 import { ModuleRegistry } from '@didacta/core-registry';
 import { Prisma } from '@didacta/database';
 import {
@@ -21,6 +21,7 @@ import {
   type BillingEventPublisher,
   type CheckoutUrlBuilder,
   type StripeAdapter,
+  type StripeAdapterOptions,
   type StripeAdapterResolver,
 } from '@didacta/mod-billing';
 import {
@@ -120,7 +121,9 @@ import { AiGatewayService } from '../ai/ai-gateway.service';
 import { runSanctionedGlobalAccess } from '../tenancy/tenant-context.storage';
 import { resolveCoreContractVersion } from '../core-version';
 import { buildCourseSaleChecker } from './course-sale-checker';
+import { PayoutsRuntime } from './payouts/payouts-runtime.service';
 import { getPlatformPaymentsConfig } from './payouts/platform-payments.config';
+import { PlatformStripeAdapters } from './payouts/platform-stripe-adapters';
 import { ModuleContextFactory } from './module-context.factory';
 import {
   TenantStripeResolverService,
@@ -175,6 +178,12 @@ export class ModuleRegistryService implements OnModuleInit {
    */
   private globalStripeAdapter?: StripeAdapter;
   private globalSubscriptionsStripeAdapter?: SubscriptionsStripeAdapter;
+  /**
+   * Solo con el modo plataforma encendido: los adaptadores de Stripe de
+   * billing/subscriptions se deciden con el resolutor de modo de cobro. Sin
+   * él, `resolveStripeAdapter` es exactamente el de siempre.
+   */
+  private platformAdapters?: PlatformStripeAdapters;
   private paymentConnections?: PaymentConnectionsService;
   private paymentTiers?: PaymentTiersService;
   private orderMirror?: OrderMirrorService;
@@ -190,6 +199,8 @@ export class ModuleRegistryService implements OnModuleInit {
     private readonly factory: ModuleContextFactory,
     private readonly pino: PinoLogger,
     private readonly aiGateway: AiGatewayService,
+    /** Solo existe con el modo plataforma encendido (ver `PayoutsModule`). */
+    @Optional() private readonly payouts?: PayoutsRuntime,
   ) {}
 
   async onModuleInit() {
@@ -378,6 +389,18 @@ export class ModuleRegistryService implements OnModuleInit {
     // respaldo no entraría. Por eso `||` sobre el valor ya recortado.
     this.globalStripeAdapter = this.tryBuildGlobalStripeAdapter();
     this.globalSubscriptionsStripeAdapter = this.tryBuildGlobalSubscriptionsStripeAdapter();
+    // Modo plataforma: el adaptador de cada tenant lo decide `PaymentModeResolver`
+    // (claves propias, cuenta del operador con `on_behalf_of`, o nada).
+    if (this.payouts) {
+      this.platformAdapters = new PlatformStripeAdapters({
+        config: this.payouts.config,
+        mode: this.payouts.mode,
+        ownCredentials: this.stripeResolver,
+        refs: this.payouts.platformRefs(),
+        buildBilling: (credentials, options) => this.buildStripeAdapter(credentials, options),
+        buildSubscriptions: (credentials) => this.buildSubscriptionsStripeAdapter(credentials),
+      });
+    }
     if (!this.globalStripeAdapter && !this.globalSubscriptionsStripeAdapter) {
       this.pino.warn(
         {},
@@ -869,6 +892,7 @@ export class ModuleRegistryService implements OnModuleInit {
    */
   private async resolveStripeAdapter(tenantId: string): Promise<StripeAdapter> {
     if (!this.stripeResolver) throw new Error('ModuleRegistry no está inicializado');
+    if (this.platformAdapters) return this.platformAdapters.billing(tenantId);
     const resolved = await this.stripeResolver.resolve(tenantId);
     if (!resolved) throw new BillingStripeConfigMissingError('secretKey');
     if (resolved.source === 'global' && this.globalStripeAdapter) return this.globalStripeAdapter;
@@ -880,6 +904,7 @@ export class ModuleRegistryService implements OnModuleInit {
     tenantId: string,
   ): Promise<SubscriptionsStripeAdapter> {
     if (!this.stripeResolver) throw new Error('ModuleRegistry no está inicializado');
+    if (this.platformAdapters) return this.platformAdapters.subscriptions(tenantId);
     const resolved = await this.stripeResolver.resolve(tenantId);
     if (!resolved) throw new SubscriptionsStripeConfigMissingError('secretKey');
     if (resolved.source === 'global' && this.globalSubscriptionsStripeAdapter) {
@@ -888,12 +913,18 @@ export class ModuleRegistryService implements OnModuleInit {
     return this.buildSubscriptionsStripeAdapter(resolved.credentials);
   }
 
-  private buildStripeAdapter(credentials: BillingStripeCredentials): StripeAdapter {
+  private buildStripeAdapter(
+    credentials: BillingStripeCredentials,
+    options?: StripeAdapterOptions,
+  ): StripeAdapter {
     // Carga perezosa de Stripe SDK — evita romper en NODE_ENV=test si no
     // está instalado (vitest unit no lo necesita).
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const StripeCtor = require('stripe').default ?? require('stripe');
-    return new StripeSdkAdapter(credentials.secretKey, credentials.webhookSecret, StripeCtor);
+    // Sin opciones (modo propio): la llamada de siempre, sin cuarto argumento.
+    return options
+      ? new StripeSdkAdapter(credentials.secretKey, credentials.webhookSecret, StripeCtor, options)
+      : new StripeSdkAdapter(credentials.secretKey, credentials.webhookSecret, StripeCtor);
   }
 
   private buildSubscriptionsStripeAdapter(

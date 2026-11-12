@@ -13,6 +13,7 @@ import {
   type PayoutsDbPort,
   type PayoutsTx,
   type PlatformStripeClient,
+  type RegisterObjectRefInput,
 } from '@didacta/mod-payouts';
 import { Logger as PinoLogger } from 'nestjs-pino';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -20,6 +21,7 @@ import { runAsTenant, runGlobalWithoutTenant } from '../../tenancy/tenant-contex
 import { PaymentModeResolver } from '../payment-mode.resolver';
 import { TenantStripeResolverService } from '../tenant-stripe-resolver.service';
 import type { PlatformPaymentsEnabled } from './platform-payments.config';
+import type { PlatformRefsPort } from './platform-stripe-adapters';
 
 /** Configuración del modo plataforma (solo existe con el modo encendido). */
 export const PLATFORM_PAYMENTS_CONFIG = Symbol('PLATFORM_PAYMENTS_CONFIG');
@@ -41,6 +43,8 @@ export class PayoutsRuntime {
   readonly mode: PaymentModeResolver;
   /** Registro objeto → tenant con el cliente global (resolver bajo acceso sancionado). */
   readonly refs: RefsService;
+  /** Transacciones con el contexto de tenant (RLS) o globales sancionadas. */
+  readonly db: PayoutsDbPort;
 
   constructor(
     @Inject(PLATFORM_PAYMENTS_CONFIG) readonly config: PlatformPaymentsEnabled,
@@ -49,7 +53,7 @@ export class PayoutsRuntime {
     stripeResolver: TenantStripeResolverService,
     logger: PinoLogger,
   ) {
-    const db: PayoutsDbPort = {
+    const db: PayoutsDbPort = (this.db = {
       // La extensión RLS del cliente inyecta el `set_config` del tenant como
       // primera sentencia del `$transaction` (y el `SET LOCAL ROLE` en el
       // acceso sancionado): toda la función corre escopada.
@@ -59,7 +63,7 @@ export class PayoutsRuntime {
         }),
       global: <T>(fn: (tx: PayoutsTx) => Promise<T>) =>
         runGlobalWithoutTenant(() => prisma.$transaction((tx) => fn(tx as unknown as PayoutsTx))),
-    };
+    });
     this.accounts = new PayoutsAccountsService(
       db,
       createConnectedAccountsApi(stripe, config.accountsApi),
@@ -79,6 +83,23 @@ export class PayoutsRuntime {
     this.settings = new PayoutsSettingsService(db, config.defaultFeeBps);
     this.refs = new RefsService(prisma as unknown as PrismaClient);
     this.mode = new PaymentModeResolver(config, stripeResolver, () => prisma);
+  }
+
+  /**
+   * Registro de objetos para los adaptadores de Stripe de los módulos
+   * (`platform-stripe-adapters.ts`): escribir a nombre del tenant con su RLS y
+   * consultar si un id es de plataforma bajo acceso sancionado.
+   */
+  platformRefs(): PlatformRefsPort {
+    return {
+      register: async (input: RegisterObjectRefInput) => {
+        await this.db.inTenant(input.tenantId, (tx) =>
+          new RefsService(tx as unknown as PrismaClient).register(input),
+        );
+      },
+      isPlatformObject: (stripeObjectId: string) =>
+        runGlobalWithoutTenant(() => this.refs.isPlatformObject([stripeObjectId])),
+    };
   }
 
   /** ¿De qué tenant es este `acct_`? `null` si no está registrado. Acceso sancionado. */

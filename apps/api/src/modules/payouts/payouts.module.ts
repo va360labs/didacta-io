@@ -16,6 +16,13 @@ import {
   PLATFORM_STRIPE_CLIENT,
   PayoutsRuntime,
 } from './payouts-runtime.service';
+import { PlatformCheckoutGate } from './platform-checkout-gate';
+import {
+  ModulesPlatformEventDispatcher,
+  PLATFORM_EVENT_DISPATCHER,
+  type PlatformEventDispatcher,
+} from './platform-event-dispatcher';
+import { PlatformObjectGuard } from './platform-object-guard';
 import { PlatformWebhookController } from './platform-webhook.controller';
 import { getPlatformPaymentsConfig, type PlatformPaymentsConfig } from './platform-payments.config';
 
@@ -30,7 +37,12 @@ import { getPlatformPaymentsConfig, type PlatformPaymentsConfig } from './platfo
  *    existen: la instalación tiene las mismas rutas que antes.
  *  - Modo plataforma ENCENDIDO: el webhook único, las rutas del creador, las
  *    dos del contrato del pool (`AdminTenantsPayoutsController`) y el
- *    conciliador de cuentas.
+ *    conciliador de cuentas. Y el módulo es GLOBAL: lo que exporta lo
+ *    reciben con `@Optional()` piezas del host que no lo importan —
+ *    `ModuleRegistryService` (adaptadores de Stripe por modo de cobro), los
+ *    webhooks heredados (`PlatformObjectGuard`: 403 a eventos de plataforma)
+ *    y los controladores de compra (`PlatformCheckoutGate`). Apagado no
+ *    exporta nada y todos ellos reciben `undefined`: son los de siempre.
  *
  * El registro del manifiesto en el `ModuleRegistry` sigue la MISMA decisión
  * (`module-registry.service.ts`): apagado, `mod.payouts` no aparece en el
@@ -41,14 +53,20 @@ export class PayoutsModule {
   /**
    * @param overrides.stripe Solo tests: el doble en memoria en vez del cliente
    *   real. En producción nadie lo pasa.
+   * @param overrides.dispatcher Solo tests: el reparto a módulos, para montar
+   *   el webhook sin el grafo entero de módulos.
    */
   static register(
     config: PlatformPaymentsConfig = getPlatformPaymentsConfig(),
-    overrides: { readonly stripe?: PlatformStripeClient } = {},
+    overrides: {
+      readonly stripe?: PlatformStripeClient;
+      readonly dispatcher?: PlatformEventDispatcher;
+    } = {},
   ): DynamicModule {
     if (!config.enabled) return { module: PayoutsModule };
     return {
       module: PayoutsModule,
+      global: true,
       imports: [AuthModule],
       controllers: [PayoutsController, PlatformWebhookController, AdminTenantsPayoutsController],
       providers: [
@@ -60,9 +78,14 @@ export class PayoutsModule {
         },
         PayoutsRuntime,
         PayoutsAccountsWorker,
+        PlatformObjectGuard,
+        PlatformCheckoutGate,
+        overrides.dispatcher
+          ? { provide: PLATFORM_EVENT_DISPATCHER, useValue: overrides.dispatcher }
+          : { provide: PLATFORM_EVENT_DISPATCHER, useClass: ModulesPlatformEventDispatcher },
         { provide: APP_FILTER, useClass: PayoutsErrorFilter },
       ],
-      exports: [PayoutsRuntime],
+      exports: [PayoutsRuntime, PlatformObjectGuard, PlatformCheckoutGate],
     };
   }
 }

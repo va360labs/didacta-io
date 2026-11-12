@@ -9,6 +9,7 @@ import {
   Controller,
   Get,
   NotFoundException,
+  Optional,
   Param,
   Post,
   Req,
@@ -25,6 +26,10 @@ import { ZodValidationPipe } from '../../auth/zod-validation.pipe';
 import { PrismaService } from '../../prisma/prisma.service';
 import { TenantResolverService } from '../../tenancy/tenant-resolver.service';
 import { ModuleRegistryService } from '../module-registry.service';
+import {
+  PAYOUTS_NOT_READY_OFFER_REASON,
+  PlatformCheckoutGate,
+} from '../payouts/platform-checkout-gate';
 
 /**
  * Endpoint de checkout para el ALUMNO (rol student/alumno o cualquier user
@@ -52,6 +57,11 @@ export class BillingController {
     private readonly registry: ModuleRegistryService,
     private readonly prisma: PrismaService,
     private readonly tenantResolver: TenantResolverService,
+    /**
+     * Solo con el modo plataforma encendido: si el aula cobra por la plataforma
+     * y su cuenta aún no puede vender, el curso no está a la venta.
+     */
+    @Optional() private readonly payoutsGate?: PlatformCheckoutGate,
   ) {}
 
   @Get('offer/:courseId')
@@ -67,6 +77,10 @@ export class BillingController {
     if (!user) throw new UnauthorizedException();
     // Si mod.billing no está configurado, la ficha debe seguir renderizando:
     // simplemente no se ofrece la compra.
+    // El aula cobra por la plataforma y su cuenta aún no puede vender.
+    if (await this.payoutsGate?.saleBlockedReason(user.tenantId)) {
+      return { forSale: false, options: [], reason: PAYOUTS_NOT_READY_OFFER_REASON };
+    }
     try {
       return await this.registry.getBillingService().getCourseOffer(user.tenantId, courseId);
     } catch {
@@ -143,7 +157,11 @@ export class BillingController {
     const webBaseUrl = (
       await this.tenantResolver.resolveTenantWebBaseUrl(user.tenantId, req)
     ).replace(/\/$/, '');
-    const result = await this.registry.getBillingService().startCheckout({
+    // Modo plataforma: 409 PAYOUTS_NOT_READY si la cuenta no puede vender
+    // (antes de crear la orden), y precios del curso en la cuenta del operador.
+    const billing = this.registry.getBillingService();
+    await this.payoutsGate?.prepareCheckout(user.tenantId, courseId, billing);
+    const result = await billing.startCheckout({
       tenantId: user.tenantId,
       userId: user.sub,
       userEmail: account?.email ?? '',
