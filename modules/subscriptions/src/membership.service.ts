@@ -543,8 +543,68 @@ export class MembershipService {
     stripe: SubscriptionsStripeAdapter,
   ): Promise<string> {
     if (plan.stripePriceId) return plan.stripePriceId;
+    return this.createStripeCatalog(plan, stripe, plan.stripeProductId);
+  }
 
-    let productId = plan.stripeProductId;
+  /**
+   * Vuelve a crear en la cuenta de Stripe ACTUAL del tenant el Product y el
+   * Price de cada plan activo que ya tenía precio, y apunta el plan a los
+   * nuevos.
+   *
+   * Para qué: cuando un tenant cambia de cuenta de Stripe (p. ej. deja de
+   * cobrar con sus claves y pasa a cobrar a través del operador de la
+   * instalación), sus `price_…` siguen en la cuenta vieja y un checkout con
+   * ellos fallaría con «No such price». Las suscripciones ya vendidas no se
+   * tocan: siguen en la cuenta donde nacieron, con su precio de entonces.
+   *
+   * El módulo no sabe en qué cuenta vive cada precio. Lo dice quien llama con
+   * `isCurrent(priceId)`: `true` = ya está en la cuenta actual, no se toca. Sin
+   * `isCurrent`, se recrean todos. Un plan que nunca se vendió (sin Product ni
+   * Price) no se toca: el primer checkout lo crea en la cuenta actual.
+   */
+  async resyncStripeCatalog(
+    tenantId: string,
+    opts: {
+      /** Limita la pasada a un plan. */
+      planId?: string;
+      isCurrent?: (stripePriceId: string) => Promise<boolean>;
+    } = {},
+  ): Promise<{ resynced: number; skipped: number }> {
+    const plans = await this.prisma.modSubscriptionsPlan.findMany({
+      where: { tenantId, active: true, ...(opts.planId ? { id: opts.planId } : {}) },
+      orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
+    });
+    let resynced = 0;
+    let skipped = 0;
+    let stripe: SubscriptionsStripeAdapter | null = null;
+    for (const plan of plans) {
+      // El precio, o si se limpió al cambiar el importe, el Product que el
+      // próximo checkout reutilizaría: los dos tienen que estar en esta cuenta.
+      const stripeRef = plan.stripePriceId ?? plan.stripeProductId;
+      if (!stripeRef) {
+        skipped += 1;
+        continue;
+      }
+      if (opts.isCurrent && (await opts.isCurrent(stripeRef))) {
+        skipped += 1;
+        continue;
+      }
+      stripe ??= await this.stripeFor(tenantId);
+      // Product nuevo: el viejo vive en la otra cuenta y no sirve para un
+      // precio de esta.
+      await this.createStripeCatalog(plan, stripe, null);
+      resynced += 1;
+    }
+    return { resynced, skipped };
+  }
+
+  /** Crea (si hace falta) el Product y el Price del plan y los apunta en el plan. */
+  private async createStripeCatalog(
+    plan: PlanRow,
+    stripe: SubscriptionsStripeAdapter,
+    existingProductId: string | null,
+  ): Promise<string> {
+    let productId = existingProductId;
     if (!productId) {
       // Un Product de Stripe POR PLAN, nombrado con el nombre del plan: así el
       // checkout muestra "Plan Anual" (el nombre que ve el comprador es el

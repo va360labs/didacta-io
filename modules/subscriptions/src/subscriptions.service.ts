@@ -337,6 +337,56 @@ export class SubscriptionsService {
     return updated;
   }
 
+  // ---------------- Portal de cliente (alumno) ----------------
+
+  /**
+   * Abre el portal de cliente de Stripe para que el alumno cambie su tarjeta,
+   * vea sus facturas y se dé de baja él solo.
+   *
+   * Qué suscripción: la indicada (tiene que ser suya), o si no la membresía viva
+   * más reciente, o si no su suscripción más reciente con cliente de Stripe. El
+   * portal es del CLIENTE (`cus_…`): muestra las suscripciones de ese cliente.
+   *
+   * La cuenta y la configuración del portal las decide el adaptador que monta el
+   * host (en una cuenta compartida, con el nombre del creador). Una suscripción
+   * ajena o sin cliente de Stripe responde «no encontrada» (404), sin decir cuál
+   * de las dos cosas es.
+   */
+  async createBillingPortalSession(
+    tenantId: string,
+    userId: string,
+    opts: { subscriptionId?: string; returnUrl: string },
+  ): Promise<{ url: string; subscriptionId: string }> {
+    const withCustomer = { stripeCustomerId: { not: '' } };
+    const sub = opts.subscriptionId
+      ? await this.prisma.modSubscriptionsSubscription.findFirst({
+          where: { id: opts.subscriptionId, tenantId, userId, ...withCustomer },
+        })
+      : ((await this.prisma.modSubscriptionsSubscription.findFirst({
+          where: {
+            tenantId,
+            userId,
+            planId: { not: null },
+            status: { in: ['TRIALING', 'ACTIVE', 'PAST_DUE'] },
+            ...withCustomer,
+          },
+          orderBy: { createdAt: 'desc' },
+        })) ??
+        (await this.prisma.modSubscriptionsSubscription.findFirst({
+          where: { tenantId, userId, ...withCustomer },
+          orderBy: { createdAt: 'desc' },
+        })));
+    if (!sub || !sub.stripeCustomerId) {
+      throw new SubscriptionNotFoundError(opts.subscriptionId ?? 'portal');
+    }
+    const stripe = await this.stripeFor(tenantId);
+    const session = await stripe.createPortalSession({
+      customerId: sub.stripeCustomerId,
+      returnUrl: opts.returnUrl,
+    });
+    return { url: session.url, subscriptionId: sub.id };
+  }
+
   // ---------------- Listado alumno ----------------
 
   async listMine(tenantId: string, userId: string): Promise<SubscriptionRow[]> {
