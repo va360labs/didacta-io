@@ -115,7 +115,8 @@
     "loadError": "No se pudo cargar el vídeo. Recarga la página para intentarlo de nuevo.",
     "fullscreen": "Pantalla completa",
     "exitFullscreen": "Salir de pantalla completa",
-    "embeddedTitle": "Vídeo de la lección"
+    "embeddedTitle": "Vídeo de la lección",
+    "watchQuota": "Esta academia ha llegado a su límite de horas de vídeo de este mes. Avisa a quien la gestiona."
   },
   "aiTutor": {
     "title": "Tutor IA",

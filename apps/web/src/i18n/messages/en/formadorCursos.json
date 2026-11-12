@@ -283,5 +283,53 @@
   "noDescription": "No description yet.",
   "updatedAt": "Updated {date}",
   "backToMyCourses": "← Back to my courses",
-  "newCoursePageDescription": "The course stays in draft until you publish it. Then you add sections, lessons and content."
+  "newCoursePageDescription": "The course stays in draft until you publish it. Then you add sections, lessons and content.",
+  "videoUpload": {
+    "dropTitle": "Upload the video for this lesson",
+    "dropReplace": "Upload another video to replace it",
+    "dropHelp": "Drag it here or click to choose it. Up to {size} and {duration} per video.",
+    "reading": "Reading the video…",
+    "preparing": "Getting the upload ready…",
+    "uploadingAria": "Upload progress",
+    "uploading": "Uploading: {sent} of {total}. You can keep editing the lesson.",
+    "paused": "Upload paused: {sent} of {total}. Click “Resume” to continue where you left off.",
+    "cut": "The connection dropped. Click “Resume” to continue where it stopped.",
+    "pause": "Pause",
+    "resume": "Resume",
+    "cancel": "Cancel",
+    "processing": "Uploaded. We're getting it ready to look good on any screen; it takes a few minutes and you can keep editing.",
+    "ready": "Ready · {duration} · up to {resolution}",
+    "saveHint": "Click “Save changes” so your students can see it.",
+    "replace": "Replace",
+    "remove": "Remove from the lesson",
+    "errors": {
+      "noDuration": "We couldn't read this video. Export it as MP4 and try again.",
+      "notVideo": "This doesn't look like a video. Upload an MP4, MOV or similar.",
+      "tooBig": "This video is {size} and the maximum is {limit}. Export it at a lower quality or split it into parts.",
+      "tooLong": "This video is {duration} long and the maximum is {limit} per video. Split it into shorter parts.",
+      "noRoom": "This video is {duration} long and you have {free} of space left. Remove videos you no longer use to make room.",
+      "generic": "The upload couldn't start. Try again in a moment."
+    },
+    "failed": {
+      "tooLong": "The video is longer than {limit}, so it wasn't kept. Split it into shorter parts.",
+      "quota": "The video doesn't fit in your space, so it wasn't kept. Remove videos you no longer use and upload it again.",
+      "uploadFailed": "The upload didn't arrive complete. Upload the video again.",
+      "abandoned": "The upload wasn't finished. Upload the video again.",
+      "encoding": "We couldn't get this video ready. Export it again as MP4 and upload it again."
+    },
+    "quota": {
+      "title": "Your video space",
+      "storedAria": "Hours of video used",
+      "watchedAria": "Hours watched this month",
+      "storedPre": "You've used {used} of {limit}. When you sell your first course you'll have {post}.",
+      "storedPost": "You've used {used} of {limit}.",
+      "bonus": "Includes {bonus} extra for your sales.",
+      "watchedPre": "This month your students have watched {used} of {limit}.",
+      "watchedPost": "This month your students have watched {used} of video.",
+      "resolutionPre": "Your videos play at up to 720p. From your first sale, the ones you upload will play at up to 1080p.",
+      "resolutionPost": "Your videos play at up to 1080p.",
+      "fullPre": "You have no space left. Remove videos you don't use or, when you sell your first course, you'll have {post}.",
+      "fullPost": "You have no space left. Remove videos you don't use; the more you sell, the more space you get."
+    }
+  }
 }

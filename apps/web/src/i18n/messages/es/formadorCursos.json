@@ -283,5 +283,53 @@
   "noDescription": "Sin descripción todavía.",
   "updatedAt": "Actualizado {date}",
   "backToMyCourses": "← Volver a mis cursos",
-  "newCoursePageDescription": "El curso queda en estado borrador hasta que lo publiques. Luego añades secciones, lecciones y contenido."
+  "newCoursePageDescription": "El curso queda en estado borrador hasta que lo publiques. Luego añades secciones, lecciones y contenido.",
+  "videoUpload": {
+    "dropTitle": "Sube el vídeo de esta lección",
+    "dropReplace": "Sube otro vídeo para sustituirlo",
+    "dropHelp": "Arrástralo aquí o haz clic para elegirlo. Hasta {size} y {duration} por vídeo.",
+    "reading": "Leyendo el vídeo…",
+    "preparing": "Preparando la subida…",
+    "uploadingAria": "Progreso de la subida",
+    "uploading": "Subiendo: {sent} de {total}. Puedes seguir editando la lección.",
+    "paused": "Subida en pausa: {sent} de {total}. Pulsa «Reanudar» para seguir donde lo dejaste.",
+    "cut": "Se ha cortado la conexión. Pulsa «Reanudar» para seguir donde se quedó.",
+    "pause": "Pausar",
+    "resume": "Reanudar",
+    "cancel": "Cancelar",
+    "processing": "Subido. Lo estamos preparando para que se vea bien en cualquier pantalla; tarda unos minutos y puedes seguir editando.",
+    "ready": "Listo · {duration} · hasta {resolution}",
+    "saveHint": "Pulsa «Guardar cambios» para que tus alumnos lo vean.",
+    "replace": "Sustituir",
+    "remove": "Quitar de la lección",
+    "errors": {
+      "noDuration": "No hemos podido leer este vídeo. Expórtalo en MP4 y vuelve a probar.",
+      "notVideo": "Esto no parece un vídeo. Sube un MP4, MOV o similar.",
+      "tooBig": "Este vídeo pesa {size} y el máximo es {limit}. Expórtalo con menos calidad o córtalo en partes.",
+      "tooLong": "Este vídeo dura {duration} y el máximo es {limit} por vídeo. Córtalo en partes más cortas.",
+      "noRoom": "Este vídeo dura {duration} y te quedan {free} de espacio. Quita vídeos que ya no uses para hacer sitio.",
+      "generic": "No se ha podido empezar la subida. Inténtalo de nuevo en un momento."
+    },
+    "failed": {
+      "tooLong": "El vídeo dura más de {limit}, así que no se ha guardado. Córtalo en partes más cortas.",
+      "quota": "El vídeo no cabe en tu espacio, así que no se ha guardado. Quita vídeos que ya no uses y vuelve a subirlo.",
+      "uploadFailed": "La subida no llegó completa. Vuelve a subir el vídeo.",
+      "abandoned": "La subida no se terminó. Vuelve a subir el vídeo.",
+      "encoding": "No hemos podido preparar este vídeo. Expórtalo de nuevo en MP4 y vuelve a subirlo."
+    },
+    "quota": {
+      "title": "Tu espacio de vídeo",
+      "storedAria": "Horas de vídeo usadas",
+      "watchedAria": "Horas vistas este mes",
+      "storedPre": "Has usado {used} de {limit}. Cuando vendas tu primer curso tendrás {post}.",
+      "storedPost": "Has usado {used} de {limit}.",
+      "bonus": "Incluye {bonus} más por tus ventas.",
+      "watchedPre": "Este mes tus alumnos han visto {used} de {limit}.",
+      "watchedPost": "Este mes tus alumnos han visto {used} de vídeo.",
+      "resolutionPre": "Tus vídeos se ven hasta en 720p. Desde tu primera venta, los que subas se verán hasta en 1080p.",
+      "resolutionPost": "Tus vídeos se ven hasta en 1080p.",
+      "fullPre": "Ya no te queda espacio. Quita vídeos que no uses o, cuando vendas tu primer curso, tendrás {post}.",
+      "fullPost": "Ya no te queda espacio. Quita vídeos que no uses; cuanto más vendas, más espacio tendrás."
+    }
+  }
 }
