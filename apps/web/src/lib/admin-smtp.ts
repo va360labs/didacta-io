@@ -232,11 +232,19 @@ export function shouldShowSmtpBanner(roles: readonly string[], status: AdminSmtp
 }
 
 /**
- * ¿Es la pantalla donde se conecta el correo? Ahí el aviso superior no se
- * pinta: la tarjeta del correo (pestaña Notificaciones, la que abre por
- * defecto) ya lo explica junto al formulario. Las pestañas son estado local,
- * así que la señal es la ruta.
+ * ¿Se está viendo la tarjeta del correo (Configuración → Notificaciones)? Ahí
+ * el aviso superior no se pinta: la tarjeta ya lo explica junto al formulario,
+ * y dos avisos iguales en la misma pantalla sobran. En las demás pestañas sí.
+ *
+ * La pestaña va en `?tab=`; sin ella, la que abre Configuración por defecto:
+ * «General» para super_admin y «Notificaciones» para el resto.
  */
-export function isSmtpSettingsRoute(pathname: string | null): boolean {
-  return pathname === '/admin/configuracion';
+export function isViewingSmtpSettings(
+  pathname: string | null,
+  tab: string | null,
+  roles: readonly string[],
+): boolean {
+  if (pathname !== '/admin/configuracion') return false;
+  const shown = tab || (roles.includes('super_admin') ? 'general' : 'notifications');
+  return shown === 'notifications';
 }

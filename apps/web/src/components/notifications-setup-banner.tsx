@@ -30,12 +30,12 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import {
   adminSmtpApi,
   deriveSmtpStatus,
-  isSmtpSettingsRoute,
+  isViewingSmtpSettings,
   shouldShowSmtpBanner,
 } from '@/lib/admin-smtp';
 
@@ -46,8 +46,13 @@ export function NotificationsSetupBanner({ roles }: { roles: readonly string[] }
   const t = useTranslations('shell');
   const [visible, setVisible] = useState(false);
   const pathname = usePathname();
-  // En Configuración la tarjeta del correo ya lo explica: un solo aviso.
-  const enAjustesDeCorreo = isSmtpSettingsRoute(pathname);
+  const searchParams = useSearchParams();
+  // En Configuración → Notificaciones la tarjeta del correo ya lo explica: un solo aviso.
+  const enAjustesDeCorreo = isViewingSmtpSettings(
+    pathname,
+    searchParams?.get('tab') ?? null,
+    roles,
+  );
 
   // Pregunta solo si el rol puede arreglarlo; con cualquier otro, el endpoint
   // respondería 403 en cada carga de página sin que sirviera de nada.

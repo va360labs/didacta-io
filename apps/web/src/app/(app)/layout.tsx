@@ -6,7 +6,7 @@
  */
 
 import { usePathname, useRouter } from 'next/navigation';
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { Suspense, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
 import { AppSidebar, type SidebarGroup } from '@/components/app-sidebar';
 import { CommandPalette } from '@/components/command-palette';
@@ -448,7 +448,9 @@ function Shell({
               {/* Solo aparece si no hay ninguna salida de correo: sin SMTP el
                   producto parece ir bien mientras pierde en silencio las altas
                   y los restablecimientos de contraseña. */}
-              <NotificationsSetupBanner roles={session.user.roles} />
+              <Suspense fallback={null}>
+                <NotificationsSetupBanner roles={session.user.roles} />
+              </Suspense>
               {/* Prueba gratis de Didacta Cloud: solo para quien administra
                   la academia, y solo mientras dura. */}
               <SubscriptionTrialBanner roles={session.user.roles} />

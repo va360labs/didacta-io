@@ -16,7 +16,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   deriveSmtpStatus,
-  isSmtpSettingsRoute,
+  isViewingSmtpSettings,
   shouldShowSmtpBanner,
   type AdminSmtpDto,
 } from '@/lib/admin-smtp';
@@ -69,10 +69,16 @@ describe('NotificationsSetupBanner — texto sin jerga', () => {
 });
 
 describe('un solo aviso en la pantalla del correo (con la tarjeta de beta.13)', () => {
-  it('en Configuración no se pinta la cabecera: la tarjeta ya lo explica', () => {
-    expect(isSmtpSettingsRoute('/admin/configuracion')).toBe(true);
-    expect(isSmtpSettingsRoute('/admin/cobros')).toBe(false);
-    expect(isSmtpSettingsRoute(null)).toBe(false);
+  it('solo se oculta donde se ve la tarjeta del correo (Configuración → Notificaciones)', () => {
+    const cfg = '/admin/configuracion';
+    expect(isViewingSmtpSettings(cfg, 'notifications', ADMIN)).toBe(true);
+    // Sin ?tab: Notificaciones es la que abre por defecto para tenant_admin…
+    expect(isViewingSmtpSettings(cfg, null, ADMIN)).toBe(true);
+    // …y General para super_admin: ahí no hay tarjeta del correo, el aviso sigue.
+    expect(isViewingSmtpSettings(cfg, null, ['super_admin'])).toBe(false);
+    expect(isViewingSmtpSettings(cfg, 'general', ADMIN)).toBe(false);
+    expect(isViewingSmtpSettings('/admin/cobros', 'notifications', ADMIN)).toBe(false);
+    expect(isViewingSmtpSettings(null, null, ADMIN)).toBe(false);
   });
 
   it('los avisos de la tarjeta, en llano y sin «SMTP», «fallback» ni «tenant»', () => {

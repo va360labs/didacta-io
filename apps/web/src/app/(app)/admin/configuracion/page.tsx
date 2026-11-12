@@ -249,7 +249,12 @@ export default function ConfiguracionPage() {
               type="button"
               role="tab"
               aria-selected={isActive}
-              onClick={() => setTab(spec.key)}
+              onClick={() => {
+                setTab(spec.key);
+                // La pestaña en la URL: se puede enlazar y el aviso de correo
+                // de la cabecera sabe si ya se está viendo la tarjeta del correo.
+                router.replace(`/admin/configuracion?tab=${spec.key}` as never, { scroll: false });
+              }}
               className={
                 isActive
                   ? 'relative px-4 py-2.5 text-sm font-semibold text-brand-700 transition-colors'
