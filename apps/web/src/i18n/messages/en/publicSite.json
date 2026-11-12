@@ -3,6 +3,7 @@
   "backToCatalog": "Back to catalog",
   "goToSignIn": "Go to sign-in",
   "discountBadge": "−{percent}%",
+  "localCurrencyNote": "At checkout you can see it in your currency",
   "catalogo": {
     "metaTitle": "Courses",
     "title": "Courses",
@@ -168,6 +169,7 @@
     "faq3A": "If you don’t have an account yet, you will receive an email with a link to set your password and get straight in.",
     "faq4Q": "How is the payment processed?",
     "faq4A": "The payment is processed securely by Stripe. You can apply a coupon on the payment screen.",
+    "faq4ANoCoupon": "The payment is processed securely by Stripe.",
     "intervalSuffixYear": "/year",
     "intervalSuffixSemester": "/6 months",
     "intervalSuffixQuarter": "/quarter",

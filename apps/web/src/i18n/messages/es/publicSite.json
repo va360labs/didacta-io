@@ -3,6 +3,7 @@
   "backToCatalog": "Volver al catálogo",
   "goToSignIn": "Ir al inicio de sesión",
   "discountBadge": "−{percent}%",
+  "localCurrencyNote": "Al pagar puedes verlo en tu moneda",
   "catalogo": {
     "metaTitle": "Cursos",
     "title": "Cursos",
@@ -168,6 +169,7 @@
     "faq3A": "Si aún no tienes cuenta, recibirás un email con un enlace para definir tu contraseña y entrar directamente.",
     "faq4Q": "¿Cómo se procesa el pago?",
     "faq4A": "El pago lo procesa Stripe de forma segura. Puedes aplicar un cupón en la pantalla de pago.",
+    "faq4ANoCoupon": "El pago lo procesa Stripe de forma segura.",
     "intervalSuffixYear": "/año",
     "intervalSuffixSemester": "/semestre",
     "intervalSuffixQuarter": "/trimestre",

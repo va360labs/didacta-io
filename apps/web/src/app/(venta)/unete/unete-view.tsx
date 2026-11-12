@@ -9,7 +9,8 @@
  * Vista de /unete — estructura del mockup de referencia del operador:
  *   - Sidebar de pago STICKY: cabecera oscura con logo del tenant, selector de
  *     planes (tachado + badge "Mejor valor"), Total hoy, ahorro, primer cargo,
- *     cupón, CTA y caja de cuenta.
+ *     cupón (no si el aula cobra por la plataforma: ahí el pago no los admite),
+ *     CTA y caja de cuenta.
  *   - Catálogo: cabecera con contador real, tiles con DATOS REALES (alumnos
  *     activos, cursos, horas), chips de filtrado por categoría real, parrilla
  *     de tarjetas con DETALLE EXPANDIBLE (módulos, profesor, precio suelto),
@@ -36,6 +37,7 @@ import {
   type MembershipCourse,
   type MembershipPage,
 } from '@/lib/membership';
+import { couponsAtCheckout, showLocalCurrencyNote } from '@/lib/checkout-hints';
 import { getStoredReferralCode, referralsApi, storeReferralCode } from '@/lib/referrals';
 import { richHtmlToPlainText } from '@/lib/sanitize-html';
 
@@ -227,6 +229,8 @@ export function UneteView() {
     filter === 'Todos' ? page.courses : page.courses.filter((c) => c.category === filter);
 
   const totalHours = Math.round(page.stats.totalMinutes / 60);
+  // Cobro por la plataforma: el pago no admite cupones, así que no se prometen.
+  const coupons = couponsAtCheckout(page);
 
   return (
     <div className="grid items-start gap-9 lg:grid-cols-[minmax(300px,26rem)_minmax(0,1fr)]">
@@ -354,6 +358,14 @@ export function UneteView() {
                       : formatCents(selected.amountCents, selected.currency, { locale })}
                   </span>
                 </div>
+                {showLocalCurrencyNote(selected) ? (
+                  <p
+                    className="mt-1 text-right text-[13px] text-text-muted"
+                    data-testid="local-currency-note"
+                  >
+                    {t('localCurrencyNote')}
+                  </p>
+                ) : null}
                 {savings ? (
                   <div className="mt-2 flex justify-between text-sm">
                     <span className="text-text-muted">{t('unete.savingsLabel')}</span>
@@ -383,7 +395,9 @@ export function UneteView() {
                     {t('unete.trialLessonLimit', { count: page.trialLessonLimit })}
                   </p>
                 ) : null}
-                <p className="mt-1.5 text-[13px] text-text-muted">{t('unete.couponHint')}</p>
+                {coupons ? (
+                  <p className="mt-1.5 text-[13px] text-text-muted">{t('unete.couponHint')}</p>
+                ) : null}
               </>
             ) : null}
 
@@ -547,7 +561,10 @@ export function UneteView() {
                 { q: t('unete.faq1Q'), a: t('unete.faq1A') },
                 { q: t('unete.faq2Q'), a: t('unete.faq2A') },
                 { q: t('unete.faq3Q'), a: t('unete.faq3A') },
-                { q: t('unete.faq4Q'), a: t('unete.faq4A') },
+                {
+                  q: t('unete.faq4Q'),
+                  a: coupons ? t('unete.faq4A') : t('unete.faq4ANoCoupon'),
+                },
               ] as const
             ).map((faq) => (
               <div key={faq.q} className="rounded-xl border border-border bg-surface px-5 py-4">

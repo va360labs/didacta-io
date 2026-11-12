@@ -29,6 +29,11 @@ export interface CatalogOption {
   currency: string;
   discountPercent: number | null;
   isFeatured: boolean;
+  /**
+   * Solo si el aula cobra por la plataforma: `true` cuando el pago enseñará el
+   * precio en la moneda del alumno. Sin el campo, como siempre.
+   */
+  localCurrencyAtCheckout?: boolean;
 }
 
 export interface CatalogCourse {

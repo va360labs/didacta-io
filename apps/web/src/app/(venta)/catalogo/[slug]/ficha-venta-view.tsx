@@ -25,6 +25,7 @@ import { authStorage } from '@/lib/auth-storage';
 import { formatDuration } from '@/lib/i18n/format';
 import { useTenantContext } from '@/lib/tenant-context';
 import { formatCents } from '@/lib/membership';
+import { showLocalCurrencyNote } from '@/lib/checkout-hints';
 import { sanitizeRichHtml } from '@/lib/sanitize-html';
 import {
   featuredOption,
@@ -261,6 +262,17 @@ export function FichaVentaView() {
                   </span>
                 ) : null}
               </div>
+            ) : null}
+
+            {/* Solo si el servidor lo afirma: cobro por la plataforma y precio en
+                la moneda del creador, que el pago convierte a la del alumno. */}
+            {showLocalCurrencyNote(selected) ? (
+              <p
+                className="-mt-2 text-center text-[13px] text-text-muted"
+                data-testid="local-currency-note"
+              >
+                {t('localCurrencyNote')}
+              </p>
             ) : null}
 
             {payError ? (

@@ -29,6 +29,11 @@ export interface MembershipPlan {
   compareAtCents: number | null;
   trialDays: number;
   isFeatured: boolean;
+  /**
+   * Solo en `GET /membership/page` y si el aula cobra por la plataforma: `true`
+   * cuando el pago enseñará el precio en la moneda del alumno.
+   */
+  localCurrencyAtCheckout?: boolean;
 }
 
 export interface MembershipAdminPlan extends MembershipPlan {
@@ -69,6 +74,11 @@ export interface MembershipPage {
   testimonial: { quote: string; author: string; role: string | null } | null;
   /** Lecciones visibles por curso durante la prueba (0 = acceso completo). */
   trialLessonLimit: number;
+  /**
+   * Solo si la instalación cobra por la plataforma: `false` cuando el pago no
+   * admite cupones (el aula cobra por la plataforma). Sin el campo, sí admite.
+   */
+  couponsAtCheckout?: boolean;
 }
 
 export interface MembershipConfig {
