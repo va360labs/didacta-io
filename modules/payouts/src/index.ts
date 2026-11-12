@@ -123,6 +123,14 @@ export type {
   PayoutsTx,
 } from './accounts.service.js';
 
+export {
+  accountIdOfEvent,
+  isAccountEvent,
+  minimalEventPayload,
+  parsePlatformEvent,
+} from './account-events.js';
+export type { PlatformStripeEvent } from './account-events.js';
+
 export { PayoutsSettingsService } from './settings.service.js';
 export type { PayoutsSettingsView } from './settings.service.js';
 
