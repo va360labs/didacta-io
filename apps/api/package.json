@@ -17,6 +17,7 @@
     "post-deploy:check": "ts-node --transpile-only scripts/post-deploy-check.ts",
     "clean": "rm -rf dist .turbo",
     "backfill:sanitize-html": "tsx scripts/backfill-sanitize-html.ts",
+    "rotate:cipher-key": "node dist/maintenance/rotate-cipher-key.cli.js",
     "medir:trusted-proxy": "tsx scripts/medir-trusted-proxy.ts"
   },
   "dependencies": {
