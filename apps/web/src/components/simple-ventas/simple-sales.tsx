@@ -25,6 +25,7 @@ import {
   type PayoutsSummaryDto,
 } from '@/lib/payouts';
 import { referralsAdminApi, type AdminCommissionRow, type ReferralsConfig } from '@/lib/referrals';
+import { fetchTenantContext } from '@/lib/tenant-context';
 import { parseAmount, saleState, simpleModeApi, type StartHereView } from '@/lib/simple-mode';
 import { cn } from '@/lib/utils';
 import { bpsToPercentInput, percentToBps, primaryCurrency, referralSales } from './sales-math';
@@ -524,6 +525,10 @@ function PriceForm({
 function ReferralsSection() {
   const t = useTranslations('modoSencilloVentas.referidos');
   const [moduleOn, setModuleOn] = useState<boolean | null>(null);
+  // El programa paga comisión por las cuotas de la membresía (nunca por un
+  // curso de pago único) y el enlace de cada alumno lleva a /unete: sin una
+  // membresía a la venta no se enseña como activo.
+  const [membershipOnSale, setMembershipOnSale] = useState<boolean | null>(null);
   const [config, setConfig] = useState<ReferralsConfig | null>(null);
   const [rows, setRows] = useState<AdminCommissionRow[]>([]);
   const [percent, setPercent] = useState('');
@@ -534,6 +539,8 @@ function ReferralsSection() {
     const token = authStorage.getAccessToken();
     const mods = token ? await meApi.getMyModules(token).catch(() => null) : null;
     const on = mods ? mods.activeModules.includes('mod.referrals') : false;
+    const ctx = await fetchTenantContext().catch(() => null);
+    setMembershipOnSale(ctx?.tenant?.membershipPageActive === true);
     setModuleOn(on);
     if (!on) return;
     const [cfg, list] = await Promise.all([
@@ -581,7 +588,28 @@ function ReferralsSection() {
     }
   }
 
-  if (moduleOn === null) return null;
+  if (moduleOn === null || membershipOnSale === null) return null;
+  if (!membershipOnSale) {
+    return (
+      <section
+        id="referidos"
+        className="mt-8 scroll-mt-32 flex flex-wrap items-start gap-4 rounded-2xl border border-dashed border-border-strong bg-surface p-5"
+        aria-label={t('titulo')}
+        data-testid="referidos-solo-membresia"
+      >
+        <span
+          className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-bg-subtle text-text-muted"
+          aria-hidden
+        >
+          <Icon name="sparkles" size={20} />
+        </span>
+        <div className="min-w-0 flex-1">
+          <h2 className="text-base font-bold text-text">{t('titulo')}</h2>
+          <p className="mt-1 max-w-[62ch] text-sm text-text-muted">{t('soloMembresia')}</p>
+        </div>
+      </section>
+    );
+  }
   const traidas = referralSales(rows);
   const active = Boolean(moduleOn && config?.active);
 
