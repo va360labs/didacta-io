@@ -122,6 +122,14 @@ function fakeSubscriptions(
       log.push([tag, 'createPortalSession', p]);
       return { url: `https://billing.test/${tag}` };
     },
+    retrieveCustomerBalance: async (id) => {
+      log.push([tag, 'retrieveCustomerBalance', id]);
+      return { balanceCents: 0, currency: 'eur' };
+    },
+    creditCustomerBalance: async (p) => {
+      log.push([tag, 'creditCustomerBalance', `${p.customerId}:${p.amountCents}`]);
+      return { id: `cbtxn_${label}` };
+    },
     constructWebhookEvent: () => {
       throw new Error('no se usa');
     },
@@ -350,6 +358,40 @@ describe('PlatformSubscriptionsStripeAdapter · portal del cliente', () => {
         { customerId: 'cus_1Heredado', returnUrl: 'https://aula.test/cuenta' },
       ],
     ]);
+  });
+});
+
+describe('PlatformSubscriptionsStripeAdapter · saldo de cliente (descuento por referidos)', () => {
+  const CREDIT = {
+    amountCents: 600,
+    currency: 'eur',
+    description: 'Descuento por invitar',
+    metadata: {},
+    idempotencyKey: 'referrals-credit:p1',
+  };
+
+  it('cliente de plataforma → el abono va a la cuenta del operador (el reparto lo descuenta al creador)', async () => {
+    const { adapters, log } = build(READY, { own: true, registered: ['cus_1Plataforma'] });
+    const adapter = await adapters.subscriptions(A);
+    expect(await adapter.retrieveCustomerBalance('cus_1Plataforma')).toEqual({
+      balanceCents: 0,
+      currency: 'eur',
+    });
+    expect(
+      await adapter.creditCustomerBalance({ customerId: 'cus_1Plataforma', ...CREDIT }),
+    ).toEqual({ id: 'cbtxn_plataforma' });
+    expect(log.map((l) => [l[0], l[1]])).toEqual([
+      ['plataforma@acct_1Creadora', 'retrieveCustomerBalance'],
+      ['plataforma@acct_1Creadora', 'creditCustomerBalance'],
+    ]);
+  });
+
+  it('cliente de las claves propias → el abono va a la cuenta del creador', async () => {
+    const { adapters, log } = build(READY, { own: true });
+    await (
+      await adapters.subscriptions(A)
+    ).creditCustomerBalance({ customerId: 'cus_1Heredado', ...CREDIT });
+    expect(log).toEqual([['propia', 'creditCustomerBalance', 'cus_1Heredado:600']]);
   });
 });
 

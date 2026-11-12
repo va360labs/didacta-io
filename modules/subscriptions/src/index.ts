@@ -50,6 +50,8 @@ export type {
   SubscriptionsStripeAdapter,
   SubscriptionsStripeAdapterOptions,
   CreatePortalSessionParams,
+  CreditCustomerBalanceParams,
+  CustomerBalanceView,
   StripePortalSessionResult,
   CreateSubscriptionCheckoutParams,
   CreateRecurringPriceParams,

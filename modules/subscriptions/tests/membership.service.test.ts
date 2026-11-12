@@ -311,6 +311,12 @@ function stubStripe() {
     createPortalSession: async () => {
       throw new Error('no usado');
     },
+    retrieveCustomerBalance: async () => {
+      throw new Error('no usado');
+    },
+    creditCustomerBalance: async () => {
+      throw new Error('no usado');
+    },
   };
   return {
     adapter,

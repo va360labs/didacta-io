@@ -348,6 +348,14 @@ class StripeStub implements SubscriptionsStripeAdapter {
     throw new Error('not used in unit tests');
   }
 
+  async retrieveCustomerBalance(): Promise<{ balanceCents: number; currency: string | null }> {
+    throw new Error('not used in unit tests');
+  }
+
+  async creditCustomerBalance(): Promise<{ id: string }> {
+    throw new Error('not used in unit tests');
+  }
+
   endTrialNowCalls: string[] = [];
   endTrialNowResult: (StripeSubscriptionView & { latestInvoicePaid: boolean }) | null = null;
 

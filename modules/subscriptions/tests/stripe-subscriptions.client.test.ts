@@ -218,3 +218,75 @@ describe('SubscriptionsStripeSdkAdapter.createRecurringPrice — precios extra p
     });
   });
 });
+
+describe('saldo de cliente (descuento por referidos)', () => {
+  function balanceWorld(customer: Record<string, unknown>) {
+    const created: Array<{ id: string; params: unknown; options: unknown }> = [];
+    class FakeStripe {
+      customers = {
+        retrieve: async () => customer,
+        createBalanceTransaction: async (id: string, params: unknown, options: unknown) => {
+          created.push({ id, params, options });
+          return { id: 'cbtxn_1', object: 'customer_balance_transaction' };
+        },
+      };
+    }
+    const adapter = new SubscriptionsStripeSdkAdapter('sk_test_x', 'whsec_x', FakeStripe as never);
+    return { adapter, created };
+  }
+
+  it('abona con importe NEGATIVO, la divisa en minúsculas y la clave de idempotencia', async () => {
+    const { adapter, created } = balanceWorld({ id: 'cus_1', balance: 0, currency: 'eur' });
+    const result = await adapter.creditCustomerBalance({
+      customerId: 'cus_1',
+      amountCents: 600,
+      currency: 'EUR',
+      description: 'Descuento por invitar',
+      metadata: { didacta_referral_payout: 'p1' },
+      idempotencyKey: 'referrals-credit:p1',
+    });
+    expect(result).toEqual({ id: 'cbtxn_1' });
+    expect(created).toEqual([
+      {
+        id: 'cus_1',
+        params: {
+          amount: -600,
+          currency: 'eur',
+          description: 'Descuento por invitar',
+          metadata: { didacta_referral_payout: 'p1' },
+        },
+        options: { idempotencyKey: 'referrals-credit:p1' },
+      },
+    ]);
+  });
+
+  it('nunca abona 0 ni negativos', async () => {
+    const { adapter, created } = balanceWorld({ id: 'cus_1', balance: 0, currency: 'eur' });
+    for (const amountCents of [0, -5, 1.5]) {
+      await expect(
+        adapter.creditCustomerBalance({
+          customerId: 'cus_1',
+          amountCents,
+          currency: 'eur',
+          description: 'x',
+          metadata: {},
+          idempotencyKey: 'k',
+        }),
+      ).rejects.toThrow(/abono no válido/);
+    }
+    expect(created).toEqual([]);
+  });
+
+  it('lee el saldo y la divisa del cliente; un cliente borrado es un error', async () => {
+    expect(
+      await balanceWorld({
+        id: 'cus_1',
+        balance: -250,
+        currency: 'eur',
+      }).adapter.retrieveCustomerBalance('cus_1'),
+    ).toEqual({ balanceCents: -250, currency: 'eur' });
+    await expect(
+      balanceWorld({ id: 'cus_1', deleted: true }).adapter.retrieveCustomerBalance('cus_1'),
+    ).rejects.toThrow(/borrado/);
+  });
+});

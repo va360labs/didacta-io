@@ -17,6 +17,8 @@ import {
   StripeConfigMissingError as SubscriptionsStripeConfigMissingError,
   type CreatePortalSessionParams,
   type CreateRecurringPriceParams,
+  type CreditCustomerBalanceParams,
+  type CustomerBalanceView,
   type CreateSubscriptionCheckoutParams,
   type EndTrialNowResult,
   type StripePortalSessionResult,
@@ -355,6 +357,19 @@ export class PlatformSubscriptionsStripeAdapter implements SubscriptionsStripeAd
       ...params,
       configurationId: portal.configurationId,
     });
+  }
+
+  /**
+   * Saldo de cliente (descuento por referidos). El cliente vive donde vive su
+   * suscripción: de plataforma → cuenta del operador (el descuento lo paga el
+   * creador en el reparto, `mod.payouts`); de las claves propias → esa cuenta.
+   */
+  async retrieveCustomerBalance(customerId: string): Promise<CustomerBalanceView> {
+    return (await this.route(customerId)).retrieveCustomerBalance(customerId);
+  }
+
+  async creditCustomerBalance(params: CreditCustomerBalanceParams): Promise<{ id: string }> {
+    return (await this.route(params.customerId)).creditCustomerBalance(params);
   }
 
   constructWebhookEvent(rawBody: string | Buffer, signatureHeader: string): Stripe.Event {
