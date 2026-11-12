@@ -513,17 +513,7 @@ export class PayoutsAccountsService {
       });
     }
 
-    // 3. Calendario de pagos (si aún no está aplicado) y estado real.
-    if (current.payoutSchedule === null) {
-      await this.applyPayoutSchedule(input.tenantId).catch((err: unknown) => {
-        // No bloquea el alta: el worker lo reintenta mientras `payout_schedule`
-        // siga vacío. Se registra el motivo literal de Stripe.
-        this.logger.warn(
-          { tenantId: input.tenantId, err: describeError(err) },
-          'mod.payouts: no se pudo aplicar el calendario de pagos al crear la cuenta',
-        );
-      });
-    }
+    // 3. Estado real; `syncAccount` aplica antes el calendario si falta.
     const account = await this.syncAccount(input.tenantId);
 
     // 4. Enlace del alta (salvo que ya esté lista).
@@ -568,12 +558,29 @@ export class PayoutsAccountsService {
    * no se toca nada.
    */
   async syncAccount(tenantId: string, expectedAccountId?: string): Promise<PayoutsAccountView> {
-    const row = await this.db.inTenant(tenantId, (tx) => findLiveAccount(tx, tenantId));
+    let row = await this.db.inTenant(tenantId, (tx) => findLiveAccount(tx, tenantId));
     if (!row) throw new PayoutsAccountNotFoundError();
     if (!row.stripeAccountId) return toView(row);
     if (expectedAccountId && expectedAccountId !== row.stripeAccountId) return toView(row);
+    const stripeAccountId = row.stripeAccountId;
 
-    const remote = await this.api.retrieve(row.stripeAccountId);
+    // Calendario pendiente (falló al crear la cuenta): se reintenta en cada
+    // sincronización. Sin Redis no hay worker, y esto lo recogen la vuelta del
+    // alta y los eventos de cuenta. Un fallo aquí no impide leer el estado.
+    if (row.payoutSchedule === null) {
+      const applied = await this.applyPayoutSchedule(tenantId).catch((err: unknown) => {
+        this.logger.warn(
+          { tenantId, err: describeError(err) },
+          'mod.payouts: el calendario de pagos sigue sin poder aplicarse',
+        );
+        return null;
+      });
+      if (applied) {
+        row = (await this.db.inTenant(tenantId, (tx) => findLiveAccount(tx, tenantId))) ?? row;
+      }
+    }
+
+    const remote = await this.api.retrieve(stripeAccountId);
     const derived = deriveStatus(remote, { supportedCountries: this.config.supportedCountries });
     const now = this.now();
     const minimumBalance =

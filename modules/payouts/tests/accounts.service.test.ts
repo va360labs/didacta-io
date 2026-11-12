@@ -903,7 +903,7 @@ describe('PayoutsAccountsService', () => {
     expect(warnings.some((w) => w.includes('días de retención'))).toBe(true);
   });
 
-  it('si Stripe falla al fijar el calendario, el alta sigue y el worker lo verá pendiente', async () => {
+  it('si Stripe falla al fijar el calendario, el alta sigue y la siguiente sincronización lo reintenta', async () => {
     fake.failNext('/v1/balance_settings', { message: 'boom', status: 500, method: 'GET' });
     const { account, onboardingUrl } = await service.startOnboarding({
       tenantId: TENANT_A,
@@ -919,5 +919,10 @@ describe('PayoutsAccountsService', () => {
       expect.objectContaining({ tenantId: TENANT_A, hasSchedule: false, status: 'ONBOARDING' }),
     ]);
     expect(await service.listAccountsToSync({ ready: true })).toEqual([]);
+
+    // Vuelta del alta / evento / worker: syncAccount lo reintenta y ya entra.
+    const synced = await service.syncAccount(TENANT_A);
+    expect(synced.payoutSchedule).toMatchObject({ interval: 'weekly', weeklyDay: 'monday' });
+    expect(fake.callsTo('POST', '/v1/balance_settings')).toHaveLength(1);
   });
 });
