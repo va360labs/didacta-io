@@ -2101,3 +2101,77 @@ describe('SubscriptionsService — el webhook solo toca filas del tenant verific
     expect(claims).toEqual(['victima']);
   });
 });
+
+/**
+ * Mismo caso que en mod.billing: dos aulas con la misma cuenta de Stripe y un
+ * endpoint cada una reciben las dos cada evento; la fila que archivó la otra no
+ * se ve (RLS) pero su clave primaria, que es global, choca.
+ */
+describe('SubscriptionsService — el evento ya lo archivó OTRA aula (fila que existe y no se ve)', () => {
+  function archivadoPorOtraAula(prisma: MockPrisma, eventId: string) {
+    prisma.webhookEvents.set(eventId, {
+      stripeEventId: eventId,
+      type: 'x',
+      payload: {},
+      processedAt: new Date(),
+      errorMessage: null,
+    } as never);
+    prisma.modSubscriptionsWebhookEvent.findUnique = async () => null;
+    prisma.modSubscriptionsWebhookEvent.update = async () => {
+      throw new Error('not found');
+    };
+  }
+
+  it('evento que aquí no toca nada → termina bien (200), sin escribir', async () => {
+    const { service, prisma, publisher } = buildSystem();
+    archivadoPorOtraAula(prisma, 'evt_compartido');
+
+    await expect(
+      service.handleWebhookEvent(
+        {
+          id: 'evt_compartido',
+          type: 'customer.updated',
+          data: { object: {} },
+        } as unknown as Stripe.Event,
+        {},
+        { tenantId: 't' },
+      ),
+    ).resolves.toBeUndefined();
+    expect(publisher.events).toHaveLength(0);
+  });
+
+  it('evento que SÍ es de esta aula → el trabajo se hace igual', async () => {
+    const { service, prisma } = buildSystem();
+    prisma.subs.set('s1', makeSubRow({ id: 's1', tenantId: 't', stripeSubscriptionId: 'sub_mia' }));
+    archivadoPorOtraAula(prisma, 'evt_mio');
+
+    await service.handleWebhookEvent(
+      {
+        id: 'evt_mio',
+        type: 'customer.subscription.deleted',
+        data: { object: makeStripeSub({ id: 'sub_mia', status: 'canceled' }) },
+      } as unknown as Stripe.Event,
+      {},
+      { tenantId: 't' },
+    );
+
+    expect(prisma.subs.get('s1')!.status).toBe('CANCELED');
+  });
+
+  it('un error al archivar que NO es de clave única no se confunde con un duplicado', async () => {
+    const { service, prisma } = buildSystem();
+    prisma.modSubscriptionsWebhookEvent.create = async () => {
+      throw new Error(
+        'new row violates row-level security policy for table "mod_subscriptions_webhook_event"',
+      );
+    };
+
+    await expect(
+      service.handleWebhookEvent(
+        { id: 'evt_rls', type: 'customer.updated', data: { object: {} } } as never,
+        {},
+        { tenantId: 't' },
+      ),
+    ).rejects.toThrow(/row-level security/);
+  });
+});

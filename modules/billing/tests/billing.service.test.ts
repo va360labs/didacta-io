@@ -23,6 +23,7 @@ import {
   type CheckoutUrlBuilder,
 } from '../src/billing.service.js';
 import {
+  OrderNotFoundError,
   ProductAlreadyExistsError,
   ProductInactiveError,
   ProductNotFoundError,
@@ -1608,5 +1609,147 @@ describe('BillingService — el webhook solo toca órdenes del tenant verificado
       },
     } as Stripe.Event);
     expect(claims).toEqual(['t1']);
+  });
+});
+
+/**
+ * Dos aulas que cobran con la MISMA cuenta de Stripe y tienen cada una su
+ * endpoint reciben las dos cada evento. La clave primaria de la tabla de
+ * eventos es global; la fila que archivó la otra aula no se ve (RLS). Antes la
+ * segunda entrega chocaba con la clave, no encontraba la fila y reventaba al
+ * actualizarla: un 500 que Stripe reintentaba durante días.
+ */
+describe('BillingService — el evento ya lo archivó OTRA aula (fila que existe y no se ve)', () => {
+  let prisma: MockPrisma;
+  let stripe: MockStripe;
+  let publisher: MockPublisher;
+  let svc: BillingService;
+
+  beforeEach(() => {
+    prisma = new MockPrisma();
+    stripe = new MockStripe();
+    publisher = new MockPublisher();
+    svc = new BillingService(prisma as unknown as never, async () => stripe, publisher, urls);
+  });
+
+  /** Simula RLS: la fila está (la clave choca) pero ni se lee ni se actualiza. */
+  function archivadoPorOtraAula(eventId: string) {
+    prisma.webhookEvents.set(eventId, {
+      stripeEventId: eventId,
+      type: 'x',
+      payload: {},
+      processedAt: new Date(),
+      errorMessage: null,
+      receivedAt: new Date(),
+    });
+    prisma.modBillingWebhookEvent.findUnique = async () => null;
+    prisma.modBillingWebhookEvent.update = async () => {
+      throw new Error('Record to update not found.');
+    };
+  }
+
+  it('evento que aquí no toca nada → termina bien (200), sin escribir', async () => {
+    archivadoPorOtraAula('evt_compartido');
+
+    await expect(
+      svc.handleWebhookEvent(
+        {
+          id: 'evt_compartido',
+          type: 'payment_method.attached',
+          data: { object: {} },
+        } as unknown as Stripe.Event,
+        {},
+        { tenantId: 't1' },
+      ),
+    ).resolves.toBeUndefined();
+    expect(publisher.events).toHaveLength(0);
+  });
+
+  it('evento que SÍ es de esta aula → el trabajo se hace igual, aunque no haya fila propia en la que apuntarlo', async () => {
+    stripe.setPrice('price_a');
+    await svc.createProduct({ tenantId: 't1', courseId: 'course-1', stripePriceId: 'price_a' });
+    const checkout = await svc.startCheckout({
+      tenantId: 't1',
+      userId: 'u1',
+      userEmail: 'u@test',
+      courseId: 'course-1',
+    });
+    publisher.events = [];
+    archivadoPorOtraAula('evt_mio');
+
+    await svc.handleWebhookEvent(
+      {
+        id: 'evt_mio',
+        type: 'checkout.session.completed',
+        data: {
+          object: {
+            id: 'cs_1',
+            metadata: {
+              orderId: checkout.orderId,
+              tenantId: 't1',
+              courseId: 'course-1',
+              productId: 'prod-1',
+            },
+            amount_total: 1999,
+            customer_details: { email: 'u@test' },
+            payment_status: 'paid',
+            status: 'complete',
+          } as unknown as Stripe.Checkout.Session,
+        },
+      } as Stripe.Event,
+      {},
+      { tenantId: 't1' },
+    );
+
+    expect(prisma.orders.get(checkout.orderId)!.status).toBe('COMPLETED');
+    expect(publisher.events.map((e) => e.name)).toEqual(['billing.order.completed']);
+  });
+
+  it('un fallo de dominio sale tal cual: apuntarlo en el archivo no lo tapa', async () => {
+    // Fila propia y visible, pero la escritura del error también falla.
+    prisma.modBillingWebhookEvent.update = async () => {
+      throw new Error('la base no contesta');
+    };
+
+    await expect(
+      svc.handleWebhookEvent(
+        {
+          id: 'evt_falla',
+          type: 'checkout.session.completed',
+          data: {
+            object: {
+              id: 'cs_2',
+              metadata: {
+                orderId: 'no-existe',
+                tenantId: 't1',
+                courseId: 'c',
+                productId: 'p',
+              },
+              payment_status: 'paid',
+            } as unknown as Stripe.Checkout.Session,
+          },
+        } as Stripe.Event,
+        {},
+        { tenantId: 't1' },
+      ),
+    ).rejects.toBeInstanceOf(OrderNotFoundError);
+  });
+
+  it('un error al archivar que NO es de clave única no se confunde con un duplicado', async () => {
+    // Antes bastaba con que el mensaje nombrara la tabla: un rechazo de RLS al
+    // insertar se tomaba por «ya recibido».
+    prisma.modBillingWebhookEvent.create = async () => {
+      throw new Error(
+        'new row violates row-level security policy for table "mod_billing_webhook_event"',
+      );
+    };
+
+    await expect(
+      svc.handleWebhookEvent(
+        { id: 'evt_rls', type: 'payment_method.attached', data: { object: {} } } as never,
+        {},
+        { tenantId: 't1' },
+      ),
+    ).rejects.toThrow(/row-level security/);
   });
 });
