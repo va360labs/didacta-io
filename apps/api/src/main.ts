@@ -13,6 +13,7 @@ import { LicenseExceptionFilter } from '@didacta/license-sdk';
 import { AppModule } from './app.module';
 import { HttpExceptionNormalizerFilter } from './common/http-exception-normalizer.filter';
 import { registerSecurityHeaders } from './common/security-headers';
+import { loadPlatformPaymentsConfig } from './modules/payouts/platform-payments.config';
 
 /**
  * Cuánto del `X-Forwarded-For` entrante nos creemos.
@@ -49,6 +50,13 @@ function resolveTrustProxy(): boolean | number | string {
 }
 
 async function bootstrap(): Promise<void> {
+  // Cobros de plataforma. Sin PAYMENTS_PLATFORM_STRIPE_SECRET_KEY esto no hace
+  // nada (devuelve «apagado» y el resto de variables ni se miran). Con ella,
+  // lo que falte o esté mal aborta el arranque AQUÍ, antes de abrir el puerto
+  // y con un mensaje que nombra la variable: una plataforma que cobra dinero
+  // ajeno no arranca a medias. Todavía nadie consume el resultado.
+  loadPlatformPaymentsConfig();
+
   const app = await NestFactory.create<NestFastifyApplication>(
     AppModule,
     new FastifyAdapter({ trustProxy: resolveTrustProxy() }),
