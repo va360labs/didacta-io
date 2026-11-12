@@ -6,6 +6,7 @@
 import {
   BadRequestException,
   Controller,
+  ForbiddenException,
   HttpCode,
   NotFoundException,
   Post,
@@ -14,18 +15,23 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
+import { Logger as PinoLogger } from 'nestjs-pino';
 import {
   buildUrlValidationResponse,
   verifyZoomSignature,
   webhookEventSchema,
 } from '@didacta/mod-zoom-live';
 import type { FastifyRequest } from 'fastify';
+import { extractClientContext } from '../../auth/client-context';
 import {
-  runAsTenantOrSanctioned,
+  runAsTenant,
+  runGlobalWithoutTenant,
   runSanctionedGlobalAccess,
 } from '../../tenancy/tenant-context.storage';
 import { TenantResolverService } from '../../tenancy/tenant-resolver.service';
 import { ModuleRegistryService } from '../module-registry.service';
+import { PrismaAuditLogService } from '../prisma-audit-log.service';
+import { reportForeignTenantWebhook, sameSecret } from '../webhook-foreign-tenant';
 import { resolvePublicHost } from '../../common/resolve-public-host';
 
 /**
@@ -43,10 +49,19 @@ import { resolvePublicHost } from '../../common/resolve-public-host';
  * Zoom (que no lleva ningún id de reunión, no hay otra forma de resolver el
  * tenant ahí) como para elegir qué secret usar al verificar la firma.
  *
- * El procesado real del evento (una vez la firma verificó) sigue resolviendo
- * el tenant por `zoomMeetingId` como antes — es la fuente de verdad de a
- * quién pertenece la reunión; el tenant por host solo decide qué secret
- * probar.
+ * ⚠️ El tenant del dominio —el dueño del secreto que verificó la firma— es
+ * PARA EL QUE SE PROCESA el evento. Antes el procesado resolvía el tenant por
+ * `zoomMeetingId` y «el tenant por host solo decidía qué secret probar»: como
+ * el id de la reunión lo escribe quien firma, el admin de un aula firmaba con
+ * SU secreto un aviso con el id de una clase de otra y le cambiaba el estado,
+ * le lanzaba la encuesta post-clase o le colgaba como grabación un enlace suyo.
+ * Los ids de reunión no son secretos: los ve cualquier alumno del aula.
+ *
+ * Única excepción: si la reunión es de OTRO tenant que tiene configurado
+ * exactamente el MISMO secreto de webhook (la misma app de Zoom repartida entre
+ * varias aulas del mismo dueño, con una sola URL de webhook), el evento es
+ * legítimo y se procesa para el dueño de la reunión. Un atacante no puede
+ * fabricar esa coincidencia sin conocer el secreto de la víctima.
  *
  * Zoom espera 2xx en menos de 3s o reintenta hasta 3 veces. La idempotencia
  * la garantiza `mod_zoom_live_webhook_event.event_id` UNIQUE en DB, con una
@@ -59,6 +74,8 @@ export class ZoomWebhookController {
   constructor(
     private readonly registry: ModuleRegistryService,
     private readonly tenantResolver: TenantResolverService,
+    private readonly auditLog: PrismaAuditLogService,
+    private readonly logger: PinoLogger,
   ) {}
 
   @Post()
@@ -78,9 +95,7 @@ export class ZoomWebhookController {
       throw new NotFoundException('No se reconoce el dominio de este webhook.');
     }
 
-    const secret = await runAsTenantOrSanctioned(tenant.id, () =>
-      zoomLive.getWebhookSecret(tenant.id),
-    );
+    const secret = await runAsTenant(tenant.id, () => zoomLive.getWebhookSecret(tenant.id));
     if (!secret) {
       // Sin secret configurado para este tenant no hay forma segura de
       // procesar; 401 en vez de aceptar todo (sería un agujero de seguridad
@@ -130,17 +145,47 @@ export class ZoomWebhookController {
       return { result: 'IGNORED', reason: 'unknown_payload_shape' };
     }
 
-    // RLS F3: lookup sancionado (sesión por zoomMeetingId, cross-tenant) +
-    // procesado bajo el contexto del tenant resuelto. Sin sesión local el
-    // procesado degrada a sancionado: solo archiva el evento como IGNORED.
-    // (Nota: puede diferir del tenant resuelto por host arriba si la key S2S
-    // se comparte entre dominios — el dueño real de la reunión manda.)
-    const tenantId = await runSanctionedGlobalAccess(() =>
+    // 1) LOOKUP (sancionado, fuera de cualquier contexto de tenant): de qué
+    //    tenant es la reunión que nombra el aviso. Solo lee.
+    const ownerTenantId = await runGlobalWithoutTenant(() =>
       zoomLive.resolveWebhookTenantId(result.data),
     );
-    const outcome = await runAsTenantOrSanctioned(
+    // 2) DECISIÓN: el aviso se procesa para el tenant cuyo secreto verificó la
+    //    firma. Si la reunión es de otro, solo pasa cuando ese otro tiene el
+    //    MISMO secreto (app de Zoom compartida); si no, 403 + rastro, antes de
+    //    archivar el aviso siquiera.
+    let tenantId = tenant.id;
+    if (ownerTenantId && ownerTenantId !== tenant.id) {
+      const ownerSecret = await runAsTenant(ownerTenantId, () =>
+        zoomLive.getWebhookSecret(ownerTenantId),
+      ).catch(() => null);
+      if (!ownerSecret || !sameSecret(ownerSecret, secret)) {
+        await reportForeignTenantWebhook({
+          provider: 'zoom',
+          code: 'ZOOM_WEBHOOK_FOREIGN_TENANT',
+          verifiedTenantId: tenant.id,
+          claimedTenantIds: [ownerTenantId],
+          eventId: result.data.event_id ?? String(result.data.event_ts ?? ''),
+          eventType: result.data.event,
+          extra: { meetingId: String(result.data.payload?.object?.id ?? '').slice(0, 64) },
+          audit: (entry) => this.auditLog.record(entry),
+          logger: this.logger,
+          host: hostStr,
+          client: extractClientContext(req),
+        });
+        throw new ForbiddenException({
+          message: 'Este webhook solo acepta avisos del aula a la que pertenece este dominio.',
+          code: 'ZOOM_WEBHOOK_FOREIGN_TENANT',
+        });
+      }
+      tenantId = ownerTenantId;
+    }
+    // 3) PROCESADO: siempre bajo el contexto de ESE tenant (nunca sancionado:
+    //    un aviso de una reunión desconocida se archiva en el del dominio) y
+    //    diciéndole al módulo cuál es, para que solo mire sus clases.
+    const outcome = await runAsTenant(
       tenantId,
-      () => zoomLive.handleWebhookEvent(result.data, { rawBody }),
+      () => zoomLive.handleWebhookEvent(result.data, { rawBody, tenantId }),
       { traceLabel: 'zoom-webhook' },
     );
     return outcome;

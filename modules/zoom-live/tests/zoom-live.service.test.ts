@@ -649,6 +649,61 @@ describe('ZoomLiveService.handleWebhookEvent', () => {
     expect(ctx.events.map((e) => e.name)).toContain('zoom.session.started');
   });
 
+  it('con el tenant verificado de OTRA aula, la clase no existe para el aviso: IGNORED y sin tocarla', async () => {
+    // El id de la reunión lo escribe quien firma el aviso. El host pasa el
+    // tenant cuyo secreto verificó la firma; una clase de otro tenant no puede
+    // cambiar de estado ni recibir una grabación por un aviso que no es suyo.
+    const prisma = makeFakePrisma();
+    const ctx = makeCtx();
+    const service = new ZoomLiveService(prisma as never, ctx as never, new StubZoomApiClient());
+    const created = await service.create(TENANT, ACTOR, {
+      topic: 'Clase del aula víctima',
+      startTime: '2026-05-15T10:00:00-03:00',
+      durationMinutes: 60,
+      hostEmail: 'h@x.com',
+      timezone: 'UTC',
+    });
+    const eventosAntes = ctx.events.length;
+
+    const started = await service.handleWebhookEvent(
+      {
+        event_id: 'evt-ajeno-1',
+        event: 'meeting.started',
+        payload: { object: { id: created.zoomMeetingId! } },
+      },
+      { tenantId: 'otra-aula' },
+    );
+    const recording = await service.handleWebhookEvent(
+      {
+        event_id: 'evt-ajeno-2',
+        event: 'recording.completed',
+        payload: {
+          object: { id: created.zoomMeetingId!, share_url: 'https://phishing.example/x' },
+        },
+      },
+      { tenantId: 'otra-aula' },
+    );
+
+    expect(started).toEqual({ result: 'IGNORED' });
+    expect(recording).toEqual({ result: 'IGNORED' });
+    const after = await service.get(TENANT, created.id);
+    expect(after.status).toBe('SCHEDULED');
+    expect(after.recordingUrl ?? null).toBeNull();
+    expect(ctx.events).toHaveLength(eventosAntes);
+
+    // Control: el mismo aviso con el tenant dueño sí se aplica.
+    const propio = await service.handleWebhookEvent(
+      {
+        event_id: 'evt-propio-1',
+        event: 'meeting.started',
+        payload: { object: { id: created.zoomMeetingId! } },
+      },
+      { tenantId: TENANT },
+    );
+    expect(propio).toEqual({ result: 'OK', sessionId: created.id });
+    expect((await service.get(TENANT, created.id)).status).toBe('STARTED');
+  });
+
   it('aplica meeting.ended → status ENDED', async () => {
     const prisma = makeFakePrisma();
     const ctx = makeCtx();

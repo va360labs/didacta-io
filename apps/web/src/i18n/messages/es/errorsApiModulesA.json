@@ -109,5 +109,6 @@
   "ZOOM_LIVE_WEBHOOK_EVENTS_FORBIDDEN": "Solo administradores pueden consultar eventos de webhook.",
   "ZOOM_NOT_REGISTERED": "Tienes que inscribirte antes de entrar a la clase.",
   "ZOOM_SESSION_ALREADY_ENDED": "La sesión ya finalizó; no se puede modificar.",
-  "ZOOM_SESSION_NOT_OPEN_FOR_REGISTRATION": "La sesión ya no admite inscripciones."
+  "ZOOM_SESSION_NOT_OPEN_FOR_REGISTRATION": "La sesión ya no admite inscripciones.",
+  "ZOOM_WEBHOOK_FOREIGN_TENANT": "Este webhook solo acepta avisos del aula a la que pertenece este dominio."
 }

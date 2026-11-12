@@ -928,8 +928,12 @@ export class ZoomLiveService {
      * `rawBody`: el cuerpo tal cual llegó. Solo se usa para derivar la clave
      * cuando el aviso no trae ni `event_id` ni `event_ts`.
      * `now`: momento de llegada (inyectable para tests deterministas).
+     * `tenantId`: el tenant para el que el host verificó el aviso (el dueño del
+     * secreto que validó la firma). El host lo pasa SIEMPRE; con él, solo se
+     * mira una clase de ese tenant — el id de la reunión lo escribe quien firma
+     * y no puede decidir a qué aula se le cambia el estado.
      */
-    opts: { rawBody?: string; now?: Date } = {},
+    opts: { rawBody?: string; now?: Date; tenantId?: string } = {},
   ): Promise<{ result: 'OK' | 'IGNORED' | 'DUPLICATE' | 'ERROR'; sessionId?: string }> {
     const now = opts.now ?? new Date();
     const eventId = webhookEventKey(event, opts.rawBody);
@@ -967,11 +971,17 @@ export class ZoomLiveService {
     }
 
     const meetingUuid = event.payload?.object?.uuid ?? null;
-    const session = meetingId
+    const found = meetingId
       ? await this.prisma.modZoomSession.findFirst({
-          where: { zoomMeetingId: meetingId },
+          where: {
+            zoomMeetingId: meetingId,
+            ...(opts.tenantId ? { tenantId: opts.tenantId } : {}),
+          },
         })
       : null;
+    // Segunda cerradura, por si la base no filtra: una clase de otro tenant es,
+    // para este aviso, una clase que no existe (se archiva como IGNORED).
+    const session = found && opts.tenantId && found.tenantId !== opts.tenantId ? null : found;
 
     let nextStatus: SessionStatus | null = null;
     if (event.event === 'meeting.started') nextStatus = 'STARTED';
