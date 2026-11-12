@@ -80,6 +80,32 @@ CREATE TRIGGER audit_log_no_delete
   EXECUTE FUNCTION audit_log_block_mutation();
 
 -- ----------------------------------------------------------------------------
+-- Libro mayor de mod.payouts: solo inserción (bloquear UPDATE y DELETE)
+-- ----------------------------------------------------------------------------
+-- Cada movimiento de dinero del creador es un asiento nuevo; una corrección es
+-- OTRO asiento (ADJUSTMENT), nunca editar el anterior. Igual que `audit_log`:
+-- el trigger va BEFORE y FOR EACH ROW, así que también corta al dueño de la
+-- tabla y a `didacta_super` (el bypass de RLS no salta triggers).
+CREATE OR REPLACE FUNCTION mod_payouts_ledger_block_mutation() RETURNS trigger AS $$
+BEGIN
+  RAISE EXCEPTION 'mod_payouts_ledger_entry es de solo inserción: no se permiten UPDATE ni DELETE (intento: %)', TG_OP;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS mod_payouts_ledger_no_update ON mod_payouts_ledger_entry;
+DROP TRIGGER IF EXISTS mod_payouts_ledger_no_delete ON mod_payouts_ledger_entry;
+
+CREATE TRIGGER mod_payouts_ledger_no_update
+  BEFORE UPDATE ON mod_payouts_ledger_entry
+  FOR EACH ROW
+  EXECUTE FUNCTION mod_payouts_ledger_block_mutation();
+
+CREATE TRIGGER mod_payouts_ledger_no_delete
+  BEFORE DELETE ON mod_payouts_ledger_entry
+  FOR EACH ROW
+  EXECUTE FUNCTION mod_payouts_ledger_block_mutation();
+
+-- ----------------------------------------------------------------------------
 -- Rol de aplicación: exento de RLS solo para super_admin (migraciones, jobs globales)
 -- ----------------------------------------------------------------------------
 -- Los workers/superadmin usan este rol cuando necesitan saltarse RLS (seeders, cron jobs).

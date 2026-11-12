@@ -4602,3 +4602,396 @@ model ModGamificationSubmission {
   @@index([tenantId, userId])
   @@map("mod_gamification_submission")
 }
+
+// ============================================================================
+// mod.payouts — Cobros de plataforma (ADR-049..052)
+// ----------------------------------------------------------------------------
+// En las instalaciones que definen `PAYMENTS_PLATFORM_STRIPE_SECRET_KEY` el
+// alumno paga en la cuenta de Stripe del OPERADOR (con `on_behalf_of` de la
+// cuenta conectada del creador) y, cuando el cargo ya tiene su comisión real,
+// se transfiere al creador `bruto − comisión de Stripe − comisión del operador`.
+//
+// Sin esa variable estas tablas quedan vacías y nadie las lee: Community sigue
+// con «pega tu clave de Stripe» y sin comisión.
+//
+// Reglas comunes:
+//  - Importes `Int` en la unidad mínima de la divisa + `currency` ISO 4217 en
+//    minúsculas. Las SUMAS se hacen en `bigint` (SQL crudo o `BigInt` en JS):
+//    un `_sum` de Prisma sobre `Int` desborda a partir de 2^31.
+//  - Todas llevan `tenant_id`, así que `prisma/rls.sql` les aplica sola la
+//    política de aislamiento por tenant.
+//  - Sin FK hacia tablas de otros módulos ni del core (contrato modular): los
+//    ids ajenos (orden, factura, usuario) son lógicos.
+//  - Las relaciones internas son `Restrict`: un registro de dinero no se borra
+//    en cascada.
+// ============================================================================
+
+/// Estado de la cuenta conectada del creador, derivado SIEMPRE de consultar la
+/// cuenta en Stripe (nunca del contenido de un evento).
+enum PayoutsAccountStatus {
+  /// Fila creada pero aún sin cuenta en Stripe.
+  NOT_CONNECTED
+  /// Cuenta creada; faltan requisitos por enviar en el alta alojada.
+  ONBOARDING
+  /// Datos enviados; Stripe aún no ha activado las capacidades.
+  PENDING_REVIEW
+  /// `card_payments` y `stripe_transfers` activos y sin requisitos vencidos.
+  READY
+  /// Requisitos vencidos o capacidad desactivada: se cortan las ventas nuevas.
+  RESTRICTED
+  /// Stripe rechazó la cuenta (`disabled_reason` de rechazo).
+  REJECTED
+  /// El creador (o la baja del tenant) desconectó los cobros. La cuenta de
+  /// Stripe NO se cierra: hacen falta 120 días para poder revertir disputas.
+  DISCONNECTED
+}
+
+/// Ciclo de vida de la liquidación de una venta.
+enum PayoutsSaleStatus {
+  /// Cobrada; el cargo aún no tiene `balance_transaction` (comisión real).
+  AWAITING_FEE
+  /// Reparto calculado; pendiente de crear la transferencia.
+  READY
+  /// Transferencia creada en Stripe.
+  TRANSFERRED
+  /// La deuda abierta del creador absorbió todo el neto: no hubo transferencia.
+  SETTLED_NETTED
+  /// La transferencia falló o la cuenta está restringida; se reintenta.
+  HELD
+  /// Fallo definitivo: requiere intervención.
+  FAILED
+}
+
+/// De dónde sale la venta.
+enum PayoutsSaleSourceKind {
+  /// Pago único de un curso (`mod_billing_order`).
+  ORDER
+  /// Factura pagada de una suscripción / membresía.
+  SUBSCRIPTION_INVOICE
+}
+
+/// Tipo de asiento del libro. `amount` lleva signo: es el efecto sobre lo que
+/// le corresponde al creador.
+enum PayoutsLedgerEntryType {
+  SALE_GROSS
+  STRIPE_FEE
+  PLATFORM_FEE
+  TRANSFER
+  REFUND
+  PLATFORM_FEE_REFUND
+  TRANSFER_REVERSAL
+  DISPUTE_WITHDRAWN
+  DISPUTE_FEE
+  DISPUTE_REINSTATED
+  DEBT_CREATED
+  DEBT_RECOVERED
+  ADJUSTMENT
+}
+
+/// Por qué el creador debe dinero al operador.
+enum PayoutsDebtReason {
+  /// Comisión de Stripe que Stripe no devuelve al reembolsar.
+  REFUND_FEE
+  /// Importe de una disputa que no se pudo recuperar revirtiendo.
+  DISPUTE
+  /// Tasa de la disputa.
+  DISPUTE_FEE
+  /// La reversión de una transferencia falló por saldo insuficiente.
+  REVERSAL_FAILED
+  /// Ajuste hecho a mano por el operador.
+  MANUAL
+}
+
+enum PayoutsDebtStatus {
+  OPEN
+  RECOVERED
+  WRITTEN_OFF
+}
+
+/// Resultado de revertir la transferencia al reembolsar.
+enum PayoutsRefundReversalStatus {
+  /// Se revirtió todo el objetivo.
+  DONE
+  /// Se revirtió lo que permitía el saldo; el resto es deuda.
+  PARTIAL
+  /// No se pudo revertir nada: todo el objetivo es deuda.
+  FAILED_TO_DEBT
+}
+
+/// Ajustes de cobro del tenant (1 fila por tenant). La comisión la empuja el
+/// plano de control (Didacta Cloud); el creador no la edita.
+model ModPayoutsSettings {
+  tenantId  String   @id @map("tenant_id") @db.Uuid
+  /// Comisión del operador en puntos básicos: 500 = 5 %. Rango 0..3000,
+  /// validado en el módulo (`assertFeeBps`).
+  feeBps    Int      @default(500) @map("fee_bps")
+  /// Quién la cambió por última vez: id de usuario o la credencial de
+  /// aprovisionamiento. Texto libre, sin FK.
+  updatedBy String?  @map("updated_by")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("mod_payouts_settings")
+}
+
+/// Cuenta conectada de Stripe del creador. Espejo de lo que dice Stripe: se
+/// reescribe en cada `syncAccount`.
+model ModPayoutsAccount {
+  id                       String               @id @default(uuid()) @db.Uuid
+  tenantId                 String               @map("tenant_id") @db.Uuid
+  /// `acct_…`. Null mientras la fila existe pero Stripe aún no creó la cuenta.
+  stripeAccountId          String?              @unique @map("stripe_account_id")
+  /// ISO 3166-1 alfa-2 en mayúsculas.
+  country                  String               @db.VarChar(2)
+  /// `individual` | `company`.
+  entityType               String               @map("entity_type")
+  status                   PayoutsAccountStatus @default(NOT_CONNECTED)
+  /// Estado literal de la capacidad en Stripe (`active`, `pending`…).
+  cardPaymentsStatus       String?              @map("card_payments_status")
+  transfersStatus          String?              @map("transfers_status")
+  payoutsEnabled           Boolean              @default(false) @map("payouts_enabled")
+  requirementsCurrentlyDue Json                 @default("[]") @map("requirements_currently_due")
+  requirementsPastDue      Json                 @default("[]") @map("requirements_past_due")
+  requirementsDeadline     DateTime?            @map("requirements_deadline")
+  disabledReason           String?              @map("disabled_reason")
+  defaultCurrency          String?              @map("default_currency") @db.VarChar(3)
+  /// `application` | `stripe` — quién cobra las comisiones / asume las pérdidas.
+  feesCollector            String?              @map("fees_collector")
+  lossesCollector          String?              @map("losses_collector")
+  /// Calendario de pagos al banco aplicado por la plataforma.
+  payoutSchedule           Json?                @map("payout_schedule")
+  /// Configuración del portal de cliente propia del creador (`bpc_…`).
+  portalConfigurationId    String?              @map("portal_configuration_id")
+  livemode                 Boolean              @default(false)
+  /// Primera vez que la cuenta llegó a READY. Null = nunca ha operado.
+  readyAt                  DateTime?            @map("ready_at")
+  lastSyncedAt             DateTime?            @map("last_synced_at")
+  closedAt                 DateTime?            @map("closed_at")
+  createdAt                DateTime             @default(now()) @map("created_at")
+  updatedAt                DateTime             @updatedAt @map("updated_at")
+
+  sales         ModPayoutsSale[]
+  ledgerEntries ModPayoutsLedgerEntry[]
+  debts         ModPayoutsDebt[]
+
+  @@index([tenantId, status])
+  @@map("mod_payouts_account")
+}
+
+/// Registro `objeto de Stripe → tenant`. Es la ÚNICA fuente de la que el
+/// webhook de plataforma saca el tenant de un evento: lo escribe nuestro
+/// servidor al crear el objeto, nunca sale de la metadata del evento.
+model ModPayoutsObjectRef {
+  /// Id del objeto en Stripe (`cs_…`, `pi_…`, `ch_…`, `sub_…`, `acct_…`…).
+  /// PK global: un objeto pertenece a un único tenant.
+  stripeObjectId String   @id @map("stripe_object_id")
+  tenantId       String   @map("tenant_id") @db.Uuid
+  /// Clase de objeto (`checkout_session`, `payment_intent`, `charge`…).
+  kind           String
+  /// Módulo que lo creó: `billing` | `membership` | `subscriptions` | `payouts`.
+  source         String
+  /// Id local al que apunta (orden, plan, suscripción…). Lógico, sin FK.
+  localRef       String?  @map("local_ref")
+  /// Objeto de Stripe del que cuelga (el `pi_…` de un `ch_…`, la sesión de un
+  /// `sub_…`): permite heredar el tenant de un hijo aún sin registrar.
+  parentObjectId String?  @map("parent_object_id")
+  livemode       Boolean  @default(false)
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  @@index([tenantId, kind])
+  @@index([parentObjectId])
+  @@map("mod_payouts_object_ref")
+}
+
+/// Una venta cobrada en la cuenta de la plataforma y su reparto. Hace de cola
+/// de liquidación (el barrido la recorre por `status` + `next_attempt_at`).
+///
+/// Invariante: `gross − stripe_fee − platform_fee = creator_net =
+/// transfer_amount + debt_netted`, todo en la divisa de liquidación del cargo.
+model ModPayoutsSale {
+  id                         String                @id @default(uuid()) @db.Uuid
+  tenantId                   String                @map("tenant_id") @db.Uuid
+  accountId                  String                @map("account_id") @db.Uuid
+  sourceKind                 PayoutsSaleSourceKind @map("source_kind")
+  /// Id de la orden de mod.billing o de la factura de Stripe. Lógico, sin FK.
+  sourceRef                  String                @map("source_ref")
+  description                String?
+  buyerEmail                 String?               @map("buyer_email")
+  stripeChargeId             String                @unique @map("stripe_charge_id")
+  stripePaymentIntentId      String?               @map("stripe_payment_intent_id")
+  stripeInvoiceId            String?               @map("stripe_invoice_id")
+  stripeBalanceTransactionId String?               @map("stripe_balance_transaction_id")
+  /// Lo que pagó el alumno, en SU divisa.
+  presentmentAmount          Int                   @map("presentment_amount")
+  presentmentCurrency        String                @map("presentment_currency") @db.VarChar(3)
+  /// Todo lo de abajo va en la divisa de liquidación (`currency`) y es null
+  /// hasta que el cargo tiene `balance_transaction`.
+  gross                      Int?
+  stripeFee                  Int?                  @map("stripe_fee")
+  /// Comisión aplicada, sellada al calcular el reparto (la del tenant puede
+  /// cambiar después).
+  feeBpsApplied              Int?                  @map("fee_bps_applied")
+  platformFee                Int?                  @map("platform_fee")
+  creatorNet                 Int?                  @map("creator_net")
+  /// Parte del neto que se quedó la plataforma para compensar deuda abierta.
+  debtNetted                 Int                   @default(0) @map("debt_netted")
+  transferAmount             Int?                  @map("transfer_amount")
+  currency                   String?               @db.VarChar(3)
+  stripeTransferId           String?               @unique @map("stripe_transfer_id")
+  status                     PayoutsSaleStatus     @default(AWAITING_FEE)
+  refundedAmount             Int                   @default(0) @map("refunded_amount")
+  reversedAmount             Int                   @default(0) @map("reversed_amount")
+  /// Cuándo quedan disponibles los fondos del cargo (`available_on`).
+  availableOn                DateTime?             @map("available_on")
+  attempts                   Int                   @default(0)
+  lastError                  String?               @map("last_error")
+  nextAttemptAt              DateTime?             @map("next_attempt_at")
+  chargedAt                  DateTime?             @map("charged_at")
+  transferredAt              DateTime?             @map("transferred_at")
+  createdAt                  DateTime              @default(now()) @map("created_at")
+  updatedAt                  DateTime              @updatedAt @map("updated_at")
+
+  account       ModPayoutsAccount       @relation(fields: [accountId], references: [id], onDelete: Restrict)
+  ledgerEntries ModPayoutsLedgerEntry[]
+  debts         ModPayoutsDebt[]
+  refunds       ModPayoutsRefund[]
+  disputes      ModPayoutsDispute[]
+
+  @@index([tenantId, status])
+  @@index([tenantId, chargedAt(sort: Desc)])
+  @@index([tenantId, sourceKind, sourceRef])
+  @@index([status, nextAttemptAt])
+  @@index([accountId])
+  @@index([stripePaymentIntentId])
+  @@index([stripeInvoiceId])
+  @@map("mod_payouts_sale")
+}
+
+/// Libro mayor de SOLO INSERCIÓN (un trigger de `rls.sql` bloquea UPDATE y
+/// DELETE, igual que en `audit_log`). Una corrección es un asiento nuevo.
+model ModPayoutsLedgerEntry {
+  id                         String                 @id @default(uuid()) @db.Uuid
+  tenantId                   String                 @map("tenant_id") @db.Uuid
+  accountId                  String                 @map("account_id") @db.Uuid
+  saleId                     String?                @map("sale_id") @db.Uuid
+  type                       PayoutsLedgerEntryType
+  /// Con signo: efecto sobre lo que corresponde al creador.
+  amount                     Int
+  currency                   String                 @db.VarChar(3)
+  stripeObjectId             String?                @map("stripe_object_id")
+  stripeBalanceTransactionId String?                @map("stripe_balance_transaction_id")
+  /// Misma clave que la cabecera `Idempotency-Key` enviada a Stripe
+  /// (`payouts:transfer:<saleId>`…). Única: reintentar no duplica el asiento.
+  idempotencyKey             String                 @unique @map("idempotency_key")
+  occurredAt                 DateTime               @map("occurred_at")
+  metadata                   Json                   @default("{}")
+  createdAt                  DateTime               @default(now()) @map("created_at")
+
+  account ModPayoutsAccount @relation(fields: [accountId], references: [id], onDelete: Restrict)
+  sale    ModPayoutsSale?   @relation(fields: [saleId], references: [id], onDelete: Restrict)
+
+  @@index([tenantId, accountId, currency])
+  @@index([tenantId, occurredAt])
+  @@index([saleId])
+  @@map("mod_payouts_ledger_entry")
+}
+
+/// Lo que el creador debe al operador y no se pudo recuperar en el momento.
+/// Se compensa en liquidaciones futuras de la MISMA divisa.
+model ModPayoutsDebt {
+  id                String            @id @default(uuid()) @db.Uuid
+  tenantId          String            @map("tenant_id") @db.Uuid
+  accountId         String            @map("account_id") @db.Uuid
+  reason            PayoutsDebtReason
+  originSaleId      String?           @map("origin_sale_id") @db.Uuid
+  amountOriginal    Int               @map("amount_original")
+  amountOutstanding Int               @map("amount_outstanding")
+  currency          String            @db.VarChar(3)
+  status            PayoutsDebtStatus @default(OPEN)
+  createdAt         DateTime          @default(now()) @map("created_at")
+  updatedAt         DateTime          @updatedAt @map("updated_at")
+
+  account    ModPayoutsAccount @relation(fields: [accountId], references: [id], onDelete: Restrict)
+  originSale ModPayoutsSale?   @relation(fields: [originSaleId], references: [id], onDelete: Restrict)
+
+  @@index([tenantId, accountId, status, currency])
+  @@index([originSaleId])
+  @@map("mod_payouts_debt")
+}
+
+/// Reembolso iniciado desde el panel (o detectado si se hizo a mano en Stripe).
+/// La fila nace ANTES de llamar a Stripe: por eso `stripe_refund_id` es nulo.
+model ModPayoutsRefund {
+  id               String                       @id @default(uuid()) @db.Uuid
+  tenantId         String                       @map("tenant_id") @db.Uuid
+  saleId           String                       @map("sale_id") @db.Uuid
+  stripeRefundId   String?                      @unique @map("stripe_refund_id")
+  amount           Int
+  currency         String                       @db.VarChar(3)
+  /// Cuánto hay que revertir de la transferencia (proporcional al reembolso).
+  reversalTarget   Int?                         @map("reversal_target")
+  stripeReversalId String?                      @map("stripe_reversal_id")
+  reversalStatus   PayoutsRefundReversalStatus? @map("reversal_status")
+  /// Id del usuario que lo pidió, o el origen si no fue desde el panel.
+  initiatedBy      String?                      @map("initiated_by")
+  reason           String?
+  /// Estado literal del reembolso en Stripe (`pending`, `succeeded`…).
+  status           String                       @default("pending")
+  createdAt        DateTime                     @default(now()) @map("created_at")
+  updatedAt        DateTime                     @updatedAt @map("updated_at")
+
+  sale ModPayoutsSale @relation(fields: [saleId], references: [id], onDelete: Restrict)
+
+  @@index([tenantId, saleId])
+  @@index([saleId])
+  @@map("mod_payouts_refund")
+}
+
+/// Disputa (contracargo) sobre una venta.
+model ModPayoutsDispute {
+  id               String    @id @default(uuid()) @db.Uuid
+  tenantId         String    @map("tenant_id") @db.Uuid
+  saleId           String    @map("sale_id") @db.Uuid
+  stripeDisputeId  String    @unique @map("stripe_dispute_id")
+  /// Estado literal de la disputa en Stripe.
+  status           String
+  amount           Int
+  currency         String    @db.VarChar(3)
+  /// Tasa de la disputa, leída de `dispute.balance_transactions`.
+  fee              Int       @default(0)
+  reason           String?
+  evidenceDueBy    DateTime? @map("evidence_due_by")
+  stripeReversalId String?   @map("stripe_reversal_id")
+  /// `won` | `lost` al cerrarse.
+  outcome          String?
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+
+  sale ModPayoutsSale @relation(fields: [saleId], references: [id], onDelete: Restrict)
+
+  @@index([tenantId, status])
+  @@index([saleId])
+  @@map("mod_payouts_dispute")
+}
+
+/// Evento recibido en el webhook único de plataforma. Idempotencia (PK =
+/// `evt_…`) y cola de reproceso del conciliador. `tenant_id` es null cuando el
+/// evento no se pudo atribuir a ningún tenant («sin atribuir»).
+model ModPayoutsWebhookEvent {
+  stripeEventId String    @id @map("stripe_event_id")
+  tenantId      String?   @map("tenant_id") @db.Uuid
+  type          String
+  /// Id del objeto principal del evento.
+  objectId      String?   @map("object_id")
+  livemode      Boolean   @default(false)
+  payload       Json      @default("{}")
+  receivedAt    DateTime  @default(now()) @map("received_at")
+  processedAt   DateTime? @map("processed_at")
+  errorMessage  String?   @map("error_message")
+  attempts      Int       @default(0)
+
+  @@index([tenantId, receivedAt])
+  @@index([type])
+  @@index([processedAt, receivedAt])
+  @@map("mod_payouts_webhook_event")
+}
