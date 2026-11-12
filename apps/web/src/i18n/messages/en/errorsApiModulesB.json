@@ -227,5 +227,11 @@
   "PAYOUTS_REFUND_EXCEEDS_REMAINING": "That's more than what's left to refund on this sale.",
   "PAYOUTS_REFUND_REJECTED": "The bank didn't accept the refund. Nothing was refunded; please try again later.",
   "PAYOUTS_PRICE_CURRENCY": "That price can’t be set in {detail}. Pick a currency from the list and an amount that can be charged in it.",
-  "BILLING_PRICE_ID_NOT_ALLOWED": "Here the price is entered as an amount: nothing to set up in Stripe."
+  "BILLING_PRICE_ID_NOT_ALLOWED": "Here the price is entered as an amount: nothing to set up in Stripe.",
+  "CHECKOUT_WITHDRAWAL_WAIVER_REQUIRED": "To buy, tick the box: you ask for immediate access and accept that you lose your 14-day right to withdraw.",
+  "CHECKOUT_WITHDRAWAL_WAIVER_OUTDATED": "The text of the box has changed. Reload the page and tick it again.",
+  "PURCHASE_CONSENT_TENANT_NOT_FOUND": "We couldn't find this academy.",
+  "PAYOUTS_TAX_PROFILE_INVALID": "Check your tax details: some fields are missing or not valid.",
+  "PAYOUTS_INVOICE_NOT_FOUND": "We couldn't find that invoice.",
+  "PAYOUTS_INVOICING_DISABLED": "Fee invoicing is not turned on in this installation."
 }
