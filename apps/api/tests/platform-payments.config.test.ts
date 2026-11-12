@@ -114,11 +114,13 @@ describe('modo plataforma ENCENDIDO — valores por defecto del plan', () => {
       displayName: 'Didacta',
       debtAlertMinor: 10000,
       // E6: lo decidido por el dueño — el operador devuelve su 5 % en
-      // proporción; la comisión de la tarjeta y la disputa perdida, el creador.
+      // proporción; la comisión de la tarjeta y la disputa perdida, el creador;
+      // y la tasa de una disputa GANADA (Stripe no la devuelve), también.
       lossPolicy: {
         refundPlatformFee: true,
         refundCardFeeBearer: 'creator',
         disputeLossBearer: 'creator',
+        disputeWonFeeBearer: 'creator',
       },
       operatorAlertEmail: null,
     });
@@ -130,6 +132,7 @@ describe('modo plataforma ENCENDIDO — valores por defecto del plan', () => {
         PAYMENTS_PLATFORM_REFUND_PLATFORM_FEE: 'none',
         PAYMENTS_PLATFORM_REFUND_CARD_FEE_BEARER: 'platform',
         PAYMENTS_PLATFORM_DISPUTE_LOSS_BEARER: 'platform',
+        PAYMENTS_PLATFORM_DISPUTE_WON_FEE_BEARER: 'platform',
         PAYMENTS_PLATFORM_OPERATOR_ALERT_EMAIL: 'cobros@example.com',
       }),
     ) as Extract<ReturnType<typeof cargar>, { enabled: true }>;
@@ -137,6 +140,7 @@ describe('modo plataforma ENCENDIDO — valores por defecto del plan', () => {
       refundPlatformFee: false,
       refundCardFeeBearer: 'platform',
       disputeLossBearer: 'platform',
+      disputeWonFeeBearer: 'platform',
     });
     expect(config.operatorAlertEmail).toBe('cobros@example.com');
     expect(() => cargar(encendido({ PAYMENTS_PLATFORM_REFUND_CARD_FEE_BEARER: 'alumno' }))).toThrow(
@@ -145,6 +149,20 @@ describe('modo plataforma ENCENDIDO — valores por defecto del plan', () => {
     expect(() =>
       cargar(encendido({ PAYMENTS_PLATFORM_OPERATOR_ALERT_EMAIL: 'no-es-un-correo' })),
     ).toThrow(/PAYMENTS_PLATFORM_OPERATOR_ALERT_EMAIL/);
+  });
+
+  it('tasa de una disputa ganada: por defecto el creador; «platform» aceptado; otro valor no arranca', () => {
+    const bearer = (value?: string) =>
+      cargar(encendido({ PAYMENTS_PLATFORM_DISPUTE_WON_FEE_BEARER: value })).lossPolicy
+        .disputeWonFeeBearer;
+    expect(bearer(undefined)).toBe('creator');
+    // Vacía en el `.env` = sin definir = por defecto.
+    expect(bearer('')).toBe('creator');
+    expect(bearer('platform')).toBe('platform');
+    expect(bearer('creator')).toBe('creator');
+    expect(() => cargar(encendido({ PAYMENTS_PLATFORM_DISPUTE_WON_FEE_BEARER: 'alumno' }))).toThrow(
+      /PAYMENTS_PLATFORM_DISPUTE_WON_FEE_BEARER: debe ser uno de: creator, platform/,
+    );
   });
 
   it('la lista de países por defecto: ES, UE/EEE, GB, CH, US y CA; sin Latinoamérica', () => {

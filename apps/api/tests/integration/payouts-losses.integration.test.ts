@@ -58,6 +58,12 @@ const CONFIG = loadPlatformPaymentsConfig({
   PAYMENTS_PLATFORM_STRIPE_SECRET_KEY: 'sk_test_inventadaE6',
   PAYMENTS_PLATFORM_STRIPE_WEBHOOK_SECRETS: OPERATOR_SECRET,
 }) as PlatformPaymentsEnabled;
+/** El mismo despliegue con la tasa de una disputa ganada a cargo del operador. */
+const CONFIG_PLATFORM_WON_FEE = loadPlatformPaymentsConfig({
+  PAYMENTS_PLATFORM_STRIPE_SECRET_KEY: 'sk_test_inventadaE6',
+  PAYMENTS_PLATFORM_STRIPE_WEBHOOK_SECRETS: OPERATOR_SECRET,
+  PAYMENTS_PLATFORM_DISPUTE_WON_FEE_BEARER: 'platform',
+}) as PlatformPaymentsEnabled;
 
 describeWithDb('Reembolsos, disputas y deudas — Postgres real como didacta_app', () => {
   let admin: PrismaClient;
@@ -65,6 +71,8 @@ describeWithDb('Reembolsos, disputas y deudas — Postgres real como didacta_app
   let closeModule: () => Promise<void>;
   let runtime: PayoutsRuntime;
   let platform: PlatformWebhookController;
+  /** Webhook de un despliegue con `PAYMENTS_PLATFORM_DISPUTE_WON_FEE_BEARER=platform`. */
+  let platformWonFee: PlatformWebhookController;
   let reconciler: PayoutsReconcilerService;
 
   const A = randomUUID();
@@ -280,6 +288,11 @@ describeWithDb('Reembolsos, disputas y deudas — Postgres real como didacta_app
         get: (token: unknown) => services.get(token),
       } as never);
       platform = new PlatformWebhookController(runtime, logger as never, dispatcher);
+      platformWonFee = new PlatformWebhookController(
+        new PayoutsRuntime(CONFIG_PLATFORM_WON_FEE, fake, prisma, stripeResolver, logger as never),
+        logger as never,
+        dispatcher,
+      );
       reconciler = new PayoutsReconcilerService({
         db: runtime.db,
         stripe: fake,
@@ -723,7 +736,14 @@ describeWithDb('Reembolsos, disputas y deudas — Postgres real como didacta_app
     expect(await violationsOfOurTenants()).toEqual([]);
   });
 
-  it('disputa ganada por el webhook: transferencia nueva por lo revertido y la deuda cancelada', async () => {
+  const absorbedAlertsFor = (disputeId: string) =>
+    logger.error.mock.calls.filter(
+      (c) =>
+        (c[0] as Row)['alert'] === 'payouts.platform_absorbed' &&
+        (c[0] as Row)['disputeId'] === disputeId,
+    );
+
+  it('disputa ganada por el webhook (por defecto): transferencia nueva por lo revertido, deuda DISPUTE cancelada y la tasa no devuelta, deuda DISPUTE_FEE del creador', async () => {
     const s = await soldAndTransferred(A, { fee: 340 });
     const dp = `dp_won_${stamp}`;
     const obj = { id: dp, object: 'dispute', charge: s.chId, payment_intent: s.piId };
@@ -740,17 +760,35 @@ describeWithDb('Reembolsos, disputas y deudas — Postgres real como didacta_app
     expect(frozen.amountOutstanding).toBe(4160);
     expect(await violationsOfOurTenants()).toEqual([]);
 
+    // Ganada: Stripe devuelve el importe pero NO su tasa de 2000.
     seedDispute(dp, s.chId, 'won', [
       { amount: -10000, fee: 2000 },
-      { amount: 10000, fee: -2000 },
+      { amount: 10000, fee: 0 },
     ]);
-    await platform.handle(signed('charge.dispute.funds_reinstated', obj, evtId('wr')));
+    const reinstated = signed('charge.dispute.funds_reinstated', obj, evtId('wr'));
+    await platform.handle(reinstated);
     await platform.handle(signed('charge.dispute.closed', obj, evtId('wc')));
     const reinstate = transfers.filter((t) => t['transfer_group'] === `didacta_dispute_${dp}`);
     expect(reinstate.map((t) => t['amount'])).toEqual([5000]);
     expect(
       await admin.modPayoutsDebt.findUniqueOrThrow({ where: { id: frozen.id } }),
     ).toMatchObject({ amountOutstanding: 0, status: 'WRITTEN_OFF' });
+    const feeDebts = await admin.modPayoutsDebt.findMany({
+      where: { originSaleId: s.saleId, reason: 'DISPUTE_FEE' },
+    });
+    expect(feeDebts.map((d) => [d.amountOriginal, d.amountOutstanding, d.status])).toEqual([
+      [2000, 2000, 'OPEN'],
+    ]);
+    expect(absorbedAlertsFor(dp)).toEqual([]);
+    expect(await violationsOfOurTenants()).toEqual([]);
+
+    // Reentrega del mismo evento: una sola deuda.
+    await platform.handle(reinstated);
+    expect(
+      await admin.modPayoutsDebt.count({
+        where: { originSaleId: s.saleId, reason: 'DISPUTE_FEE' },
+      }),
+    ).toBe(1);
     // El evento `transfer.created` de esa transferencia cuadra con su asiento.
     const check = await platform.handle(
       signed(
@@ -763,6 +801,43 @@ describeWithDb('Reembolsos, disputas y deudas — Postgres real como didacta_app
     expect(
       logger.error.mock.calls.filter((c) => (c[0] as Row)['alert'] === 'payouts.transfer_mismatch'),
     ).toEqual([]);
+    expect(await violationsOfOurTenants()).toEqual([]);
+  });
+
+  it('disputa ganada con PAYMENTS_PLATFORM_DISPUTE_WON_FEE_BEARER=platform: la tasa la asume el operador, con asiento y alerta, como antes', async () => {
+    const s = await soldAndTransferred(A, { fee: 340 });
+    const dp = `dp_won_platform_${stamp}`;
+    const obj = { id: dp, object: 'dispute', charge: s.chId, payment_intent: s.piId };
+    seedDispute(dp, s.chId, 'under_review', [{ amount: -10000, fee: 2000 }]);
+    await platformWonFee.handle(signed('charge.dispute.funds_withdrawn', obj, evtId('pw')));
+    seedDispute(dp, s.chId, 'won', [
+      { amount: -10000, fee: 2000 },
+      { amount: 10000, fee: 0 },
+    ]);
+    await platformWonFee.handle(signed('charge.dispute.closed', obj, evtId('pc')));
+    // Se le devuelve exactamente lo que se le revirtió (la venta pudo pagar
+    // antes deudas abiertas de otros casos de este fichero).
+    const entries = await lossEntries(s.saleId);
+    expect(entries['TRANSFER_REVERSAL']).toBeGreaterThan(0);
+    expect(
+      transfers
+        .filter((t) => t['transfer_group'] === `didacta_dispute_${dp}`)
+        .map((t) => t['amount']),
+    ).toEqual([entries['TRANSFER_REVERSAL']]);
+    // Ninguna deuda de la tasa, y ninguna deuda abierta de esta venta.
+    expect(
+      await admin.modPayoutsDebt.count({
+        where: { originSaleId: s.saleId, reason: 'DISPUTE_FEE' },
+      }),
+    ).toBe(0);
+    expect(
+      await admin.modPayoutsDebt.count({ where: { originSaleId: s.saleId, status: 'OPEN' } }),
+    ).toBe(0);
+    const wonCost = await admin.modPayoutsLedgerEntry.findMany({
+      where: { saleId: s.saleId, type: 'ADJUSTMENT', idempotencyKey: { endsWith: ':won-cost' } },
+    });
+    expect(wonCost.map((e) => e.amount)).toEqual([2000]);
+    expect(absorbedAlertsFor(dp)).toHaveLength(1);
     expect(await violationsOfOurTenants()).toEqual([]);
   });
 

@@ -122,6 +122,7 @@ export class PayoutsRuntime {
       logger,
       operatorName: config.displayName,
       operatorAlertEmail: config.operatorAlertEmail,
+      disputeWonFeeBearer: config.lossPolicy.disputeWonFeeBearer,
       smtpResolver,
       smtp,
       tenantResolver,

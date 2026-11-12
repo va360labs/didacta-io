@@ -32,12 +32,19 @@ export interface PayoutsLossPolicy {
   readonly refundCardFeeBearer: 'creator' | 'platform';
   /** Tasa de la disputa y comisión de la tarjeta cuando se PIERDE. */
   readonly disputeLossBearer: 'creator' | 'platform';
+  /**
+   * Tasa de la disputa cuando se GANA: Stripe devuelve el importe pero no la
+   * tasa. `creator` (decisión del dueño): deuda `DISPUTE_FEE` del creador que
+   * se descuenta de sus próximos cobros. `platform`: la asume el operador.
+   */
+  readonly disputeWonFeeBearer: 'creator' | 'platform';
 }
 
 export const DEFAULT_LOSS_POLICY: PayoutsLossPolicy = Object.freeze({
   refundPlatformFee: true,
   refundCardFeeBearer: 'creator',
   disputeLossBearer: 'creator',
+  disputeWonFeeBearer: 'creator',
 });
 
 /**
@@ -62,7 +69,8 @@ export interface PayoutsNotifier {
     readonly description: string | null;
     readonly amount: number;
     readonly currency: string;
-    readonly cause: 'refund' | 'dispute_withdrawn' | 'dispute_lost';
+    /** `dispute_won`: se ganó, pero la tasa que Stripe no devuelve la paga el creador. */
+    readonly cause: 'refund' | 'dispute_withdrawn' | 'dispute_lost' | 'dispute_won';
   }): Promise<void>;
   /** Algo que un humano del operador debe mirar. */
   operatorAlert(alert: string, detail: Record<string, unknown>): Promise<void>;

@@ -5,7 +5,7 @@
 
 import type { PrismaClient } from '@didacta/database';
 import type { PayoutsDbPort, PayoutsLogger, PayoutsTx } from './accounts.service.js';
-import { createDebt, netAgainstPendingSale } from './debts.service.js';
+import { DISPUTE_WON_FEE_DEBT_PART, createDebt, netAgainstPendingSale } from './debts.service.js';
 import { PlatformStripeApiError } from './errors.js';
 import { idOf } from './event-router.js';
 import { IDEMPOTENCY_KEYS, LedgerService, type LedgerEntryInput } from './ledger.service.js';
@@ -37,7 +37,7 @@ import type { PlatformStripeClient } from './stripe/platform-stripe.client.js';
  * |---|---|---|
  * | Alta | la disputa existe | fila, aviso al creador con la fecha límite; sin dinero |
  * | Retirada | `balance_transactions` con importe negativo | `DISPUTE_WITHDRAWN` (−importe real), `DISPUTE_FEE` (−tasa real), `PLATFORM_FEE_REFUND` (+5 % en proporción), `TRANSFER_REVERSAL` (+lo revertido al creador), `ADJUSTMENT` provisional (+tasa y comisión de la tarjeta, que adelanta el operador hasta que se decida) y deuda `DISPUTE` por lo que no se pudo revertir |
- * | Ganada | `balance_transactions` con importe positivo | `DISPUTE_REINSTATED`, tasa devuelta, el 5 % otra vez, se deshace el provisional, `TRANSFER` nueva al creador por lo que se le quitó y se cancela su deuda `DISPUTE` |
+ * | Ganada | `balance_transactions` con importe positivo | `DISPUTE_REINSTATED`, tasa devuelta, el 5 % otra vez, se deshace el provisional, `TRANSFER` nueva al creador por lo que se le quitó, se cancela su deuda `DISPUTE` y la tasa que Stripe NO devuelve pasa a deuda `DISPUTE_FEE` del creador (`disputeWonFeeBearer = creator`, por defecto) o la asume el operador (`platform`, `ADJUSTMENT` y alerta) |
  * | Perdida | `status = lost` | se deshace el provisional y nace la deuda `DISPUTE_FEE` (tasa + comisión de la tarjeta): la repercusión |
  *
  * Cada paso suma 0 en el libro. La deuda `DISPUTE` de una disputa abierta no
@@ -713,14 +713,35 @@ export class PayoutsDisputesService {
           });
         }
       }
-      // Lo que no cuadra (tasa que Stripe no devolvió, diferencia de importe)
-      // lo asume el operador, con su asiento y su alerta.
+      // Lo que no cuadra: la tasa que Stripe no devolvió y, si la hubiera, una
+      // diferencia de importe. La tasa la paga el creador (deuda `DISPUTE_FEE`)
+      // si así lo dice la política; el resto lo asume el operador, con su
+      // asiento y su alerta. La deuda es SOLO la tasa no devuelta: lo revertido
+      // o retenido al creador ya vuelve entero con la transferencia de arriba y
+      // la cancelación de su deuda `DISPUTE`, así que nada se cuenta dos veces.
       const plug = -entries.reduce((total, entry) => total + entry.amount, 0);
-      if (plug !== 0) {
+      const unreturnedFee = Math.max(0, previous.fee - feeBack);
+      const feeCharged =
+        this.policy.disputeWonFeeBearer === 'creator'
+          ? Math.max(0, Math.min(unreturnedFee, plug))
+          : 0;
+      if (feeCharged > 0) {
+        await createDebt(tx, {
+          ...base,
+          reason: 'DISPUTE_FEE',
+          amount: feeCharged,
+          originSaleId: sale.id,
+          idempotencyKey: IDEMPOTENCY_KEYS.disputeEntry(row.id, DISPUTE_WON_FEE_DEBT_PART),
+          stripeObjectId: row.stripeDisputeId,
+          metadata: { disputeId: row.stripeDisputeId, cause: 'dispute_won_fee_not_returned' },
+        });
+      }
+      const absorbed = plug - feeCharged;
+      if (absorbed !== 0) {
         entries.push({
           ...base,
           type: 'ADJUSTMENT',
-          amount: plug,
+          amount: absorbed,
           idempotencyKey: IDEMPOTENCY_KEYS.disputeEntry(row.id, 'won-cost'),
           metadata: {
             disputeId: row.stripeDisputeId,
@@ -744,17 +765,33 @@ export class PayoutsDisputesService {
         where: { id: row.id, tenantId },
         data: { outcome: 'won', status: 'won' },
       });
-      return { plug };
+      return { absorbed, feeCharged };
     });
-    if (written && written.plug !== 0) {
+    if (written && written.absorbed !== 0) {
       await this.alert(PAYOUTS_LOSS_ALERTS.platformAbsorbed, {
         tenantId,
         saleId: sale.id,
         disputeId: row.stripeDisputeId,
-        amount: written.plug,
+        amount: written.absorbed,
         currency,
         detail: 'disputa ganada: coste que no devolvió Stripe, asumido por la plataforma',
       });
+    }
+    if (written && written.feeCharged > 0) {
+      await this.notifier
+        .debtCharged({
+          tenantId,
+          saleId: sale.id,
+          description: sale.description,
+          amount: written.feeCharged,
+          currency,
+          cause: 'dispute_won',
+        })
+        .catch(() => undefined);
+      this.logger.log?.(
+        { tenantId, saleId: sale.id, disputeId: row.stripeDisputeId, fee: written.feeCharged },
+        'payouts.dispute: disputa ganada; la tasa no devuelta pasa a deuda del creador',
+      );
     }
     await this.onSaleChanged?.(tenantId, sale.id).catch(() => undefined);
     return written ? 'accounted' : 'already';
@@ -906,6 +943,7 @@ export class PayoutsDisputesService {
       const keys = {
         reversal: IDEMPOTENCY_KEYS.disputeReversal(stripeDisputeId),
         provisional: IDEMPOTENCY_KEYS.disputeEntry(rowId, 'provisional'),
+        fee: IDEMPOTENCY_KEYS.disputeEntry(rowId, 'fee'),
         platform: IDEMPOTENCY_KEYS.disputeEntry(rowId, 'platform-fee'),
         debt: IDEMPOTENCY_KEYS.disputeEntry(rowId, 'debt'),
       };
@@ -918,6 +956,8 @@ export class PayoutsDisputesService {
       return {
         reversed: byKey.get(keys.reversal)?.amount ?? 0,
         provisional: byKey.get(keys.provisional)?.amount ?? 0,
+        /** La tasa que Stripe retiró con la disputa (el asiento va en negativo). */
+        fee: -(byKey.get(keys.fee)?.amount ?? 0),
         platformReturned: byKey.get(keys.platform)?.amount ?? 0,
         debtId: typeof debtMeta?.debtId === 'string' ? debtMeta.debtId : null,
       };

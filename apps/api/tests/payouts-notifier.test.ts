@@ -105,8 +105,41 @@ describe('textos', () => {
       dueBy: '22 de noviembre de 2026',
     });
     expect(es.body).toContain('antes del 22 de noviembre de 2026');
-    expect(es.body).toContain('Si el banco nos da la razón, te lo devolvemos entero');
+    // Por defecto la tasa la paga el creador aunque se gane: se dice desde el principio.
+    expect(es.body).toContain('el banco se queda su tasa aunque ganemos');
+    expect(es.body).not.toContain('te lo devolvemos entero');
     for (const word of ['chargeback', 'dispute', 'Stripe', 'transfer']) {
+      expect(es.body).not.toContain(word);
+    }
+    const platform = disputeOpenedTexts({
+      lang: 'es',
+      operator: 'Didacta',
+      description: 'Curso de Excel',
+      amount: '100,00 €',
+      dueBy: null,
+      wonFeeCharged: false,
+    });
+    expect(platform.body).toContain('Si el banco nos da la razón, te lo devolvemos entero');
+  });
+
+  it('disputa ganada: se ganó y la tasa del banco (importe) se descuenta de los próximos cobros', () => {
+    const es = debtChargedTexts({
+      lang: 'es',
+      description: 'Curso de Excel',
+      amount: '20,00 €',
+      cause: 'dispute_won',
+    });
+    expect(es.subject).toBe('Hemos ganado la reclamación de «Curso de Excel»');
+    expect(es.body).toContain('nos ha dado la razón');
+    expect(es.body).toContain('Esa tasa (20,00 €) se descontará de tus próximos cobros.');
+    const en = debtChargedTexts({
+      lang: 'en',
+      description: 'Excel',
+      amount: '€20.00',
+      cause: 'dispute_won',
+    });
+    expect(en.body).toContain('That fee (€20.00) will be taken from your next payouts.');
+    for (const word of ['chargeback', 'dispute', 'Stripe', 'transfer', 'payout ']) {
       expect(es.body).not.toContain(word);
     }
   });

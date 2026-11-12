@@ -41,6 +41,8 @@ export interface PayoutsEmailNotifierDeps {
   readonly logger: PinoLogger;
   readonly operatorName: string;
   readonly operatorAlertEmail: string | null;
+  /** Quién paga la tasa de una disputa GANADA (por defecto, el creador). */
+  readonly disputeWonFeeBearer?: 'creator' | 'platform';
   readonly smtpResolver?: TenantSmtpResolverService;
   readonly smtp?: SmtpAdapterService;
   readonly tenantResolver?: TenantResolverService;
@@ -104,9 +106,15 @@ export function disputeOpenedTexts(input: {
   readonly description: string | null;
   readonly amount: string;
   readonly dueBy: string | null;
+  /** ¿Paga el creador la tasa aunque se gane? (por defecto, sí). */
+  readonly wonFeeCharged?: boolean;
 }): Texts {
   const item = input.description ?? (input.lang === 'en' ? 'a sale' : 'una venta');
+  const wonFeeCharged = input.wonFeeCharged ?? true;
   if (input.lang === 'en') {
+    const won = wonFeeCharged
+      ? `If the bank rules in our favour, you get it back, but the bank keeps its fee even then, and that fee will be taken from your next payouts.`
+      : `If the bank rules in our favour, you get it all back.`;
     return {
       subject: `A student has disputed a payment with their bank`,
       title: 'A student has disputed a payment',
@@ -115,10 +123,13 @@ export function disputeOpenedTexts(input: {
         `${input.operator} will answer the bank on your behalf` +
         (input.dueBy ? ` before ${input.dueBy}` : '') +
         `. If you have proof that the student received the course (access history, messages, invoice), send it to us as soon as possible.\n\n` +
-        `While the bank decides, what you received for this sale is on hold. If the bank rules in our favour, you get it all back. If not, it will be taken from your next payouts together with the bank's fee.`,
+        `While the bank decides, what you received for this sale is on hold. ${won} If not, it will be taken from your next payouts together with the bank's fee.`,
       cta: 'See my sales',
     };
   }
+  const won = wonFeeCharged
+    ? `Si el banco nos da la razón, te lo devolvemos, pero el banco se queda su tasa aunque ganemos y esa tasa se descontará de tus próximos cobros.`
+    : `Si el banco nos da la razón, te lo devolvemos entero.`;
   return {
     subject: 'Un alumno ha reclamado un pago a su banco',
     title: 'Un alumno ha reclamado un pago',
@@ -127,7 +138,7 @@ export function disputeOpenedTexts(input: {
       `${input.operator} responderá al banco en tu nombre` +
       (input.dueBy ? ` antes del ${input.dueBy}` : '') +
       `. Si tienes pruebas de que el alumno recibió el curso (accesos, mensajes, factura), envíanoslas cuanto antes.\n\n` +
-      `Mientras el banco decide, lo que recibiste por esa venta queda retenido. Si el banco nos da la razón, te lo devolvemos entero. Si no, se descontará de tus próximos cobros junto con la tasa del banco.`,
+      `Mientras el banco decide, lo que recibiste por esa venta queda retenido. ${won} Si no, se descontará de tus próximos cobros junto con la tasa del banco.`,
     cta: 'Ver mis ventas',
   };
 }
@@ -136,9 +147,32 @@ export function debtChargedTexts(input: {
   readonly lang: EmailLang;
   readonly description: string | null;
   readonly amount: string;
-  readonly cause: 'refund' | 'dispute_withdrawn' | 'dispute_lost';
+  readonly cause: 'refund' | 'dispute_withdrawn' | 'dispute_lost' | 'dispute_won';
 }): Texts {
   const item = input.description ?? (input.lang === 'en' ? 'a sale' : 'una venta');
+  if (input.cause === 'dispute_won') {
+    // Buena noticia primero; luego, en llano, lo único que cuesta.
+    if (input.lang === 'en') {
+      return {
+        subject: `We won the student's claim on "${item}"`,
+        title: 'We won the claim',
+        body:
+          `The student's bank has ruled in our favour on "${item}": what was on hold comes back to you.\n\n` +
+          `The bank doesn't return its fee for handling the claim, even when we win. That fee (${input.amount}) will be taken from your next payouts.\n\n` +
+          `You don't need to do anything: it comes off your next sales automatically, and you can see it in Payouts.`,
+        cta: 'See my sales',
+      };
+    }
+    return {
+      subject: `Hemos ganado la reclamación de «${item}»`,
+      title: 'Hemos ganado la reclamación',
+      body:
+        `El banco del alumno nos ha dado la razón con «${item}»: lo que estaba retenido vuelve a ti.\n\n` +
+        `El banco no devuelve su tasa por tramitar la reclamación, aunque ganemos. Esa tasa (${input.amount}) se descontará de tus próximos cobros.\n\n` +
+        `No tienes que hacer nada: se resta sola de tus siguientes ventas y lo ves en Cobros.`,
+      cta: 'Ver mis ventas',
+    };
+  }
   if (input.lang === 'en') {
     const reason =
       input.cause === 'refund'
@@ -178,6 +212,7 @@ export class PayoutsEmailNotifier implements PayoutsNotifier {
         description: input.description,
         amount: formatMinor(input.amount, input.currency, lang),
         dueBy: input.evidenceDueBy ? formatDay(input.evidenceDueBy, lang) : null,
+        wonFeeCharged: (this.deps.disputeWonFeeBearer ?? 'creator') === 'creator',
       }),
     );
   }

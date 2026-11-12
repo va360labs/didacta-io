@@ -5,7 +5,7 @@
 
 import type { PayoutsSaleStatus } from '@didacta/database';
 import type { PayoutScheduleView, PayoutsDbPort } from './accounts.service.js';
-import { frozenDisputeSaleIds, type DebtView } from './debts.service.js';
+import { frozenDisputeSaleIds, wonDisputeFeeDebtIds, type DebtView } from './debts.service.js';
 import type { DisputeView } from './disputes.service.js';
 import { saleReasonCode } from './settlement.service.js';
 
@@ -273,44 +273,46 @@ export class PayoutsReportsService {
 
   /** Resumen por divisa de liquidación. Nunca suma divisas distintas. */
   async summary(tenantId: string): Promise<SalesSummary> {
-    const { groups, debts, awaiting, openDebts, openDisputes, frozen } = await this.db.inTenant(
-      tenantId,
-      async (tx) => ({
-        groups: await tx.modPayoutsSale.groupBy({
-          by: ['currency', 'status'],
-          where: { tenantId, currency: { not: null } },
-          _count: { _all: true },
-          _sum: {
-            gross: true,
-            stripeFee: true,
-            platformFee: true,
-            transferAmount: true,
-            debtNetted: true,
-            refundedAmount: true,
-            reversedAmount: true,
-          },
-          orderBy: [{ currency: 'asc' }, { status: 'asc' }],
-        }),
-        debts: await tx.modPayoutsDebt.groupBy({
-          by: ['currency'],
-          where: { tenantId, status: 'OPEN' },
-          _sum: { amountOutstanding: true },
-          orderBy: { currency: 'asc' },
-        }),
-        awaiting: await tx.modPayoutsSale.count({ where: { tenantId, currency: null } }),
-        openDebts: await tx.modPayoutsDebt.findMany({
+    const { groups, debts, awaiting, openDebts, openDisputes, frozen, wonFee } =
+      await this.db.inTenant(tenantId, async (tx) => {
+        const open = await tx.modPayoutsDebt.findMany({
           where: { tenantId, status: 'OPEN', amountOutstanding: { gt: 0 } },
           orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
           take: 50,
-        }),
-        openDisputes: await tx.modPayoutsDispute.findMany({
-          where: { tenantId, outcome: null },
-          orderBy: [{ evidenceDueBy: { sort: 'asc', nulls: 'last' } }, { createdAt: 'asc' }],
-          take: 50,
-        }),
-        frozen: await frozenDisputeSaleIds(tx, tenantId),
-      }),
-    );
+        });
+        return {
+          groups: await tx.modPayoutsSale.groupBy({
+            by: ['currency', 'status'],
+            where: { tenantId, currency: { not: null } },
+            _count: { _all: true },
+            _sum: {
+              gross: true,
+              stripeFee: true,
+              platformFee: true,
+              transferAmount: true,
+              debtNetted: true,
+              refundedAmount: true,
+              reversedAmount: true,
+            },
+            orderBy: [{ currency: 'asc' }, { status: 'asc' }],
+          }),
+          debts: await tx.modPayoutsDebt.groupBy({
+            by: ['currency'],
+            where: { tenantId, status: 'OPEN' },
+            _sum: { amountOutstanding: true },
+            orderBy: { currency: 'asc' },
+          }),
+          awaiting: await tx.modPayoutsSale.count({ where: { tenantId, currency: null } }),
+          openDebts: open,
+          openDisputes: await tx.modPayoutsDispute.findMany({
+            where: { tenantId, outcome: null },
+            orderBy: [{ evidenceDueBy: { sort: 'asc', nulls: 'last' } }, { createdAt: 'asc' }],
+            take: 50,
+          }),
+          frozen: await frozenDisputeSaleIds(tx, tenantId),
+          wonFee: await wonDisputeFeeDebtIds(tx, tenantId, open),
+        };
+      });
     const saleIds = [
       ...new Set([
         ...openDebts.map((d) => d.originSaleId).filter((id): id is string => !!id),
@@ -387,6 +389,7 @@ export class PayoutsReportsService {
           debt.reason === 'DISPUTE' &&
           debt.originSaleId !== null &&
           frozen.includes(debt.originSaleId),
+        fromWonDispute: wonFee.has(debt.id),
       })),
       disputes: openDisputes.map((dispute) => ({
         id: dispute.id,

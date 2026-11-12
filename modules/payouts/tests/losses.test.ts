@@ -411,6 +411,7 @@ describe('Reembolso desde Didacta', () => {
       refundPlatformFee: false,
       refundCardFeeBearer: 'platform',
       disputeLossBearer: 'creator',
+      disputeWonFeeBearer: 'creator',
     });
     const s = await transferredSale({});
     await refunds.refund({ tenantId: A, saleId: s.saleId, initiatedBy: 'u' });
@@ -594,6 +595,9 @@ describe('Disputas', () => {
     expect(notices).toContainEqual(
       expect.objectContaining({ kind: 'debtCharged', amount: 2340, cause: 'dispute_lost' }),
     );
+    expect((await new PayoutsReportsService(db.port()).summary(A)).debts).toEqual([
+      expect.objectContaining({ reason: 'DISPUTE_FEE', fromWonDispute: false }),
+    ]);
     expect(await invariantViolations()).toEqual([]);
 
     // La deuda se compensa con la próxima venta en euros.
@@ -659,7 +663,130 @@ describe('Disputas', () => {
     });
   });
 
-  it('ganada sin que Stripe devuelva la tasa: la asume la plataforma, con asiento y alerta', async () => {
+  it('ganada sin que Stripe devuelva la tasa (por defecto): deuda DISPUTE_FEE de 2000 del creador, idempotente y compensada con la próxima venta', async () => {
+    const s = await transferredSale({ fee: 340 });
+    seedDispute(fake, {
+      id: 'dp_fee_creator',
+      chargeId: s.chargeId,
+      amount: 10000,
+      currency: 'eur',
+      status: 'won',
+      withdrawn: { amount: 10000, fee: 2000, currency: 'eur' },
+      reinstated: { amount: 10000, fee: 0, currency: 'eur' },
+    });
+    await disputeEvent('charge.dispute.closed', 'dp_fee_creator');
+    // Lo revertido (9160) vuelve entero al creador …
+    expect(
+      transfers.all
+        .filter((t) => t['transfer_group'] === 'didacta_dispute_dp_fee_creator')
+        .map((t) => t['amount']),
+    ).toEqual([9160]);
+    // … y la tasa que Stripe no devolvió es deuda suya, exactamente 2000.
+    expect(debtRows()).toEqual([
+      expect.objectContaining({
+        reason: 'DISPUTE_FEE',
+        amountOriginal: 2000,
+        amountOutstanding: 2000,
+        status: 'OPEN',
+        originSaleId: s.saleId,
+      }),
+    ]);
+    expect(lossEntries(s.saleId)).toEqual({
+      DISPUTE_WITHDRAWN: -10000,
+      DISPUTE_REINSTATED: 10000,
+      DISPUTE_FEE: -2000,
+      PLATFORM_FEE_REFUND: 500,
+      PLATFORM_FEE: -500,
+      TRANSFER_REVERSAL: 9160,
+      TRANSFER: -9160,
+      ADJUSTMENT: 0,
+      DEBT_CREATED: 2000,
+    });
+    expect(
+      db
+        .rows('modPayoutsLedgerEntry', { type: 'ADJUSTMENT' })
+        .filter((e) => (e['idempotencyKey'] as string).endsWith(':won-cost')),
+    ).toEqual([]);
+    expect(alerts.map((a) => a['alert'])).not.toContain('payouts.platform_absorbed');
+    expect(notices).toContainEqual(
+      expect.objectContaining({ kind: 'debtCharged', amount: 2000, cause: 'dispute_won' }),
+    );
+    // «Tus ventas» la distingue de la de una disputa perdida (las dos son DISPUTE_FEE).
+    const summary = await new PayoutsReportsService(db.port()).summary(A);
+    expect(summary.debts).toEqual([
+      expect.objectContaining({ reason: 'DISPUTE_FEE', fromWonDispute: true, frozen: false }),
+    ]);
+    expect(await debts.listOpen(A)).toEqual([
+      expect.objectContaining({ amountOutstanding: 2000, fromWonDispute: true }),
+    ]);
+    expect(await invariantViolations()).toEqual([]);
+    expect(ledgerTotal()).toBe(0);
+
+    // Reentrega del mismo evento (y del de dinero devuelto): una sola deuda.
+    await disputeEvent('charge.dispute.closed', 'dp_fee_creator');
+    await disputeEvent('charge.dispute.funds_reinstated', 'dp_fee_creator');
+    expect(debtRows()).toHaveLength(1);
+    expect(notices.filter((n) => n['cause'] === 'dispute_won')).toHaveLength(1);
+    expect(await invariantViolations()).toEqual([]);
+
+    // Se descuenta de la próxima venta en euros.
+    const next = await transferredSale({});
+    expect(sale(next.saleId)).toMatchObject({ debtNetted: 2000, transferAmount: 7325 });
+    expect(debtRows()).toEqual([
+      expect.objectContaining({ reason: 'DISPUTE_FEE', amountOutstanding: 0, status: 'RECOVERED' }),
+    ]);
+    expect(await invariantViolations()).toEqual([]);
+  });
+
+  it('ganada tras revertir solo parte al creador: la deuda DISPUTE se cancela y la DISPUTE_FEE es solo la tasa', async () => {
+    const s = await transferredSale({ fee: 340 });
+    world.setBalance(ACCT_A, 'eur', 5000);
+    seedDispute(fake, {
+      id: 'dp_part',
+      chargeId: s.chargeId,
+      amount: 10000,
+      currency: 'eur',
+      status: 'under_review',
+      withdrawn: { amount: 10000, fee: 2000, currency: 'eur' },
+    });
+    await disputeEvent('charge.dispute.funds_withdrawn', 'dp_part');
+    expect(world.reversals.map((r) => r['amount'])).toEqual([5000]);
+    expect(debtRows()).toEqual([
+      expect.objectContaining({ reason: 'DISPUTE', amountOutstanding: 4160 }),
+    ]);
+
+    seedDispute(fake, {
+      id: 'dp_part',
+      chargeId: s.chargeId,
+      amount: 10000,
+      currency: 'eur',
+      status: 'won',
+      withdrawn: { amount: 10000, fee: 2000, currency: 'eur' },
+      reinstated: { amount: 10000, fee: 0, currency: 'eur' },
+    });
+    await disputeEvent('charge.dispute.funds_reinstated', 'dp_part');
+    await disputeEvent('charge.dispute.closed', 'dp_part');
+
+    // Se le devuelve solo lo que de verdad se le quitó (5000) …
+    expect(
+      transfers.all
+        .filter((t) => t['transfer_group'] === 'didacta_dispute_dp_part')
+        .map((t) => t['amount']),
+    ).toEqual([5000]);
+    // … la deuda de lo no revertido se cancela, y la tasa es una deuda aparte de 2000.
+    expect(debtRows({ reason: 'DISPUTE' })).toEqual([
+      expect.objectContaining({ amountOutstanding: 0, status: 'WRITTEN_OFF' }),
+    ]);
+    expect(debtRows({ status: 'OPEN' })).toEqual([
+      expect.objectContaining({ reason: 'DISPUTE_FEE', amountOutstanding: 2000 }),
+    ]);
+    expect(alerts.map((a) => a['alert'])).not.toContain('payouts.platform_absorbed');
+    expect(await invariantViolations()).toEqual([]);
+    expect(ledgerTotal()).toBe(0);
+  });
+
+  it('ganada con la política «platform»: la tasa no devuelta la asume la plataforma, con asiento y alerta', async () => {
+    build({ ...DEFAULT_LOSS_POLICY, disputeWonFeeBearer: 'platform' });
     const s = await transferredSale({ fee: 340 });
     seedDispute(fake, {
       id: 'dp_fee',
@@ -679,6 +806,8 @@ describe('Disputas', () => {
       .filter((e) => (e['idempotencyKey'] as string).endsWith(':won-cost'));
     expect(adjustments.map((e) => e['amount'])).toEqual([2000]);
     expect(alerts.map((a) => a['alert'])).toContain('payouts.platform_absorbed');
+    expect(debtRows()).toHaveLength(0);
+    expect(notices.filter((n) => n['kind'] === 'debtCharged')).toEqual([]);
     expect(await invariantViolations()).toEqual([]);
   });
 

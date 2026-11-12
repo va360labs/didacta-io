@@ -221,6 +221,8 @@ export {
   PayoutsDebtsService,
   createDebt,
   frozenDisputeSaleIds,
+  wonDisputeFeeDebtIds,
+  DISPUTE_WON_FEE_DEBT_PART,
   netAgainstPendingSale,
 } from './debts.service.js';
 export type {

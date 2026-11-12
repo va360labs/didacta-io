@@ -52,6 +52,8 @@ export const PLATFORM_PAYMENTS_ENV = {
   refundPlatformFee: 'PAYMENTS_PLATFORM_REFUND_PLATFORM_FEE',
   refundCardFeeBearer: 'PAYMENTS_PLATFORM_REFUND_CARD_FEE_BEARER',
   disputeLossBearer: 'PAYMENTS_PLATFORM_DISPUTE_LOSS_BEARER',
+  /** Tasa de una disputa GANADA (Stripe no la devuelve): por defecto, el creador. */
+  disputeWonFeeBearer: 'PAYMENTS_PLATFORM_DISPUTE_WON_FEE_BEARER',
   /** Correo del operador para las alertas de dinero (opcional). */
   operatorAlertEmail: 'PAYMENTS_PLATFORM_OPERATOR_ALERT_EMAIL',
 } as const;
@@ -279,6 +281,7 @@ const enabledSchema = z.object({
   refundPlatformFee: z.enum(['proportional', 'none']).default('proportional'),
   refundCardFeeBearer: z.enum(['creator', 'platform']).default('creator'),
   disputeLossBearer: z.enum(['creator', 'platform']).default('creator'),
+  disputeWonFeeBearer: z.enum(['creator', 'platform']).default('creator'),
   operatorAlertEmail: z.string().email('debe ser un correo electrónico').optional(),
 });
 
@@ -351,6 +354,7 @@ export function loadPlatformPaymentsConfig(
       refundPlatformFee: data.refundPlatformFee === 'proportional',
       refundCardFeeBearer: data.refundCardFeeBearer,
       disputeLossBearer: data.disputeLossBearer,
+      disputeWonFeeBearer: data.disputeWonFeeBearer,
     }),
     operatorAlertEmail: data.operatorAlertEmail ?? null,
   });

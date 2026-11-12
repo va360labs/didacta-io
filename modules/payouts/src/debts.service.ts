@@ -113,6 +113,52 @@ export async function frozenDisputeSaleIds(tx: PayoutsTx, tenantId: string): Pro
   return [...new Set(rows.map((row) => row.saleId))];
 }
 
+/**
+ * Parte de la clave del asiento `DEBT_CREATED` de la deuda por la tasa de una
+ * disputa GANADA (`payouts:dispute:<id>:debt-won-fee`): con ella «Tus ventas»
+ * distingue esa deuda de la de una disputa perdida (las dos son `DISPUTE_FEE`).
+ */
+export const DISPUTE_WON_FEE_DEBT_PART = 'debt-won-fee';
+
+/**
+ * De estas deudas, cuáles son la tasa de una disputa GANADA (Stripe no la
+ * devuelve y la paga el creador). Exacto: por la clave de su asiento.
+ */
+export async function wonDisputeFeeDebtIds(
+  tx: PayoutsTx,
+  tenantId: string,
+  debts: ReadonlyArray<{ readonly reason: string; readonly originSaleId: string | null }>,
+): Promise<Set<string>> {
+  const out = new Set<string>();
+  const saleIds = [
+    ...new Set(
+      debts
+        .filter((d) => d.reason === 'DISPUTE_FEE' && d.originSaleId !== null)
+        .map((d) => d.originSaleId as string),
+    ),
+  ];
+  if (saleIds.length === 0) return out;
+  const won = await tx.modPayoutsDispute.findMany({
+    where: { tenantId, saleId: { in: saleIds }, outcome: 'won' },
+    select: { id: true },
+  });
+  if (won.length === 0) return out;
+  const entries = await tx.modPayoutsLedgerEntry.findMany({
+    where: {
+      tenantId,
+      idempotencyKey: {
+        in: won.map((d) => IDEMPOTENCY_KEYS.disputeEntry(d.id, DISPUTE_WON_FEE_DEBT_PART)),
+      },
+    },
+    select: { metadata: true },
+  });
+  for (const entry of entries) {
+    const debtId = (entry.metadata as { debtId?: unknown } | null)?.debtId;
+    if (typeof debtId === 'string') out.add(debtId);
+  }
+  return out;
+}
+
 /** Filtro de Prisma para dejar fuera las deudas congeladas. */
 export function unfrozenDebtsWhere(frozenSaleIds: readonly string[]): Record<string, unknown> {
   return frozenSaleIds.length === 0
@@ -223,6 +269,8 @@ export interface DebtView {
   readonly saleDescription: string | null;
   /** Deuda de una disputa aún abierta: no se cobra hasta que se decida. */
   readonly frozen: boolean;
+  /** La tasa de una disputa que se GANÓ (Stripe no la devuelve): se explica aparte. */
+  readonly fromWonDispute: boolean;
 }
 
 export interface DebtRecoveryReport {
@@ -288,6 +336,7 @@ export class PayoutsDebtsService {
           })
         : [];
       const description = new Map(sales.map((s) => [s.id, s.description]));
+      const wonFee = await wonDisputeFeeDebtIds(tx, tenantId, debts);
       return debts.map((debt) => ({
         id: debt.id,
         reason: debt.reason,
@@ -301,6 +350,7 @@ export class PayoutsDebtsService {
           debt.reason === 'DISPUTE' &&
           debt.originSaleId !== null &&
           frozen.includes(debt.originSaleId),
+        fromWonDispute: wonFee.has(debt.id),
       }));
     });
   }
