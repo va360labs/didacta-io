@@ -809,10 +809,16 @@ importers:
       '@didacta/database':
         specifier: workspace:*
         version: link:../../packages/database
+      pdfkit:
+        specifier: ^0.16.0
+        version: 0.16.0
     devDependencies:
       '@types/node':
         specifier: ^22.10.2
         version: 22.19.17
+      '@types/pdfkit':
+        specifier: ^0.13.9
+        version: 0.13.9
       typescript:
         specifier: ^5.7.2
         version: 5.9.3
@@ -4377,6 +4383,7 @@ packages:
 
   crypto-js@4.2.0:
     resolution: {integrity: sha512-KALDyEYgpY+Rlob/iriUtjV6d5Eq+Y191A5g4UqLAi8CyGP9N1+FdVbkc1SxKc2r4YAYqG8JzO2KGL+AizD70Q==}
+    deprecated: Active development of CryptoJS has been discontinued. This library is no longer maintained.
 
   css-tree@3.2.1:
     resolution: {integrity: sha512-X7sjQzceUhu1u7Y/ylrRZFU2FS6LRiFVp6rKLPg23y3x3c3DOKAwuXGDp+PAGjh6CSnCjYeAul8pcT8bAl+lSA==}

@@ -268,6 +268,77 @@ export type {
 export { PayoutsSettingsService } from './settings.service.js';
 export type { PayoutsSettingsView } from './settings.service.js';
 
+// Condiciones legales: datos fiscales del creador (factura y DAC7) y factura
+// mensual de la comisión.
+export {
+  EU_VAT_PREFIX_BY_COUNTRY,
+  checkSpanishNif,
+  checkTaxId,
+  checkVatId,
+  compactTaxId,
+  isEuVatCountry,
+  taxIdHint,
+} from './tax/tax-ids.js';
+export type { SpanishNifCheck, SpanishNifKind, TaxIdCheck, VatIdCheck } from './tax/tax-ids.js';
+export { FetchViesClient, VIES_CHECK_URL } from './tax/vies.js';
+export type { FetchViesClientOptions, ViesClient, ViesResult } from './tax/vies.js';
+export {
+  PayoutsTaxProfileService,
+  TAX_PROFILE_HOLD_REASON,
+  checkBirthDate,
+  identityFromStripe,
+  missingFields,
+} from './tax/tax-profile.service.js';
+export type {
+  PayoutsCipher,
+  TaxAddress,
+  TaxEntityType,
+  TaxField,
+  TaxFieldProblems,
+  TaxProfileFull,
+  TaxProfileInput,
+  TaxProfileServiceOptions,
+  TaxProfileView,
+  TaxSensitiveData,
+  VatStatus,
+} from './tax/tax-profile.service.js';
+export {
+  ES_VAT_RATE_BPS,
+  regimeMention,
+  spanishSpecialTerritory,
+  splitVatIncluded,
+  vatRateBpsFor,
+  vatRegimeFor,
+} from './invoices/vat.js';
+export type { VatRegime } from './invoices/vat.js';
+export {
+  INVOICE_TIME_ZONE,
+  madridDate,
+  madridMidnight,
+  madridToday,
+  monthKey,
+  monthPeriod,
+  parseMonthKey,
+  previousMonthKey,
+} from './invoices/periods.js';
+export type { MonthKey } from './invoices/periods.js';
+export {
+  formatInvoiceAmount,
+  formatInvoiceDate,
+  pdfSafe,
+  renderInvoicePdf,
+} from './invoices/invoice-pdf.js';
+export type { InvoicePdfInput, InvoicePdfItem, InvoicePdfParty } from './invoices/invoice-pdf.js';
+export { PayoutsInvoicesService } from './invoices/invoices.service.js';
+export type {
+  InvoiceIssuer,
+  InvoiceRunReport,
+  InvoiceView,
+  InvoicesServiceOptions,
+  InvoicingConfig,
+  IssueOutcome,
+} from './invoices/invoices.service.js';
+
 export { InMemoryPlatformStripeClient } from './stripe/platform-stripe.fake.js';
 export type {
   FakeStripeCall,
@@ -312,6 +383,9 @@ export {
   PayoutsRefundExceedsRemainingError,
   PayoutsRefundRejectedError,
   PayoutsPriceCurrencyError,
+  PayoutsTaxProfileInvalidError,
+  PayoutsInvoiceNotFoundError,
+  PayoutsInvoicingDisabledError,
   PlatformStripeConfigError,
   PlatformStripeApiError,
 } from './errors.js';

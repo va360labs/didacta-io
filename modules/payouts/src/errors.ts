@@ -69,6 +69,45 @@ export class PayoutsPriceCurrencyError extends PayoutsError {
   }
 }
 
+/**
+ * Los datos fiscales no valen. `detail` = `campo:motivo` separados por comas
+ * (`taxId:check_digit,birthDate:required`), para que la web marque cada campo.
+ */
+export class PayoutsTaxProfileInvalidError extends PayoutsError {
+  constructor(public readonly fields: Readonly<Record<string, string>>) {
+    const detail = Object.entries(fields)
+      .map(([field, reason]) => `${field}:${reason}`)
+      .join(',');
+    super(
+      'Revisa tus datos fiscales: hay campos que faltan o no son válidos.',
+      'PAYOUTS_TAX_PROFILE_INVALID',
+      {
+        detail,
+      },
+    );
+    this.name = 'PayoutsTaxProfileInvalidError';
+  }
+}
+
+/** No hay factura con ese id en esta academia. */
+export class PayoutsInvoiceNotFoundError extends PayoutsError {
+  constructor() {
+    super('Factura no encontrada.', 'PAYOUTS_INVOICE_NOT_FOUND');
+    this.name = 'PayoutsInvoiceNotFoundError';
+  }
+}
+
+/** La facturación no está configurada (faltan los datos del emisor). */
+export class PayoutsInvoicingDisabledError extends PayoutsError {
+  constructor() {
+    super(
+      'La facturación de la comisión no está activada en esta instalación.',
+      'PAYOUTS_INVOICING_DISABLED',
+    );
+    this.name = 'PayoutsInvoicingDisabledError';
+  }
+}
+
 /** La comisión del operador no es un entero entre 0 y 3000 puntos básicos. */
 export class PayoutsInvalidFeeBpsError extends PayoutsError {
   constructor(value: unknown) {
