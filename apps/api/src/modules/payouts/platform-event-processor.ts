@@ -250,7 +250,16 @@ export class PlatformEventProcessor {
       (ref): ref is ObjectRef => !!ref && SUBSCRIPTION_REF_SOURCES.has(ref.source),
     );
     if (subscriptionSession || route.family === 'invoice') {
-      return this.subscriptionMoney(event, route, tenantId, subscriptionSession ?? null, fail);
+      const subscription = await this.subscriptionMoney(
+        event,
+        route,
+        tenantId,
+        subscriptionSession ?? null,
+        fail,
+      );
+      // `null`: no era nada de la suscripción; el evento sigue su camino (un
+      // `charge.*` atribuido por la sesión de origen se liquida como cualquiera).
+      if (subscription) return subscription;
     }
 
     if (SALE_EVENT_TYPES.has(event.type) && sessionRef?.source === 'billing') {
@@ -328,6 +337,11 @@ export class PlatformEventProcessor {
    *    nada. `invoice.payment_failed` no mueve dinero.
    *  - Renovación cobrada con la cuenta del creador restringida → la venta se
    *    anota y la liquidación la retiene; alerta para el operador.
+   *
+   * Devuelve `null` si al evento no le queda nada de la suscripción: Stripe
+   * también encuentra la sesión de una suscripción por el PaymentIntent de su
+   * primera factura, así que un `charge.*` puede llegar aquí por la sesión de
+   * origen y tiene que seguir a la liquidación del cargo.
    */
   private async subscriptionMoney(
     event: PlatformStripeEvent,
@@ -339,7 +353,7 @@ export class PlatformEventProcessor {
     sale?: PlatformWebhookResult['sale'];
     settlement?: PlatformWebhookResult['settlement'];
     error: string | null;
-  }> {
+  } | null> {
     const deps = { db: this.runtime.db, stripe: this.runtime.stripe };
     if (
       sessionRef &&
@@ -351,6 +365,7 @@ export class PlatformEventProcessor {
         return { error: fail('subscription_refs', err, { sessionId: sessionRef.stripeObjectId }) };
       }
     }
+    if (route.family !== 'invoice') return null;
     if (event.type !== 'invoice.paid' || !route.primaryId) return { error: null };
 
     let recorded: InvoiceSaleOutcome;

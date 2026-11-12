@@ -66,6 +66,8 @@ describeWithDb('Membresías por la plataforma — Postgres real como didacta_app
   const fake = new InMemoryPlatformStripeClient({ livemode: false });
   const transfers: StripeObject[] = [];
   const sessionBySubscription = new Map<string, string>();
+  /** Stripe también encuentra la sesión por el PaymentIntent de la PRIMERA factura (visto en el sandbox). */
+  const sessionByPaymentIntent = new Map<string, string>();
   const published: Array<{ tenantId: string; name: string }> = [];
   const logger = { error: vi.fn(), warn: vi.fn(), log: vi.fn() };
 
@@ -145,7 +147,10 @@ describeWithDb('Membresías por la plataforma — Postgres real como didacta_app
       }));
       // La sesión de una suscripción se encuentra por la suscripción (no tiene PaymentIntent).
       fake.on('GET', '/v1/checkout/sessions', (req) => {
-        const id = sessionBySubscription.get(String(req.params['subscription']));
+        const id =
+          req.params['subscription'] !== undefined
+            ? sessionBySubscription.get(String(req.params['subscription']))
+            : sessionByPaymentIntent.get(String(req.params['payment_intent']));
         return { object: 'list', has_more: false, data: id ? [{ id }] : [] };
       });
 
@@ -542,6 +547,44 @@ describeWithDb('Membresías por la plataforma — Postgres real como didacta_app
         where: { tenantId: A, stripeInvoiceId: { in: [first.invoiceId, renewal.invoiceId] } },
       }),
     ).toBe(2);
+  });
+
+  it('charge.succeeded del primer cobro antes que nada (Stripe da la sesión por su PaymentIntent) → ata los hijos y sigue a la liquidación', async () => {
+    const m = await membershipCheckout(A);
+    const first = paidInvoice(m, { amount: 2900, fee: 69, reason: 'subscription_create' });
+    sessionByPaymentIntent.set(first.piId, m.sessionId);
+    const charge = {
+      id: first.chId,
+      object: 'charge',
+      payment_intent: first.piId,
+      customer: m.cusId,
+      on_behalf_of: ACCT[A],
+    };
+    const succeeded = await platform.handle(signed('charge.succeeded', charge, evtId('chfirst')));
+    // Aún no hay venta (la crea invoice.paid), pero el cargo pasó por la liquidación.
+    expect(succeeded).toEqual({ received: true, outcome: 'processed', settlement: 'no_sale' });
+    expect(
+      await admin.modPayoutsObjectRef.findUniqueOrThrow({ where: { stripeObjectId: m.subId } }),
+    ).toMatchObject({ tenantId: A, parentObjectId: m.sessionId });
+
+    await platform.handle(
+      signed('checkout.session.completed', completedObject(m), evtId('cfirst')),
+    );
+    const paid = await platform.handle(signed('invoice.paid', first.invoice, evtId('pfirst')));
+    expect(paid).toEqual({
+      received: true,
+      outcome: 'processed',
+      sale: 'created',
+      settlement: 'transferred',
+    });
+    // Un charge.updated posterior se atribuye ya por el registro y no transfiere dos veces.
+    const updated = await platform.handle(signed('charge.updated', charge, evtId('ufirst')));
+    expect(updated).toEqual({
+      received: true,
+      outcome: 'processed',
+      settlement: 'already_settled',
+    });
+    expect(transfers.filter((t) => t['source_transaction'] === first.chId)).toHaveLength(1);
   });
 
   it('prueba de 7 días: la factura de 0 € no crea venta; la primera con importe, sí', async () => {
