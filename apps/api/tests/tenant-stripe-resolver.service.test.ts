@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   TenantStripeResolverService,
+  buildGlobalFallbackFlagReader,
+  type GlobalFallbackPolicyStore,
   type ResolvedStripeCredentials,
 } from '../src/modules/tenant-stripe-resolver.service';
 
@@ -238,13 +240,36 @@ describe('TenantStripeResolverService', () => {
       expect(result.credentials.secretKey).toBe('sk_test_tenantA');
     });
 
-    it('si el lector revienta se asume permitido: un fallo de BD no corta los cobros', async () => {
+    it('si el lector revienta y no hay valor previo NO se hereda: el dinero no va a la cuenta de otro por un fallo de BD', async () => {
+      // Antes se asumía permitido. En un servidor con varias aulas eso mandaba
+      // los cobros de un aula a la cuenta del operador justo cuando no se podía
+      // comprobar si estaba permitido. Un checkout que falla se reintenta; un
+      // cobro en la cuenta equivocada, no.
       const config = makeTenantConfig();
       const r = new TenantStripeResolverService(config as never, async () => {
         throw new Error('BD caída');
       });
-      const result = (await r.resolve(TENANT_B)) as ResolvedStripeCredentials;
-      expect(result.source).toBe('global');
+      expect(await r.resolve(TENANT_B)).toBeNull();
+    });
+
+    it('si el lector revienta pero hubo un valor previo, se mantiene ese (y el fallo no se cachea)', async () => {
+      const config = makeTenantConfig();
+      let lecturas = 0;
+      let rota = false;
+      const r = new TenantStripeResolverService(config as never, async () => {
+        lecturas += 1;
+        if (rota) throw new Error('BD caída');
+        return true;
+      });
+      expect(((await r.resolve(TENANT_B)) as ResolvedStripeCredentials).source).toBe('global');
+
+      // Caduca el cache (sin invalidar el último valor conocido) y la BD se cae.
+      rota = true;
+      (r as unknown as { flagCache: { expiresAt: number } }).flagCache.expiresAt = 0;
+      expect(((await r.resolve(TENANT_B)) as ResolvedStripeCredentials).source).toBe('global');
+      // Vuelve a intentarlo en la siguiente llamada: el fallo no se cachea.
+      await r.resolve(TENANT_B);
+      expect(lecturas).toBe(3);
     });
 
     it('cachea el flag: resolve() corre en cada checkout y no puede ir a BD siempre', async () => {
@@ -275,6 +300,110 @@ describe('TenantStripeResolverService', () => {
       const result = (await r.resolve(TENANT_B)) as ResolvedStripeCredentials;
       expect(result.source).toBe('global');
       expect(lecturas).toBe(2);
+    });
+  });
+
+  /**
+   * La política de verdad (la que montan `ModuleRegistryService` y `AuthModule`).
+   *
+   * El valor por defecto era «permitido» siempre. En la instalación de UNA aula
+   * es lo correcto —el dueño de la instancia y el del aula son la misma persona—
+   * pero en un servidor con varias, el aula que no había configurado su Stripe
+   * cobraba a sus alumnos con la cuenta del operador sin que nadie lo decidiera.
+   */
+  describe('política del fallback global (buildGlobalFallbackFlagReader)', () => {
+    function store(opts: { setting?: unknown; aulas: number }) {
+      const calls = { count: 0, where: undefined as unknown };
+      const s: GlobalFallbackPolicyStore = {
+        instanceSetting: {
+          findUnique: async () => (opts.setting === undefined ? null : { valueJson: opts.setting }),
+        },
+        tenant: {
+          count: async (args) => {
+            calls.count += 1;
+            calls.where = args.where;
+            return opts.aulas;
+          },
+        },
+      };
+      return { s, calls };
+    }
+
+    it('UNA sola aula y nadie ha dicho nada → permitido (la edición Community no cambia)', async () => {
+      const { s } = store({ aulas: 1 });
+      expect(await buildGlobalFallbackFlagReader(s, {})()).toBe(true);
+    });
+
+    it('instancia recién creada, aún sin aulas → permitido', async () => {
+      const { s } = store({ aulas: 0 });
+      expect(await buildGlobalFallbackFlagReader(s, {})()).toBe(true);
+    });
+
+    it('VARIAS aulas y nadie ha dicho nada → NO permitido', async () => {
+      const { s, calls } = store({ aulas: 2 });
+      expect(await buildGlobalFallbackFlagReader(s, {})()).toBe(false);
+      // Las archivadas no cuentan: un aula dada de baja no convierte la
+      // instancia en multi-aula.
+      expect(calls.where).toEqual({ status: { not: 'ARCHIVED' }, deletedAt: null });
+    });
+
+    it('VARIAS aulas con STRIPE_ALLOW_GLOBAL_FALLBACK=true → permitido (mismo dueño, decisión explícita)', async () => {
+      const { s, calls } = store({ aulas: 5 });
+      const env = { STRIPE_ALLOW_GLOBAL_FALLBACK: ' TRUE ' };
+      expect(await buildGlobalFallbackFlagReader(s, env)()).toBe(true);
+      expect(calls.count).toBe(0);
+    });
+
+    it('UNA aula con STRIPE_ALLOW_GLOBAL_FALLBACK=false → NO permitido', async () => {
+      const { s } = store({ aulas: 1 });
+      const env = { STRIPE_ALLOW_GLOBAL_FALLBACK: 'false' };
+      expect(await buildGlobalFallbackFlagReader(s, env)()).toBe(false);
+    });
+
+    it('el setting de instancia manda sobre la variable y sobre el recuento', async () => {
+      const permitido = store({ setting: true, aulas: 9 });
+      expect(
+        await buildGlobalFallbackFlagReader(permitido.s, {
+          STRIPE_ALLOW_GLOBAL_FALLBACK: 'false',
+        })(),
+      ).toBe(true);
+
+      const prohibido = store({ setting: false, aulas: 1 });
+      expect(
+        await buildGlobalFallbackFlagReader(prohibido.s, {
+          STRIPE_ALLOW_GLOBAL_FALLBACK: 'true',
+        })(),
+      ).toBe(false);
+    });
+
+    it('un setting que no es booleano o una variable ilegible no deciden nada: se cae al recuento', async () => {
+      const { s } = store({ setting: 'sí', aulas: 3 });
+      const env = { STRIPE_ALLOW_GLOBAL_FALLBACK: 'quizá' };
+      expect(await buildGlobalFallbackFlagReader(s, env)()).toBe(false);
+    });
+
+    it('integrado con el resolutor: en un servidor con dos aulas, la que no tiene Stripe NO hereda el de instancia', async () => {
+      process.env['STRIPE_SECRET_KEY'] = 'sk_test_global';
+      process.env['STRIPE_WEBHOOK_SECRET'] = 'whsec_global';
+      const config = makeTenantConfig();
+      config.seed(TENANT_A, 'billing', 'stripe', VALID_TENANT_CREDS);
+
+      const multi = new TenantStripeResolverService(
+        config as never,
+        buildGlobalFallbackFlagReader(store({ aulas: 2 }).s, {}),
+      );
+      expect(await multi.resolve(TENANT_B)).toBeNull();
+      // La que sí tiene lo suyo no se entera.
+      expect(((await multi.resolve(TENANT_A)) as ResolvedStripeCredentials).source).toBe(
+        'tenant_unverified',
+      );
+
+      // Control: la misma instancia con una sola aula sigue cobrando por env.
+      const single = new TenantStripeResolverService(
+        config as never,
+        buildGlobalFallbackFlagReader(store({ aulas: 1 }).s, {}),
+      );
+      expect(((await single.resolve(TENANT_B)) as ResolvedStripeCredentials).source).toBe('global');
     });
   });
 });

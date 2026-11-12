@@ -13,7 +13,11 @@ import { PrismaTenantConfigService } from '../modules/prisma-tenant-config.servi
 import { SecretCipherService } from '../modules/secret-cipher.service';
 import { SmtpAdapterService } from '../modules/smtp-adapter.service';
 import { TenantSmtpResolverService } from '../modules/tenant-smtp-resolver.service';
-import { TenantStripeResolverService } from '../modules/tenant-stripe-resolver.service';
+import {
+  TenantStripeResolverService,
+  buildGlobalFallbackFlagReader,
+  type GlobalFallbackPolicyStore,
+} from '../modules/tenant-stripe-resolver.service';
 import { ApiKeyController } from './api-key.controller';
 import { MeController } from './me.controller';
 import { JwtOrApiKeyGuard } from './api-key.guard';
@@ -128,10 +132,20 @@ function loadCipherKeyForAuth(): string {
     // (mod.billing/mod.subscriptions/webhooks/admin-stripe). Mismo criterio
     // que TenantSmtpResolverService: depende de la interface del kernel
     // (TenantConfigService), NestJS no la resuelve sola.
+    //
+    // Lleva el MISMO candado del fallback global que la instancia que monta
+    // `ModuleRegistryService` para los checkouts. Antes esta se construía sin
+    // él: con el fallback apagado, el checkout de un aula sin Stripe fallaba
+    // (bien) pero su webhook seguía dando por buena la firma de la cuenta de
+    // instancia y el panel seguía diciendo que había fallback.
     {
       provide: TenantStripeResolverService,
-      inject: [PrismaTenantConfigService],
-      useFactory: (config: PrismaTenantConfigService) => new TenantStripeResolverService(config),
+      inject: [PrismaTenantConfigService, PrismaService],
+      useFactory: (config: PrismaTenantConfigService, prisma: PrismaService) =>
+        new TenantStripeResolverService(
+          config,
+          buildGlobalFallbackFlagReader(prisma as unknown as GlobalFallbackPolicyStore),
+        ),
     },
     // MfaPolicyService — orquesta CRUD de la política tenant-wide y la
     // evaluación del enforcement en el flujo de login. Inyectamos manual

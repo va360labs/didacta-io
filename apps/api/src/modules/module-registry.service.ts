@@ -122,6 +122,8 @@ import { buildCourseSaleChecker } from './course-sale-checker';
 import { ModuleContextFactory } from './module-context.factory';
 import {
   TenantStripeResolverService,
+  buildGlobalFallbackFlagReader,
+  type GlobalFallbackPolicyStore,
   type StripeCredentials as BillingStripeCredentials,
 } from './tenant-stripe-resolver.service';
 
@@ -352,28 +354,19 @@ export class ModuleRegistryService implements OnModuleInit {
     // disponibilidad real de Stripe se decide per-tenant, per-llamada dentro
     // de `stripeFor`/`subscriptionsStripeFor` (StripeConfigMissingError se
     // propaga desde ahí cuando ni el tenant ni la instancia tienen key).
-    // El 2º argumento es el candado `billing.allowGlobalStripeFallback`: con él
-    // a `false`, un tenant sin credenciales propias NO hereda las de instancia
-    // (en un pool multi-tenant heredarlas mete el dinero de sus alumnos en la
-    // cuenta del operador). Se lee de `core_instance_setting`, tabla global sin
-    // `tenant_id` — RLS no aplica —, y el resolutor lo cachea 60 s.
-    const prismaForFlag = this.factory.getPrisma() as unknown as {
-      instanceSetting: {
-        findUnique(args: {
-          where: { scope_key: { scope: string; key: string } };
-        }): Promise<{ valueJson: unknown } | null>;
-      };
-    };
+    // El 2º argumento es el candado del fallback global: un tenant sin
+    // credenciales propias solo hereda las de instancia si el operador lo ha
+    // dicho o si la instancia tiene una única aula (en un servidor con varias,
+    // heredarlas mete el dinero de sus alumnos en la cuenta del operador). La
+    // política vive en `buildGlobalFallbackFlagReader`; lee `core_instance_setting`
+    // y `tenant`, tablas globales sin `tenant_id` — RLS no aplica —, y el
+    // resolutor la cachea 60 s. Es la MISMA que usa la instancia de DI de
+    // `AuthModule` (webhooks y panel): antes aquella no llevaba candado.
     this.stripeResolver = new TenantStripeResolverService(
       this.factory.getTenantConfig(),
-      async () => {
-        const row = await prismaForFlag.instanceSetting.findUnique({
-          where: { scope_key: { scope: 'billing', key: 'allowGlobalStripeFallback' } },
-        });
-        // Ausente o cualquier cosa que no sea `false` → permitido (default seguro
-        // para el self-hoster que actualiza y hoy cobra por env).
-        return row?.valueJson !== false;
-      },
+      buildGlobalFallbackFlagReader(
+        this.factory.getPrisma() as unknown as GlobalFallbackPolicyStore,
+      ),
     );
     // OJO con `??`: la plantilla del .env declara `STRIPE_WEBHOOK_SECRET=` y un
     // env_file convierte eso en CADENA VACÍA, no en undefined — con `??` el

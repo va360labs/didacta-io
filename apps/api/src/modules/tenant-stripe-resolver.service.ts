@@ -33,11 +33,71 @@ export interface ResolvedStripeCredentials {
 }
 
 /**
- * Lector del candado `billing.allowGlobalStripeFallback` (`instance_setting`).
- * Se inyecta como función y no como servicio para no arrastrar el grafo de DI
- * hasta aquí: este resolutor se construye A MANO en `ModuleRegistryService`.
+ * ¿Puede un tenant sin credenciales propias heredar las `STRIPE_*` de la
+ * instancia? Se inyecta como función y no como servicio para no arrastrar el
+ * grafo de DI hasta aquí: este resolutor se construye A MANO en
+ * `ModuleRegistryService` y con una factory en `AuthModule`. Las dos lo montan
+ * con `buildGlobalFallbackFlagReader`, que es donde vive la política.
  */
 export type GlobalFallbackFlagReader = () => Promise<boolean>;
+
+/** Subconjunto de Prisma que necesita la política del fallback global. */
+export interface GlobalFallbackPolicyStore {
+  instanceSetting: {
+    findUnique(args: {
+      where: { scope_key: { scope: string; key: string } };
+    }): Promise<{ valueJson: unknown } | null>;
+  };
+  tenant: {
+    count(args: { where: { status: { not: 'ARCHIVED' }; deletedAt: null } }): Promise<number>;
+  };
+}
+
+/** Variable de entorno que fija la política sin tocar la base. */
+export const STRIPE_ALLOW_GLOBAL_FALLBACK_ENV = 'STRIPE_ALLOW_GLOBAL_FALLBACK';
+
+/**
+ * Política del fallback global de Stripe. Por orden:
+ *
+ *  1. `core_instance_setting` `billing.allowGlobalStripeFallback` a `true` o
+ *     `false` → lo que diga. Es la decisión explícita del operador.
+ *  2. Env `STRIPE_ALLOW_GLOBAL_FALLBACK` a `true`/`false` → lo que diga. Misma
+ *     decisión, para quien despliega por variables y no quiere tocar la base.
+ *  3. Nadie ha dicho nada → se permite SOLO si la instancia tiene una única
+ *     aula (no archivada).
+ *
+ * El punto 3 es el cambio. Antes el valor por defecto era «permitido» siempre:
+ * correcto para la instalación de una sola academia (edición Community: el
+ * dueño de la instancia y el del aula son la misma persona, y cobrar por env es
+ * justo lo que quiere), pero en un servidor con VARIAS aulas significaba que el
+ * aula que no hubiera configurado su Stripe cobraba a sus alumnos con la cuenta
+ * del OPERADOR, en silencio y sin error. Con más de un aula, heredar la cuenta
+ * del operador tiene que ser una decisión, no un descuido.
+ *
+ * Quien tenga varias aulas PROPIAS cobrando a propósito con las `STRIPE_*` de
+ * instancia lo declara con `STRIPE_ALLOW_GLOBAL_FALLBACK=true` (o el setting) y
+ * sigue exactamente como estaba.
+ */
+export function buildGlobalFallbackFlagReader(
+  store: GlobalFallbackPolicyStore,
+  env: NodeJS.ProcessEnv = process.env,
+): GlobalFallbackFlagReader {
+  return async () => {
+    const row = await store.instanceSetting.findUnique({
+      where: { scope_key: { scope: 'billing', key: 'allowGlobalStripeFallback' } },
+    });
+    if (row?.valueJson === true || row?.valueJson === false) return row.valueJson;
+
+    const fromEnv = env[STRIPE_ALLOW_GLOBAL_FALLBACK_ENV]?.trim().toLowerCase();
+    if (fromEnv === 'true' || fromEnv === '1') return true;
+    if (fromEnv === 'false' || fromEnv === '0') return false;
+
+    const aulas = await store.tenant.count({
+      where: { status: { not: 'ARCHIVED' }, deletedAt: null },
+    });
+    return aulas <= 1;
+  };
+}
 
 /** Cuánto se cachea el candado. `resolve()` corre en cada checkout y en cada webhook. */
 const FLAG_CACHE_MS = 60_000;
@@ -56,10 +116,10 @@ const FLAG_CACHE_MS = 60_000;
  * —un pool donde conviven academias de distintos dueños— heredar la clave de
  * `STRIPE_SECRET_KEY` significa que el dinero de los alumnos de un tenant sin
  * configurar entra en la cuenta de Stripe del OPERADOR, en silencio y sin error.
- * Por eso existe el candado `billing.allowGlobalStripeFallback`: por defecto
- * `true` (no rompe a ningún self-hoster que hoy cobre por env), y a `false`
- * el escalón 2 desaparece y el tenant sin credenciales propias resuelve a
- * `null` → el checkout falla con un error claro en vez de cobrar mal.
+ * Por eso el escalón 2 tiene candado (`buildGlobalFallbackFlagReader`): sin
+ * decisión explícita del operador solo está abierto en la instancia de UNA
+ * aula; con varias, el tenant sin credenciales propias resuelve a `null` → el
+ * checkout falla con un error claro en vez de cobrar en la cuenta de otro.
  *
  * NO loguea credenciales nunca. Solo `source`/`verified` para poder
  * correlacionar fallos con el origen real sin filtrar secretos.
@@ -94,10 +154,18 @@ export class TenantStripeResolverService {
   }
 
   /**
-   * ¿Se permite heredar las credenciales de instancia? Default `true` para no
-   * cambiar el comportamiento de nadie que actualice. Si la lectura falla se
-   * asume `true` por la misma razón: un problema de BD no puede convertirse en
-   * un corte de cobros.
+   * ¿Se permite heredar las credenciales de instancia?
+   *
+   * Sin lector (el resolutor construido a pelo, como en los tests) se permite:
+   * es el comportamiento de siempre. Las dos construcciones de producción le
+   * pasan la política de `buildGlobalFallbackFlagReader`.
+   *
+   * Si la lectura falla se usa el último valor conocido y, si no hay ninguno,
+   * NO se permite. Antes se asumía «permitido» para que un fallo de BD no
+   * cortara los cobros; pero ese mismo fallo, en un servidor con varias aulas,
+   * mandaba el dinero de un aula a la cuenta del operador, que no se deshace.
+   * Un checkout que falla un momento se reintenta; un cobro en la cuenta
+   * equivocada, no. El fallo no se cachea: la siguiente llamada vuelve a leer.
    */
   private async globalFallbackAllowed(): Promise<boolean> {
     if (!this.readGlobalFallbackFlag) return true;
@@ -105,17 +173,21 @@ export class TenantStripeResolverService {
     const now = Date.now();
     if (this.flagCache && this.flagCache.expiresAt > now) return this.flagCache.value;
 
-    let value = true;
     try {
-      value = await this.readGlobalFallbackFlag();
+      const value = await this.readGlobalFallbackFlag();
+      this.flagCache = { value, expiresAt: now + FLAG_CACHE_MS };
+      return value;
     } catch (err) {
+      const stale = this.flagCache?.value;
       this.logger.warn(
-        `[stripe-resolver] no se pudo leer billing.allowGlobalStripeFallback: ` +
-          `${(err as Error).message.slice(0, 200)}. Se asume permitido.`,
+        `[stripe-resolver] no se pudo leer la política del fallback global de Stripe: ` +
+          `${(err as Error).message.slice(0, 200)}. ` +
+          (stale === undefined
+            ? 'Sin valor previo: NO se hereda la cuenta de instancia.'
+            : `Se mantiene el último valor conocido (${stale ? 'permitido' : 'no permitido'}).`),
       );
+      return stale ?? false;
     }
-    this.flagCache = { value, expiresAt: now + FLAG_CACHE_MS };
-    return value;
   }
 
   /** Variante solo-tenant, sin caer al fallback global — usada por el botón "Probar conexión" del panel. */
