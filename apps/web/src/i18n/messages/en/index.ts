@@ -58,6 +58,9 @@ import nav from './nav.json';
 import playersContenido from './playersContenido.json';
 import publicSite from './publicSite.json';
 import modoSencillo from './modoSencillo.json';
+import modoSencilloVentas from './modoSencilloVentas.json';
+import modoSencilloGestion from './modoSencilloGestion.json';
+import modoSencilloAprender from './modoSencilloAprender.json';
 import shell from './shell.json';
 
 export default {
@@ -108,5 +111,8 @@ export default {
   playersContenido,
   publicSite,
   modoSencillo,
+  modoSencilloVentas,
+  modoSencilloGestion,
+  modoSencilloAprender,
   shell,
 } as const;
