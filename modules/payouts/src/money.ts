@@ -175,6 +175,85 @@ export function computeProportionalReversal(input: ProportionalReversalInput): n
   return Math.min(target, input.transferAmount - alreadyReversed);
 }
 
+/** Reparto sellado de una venta: lo que necesita el cálculo de una devolución. */
+export interface SettledSaleAmounts {
+  readonly gross: number;
+  readonly stripeFee: number;
+  readonly platformFee: number;
+  readonly creatorNet: number;
+}
+
+/** De qué bolsillo sale una devolución (reembolso o disputa) de `amount` del bruto. */
+export interface GrossShares {
+  /** Lo que se devuelve, en la divisa de liquidación. */
+  readonly amount: number;
+  /** Parte que el creador había recibido (o iba a recibir). */
+  readonly creator: number;
+  /** Parte de la comisión del operador. */
+  readonly platform: number;
+  /** Parte de la comisión de Stripe (que Stripe no devuelve). */
+  readonly stripe: number;
+}
+
+/**
+ * Parte de cada bolsillo en una devolución de `amount` del bruto, cuando ya se
+ * devolvieron `consumedBefore` antes. Se prorratea sobre lo ACUMULADO
+ * (`prorate(x, antes + ahora) − prorate(x, antes)`): dos reembolsos parciales
+ * que suman el total devuelven EXACTAMENTE el neto, la comisión del operador
+ * y la de Stripe de la venta, sin un céntimo de deriva por redondeo.
+ *
+ * `creator + platform + stripe = amount`, siempre.
+ *
+ * Reembolso total de 100 € (comisión 1,75, 5 % = 5,00): creador 93,25,
+ * operador 5,00, Stripe 1,75. Parcial de 40 €: 37,30 / 2,00 / 0,70.
+ */
+export function sharesOfGross(
+  sale: SettledSaleAmounts,
+  consumedBefore: number,
+  amount: number,
+): GrossShares {
+  assertMinorAmount(consumedBefore, 'consumedBefore');
+  assertMinorAmount(amount, 'amount');
+  assertMinorAmount(sale.creatorNet, 'creatorNet');
+  const after = consumedBefore + amount;
+  if (after > sale.gross) {
+    throw new PayoutsInvalidAmountError(
+      `se devolverían ${after} de un bruto de ${sale.gross} (ya devuelto ${consumedBefore})`,
+    );
+  }
+  const cumulative = (value: number, upTo: number) =>
+    upTo === 0 ? 0 : prorate(value, upTo, sale.gross);
+  const creator = cumulative(sale.creatorNet, after) - cumulative(sale.creatorNet, consumedBefore);
+  const platform =
+    cumulative(sale.platformFee, after) - cumulative(sale.platformFee, consumedBefore);
+  return { amount, creator, platform, stripe: amount - creator - platform };
+}
+
+/**
+ * Un importe en la divisa del CARGO (la de `POST /v1/refunds`) pasado a la de
+ * LIQUIDACIÓN, en proporción al bruto y sobre lo acumulado: reembolsar en dos
+ * veces el cargo entero da exactamente el bruto. Si las dos divisas coinciden
+ * (lo normal: el precio va en la moneda del creador), es la identidad.
+ */
+export function chargeToSettlement(input: {
+  readonly chargeAmount: number;
+  readonly gross: number;
+  readonly refundedBefore: number;
+  readonly amount: number;
+}): number {
+  assertMinorAmount(input.chargeAmount, 'chargeAmount');
+  assertMinorAmount(input.refundedBefore, 'refundedBefore');
+  assertMinorAmount(input.amount, 'amount');
+  const after = input.refundedBefore + input.amount;
+  if (after > input.chargeAmount) {
+    throw new PayoutsInvalidAmountError(
+      `se reembolsarían ${after} de un cargo de ${input.chargeAmount}`,
+    );
+  }
+  const at = (part: number) => (part === 0 ? 0 : prorate(input.gross, part, input.chargeAmount));
+  return at(after) - at(input.refundedBefore);
+}
+
 /** Suma de importes en `bigint`. Para totales de libro: no tiene techo. */
 export function sumMinor(amounts: Iterable<number | bigint>): bigint {
   let total = 0n;

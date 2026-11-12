@@ -125,7 +125,34 @@ export const IDEMPOTENCY_KEYS = {
    */
   saleEntry: (saleId: string, type: PayoutsLedgerEntryType) =>
     `payouts:sale:${saleId}:${type.toLowerCase()}`,
+  /**
+   * Asientos de un reembolso que no son la llamada a Stripe (devolución de la
+   * comisión, deuda…): `payouts:refund:<refundId>:<parte>` (E6).
+   */
+  refundEntry: (refundId: string, part: string) => `payouts:refund:${refundId}:${part}`,
+  /** Asientos de una disputa: `payouts:dispute:<disputeId>:<parte>` (E6). */
+  disputeEntry: (disputeId: string, part: string) => `payouts:dispute:${disputeId}:${part}`,
+  /**
+   * Transferencia nueva al creador cuando se GANA una disputa (le devuelve lo
+   * que se le revirtió). NO empieza por `payouts:transfer:`: no es la
+   * transferencia de la venta y el conciliador no la cuenta como tal.
+   */
+  disputeReinstatement: (disputeId: string) => `payouts:reinstate:dispute:${disputeId}`,
 } as const;
+
+/**
+ * ¿Es un asiento del reparto de la venta (lo que sella la liquidación)? Son
+ * los que el conciliador coteja con las columnas de la venta: bruto,
+ * comisiones, deuda compensada con su neto y su transferencia. Los de
+ * reembolsos, disputas y recobro de deudas van aparte (y suman 0 por grupo).
+ */
+export function isSettlementEntryKey(idempotencyKey: string): boolean {
+  return (
+    idempotencyKey.startsWith('payouts:sale:') ||
+    idempotencyKey.startsWith('payouts:transfer:') ||
+    /^payouts:debt-recovery:[^:]+:sale:/.test(idempotencyKey)
+  );
+}
 
 export class LedgerService {
   constructor(private readonly prisma: PrismaClient) {}
