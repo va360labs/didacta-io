@@ -26,6 +26,12 @@ import { PrismaService } from '../prisma/prisma.service';
 import { SmtpEncryptionSchema, type SmtpEncryption } from '../modules/smtp-adapter.service';
 import { TenantSmtpResolverService } from '../modules/tenant-smtp-resolver.service';
 import {
+  SENDER_SETTING_KEY,
+  SENDER_SETTING_MODULE,
+  sanitizeReplyTo,
+  type TenantSenderSetting,
+} from '../modules/smtp-sender-identity';
+import {
   resolveEmailBranding,
   renderBrandedEmail,
   textToHtmlParagraphs,
@@ -78,6 +84,31 @@ const SmtpUpsertSchema = z.object({
   fromEmail: z.string().email().max(255),
   fromName: z.string().max(255).optional(),
 });
+
+/**
+ * «Correo para respuestas» del aula. Vacío o null = quitarlo (las respuestas
+ * vuelven a ir al administrador principal). Además de `email()`, pasa por
+ * `sanitizeReplyTo`: una sola dirección, sin nada que parta la cabecera.
+ */
+export const SenderUpsertSchema = z.object({
+  replyToEmail: z
+    .union([z.literal(''), z.string().trim().max(254).email(), z.null()])
+    .transform((v) => (v ? v : null))
+    .refine((v) => v === null || sanitizeReplyTo(v) === v, { message: 'Dirección no válida' }),
+});
+
+interface SenderResponseDto {
+  /** Lo que el admin escribió, o null. */
+  replyToEmail: string | null;
+  /**
+   * Adónde van de verdad las respuestas hoy (lo que saldrá en `Reply-To`), o
+   * null si no llevan ninguno. Con el SMTP compartido y sin correo propio es el
+   * del administrador principal; con SMTP propio, su dirección de envío.
+   */
+  effectiveReplyTo: string | null;
+  /** True si los correos salen por el SMTP propio del aula (modo avanzado). */
+  usesOwnSmtp: boolean;
+}
 
 const SmtpTestSchema = z.object({
   toEmail: z.string().email(),
@@ -252,6 +283,57 @@ export class AdminSmtpController {
     );
 
     return this.readDto(claims.tenantId);
+  }
+
+  @Get('sender')
+  @ApiOperation({
+    summary: '«Correo para respuestas» del aula y adónde van hoy las respuestas de sus correos.',
+  })
+  async getSender(@CurrentUser() user: SessionClaims | undefined): Promise<SenderResponseDto> {
+    const claims = requireAdmin(user);
+    return this.readSenderDto(claims.tenantId);
+  }
+
+  @Put('sender')
+  @ApiOperation({
+    summary:
+      'Guarda el «Correo para respuestas» (Reply-To de los correos del aula). null o vacío lo quita.',
+  })
+  async upsertSender(
+    @CurrentUser() user: SessionClaims | undefined,
+    @Body(new ZodValidationPipe(SenderUpsertSchema))
+    body: z.infer<typeof SenderUpsertSchema>,
+  ): Promise<SenderResponseDto> {
+    const claims = requireAdmin(user);
+    const value: TenantSenderSetting = { replyToEmail: body.replyToEmail };
+    await this.modules
+      .getTenantConfig()
+      .set(claims.tenantId, SENDER_SETTING_MODULE, SENDER_SETTING_KEY, value, {
+        isSecret: false,
+        actorId: claims.sub,
+      });
+    return this.readSenderDto(claims.tenantId);
+  }
+
+  private async readSenderDto(tenantId: string): Promise<SenderResponseDto> {
+    const stored = (await this.modules
+      .getTenantConfig()
+      .get(tenantId, SENDER_SETTING_MODULE, SENDER_SETTING_KEY)
+      .catch(() => undefined)) as Partial<TenantSenderSetting> | undefined;
+    // Se pregunta al MISMO resolver que usan los envíos: lo que se enseña es
+    // exactamente lo que saldrá en la cabecera, no una reconstrucción aparte.
+    // Sin SMTP propio se calcula aunque el despliegue aún no tenga SMTP
+    // compartido: el creador ve adónde irán las respuestas cuando lo haya.
+    const own = await this.resolver.resolveTenantOnly(tenantId);
+    const usesOwnSmtp = own !== null;
+    const effectiveReplyTo = own
+      ? (own.config.sender?.replyTo ?? own.config.from)
+      : await this.resolver.sharedReplyTo(tenantId);
+    return {
+      replyToEmail: sanitizeReplyTo(stored?.replyToEmail),
+      effectiveReplyTo,
+      usesOwnSmtp,
+    };
   }
 
   @Post('test')

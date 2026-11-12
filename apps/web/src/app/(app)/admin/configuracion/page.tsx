@@ -17,6 +17,7 @@ import { Select } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { MemberRegistrationSettingsCard } from '@/components/admin/member-registration-settings-card';
 import { SignupPolicyCard } from '@/components/admin/signup-policy-card';
+import { ReplyToCard } from '@/components/admin/reply-to-card';
 import { SmtpSettingsCard } from '@/components/admin/smtp-settings-card';
 import { StripeSettingsCard } from '@/components/admin/stripe-settings-card';
 import { TenantIdentityCard } from '@/components/admin/tenant-identity-card';
@@ -261,7 +262,12 @@ export default function ConfiguracionPage() {
 
       {tab === 'general' ? <TenantIdentityCard /> : null}
 
-      {tab === 'notifications' ? <SmtpSettingsCard /> : null}
+      {tab === 'notifications' ? (
+        <div className="space-y-4">
+          <ReplyToCard />
+          <SmtpSettingsCard />
+        </div>
+      ) : null}
 
       {tab === 'registro' ? (
         <div className="flex flex-col gap-6">

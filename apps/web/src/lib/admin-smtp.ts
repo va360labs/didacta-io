@@ -78,6 +78,52 @@ function withAuth(): string {
   return token;
 }
 
+/**
+ * «Correo para respuestas» del aula (`GET/PUT /admin/tenant-settings/smtp/sender`).
+ * Es el Reply-To de los correos que el aula manda a sus alumnos.
+ */
+export interface AdminSenderDto {
+  /** Lo que escribió el admin, o null si no puso ninguno. */
+  replyToEmail: string | null;
+  /** Adónde van de verdad las respuestas hoy, o null si a ningún sitio. */
+  effectiveReplyTo: string | null;
+  /** True si el aula envía con su propio servidor de correo (modo avanzado). */
+  usesOwnSmtp: boolean;
+}
+
+/** Valor a enviar: vacío (o solo espacios) = quitarlo. */
+export function normalizeReplyToInput(raw: string): string | null {
+  const v = raw.trim();
+  return v ? v : null;
+}
+
+/**
+ * Formato aceptable antes de mandarlo: UNA dirección, sin comas ni espacios.
+ * El servidor vuelve a validarlo; esto solo evita un viaje con error obvio.
+ */
+export function isValidReplyToInput(raw: string): boolean {
+  const v = normalizeReplyToInput(raw);
+  if (v === null) return true;
+  return v.length <= 254 && /^[^@\s,;<>"]+@[^@\s,;<>"]+\.[^@\s,;<>"]+$/.test(v);
+}
+
+export const adminSenderApi = {
+  async get(): Promise<AdminSenderDto> {
+    return apiFetch<AdminSenderDto>(
+      '/api/v1/admin/tenant-settings/smtp/sender',
+      { method: 'GET' },
+      withAuth(),
+    );
+  },
+  async save(replyToEmail: string | null): Promise<AdminSenderDto> {
+    return apiFetch<AdminSenderDto>(
+      '/api/v1/admin/tenant-settings/smtp/sender',
+      { method: 'PUT', body: JSON.stringify({ replyToEmail }) },
+      withAuth(),
+    );
+  },
+};
+
 export const adminSmtpApi = {
   async get(): Promise<AdminSmtpDto> {
     return apiFetch<AdminSmtpDto>(

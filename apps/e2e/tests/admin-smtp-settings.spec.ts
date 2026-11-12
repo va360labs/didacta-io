@@ -96,7 +96,8 @@ test.describe('Admin SMTP settings — UI + contrato admin-smtp', () => {
     await page.getByLabel('From name (opcional)').fill('Didacta E2E');
 
     // Guardar — el backend acepta cualquier set válido sin probar conexión.
-    await page.getByRole('button', { name: 'Guardar' }).click();
+    // `exact`: en la pestaña también está «Guardar correo» (correo para respuestas).
+    await page.getByRole('button', { name: 'Guardar', exact: true }).click();
     await expect(page.getByTestId('smtp-banner-unverified')).toBeVisible({ timeout: 10_000 });
 
     // Botón "Enviar email de prueba" ahora debe estar habilitado

@@ -314,6 +314,20 @@
     "bannerFallback": "Using the host's global SMTP (fallback). If you want your own sender, save a tenant configuration.",
     "bannerNone": "No SMTP configured — emails (activation, password reset, notifications) are not sent."
   },
+  "replyTo": {
+    "title": "Reply-to email",
+    "description": "Emails your students receive are sent with your academy name. If someone replies, the reply goes to this address.",
+    "label": "Reply-to email",
+    "placeholder": "hello@youracademy.com",
+    "effective": "Right now, replies go to {email}.",
+    "effectiveNone": "Right now, replies go nowhere. Enter your email here.",
+    "invalid": "Enter a single email address, for example hello@youracademy.com.",
+    "save": "Save email",
+    "saving": "Saving…",
+    "saved": "Saved. Replies from your students will go to this address.",
+    "saveError": "We couldn’t save it. Please try again.",
+    "loadError": "We couldn’t load it. Please reload the page."
+  },
   "validation": {
     "hostRequired": "Host required",
     "portInvalid": "Invalid port",

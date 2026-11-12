@@ -1,6 +1,6 @@
 import { BadRequestException, ForbiddenException, UnauthorizedException } from '@nestjs/common';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { AdminSmtpController } from '../src/admin/admin-smtp.controller';
+import { AdminSmtpController, SenderUpsertSchema } from '../src/admin/admin-smtp.controller';
 import { SmtpAdapterService } from '../src/modules/smtp-adapter.service';
 import { TenantSmtpResolverService } from '../src/modules/tenant-smtp-resolver.service';
 
@@ -307,6 +307,94 @@ describe('AdminSmtpController', () => {
         expect(msg.subject, String(actorLocale)).toBe('Prueba de SMTP — Demo');
         vi.restoreAllMocks();
       }
+    });
+  });
+
+  describe('«Correo para respuestas» (GET/PUT sender)', () => {
+    const ENV = ['SMTP_HOST', 'SMTP_PORT', 'SMTP_USER', 'SMTP_PASS', 'SMTP_FROM'] as const;
+    const saved: Record<string, string | undefined> = {};
+    beforeEach(() => {
+      for (const k of ENV) saved[k] = process.env[k];
+      process.env['SMTP_HOST'] = 'email-smtp.eu-west-1.amazonaws.com';
+      process.env['SMTP_PORT'] = '587';
+      process.env['SMTP_USER'] = 'u';
+      process.env['SMTP_PASS'] = 'p';
+      process.env['SMTP_FROM'] = 'Didacta <hola@didacta.io>';
+      resolver = new TenantSmtpResolverService(configStub as never, smtp, {
+        primaryAdminEmail: async () => 'creador@nandu.es',
+      });
+      controller = new AdminSmtpController(factory as never, prisma as never, resolver);
+      return () => {
+        for (const k of ENV) {
+          if (saved[k] === undefined) delete process.env[k];
+          else process.env[k] = saved[k];
+        }
+      };
+    });
+
+    it('sin rol admin → 403 (leer y escribir)', async () => {
+      await expect(controller.getSender(NON_ADMIN as never)).rejects.toBeInstanceOf(
+        ForbiddenException,
+      );
+      await expect(
+        controller.upsertSender(NON_ADMIN as never, { replyToEmail: 'a@b.es' }),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+    });
+
+    it('sin configurar: las respuestas van al administrador principal', async () => {
+      expect(await controller.getSender(ADMIN_USER as never)).toEqual({
+        replyToEmail: null,
+        effectiveReplyTo: 'creador@nandu.es',
+        usesOwnSmtp: false,
+      });
+    });
+
+    it('al guardarlo, el Reply-To efectivo pasa a ser ese; al quitarlo, vuelve al administrador', async () => {
+      const dto = await controller.upsertSender(ADMIN_USER as never, {
+        replyToEmail: 'contacto@nandu.es',
+      });
+      expect(dto).toEqual({
+        replyToEmail: 'contacto@nandu.es',
+        effectiveReplyTo: 'contacto@nandu.es',
+        usesOwnSmtp: false,
+      });
+      // Y se guarda como ajuste NO secreto, en su propia fila.
+      expect(configStub.store.get(`${TENANT_A}|notifications|sender`)).toEqual({
+        value: { replyToEmail: 'contacto@nandu.es' },
+        isSecret: false,
+      });
+      const cleared = await controller.upsertSender(ADMIN_USER as never, { replyToEmail: null });
+      expect(cleared.effectiveReplyTo).toBe('creador@nandu.es');
+    });
+
+    it('sin SMTP compartido todavía, enseña igualmente adónde irán (al administrador)', async () => {
+      delete process.env['SMTP_HOST'];
+      expect((await controller.getSender(ADMIN_USER as never)).effectiveReplyTo).toBe(
+        'creador@nandu.es',
+      );
+    });
+
+    it('con SMTP propio, las respuestas van a su dirección de envío', async () => {
+      await controller.upsert(ADMIN_USER as never, VALID_BODY);
+      expect(await controller.getSender(ADMIN_USER as never)).toEqual({
+        replyToEmail: null,
+        effectiveReplyTo: VALID_BODY.fromEmail,
+        usesOwnSmtp: true,
+      });
+    });
+
+    it('el schema acepta vacío como «quitar» y rechaza listas e inyección', () => {
+      expect(SenderUpsertSchema.parse({ replyToEmail: '' })).toEqual({ replyToEmail: null });
+      expect(SenderUpsertSchema.parse({ replyToEmail: ' a@b.es ' })).toEqual({
+        replyToEmail: 'a@b.es',
+      });
+      expect(SenderUpsertSchema.safeParse({ replyToEmail: 'a@b.es,c@d.es' }).success).toBe(false);
+      expect(
+        SenderUpsertSchema.safeParse({
+          replyToEmail: 'a@b.es' + String.fromCharCode(13, 10) + 'Bcc: c@d.es',
+        }).success,
+      ).toBe(false);
+      expect(SenderUpsertSchema.safeParse({ replyToEmail: 'no-es-correo' }).success).toBe(false);
     });
   });
 });
