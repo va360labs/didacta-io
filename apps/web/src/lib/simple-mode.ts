@@ -201,6 +201,10 @@ export const simpleModeApi = {
   updatePrice(price: { amountCents: number; currency: string }): Promise<OfferView> {
     return apiFetch(`${BASE}/price`, { method: 'PUT', body: JSON.stringify(price) }, bearer());
   },
+  /** Aula que ya tenía cursos, alumnos o ventas: se adopta sin alta de cero. */
+  adopt(): Promise<{ adopted: boolean }> {
+    return apiFetch(`${BASE}/adopt`, { method: 'POST', body: '{}' }, bearer());
+  },
   confirmAcademy(): Promise<{ ok: true }> {
     return apiFetch(`${BASE}/academy/confirm`, { method: 'POST', body: '{}' }, bearer());
   },

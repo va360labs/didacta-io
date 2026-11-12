@@ -144,6 +144,17 @@ export class SimpleModeController {
     return { ok: true };
   }
 
+  @Post('adopt')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary:
+      'Aula con cursos, alumnos o ventas que pasa al modo sencillo: se adopta tal cual, sin alta de cero.',
+  })
+  async adopt(@CurrentUser() user: SessionClaims | undefined) {
+    const u = requireAdmin(user);
+    return this.service.adoptExisting(u.tenantId, u.sub);
+  }
+
   @Post('publish')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({

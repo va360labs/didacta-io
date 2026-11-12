@@ -41,6 +41,11 @@ interface SimpleModeState {
   academyConfirmedAt?: string | null;
   /** Cuándo terminó el alta en 3 preguntas. */
   quickStartAt?: string | null;
+  /**
+   * Aula que ya trabajaba antes de pasar al modo sencillo (cursos, alumnos o
+   * ventas): se adoptó tal cual, sin alta en 3 preguntas.
+   */
+  adoptedAt?: string | null;
 }
 
 /** Color por defecto del tema (el azul de Didacta): igual = el creador no lo tocó. */
@@ -219,7 +224,7 @@ export class SimpleModeService {
     price: { amountCents: number; currency: string },
   ): Promise<OfferIntent> {
     await this.assertCurrency(tenantId, price.currency, price.amountCents);
-    const offer = (await this.readOffer(tenantId)) ?? emptyOfferIntent();
+    const offer = (await this.currentOffer(tenantId)) ?? emptyOfferIntent();
     const next: OfferIntent = { ...offer, ...price };
     if (next.kind === 'membership' && next.planId) {
       await this.registry.getMembershipService().updatePlan(tenantId, next.planId, price);
@@ -239,6 +244,39 @@ export class SimpleModeService {
     await this.writeState(tenantId, actorId, { academyConfirmedAt: new Date().toISOString() });
   }
 
+  // ── Aulas que ya trabajaban ──────────────────────────────────────────────
+
+  /**
+   * Un aula que pasa al modo sencillo con trabajo hecho (cursos, alumnos o
+   * ventas) NO puede encontrarse el alta «de cero»: crearía un segundo curso
+   * y pisaría el nombre. Se adopta tal cual: se da por hecho el asistente de
+   * academia (el gate del aula deja de mandarla a `/bienvenida`) y se anota.
+   * Un aula vacía no se adopta: para ella el alta en 3 preguntas es el camino.
+   *
+   * Idempotente. La comprobación es del servidor: el cliente solo pregunta.
+   */
+  async adoptExisting(tenantId: string, actorId: string): Promise<{ adopted: boolean }> {
+    const state = await this.readState(tenantId);
+    if (state.quickStartAt || state.adoptedAt) return { adopted: Boolean(state.adoptedAt) };
+    if (!(await this.hasExistingWork(tenantId))) return { adopted: false };
+    await this.writeState(tenantId, actorId, { adoptedAt: new Date().toISOString() });
+    await this.completeLegacyWizard(tenantId, actorId);
+    await this.prisma.user.updateMany({
+      where: { id: actorId, tenantId, onboardingCompletedAt: null },
+      data: { onboardingCompletedAt: new Date() },
+    });
+    return { adopted: true };
+  }
+
+  private async hasExistingWork(tenantId: string): Promise<boolean> {
+    const [courses, students, sales] = await Promise.all([
+      this.prisma.modCoursesCourse.count({ where: { tenantId, deletedAt: null } }),
+      this.invitedCount(tenantId),
+      this.salesSummary(tenantId),
+    ]);
+    return courses > 0 || students > 0 || sales.count > 0;
+  }
+
   // ── Publicar ─────────────────────────────────────────────────────────────
 
   /**
@@ -248,7 +286,7 @@ export class SimpleModeService {
    * está en el dominio del aula).
    */
   async publish(tenantId: string, actorId: string): Promise<{ salePath: string }> {
-    const offer = await this.readOffer(tenantId);
+    const offer = await this.currentOffer(tenantId);
     if (!offer || offer.amountCents <= 0) {
       throw new SimpleModeError('SIMPLE_MODE_NO_PRICE', 'Pon un precio antes de publicar.');
     }
@@ -302,7 +340,7 @@ export class SimpleModeService {
   async startHere(tenantId: string): Promise<StartHereView> {
     const [tenant, offer, state] = await Promise.all([
       this.prisma.tenant.findUnique({ where: { id: tenantId }, select: { name: true } }),
-      this.readOffer(tenantId),
+      this.currentOffer(tenantId),
       this.readState(tenantId),
     ]);
 
@@ -325,7 +363,9 @@ export class SimpleModeService {
       ]);
 
     const done: Record<StepId, boolean> = {
-      academy: academyDone,
+      // Quien ya vende o tiene algo publicado tiene academia, aunque nunca
+      // tocara el logo ni el color.
+      academy: academyDone || published || sales.count > 0,
       course: courseDone.done,
       price: (offer?.amountCents ?? 0) > 0,
       payments: paymentsReady,
@@ -384,6 +424,86 @@ export class SimpleModeService {
       amountCents: typeof v.amountCents === 'number' ? v.amountCents : 0,
       currency: typeof v.currency === 'string' ? v.currency : 'eur',
     };
+  }
+
+  /**
+   * La oferta con la que trabaja «Empieza aquí»: la guardada por el modo
+   * sencillo o, en un aula que ya vendía antes de pasar a él, la que se deduce
+   * de lo que ya tiene a la venta. Así no le pide de nuevo precio ni publicar.
+   */
+  async currentOffer(tenantId: string): Promise<OfferIntent | null> {
+    return (await this.readOffer(tenantId)) ?? (await this.inferOffer(tenantId));
+  }
+
+  /**
+   * Deduce la oferta de un aula sin estado del modo sencillo. Por orden:
+   * 1. la membresía si está encendida (su plan activo más barato, el de entrada);
+   * 2. el curso PUBLICADO con opción de compra activa (si hay varios, el de la
+   *    opción más antigua);
+   * 3. el primer curso del aula, aún sin precio.
+   * Solo lee; nada se guarda hasta que el creador toca algo.
+   */
+  async inferOffer(tenantId: string): Promise<OfferIntent | null> {
+    const config = await this.prisma.modSubscriptionsMembershipConfig.findUnique({
+      where: { tenantId },
+      select: { active: true },
+    });
+    if (config?.active) {
+      const plan = await this.prisma.modSubscriptionsPlan.findFirst({
+        where: { tenantId, active: true },
+        orderBy: [{ amountCents: 'asc' }, { createdAt: 'asc' }],
+        select: { id: true, amountCents: true, currency: true },
+      });
+      if (plan) {
+        return {
+          kind: 'membership',
+          courseId: null,
+          planId: plan.id,
+          amountCents: plan.amountCents,
+          currency: plan.currency,
+        };
+      }
+    }
+    // Sin FK entre módulos (billing ↔ courses): dos lecturas, ambas por tenant.
+    const products = await this.prisma.modBillingProduct.findMany({
+      where: { tenantId, active: true },
+      orderBy: [{ createdAt: 'asc' }],
+      select: { courseId: true, unitAmount: true, currency: true },
+      take: 200,
+    });
+    const published = products.length
+      ? new Set(
+          (
+            await this.prisma.modCoursesCourse.findMany({
+              where: {
+                tenantId,
+                deletedAt: null,
+                status: 'PUBLISHED',
+                id: { in: [...new Set(products.map((p) => p.courseId))] },
+              },
+              select: { id: true },
+            })
+          ).map((c) => c.id),
+        )
+      : new Set<string>();
+    const product = products.find((p) => published.has(p.courseId));
+    if (product) {
+      return {
+        kind: 'course',
+        courseId: product.courseId,
+        planId: null,
+        amountCents: product.unitAmount,
+        currency: product.currency,
+      };
+    }
+    const course = await this.prisma.modCoursesCourse.findFirst({
+      where: { tenantId, deletedAt: null },
+      orderBy: { createdAt: 'asc' },
+      select: { id: true },
+    });
+    return course
+      ? { kind: 'course', courseId: course.id, planId: null, amountCents: 0, currency: 'eur' }
+      : null;
   }
 
   private async readState(tenantId: string): Promise<SimpleModeState> {
@@ -553,7 +673,14 @@ export class SimpleModeService {
    * el color se cambian desde «Cambiar».
    */
   private async academyDone(tenantId: string, state: SimpleModeState): Promise<boolean> {
-    if (state.academyConfirmedAt || state.quickStartAt) return true;
+    if (state.academyConfirmedAt || state.quickStartAt || state.adoptedAt) return true;
+    // El asistente de academia del modo completo, ya terminado.
+    const legacy = await this.prisma.tenantSetting.findUnique({
+      where: { tenantId_moduleName_key: { tenantId, moduleName: 'onboarding', key: 'academy' } },
+      select: { valueJson: true },
+    });
+    const legacyValue = legacy?.valueJson as { completedAt?: unknown } | null | undefined;
+    if (legacyValue && typeof legacyValue.completedAt === 'string') return true;
     const theme = await this.prisma.modThemingTenantTheme.findUnique({
       where: { tenantId },
       select: { logoUrl: true, brandHue: true },

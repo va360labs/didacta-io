@@ -49,6 +49,7 @@ function mundo(opts: { paymentsReady?: boolean } = {}) {
     spaces: new Set<string>(),
     posts: [] as Array<{ title: string; authorId: string; tags: string[] }>,
     ordersCompleted: 0,
+    students: 0,
   };
 
   const prisma = {
@@ -63,7 +64,10 @@ function mundo(opts: { paymentsReady?: boolean } = {}) {
       update: vi.fn(async ({ data }: { data: Record<string, unknown> }) =>
         Object.assign(db.user, data),
       ),
-      count: vi.fn(async () => 0),
+      count: vi.fn(async () => db.students),
+      updateMany: vi.fn(async ({ data }: { data: Record<string, unknown> }) => {
+        if (!db.user.onboardingCompletedAt) Object.assign(db.user, data);
+      }),
     },
     tenantSetting: {
       findUnique: vi.fn(
@@ -88,6 +92,17 @@ function mundo(opts: { paymentsReady?: boolean } = {}) {
       findFirst: vi.fn(async ({ where }: { where: { id?: string } }) =>
         where.id ? (db.courses.find((c) => c.id === where.id) ?? null) : (db.courses[0] ?? null),
       ),
+      findMany: vi.fn(async ({ where }: { where: { status?: string; id?: { in: string[] } } }) =>
+        db.courses.filter(
+          (c) =>
+            (!where.status || c.status === where.status) &&
+            (!where.id || where.id.in.includes(c.id)),
+        ),
+      ),
+      count: vi.fn(async () => db.courses.length),
+    },
+    modBillingProduct: {
+      findMany: vi.fn(async () => db.products.filter((p) => p.active)),
     },
     modCoursesLesson: { findMany: vi.fn(async () => db.lessons) },
     modThemingTenantTheme: { findUnique: vi.fn(async () => null) },
@@ -102,9 +117,12 @@ function mundo(opts: { paymentsReady?: boolean } = {}) {
       findUnique: vi.fn(async () => ({ active: db.membershipActive })),
     },
     modSubscriptionsPlan: {
-      findFirst: vi.fn(
-        async ({ where }: { where: { id: string } }) =>
-          db.plans.find((p) => p.id === where.id) ?? null,
+      findFirst: vi.fn(async ({ where }: { where: { id?: string } }) =>
+        where.id
+          ? (db.plans.find((p) => p.id === where.id) ?? null)
+          : ([...db.plans.filter((p) => p.active)].sort(
+              (a, b) => a.amountCents - b.amountCents,
+            )[0] ?? null),
       ),
     },
     modZoomSession: { findFirst: vi.fn(async () => null) },
@@ -388,8 +406,10 @@ describe('Empieza aquí', () => {
     view = await service.startHere(T);
     expect(view.steps.find((s) => s.id === 'course')?.done).toBe(true);
 
-    // Sin alta, la academia no está hecha hasta confirmarla o personalizarla.
+    // Sin alta (ni el asistente del modo completo terminado), la academia no
+    // está hecha hasta confirmarla o personalizarla.
     db.settings.set('state', {});
+    db.settings.delete('academy');
     expect((await service.startHere(T)).steps.find((s) => s.id === 'academy')?.done).toBe(false);
     await service.confirmAcademy(T, U);
     expect((await service.startHere(T)).steps.find((s) => s.id === 'academy')?.done).toBe(true);
@@ -418,5 +438,121 @@ describe('Empieza aquí', () => {
     expect(view.salePath).toBe('/catalogo/acuarela-desde-cero');
     expect(view.steps.find((s) => s.id === 'payments')?.done).toBe(false);
     expect(view.steps.find((s) => s.id === 'publish')?.done).toBe(false);
+  });
+});
+
+/**
+ * Aula de Cloud que ya trabajaba en modo completo y pasa al sencillo: sin
+ * estado del modo sencillo, pero con curso publicado, precio, alumnos y ventas.
+ */
+function aulaQueYaVendia(opts: { paymentsReady?: boolean } = { paymentsReady: true }) {
+  const m = mundo(opts);
+  m.db.tenant.name = 'Escuela de Cerámica';
+  m.db.courses.push({
+    id: 'c-torno',
+    slug: 'torno-basico',
+    title: 'Torno básico',
+    status: 'PUBLISHED',
+    deletedAt: null,
+    createdAt: new Date('2026-09-01'),
+  });
+  m.db.lessons.push({
+    type: 'TEXT',
+    content: { text: 'Bienvenida' },
+    module: { courseId: 'c-torno' },
+  });
+  m.db.products.push({
+    id: 'pr-torno',
+    courseId: 'c-torno',
+    active: true,
+    unitAmount: 8900,
+    currency: 'eur',
+  });
+  m.db.students = 14;
+  m.db.ordersCompleted = 6;
+  // Terminó el asistente de academia del modo completo.
+  m.db.settings.set('academy', { step: 'resumen', completedAt: '2026-09-01T10:00:00.000Z' });
+  return m;
+}
+
+describe('aulas que ya trabajaban antes del modo sencillo', () => {
+  it('Empieza aquí marca hechos los 6 pasos y deduce la oferta de lo que ya vende', async () => {
+    const { service } = aulaQueYaVendia();
+    const view = await service.startHere(T);
+    expect(view.steps.every((s) => s.done)).toBe(true);
+    expect(view.offer).toMatchObject({
+      kind: 'course',
+      courseId: 'c-torno',
+      amountCents: 8900,
+      courseSlug: 'torno-basico',
+    });
+    expect(view.salePath).toBe('/catalogo/torno-basico');
+    expect(view.sales.count).toBe(6);
+    expect(view.students).toBe(14);
+  });
+
+  it('sin el asistente terminado y sin tocar el logo, vender ya cuenta como academia hecha', async () => {
+    const { db, service } = aulaQueYaVendia();
+    db.settings.delete('academy');
+    const view = await service.startHere(T);
+    expect(view.steps.find((s) => s.id === 'academy')?.done).toBe(true);
+  });
+
+  it('con cursos pero sin precio: el curso cuenta y el paso abierto es el precio, no «crea tu curso»', async () => {
+    const { db, service } = aulaQueYaVendia({ paymentsReady: false });
+    db.products.length = 0;
+    db.ordersCompleted = 0;
+    db.courses[0].status = 'DRAFT';
+    const view = await service.startHere(T);
+    const done = Object.fromEntries(view.steps.map((s) => [s.id, s.done]));
+    expect(done).toMatchObject({ academy: true, course: true, price: false, publish: false });
+    expect(view.offer?.courseId).toBe('c-torno');
+    expect(view.firstCourseId).toBe('c-torno');
+  });
+
+  it('poner precio en un aula adoptada lo guarda sobre SU curso (no crea otro)', async () => {
+    const { db, service, courses } = aulaQueYaVendia();
+    db.products.length = 0;
+    db.courses[0].status = 'DRAFT';
+    const offer = await service.updatePrice(T, U, { amountCents: 5900, currency: 'eur' });
+    expect(offer).toMatchObject({ kind: 'course', courseId: 'c-torno', amountCents: 5900 });
+    expect(courses.createCourse).not.toHaveBeenCalled();
+  });
+
+  it('con la membresía encendida, la oferta es su plan activo de entrada', async () => {
+    const { db, service } = aulaQueYaVendia();
+    db.membershipActive = true;
+    db.plans.push(
+      { id: 'p-anual', name: 'Anual', amountCents: 19000, currency: 'eur', active: true },
+      { id: 'p-mes', name: 'Mensual', amountCents: 1900, currency: 'eur', active: true },
+    );
+    const view = await service.startHere(T);
+    expect(view.offer).toMatchObject({ kind: 'membership', planId: 'p-mes', amountCents: 1900 });
+    expect(view.salePath).toBe('/unete');
+  });
+
+  it('adoptar: con trabajo hecho se salta el alta de cero (idempotente) y no toca nombre ni cursos', async () => {
+    const { db, service, courses } = aulaQueYaVendia();
+    db.settings.delete('academy');
+    expect(await service.adoptExisting(T, U)).toEqual({ adopted: true });
+    expect(await service.adoptExisting(T, U)).toEqual({ adopted: true });
+    expect((db.settings.get('academy') as { completedAt?: string }).completedAt).toEqual(
+      expect.any(String),
+    );
+    expect(db.user.onboardingCompletedAt).toBeInstanceOf(Date);
+    expect(db.tenant.name).toBe('Escuela de Cerámica');
+    expect(courses.createCourse).not.toHaveBeenCalled();
+  });
+
+  it('control: un aula vacía NO se adopta; su camino es el alta en 3 preguntas', async () => {
+    const { db, service } = mundo();
+    expect(await service.adoptExisting(T, U)).toEqual({ adopted: false });
+    expect(db.settings.has('academy')).toBe(false);
+  });
+
+  it('un aula que ya hizo el alta en 3 preguntas no se adopta', async () => {
+    const { service } = mundo({ paymentsReady: true });
+    await service.quickStart(T, { id: U }, ALTA);
+    expect(await service.adoptExisting(T, U)).toEqual({ adopted: false });
   });
 });

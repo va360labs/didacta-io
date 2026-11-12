@@ -5,7 +5,7 @@
  * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
  */
 
-import { useSimpleMode } from '@/lib/simple-mode';
+import { simpleModeApi, useSimpleMode } from '@/lib/simple-mode';
 import { AltaSencilla } from './alta-sencilla';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
@@ -107,7 +107,32 @@ async function leerCobrosDePlataforma(sync: boolean): Promise<PayoutsStatusDto |
 export default function BienvenidaPage() {
   const simple = useSimpleMode();
   if (simple === null) return null;
-  return simple ? <AltaSencilla /> : <BienvenidaCompleta />;
+  return simple ? <AltaOAdopcion /> : <BienvenidaCompleta />;
+}
+
+/**
+ * Un aula que ya trabajaba (cursos, alumnos o ventas) y pasa al modo sencillo
+ * NO hace el alta de cero: el servidor la adopta tal cual y va a «Empieza
+ * aquí», que marca lo que ya tiene hecho. Recarga entera para que el gate del
+ * aula lea el asistente ya terminado.
+ */
+function AltaOAdopcion() {
+  const [estado, setEstado] = useState<'comprobando' | 'alta'>('comprobando');
+  useEffect(() => {
+    let vivo = true;
+    simpleModeApi
+      .adopt()
+      .then((r) => {
+        if (!vivo) return;
+        if (r.adopted) window.location.assign('/empieza');
+        else setEstado('alta');
+      })
+      .catch(() => vivo && setEstado('alta'));
+    return () => {
+      vivo = false;
+    };
+  }, []);
+  return estado === 'alta' ? <AltaSencilla /> : null;
 }
 
 function BienvenidaCompleta() {
