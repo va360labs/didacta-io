@@ -466,6 +466,14 @@ export class PayoutsAccountsService {
       const live = await findLiveAccount(tx, input.tenantId);
       if (live) {
         const sameChoice = live.country === country && live.entityType === entityType;
+        // Reconexión tras «Desconectar»: la misma cuenta de Stripe vuelve a
+        // operar; su estado real lo fija `syncAccount` a continuación.
+        if (live.status === 'DISCONNECTED' && live.stripeAccountId !== null) {
+          return tx.modPayoutsAccount.update({
+            where: { id: live.id },
+            data: { status: 'ONBOARDING' },
+          });
+        }
         if (sameChoice) return live;
         if (live.stripeAccountId !== null) {
           throw new PayoutsAccountAlreadyStartedError(live.country);
@@ -593,10 +601,17 @@ export class PayoutsAccountsService {
     const deadline = remote.requirements?.current_deadline;
 
     const updated = await this.db.inTenant(tenantId, async (tx) => {
+      // «Desconectada» la decide el creador (o la baja del aula), no Stripe:
+      // se refresca el espejo pero el estado se queda.
+      const current = await tx.modPayoutsAccount.findUniqueOrThrow({
+        where: { id: row.id },
+        select: { status: true },
+      });
+      const disconnected = current.status === 'DISCONNECTED';
       await tx.modPayoutsAccount.update({
         where: { id: row.id },
         data: {
-          status: derived.status,
+          status: disconnected ? 'DISCONNECTED' : derived.status,
           country: (remote.country ?? row.country).toUpperCase(),
           cardPaymentsStatus: derived.cardPaymentsStatus,
           transfersStatus: derived.transfersStatus,
@@ -614,7 +629,7 @@ export class PayoutsAccountsService {
           lastSyncedAt: now,
         },
       });
-      if (derived.status === 'READY') {
+      if (derived.status === 'READY' && !disconnected) {
         // Sello de «ha operado»: la primera vez, y nunca se borra.
         await tx.modPayoutsAccount.updateMany({
           where: { id: row.id, readyAt: null },
@@ -624,6 +639,28 @@ export class PayoutsAccountsService {
       return tx.modPayoutsAccount.findUniqueOrThrow({ where: { id: row.id } });
     });
     return toView(updated);
+  }
+
+  /**
+   * «Desconectar cobros» (o baja del aula): la cuenta deja de poder vender
+   * (`DISCONNECTED` → el resolutor de modo de cobro cierra el checkout) pero
+   * la cuenta de Stripe NO se cierra: hacen falta 120 días para poder
+   * revertir disputas, y lo pendiente de transferir se sigue transfiriendo.
+   * Idempotente. Sin cuenta viva, no hace nada.
+   */
+  async disconnect(
+    tenantId: string,
+  ): Promise<{ account: PayoutsAccountView | null; changed: boolean }> {
+    return this.db.inTenant(tenantId, async (tx) => {
+      const live = await findLiveAccount(tx, tenantId);
+      if (!live) return { account: null, changed: false };
+      if (live.status === 'DISCONNECTED') return { account: toView(live), changed: false };
+      const updated = await tx.modPayoutsAccount.update({
+        where: { id: live.id },
+        data: { status: 'DISCONNECTED' },
+      });
+      return { account: toView(updated), changed: true };
+    });
   }
 
   /**

@@ -806,6 +806,41 @@ describe('PayoutsAccountsService', () => {
     expect(restricted.readyAt).toBe(ready.readyAt);
   });
 
+  it('desconectar (E6): DISCONNECTED aguanta las sincronizaciones y «Conectar» la reactiva', async () => {
+    const { account } = await service.startOnboarding({
+      tenantId: TENANT_A,
+      country: 'ES',
+      entityType: 'individual',
+      prefill: PREFILL,
+      urls: URLS,
+    });
+    const acct = account.stripeAccountId!;
+    fake.seed({
+      ...(recorded['es_lista']!.account as unknown as Record<string, unknown>),
+      id: acct,
+    });
+    expect((await service.syncAccount(TENANT_A)).status).toBe('READY');
+
+    expect(await service.disconnect(TENANT_A)).toMatchObject({
+      changed: true,
+      account: { status: 'DISCONNECTED' },
+    });
+    expect(await service.disconnect(TENANT_A)).toMatchObject({ changed: false });
+    // Stripe sigue diciendo que está lista: el estado lo decidió el creador.
+    expect((await service.syncAccount(TENANT_A)).status).toBe('DISCONNECTED');
+    expect(await service.disconnect(TENANT_B)).toEqual({ account: null, changed: false });
+
+    const back = await service.startOnboarding({
+      tenantId: TENANT_A,
+      country: 'ES',
+      entityType: 'individual',
+      prefill: PREFILL,
+      urls: URLS,
+    });
+    expect(back.account.stripeAccountId).toBe(acct);
+    expect(back.account.status).toBe('READY');
+  });
+
   it('syncAccount con un acct_ que ya no es la cuenta viva no toca nada', async () => {
     const { account } = await service.startOnboarding({
       tenantId: TENANT_A,

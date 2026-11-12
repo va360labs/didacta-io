@@ -17,7 +17,12 @@ import type { PlatformStripeClient } from '../stripe/platform-stripe.client.js';
  * transferencia de la API y se coteja con la venta y el libro: importe,
  * divisa, cuenta de destino y lo revertido. Lo que no casa es una alerta para
  * un humano: una transferencia que no hicimos nosotros, o una reversión hecha
- * a mano en el panel de Stripe (eso lo tratará E6).
+ * a mano en el panel de Stripe.
+ *
+ * E6: la transferencia NUEVA de una disputa ganada no es la de la venta: se
+ * coteja con su asiento (`payouts:reinstate:…`). Y una reversión que Stripe ya
+ * avisa pero aún se está anotando (reembolso o disputa en curso) no es una
+ * discrepancia: se da por «en vuelo».
  */
 
 export const TRANSFER_EVENT_TYPES: ReadonlySet<string> = new Set([
@@ -68,6 +73,35 @@ export async function checkTransferEvent(
       ? (transfer.metadata['didacta_sale_id'] as string)
       : null;
 
+  // Transferencia de una disputa ganada: se coteja con su propio asiento.
+  if (typeof transfer.metadata?.['didacta_dispute_id'] === 'string') {
+    const entry = await deps.db.inTenant(input.tenantId, (tx) =>
+      tx.modPayoutsLedgerEntry.findFirst({
+        where: { tenantId: input.tenantId, stripeObjectId: transfer.id, type: 'TRANSFER' },
+        select: { amount: true, currency: true, saleId: true },
+      }),
+    );
+    if (!entry) return { outcome: 'in_flight', saleId: metaSaleId ?? '' };
+    if (
+      entry.amount !== -(transfer.amount ?? NaN) ||
+      entry.currency !== (transfer.currency ?? '').toLowerCase()
+    ) {
+      const problems = [`importe ${String(transfer.amount)} ≠ asiento ${-entry.amount}`];
+      (deps.logger?.error ?? deps.logger?.warn)?.call(
+        deps.logger,
+        {
+          alert: PAYOUTS_ALERTS.transferMismatch,
+          tenantId: input.tenantId,
+          transferId: transfer.id,
+          problems,
+        },
+        `${PAYOUTS_ALERTS.transferMismatch}: la transferencia de la disputa no casa con su asiento`,
+      );
+      return { outcome: 'mismatch', saleId: entry.saleId ?? '', problems };
+    }
+    return { outcome: 'ok', saleId: entry.saleId ?? '' };
+  }
+
   const found = await deps.db.inTenant(input.tenantId, async (tx) => {
     const sale =
       (await tx.modPayoutsSale.findFirst({
@@ -81,7 +115,15 @@ export async function checkTransferEvent(
       where: { id: sale.accountId, tenantId: input.tenantId },
       select: { stripeAccountId: true },
     });
-    return { sale, destination: account?.stripeAccountId ?? null };
+    // Reembolsos o disputas de la venta que aún se están anotando (E6).
+    const accounting =
+      (await tx.modPayoutsRefund.count({
+        where: { tenantId: input.tenantId, saleId: sale.id, reversalStatus: null },
+      })) +
+      (await tx.modPayoutsDispute.count({
+        where: { tenantId: input.tenantId, saleId: sale.id, outcome: null },
+      }));
+    return { sale, destination: account?.stripeAccountId ?? null, accounting };
   });
 
   const warn = (alert: string, obj: Record<string, unknown>, msg: string) =>
@@ -99,7 +141,7 @@ export async function checkTransferEvent(
     );
     return { outcome: 'unknown' };
   }
-  const { sale, destination } = found;
+  const { sale, destination, accounting } = found;
   if (sale.stripeTransferId !== transfer.id) {
     // La liquidación la está anotando ahora mismo (la creó y aún no cerró su
     // transacción), o la anotará el próximo intento al encontrarla en Stripe.
@@ -121,7 +163,11 @@ export async function checkTransferEvent(
   if (idOf(transfer.destination) !== destination) {
     problems.push(`destino ${String(idOf(transfer.destination))} ≠ ${String(destination)}`);
   }
-  if ((transfer.amount_reversed ?? 0) !== sale.reversedAmount) {
+  const reversedInStripe = transfer.amount_reversed ?? 0;
+  if (reversedInStripe > sale.reversedAmount && accounting > 0 && problems.length === 0) {
+    return { outcome: 'in_flight', saleId: sale.id };
+  }
+  if (reversedInStripe !== sale.reversedAmount) {
     problems.push(
       `revertido en Stripe ${String(transfer.amount_reversed ?? 0)} ≠ anotado ${sale.reversedAmount}`,
     );

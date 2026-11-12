@@ -260,6 +260,63 @@ export class PayoutsSettlementConflictError extends PayoutsError {
   }
 }
 
+/**
+ * La venta no existe en ESTE tenant. Una venta de otra academia da lo mismo
+ * que una que no existe (la RLS ni siquiera la deja ver): 404, sin pistas.
+ */
+export class PayoutsSaleNotFoundError extends PayoutsError {
+  constructor() {
+    super('Venta no encontrada.', 'PAYOUTS_SALE_NOT_FOUND');
+    this.name = 'PayoutsSaleNotFoundError';
+  }
+}
+
+/**
+ * La venta no se puede reembolsar desde el panel ahora mismo.
+ *
+ * `reason`:
+ *  - `not_settled`: el cobro aún no tiene la comisión de Stripe asentada (minutos).
+ *  - `disputed`: el alumno reclamó el pago a su banco; lo decide la disputa.
+ *  - `fully_refunded`: ya no queda nada por devolver.
+ *  - `needs_review`: la venta está en revisión (`FAILED`).
+ */
+export class PayoutsSaleNotRefundableError extends PayoutsError {
+  constructor(public readonly reason: string) {
+    super('Esta venta no se puede reembolsar ahora mismo.', 'PAYOUTS_SALE_NOT_REFUNDABLE', {
+      detail: reason,
+    });
+    this.name = 'PayoutsSaleNotRefundableError';
+  }
+}
+
+/** El importe pedido supera lo que queda por reembolsar del cargo. */
+export class PayoutsRefundExceedsRemainingError extends PayoutsError {
+  constructor(
+    public readonly requested: number,
+    public readonly remaining: number,
+  ) {
+    super(
+      `Solo quedan ${remaining} por reembolsar y se han pedido ${requested}.`,
+      'PAYOUTS_REFUND_EXCEEDS_REMAINING',
+      { detail: String(remaining) },
+    );
+    this.name = 'PayoutsRefundExceedsRemainingError';
+  }
+}
+
+/**
+ * Stripe rechazó el reembolso (no es un fallo transitorio). El literal de
+ * Stripe va en `detail`; el alumno no ha recibido nada.
+ */
+export class PayoutsRefundRejectedError extends PayoutsError {
+  constructor(stripeMessage: string) {
+    super(`Stripe no ha aceptado el reembolso: ${stripeMessage}`, 'PAYOUTS_REFUND_REJECTED', {
+      detail: stripeMessage,
+    });
+    this.name = 'PayoutsRefundRejectedError';
+  }
+}
+
 /** La clave de Stripe de plataforma no tiene el formato esperado. */
 export class PlatformStripeConfigError extends PayoutsError {
   constructor(what: string) {

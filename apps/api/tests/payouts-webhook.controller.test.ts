@@ -228,11 +228,39 @@ describe('PayoutsController', () => {
       resolvePrimaryDomain: vi.fn(async () => null),
       resolveTenantWebBaseUrl: vi.fn(async () => 'http://localhost:3000'),
     };
+    const audit = { record: vi.fn(async () => undefined) };
     return {
       runtime,
-      payouts: new PayoutsController(runtime as never, tenantResolver as never),
+      audit,
+      payouts: new PayoutsController(runtime as never, tenantResolver as never, audit as never),
     };
   }
+
+  it('desconectar (E6): solo el admin del aula, nunca una sesión de soporte; queda auditado', async () => {
+    const { payouts, runtime, audit } = controller();
+    const disconnect = vi.fn(async () => ({
+      account: null,
+      changed: true,
+      subscriptionsScheduled: 2,
+      subscriptionsFailed: 0,
+    }));
+    (runtime as unknown as { offboarding: unknown }).offboarding = { disconnect };
+    await expect(
+      payouts.disconnect({} as never, claims({ roles: ['student'] })),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+    await expect(
+      payouts.disconnect({} as never, claims({ sup: true } as never)),
+    ).rejects.toMatchObject({
+      response: { code: 'PAYOUTS_SUPPORT_SESSION_FORBIDDEN' },
+    });
+    expect(disconnect).not.toHaveBeenCalled();
+    const result = await payouts.disconnect({ headers: {} } as never, claims());
+    expect(result.subscriptionsScheduled).toBe(2);
+    expect(disconnect).toHaveBeenCalledWith(TENANT_A, { reason: 'creator' });
+    expect(audit.record).toHaveBeenCalledWith(
+      expect.objectContaining({ tenantId: TENANT_A, action: 'payouts.account.disconnected' }),
+    );
+  });
 
   it('país no admitido → 422 antes de leer nada del aula', async () => {
     const { payouts, runtime } = controller();

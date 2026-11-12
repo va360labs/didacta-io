@@ -427,16 +427,22 @@ describe('retenciones y reintentos', () => {
     expect(transferPosts()[0]!.options.idempotencyKey).toBe(`payouts:transfer:${saleId}`);
   });
 
-  it('cargo ya reembolsado antes de liquidar → HELD (lo decide E6), sin reparto ni transferencia', async () => {
+  it('cargo reembolsado en Stripe sin anotar → sella el reparto pero HELD sin transferir (E6 lo anota)', async () => {
     const { saleId, chargeId } = newSale({ bt: { amount: 10000, fee: 175, currency: 'eur' } });
     fake.patch(chargeId, { amount_refunded: 10000, refunded: true });
     await expect(service.settleSale(A, saleId)).resolves.toMatchObject({
       outcome: 'held',
       reason: 'charge_refunded',
     });
-    expect(sale(saleId)).toMatchObject({ status: 'HELD', transferAmount: null });
-    expect(entries(saleId)).toEqual([]);
+    // El reparto se sella (el reembolso se anota contra él); la transferencia no sale.
+    expect(sale(saleId)).toMatchObject({ status: 'HELD', transferAmount: 9325 });
+    expect(entries(saleId).map((e) => e.type)).toEqual([
+      'SALE_GROSS',
+      'STRIPE_FEE',
+      'PLATFORM_FEE',
+    ]);
     expect(transferPosts()).toHaveLength(0);
+    expect(await invariantViolations()).toEqual([]);
   });
 
   it('cargo disputado → HELD charge_disputed', async () => {

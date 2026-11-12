@@ -15,6 +15,7 @@ import { LICENSE_CAPABILITIES, LicenseService } from '@didacta/license-sdk';
 import { type AdminActor, auditActorId, auditActorTrace } from '../auth/admin-actor';
 import type { ClientContext } from '../auth/client-context';
 import { PasswordResetService } from '../auth/password-reset.service';
+import { PayoutsRuntime } from '../modules/payouts/payouts-runtime.service';
 import { TenantStripeResolverService } from '../modules/tenant-stripe-resolver.service';
 import { PrismaAuditLogService } from '../modules/prisma-audit-log.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -126,6 +127,9 @@ export class AdminTenantsService {
     // Para avisar de que la cuenta de Stripe de instancia deja de heredarse al
     // pasar de una aula a varias. Opcional por lo mismo que el anterior.
     @Optional() private readonly stripeResolver?: TenantStripeResolverService,
+    // Cobros de plataforma (solo existe con el modo encendido): al archivar un
+    // aula se desconectan sus cobros (E6).
+    @Optional() private readonly payouts?: PayoutsRuntime,
   ) {}
 
   /**
@@ -528,13 +532,42 @@ export class AdminTenantsService {
       }
     });
 
+    // Baja del creador (E6): sin ventas nuevas y sus suscripciones a fin de
+    // periodo. La cuenta de Stripe no se cierra (disputas: 120 días) y lo
+    // pendiente se le sigue pagando. Un fallo aquí no deshace el archivado:
+    // queda en el log y se puede repetir desde el panel del aula.
+    let payoutsOffboarding: Record<string, unknown> | null = null;
+    if (status === 'ARCHIVED' && t.status !== 'ARCHIVED' && this.payouts) {
+      try {
+        const result = await this.payouts.offboarding.disconnect(id, {
+          reason: 'tenant_archived',
+        });
+        payoutsOffboarding = {
+          changed: result.changed,
+          subscriptionsScheduled: result.subscriptionsScheduled,
+          subscriptionsFailed: result.subscriptionsFailed,
+        };
+      } catch (err) {
+        payoutsOffboarding = { error: err instanceof Error ? err.message.slice(0, 200) : 'error' };
+        this.logger.error(
+          { err, tenantId: id },
+          'payouts.offboarding_failed: no se pudieron desconectar los cobros del aula archivada',
+        );
+      }
+    }
+
     await this.auditLog.record({
       tenantId: id,
       actorId: auditActorId(actor),
       action: `admin.tenant.status_changed.${status.toLowerCase()}`,
       resourceType: 'tenant',
       resourceId: id,
-      metadata: { previousStatus: t.status, newStatus: status, ...auditActorTrace(actor) },
+      metadata: {
+        previousStatus: t.status,
+        newStatus: status,
+        ...(payoutsOffboarding ? { payoutsOffboarding } : {}),
+        ...auditActorTrace(actor),
+      },
       ip: ctx.ip ?? undefined,
       userAgent: ctx.userAgent ?? undefined,
     });

@@ -410,7 +410,10 @@
         "heldRetry": "On hold: we’ll try again tomorrow",
         "refunded": "Refunded",
         "disputed": "The student disputed the payment with their bank",
-        "review": "We’re looking into it and will email you if we need anything"
+        "review": "We’re looking into it and will email you if we need anything",
+        "refundedPartial": "Partly refunded",
+        "disputeWon": "Dispute won: we sent it back to you",
+        "disputeLost": "Dispute lost: the bank gave it back to the student"
       },
       "noticeHeld": "Some of your sales are on hold: the money is safe and we try again every day. If it says “until you finish setting up how you get paid”, click “Finish” above.",
       "noticeDebt": "You have {amount} to be taken from your next sales.",
@@ -423,7 +426,51 @@
       "summaryDebtNetted": "Taken to settle what you owed",
       "summaryDebt": "To be taken from your next sales",
       "summarySalesCount": "{count, plural, one {# sale} other {# sales}}",
-      "awaiting": "{count, plural, one {# sale just paid: we’re working out the fees.} other {# sales just paid: we’re working out the fees.}}"
+      "awaiting": "{count, plural, one {# sale just paid: we’re working out the fees.} other {# sales just paid: we’re working out the fees.}}",
+      "refundedNote": "Refunded to the student: {amount}",
+      "refundCta": "Refund",
+      "refund": {
+        "title": "Refund \"{item}\"",
+        "loading": "Working it out…",
+        "optionFull": "All of it ({amount})",
+        "optionPartial": "Part of it",
+        "amountLabel": "How much to give back ({currency})",
+        "amountHint": "Up to {amount}.",
+        "amountInvalid": "Enter an amount between 0.01 and {amount}.",
+        "studentGets": "The student gets {amount} back on their card. It usually shows up in 5 to 10 days.",
+        "creatorShare": "{amount} comes off what you received for this sale.",
+        "paidOutHow": "We had already sent it to you, so we take it back from your Stripe balance. If there isn't enough, it comes off your next payouts.",
+        "notPaidOutHow": "We hadn't sent it to you yet, so it comes off what we were going to send.",
+        "cardFeeCreator": "The bank doesn't return the card fee ({amount}): you pay it and it comes off your next payouts.",
+        "cardFeePlatform": "The bank doesn't return the card fee ({amount}): {operator} covers it.",
+        "operatorFeeReturned": "{operator} gives you back its share ({amount}).",
+        "operatorFeeKept": "{operator}'s share ({amount}) isn't returned: it comes off your next payouts.",
+        "total": "In total, {amount} comes off your money.",
+        "accessFull": "With a full refund, the student loses access to the course.",
+        "accessPartial": "With a partial refund, the student keeps access to the course.",
+        "confirm": "Refund {amount}",
+        "confirming": "Refunding…",
+        "cancel": "Cancel",
+        "done": "Done. The student will get {amount} back.",
+        "doneTitle": "Refund done",
+        "close": "Close"
+      },
+      "noticeDebtItem": "We'll take {amount} from your next payouts because of {reason}.",
+      "noticeDebtFrozen": "If the bank rules in our favour, we won't take anything.",
+      "debtReasons": {
+        "REFUND_FEE": "the card fee on a refund (\"{item}\")",
+        "REVERSAL_FAILED": "a refund we couldn't take back from your balance (\"{item}\")",
+        "DISPUTE": "a payment dispute with the bank (\"{item}\")",
+        "DISPUTE_FEE": "a payment dispute we didn't win: the bank's fee and the card fee (\"{item}\")",
+        "MANUAL": "an adjustment (\"{item}\")"
+      },
+      "noticeDispute": "A student has disputed the payment for \"{item}\" ({amount}) with their bank. We'll answer the bank before {date}. If you have proof they received the course (access history, messages, invoice), send it to us. Until it's decided, this sale is on hold.",
+      "noticeDisputeNoDate": "A student has disputed the payment for \"{item}\" ({amount}) with their bank. We'll answer the bank. If you have proof they received the course (access history, messages, invoice), send it to us. Until it's decided, this sale is on hold.",
+      "summaryRefunded": "Refunded to students",
+      "summaryReversed": "Taken back from what we sent you",
+      "disputeNoteOpen": "On hold while the bank decides",
+      "disputeNoteWon": "Sent back to you after we won the dispute",
+      "disputeNoteLost": "The bank gave it back to the student"
     }
   }
 }

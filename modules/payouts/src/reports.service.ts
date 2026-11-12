@@ -5,6 +5,8 @@
 
 import type { PayoutsSaleStatus } from '@didacta/database';
 import type { PayoutScheduleView, PayoutsDbPort } from './accounts.service.js';
+import { frozenDisputeSaleIds, type DebtView } from './debts.service.js';
+import type { DisputeView } from './disputes.service.js';
 import { saleReasonCode } from './settlement.service.js';
 
 /**
@@ -35,7 +37,20 @@ export interface SaleView {
   readonly creatorNet: number | null;
   readonly debtNetted: number;
   readonly transferAmount: number | null;
+  /** Devuelto al alumno, en la divisa de liquidación (lo ya anotado). */
   readonly refundedAmount: number;
+  /** Lo que se le retiró al creador de esta venta (reembolsos, disputas, deudas). */
+  readonly reversedAmount: number;
+  /** `none` | `partial` | `full`: cuánto de la venta se ha devuelto. */
+  readonly refundState: 'none' | 'partial' | 'full';
+  /** El alumno reclamó el pago a su banco y aún no se ha decidido. */
+  readonly disputeOpen: boolean;
+  /** ¿Se puede pedir un reembolso desde el panel ahora? */
+  readonly canRefund: boolean;
+  /** Reclamación ya decidida: `won` (se le devolvió al creador) o `lost`. */
+  readonly disputeOutcome: 'won' | 'lost' | null;
+  /** Lo que se le transfirió de nuevo al ganar una reclamación. */
+  readonly reinstatedAmount: number;
   readonly transferredAt: string | null;
   /** Cuándo quedan disponibles los fondos (`available_on`). */
   readonly availableOn: string | null;
@@ -65,12 +80,20 @@ export interface CurrencySummary {
   readonly debtNetted: number;
   /** Deuda abierta hoy en esta divisa. */
   readonly debtOutstanding: number;
+  /** Devuelto a alumnos (reembolsos anotados). */
+  readonly refunded: number;
+  /** Retirado de lo que ya se le había enviado (reembolsos, disputas, recobros). */
+  readonly reversed: number;
 }
 
 export interface SalesSummary {
   readonly currencies: CurrencySummary[];
   /** Ventas cobradas cuyo reparto aún no se puede calcular (sin `balance_transaction`). */
   readonly awaitingFeeCount: number;
+  /** Deudas abiertas, con su motivo, para el aviso «Te descontaremos…». */
+  readonly debts: DebtView[];
+  /** Disputas sin decidir, con su fecha límite. */
+  readonly disputes: DisputeView[];
 }
 
 /** Fila del contrato `GET /admin/tenants/payouts/volume`. */
@@ -144,27 +167,54 @@ export class PayoutsReportsService {
   ): Promise<SalesPage> {
     const pageSize = Math.min(Math.max(Math.trunc(options.pageSize ?? 20), 1), 100);
     const page = Math.max(Math.trunc(options.page ?? 1), 1);
-    const { rows, total, schedule } = await this.db.inTenant(tenantId, async (tx) => {
-      const [rows, total, account] = await Promise.all([
-        tx.modPayoutsSale.findMany({
-          where: { tenantId },
-          orderBy: [{ chargedAt: { sort: 'desc', nulls: 'last' } }, { createdAt: 'desc' }],
-          skip: (page - 1) * pageSize,
-          take: pageSize,
-        }),
-        tx.modPayoutsSale.count({ where: { tenantId } }),
-        tx.modPayoutsAccount.findFirst({
-          where: { tenantId, closedAt: null },
-          orderBy: { createdAt: 'desc' },
-          select: { payoutSchedule: true },
-        }),
-      ]);
-      return {
-        rows,
-        total,
-        schedule: (account?.payoutSchedule as PayoutScheduleView | null | undefined) ?? null,
-      };
-    });
+    const { rows, total, schedule, disputed, outcomes, reinstated } = await this.db.inTenant(
+      tenantId,
+      async (tx) => {
+        const [rows, total, account] = await Promise.all([
+          tx.modPayoutsSale.findMany({
+            where: { tenantId },
+            orderBy: [{ chargedAt: { sort: 'desc', nulls: 'last' } }, { createdAt: 'desc' }],
+            skip: (page - 1) * pageSize,
+            take: pageSize,
+          }),
+          tx.modPayoutsSale.count({ where: { tenantId } }),
+          tx.modPayoutsAccount.findFirst({
+            where: { tenantId, closedAt: null },
+            orderBy: { createdAt: 'desc' },
+            select: { payoutSchedule: true },
+          }),
+        ]);
+        const disputed = new Set(await frozenDisputeSaleIds(tx, tenantId));
+        const ids = rows.map((r) => r.id);
+        const decided = ids.length
+          ? await tx.modPayoutsDispute.findMany({
+              where: { tenantId, saleId: { in: ids }, outcome: { not: null } },
+              select: { saleId: true, outcome: true },
+            })
+          : [];
+        const reinstated = ids.length
+          ? await tx.modPayoutsLedgerEntry.groupBy({
+              by: ['saleId'],
+              where: {
+                tenantId,
+                saleId: { in: ids },
+                type: 'TRANSFER',
+                idempotencyKey: { startsWith: 'payouts:reinstate:' },
+              },
+              _sum: { amount: true },
+              orderBy: { saleId: 'asc' },
+            })
+          : [];
+        return {
+          rows,
+          total,
+          schedule: (account?.payoutSchedule as PayoutScheduleView | null | undefined) ?? null,
+          disputed,
+          outcomes: new Map(decided.map((d) => [d.saleId, d.outcome])),
+          reinstated: new Map(reinstated.map((r) => [r.saleId, -(r._sum.amount ?? 0)])),
+        };
+      },
+    );
     const items = rows.map((row): SaleView => {
       const arrival = ARRIVAL_STATUSES.has(row.status)
         ? estimatePayoutDate(row.availableOn, schedule)
@@ -188,6 +238,31 @@ export class PayoutsReportsService {
         debtNetted: row.debtNetted,
         transferAmount: row.transferAmount,
         refundedAmount: row.refundedAmount,
+        reversedAmount: row.reversedAmount,
+        refundState:
+          row.refundedAmount <= 0
+            ? 'none'
+            : row.gross !== null && row.refundedAmount >= row.gross
+              ? 'full'
+              : 'partial',
+        disputeOpen: disputed.has(row.id),
+        disputeOutcome: disputed.has(row.id)
+          ? null
+          : outcomes.get(row.id) === 'won'
+            ? 'won'
+            : outcomes.get(row.id) === 'lost'
+              ? 'lost'
+              : null,
+        reinstatedAmount: reinstated.get(row.id) ?? 0,
+        canRefund:
+          row.status !== 'AWAITING_FEE' &&
+          row.status !== 'FAILED' &&
+          row.gross !== null &&
+          row.transferAmount !== null &&
+          row.refundedAmount < row.gross &&
+          // Con disputa (abierta o decidida) Stripe no deja reembolsar el cargo.
+          !disputed.has(row.id) &&
+          !outcomes.has(row.id),
         transferredAt: row.transferredAt?.toISOString() ?? null,
         availableOn: row.availableOn?.toISOString() ?? null,
         estimatedArrival: arrival ? arrival.toISOString().slice(0, 10) : null,
@@ -198,28 +273,62 @@ export class PayoutsReportsService {
 
   /** Resumen por divisa de liquidación. Nunca suma divisas distintas. */
   async summary(tenantId: string): Promise<SalesSummary> {
-    const { groups, debts, awaiting } = await this.db.inTenant(tenantId, async (tx) => ({
-      groups: await tx.modPayoutsSale.groupBy({
-        by: ['currency', 'status'],
-        where: { tenantId, currency: { not: null } },
-        _count: { _all: true },
-        _sum: {
-          gross: true,
-          stripeFee: true,
-          platformFee: true,
-          transferAmount: true,
-          debtNetted: true,
-        },
-        orderBy: [{ currency: 'asc' }, { status: 'asc' }],
+    const { groups, debts, awaiting, openDebts, openDisputes, frozen } = await this.db.inTenant(
+      tenantId,
+      async (tx) => ({
+        groups: await tx.modPayoutsSale.groupBy({
+          by: ['currency', 'status'],
+          where: { tenantId, currency: { not: null } },
+          _count: { _all: true },
+          _sum: {
+            gross: true,
+            stripeFee: true,
+            platformFee: true,
+            transferAmount: true,
+            debtNetted: true,
+            refundedAmount: true,
+            reversedAmount: true,
+          },
+          orderBy: [{ currency: 'asc' }, { status: 'asc' }],
+        }),
+        debts: await tx.modPayoutsDebt.groupBy({
+          by: ['currency'],
+          where: { tenantId, status: 'OPEN' },
+          _sum: { amountOutstanding: true },
+          orderBy: { currency: 'asc' },
+        }),
+        awaiting: await tx.modPayoutsSale.count({ where: { tenantId, currency: null } }),
+        openDebts: await tx.modPayoutsDebt.findMany({
+          where: { tenantId, status: 'OPEN', amountOutstanding: { gt: 0 } },
+          orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+          take: 50,
+        }),
+        openDisputes: await tx.modPayoutsDispute.findMany({
+          where: { tenantId, outcome: null },
+          orderBy: [{ evidenceDueBy: { sort: 'asc', nulls: 'last' } }, { createdAt: 'asc' }],
+          take: 50,
+        }),
+        frozen: await frozenDisputeSaleIds(tx, tenantId),
       }),
-      debts: await tx.modPayoutsDebt.groupBy({
-        by: ['currency'],
-        where: { tenantId, status: 'OPEN' },
-        _sum: { amountOutstanding: true },
-        orderBy: { currency: 'asc' },
-      }),
-      awaiting: await tx.modPayoutsSale.count({ where: { tenantId, currency: null } }),
-    }));
+    );
+    const saleIds = [
+      ...new Set([
+        ...openDebts.map((d) => d.originSaleId).filter((id): id is string => !!id),
+        ...openDisputes.map((d) => d.saleId),
+      ]),
+    ];
+    const descriptions = saleIds.length
+      ? new Map(
+          (
+            await this.db.inTenant(tenantId, (tx) =>
+              tx.modPayoutsSale.findMany({
+                where: { tenantId, id: { in: saleIds } },
+                select: { id: true, description: true },
+              }),
+            )
+          ).map((sale) => [sale.id, sale.description]),
+        )
+      : new Map<string, string | null>();
 
     const byCurrency = new Map<string, Mutable<CurrencySummary>>();
     const bucket = (currency: string) => {
@@ -235,6 +344,8 @@ export class PayoutsReportsService {
           pending: 0,
           debtNetted: 0,
           debtOutstanding: 0,
+          refunded: 0,
+          reversed: 0,
         };
         byCurrency.set(currency, entry);
       }
@@ -249,6 +360,8 @@ export class PayoutsReportsService {
       entry.stripeFees += sum.stripeFee ?? 0;
       entry.platformFees += sum.platformFee ?? 0;
       entry.debtNetted += sum.debtNetted ?? 0;
+      entry.refunded += sum.refundedAmount ?? 0;
+      entry.reversed += sum.reversedAmount ?? 0;
       if (group.status === 'TRANSFERRED') entry.received += sum.transferAmount ?? 0;
       if (group.status === 'READY' || group.status === 'HELD') {
         entry.pending += sum.transferAmount ?? 0;
@@ -261,6 +374,30 @@ export class PayoutsReportsService {
     return {
       currencies: [...byCurrency.values()].sort((a, b) => a.currency.localeCompare(b.currency)),
       awaitingFeeCount: awaiting,
+      debts: openDebts.map((debt) => ({
+        id: debt.id,
+        reason: debt.reason,
+        amountOriginal: debt.amountOriginal,
+        amountOutstanding: debt.amountOutstanding,
+        currency: debt.currency,
+        createdAt: debt.createdAt.toISOString(),
+        saleId: debt.originSaleId,
+        saleDescription: debt.originSaleId ? (descriptions.get(debt.originSaleId) ?? null) : null,
+        frozen:
+          debt.reason === 'DISPUTE' &&
+          debt.originSaleId !== null &&
+          frozen.includes(debt.originSaleId),
+      })),
+      disputes: openDisputes.map((dispute) => ({
+        id: dispute.id,
+        saleId: dispute.saleId,
+        saleDescription: descriptions.get(dispute.saleId) ?? null,
+        status: dispute.status,
+        amount: dispute.amount,
+        currency: dispute.currency,
+        reason: dispute.reason,
+        evidenceDueBy: dispute.evidenceDueBy?.toISOString() ?? null,
+      })),
     };
   }
 

@@ -8,6 +8,7 @@ import type { PayoutsDbPort, PayoutsLogger, PayoutsTx } from './accounts.service
 import { PayoutsSettlementConflictError, PlatformStripeApiError } from './errors.js';
 import { idOf } from './event-router.js';
 import { IDEMPOTENCY_KEYS, LedgerService, type LedgerEntryInput } from './ledger.service.js';
+import { frozenDisputeSaleIds, unfrozenDebtsWhere } from './debts.service.js';
 import { assertFeeBps, computeSplit, normalizeCurrency } from './money.js';
 import { RefsService } from './refs.service.js';
 import type { PayoutsSettingsService } from './settings.service.js';
@@ -57,9 +58,13 @@ export const SALE_HOLD_REASONS = {
   accountNotReady: 'account_not_ready',
   /** Stripe rechazó la transferencia (saldo, capacidad…). Se reintenta cada día. */
   transferRejected: 'transfer_rejected',
-  /** El cargo tiene reembolsos: el reparto lo decide la etapa de reembolsos (E6). */
+  /**
+   * El cargo tiene reembolsos que aún no están anotados: se espera a que los
+   * anote `refunds.service.ts` (que descuenta de esta transferencia pendiente
+   * lo que toque) y después la venta sigue sola.
+   */
   chargeRefunded: 'charge_refunded',
-  /** El cargo está disputado: el reparto lo decide la etapa de disputas (E6). */
+  /** El cargo tiene una disputa sin decidir: no se transfiere hasta que se decida. */
   chargeDisputed: 'charge_disputed',
 } as const;
 export type SaleHoldReason = (typeof SALE_HOLD_REASONS)[keyof typeof SALE_HOLD_REASONS];
@@ -324,9 +329,9 @@ export class SettlementService {
         `el cargo ${charge.id} no está cobrado (${String(charge.status)})`,
       );
     }
-    const blocked = this.chargeHoldReason(charge);
-    if (blocked) return this.hold(tenantId, sale, blocked, `cargo ${charge.id}`, null);
-
+    // Un cargo reembolsado o disputado también SELLA su reparto (los
+    // reembolsos y las disputas se anotan contra él); lo que no hace es
+    // transferir hasta que estén anotados: eso lo decide `transfer()`.
     const bt = this.balanceTransactionOf(charge);
     if (!bt) {
       const chargedAt = (sale.chargedAt ?? sale.createdAt).getTime();
@@ -371,6 +376,8 @@ export class SettlementService {
       // Cerrojo de la deuda de esta cuenta en esta divisa: dos ventas a la vez
       // no pueden compensar la misma deuda.
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`payouts:debt:${sale.accountId}:${currency}`}::text, 0))`;
+      // La deuda de una disputa aún abierta no se cobra (E6): si se gana, se cancela.
+      const frozen = split.creatorNet > 0 ? await frozenDisputeSaleIds(tx, tenantId) : [];
       const debts =
         split.creatorNet > 0
           ? await tx.modPayoutsDebt.findMany({
@@ -380,6 +387,7 @@ export class SettlementService {
                 currency,
                 status: 'OPEN',
                 amountOutstanding: { gt: 0 },
+                ...unfrozenDebtsWhere(frozen),
               },
               orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
             })
@@ -538,7 +546,7 @@ export class SettlementService {
     }
 
     const charge = chargeRead ?? (await this.readCharge(sale.stripeChargeId));
-    const blocked = this.chargeHoldReason(charge);
+    const blocked = await this.chargeHoldReason(tenantId, sale.id, charge);
     if (blocked) return this.hold(tenantId, sale, blocked, `cargo ${charge.id}`, leaseUntil);
 
     const amount = sale.transferAmount!;
@@ -602,6 +610,8 @@ export class SettlementService {
           tenantId,
           stripeTransferId: null,
           status: { in: TRANSFERABLE_STATUSES },
+          // Un reembolso anotado mientras tanto habría cambiado el importe.
+          transferAmount: amount,
         },
         data: {
           status: 'TRANSFERRED',
@@ -794,11 +804,39 @@ export class SettlementService {
     };
   }
 
-  private chargeHoldReason(charge: ChargeFromApi): SaleHoldReason | null {
-    if (charge.disputed === true) return SALE_HOLD_REASONS.chargeDisputed;
-    if ((charge.amount_refunded ?? 0) > 0 || charge.refunded === true) {
-      return SALE_HOLD_REASONS.chargeRefunded;
+  /**
+   * ¿Hay algo en el cargo que aún no está anotado? (E6)
+   *
+   *  - Una disputa sin decidir (o que Stripe tiene y nosotros aún no) →
+   *    retenida hasta que se decida.
+   *  - Más reembolsado en Stripe que anotado en el libro → retenida hasta que
+   *    se anote: la anotación descuenta de ESTA transferencia lo que toca al
+   *    creador. Con todo anotado, la venta sigue con su importe ya reducido.
+   */
+  private async chargeHoldReason(
+    tenantId: string,
+    saleId: string,
+    charge: ChargeFromApi,
+  ): Promise<SaleHoldReason | null> {
+    const refunded = charge.amount_refunded ?? 0;
+    if (charge.disputed !== true && refunded === 0) return null;
+    const recorded = await this.db.inTenant(tenantId, async (tx) => ({
+      disputes: await tx.modPayoutsDispute.findMany({
+        where: { tenantId, saleId },
+        select: { outcome: true },
+      }),
+      refunds: await tx.modPayoutsRefund.findMany({
+        where: { tenantId, saleId, reversalStatus: { not: null } },
+        select: { amount: true },
+      }),
+    }));
+    if (charge.disputed === true) {
+      if (recorded.disputes.length === 0 || recorded.disputes.some((d) => d.outcome === null)) {
+        return SALE_HOLD_REASONS.chargeDisputed;
+      }
     }
+    const accounted = recorded.refunds.reduce((total, row) => total + row.amount, 0);
+    if (refunded > accounted) return SALE_HOLD_REASONS.chargeRefunded;
     return null;
   }
 

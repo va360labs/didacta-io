@@ -410,7 +410,10 @@
         "heldRetry": "Retenida: lo volvemos a intentar mañana",
         "refunded": "Reembolsada",
         "disputed": "El alumno ha reclamado el pago a su banco",
-        "review": "La estamos revisando; te escribimos si hace falta algo"
+        "review": "La estamos revisando; te escribimos si hace falta algo",
+        "refundedPartial": "Reembolsada en parte",
+        "disputeWon": "Reclamación ganada: te lo devolvimos",
+        "disputeLost": "Reclamación perdida: el banco lo devolvió al alumno"
       },
       "noticeHeld": "Tienes ventas retenidas: el dinero está a salvo y lo volvemos a intentar cada día. Si dice «hasta que completes tus datos de cobro», pulsa «Completar» arriba.",
       "noticeDebt": "Tienes {amount} pendientes de descontar de tus próximas ventas.",
@@ -423,7 +426,51 @@
       "summaryDebtNetted": "Descontado para saldar deudas",
       "summaryDebt": "Por descontar de próximas ventas",
       "summarySalesCount": "{count, plural, one {# venta} other {# ventas}}",
-      "awaiting": "{count, plural, one {# venta recién cobrada: estamos calculando las comisiones.} other {# ventas recién cobradas: estamos calculando las comisiones.}}"
+      "awaiting": "{count, plural, one {# venta recién cobrada: estamos calculando las comisiones.} other {# ventas recién cobradas: estamos calculando las comisiones.}}",
+      "refundedNote": "Devuelto al alumno: {amount}",
+      "refundCta": "Reembolsar",
+      "refund": {
+        "title": "Reembolsar «{item}»",
+        "loading": "Calculando…",
+        "optionFull": "Todo ({amount})",
+        "optionPartial": "Una parte",
+        "amountLabel": "Cuánto devuelves ({currency})",
+        "amountHint": "Como máximo {amount}.",
+        "amountInvalid": "Escribe un importe entre 0,01 y {amount}.",
+        "studentGets": "El alumno recibe {amount} en su tarjeta. Suele verlo en 5 a 10 días.",
+        "creatorShare": "Se te descuentan {amount} de lo que recibiste por esta venta.",
+        "paidOutHow": "Como ya te lo habíamos enviado, lo retiramos de tu saldo en Stripe. Si no hay bastante, lo descontamos de tus próximos cobros.",
+        "notPaidOutHow": "Como aún no te lo habíamos enviado, se resta de lo que te íbamos a enviar.",
+        "cardFeeCreator": "El banco no devuelve la comisión de la tarjeta ({amount}): la pagas tú y se descuenta de tus próximos cobros.",
+        "cardFeePlatform": "El banco no devuelve la comisión de la tarjeta ({amount}): la asume {operator}.",
+        "operatorFeeReturned": "{operator} te devuelve su parte ({amount}).",
+        "operatorFeeKept": "La parte de {operator} ({amount}) no se devuelve: se descuenta de tus próximos cobros.",
+        "total": "En total se te descuentan {amount}.",
+        "accessFull": "Al devolverlo todo, el alumno pierde el acceso al curso.",
+        "accessPartial": "Con un reembolso parcial, el alumno conserva el acceso al curso.",
+        "confirm": "Reembolsar {amount}",
+        "confirming": "Reembolsando…",
+        "cancel": "Cancelar",
+        "done": "Hecho. El alumno recibirá {amount}.",
+        "doneTitle": "Reembolso hecho",
+        "close": "Cerrar"
+      },
+      "noticeDebtItem": "Te descontaremos {amount} de tus próximos cobros por {reason}.",
+      "noticeDebtFrozen": "Si el banco nos da la razón, no te descontaremos nada.",
+      "debtReasons": {
+        "REFUND_FEE": "la comisión de la tarjeta de un reembolso («{item}»)",
+        "REVERSAL_FAILED": "un reembolso que no pudimos retirar de tu saldo («{item}»)",
+        "DISPUTE": "una reclamación al banco («{item}»)",
+        "DISPUTE_FEE": "una reclamación al banco que no ganamos: la tasa del banco y la comisión de la tarjeta («{item}»)",
+        "MANUAL": "un ajuste («{item}»)"
+      },
+      "noticeDispute": "Un alumno ha reclamado a su banco el pago de «{item}» ({amount}). Le respondemos nosotros antes del {date}. Si tienes pruebas de que recibió el curso (accesos, mensajes, factura), envíanoslas. Mientras se decide, esa venta queda retenida.",
+      "noticeDisputeNoDate": "Un alumno ha reclamado a su banco el pago de «{item}» ({amount}). Le respondemos nosotros. Si tienes pruebas de que recibió el curso (accesos, mensajes, factura), envíanoslas. Mientras se decide, esa venta queda retenida.",
+      "summaryRefunded": "Devuelto a alumnos",
+      "summaryReversed": "Retirado de lo que ya te enviamos",
+      "disputeNoteOpen": "Retenido mientras el banco decide",
+      "disputeNoteWon": "Te lo devolvimos al ganar la reclamación",
+      "disputeNoteLost": "El banco se lo devolvió al alumno"
     }
   }
 }

@@ -181,6 +181,8 @@ describe('ventas y resumen', () => {
         pending: 6985,
         debtNetted: 2340,
         debtOutstanding: 0,
+        refunded: 0,
+        reversed: 0,
       },
       {
         currency: 'gbp',
@@ -192,6 +194,8 @@ describe('ventas y resumen', () => {
         pending: 0,
         debtNetted: 0,
         debtOutstanding: 500,
+        refunded: 0,
+        reversed: 0,
       },
       {
         currency: 'usd',
@@ -203,6 +207,8 @@ describe('ventas y resumen', () => {
         pending: 0,
         debtNetted: 0,
         debtOutstanding: 0,
+        refunded: 0,
+        reversed: 0,
       },
     ]);
   });

@@ -67,7 +67,7 @@ const FAMILY_OF_TYPE: ReadonlyArray<readonly [RegExp, PlatformEventFamily]> = [
   [/^invoice\.(paid|payment_failed)$/, 'invoice'],
   [/^charge\.(succeeded|updated|refunded)$/, 'charge'],
   [/^refund\.(created|updated|failed)$/, 'refund'],
-  [/^charge\.dispute\.(created|funds_withdrawn|funds_reinstated|closed)$/, 'dispute'],
+  [/^charge\.dispute\.(created|updated|funds_withdrawn|funds_reinstated|closed)$/, 'dispute'],
   [/^transfer\.(created|reversed|updated)$/, 'transfer'],
   [/^payout\.failed$/, 'payout'],
 ];

@@ -60,6 +60,9 @@ export class PayoutsReconcileWorker implements OnApplicationBootstrap, OnModuleD
       settlement: runtime.settlement,
       replayEvent: (event) =>
         processor.process(event, { ip: null, userAgent: 'payouts-reconcile' }),
+      // E6: reembolsos y disputas que se perdieron o quedaron a medias, y
+      // (en la pasada diaria) recobro de deudas y avisos al operador.
+      losses: { refunds: runtime.refunds, disputes: runtime.disputes, debts: runtime.debts },
       logger: {
         warn: (obj, msg) => logger.warn(obj, msg),
         log: (obj, msg) => logger.log(obj, msg),

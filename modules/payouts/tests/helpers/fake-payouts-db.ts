@@ -121,14 +121,30 @@ const MODELS: Record<string, ModelSpec> = {
   modPayoutsRefund: {
     tenantScoped: true,
     primary: 'id',
-    unique: ['id'],
-    defaults: () => ({ id: randomUUID(), status: 'pending' }),
+    unique: ['id', 'stripeRefundId'],
+    defaults: () => ({
+      id: randomUUID(),
+      status: 'pending',
+      stripeRefundId: null,
+      reversalTarget: null,
+      stripeReversalId: null,
+      reversalStatus: null,
+      initiatedBy: null,
+      reason: null,
+    }),
   },
   modPayoutsDispute: {
     tenantScoped: true,
     primary: 'id',
-    unique: ['id'],
-    defaults: () => ({ id: randomUUID(), fee: 0 }),
+    unique: ['id', 'stripeDisputeId'],
+    defaults: () => ({
+      id: randomUUID(),
+      fee: 0,
+      reason: null,
+      evidenceDueBy: null,
+      stripeReversalId: null,
+      outcome: null,
+    }),
   },
 };
 
@@ -198,6 +214,9 @@ export function matches(row: Row, where: Where | undefined): boolean {
             break;
           case 'contains':
             if (typeof value !== 'string' || !value.includes(String(arg))) return false;
+            break;
+          case 'startsWith':
+            if (typeof value !== 'string' || !value.startsWith(String(arg))) return false;
             break;
           default:
             throw new Error(`fake-payouts-db: operador no soportado ${op}`);

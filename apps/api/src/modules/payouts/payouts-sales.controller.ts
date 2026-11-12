@@ -9,19 +9,30 @@ import {
   ForbiddenException,
   Get,
   HttpCode,
+  Param,
   Post,
   Query,
+  Req,
   UnauthorizedException,
   UseGuards,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
-import type { ReconcileReport, SalesPage, SalesSummary } from '@didacta/mod-payouts';
+import type {
+  ReconcileReport,
+  RefundPreview,
+  RefundResult,
+  SalesPage,
+  SalesSummary,
+} from '@didacta/mod-payouts';
+import type { FastifyRequest } from 'fastify';
 import { z } from 'zod';
+import { extractClientContext } from '../../auth/client-context';
 import { CurrentUser } from '../../auth/decorators';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import type { SessionClaims } from '../../auth/token.service';
 import { ZodValidationPipe } from '../../auth/zod-validation.pipe';
 import { runAsTenant } from '../../tenancy/tenant-context.storage';
+import { PrismaAuditLogService } from '../prisma-audit-log.service';
 import { PayoutsReconcileWorker } from './payouts-reconcile.worker';
 import { PayoutsRuntime } from './payouts-runtime.service';
 
@@ -45,6 +56,24 @@ export const reconcileRunSchema = z
   })
   .default({});
 type ReconcileRunDto = z.infer<typeof reconcileRunSchema>;
+
+/** Importe en unidad mínima de la moneda del cargo; sin él, todo lo que queda. */
+const amountSchema = z.coerce.number().int().min(1).max(2_147_483_647);
+
+export const refundSchema = z
+  .object({
+    amount: amountSchema.optional(),
+    /**
+     * UUID que genera el diálogo al abrirse: es el id del reembolso. Un doble
+     * clic (o un reintento) manda el mismo y acaba en UN solo reembolso.
+     */
+    requestId: z.string().uuid().optional(),
+  })
+  .default({});
+type RefundDto = z.infer<typeof refundSchema>;
+
+export const refundPreviewQuerySchema = z.object({ amount: amountSchema.optional() });
+type RefundPreviewQuery = z.infer<typeof refundPreviewQuerySchema>;
 
 /** `GET /modules/payouts/summary`. Contrato con la web. */
 export interface PayoutsSummaryResponse extends SalesSummary {
@@ -84,6 +113,7 @@ export class PayoutsSalesController {
   constructor(
     private readonly runtime: PayoutsRuntime,
     private readonly reconcile: PayoutsReconcileWorker,
+    private readonly auditLog: PrismaAuditLogService,
   ) {}
 
   @Get('sales')
@@ -112,6 +142,70 @@ export class PayoutsSalesController {
       ]);
       return { ...summary, operatorName: this.runtime.config.displayName, feeBps: settings.feeBps };
     });
+  }
+
+  @Get('sales/:id/refund-preview')
+  @ApiOperation({
+    summary:
+      'Qué pasaría al reembolsar (amount en la moneda del cargo; sin él, todo lo que queda): lo que recibe el alumno y lo que se descuenta al creador. No mueve dinero.',
+  })
+  async refundPreview(
+    @CurrentUser() user: SessionClaims | undefined,
+    @Param('id') saleId: string,
+    @Query(new ZodValidationPipe(refundPreviewQuerySchema)) query: RefundPreviewQuery,
+  ): Promise<RefundPreview> {
+    const u = requireRole(user, ADMIN_ROLES, 'PAYOUTS_ADMIN_ROLE_REQUIRED');
+    return runAsTenant(u.tenantId, () =>
+      this.runtime.refunds.preview(u.tenantId, saleId, query.amount),
+    );
+  }
+
+  @Post('sales/:id/refund')
+  @HttpCode(200)
+  @ApiOperation({
+    summary:
+      'Reembolsa una venta (total, o parcial con amount). Devuelve el dinero al alumno, recupera del creador su parte y deja como deuda lo que no se pueda recuperar. Venta de otra academia: 404.',
+  })
+  async refund(
+    @Req() req: FastifyRequest,
+    @CurrentUser() user: SessionClaims | undefined,
+    @Param('id') saleId: string,
+    @Body(new ZodValidationPipe(refundSchema)) dto: RefundDto,
+  ): Promise<RefundResult> {
+    const u = requireRole(user, ADMIN_ROLES, 'PAYOUTS_ADMIN_ROLE_REQUIRED');
+    if (u.sup) {
+      throw new ForbiddenException({
+        message: 'Una sesión de soporte no puede reembolsar ventas.',
+        code: 'PAYOUTS_SUPPORT_SESSION_FORBIDDEN',
+      });
+    }
+    const result = await runAsTenant(u.tenantId, () =>
+      this.runtime.refunds.refund({
+        tenantId: u.tenantId,
+        saleId,
+        amount: dto.amount,
+        requestId: dto.requestId,
+        initiatedBy: u.sub,
+      }),
+    );
+    const client = extractClientContext(req);
+    await this.auditLog.record({
+      tenantId: u.tenantId,
+      actorId: u.sub,
+      action: 'payouts.sale.refunded',
+      resourceType: 'payouts_sale',
+      resourceId: saleId,
+      metadata: {
+        refundId: result.refundId,
+        stripeRefundId: result.stripeRefundId,
+        amount: result.amount,
+        currency: result.currency,
+        status: result.status,
+      },
+      ip: client.ip ?? undefined,
+      userAgent: client.userAgent ?? undefined,
+    });
+    return result;
   }
 
   @Post('admin/reconcile/run-now')
