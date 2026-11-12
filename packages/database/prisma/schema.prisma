@@ -4039,6 +4039,9 @@ model ModReferralsConfig {
   /// Copy editable del área del miembro (/referidos). Sin datos inventados:
   /// lo escribe el operador; vacío = solo la UI funcional.
   memberCopy              String?  @map("member_copy")
+  /// El alumno con membresía puede cobrar lo ganado como descuento en su
+  /// próxima cuota (saldo de cliente de Stripe). El creador lo apaga en Ventas.
+  allowCreditRedemption   Boolean  @default(true) @map("allow_credit_redemption")
   createdAt               DateTime @default(now()) @map("created_at")
   updatedAt               DateTime @updatedAt @map("updated_at")
 
@@ -4165,8 +4168,18 @@ model ModReferralsPayout {
   currency          String   @default("eur")
   /// Referencia externa obligatoria del pago real.
   externalReference String   @map("external_reference")
-  /// Admin que registró la liquidación (ID lógico).
+  /// Admin que registró la liquidación (ID lógico). En un canje como
+  /// descuento, el propio alumno.
   createdByUserId   String   @map("created_by_user_id") @db.Uuid
+  /// CASH = pago fuera (lo registra el admin); CREDIT = descuento en la
+  /// próxima cuota (saldo de cliente de Stripe).
+  method            String   @default("CASH")
+  /// CREDIT: PENDING mientras Stripe no confirma el abono; DONE con el id de
+  /// la transacción de saldo (`cbtxn_…`) en `externalReference`.
+  status            String   @default("DONE")
+  /// CREDIT: cliente de Stripe (`cus_…`) al que se abona. Un reintento usa el
+  /// mismo cliente y la misma clave de idempotencia (el id de esta fila).
+  stripeCustomerId  String?  @map("stripe_customer_id")
   createdAt         DateTime @default(now()) @map("created_at")
 
   commissions ModReferralsCommission[]
@@ -4907,6 +4920,9 @@ model ModPayoutsSale {
   /// Lo que pagó el alumno, en SU divisa.
   presentmentAmount          Int                   @map("presentment_amount")
   presentmentCurrency        String                @map("presentment_currency") @db.VarChar(3)
+  /// Saldo a favor del cliente que Stripe aplicó a la factura (descuento por
+  /// referidos), en la divisa del alumno. El alumno pagó eso de menos.
+  customerCreditApplied      Int                   @default(0) @map("customer_credit_applied")
   /// Todo lo de abajo va en la divisa de liquidación (`currency`) y es null
   /// hasta que el cargo tiene `balance_transaction`.
   gross                      Int?
@@ -4914,6 +4930,10 @@ model ModPayoutsSale {
   /// Comisión aplicada, sellada al calcular el reparto (la del tenant puede
   /// cambiar después).
   feeBpsApplied              Int?                  @map("fee_bps_applied")
+  /// Base de la comisión del operador: el bruto MÁS el saldo a favor aplicado
+  /// (pasado a la divisa de liquidación). Null = el bruto. El descuento lo
+  /// paga el creador, nunca el operador.
+  feeBase                    Int?                  @map("fee_base")
   platformFee                Int?                  @map("platform_fee")
   creatorNet                 Int?                  @map("creator_net")
   /// Parte del neto que se quedó la plataforma para compensar deuda abierta.
