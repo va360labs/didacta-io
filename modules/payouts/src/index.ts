@@ -311,6 +311,7 @@ export {
   PayoutsSaleNotRefundableError,
   PayoutsRefundExceedsRemainingError,
   PayoutsRefundRejectedError,
+  PayoutsPriceCurrencyError,
   PlatformStripeConfigError,
   PlatformStripeApiError,
 } from './errors.js';
@@ -341,3 +342,16 @@ export function buildPayoutsModule(): DidactaModule {
     },
   };
 }
+
+export {
+  PLATFORM_PRICE_CURRENCIES,
+  STRIPE_ZERO_DECIMAL_CURRENCIES,
+  STRIPE_WHOLE_UNIT_CURRENCIES,
+  MAX_CURRENCY_OPTIONS,
+  assertPlatformPrice,
+  isValidStripeAmount,
+  normalizeCurrencyOptions,
+  settlementCurrencyOf,
+} from './currencies.js';
+export type { PriceCurrencyCheck } from './currencies.js';
+export type { PayoutsPriceCurrencyReason } from './errors.js';

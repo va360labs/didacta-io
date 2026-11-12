@@ -43,6 +43,32 @@ export class PayoutsInvalidAmountError extends PayoutsError {
   }
 }
 
+/** Motivo estable de un precio que no se puede poner en modo plataforma. */
+export type PayoutsPriceCurrencyReason =
+  | 'currency_not_supported'
+  | 'invalid_amount'
+  | 'invalid_currency_option';
+
+/**
+ * Un precio en modo plataforma con una moneda que no se puede usar, un importe
+ * que Stripe no cobra en esa moneda (p. ej. 5,50 ISK) o un precio extra por
+ * mercado mal formado. `detail` = la moneda.
+ */
+export class PayoutsPriceCurrencyError extends PayoutsError {
+  constructor(
+    public readonly reason: PayoutsPriceCurrencyReason,
+    currency: string,
+  ) {
+    const messages: Record<PayoutsPriceCurrencyReason, string> = {
+      currency_not_supported: `No se pueden poner precios en ${currency.toUpperCase()}. Elige una de las monedas de la lista.`,
+      invalid_amount: `Ese importe no se puede cobrar en ${currency.toUpperCase()}.`,
+      invalid_currency_option: `El precio fijo en ${currency.toUpperCase()} no es válido.`,
+    };
+    super(messages[reason], 'PAYOUTS_PRICE_CURRENCY', { detail: currency.toUpperCase() });
+    this.name = 'PayoutsPriceCurrencyError';
+  }
+}
+
 /** La comisión del operador no es un entero entre 0 y 3000 puntos básicos. */
 export class PayoutsInvalidFeeBpsError extends PayoutsError {
   constructor(value: unknown) {
