@@ -8,6 +8,7 @@ import { ApiHttpError } from './api-client';
 import {
   formatBytes,
   formatDuration,
+  formatUsedDuration,
   looksLikeVideo,
   preflight,
   usedPercent,
@@ -39,6 +40,16 @@ describe('formato en llano', () => {
     expect(formatDuration(45 * 60 + 59)).toBe('45 min');
     expect(formatDuration(0)).toBe('0 min');
     expect(formatDuration(-5)).toBe('0 min');
+  });
+
+  it('lo usado y lo que dura un vídeo redondean hacia arriba (32 s no es «0 min»)', () => {
+    expect(formatDuration(32)).toBe('0 min');
+    expect(formatUsedDuration(32)).toBe('1 min');
+    expect(formatUsedDuration(0)).toBe('0 min');
+    expect(formatUsedDuration(-5)).toBe('0 min');
+    expect(formatUsedDuration(60)).toBe('1 min');
+    expect(formatUsedDuration(2 * H + 30)).toBe('2 h 1 min');
+    expect(formatUsedDuration(5 * H)).toBe('5 h');
   });
 
   it('tamaños', () => {

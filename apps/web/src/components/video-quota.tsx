@@ -10,7 +10,13 @@ import { useEffect, useState } from 'react';
 import { Icon } from '@/components/icon';
 import { Card, CardContent } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
-import { formatDuration, usedPercent, videoUploadApi, type VideoQuota } from '@/lib/video-upload';
+import {
+  formatDuration,
+  formatUsedDuration,
+  usedPercent,
+  videoUploadApi,
+  type VideoQuota,
+} from '@/lib/video-upload';
 
 /** Las frases de la cuota, en llano. Las usa la tarjeta y el editor de la lección. */
 export function useQuotaLines(quota: VideoQuota) {
@@ -18,12 +24,12 @@ export function useQuotaLines(quota: VideoQuota) {
   const pre = quota.tier === 'pre_sale';
   const stored = pre
     ? t('storedPre', {
-        used: formatDuration(quota.stored.usedSeconds),
+        used: formatUsedDuration(quota.stored.usedSeconds),
         limit: formatDuration(quota.stored.limitSeconds),
         post: formatDuration(quota.postSaleStoredSeconds),
       })
     : t('storedPost', {
-        used: formatDuration(quota.stored.usedSeconds),
+        used: formatUsedDuration(quota.stored.usedSeconds),
         limit: formatDuration(quota.stored.limitSeconds),
       });
   const bonus =
@@ -33,10 +39,10 @@ export function useQuotaLines(quota: VideoQuota) {
   const watched =
     quota.watched.limitSeconds !== null
       ? t('watchedPre', {
-          used: formatDuration(quota.watched.usedSeconds),
+          used: formatUsedDuration(quota.watched.usedSeconds),
           limit: formatDuration(quota.watched.limitSeconds),
         })
-      : t('watchedPost', { used: formatDuration(quota.watched.usedSeconds) });
+      : t('watchedPost', { used: formatUsedDuration(quota.watched.usedSeconds) });
   const resolution = pre ? t('resolutionPre') : t('resolutionPost');
   return { stored, bonus, watched, resolution };
 }
