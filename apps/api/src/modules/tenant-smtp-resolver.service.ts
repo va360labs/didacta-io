@@ -5,7 +5,16 @@
 
 import { Injectable, Logger } from '@nestjs/common';
 import type { TenantConfigService } from '@didacta/core-kernel';
-import { SmtpAdapterService, type SmtpConfig } from './smtp-adapter.service';
+import { SmtpAdapterService, type SmtpConfig, type SmtpSendConfig } from './smtp-adapter.service';
+import {
+  SENDER_SETTING_KEY,
+  SENDER_SETTING_MODULE,
+  displayNameFromAddress,
+  sanitizeReplyTo,
+  sanitizeSenderName,
+  type SmtpSenderIdentity,
+  type TenantSenderSetting,
+} from './smtp-sender-identity';
 
 /**
  * Origen efectivo de la config SMTP devuelta por el resolver. Útil para
@@ -16,10 +25,20 @@ import { SmtpAdapterService, type SmtpConfig } from './smtp-adapter.service';
 export type SmtpSource = 'tenant' | 'tenant_unverified' | 'global' | 'none';
 
 export interface ResolvedSmtp {
-  config: SmtpConfig;
+  /** Lista para `SmtpAdapterService.send`: incluye nombre visible y Reply-To. */
+  config: SmtpSendConfig;
   source: SmtpSource;
   /** Si la config viene del tenant, ¿fue probada al menos una vez con éxito? */
   verified: boolean;
+}
+
+/**
+ * Lo que el resolver necesita saber del aula para el Reply-To por defecto.
+ * Interfaz estrecha (no PrismaService) para que los tests no monten Prisma.
+ */
+export interface TenantSenderDirectory {
+  /** Correo del administrador principal del aula (el primer tenant_admin activo), o null. */
+  primaryAdminEmail(tenantId: string): Promise<string | null>;
 }
 
 /**
@@ -50,6 +69,8 @@ export class TenantSmtpResolverService {
   constructor(
     private readonly tenantConfig: TenantConfigService,
     private readonly smtp: SmtpAdapterService,
+    /** Opcional: sin él no hay Reply-To de respaldo al administrador del aula. */
+    private readonly directory?: TenantSenderDirectory,
   ) {}
 
   /**
@@ -68,9 +89,63 @@ export class TenantSmtpResolverService {
     }
     const globalConfig = this.readGlobalConfig();
     if (globalConfig) {
-      return { config: globalConfig, source: 'global', verified: false };
+      return {
+        config: { ...globalConfig, sender: await this.globalSender(tenantId) },
+        source: 'global',
+        verified: false,
+      };
     }
     return null;
+  }
+
+  /**
+   * Identidad con el SMTP COMPARTIDO: la dirección es la de la plataforma, el
+   * nombre lo pone el emisor (la academia) y las respuestas van al «correo
+   * para respuestas» del aula o, si no lo puso, a su administrador principal.
+   * Si el nombre de la academia faltara, se firma con el de `SMTP_FROM`.
+   */
+  private async globalSender(tenantId: string): Promise<SmtpSenderIdentity> {
+    const fallbackName = displayNameFromAddress(process.env['SMTP_FROM']) ?? undefined;
+    const replyTo = await this.sharedReplyTo(tenantId);
+    return {
+      ...(fallbackName ? { fallbackName } : {}),
+      ...(replyTo ? { replyTo } : {}),
+    };
+  }
+
+  /**
+   * Reply-To con el SMTP compartido: el «correo para respuestas» del aula o, si
+   * no lo puso, su administrador principal. Público para que el panel enseñe
+   * exactamente lo mismo que saldrá en la cabecera.
+   */
+  async sharedReplyTo(tenantId: string): Promise<string | null> {
+    return (await this.configuredReplyTo(tenantId)) ?? (await this.primaryAdminReplyTo(tenantId));
+  }
+
+  /** «Correo para respuestas» del aula. Un fallo de lectura no bloquea el envío. */
+  private async configuredReplyTo(tenantId: string): Promise<string | null> {
+    try {
+      const raw = (await this.tenantConfig.get(
+        tenantId,
+        SENDER_SETTING_MODULE,
+        SENDER_SETTING_KEY,
+      )) as Partial<TenantSenderSetting> | undefined;
+      return sanitizeReplyTo(raw?.replyToEmail);
+    } catch {
+      return null;
+    }
+  }
+
+  private async primaryAdminReplyTo(tenantId: string): Promise<string | null> {
+    if (!this.directory) return null;
+    try {
+      return sanitizeReplyTo(await this.directory.primaryAdminEmail(tenantId));
+    } catch (err) {
+      this.logger.warn(
+        `[smtp-resolver] no se pudo leer el administrador del tenant ${tenantId} para el Reply-To: ${(err as Error).message.slice(0, 200)}`,
+      );
+      return null;
+    }
   }
 
   /**
@@ -89,6 +164,11 @@ export class TenantSmtpResolverService {
     return tenant !== null;
   }
 
+  /** True si el despliegue tiene SMTP compartido (env globales válidas) para todas las aulas. */
+  hasGlobalConfig(): boolean {
+    return this.readGlobalConfig() !== null;
+  }
+
   private async readTenantConfig(tenantId: string): Promise<ResolvedSmtp | null> {
     let raw: unknown;
     try {
@@ -103,17 +183,24 @@ export class TenantSmtpResolverService {
     if (!raw) return null;
 
     const parsed = this.smtp.parseConfig(raw);
-    let meta: { verifiedAt?: string | null } | undefined;
+    let meta: { verifiedAt?: string | null; fromName?: string | null } | undefined;
     try {
       meta = (await this.tenantConfig.get(tenantId, 'notifications', 'smtp_meta')) as
-        | { verifiedAt?: string | null }
+        | { verifiedAt?: string | null; fromName?: string | null }
         | undefined;
     } catch {
       meta = undefined;
     }
     const verified = Boolean(meta?.verifiedAt);
+    // SMTP propio (modo avanzado): se respeta el «nombre del remitente» que
+    // configuró; el Reply-To solo si lo puso a mano (su dirección ya es suya).
+    const fixedName = sanitizeSenderName(meta?.fromName) ?? undefined;
+    const replyTo = await this.configuredReplyTo(tenantId);
     return {
-      config: parsed,
+      config: {
+        ...parsed,
+        sender: { ...(fixedName ? { fixedName } : {}), ...(replyTo ? { replyTo } : {}) },
+      },
       source: verified ? 'tenant' : 'tenant_unverified',
       verified,
     };

@@ -6,6 +6,7 @@
 import { Injectable } from '@nestjs/common';
 import nodemailer, { type Transporter } from 'nodemailer';
 import { z } from 'zod';
+import { resolveSenderName, type SmtpSenderIdentity } from './smtp-sender-identity';
 
 /**
  * Schema de la config SMTP que cada tenant configura desde
@@ -40,6 +41,13 @@ export const SmtpConfigSchema = z.object({
 });
 
 export type SmtpConfig = z.infer<typeof SmtpConfigSchema>;
+
+/**
+ * Config lista para enviar: la de `SmtpConfigSchema` más la identidad del
+ * remitente que añade `TenantSmtpResolverService` (nombre visible y Reply-To).
+ * No forma parte del schema persistido: se calcula en cada resolución.
+ */
+export type SmtpSendConfig = SmtpConfig & { sender?: SmtpSenderIdentity };
 
 export interface SmtpSendInput {
   to: string;
@@ -92,18 +100,26 @@ export class SmtpAdapterService {
    * Envía un mail a través del SMTP del tenant. Devuelve `{ ok: true, messageId }`
    * en éxito o `{ ok: false, error }` en fallo (no relanza).
    *
-   * `fromName` (opcional) es el nombre para mostrar en el header From — se usa el
-   * nombre del tenant para que los correos NO se firmen como "Didacta". La
-   * dirección sigue siendo `config.from`. Se sanea para evitar inyección de
-   * headers (saltos de línea / comillas dobles).
+   * `fromName` (opcional) es el nombre de la academia que pasa el emisor. La
+   * DIRECCIÓN es siempre `config.from`; el nombre visible sale de
+   * `resolveSenderName`: el fijado por el SMTP propio del aula → `fromName` →
+   * el de la plataforma. Todo nombre se sanea contra inyección de cabeceras y
+   * suplantación (ver `smtp-sender-identity.ts`). Si la identidad trae
+   * Reply-To, se añade.
    */
-  async send(config: SmtpConfig, input: SmtpSendInput, fromName?: string): Promise<SmtpSendResult> {
+  async send(
+    config: SmtpSendConfig,
+    input: SmtpSendInput,
+    fromName?: string,
+  ): Promise<SmtpSendResult> {
     const transporter = this.createTransporter(config);
-    const cleanName = fromName?.replace(/[\r\n"]/g, ' ').trim();
-    const from = cleanName ? { name: cleanName, address: config.from } : config.from;
+    const name = resolveSenderName(config.sender, fromName);
+    const from = name ? { name, address: config.from } : config.from;
+    const replyTo = config.sender?.replyTo;
     try {
       const info = await transporter.sendMail({
         from,
+        ...(replyTo && replyTo.toLowerCase() !== config.from.toLowerCase() ? { replyTo } : {}),
         to: input.to,
         subject: input.subject,
         text: input.text,

@@ -29,7 +29,14 @@ import { PrismaNotificationHubService } from './prisma-notification-hub.service'
 import { PrismaTenantConfigService } from './prisma-tenant-config.service';
 import { SecretCipherService } from './secret-cipher.service';
 import { SmtpAdapterService } from './smtp-adapter.service';
-import { TenantSmtpResolverService } from './tenant-smtp-resolver.service';
+import {
+  TenantSmtpResolverService,
+  type TenantSenderDirectory,
+} from './tenant-smtp-resolver.service';
+import {
+  prismaTenantSenderDirectory,
+  type SenderDirectoryPrisma,
+} from './prisma-tenant-sender-directory';
 import { loadCipherKey } from '../auth/cipher-key';
 import { TenantResolverService } from '../tenancy/tenant-resolver.service';
 
@@ -145,7 +152,11 @@ export class ModuleContextFactory implements OnApplicationShutdown {
     const auditLog = new PrismaAuditLogService(this.prisma);
     const evidenceVault = new PrismaEvidenceVaultService(this.prisma, this.storage);
     this.tenantConfig = new PrismaTenantConfigService(this.prisma, this.cipher, auditLog);
-    this.smtpResolver = new TenantSmtpResolverService(this.tenantConfig, this.smtp);
+    this.smtpResolver = new TenantSmtpResolverService(
+      this.tenantConfig,
+      this.smtp,
+      this.senderDirectory(),
+    );
     const notificationHub = new PrismaNotificationHubService(
       this.prisma,
       this.pino,
@@ -228,9 +239,18 @@ export class ModuleContextFactory implements OnApplicationShutdown {
    */
   getSmtpResolver(): TenantSmtpResolverService {
     if (!this.smtpResolver) {
-      this.smtpResolver = new TenantSmtpResolverService(this.getTenantConfig(), this.smtp);
+      this.smtpResolver = new TenantSmtpResolverService(
+        this.getTenantConfig(),
+        this.smtp,
+        this.senderDirectory(),
+      );
     }
     return this.smtpResolver;
+  }
+
+  /** Para el Reply-To de respaldo: el administrador principal de cada aula. */
+  private senderDirectory(): TenantSenderDirectory {
+    return prismaTenantSenderDirectory(this.prisma as unknown as SenderDirectoryPrisma);
   }
 
   /** Devuelve el storage activo. Si es S3 expone también `ping()` para health. */
