@@ -134,7 +134,12 @@ export function SubscriptionTab() {
       setSubs((prev) =>
         prev.map((s) =>
           s.id === subId
-            ? { ...res.subscription, planName: s.planName, courseTitle: s.courseTitle }
+            ? {
+                ...res.subscription,
+                planName: s.planName,
+                courseTitle: s.courseTitle,
+                billingPortal: s.billingPortal,
+              }
             : s,
         ),
       );
@@ -165,7 +170,12 @@ export function SubscriptionTab() {
       setSubs((prev) =>
         prev.map((s) =>
           s.id === res.subscription.id
-            ? { ...res.subscription, planName: s.planName, courseTitle: s.courseTitle }
+            ? {
+                ...res.subscription,
+                planName: s.planName,
+                courseTitle: s.courseTitle,
+                billingPortal: s.billingPortal,
+              }
             : s,
         ),
       );

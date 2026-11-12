@@ -21,6 +21,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { payoutsApi } from '@/lib/payouts';
 import { Select } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
@@ -96,6 +97,8 @@ export default function MembresiaAdminPage() {
   // Stripe configurado — la config de planes/página se guarda igual, pero el
   // checkout real de /unete fallará hasta que se configure.
   const [stripeReady, setStripeReady] = useState<boolean | null>(null);
+  /** Modo plataforma (cobros de Didacta): `true` si la cuenta aún no puede vender. */
+  const [payoutsNotReady, setPayoutsNotReady] = useState(false);
 
   // Alta/edición de plan
   const [draft, setDraft] = useState<PlanDraft>(EMPTY_DRAFT);
@@ -140,8 +143,16 @@ export default function MembresiaAdminPage() {
       // Stripe, pero el checkout real de /unete sí — mejor avisar aquí que
       // dejar que el admin lo descubra cuando un alumno intente pagar.
       try {
-        const stripe = await adminStripeApi.get();
-        setStripeReady(stripe.hasTenantConfig || stripe.hasGlobalFallback);
+        // Cobros de plataforma: no hay claves que pegar; lo que cuenta es si la
+        // cuenta del creador ya puede vender. Fuera de ese modo, `null`.
+        const payouts = await payoutsApi.status().catch(() => null);
+        if (payouts && payouts.mode === 'platform') {
+          setPayoutsNotReady(!payouts.ready);
+          setStripeReady(null);
+        } else {
+          const stripe = await adminStripeApi.get();
+          setStripeReady(stripe.hasTenantConfig || stripe.hasGlobalFallback);
+        }
       } catch {
         setStripeReady(null);
       }
@@ -332,6 +343,18 @@ export default function MembresiaAdminPage() {
           {config?.active ? t('badgeActive') : t('badgeInactive')}
         </Badge>
       </div>
+
+      {payoutsNotReady ? (
+        <p className="rounded-lg border border-warning-200 bg-warning-50 px-3 py-2 text-sm text-warning-700">
+          {t.rich('payoutsWarning', {
+            link: (chunks) => (
+              <Link href="/admin/cobros" className="font-semibold underline">
+                {chunks}
+              </Link>
+            ),
+          })}
+        </p>
+      ) : null}
 
       {stripeReady === false ? (
         <p className="rounded-lg border border-warning-200 bg-warning-50 px-3 py-2 text-sm text-warning-700">
