@@ -75,7 +75,9 @@
       "PAID": "Paid",
       "REVOKED": "Cancelled"
     },
-    "verDetalle": "See referral details"
+    "verDetalle": "See referral details",
+    "descuentoTitulo": "Let them use it as a discount on their fee",
+    "descuentoTexto": "Members can take what they earned off their next fee instead of being paid out. You cover it: that fee reaches you with the discount."
   },
   "propias": {
     "titulo": "Sales",

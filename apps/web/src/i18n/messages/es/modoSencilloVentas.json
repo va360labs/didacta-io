@@ -75,7 +75,9 @@
       "PAID": "Pagada",
       "REVOKED": "Anulada"
     },
-    "verDetalle": "Ver el detalle de los referidos"
+    "verDetalle": "Ver el detalle de los referidos",
+    "descuentoTitulo": "Dejar que lo usen como descuento en su cuota",
+    "descuentoTexto": "Quien tenga membresía puede restar lo que ha ganado de su próxima cuota en vez de cobrarlo aparte. Lo pagas tú: esa cuota te llega con ese descuento."
   },
   "propias": {
     "titulo": "Ventas",

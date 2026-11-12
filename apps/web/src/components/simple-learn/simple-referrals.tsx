@@ -99,6 +99,9 @@ export function SimpleReferrals() {
   const [error, setError] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
   const [canShare, setCanShare] = useState(false);
+  const [redeeming, setRedeeming] = useState(false);
+  const [redeemed, setRedeemed] = useState<{ cents: number; currency: string } | null>(null);
+  const [redeemError, setRedeemError] = useState<string | null>(null);
 
   useEffect(() => {
     setCanShare(typeof navigator !== 'undefined' && typeof navigator.share === 'function');
@@ -159,6 +162,28 @@ export function SimpleReferrals() {
       /* el enlace sigue a la vista */
     }
   }
+
+  async function redeem() {
+    setRedeeming(true);
+    setRedeemError(null);
+    try {
+      const r = await referralsApi.redeemCredit();
+      setRedeemed({ cents: r.totalCents, currency: r.currency.toUpperCase() });
+      setStats(await referralsApi.myStats());
+    } catch (e) {
+      setRedeemError(
+        e instanceof ApiHttpError && e.code === 'REFERRALS_CREDIT_NOTHING'
+          ? t('descuento.nada')
+          : t('descuento.error'),
+      );
+    } finally {
+      setRedeeming(false);
+    }
+  }
+
+  const credit = stats.credit;
+  const creditMoney = (c: number) =>
+    formatCents(c, (credit?.currency ?? fig.currency).toUpperCase());
 
   const ganas =
     stats.scope === 'FIRST_PAYMENT'
@@ -310,6 +335,52 @@ export function SimpleReferrals() {
               <div className="text-sm text-text-muted">{t('esteMes')}</div>
             </div>
           </section>
+
+          {credit && (credit.enabled || credit.pending) ? (
+            <section
+              className="rounded-2xl border border-border bg-surface p-5"
+              aria-labelledby="referidos-descuento"
+              data-testid="referidos-descuento"
+            >
+              <h2 id="referidos-descuento" className="text-base font-bold text-text">
+                {t('descuento.titulo')}
+              </h2>
+              <p className="mt-1 max-w-[60ch] text-sm text-text-muted">
+                {t('descuento.texto', { max: creditMoney(credit.maxCents) })}
+              </p>
+              {redeemed ? (
+                <p
+                  className="mt-4 rounded-xl bg-success-50 p-3 text-sm font-semibold text-success-700"
+                  role="status"
+                >
+                  {t('descuento.hecho', { amount: formatCents(redeemed.cents, redeemed.currency) })}
+                </p>
+              ) : null}
+              {credit.pending || credit.availableCents > 0 ? (
+                <button
+                  type="button"
+                  onClick={() => void redeem()}
+                  disabled={redeeming}
+                  className="mt-4 inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-brand-600 px-5 py-2 text-left text-[15px] font-semibold text-white hover:bg-brand-700 disabled:opacity-50"
+                  data-testid="referidos-descuento-boton"
+                >
+                  <Icon name="check" size={16} />
+                  {redeeming
+                    ? t('descuento.aplicando')
+                    : credit.pending
+                      ? t('descuento.terminar')
+                      : t('descuento.boton', { amount: creditMoney(credit.availableCents) })}
+                </button>
+              ) : redeemed ? null : (
+                <p className="mt-4 text-sm text-text-subtle">{t('descuento.vacio')}</p>
+              )}
+              {redeemError ? (
+                <p className="mt-3 text-sm text-danger-700" role="alert">
+                  {redeemError}
+                </p>
+              ) : null}
+            </section>
+          ) : null}
 
           <section
             className="rounded-2xl border border-border bg-surface"

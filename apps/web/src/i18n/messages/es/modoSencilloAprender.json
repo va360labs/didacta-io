@@ -83,6 +83,17 @@
       "limitePrimerPago": "Cuenta solo su primer pago.",
       "limiteMeses": "Ganas durante sus primeros {months} meses.",
       "limiteSin": "No. Mientras siga pagando, sigues ganando."
+    },
+    "descuento": {
+      "titulo": "Úsalo como descuento",
+      "texto": "Lo que ya tienes confirmado se puede restar de tu próxima cuota en vez de cobrarlo aparte. Como mucho {max} por cuota.",
+      "boton": "Usar como descuento en mi próxima cuota ({amount})",
+      "terminar": "Terminar de aplicar el descuento",
+      "aplicando": "Aplicando…",
+      "hecho": "Hecho. Te restaremos {amount} de tu próxima cuota.",
+      "vacio": "Aún no tienes nada confirmado que restar. Lo verás aquí cuando pase el plazo de devolución.",
+      "nada": "Ahora mismo no tienes nada que restar de tu próxima cuota.",
+      "error": "No hemos podido aplicar el descuento. Vuelve a intentarlo: no se aplicará dos veces."
     }
   }
 }

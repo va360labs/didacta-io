@@ -26,6 +26,8 @@ export interface ReferralsConfig {
   minPayoutCents: number;
   requireActiveMembership: boolean;
   memberCopy: string | null;
+  /** El alumno con membresía puede cobrar lo ganado como descuento en su cuota. */
+  allowCreditRedemption: boolean;
 }
 
 export interface ReferralCommissionRow {
@@ -43,7 +45,27 @@ export interface ReferralPayoutRow {
   totalCents: number;
   currency: string;
   externalReference: string;
+  /** CASH = pago aparte; CREDIT = descuento en la cuota. */
+  method?: 'CASH' | 'CREDIT';
+  status?: 'PENDING' | 'DONE';
   createdAt: string;
+}
+
+/** Lo que el alumno puede usar como descuento en su próxima cuota. */
+export interface MemberCreditView {
+  enabled: boolean;
+  availableCents: number;
+  currency: string | null;
+  maxCents: number;
+  pending: boolean;
+}
+
+export interface RedeemCreditResult {
+  payoutId: string;
+  totalCents: number;
+  currency: string;
+  count: number;
+  stripeBalanceTransactionId: string;
 }
 
 export interface MemberReferralStats {
@@ -60,6 +82,7 @@ export interface MemberReferralStats {
   totals: { pendingCents: number; approvedCents: number; paidCents: number };
   commissions: ReferralCommissionRow[];
   payouts: ReferralPayoutRow[];
+  credit?: MemberCreditView;
 }
 
 /**
@@ -123,6 +146,15 @@ export const referralsApi = {
 
   async myStats(): Promise<MemberReferralStats> {
     return apiFetch<MemberReferralStats>(`${BASE}/me/stats`, { method: 'GET' }, withAuth());
+  },
+
+  /** Usa lo ganado como descuento en la próxima cuota (saldo de cliente de Stripe). */
+  async redeemCredit(): Promise<RedeemCreditResult> {
+    return apiFetch<RedeemCreditResult>(
+      `${BASE}/me/redeem-credit`,
+      { method: 'POST', body: JSON.stringify({}) },
+      withAuth(),
+    );
   },
 
   /** Tus invitados: iniciales, fecha, estado y lo que han generado. */

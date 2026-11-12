@@ -83,6 +83,17 @@
       "limitePrimerPago": "Only their first payment counts.",
       "limiteMeses": "You earn during their first {months} months.",
       "limiteSin": "No. As long as they keep paying, you keep earning."
+    },
+    "descuento": {
+      "titulo": "Use it as a discount",
+      "texto": "What is already confirmed can come off your next fee instead of being paid out. Up to {max} per fee.",
+      "boton": "Use as a discount on my next fee ({amount})",
+      "terminar": "Finish applying the discount",
+      "aplicando": "Applying…",
+      "hecho": "Done. We will take {amount} off your next fee.",
+      "vacio": "You have nothing confirmed to take off yet. It will show here once the refund period is over.",
+      "nada": "Right now you have nothing to take off your next fee.",
+      "error": "We could not apply the discount. Try again: it will not be applied twice."
     }
   }
 }

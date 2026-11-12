@@ -617,6 +617,19 @@ function ReferralsSection() {
   const traidas = referralSales(rows);
   const active = Boolean(moduleOn && config?.active);
 
+  async function toggleCredit(allowCreditRedemption: boolean) {
+    setBusy(true);
+    setMessage(null);
+    try {
+      setConfig(await referralsAdminApi.updateConfig({ allowCreditRedemption }));
+      setMessage({ ok: true, text: t('guardado') });
+    } catch {
+      setMessage({ ok: false, text: t('error') });
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <section
       id="referidos"
@@ -690,6 +703,33 @@ function ReferralsSection() {
           </button>
         </div>
       )}
+      {moduleOn && config ? (
+        <div
+          className="mt-4 flex max-w-[65ch] items-start gap-3 rounded-xl border border-border p-3"
+          data-testid="referidos-opcion-descuento"
+        >
+          <input
+            id="ref-descuento"
+            type="checkbox"
+            checked={config.allowCreditRedemption !== false}
+            disabled={busy}
+            onChange={(e) => void toggleCredit(e.target.checked)}
+            aria-describedby="ref-descuento-texto"
+            className="mt-0.5 h-5 w-5 shrink-0 cursor-pointer accent-brand-600"
+          />
+          <div className="min-w-0">
+            <label
+              htmlFor="ref-descuento"
+              className="block cursor-pointer text-sm font-semibold text-text"
+            >
+              {t('descuentoTitulo')}
+            </label>
+            <p id="ref-descuento-texto" className="text-sm text-text-muted">
+              {t('descuentoTexto')}
+            </p>
+          </div>
+        </div>
+      ) : null}
       {message ? (
         <p
           role="status"
