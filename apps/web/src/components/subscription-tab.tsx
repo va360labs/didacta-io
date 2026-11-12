@@ -183,6 +183,24 @@ export function SubscriptionTab() {
     }
   }
 
+  /** Portal de Stripe de una suscripción propia (tarjeta, facturas, baja). */
+  async function openSubscriptionPortal(subId: string) {
+    const token = authStorage.getAccessToken();
+    if (!token) return;
+    setPortalBusy(subId);
+    setActionError(null);
+    try {
+      const res = await subscriptionsApi.billingPortal(token, subId);
+      window.location.href = res.url;
+      // No reseteamos portalBusy: navegamos fuera de la app.
+    } catch (e) {
+      setActionError(
+        e instanceof ApiHttpError ? apiErrorMessage(e, tErrors) : t('subscription.portalError'),
+      );
+      setPortalBusy(null);
+    }
+  }
+
   async function openPortal(item: MySubscriptionItem) {
     const token = authStorage.getAccessToken();
     if (!token) return;
@@ -345,6 +363,16 @@ export function SubscriptionTab() {
             </CardHeader>
             <CardContent className="space-y-3">
               <div className="flex flex-wrap gap-2">
+                {sub.billingPortal && sub.status !== 'CANCELED' ? (
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={() => void openSubscriptionPortal(sub.id)}
+                    disabled={portalBusy === sub.id}
+                  >
+                    {portalBusy === sub.id ? t('subscription.opening') : t('subscription.manage')}
+                  </Button>
+                ) : null}
                 {isMembership && sub.status === 'TRIALING' && !sub.cancelAtPeriodEnd ? (
                   <Button
                     type="button"

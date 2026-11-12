@@ -54,6 +54,12 @@ export interface SubscriptionRow {
   canceledReason: string | null;
   /** Fin del periodo de prueba (solo status TRIALING). */
   trialEndsAt: string | null;
+  /**
+   * Hay portal de cliente para esta suscripción (tarjeta, facturas y baja con
+   * el nombre de la academia). Lo decide el backend: hoy, las cobradas a
+   * través de la plataforma.
+   */
+  billingPortal?: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -119,6 +125,18 @@ export const subscriptionsApi = {
     return apiFetch<{ subscription: SubscriptionRow }>(
       `${BASE}/me/${encodeURIComponent(subscriptionId)}/cancel`,
       { method: 'POST', body: JSON.stringify({ immediate }) },
+      bearer,
+    );
+  },
+
+  /** Abre el portal de cliente de Stripe de una suscripción propia: devuelve su URL. */
+  async billingPortal(
+    bearer: string,
+    subscriptionId: string,
+  ): Promise<{ url: string; subscriptionId: string }> {
+    return apiFetch<{ url: string; subscriptionId: string }>(
+      `${BASE}/me/portal`,
+      { method: 'POST', body: JSON.stringify({ subscriptionId }) },
       bearer,
     );
   },
