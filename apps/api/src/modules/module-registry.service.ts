@@ -564,6 +564,17 @@ export class ModuleRegistryService implements OnModuleInit {
         });
         return user?.email ?? null;
       },
+      // Descuento en la cuota: el saldo de cliente vive donde vive la
+      // suscripción (claves propias del aula o, en modo plataforma, la cuenta
+      // del operador; ahí `mod.payouts` descuenta el abono al creador).
+      {
+        retrieveBalance: async (tenantId, customerId) =>
+          (await this.resolveSubscriptionsStripeAdapter(tenantId)).retrieveCustomerBalance(
+            customerId,
+          ),
+        credit: async (tenantId, params) =>
+          (await this.resolveSubscriptionsStripeAdapter(tenantId)).creditCustomerBalance(params),
+      },
     );
     const referralsModule = buildReferralsModule(this.referrals);
 

@@ -62,6 +62,7 @@ const configSchema = z
     minPayoutCents: z.number().int().min(0).max(100_000_000),
     requireActiveMembership: z.boolean(),
     memberCopy: z.string().trim().max(2000).nullable(),
+    allowCreditRedemption: z.boolean(),
   })
   .partial();
 
@@ -126,6 +127,19 @@ export class ReferralsController {
   async myInvitees(@CurrentUser() user: SessionClaims | undefined) {
     const u = this.requireUser(user);
     return this.registry.getReferralsService().memberInvitees(u.tenantId, u.sub);
+  }
+
+  @Post('me/redeem-credit')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @HttpCode(200)
+  @ApiOperation({
+    summary:
+      'Canjea lo ganado (comisiones aprobadas sin cobrar) como descuento en la próxima cuota de la membresía: abono en el saldo de cliente de Stripe. Idempotente: un canje a medias se termina con la misma clave. 403 sin membresía activa o con la opción apagada; 409 si no hay nada que canjear.',
+  })
+  async redeemCredit(@CurrentUser() user: SessionClaims | undefined) {
+    const u = this.requireUser(user);
+    return this.registry.getReferralsService().redeemAsCredit(u.tenantId, u.sub);
   }
 
   // ---------------- Público (clics) ----------------
