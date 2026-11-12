@@ -134,7 +134,7 @@ describeWithDb('Liquidación y conciliador — Postgres real como didacta_app', 
       // ── Stripe: transferencias, listados de cargos y eventos ──
       fake.on('POST', '/v1/transfers', (req, f) => {
         const transfer = {
-          id: f.nextId('tr'),
+          id: `${f.nextId('tr')}_${stamp}`,
           object: 'transfer',
           amount: req.params['amount'],
           amount_reversed: 0,
@@ -143,7 +143,7 @@ describeWithDb('Liquidación y conciliador — Postgres real como didacta_app', 
           source_transaction: req.params['source_transaction'],
           transfer_group: req.params['transfer_group'],
           metadata: req.params['metadata'],
-          balance_transaction: f.nextId('txn'),
+          balance_transaction: `${f.nextId('txn')}_${stamp}`,
           created: Math.floor(Date.now() / 1000),
           livemode: false,
         };
@@ -243,7 +243,12 @@ describeWithDb('Liquidación y conciliador — Postgres real como didacta_app', 
 
   afterAll(async () => {
     // El libro es de solo inserción (trigger): sus filas, las ventas que
-    // apunta y las aulas se quedan en la base desechable.
+    // apunta y las aulas se quedan en la base desechable. Las cuentas se
+    // cierran para que los barridos de cuentas de otros ficheros no las vean.
+    await admin?.modPayoutsAccount.updateMany({
+      where: { tenantId: { in: [A, B] } },
+      data: { closedAt: new Date(), status: 'DISCONNECTED' },
+    });
     await closeModule?.();
     await admin?.$disconnect();
   });
@@ -494,7 +499,7 @@ describeWithDb('Liquidación y conciliador — Postgres real como didacta_app', 
         currency: c.bt.currency,
         presentmentAmount: c.presentment?.amount ?? c.amount,
         presentmentCurrency: c.presentment?.currency ?? c.currency ?? 'eur',
-        stripeTransferId: posts.length ? expect.stringMatching(/^tr_fake_/) : null,
+        stripeTransferId: expect.stringMatching(/^tr_fake_\d+_\d+$/),
       });
       expect(await ledgerOf(sale.id)).toEqual([
         ['SALE_GROSS', c.bt.amount, c.bt.currency],
