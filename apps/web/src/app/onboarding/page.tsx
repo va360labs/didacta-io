@@ -5,6 +5,7 @@
  * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
  */
 
+import { useSimpleMode } from '@/lib/simple-mode';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
@@ -35,6 +36,9 @@ import { communityApi } from '@/modules/community';
 export default function OnboardingPage() {
   const router = useRouter();
   const t = useTranslations('auth');
+  // Modo sencillo: la foto es opcional (avatar con iniciales); la API también.
+  const simple = useSimpleMode() === true;
+  const tSimple = useTranslations('modoSencillo');
   const tErrors = useTranslations('errors');
   const { tenant } = useTenantContext();
   const [loading, setLoading] = useState(true);
@@ -136,7 +140,7 @@ export default function OnboardingPage() {
   const documentInvalid = !isDocumentFieldValid(documentId);
   const canNext =
     step === 0
-      ? avatarUrl !== null
+      ? avatarUrl !== null || simple
       : step === 1
         ? name.trim().length > 0 && !documentInvalid
         : true;
@@ -236,7 +240,9 @@ export default function OnboardingPage() {
             <div className="space-y-3">
               <div>
                 <h2 className="text-lg font-semibold">{t('onboarding.photoTitle')}</h2>
-                <p className="text-sm text-text-muted">{t('onboarding.photoDescription')}</p>
+                <p className="text-sm text-text-muted">
+                  {simple ? tSimple('perfil.fotoOpcional') : t('onboarding.photoDescription')}
+                </p>
               </div>
               <AvatarUpload
                 value={avatarUrl}

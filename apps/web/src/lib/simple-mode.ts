@@ -9,6 +9,7 @@ import { useEffect, useState } from 'react';
 import { ApiHttpError, apiFetch } from './api-client';
 import { authStorage } from './auth-storage';
 import { meApi } from './me';
+import { majorToMinor } from './stripe-currencies';
 
 /**
  * Modo sencillo del aula (Didacta Cloud): menú corto, «Empieza aquí» y alta en
@@ -110,6 +111,39 @@ export interface StartHereView {
   sales: { count: number; firstSaleAt: string | null };
   students: number;
   nextLive: { id: string; topic: string; startTime: string } | null;
+  paymentsSetupPath: string;
+}
+
+/** «49», «49,90» o «49.90» → unidad mínima de la moneda; `null` si no vale. */
+export function parseAmount(raw: string, currency: string): number | null {
+  const n = Number(raw.trim().replace(/\s/g, '').replace(',', '.'));
+  if (!Number.isFinite(n) || n <= 0) return null;
+  return majorToMinor(n, currency);
+}
+
+/**
+ * Moneda propuesta en el alta según el idioma y país del navegador
+ * (es-ES → EUR, en-US → USD, en-GB → GBP…), si el aula puede cobrar en ella;
+ * si no, la primera de la lista.
+ */
+export function suggestCurrency(locale: string, allowed: readonly string[]): string {
+  const region = (locale.split('-')[1] ?? '').toUpperCase();
+  const byRegion: Record<string, string> = {
+    US: 'usd',
+    GB: 'gbp',
+    CA: 'cad',
+    CH: 'chf',
+    SE: 'sek',
+    DK: 'dkk',
+    NO: 'nok',
+    PL: 'pln',
+    CZ: 'czk',
+    HU: 'huf',
+    RO: 'ron',
+    MX: 'mxn',
+  };
+  const guess = byRegion[region] ?? 'eur';
+  return allowed.includes(guess) ? guess : (allowed[0] ?? 'eur');
 }
 
 export interface QuickStartInput {

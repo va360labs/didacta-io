@@ -5,6 +5,8 @@
  * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
  */
 
+import { useSimpleMode } from '@/lib/simple-mode';
+import { AltaSencilla } from './alta-sencilla';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -98,7 +100,17 @@ async function leerCobrosDePlataforma(sync: boolean): Promise<PayoutsStatusDto |
  * El progreso se guarda en el servidor a cada paso (ver `onboardingApi`), no al
  * final: si se cae la conexión en el paso 5, no se pierden los cuatro anteriores.
  */
+/**
+ * En las aulas en MODO SENCILLO el asistente es el alta en 3 preguntas; en el
+ * resto, el de siempre.
+ */
 export default function BienvenidaPage() {
+  const simple = useSimpleMode();
+  if (simple === null) return null;
+  return simple ? <AltaSencilla /> : <BienvenidaCompleta />;
+}
+
+function BienvenidaCompleta() {
   const router = useRouter();
   const t = useTranslations('bienvenida');
 
