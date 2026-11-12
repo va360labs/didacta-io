@@ -138,7 +138,7 @@ function mundo(opts: { paymentsReady?: boolean } = {}) {
     }),
     publishCourse: vi.fn(async (_t: string, _a: string, id: string) => {
       const c = db.courses.find((x) => x.id === id)!;
-      if (!db.lessons.some((l) => l.module.courseId === id)) throw new CourseHasNoLessonsError(id);
+      if (!db.lessons.some((l) => l.module.courseId === id)) throw new CourseHasNoLessonsError();
       c.status = 'PUBLISHED';
     }),
   };
