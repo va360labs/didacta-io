@@ -10,6 +10,10 @@ import { useParams, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { AiTutorPanel } from '@/components/ai-tutor-panel';
+import {
+  CourseCertificateCard,
+  showCourseCertificateCard,
+} from '@/components/simple-learn/course-certificate-card';
 import { CourseStatusBadge } from '@/components/course-status-badge';
 import { authStorage } from '@/lib/auth-storage';
 import { CourseSalesPanel, LockedContentActions } from '@/modules/billing/course-sales-panel';
@@ -31,6 +35,7 @@ import { formatDate, formatDateTime, formatDuration } from '@/lib/i18n/format';
 import { labelOr, type TranslatorLike } from '@/lib/i18n/labels';
 import { learningApi, type Enrollment } from '@/lib/learning';
 import { sanitizeRichHtml } from '@/lib/sanitize-html';
+import { useSimpleMode } from '@/lib/simple-mode';
 import { subscriptionsApi } from '@/modules/subscriptions';
 import { zoomLiveApi, type ZoomSession } from '@/modules/zoom-live';
 
@@ -76,6 +81,8 @@ export default function CourseAlumnoPage() {
   const [certificate, setCertificate] = useState<Certificate | null>(null);
   const [zoomSessions, setZoomSessions] = useState<ZoomSession[]>([]);
   const [downloadingCert, setDownloadingCert] = useState(false);
+  // Modo sencillo: el certificado se ve dentro del curso al terminarlo.
+  const simple = useSimpleMode() === true;
 
   const reload = useCallback(async () => {
     if (!params?.slug) return;
@@ -325,13 +332,16 @@ export default function CourseAlumnoPage() {
               </div>
               <div className="flex flex-wrap gap-2">
                 {enrollment.status === 'COMPLETED' && certificate ? (
-                  <Button
-                    variant="success"
-                    onClick={handleDownloadCertificate}
-                    disabled={downloadingCert}
-                  >
-                    {downloadingCert ? t('downloading') : t('downloadCertificate')}
-                  </Button>
+                  // Modo sencillo: el certificado tiene su propia tarjeta debajo.
+                  simple ? null : (
+                    <Button
+                      variant="success"
+                      onClick={handleDownloadCertificate}
+                      disabled={downloadingCert}
+                    >
+                      {downloadingCert ? t('downloading') : t('downloadCertificate')}
+                    </Button>
+                  )
                 ) : (
                   <Button variant="primary" onClick={handleContinue}>
                     {t('continueCourse')}
@@ -471,6 +481,20 @@ export default function CourseAlumnoPage() {
           </div>
         </Card>
       )}
+
+      {certificate &&
+      showCourseCertificateCard({
+        simple,
+        enrollmentStatus: enrollment?.status,
+        hasCertificate: true,
+      }) ? (
+        <CourseCertificateCard
+          certificate={certificate}
+          courseTitle={course.title}
+          downloading={downloadingCert}
+          onDownload={handleDownloadCertificate}
+        />
+      ) : null}
 
       {error ? (
         <div

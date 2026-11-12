@@ -1,3 +1,73 @@
 {
-  "seccion": "Learning"
+  "seccion": "Learning",
+  "certificado": {
+    "titulo": "You have finished the course. Your certificate is ready.",
+    "texto": "It carries your name and can be checked with a link. Add it to your LinkedIn profile or share it with anyone.",
+    "descargar": "Download PDF",
+    "descargando": "Downloading…",
+    "linkedin": "Add to LinkedIn",
+    "vistaPrevia": "Certificate preview",
+    "etiqueta": "CERTIFICATE OF COMPLETION",
+    "haCompletado": "has completed the course"
+  },
+  "progreso": {
+    "certificados": "My certificates",
+    "certificadosTexto": "Certificates for the courses you have finished."
+  },
+  "referidos": {
+    "titulo": "Invite and earn",
+    "migaPerfil": "Your profile",
+    "migasAria": "You are in",
+    "heroTitulo": "Earn {percent}% of what each person who joins through your link pays",
+    "heroTexto": "Share {academia} with someone who would find it useful. When they pay, part of it is yours.",
+    "inactivoTitulo": "There is no invite and earn programme right now",
+    "inactivoTexto": "Your academy has not switched it on. If it does, you will see your link and earnings here.",
+    "membresiaRequerida": "You need an active membership in the academy to get your link.",
+    "errorEnlace": "Could not prepare your link. Try again later.",
+    "errorCarga": "Could not load. Try again.",
+    "copiar": "Copy link",
+    "copiado": "Copied",
+    "correo": "Email",
+    "mas": "More",
+    "mensajeCompartir": "I recommend {academia}. Join through my link:",
+    "cifrasAria": "Your results",
+    "ganadoTotal": "earned in total",
+    "pendiente": "Plus {amount} waiting to be confirmed",
+    "personas": "people have joined through your link",
+    "esteMes": "this month",
+    "listaTitulo": "What you have earned",
+    "listaTexto": "Each sale you brought in, with its status. No personal details are shown.",
+    "listaVacia": "Nothing yet. When someone pays after joining through your link, it will show up here.",
+    "sobre": "On a sale of {amount}",
+    "estado": {
+      "PENDING": "Waiting to be confirmed",
+      "APPROVED": "Confirmed",
+      "PAID": "Paid",
+      "REVOKED": "Cancelled"
+    },
+    "comoTitulo": "How it works",
+    "pasos": {
+      "compartes": "You share your link",
+      "compartesTexto": "On WhatsApp, social media or in person.",
+      "entra": "Someone joins through it",
+      "entraTexto": "They stay linked to you for {days} days after opening it.",
+      "ganas": "You earn your share",
+      "ganaPrimerPago": "{percent}% of their first payment.",
+      "ganaCadaPago": "{percent}% of each payment, for as long as they keep paying.",
+      "ganaMeses": "{percent}% of each payment during their first {months} months."
+    },
+    "cobro": "What you earn is confirmed once the refund period is over and {academia} pays it to you.",
+    "cobroMinimo": "What you earn is confirmed once the refund period is over and {academia} pays it to you when you reach {min}.",
+    "dudasTitulo": "Questions",
+    "dudas": {
+      "cuando": "When does it start counting?",
+      "cuandoTexto": "When someone opens your link. If they pay within the next {days} days, the sale is yours.",
+      "devolucion": "What if they ask for a refund?",
+      "devolucionTexto": "If they get their money back, your share of that sale is cancelled.",
+      "limite": "Is there a limit?",
+      "limitePrimerPago": "Only their first payment counts.",
+      "limiteMeses": "You earn during their first {months} months.",
+      "limiteSin": "No. As long as they keep paying, you keep earning."
+    }
+  }
 }

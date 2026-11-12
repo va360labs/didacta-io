@@ -1,3 +1,73 @@
 {
-  "seccion": "Aprender"
+  "seccion": "Aprender",
+  "certificado": {
+    "titulo": "Has terminado el curso. Tu certificado está listo.",
+    "texto": "Lleva tu nombre y se puede comprobar con un enlace. Añádelo a tu perfil de LinkedIn o compártelo con quien quieras.",
+    "descargar": "Descargar PDF",
+    "descargando": "Descargando…",
+    "linkedin": "Añadir a LinkedIn",
+    "vistaPrevia": "Vista previa del certificado",
+    "etiqueta": "CERTIFICADO DE FINALIZACIÓN",
+    "haCompletado": "ha completado el curso"
+  },
+  "progreso": {
+    "certificados": "Mis certificados",
+    "certificadosTexto": "Los certificados de los cursos que has terminado."
+  },
+  "referidos": {
+    "titulo": "Invita y gana",
+    "migaPerfil": "Tu perfil",
+    "migasAria": "Estás en",
+    "heroTitulo": "Gana el {percent} % de lo que pague cada persona que entre con tu enlace",
+    "heroTexto": "Comparte {academia} con quien le pueda servir. Cuando paguen, una parte es para ti.",
+    "inactivoTitulo": "Ahora mismo no hay programa para invitar y ganar",
+    "inactivoTexto": "Tu academia no lo tiene activo. Si lo activa, aquí verás tu enlace y lo que ganas.",
+    "membresiaRequerida": "Para tener tu enlace necesitas una membresía activa en la academia.",
+    "errorEnlace": "No se ha podido preparar tu enlace. Inténtalo de nuevo más tarde.",
+    "errorCarga": "No se ha podido cargar. Inténtalo de nuevo.",
+    "copiar": "Copiar enlace",
+    "copiado": "Copiado",
+    "correo": "Correo",
+    "mas": "Más",
+    "mensajeCompartir": "Te recomiendo {academia}. Entra con mi enlace:",
+    "cifrasAria": "Lo que llevas",
+    "ganadoTotal": "ganado en total",
+    "pendiente": "Y {amount} pendiente de confirmar",
+    "personas": "personas han entrado con tu enlace",
+    "esteMes": "este mes",
+    "listaTitulo": "Lo que has ganado",
+    "listaTexto": "Cada venta que trajiste, con su estado. No se muestran datos de las personas.",
+    "listaVacia": "Todavía no hay nada. Cuando alguien pague tras entrar con tu enlace, aparecerá aquí.",
+    "sobre": "Sobre una venta de {amount}",
+    "estado": {
+      "PENDING": "Pendiente de confirmar",
+      "APPROVED": "Confirmada",
+      "PAID": "Pagada",
+      "REVOKED": "Anulada"
+    },
+    "comoTitulo": "Cómo funciona",
+    "pasos": {
+      "compartes": "Compartes tu enlace",
+      "compartesTexto": "Por WhatsApp, redes o en persona.",
+      "entra": "Alguien entra con él",
+      "entraTexto": "Queda unido a ti durante {days} días desde que lo abre.",
+      "ganas": "Ganas tu parte",
+      "ganaPrimerPago": "El {percent} % de su primer pago.",
+      "ganaCadaPago": "El {percent} % de cada pago suyo, mientras siga pagando.",
+      "ganaMeses": "El {percent} % de cada pago suyo durante sus primeros {months} meses."
+    },
+    "cobro": "Lo que ganas se confirma cuando pasa el plazo de devolución y te lo paga {academia}.",
+    "cobroMinimo": "Lo que ganas se confirma cuando pasa el plazo de devolución y te lo paga {academia} cuando llegas a {min}.",
+    "dudasTitulo": "Dudas",
+    "dudas": {
+      "cuando": "¿Cuándo empieza a contar?",
+      "cuandoTexto": "Cuando alguien abre tu enlace. Si paga en los {days} días siguientes, la venta es tuya.",
+      "devolucion": "¿Y si pide la devolución?",
+      "devolucionTexto": "Si recupera su dinero, la parte de esa venta se anula.",
+      "limite": "¿Hay un límite?",
+      "limitePrimerPago": "Cuenta solo su primer pago.",
+      "limiteMeses": "Ganas durante sus primeros {months} meses.",
+      "limiteSin": "No. Mientras siga pagando, sigues ganando."
+    }
+  }
 }

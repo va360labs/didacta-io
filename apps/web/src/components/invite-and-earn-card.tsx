@@ -11,6 +11,7 @@ import { useTranslations } from 'next-intl';
 import { Icon } from '@/components/icon';
 import { formatNumber } from '@/lib/i18n/format';
 import { referralsApi } from '@/lib/referrals';
+import { fetchTenantContext } from '@/lib/tenant-context';
 import { cn } from '@/lib/utils';
 
 /** Porcentaje legible a partir de puntos básicos (1250 → «12,5»). */
@@ -23,6 +24,10 @@ export function percentFromBps(bps: number): string {
  * un botón para copiarlo y lo que gana, en llano. Reutiliza el programa de
  * referidos (`/modules/referrals/me` y `/me/stats`); si el aula no lo tiene
  * activo, o el alumno no puede tener enlace, no pinta nada.
+ *
+ * Solo con la membresía a la venta: el módulo paga comisión por las cuotas de
+ * la membresía (no por un curso suelto) y el enlace personal lleva a `/unete`.
+ * Sin membresía activa, el enlace caería en una página apagada y no daría nada.
  */
 export function InviteAndEarnCard({
   variant = 'aside',
@@ -46,6 +51,8 @@ export function InviteAndEarnCard({
         .myStats()
         .then(async (s) => {
           if (cancelled || !s.programActive) return;
+          const ctx = await fetchTenantContext().catch(() => null);
+          if (cancelled || !ctx?.tenant?.membershipPageActive) return;
           const link = await referralsApi.me();
           if (cancelled) return;
           setPercent(percentFromBps(s.commissionBps));

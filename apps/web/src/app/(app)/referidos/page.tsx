@@ -23,6 +23,8 @@ import { apiErrorMessage } from '@/lib/i18n/api-error';
 import { formatCents, formatDate, formatNumber } from '@/lib/i18n/format';
 import { labelOr, type TranslatorLike } from '@/lib/i18n/labels';
 import { referralsApi, type MemberReferralStats } from '@/lib/referrals';
+import { useSimpleMode } from '@/lib/simple-mode';
+import { SimpleReferrals } from '@/components/simple-learn/simple-referrals';
 
 /** Estado de comisión → key del catálogo. Viene de la API: desconocido → crudo. */
 const STATUS_LABEL: Record<string, string> = {
@@ -48,7 +50,14 @@ function dateLabel(iso: string): string {
   return formatDate(iso, { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
+/** En modo sencillo, la página «Invita y gana»; si no, la de siempre. */
 export default function ReferidosPage() {
+  const simple = useSimpleMode();
+  if (simple === null) return null;
+  return simple ? <SimpleReferrals /> : <ReferidosCompleta />;
+}
+
+function ReferidosCompleta() {
   const t = useTranslations('alumnoSocial');
   const tErrors = useTranslations('errors');
   const [stats, setStats] = useState<MemberReferralStats | null>(null);
