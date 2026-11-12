@@ -206,7 +206,7 @@ export function SimpleReferrals() {
       </nav>
 
       <div className="mt-4 grid grid-cols-[minmax(0,1fr)] gap-5 lg:grid-cols-[minmax(0,1fr)_340px] lg:items-start">
-        <div className="grid min-w-0 gap-5">
+        <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-5">
           <section className="rounded-2xl border border-border bg-surface p-5 lg:p-7">
             <h1 className="max-w-[24ch] text-[26px] leading-tight font-extrabold tracking-tight text-text lg:text-[32px]">
               {stats.programActive ? t('heroTitulo', { percent }) : t('inactivoTitulo')}
@@ -486,7 +486,7 @@ export function SimpleReferrals() {
           </section>
         </div>
 
-        <aside className="grid min-w-0 gap-5">
+        <aside className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-5">
           <section className="rounded-2xl border border-border bg-surface p-5">
             <h2 className="text-base font-bold text-text">{t('comoTitulo')}</h2>
             <ol className="mt-3 grid gap-3.5">
