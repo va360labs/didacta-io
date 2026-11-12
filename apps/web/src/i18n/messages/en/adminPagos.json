@@ -208,7 +208,16 @@
     "deactivateCta": "Deactivate",
     "reactivateCta": "Reactivate",
     "unlinkCta": "Unlink",
-    "courseFallback": "Course {id}"
+    "courseFallback": "Course {id}",
+    "platformTitle": "Course prices",
+    "platformSubtitle": "Set each course’s price by entering the amount. Nothing to set up in Stripe: the “Buy course” button shows in the catalog and, once paid, the student gets in automatically.",
+    "platformFormTitle": "Put a course on sale",
+    "platformFormHelp": "Pick the course and enter how much it costs.",
+    "platformCreateCta": "Put on sale",
+    "platformChangePriceCta": "Change price",
+    "platformSaveCta": "Save price",
+    "platformCancelCta": "Cancel",
+    "platformMarketPrices": "Fixed price in other countries"
   },
   "impagos": {
     "loadError": "We could not load the overdue payments.",

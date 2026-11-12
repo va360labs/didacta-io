@@ -208,7 +208,16 @@
     "deactivateCta": "Desactivar",
     "reactivateCta": "Reactivar",
     "unlinkCta": "Desvincular",
-    "courseFallback": "Curso {id}"
+    "courseFallback": "Curso {id}",
+    "platformTitle": "Precios de los cursos",
+    "platformSubtitle": "Pon precio a cada curso escribiendo el importe. No hace falta crear nada en Stripe: el botón «Comprar curso» aparece en el catálogo y, al pagar, el alumno entra solo.",
+    "platformFormTitle": "Poner un curso a la venta",
+    "platformFormHelp": "Elige el curso y escribe cuánto cuesta.",
+    "platformCreateCta": "Poner a la venta",
+    "platformChangePriceCta": "Cambiar precio",
+    "platformSaveCta": "Guardar precio",
+    "platformCancelCta": "Cancelar",
+    "platformMarketPrices": "Precio fijo en otros países"
   },
   "impagos": {
     "loadError": "No pudimos cargar los impagos.",
