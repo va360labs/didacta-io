@@ -253,7 +253,12 @@ class MockStripe implements StripeAdapter {
     metadata: Record<string, string>;
     customerEmail?: string;
   } | null = null;
-  lastOneOffPrice: { name: string; unitAmount: number; currency: string } | null = null;
+  lastOneOffPrice: {
+    name: string;
+    unitAmount: number;
+    currency: string;
+    currencyOptions?: Readonly<Record<string, number>> | null;
+  } | null = null;
 
   async createCheckoutSession(params: {
     metadata: Record<string, string>;

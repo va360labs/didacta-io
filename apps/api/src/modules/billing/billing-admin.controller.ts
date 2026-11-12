@@ -252,8 +252,9 @@ export class BillingAdminController {
     const current = (await billing.listProducts(u.tenantId)).find((p) => p.id === id);
     if (!current) {
       throw new NotFoundException({
-        message: 'Esa opción de compra no existe en esta organización.',
+        message: `Esa opción de compra no existe en esta organización: ${id}`,
         code: 'BILLING_PRODUCT_NOT_FOUND',
+        detail: id,
       });
     }
     const unitAmount = patch.amountCents ?? current.unitAmount;
