@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
  */
 
-import { Body, Controller, Get, NotFoundException, Post, Req } from '@nestjs/common';
+import { Body, Controller, Get, NotFoundException, Optional, Post, Req } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { FastifyRequest } from 'fastify';
 import { extractClientContext } from '../../auth/client-context';
@@ -12,6 +12,10 @@ import { ZodValidationPipe } from '../../auth/zod-validation.pipe';
 import { runAsTenant } from '../../tenancy/tenant-context.storage';
 import { TenantResolverService } from '../../tenancy/tenant-resolver.service';
 import { ModuleRegistryService } from '../module-registry.service';
+import {
+  PAYOUTS_NOT_READY_OFFER_REASON,
+  PlatformCheckoutGate,
+} from '../payouts/platform-checkout-gate';
 import { membershipCheckoutSchema, type MembershipCheckoutDto } from './membership.dto';
 import { resolvePublicHost } from '../../common/resolve-public-host';
 
@@ -28,6 +32,12 @@ export class MembershipPublicController {
   constructor(
     private readonly registry: ModuleRegistryService,
     private readonly tenantResolver: TenantResolverService,
+    /**
+     * Solo con el modo plataforma encendido (E5): si el aula cobra por la
+     * plataforma y su cuenta aún no puede vender, la página no ofrece planes y
+     * el checkout responde 409, como los cursos.
+     */
+    @Optional() private readonly payoutsGate?: PlatformCheckoutGate,
   ) {}
 
   @Get('page')
@@ -39,9 +49,14 @@ export class MembershipPublicController {
     const tenantId = await this.resolveTenantId(req);
     // RLS F2: ruta pública sin middleware de tenant — las queries corren bajo
     // el ALS del tenant resuelto por Host.
-    return runAsTenant(tenantId, () =>
-      this.registry.getMembershipService().getPublicPage(tenantId),
-    );
+    return runAsTenant(tenantId, async () => {
+      const page = await this.registry.getMembershipService().getPublicPage(tenantId);
+      // Cobros de plataforma sin terminar de conectar: la página se ve, sin venta.
+      if (await this.payoutsGate?.saleBlockedReason(tenantId)) {
+        return { ...page, plans: [], reason: PAYOUTS_NOT_READY_OFFER_REASON };
+      }
+      return page;
+    });
   }
 
   @Post('checkout')
@@ -56,20 +71,22 @@ export class MembershipPublicController {
     const tenantId = await this.resolveTenantId(req);
     const base = await this.tenantResolver.resolveTenantWebBaseUrl(tenantId, req);
     return runAsTenant(tenantId, async () => {
-      const { url, sessionId } = await this.registry
-        .getMembershipService()
-        .startMembershipCheckout({
-          tenantId,
-          planId: dto.planId,
-          email: dto.email,
-          referralCode: dto.referralCode,
-          // Idioma con el que el comprador está navegando AHORA. Viaja en la
-          // metadata de Stripe porque su fila de `user` no existe todavía: se
-          // crea en el webhook, después del salto a la pasarela.
-          locale: readRequestLocale(req.headers),
-          successUrl: `${base}/unete?status=success`,
-          cancelUrl: `${base}/unete?status=cancel`,
-        });
+      const membership = this.registry.getMembershipService();
+      // Modo plataforma: 409 si la cuenta no puede vender; si puede, el precio
+      // del plan en la cuenta del operador (antes de crear nada).
+      await this.payoutsGate?.prepareMembershipCheckout(tenantId, dto.planId, membership);
+      const { url, sessionId } = await membership.startMembershipCheckout({
+        tenantId,
+        planId: dto.planId,
+        email: dto.email,
+        referralCode: dto.referralCode,
+        // Idioma con el que el comprador está navegando AHORA. Viaja en la
+        // metadata de Stripe porque su fila de `user` no existe todavía: se
+        // crea en el webhook, después del salto a la pasarela.
+        locale: readRequestLocale(req.headers),
+        successUrl: `${base}/unete?status=success`,
+        cancelUrl: `${base}/unete?status=cancel`,
+      });
       // Client context solo para trazabilidad en logs de acceso (no se persiste aquí).
       void extractClientContext(req);
       return { url, sessionId };

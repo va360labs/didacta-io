@@ -134,7 +134,12 @@ export function SubscriptionTab() {
       setSubs((prev) =>
         prev.map((s) =>
           s.id === subId
-            ? { ...res.subscription, planName: s.planName, courseTitle: s.courseTitle }
+            ? {
+                ...res.subscription,
+                planName: s.planName,
+                courseTitle: s.courseTitle,
+                billingPortal: s.billingPortal,
+              }
             : s,
         ),
       );
@@ -165,7 +170,12 @@ export function SubscriptionTab() {
       setSubs((prev) =>
         prev.map((s) =>
           s.id === res.subscription.id
-            ? { ...res.subscription, planName: s.planName, courseTitle: s.courseTitle }
+            ? {
+                ...res.subscription,
+                planName: s.planName,
+                courseTitle: s.courseTitle,
+                billingPortal: s.billingPortal,
+              }
             : s,
         ),
       );
@@ -180,6 +190,24 @@ export function SubscriptionTab() {
       );
     } finally {
       setBusyId(null);
+    }
+  }
+
+  /** Portal de Stripe de una suscripción propia (tarjeta, facturas, baja). */
+  async function openSubscriptionPortal(subId: string) {
+    const token = authStorage.getAccessToken();
+    if (!token) return;
+    setPortalBusy(subId);
+    setActionError(null);
+    try {
+      const res = await subscriptionsApi.billingPortal(token, subId);
+      window.location.href = res.url;
+      // No reseteamos portalBusy: navegamos fuera de la app.
+    } catch (e) {
+      setActionError(
+        e instanceof ApiHttpError ? apiErrorMessage(e, tErrors) : t('subscription.portalError'),
+      );
+      setPortalBusy(null);
     }
   }
 
@@ -345,6 +373,16 @@ export function SubscriptionTab() {
             </CardHeader>
             <CardContent className="space-y-3">
               <div className="flex flex-wrap gap-2">
+                {sub.billingPortal && sub.status !== 'CANCELED' ? (
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={() => void openSubscriptionPortal(sub.id)}
+                    disabled={portalBusy === sub.id}
+                  >
+                    {portalBusy === sub.id ? t('subscription.opening') : t('subscription.manage')}
+                  </Button>
+                ) : null}
                 {isMembership && sub.status === 'TRIALING' && !sub.cancelAtPeriodEnd ? (
                   <Button
                     type="button"

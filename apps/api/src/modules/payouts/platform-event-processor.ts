@@ -18,6 +18,14 @@ import {
   type PlatformStripeEvent,
   type SettleOutcome,
 } from '@didacta/mod-payouts';
+import {
+  PAYOUTS_RENEWAL_ON_BLOCKED_ACCOUNT_ALERT,
+  SUBSCRIPTION_REF_SOURCES,
+  accountHoldsRenewals,
+  recordInvoiceSale,
+  registerSubscriptionChildren,
+  type InvoiceSaleOutcome,
+} from '@didacta/mod-payouts';
 import type { Logger as PinoLogger } from 'nestjs-pino';
 import type Stripe from 'stripe';
 import type { ClientContext } from '../../auth/client-context';
@@ -39,7 +47,7 @@ export interface PlatformWebhookResult {
    */
   readonly outcome: 'synced' | 'processed' | 'duplicate' | 'unattributed' | 'mismatch' | 'ignored';
   /** Solo en compras: qué pasó con la venta (`created`, `exists`, `not_paid`…, o `pending`). */
-  readonly sale?: CheckoutSaleOutcome['outcome'] | 'pending';
+  readonly sale?: CheckoutSaleOutcome['outcome'] | InvoiceSaleOutcome['outcome'] | 'pending';
   /**
    * Qué pasó con la liquidación cuando el evento la dispara (`charge.updated`,
    * o la compra cuando se liquida en línea): `transferred`, `awaiting_fee`,
@@ -166,7 +174,13 @@ export class PlatformEventProcessor {
 
         // DINERO. No bloquea: si falla, el acceso se concede igual y lo
         // recogen el barrido de liquidación o el conciliador.
-        const money = await this.money(event, route, tenantId, sessionRef);
+        const money = await this.money(
+          event,
+          route,
+          tenantId,
+          sessionRef,
+          attribution.via === 'origin_session' ? (attribution.resolution.refs[0] ?? null) : null,
+        );
 
         // REPARTO a los módulos: acceso al curso, membresía… Un fallo → 5xx.
         try {
@@ -216,6 +230,8 @@ export class PlatformEventProcessor {
     route: Extract<PlatformEventRoute, { kind: 'objects' }>,
     tenantId: string,
     sessionRef: ObjectRef | null,
+    /** Sesión de checkout de origen, cuando el evento se atribuyó preguntando a Stripe. */
+    originRef: ObjectRef | null = null,
   ): Promise<{
     sale?: PlatformWebhookResult['sale'];
     settlement?: PlatformWebhookResult['settlement'];
@@ -228,6 +244,23 @@ export class PlatformEventProcessor {
       );
       return `dinero: ${err instanceof Error ? err.message : String(err)}`.slice(0, 500);
     };
+
+    // E5 — membresías y suscripciones cobradas por la plataforma.
+    const subscriptionSession = [sessionRef, originRef].find(
+      (ref): ref is ObjectRef => !!ref && SUBSCRIPTION_REF_SOURCES.has(ref.source),
+    );
+    if (subscriptionSession || route.family === 'invoice') {
+      const subscription = await this.subscriptionMoney(
+        event,
+        route,
+        tenantId,
+        subscriptionSession ?? null,
+        fail,
+      );
+      // `null`: no era nada de la suscripción; el evento sigue su camino (un
+      // `charge.*` atribuido por la sesión de origen se liquida como cualquiera).
+      if (subscription) return subscription;
+    }
 
     if (SALE_EVENT_TYPES.has(event.type) && sessionRef?.source === 'billing') {
       let recorded: CheckoutSaleOutcome;
@@ -290,6 +323,85 @@ export class PlatformEventProcessor {
       }
     }
     return { error: null };
+  }
+
+  /**
+   * DINERO de una suscripción (E5). Nunca lanza.
+   *
+   *  - El `completed` de su sesión, o el primer evento de la suscripción que se
+   *    atribuyó por su sesión de origen (llegó antes que el `completed`): se
+   *    atan `sub_…` y `cus_…` a la sesión, para que las renovaciones se
+   *    atribuyan por el registro.
+   *  - `invoice.paid` con importe → venta `SUBSCRIPTION_INVOICE` (y sin Redis,
+   *    liquidada en línea). La factura de 0 € de una prueba gratis no anota
+   *    nada. `invoice.payment_failed` no mueve dinero.
+   *  - Renovación cobrada con la cuenta del creador restringida → la venta se
+   *    anota y la liquidación la retiene; alerta para el operador.
+   *
+   * Devuelve `null` si al evento no le queda nada de la suscripción: Stripe
+   * también encuentra la sesión de una suscripción por el PaymentIntent de su
+   * primera factura, así que un `charge.*` puede llegar aquí por la sesión de
+   * origen y tiene que seguir a la liquidación del cargo.
+   */
+  private async subscriptionMoney(
+    event: PlatformStripeEvent,
+    route: Extract<PlatformEventRoute, { kind: 'objects' }>,
+    tenantId: string,
+    sessionRef: ObjectRef | null,
+    fail: (stage: string, err: unknown, extra: Record<string, unknown>) => string,
+  ): Promise<{
+    sale?: PlatformWebhookResult['sale'];
+    settlement?: PlatformWebhookResult['settlement'];
+    error: string | null;
+  } | null> {
+    const deps = { db: this.runtime.db, stripe: this.runtime.stripe };
+    if (
+      sessionRef &&
+      (event.type === 'checkout.session.completed' || route.family !== 'checkout_session')
+    ) {
+      try {
+        await registerSubscriptionChildren(deps, { tenantId, sessionRef });
+      } catch (err) {
+        return { error: fail('subscription_refs', err, { sessionId: sessionRef.stripeObjectId }) };
+      }
+    }
+    if (route.family !== 'invoice') return null;
+    if (event.type !== 'invoice.paid' || !route.primaryId) return { error: null };
+
+    let recorded: InvoiceSaleOutcome;
+    try {
+      recorded = await recordInvoiceSale(deps, { tenantId, invoiceId: route.primaryId });
+    } catch (err) {
+      return { sale: 'pending', error: fail('sale', err, { invoiceId: route.primaryId }) };
+    }
+    if (recorded.outcome !== 'created' && recorded.outcome !== 'exists') {
+      return { sale: recorded.outcome, error: null };
+    }
+    if (accountHoldsRenewals(recorded.accountStatus)) {
+      this.logger.error(
+        {
+          alert: PAYOUTS_RENEWAL_ON_BLOCKED_ACCOUNT_ALERT,
+          eventId: event.id,
+          tenantId,
+          saleId: recorded.saleId,
+          accountStatus: recorded.accountStatus,
+        },
+        `${PAYOUTS_RENEWAL_ON_BLOCKED_ACCOUNT_ALERT}: renovación cobrada con la cuenta del creador ${recorded.accountStatus}; la venta queda retenida hasta que pueda recibir transferencias`,
+      );
+    }
+    if (!this.runtime.settleInline) return { sale: recorded.outcome, error: null };
+    try {
+      const settled = await this.runtime.settlement.settleSale(tenantId, recorded.saleId, {
+        force: true,
+      });
+      return { sale: recorded.outcome, settlement: settled.outcome, error: null };
+    } catch (err) {
+      return {
+        sale: recorded.outcome,
+        settlement: 'pending',
+        error: fail('settlement', err, { saleId: recorded.saleId }),
+      };
+    }
   }
 
   /** Eventos de cuenta (E2): el evento solo dispara `syncAccount`. */

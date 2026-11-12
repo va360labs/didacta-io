@@ -35,6 +35,7 @@ import {
   type CoursePriceCatalog as SubsCoursePriceCatalog,
   type SubscriptionsEventPublisher,
   type SubscriptionsStripeAdapter,
+  type SubscriptionsStripeAdapterOptions,
   type SubscriptionsStripeAdapterResolver,
 } from '@didacta/mod-subscriptions';
 import {
@@ -398,7 +399,9 @@ export class ModuleRegistryService implements OnModuleInit {
         ownCredentials: this.stripeResolver,
         refs: this.payouts.platformRefs(),
         buildBilling: (credentials, options) => this.buildStripeAdapter(credentials, options),
-        buildSubscriptions: (credentials) => this.buildSubscriptionsStripeAdapter(credentials),
+        buildSubscriptions: (credentials, options) =>
+          this.buildSubscriptionsStripeAdapter(credentials, options),
+        portal: this.payouts.platformPortal(),
       });
     }
     if (!this.globalStripeAdapter && !this.globalSubscriptionsStripeAdapter) {
@@ -929,14 +932,15 @@ export class ModuleRegistryService implements OnModuleInit {
 
   private buildSubscriptionsStripeAdapter(
     credentials: BillingStripeCredentials,
+    options?: SubscriptionsStripeAdapterOptions,
   ): SubscriptionsStripeAdapter {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const StripeCtor = require('stripe').default ?? require('stripe');
-    return new SubscriptionsStripeSdkAdapter(
-      credentials.secretKey,
-      credentials.subscriptionsWebhookSecret || credentials.webhookSecret,
-      StripeCtor,
-    );
+    const webhookSecret = credentials.subscriptionsWebhookSecret || credentials.webhookSecret;
+    // Sin opciones (modo propio): la llamada de siempre, sin cuarto argumento.
+    return options
+      ? new SubscriptionsStripeSdkAdapter(credentials.secretKey, webhookSecret, StripeCtor, options)
+      : new SubscriptionsStripeSdkAdapter(credentials.secretKey, webhookSecret, StripeCtor);
   }
 
   private tryBuildGlobalStripeAdapter(): StripeAdapter | undefined {

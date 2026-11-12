@@ -13,6 +13,7 @@
  *   - createSubscriptionCheckoutSession (mode='subscription' en Stripe).
  *   - retrievePrice + validar que es recurring.
  *   - cancelSubscription (al final del periodo o inmediato).
+ *   - createPortalSession (portal de cliente: tarjeta, facturas y baja).
  *   - constructWebhookEvent (verifica firma HMAC).
  */
 
@@ -49,6 +50,51 @@ export interface SubscriptionsStripeAdapter {
    * inmutables: para cambiar el importe se crea uno nuevo.
    */
   createRecurringPrice(params: CreateRecurringPriceParams): Promise<string>;
+  /**
+   * Sesión del portal de cliente de Stripe: el alumno cambia su tarjeta, ve sus
+   * facturas y se da de baja. Devuelve la URL a la que redirigir.
+   */
+  createPortalSession(params: CreatePortalSessionParams): Promise<StripePortalSessionResult>;
+}
+
+export interface CreatePortalSessionParams {
+  /** Cliente de Stripe (`cus_…`) dueño de la suscripción. */
+  customerId: string;
+  /** A dónde vuelve el alumno al salir del portal. */
+  returnUrl: string;
+  /**
+   * Configuración del portal (`bpc_…`). Sin ella, Stripe usa la configuración
+   * por defecto de la cuenta.
+   */
+  configurationId?: string;
+}
+
+export interface StripePortalSessionResult {
+  url: string;
+}
+
+/**
+ * Opciones con las que el HOST monta el adaptador. Este módulo no sabe de
+ * quién es la cuenta de Stripe ni por qué: solo aplica lo que le dicen.
+ *
+ * Sin opciones (lo de siempre: el tenant cobra en SU cuenta), los parámetros
+ * de la sesión de checkout son exactamente los de antes — hay un test de
+ * instantánea que lo vigila.
+ */
+export interface SubscriptionsStripeAdapterOptions {
+  /**
+   * Cobro en una cuenta COMPARTIDA en nombre de otra. Con esto la sesión añade
+   * `subscription_data.on_behalf_of` (la suscripción, sus facturas y sus cargos
+   * son en nombre de esa cuenta: es el comercio que ve el comprador) y el
+   * portal de cliente se abre con `on_behalf_of` (lleva su nombre).
+   */
+  readonly connect?: { readonly onBehalfOf: string };
+  /**
+   * `'deny'` ignora `allowPromotionCodes`. En una cuenta compartida un código
+   * promocional creado para una academia valdría en todas las demás.
+   * Por defecto `'allow'`: manda lo que pida el servicio.
+   */
+  readonly promotionCodes?: 'allow' | 'deny';
 }
 
 export interface CreateRecurringPriceParams {
@@ -116,6 +162,7 @@ export class SubscriptionsStripeSdkAdapter implements SubscriptionsStripeAdapter
     private readonly secretKey: string,
     private readonly webhookSecret: string,
     StripeCtor: new (key: string, opts?: Stripe.StripeConfig) => Stripe,
+    private readonly options: SubscriptionsStripeAdapterOptions = {},
   ) {
     if (!secretKey) throw new StripeConfigMissingError('secretKey');
     if (!webhookSecret) throw new StripeConfigMissingError('webhookSecret');
@@ -147,11 +194,14 @@ export class SubscriptionsStripeSdkAdapter implements SubscriptionsStripeAdapter
         cancel_url: p.cancelUrl,
         customer_email: p.customerEmail,
         client_reference_id: p.clientReferenceId ?? p.metadata['subscriptionLocalId'],
-        ...(p.allowPromotionCodes ? { allow_promotion_codes: true } : {}),
+        ...(p.allowPromotionCodes && this.options.promotionCodes !== 'deny'
+          ? { allow_promotion_codes: true }
+          : {}),
         metadata: { ...p.metadata },
         subscription_data: {
           metadata: { ...p.metadata },
           ...(trialDays ? { trial_period_days: trialDays } : {}),
+          ...(this.options.connect ? { on_behalf_of: this.options.connect.onBehalfOf } : {}),
         },
       });
       if (!session.url) {
@@ -257,6 +307,22 @@ export class SubscriptionsStripeSdkAdapter implements SubscriptionsStripeAdapter
         currentPeriodEnd: currentPeriodEndFromSubscription(sub),
         canceledAt: sub.canceled_at ?? null,
       };
+    } catch (err) {
+      throw new StripeApiError((err as Error).message);
+    }
+  }
+
+  async createPortalSession(p: CreatePortalSessionParams): Promise<StripePortalSessionResult> {
+    try {
+      const session = await this.client.billingPortal.sessions.create({
+        customer: p.customerId,
+        return_url: p.returnUrl,
+        ...(p.configurationId ? { configuration: p.configurationId } : {}),
+        // En la cuenta compartida, el portal lleva el nombre y la marca de la
+        // cuenta del creador, no los del operador.
+        ...(this.options.connect ? { on_behalf_of: this.options.connect.onBehalfOf } : {}),
+      });
+      return { url: session.url };
     } catch (err) {
       throw new StripeApiError((err as Error).message);
     }

@@ -48,11 +48,15 @@ export type {
 export { SubscriptionsStripeSdkAdapter } from './stripe-subscriptions.client.js';
 export type {
   SubscriptionsStripeAdapter,
+  SubscriptionsStripeAdapterOptions,
+  CreatePortalSessionParams,
+  StripePortalSessionResult,
   CreateSubscriptionCheckoutParams,
   CreateRecurringPriceParams,
   StripeSubscriptionCheckoutResult,
   StripePriceResult,
   StripeSubscriptionView,
+  EndTrialNowResult,
 } from './stripe-subscriptions.client.js';
 export {
   SubscriptionsError,

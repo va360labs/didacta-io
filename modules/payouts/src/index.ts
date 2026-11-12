@@ -152,6 +152,24 @@ export type { ChargeEventOutcome } from './handlers/charge.js';
 export { checkTransferEvent, TRANSFER_EVENT_TYPES } from './handlers/transfer.js';
 export type { TransferCheckOutcome } from './handlers/transfer.js';
 
+// E5 — membresías: factura cobrada → venta; hijos de la sesión; portal del creador.
+export {
+  PAYOUTS_RENEWAL_ON_BLOCKED_ACCOUNT_ALERT,
+  accountHoldsRenewals,
+  recordInvoiceSale,
+} from './handlers/invoice.js';
+export type { InvoiceSaleInput, InvoiceSaleOutcome } from './handlers/invoice.js';
+export { SUBSCRIPTION_REF_SOURCES, registerSubscriptionChildren } from './handlers/subscription.js';
+export type { SubscriptionChildrenOutcome } from './handlers/subscription.js';
+export {
+  findInvoiceOfCharge,
+  findInvoicePayment,
+  invoicePaymentFromObject,
+} from './stripe/invoice-shape.js';
+export type { InvoicePaymentRef } from './stripe/invoice-shape.js';
+export { PayoutsPortalService } from './portal.service.js';
+export type { PortalForAccount } from './portal.service.js';
+
 export {
   PAYOUTS_ALERTS,
   SALE_FAILURE_REASONS,

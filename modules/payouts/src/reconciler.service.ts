@@ -6,8 +6,11 @@
 import type { PrismaClient } from '@didacta/database';
 import type { PayoutsDbPort, PayoutsLogger } from './accounts.service.js';
 import type { PlatformStripeEvent } from './account-events.js';
-import { idOf, routePlatformEvent } from './event-router.js';
+import { idOf, routePlatformEvent, subscriptionIdFromInvoice } from './event-router.js';
 import { recordCheckoutSale } from './handlers/checkout.js';
+import { recordInvoiceSale } from './handlers/invoice.js';
+import { registerSubscriptionChildren } from './handlers/subscription.js';
+import { findInvoiceOfCharge } from './stripe/invoice-shape.js';
 import { computePlatformFee } from './money.js';
 import { RefsService } from './refs.service.js';
 import {
@@ -46,8 +49,9 @@ import type { PlatformStripeClient } from './stripe/platform-stripe.client.js';
  * Nada de esto decide importes: lo que crea o avanza pasa por
  * `recordCheckoutSale` y `SettlementService`, que releen Stripe.
  *
- * Fuera de E4 (puntos de enganche): la recuperación activa de deudas (E6) y
- * las facturas de suscripción sin venta (E5, hoy solo alerta).
+ * Fuera de E4 (puntos de enganche): la recuperación activa de deudas (E6).
+ * Desde E5, el cargo de una factura de suscripción sin venta la crea
+ * (`recordInvoiceSale`), con el tenant del registro de su suscripción.
  */
 
 export interface ReconcilerDeps {
@@ -245,25 +249,31 @@ export class PayoutsReconcilerService {
       if (existing) continue;
       withoutSale += 1;
 
-      if (idOf(charge.invoice)) {
-        // Factura de suscripción: su venta es de E5.
-        unhandled += 1;
-        this.alert(
-          PAYOUTS_ALERTS.chargeUnhandled,
-          { chargeId: charge.id, invoiceId: idOf(charge.invoice) },
-          'cargo de factura sin venta (las membresías llegan en E5)',
-        );
-        continue;
+      const paymentIntentId = idOf(charge.payment_intent);
+      const sessions =
+        paymentIntentId && !idOf(charge.invoice)
+          ? await this.deps.stripe.v1<StripeList<{ id?: unknown }>>(
+              'GET',
+              '/v1/checkout/sessions',
+              { payment_intent: paymentIntentId, limit: 1 },
+            )
+          : null;
+      const sessionId = idOf(sessions?.data?.[0]?.id);
+
+      // E5: sin sesión de pago, puede ser el cargo de una factura de
+      // suscripción (la sesión de una suscripción no tiene PaymentIntent) →
+      // su venta SUBSCRIPTION_INVOICE.
+      if (!sessionId) {
+        const invoiceId = await findInvoiceOfCharge(this.deps.stripe, charge);
+        if (invoiceId) {
+          const invoiceSale = await this.invoiceSaleOfCharge(charge.id, invoiceId);
+          if (invoiceSale === 'created') created += 1;
+          else if (invoiceSale === 'unattributed') unattributed += 1;
+          else if (invoiceSale === 'unhandled') unhandled += 1;
+          continue;
+        }
       }
 
-      const paymentIntentId = idOf(charge.payment_intent);
-      const sessions = paymentIntentId
-        ? await this.deps.stripe.v1<StripeList<{ id?: unknown }>>('GET', '/v1/checkout/sessions', {
-            payment_intent: paymentIntentId,
-            limit: 1,
-          })
-        : null;
-      const sessionId = idOf(sessions?.data?.[0]?.id);
       const ref = sessionId
         ? await this.deps.db.global((tx) =>
             new RefsService(tx as unknown as PrismaClient).find(sessionId),
@@ -299,6 +309,78 @@ export class PayoutsReconcilerService {
       }
     }
     return { listed: charges.length, withoutSale, created, unattributed, unhandled };
+  }
+
+  /**
+   * E5: el cargo sin venta es de una factura. El tenant sale del registro de
+   * la suscripción (o, si nunca se registró, de su sesión de checkout de
+   * origen, consultada a Stripe) y la venta la anota `recordInvoiceSale`, que
+   * relee todo de la API.
+   */
+  private async invoiceSaleOfCharge(
+    chargeId: string,
+    invoiceId: string,
+  ): Promise<'created' | 'exists' | 'unattributed' | 'unhandled'> {
+    const invoice = await this.deps.stripe.v1<Record<string, unknown>>(
+      'GET',
+      `/v1/invoices/${encodeURIComponent(invoiceId)}`,
+    );
+    const subscriptionId = subscriptionIdFromInvoice(invoice);
+    if (!subscriptionId) {
+      this.alert(
+        PAYOUTS_ALERTS.chargeUnhandled,
+        { chargeId, invoiceId },
+        'cargo de una factura sin suscripción (no es de ningún flujo de venta)',
+      );
+      return 'unhandled';
+    }
+    try {
+      const findRef = (id: string) =>
+        this.deps.db.global((tx) => new RefsService(tx as unknown as PrismaClient).find(id));
+      let tenantId = (await findRef(subscriptionId))?.tenantId ?? null;
+      if (!tenantId) {
+        const sessions = await this.deps.stripe.v1<StripeList<{ id?: unknown }>>(
+          'GET',
+          '/v1/checkout/sessions',
+          { subscription: subscriptionId, limit: 1 },
+        );
+        const sessionId = idOf(sessions.data?.[0]?.id);
+        const sessionRef = sessionId ? await findRef(sessionId) : null;
+        if (sessionRef) {
+          const children = await registerSubscriptionChildren(
+            { db: this.deps.db, stripe: this.deps.stripe },
+            { tenantId: sessionRef.tenantId, sessionRef },
+          );
+          if (children.outcome === 'registered') tenantId = sessionRef.tenantId;
+        }
+      }
+      if (!tenantId) {
+        this.alert(
+          PAYOUTS_ALERTS.chargeUnattributed,
+          { chargeId, invoiceId, subscriptionId },
+          'cargo de una factura cuya suscripción el registro no atribuye a ningún aula',
+        );
+        return 'unattributed';
+      }
+      const result = await recordInvoiceSale(
+        { db: this.deps.db, stripe: this.deps.stripe },
+        { tenantId, invoiceId },
+      );
+      if (result.outcome === 'created' || result.outcome === 'exists') return result.outcome;
+      this.alert(
+        PAYOUTS_ALERTS.chargeUnhandled,
+        { chargeId, invoiceId, tenantId, outcome: result.outcome },
+        'cargo cobrado de una factura que Stripe no da por cobrada',
+      );
+      return 'unhandled';
+    } catch (err) {
+      this.alert(
+        PAYOUTS_ALERTS.chargeUnattributed,
+        { chargeId, invoiceId, subscriptionId, err: describe(err) },
+        'cargo de factura atribuido cuya venta no se pudo anotar',
+      );
+      return 'unattributed';
+    }
   }
 
   // ── 4. Transferencias sin asiento ──────────────────────────────────────

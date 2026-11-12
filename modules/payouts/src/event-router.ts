@@ -267,15 +267,21 @@ async function findOriginSessionId(
   stripe: PlatformStripeClient,
 ): Promise<string | null> {
   if (route.family === 'checkout_session') return null; // la sesión ES el evento
-  const query = route.paymentIntentId
-    ? { payment_intent: route.paymentIntentId }
-    : route.subscriptionId
-      ? { subscription: route.subscriptionId }
-      : null;
-  if (!query) return null;
-  const list = await stripe.v1<{ data?: Array<{ id?: unknown }> }>('GET', '/v1/checkout/sessions', {
-    ...query,
-    limit: 1,
-  });
-  return idOf(list.data?.[0]?.id);
+  const queries = [
+    ...(route.paymentIntentId ? [{ payment_intent: route.paymentIntentId }] : []),
+    // E5: una factura con la forma anterior a `basil` nombra un PaymentIntent
+    // y una suscripción; la sesión de una suscripción no tiene PaymentIntent,
+    // así que si por él no sale nada, se pregunta por la suscripción.
+    ...(route.subscriptionId ? [{ subscription: route.subscriptionId }] : []),
+  ];
+  for (const query of queries) {
+    const list = await stripe.v1<{ data?: Array<{ id?: unknown }> }>(
+      'GET',
+      '/v1/checkout/sessions',
+      { ...query, limit: 1 },
+    );
+    const id = idOf(list.data?.[0]?.id);
+    if (id) return id;
+  }
+  return null;
 }
