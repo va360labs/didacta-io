@@ -189,8 +189,15 @@ test.describe('comunidad · barra lateral (modo sencillo)', () => {
 
     const ranking = barra.getByTestId('community-leaderboard');
     await expect(ranking.getByRole('heading', { name: 'Leaderboard · this month' })).toBeVisible();
-    await expect(ranking.getByRole('listitem').first()).toContainText('Priya Nair');
-    await expect(ranking.getByRole('listitem').first()).toContainText('+10');
+    // Publicar da 10 y comentar 5 (también puntúa el post de bienvenida del
+    // alta, así que no se afirma el orden de los empates).
+    await expect(ranking.getByRole('listitem').filter({ hasText: 'Priya Nair' })).toContainText(
+      '+10',
+    );
+    await expect(ranking.getByRole('listitem').filter({ hasText: 'Leo Martins' })).toContainText(
+      '+5',
+    );
+    await expect(ranking.getByRole('listitem').first()).toContainText('1');
     await expect(ranking.getByRole('link', { name: 'See the full leaderboard' })).toHaveAttribute(
       'href',
       '/leaderboard',
@@ -214,6 +221,23 @@ test.describe('comunidad · barra lateral (modo sencillo)', () => {
     await expect(dialogo.locator(`[id="comment-${commentId}"] textarea`)).toBeVisible();
     // El feed sigue montado debajo: sin recarga de la página.
     await expect(page.getByTestId('community-sidebar')).toBeVisible();
+    await ctx.close();
+  });
+
+  test('el enlace directo a un post abre la comunidad sencilla, no la completa', async ({
+    browser,
+  }) => {
+    const { ctx, page } = await abrir(browser, aula, priya, 1440, 900);
+    await page.goto(`${aula.base}/community/${postId}?comment=${commentId}`);
+    await expect(page.getByRole('dialog')).toContainText('Which grinder for a small budget?', {
+      timeout: 30_000,
+    });
+    // Debajo del modal, el feed del modo sencillo con su barra nueva…
+    await expect(page.getByTestId('escribe-algo')).toBeAttached();
+    await expect(page.getByTestId('community-sidebar')).toBeAttached();
+    // …y no el del modo completo (título, «New conversation», galería).
+    await expect(page.getByRole('button', { name: 'New conversation' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Gallery' })).toHaveCount(0);
     await ctx.close();
   });
 
