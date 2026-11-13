@@ -42,7 +42,10 @@ test.afterAll(async () => {
   await bunny?.close();
 });
 
-/** Creadora recién llegada: contraseña, entrada y alta en 3 preguntas. */
+/**
+ * Creadora recién llegada: contraseña, entrada, su perfil (en el modo sencillo
+ * va antes del alta; deja la foto para luego) y alta en 3 preguntas.
+ */
 async function creadoraConCurso(page: Page, tenant: FreshTenant): Promise<void> {
   await page.goto(tenant.setPasswordUrl);
   const pw = page.locator('input[type="password"]');
@@ -56,6 +59,13 @@ async function creadoraConCurso(page: Page, tenant: FreshTenant): Promise<void> 
   await page.locator('input[autocomplete="email"]').fill(tenant.creatorEmail);
   await page.locator('input[autocomplete="current-password"]').fill(tenant.password);
   await page.locator('button[type="submit"]').click();
+  await page.waitForURL(/\/onboarding/, { timeout: 30_000 });
+  await page.getByRole('button', { name: 'Dejar para luego' }).click();
+  await page.getByLabel(/Nombre de perfil/).fill('Clara Espresso');
+  await page.getByRole('button', { name: 'Continuar' }).click();
+  await expect(page.getByRole('heading', { name: 'Tus notificaciones' })).toBeVisible();
+  await page.getByRole('button', { name: 'Continuar' }).click();
+  await page.getByRole('button', { name: 'Seguir con mi academia' }).click();
   await page.waitForURL(/\/bienvenida/, { timeout: 30_000 });
   await page.getByLabel('Nombre de la academia').fill('Morning Pour');
   await page.getByRole('button', { name: 'Siguiente' }).click();
@@ -306,5 +316,102 @@ test('modo sencillo: cancelar una lección de vídeo a medio subir no deja lecci
   await expect.poll(async () => (await leccionesDelCurso(tenant, creadora)).lessons.length).toBe(0);
   // El vídeo reservado en Bunny también se borra.
   await expect.poll(() => bunny!.videos.size).toBe(antes);
+  await ctx.close();
+});
+
+/**
+ * La zona de subida cabe entera en el ancho, la página no desborda y en su
+ * centro y sus esquinas está ella misma: nada fijo ni pegado (panel del
+ * agente, pestaña plegada, cabecera, barra inferior) la tapa.
+ */
+async function zonaLibre(page: Page, ancho: number) {
+  const zona = page.getByTestId('video-soltar');
+  await zona.evaluate((el) => el.scrollIntoView({ block: 'center' }));
+  const z = (await zona.boundingBox())!;
+  expect(z.x).toBeGreaterThanOrEqual(0);
+  expect(z.x + z.width).toBeLessThanOrEqual(ancho);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(
+    ancho,
+  );
+  const tapada = await zona.evaluate((el) => {
+    const r = el.getBoundingClientRect();
+    const puntos: Array<[number, number]> = [
+      [r.left + r.width / 2, r.top + r.height / 2],
+      [r.left + 24, r.top + 24],
+      [r.right - 24, r.top + 24],
+      [r.left + 24, r.bottom - 24],
+      [r.right - 24, r.bottom - 24],
+    ];
+    return puntos.filter(([x, y]) => {
+      const hit = document.elementFromPoint(x, y);
+      return !hit || !el.contains(hit);
+    }).length;
+  });
+  expect(tapada).toBe(0);
+  // Y se puede pulsar de verdad: abre el selector de ficheros.
+  const [chooser] = await Promise.all([page.waitForEvent('filechooser'), zona.click()]);
+  expect(chooser.isMultiple()).toBe(false);
+  return z;
+}
+
+function seSolapan(
+  a: { x: number; y: number; width: number; height: number },
+  b: { x: number; y: number; width: number; height: number },
+): boolean {
+  return a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
+}
+
+test('modo sencillo: el panel del agente de IA y la subida del vídeo conviven sin taparse (1440 y 390 px)', async ({
+  browser,
+}) => {
+  test.skip(REAL, 'Solo con el doble');
+  test.setTimeout(180_000);
+  const tenant = await freshTenant(`videopanel${Date.now().toString(36)}`, true);
+  const ctx = await browser.newContext({ locale: 'es-ES', viewport: { width: 1440, height: 900 } });
+  await ctx.addCookies([{ name: 'didacta_locale', value: 'es-ES', url: tenant.base }]);
+  const page = await ctx.newPage();
+  await creadoraConCurso(page, tenant);
+
+  await page.getByRole('link', { name: 'Añadir mi primera lección' }).click();
+  await expect(page.getByTestId('editor-sencillo')).toBeVisible();
+  await page.getByTestId('tipo-VIDEO').click();
+  const zona = page.getByTestId('video-soltar');
+  await expect(zona).toBeVisible({ timeout: 20_000 });
+
+  // ── 1440: el panel es una columna a la derecha; la zona, entera a su izquierda.
+  const panel = page.getByTestId('agente-ia-panel');
+  await expect(panel).toBeVisible();
+  const z1440 = await zonaLibre(page, 1440);
+  const p = (await panel.boundingBox())!;
+  expect(seSolapan(z1440, p)).toBe(false);
+  expect(z1440.x + z1440.width).toBeLessThanOrEqual(p.x);
+
+  // Plegado: queda la pestaña lateral fija, y tampoco pisa la zona.
+  await panel.getByTestId('agente-ia-ocultar').click();
+  const plegado = page.getByTestId('agente-ia-plegado');
+  await expect(plegado).toBeVisible();
+  await expect(panel).toHaveCount(0);
+  const zPlegado = await zonaLibre(page, 1440);
+  expect(seSolapan(zPlegado, (await plegado.boundingBox())!)).toBe(false);
+  await plegado.click();
+  await expect(panel).toBeVisible();
+
+  // ── 390: sin columna; un botón en el flujo, ANTES del editor, y la hoja.
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(panel).toBeHidden();
+  const boton = page.getByTestId('agente-ia-movil');
+  await expect(boton).toBeVisible();
+  await expect(zona).toBeVisible();
+  const z390 = await zonaLibre(page, 390);
+  const b = (await boton.boundingBox())!;
+  expect(b.y + b.height).toBeLessThanOrEqual(z390.y);
+  // Abrir y cerrar la hoja no se lleva la lección a medio hacer.
+  await boton.click();
+  const hoja = page.getByTestId('agente-ia-hoja');
+  await expect(hoja).toBeVisible();
+  await hoja.getByTestId('agente-ia-ocultar').click();
+  await expect(hoja).toHaveCount(0);
+  await expect(zona).toBeVisible();
+  await zonaLibre(page, 390);
   await ctx.close();
 });
