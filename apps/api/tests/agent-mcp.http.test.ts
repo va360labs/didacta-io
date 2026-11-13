@@ -10,7 +10,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vites
 import { AgentKeyGuard, extractAgentToken } from '../src/agent/agent-key.guard';
 import { AgentKeysController } from '../src/agent/agent-keys.controller';
 import { PANEL_AGENT_SCOPES } from '../src/agent/agent-scopes';
-import { AGENT_TOOLS } from '../src/agent/agent-tools';
+import { AGENT_TOOLS, localizeAgentText } from '../src/agent/agent-tools';
 import { AgentService, AgentToolError } from '../src/agent/agent.service';
 import { McpController, negotiateProtocolVersion } from '../src/agent/mcp.controller';
 import { ApiKeyService } from '../src/auth/api-key.service';
@@ -79,9 +79,12 @@ const resolver = {
 };
 const auditLog = { record: vi.fn(async () => undefined) };
 const seen: { user?: SessionClaims; als?: string } = {};
+/** Idioma del aula del doble: lo cambia el test de las instrucciones. */
+let idiomaAula: 'es' | 'en' = 'es';
 const agent = {
   academyName: vi.fn(async () => 'Aula A'),
-  academyLocale: vi.fn(async (): Promise<'es' | 'en'> => 'es'),
+  academyLocale: vi.fn(async (): Promise<'es' | 'en'> => idiomaAula),
+  localize: vi.fn(async (_t: string, text: string) => localizeAgentText(text, idiomaAula)),
   visibleTools: vi.fn(async (u: SessionClaims) =>
     AGENT_TOOLS.filter((t) => u.roles.includes(t.scope)),
   ),
@@ -271,6 +274,29 @@ describe('MCP — protocolo', () => {
     expect(r.capabilities.tools).toBeDefined();
     expect(r.serverInfo.title).toContain('Aula A');
     expect(r.instructions).toMatch(/draft/);
+  });
+
+  it('initialize: instrucciones en inglés, pero la pantalla con el nombre que ve el aula', async () => {
+    const initialize = async () =>
+      (
+        await rpc(
+          { jsonrpc: '2.0', id: 'i', method: 'initialize', params: {} },
+          'Bearer lmsk_aula_a',
+        )
+      ).json().result.instructions as string;
+    try {
+      idiomaAula = 'es';
+      const es = await initialize();
+      expect(es).toContain('publishes them (with their price) from "Empieza aquí"');
+      expect(es).not.toContain('Start here');
+      expect(es).not.toContain('{{ui:');
+      idiomaAula = 'en';
+      const en = await initialize();
+      expect(en).toContain('from "Start here"');
+      expect(en).not.toContain('Empieza aquí');
+    } finally {
+      idiomaAula = 'es';
+    }
   });
 
   it('versión desconocida → responde con la más nueva que habla', () => {
