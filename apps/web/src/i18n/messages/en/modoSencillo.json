@@ -110,7 +110,9 @@
     "portadaCambiar": "Change the cover",
     "portadaQuitar": "Remove",
     "portadaSubiendo": "Uploading the cover…",
-    "portadaError": "The cover could not be uploaded. You can carry on without it and add it later."
+    "portadaError": "The cover could not be uploaded. You can carry on without it and add it later.",
+    "idiomaLabel": "Academy language",
+    "idiomaAyuda": "Your students and visitors will see your academy in this language. You can change it in Settings."
   },
   "empieza": {
     "titulo": "Your academy is almost ready to sell",

@@ -25,6 +25,7 @@ import { ReplyToCard } from '@/components/admin/reply-to-card';
 import { SmtpSettingsCard } from '@/components/admin/smtp-settings-card';
 import { StripeSettingsCard } from '@/components/admin/stripe-settings-card';
 import { TenantIdentityCard } from '@/components/admin/tenant-identity-card';
+import { AcademyLanguageCard } from '@/components/admin/academy-language-card';
 import { adminModulesApi, type TenantModuleListItem } from '@/lib/admin-modules';
 import { meApi } from '@/lib/me';
 import { adminTenantsApi, type TenantListItem } from '@/lib/admin-tenants';
@@ -87,10 +88,10 @@ const CORE_TABS: ConfigTabSpec[] = [
   { key: 'raw' },
 ];
 
-/// Tab "general" (identidad del tenant: nombre usado en emails y header).
-/// Va PRIMERO porque renombrar la organización es el setting más
-/// fundamental — antes que SMTP, storage o cualquier módulo. Sólo aplica a
-/// super_admin (gating duro en `visibleTabs` dentro del componente).
+/// Tab "general": el idioma de la academia (super_admin y tenant_admin) y la
+/// identidad del tenant (nombre usado en emails y header, solo super_admin).
+/// Va PRIMERO porque son los ajustes más fundamentales — antes que SMTP,
+/// storage o cualquier módulo.
 const GENERAL_TAB: ConfigTabSpec = { key: 'general' };
 
 /// Lista combinada CORE + EXTENSIONS, calculada una vez por mount. El
@@ -139,13 +140,19 @@ function ConfiguracionCompleta() {
   const [error, setError] = useState<string | null>(null);
   const [activeModules, setActiveModules] = useState<Set<string> | null>(null);
 
-  // El tab "general" (identidad de la organización) sólo se muestra a
-  // super_admin porque el endpoint backend que renombra el tenant es
-  // super_admin-only. Para el resto de roles el tab inicial sigue siendo
-  // "notifications" (compat con el comportamiento previo).
+  // La tarjeta de identidad de la organización de la pestaña "general" sólo
+  // se muestra a super_admin porque el endpoint backend que renombra el tenant
+  // es super_admin-only; el idioma de la academia, también a tenant_admin. Para
+  // el resto de roles el tab inicial sigue siendo "notifications" (compat con
+  // el comportamiento previo).
   const isSuperAdmin = (() => {
     const session = authStorage.getSession();
     return session?.user.roles.includes('super_admin') ?? false;
+  })();
+  // El idioma de la academia lo elige quien la administra.
+  const isTenantAdmin = (() => {
+    const session = authStorage.getSession();
+    return session?.user.roles.includes('tenant_admin') ?? false;
   })();
 
   /// El tab inicial se puede fijar por query (`?tab=notifications`) para que
@@ -203,7 +210,7 @@ function ConfiguracionCompleta() {
   /// `?tab=payments` lleva allí. Sin el módulo (Community), nada cambia.
   const platformPayouts = activeModules?.has('mod.payouts') ?? false;
   const visibleTabs = ALL_TABS.filter((spec) => {
-    if (spec.key === 'general') return isSuperAdmin;
+    if (spec.key === 'general') return isSuperAdmin || isTenantAdmin;
     if (spec.key === 'payments') return !platformPayouts;
     if (!spec.requiresModule) return true;
     if (!activeModules) return false;
@@ -308,7 +315,12 @@ function ConfiguracionCompleta() {
         })}
       </div>
 
-      {tab === 'general' ? <TenantIdentityCard /> : null}
+      {tab === 'general' ? (
+        <div className="space-y-4">
+          <AcademyLanguageCard />
+          {isSuperAdmin ? <TenantIdentityCard /> : null}
+        </div>
+      ) : null}
 
       {tab === 'notifications' ? (
         <div className="space-y-4">
@@ -441,6 +453,11 @@ function ModulesTab() {
   const isSuperAdmin = (() => {
     const session = authStorage.getSession();
     return session?.user.roles.includes('super_admin') ?? false;
+  })();
+  // El idioma de la academia lo elige quien la administra.
+  const isTenantAdmin = (() => {
+    const session = authStorage.getSession();
+    return session?.user.roles.includes('tenant_admin') ?? false;
   })();
 
   async function reload(tenantId = targetTenantId) {

@@ -5,7 +5,13 @@
 
 import { describe, expect, it } from 'vitest';
 import { extraTimezone } from '@/lib/me';
-import { firstAccessPatch, firstAccessTimeZone, isBrowserTimeZone } from './first-access';
+import {
+  firstAccessPatch,
+  firstAccessTimeZone,
+  isBrowserTimeZone,
+  profileLocaleToApply,
+  viewingLocale,
+} from './first-access';
 
 const NUEVO = {
   onboarded: false,
@@ -64,5 +70,34 @@ describe('primer acceso: zona e idioma del navegador', () => {
     expect(extraTimezone('Asia/Tokyo')).toBe('Asia/Tokyo');
     expect(extraTimezone('Europe/Madrid')).toBeNull();
     expect(extraTimezone('America/New_York')).toBeNull();
+  });
+});
+
+describe('idioma del aula para quien entra sin cookie', () => {
+  it('está viendo el aula en su cookie o, sin ella, en el idioma del aula', () => {
+    expect(viewingLocale('es-AR', 'en')).toBe('es-AR');
+    expect(viewingLocale(null, 'en')).toBe('en-US');
+    expect(viewingLocale(null, 'es')).toBe('es-ES');
+    expect(viewingLocale(null, null)).toBeNull();
+  });
+
+  it('primer acceso sin cookie en un aula en inglés: el perfil pasa a inglés', () => {
+    expect(
+      firstAccessPatch({
+        ...NUEVO,
+        cookieLocale: viewingLocale(null, 'en'),
+        browserTimeZone: undefined,
+      }),
+    ).toEqual({ locale: 'en-US' });
+  });
+
+  it('la preferencia del usuario manda: se compara con lo que se pinta, no solo con la cookie', () => {
+    // Sin cookie, el aula en inglés se pinta en inglés; el perfil en español gana.
+    expect(profileLocaleToApply('es-ES', null, 'en-US')).toBe('es-ES');
+    // Ya se pinta en su idioma: nada que hacer (ni refresco).
+    expect(profileLocaleToApply('en-US', null, 'en-US')).toBeNull();
+    expect(profileLocaleToApply('es-AR', 'es-AR', 'es-AR')).toBeNull();
+    // La cookie de otra visita no manda sobre el perfil.
+    expect(profileLocaleToApply('en-US', 'es-ES', 'es-ES')).toBe('en-US');
   });
 });

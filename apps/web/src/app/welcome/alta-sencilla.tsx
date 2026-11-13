@@ -9,6 +9,7 @@ import Image from 'next/image';
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 import { Icon } from '@/components/icon';
+import { ACADEMY_LOCALE_NAMES, ACADEMY_LOCALES, type AcademyLocale } from '@/i18n/config';
 import { authStorage } from '@/lib/auth-storage';
 import { formatCents } from '@/lib/i18n/format';
 import { parseAmount, simpleModeApi, suggestCurrency } from '@/lib/simple-mode';
@@ -20,10 +21,11 @@ type Offer = 'course' | 'membership';
 
 /**
  * Alta en 3 preguntas del MODO SENCILLO (sustituye al asistente de 12
- * pantallas): nombre de la academia, qué vende (curso o membresía, con su
- * nombre) y cuánto cuesta. Al terminar quedan creados el curso en borrador o
- * el plan, los espacios básicos y un post de bienvenida, y lleva a «Empieza
- * aquí». A la derecha (debajo en el móvil), cómo lo verán los alumnos.
+ * pantallas): nombre de la academia (y su idioma, ya elegido: el de la
+ * interfaz), qué vende (curso o membresía, con su nombre) y cuánto cuesta. Al
+ * terminar quedan creados el curso en borrador o el plan, los espacios básicos
+ * y un post de bienvenida, y lleva a «Empieza aquí». A la derecha (debajo en el
+ * móvil), cómo lo verán los alumnos.
  */
 export function AltaSencilla() {
   const t = useTranslations('modoSencillo.alta');
@@ -33,6 +35,10 @@ export function AltaSencilla() {
   useEffect(() => setHost(window.location.host), []);
   const [paso, setPaso] = useState<1 | 2 | 3>(1);
   const [nombre, setNombre] = useState('');
+  // Idioma de la academia: preseleccionado con el de la interfaz (el de la
+  // creadora, o el que fijó Cloud al crear el aula). No suma clics: solo se
+  // toca si se quiere otro.
+  const [idioma, setIdioma] = useState<AcademyLocale>(locale.startsWith('en') ? 'en' : 'es');
   const [oferta, setOferta] = useState<Offer>('course');
   const [titulo, setTitulo] = useState('');
   const [importe, setImporte] = useState('');
@@ -103,7 +109,7 @@ export function AltaSencilla() {
         ...(oferta === 'course' && portada ? { coverUrl: portada } : {}),
         amountCents: cents,
         currency: moneda,
-        locale: locale.startsWith('en') ? 'en' : 'es',
+        locale: idioma,
       });
       // El servidor ya dio por hechos el perfil y el asistente: la sesión de la
       // pestaña lo refleja para que el shell no vuelva a mandar aquí.
@@ -176,6 +182,22 @@ export function AltaSencilla() {
                   {t('direccion', { host: host.replace(/:\d+$/, '') })}
                 </p>
               ) : null}
+              <label htmlFor="alta-idioma" className="mt-6 block text-sm font-semibold text-text">
+                {t('idiomaLabel')}
+              </label>
+              <select
+                id="alta-idioma"
+                value={idioma}
+                onChange={(e) => setIdioma(e.target.value as AcademyLocale)}
+                className="mt-1.5 h-12 w-full max-w-[240px] rounded-xl border border-border bg-surface px-3 text-base font-semibold text-text outline-none focus:border-brand-600 focus:ring-4 focus:ring-brand-100"
+              >
+                {ACADEMY_LOCALES.map((l) => (
+                  <option key={l} value={l} lang={l}>
+                    {ACADEMY_LOCALE_NAMES[l]}
+                  </option>
+                ))}
+              </select>
+              <p className="mt-1.5 text-sm text-text-subtle">{t('idiomaAyuda')}</p>
             </>
           ) : paso === 2 ? (
             <>

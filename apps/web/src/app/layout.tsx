@@ -5,10 +5,12 @@
 
 import type { Metadata } from 'next';
 import { Figtree, Inter, Sora } from 'next/font/google';
+import { headers } from 'next/headers';
 import type { ReactNode } from 'react';
 import { NextIntlClientProvider } from 'next-intl';
 import { getLocale, getMessages } from 'next-intl/server';
 import { LocaleSync } from '@/components/locale-sync';
+import { getAcademyLocale, publicHost } from '@/lib/academy-locale';
 import { SubscriptionGate } from '@/components/subscription-gate';
 import { TenantThemeProvider } from '@/components/tenant-theme-provider';
 import { TenantTitle } from '@/components/tenant-title';
@@ -60,6 +62,9 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
   // Idioma por cookie `didacta_locale` (ver src/i18n/request.ts). LocaleSync
   // la mantiene alineada con user.locale tras el login.
   const locale = await getLocale();
+  // Idioma del aula (cacheado por host): con él se pinta quien entra sin cookie
+  // y LocaleSync lo adopta en el primer acceso de quien aún no eligió el suyo.
+  const academyLocale = await getAcademyLocale(publicHost(await headers()));
   const messages = await getMessages();
   return (
     <html
@@ -85,7 +90,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
           <TenantThemeProvider>
             <SubscriptionGate>{children}</SubscriptionGate>
           </TenantThemeProvider>
-          <LocaleSync />
+          <LocaleSync academyLocale={academyLocale} />
         </NextIntlClientProvider>
       </body>
     </html>

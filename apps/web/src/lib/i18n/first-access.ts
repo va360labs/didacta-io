@@ -3,7 +3,12 @@
  * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
  */
 
-import { toSupportedLocale, type SupportedLocale } from '@/i18n/config';
+import {
+  academyUiLocale,
+  toSupportedLocale,
+  type AcademyLocale,
+  type SupportedLocale,
+} from '@/i18n/config';
 
 /**
  * Primer acceso: zona horaria e idioma del perfil a partir del navegador.
@@ -15,10 +20,10 @@ import { toSupportedLocale, type SupportedLocale } from '@/i18n/config';
  * interfaz al español nada más entrar.
  *
  * Mientras no haya terminado el primer acceso (`onboardingCompletedAt` nulo),
- * se toma lo del navegador: su zona (si `Intl` la reconoce) y el idioma de la
- * cookie con el que está viendo el aula (solo si hay cookie: sin ella no hay
- * nada que adoptar). Después de eso manda lo que el usuario elija en su perfil
- * y aquí no se toca nada.
+ * se toma lo del navegador: su zona (si `Intl` la reconoce) y el idioma con el
+ * que está viendo el aula (`viewingLocale`: su cookie o, sin ella, el idioma
+ * del aula; si no se sabe ninguno, no hay nada que adoptar). Después de eso
+ * manda lo que el usuario elija en su perfil y aquí no se toca nada.
  */
 
 export function isBrowserTimeZone(tz: string | undefined | null): tz is string {
@@ -68,4 +73,32 @@ export function firstAccessTimeZone(
   browserTimeZone: string | undefined,
 ): string {
   return isBrowserTimeZone(browserTimeZone) ? browserTimeZone : profileTimeZone;
+}
+
+/**
+ * Idioma con el que alguien está viendo el aula: el de su cookie o, sin ella,
+ * el del aula (con el que la web pinta a quien entra sin cookie). `null` si no
+ * se sabe ninguno: entonces no hay nada que adoptar en el primer acceso.
+ */
+export function viewingLocale(
+  cookie: string | null,
+  academy: AcademyLocale | null | undefined,
+): string | null {
+  return cookie ?? (academy ? academyUiLocale(academy) : null);
+}
+
+/**
+ * Tag que hay que escribir en la cookie para que se pinte el idioma del perfil,
+ * o `null` si ya se pinta en él. Se compara con lo que SE PINTA (la cookie o,
+ * sin ella, el idioma activo, que es el del aula), no solo con la cookie: sin
+ * cookie, un perfil en español en un aula en inglés se quedaba en inglés. La
+ * preferencia de cada usuario manda para ese usuario.
+ */
+export function profileLocaleToApply(
+  profileLocale: string,
+  cookie: string | null,
+  active: string,
+): SupportedLocale | null {
+  const wanted = toSupportedLocale(profileLocale);
+  return wanted !== toSupportedLocale(cookie ?? active) ? wanted : null;
 }

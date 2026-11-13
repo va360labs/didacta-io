@@ -110,7 +110,9 @@
     "portadaCambiar": "Cambiar la portada",
     "portadaQuitar": "Quitar",
     "portadaSubiendo": "Subiendo la portada…",
-    "portadaError": "No se ha podido subir la portada. Puedes seguir sin ella y ponerla luego."
+    "portadaError": "No se ha podido subir la portada. Puedes seguir sin ella y ponerla luego.",
+    "idiomaLabel": "Idioma de la academia",
+    "idiomaAyuda": "Así verán tu academia tus alumnos y visitantes. Puedes cambiarlo en Ajustes."
   },
   "empieza": {
     "titulo": "Tu academia está casi lista para vender",

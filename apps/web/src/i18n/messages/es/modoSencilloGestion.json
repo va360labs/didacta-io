@@ -92,7 +92,9 @@
     "volverTitulo": "Volver al modo sencillo",
     "volverTexto": "Menú corto arriba, «Empieza aquí» y editores sin opciones avanzadas. No se borra nada: lo avanzado sigue aquí cuando lo necesites.",
     "volverBoton": "Volver al modo sencillo",
-    "volverCambiando": "Cambiando…"
+    "volverCambiando": "Cambiando…",
+    "idioma": "Idioma de la academia",
+    "idiomaAyuda": "Es el de tu página de venta, tu catálogo y los correos a quien aún no ha elegido idioma. Cada alumno puede cambiar el suyo en su perfil."
   },
   "cursos": {
     "titulo": "Cursos",
