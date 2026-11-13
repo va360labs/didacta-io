@@ -235,7 +235,26 @@
     "crear": "Crear curso",
     "creando": "Creando…",
     "error": "No se ha podido guardar. Inténtalo de nuevo.",
-    "editar": "Editar"
+    "editar": "Editar",
+    "subida": {
+      "ayudaSoloEnlace": "Pega un enlace de YouTube o Vimeo",
+      "subirTitulo": "Sube tu vídeo",
+      "subirAyuda": "Arrástralo aquí o elige el archivo. Hasta {size} y {duration} por vídeo.",
+      "soltar": "Suéltalo aquí para subirlo",
+      "elegir": "Elegir vídeo",
+      "estadoProcesando": "Preparándose",
+      "estadoListo": "Listo",
+      "listoDetalle": "{duration} · se ve hasta en {resolution}",
+      "guardadoProcesando": "Ya está guardado en la lección. Tus alumnos lo verán en cuanto esté listo.",
+      "guardadoListo": "Guardado en la lección. Tus alumnos ya pueden verlo.",
+      "sinSubidaTitulo": "En esta academia no se pueden subir vídeos",
+      "sinSubidaTexto": "Puedes añadir el vídeo igualmente: súbelo a YouTube o Vimeo y pega aquí su enlace. Tus alumnos lo verán aquí mismo, en la lección.",
+      "errorEspacioTitulo": "No hemos podido comprobar tu espacio de vídeo",
+      "errorEspacioTexto": "Revisa tu conexión y vuelve a probar. Mientras, puedes pegar un enlace de YouTube o Vimeo.",
+      "reintentar": "Volver a probar",
+      "enlaceSolo": "Enlace del vídeo (YouTube, Vimeo…)",
+      "esperaSubida": "Espera a que termine de subirse el vídeo para guardar."
+    }
   },
   "perfil": {
     "fotoOpcional": "Opcional. Si no subes ninguna, usamos tus iniciales."

@@ -235,7 +235,26 @@
     "crear": "Create course",
     "creando": "Creating…",
     "error": "Could not save. Try again.",
-    "editar": "Edit"
+    "editar": "Edit",
+    "subida": {
+      "ayudaSoloEnlace": "Paste a YouTube or Vimeo link",
+      "subirTitulo": "Upload your video",
+      "subirAyuda": "Drag it here or choose the file. Up to {size} and {duration} per video.",
+      "soltar": "Drop it here to upload it",
+      "elegir": "Choose a video",
+      "estadoProcesando": "Getting ready",
+      "estadoListo": "Ready",
+      "listoDetalle": "{duration} · plays at up to {resolution}",
+      "guardadoProcesando": "Already saved in the lesson. Your students will see it as soon as it's ready.",
+      "guardadoListo": "Saved in the lesson. Your students can watch it now.",
+      "sinSubidaTitulo": "Uploading videos isn't available in this academy",
+      "sinSubidaTexto": "You can still add the video: put it on YouTube or Vimeo and paste its link below. Your students will watch it right here, in the lesson.",
+      "errorEspacioTitulo": "We couldn't check your video space",
+      "errorEspacioTexto": "Check your connection and try again. In the meantime, you can paste a YouTube or Vimeo link.",
+      "reintentar": "Try again",
+      "enlaceSolo": "Video link (YouTube, Vimeo…)",
+      "esperaSubida": "Wait until the video finishes uploading to save."
+    }
   },
   "perfil": {
     "fotoOpcional": "Optional. If you do not upload one, we use your initials."
