@@ -537,7 +537,21 @@ function SaleLinkCard({ view, origin }: { view: StartHereView; origin: string })
       ) : null}
       {offer ? (
         <div className="mt-3 overflow-hidden rounded-xl border border-border">
-          <div className="h-24 bg-[linear-gradient(135deg,hsl(var(--brand-h)_70%_88%),hsl(174_60%_86%))]" />
+          {offer.courseCoverUrl ? (
+            // La portada real del curso; el degradado queda solo de reserva.
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={offer.courseCoverUrl}
+              alt=""
+              className="h-24 w-full object-cover"
+              data-testid="enlace-portada"
+            />
+          ) : (
+            <div
+              className="h-24 bg-[linear-gradient(135deg,hsl(var(--brand-h)_70%_88%),hsl(174_60%_86%))]"
+              data-testid="enlace-portada-reserva"
+            />
+          )}
           <div className="flex items-center justify-between gap-3 p-3">
             <div className="min-w-0">
               <strong className="block truncate text-[15px] text-text">

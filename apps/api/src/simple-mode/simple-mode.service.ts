@@ -347,7 +347,7 @@ export class SimpleModeService {
     const course = offer?.courseId
       ? await this.prisma.modCoursesCourse.findFirst({
           where: { id: offer.courseId, tenantId, deletedAt: null },
-          select: { id: true, slug: true, title: true, status: true },
+          select: { id: true, slug: true, title: true, status: true, thumbnailUrl: true },
         })
       : null;
 
@@ -390,6 +390,7 @@ export class SimpleModeService {
             ...offer,
             courseTitle: course?.title ?? null,
             courseSlug: course?.slug ?? null,
+            courseCoverUrl: course?.thumbnailUrl ?? null,
           }
         : null,
       firstCourseId: courseDone.courseId,

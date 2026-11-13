@@ -35,7 +35,18 @@ export interface StartHereView {
   academyName: string;
   /** El alta en 3 preguntas ya se hizo. */
   quickStartDone: boolean;
-  offer: (OfferIntent & { courseTitle: string | null; courseSlug: string | null }) | null;
+  offer:
+    | (OfferIntent & {
+        courseTitle: string | null;
+        courseSlug: string | null;
+        /**
+         * Portada del curso de la oferta (`thumbnailUrl`). La tarjeta del
+         * enlace de venta la enseña; sin portada (o con membresía) pinta el
+         * degradado de reserva.
+         */
+        courseCoverUrl: string | null;
+      })
+    | null;
   /** Curso al que lleva el paso 2 (el de la oferta, o el primero del aula). */
   firstCourseId: string | null;
   steps: Array<{ id: StepId; done: boolean }>;

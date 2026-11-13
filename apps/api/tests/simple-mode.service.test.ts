@@ -223,7 +223,7 @@ function mundo(opts: { paymentsReady?: boolean } = {}) {
     registry as never,
     stripeResolver as never,
   );
-  return { db, service, courses, billing, community, membership, stripeResolver };
+  return { db, prisma, service, courses, billing, community, membership, stripeResolver };
 }
 
 const ALTA = {
@@ -485,10 +485,40 @@ describe('aulas que ya trabajaban antes del modo sencillo', () => {
       courseId: 'c-torno',
       amountCents: 8900,
       courseSlug: 'torno-basico',
+      // Sin portada: la tarjeta del enlace pinta el degradado de reserva.
+      courseCoverUrl: null,
     });
     expect(view.salePath).toBe('/catalogo/torno-basico');
     expect(view.sales.count).toBe(6);
     expect(view.students).toBe(14);
+  });
+
+  it('la tarjeta del enlace de venta recibe la portada REAL del curso de la oferta', async () => {
+    const { db, prisma, service } = aulaQueYaVendia();
+    Object.assign(db.courses[0]!, { thumbnailUrl: '/api/v1/storage/file/covers/torno.jpg' });
+    const view = await service.startHere(T);
+    expect(view.offer?.courseCoverUrl).toBe('/api/v1/storage/file/covers/torno.jpg');
+    // Y se pide a la base: el doble devuelve la fila entera, pero Prisma solo
+    // devuelve lo que lleva el `select`.
+    const selects = prisma.modCoursesCourse.findFirst.mock.calls.map(
+      (c) => (c[0] as { select?: Record<string, boolean> }).select,
+    );
+    expect(selects.some((s) => s?.thumbnailUrl === true)).toBe(true);
+  });
+
+  it('con membresía no hay curso ni portada', async () => {
+    const { db, service } = aulaQueYaVendia();
+    Object.assign(db.courses[0]!, { thumbnailUrl: '/x.jpg' });
+    db.membershipActive = true;
+    db.plans.push({
+      id: 'p-mes',
+      name: 'Mensual',
+      amountCents: 1900,
+      currency: 'eur',
+      active: true,
+    });
+    const view = await service.startHere(T);
+    expect(view.offer).toMatchObject({ kind: 'membership', courseCoverUrl: null });
   });
 
   it('sin el asistente terminado y sin tocar el logo, vender ya cuenta como academia hecha', async () => {
