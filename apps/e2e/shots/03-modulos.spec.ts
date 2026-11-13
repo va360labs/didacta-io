@@ -1573,7 +1573,7 @@ test('modulos · capturas', async ({ browser }) => {
 
   // ── billing ──────────────────────────────────────────────────────────
   await captura('billing', 'billing-1-stripe-config', async () => {
-    await admin.goto('/admin/settings?tab=pagos');
+    await admin.goto('/admin/settings?tab=payments');
     // Con las claves falsas guardadas por el recorrido 2 el banner dice
     // «sin verificar»; si la tanda corre sin ese estado, cualquiera de los
     // banners de la tarjeta vale como pantalla real.
@@ -1803,7 +1803,7 @@ test('modulos · capturas', async ({ browser }) => {
 
   // ── zoom-live ────────────────────────────────────────────────────────
   await captura('zoom-live', 'zoom-live-1-credenciales', async () => {
-    await admin.goto('/admin/settings?tab=aula-virtual');
+    await admin.goto('/admin/settings?tab=virtual-classroom');
     await expect(admin.locator('#zoom-account')).toBeVisible({ timeout: 30_000 });
     await shot(admin, walk('zoom-live'), 'zoom-live-1-credenciales');
   });
@@ -2073,7 +2073,7 @@ test('modulos · capturas', async ({ browser }) => {
 
   // ── member-registration ──────────────────────────────────────────────
   await captura('member-registration', 'member-registration-1-config', async () => {
-    await admin.goto('/admin/settings?tab=registro');
+    await admin.goto('/admin/settings?tab=registration');
     await expect(admin.locator('#mr-approver')).toBeVisible({ timeout: 30_000 });
     await expect(admin.locator('#mr-bot-username')).toBeVisible({ timeout: 30_000 });
     await shot(admin, walk('member-registration'), 'member-registration-1-config');

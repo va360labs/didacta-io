@@ -88,7 +88,7 @@ test.describe('Métricas del negocio (bloque 7)', () => {
     // /admin/metrics es ahora un redirect a la pestaña "Negocio" del panel:
     // los KPIs dejaron de tener pantalla propia para no competir con /admin.
     await page.goto('/admin/metrics');
-    await expect(page).toHaveURL(/\/admin\?tab=negocio/);
+    await expect(page).toHaveURL(/\/admin\?tab=business/);
     await expect(page.getByRole('heading', { name: 'Panel del tenant' })).toBeVisible();
     await expect(page.getByText('NPS (30 días)')).toBeVisible();
     await expect(page.getByText('Ventas (30 días)')).toBeVisible();
