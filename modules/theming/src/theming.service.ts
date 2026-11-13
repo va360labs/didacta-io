@@ -7,12 +7,15 @@ import type { ModuleContext } from '@didacta/core-kernel';
 import type { PrismaClient } from '@didacta/database';
 import {
   ALLOWED_BODY_FONTS,
+  ALLOWED_COVER_MIME_TYPES,
   ALLOWED_DISPLAY_FONTS,
   ALLOWED_FAVICON_MIME_TYPES,
   ALLOWED_LOGO_MIME_TYPES,
   DEFAULT_LOGO_DISPLAY_MODE,
   DEFAULT_THEME,
   LOGO_DISPLAY_MODES,
+  MAX_ABOUT_CHARS,
+  MAX_COVER_BYTES,
   MAX_CUSTOM_CSS_BYTES,
   MAX_FAVICON_BYTES,
   MAX_FOOTER_HTML_BYTES,
@@ -24,8 +27,12 @@ import {
   type UpdateThemeDto,
 } from './dto.js';
 import {
+  AboutTooLongError,
+  CoverNotFoundError,
+  CoverTooLargeError,
   CustomCssTooLargeError,
   CustomCssUnsafeError,
+  EmptyCoverError,
   EmptyFaviconError,
   EmptyLogoError,
   FaviconNotFoundError,
@@ -33,13 +40,23 @@ import {
   FooterHtmlTooLargeError,
   InvalidHueError,
   InvalidSaturationError,
+  InvalidSocialLinkError,
   LogoNotFoundError,
   LogoTooLargeError,
   SigninCopyTooLongError,
+  TooManySocialLinksError,
+  UnsupportedCoverTypeError,
   UnsupportedFaviconTypeError,
   UnsupportedFontError,
   UnsupportedLogoTypeError,
 } from './errors.js';
+import {
+  MAX_SOCIAL_LINKS,
+  SOCIAL_LINK_KINDS,
+  parseSocialLinks,
+  socialLinkProblem,
+  type SocialLinkKind,
+} from './social-links.js';
 
 /**
  * Patrones que NUNCA deben aparecer en custom CSS (defensa en profundidad,
@@ -113,6 +130,14 @@ export class ThemingService {
         ...(dto.signinSubheadline !== undefined
           ? { signinSubheadline: dto.signinSubheadline || null }
           : {}),
+        // Descripción de la academia: vacía = sin descripción propia (la
+        // tarjeta de la comunidad vuelve al titular de acceso).
+        ...(dto.about !== undefined ? { about: dto.about?.trim() || null } : {}),
+        // Enlaces: la lista entera sustituye a la anterior ([] = ninguno).
+        // Objetos literales (no la interfaz) para el tipo Json de Prisma.
+        ...(dto.socialLinks !== undefined
+          ? { socialLinks: dto.socialLinks.map((l) => ({ kind: l.kind, url: l.url.trim() })) }
+          : {}),
       },
     });
     this.ctx.logger.info('mod.theming: theme updated', { tenantId, fields: Object.keys(dto) });
@@ -134,6 +159,11 @@ export class ThemingService {
         // Best-effort: si el blob ya no existe en storage, seguimos.
       });
     }
+    if (current.coverUploaded) {
+      await this.deleteCoverBlob(tenantId).catch(() => {
+        // Best-effort, igual que el favicon.
+      });
+    }
     const updated = await this.prisma.modThemingTenantTheme.update({
       where: { tenantId },
       data: {
@@ -152,6 +182,11 @@ export class ThemingService {
         footerHtml: null,
         signinHeadline: null,
         signinSubheadline: null,
+        about: null,
+        socialLinks: [],
+        coverUrl: null,
+        coverStorageKey: null,
+        coverMimeType: null,
       },
     });
     this.ctx.logger.info('mod.theming: theme reset to defaults', { tenantId });
@@ -419,6 +454,108 @@ export class ThemingService {
     }
   }
 
+  /**
+   * Sube la portada de la academia (la imagen de cabecera de su tarjeta en la
+   * comunidad, como la de un grupo de Skool). Espejo de `uploadLogo` con dos
+   * diferencias: 10 MB de límite (es una foto, como la portada de un curso) y
+   * salida WebP de 1600 px de ancho, que es lo que hace el core con cualquier
+   * imagen grande (no viaja en correos, así que WebP es seguro aquí).
+   */
+  async uploadCover(
+    tenantId: string,
+    input: { data: string; filename: string; contentType: string },
+  ): Promise<ThemeSnapshot> {
+    if (!ALLOWED_COVER_MIME_TYPES.includes(input.contentType as never)) {
+      throw new UnsupportedCoverTypeError(input.contentType, ALLOWED_COVER_MIME_TYPES);
+    }
+
+    const buffer = Buffer.from(input.data, 'base64');
+    if (buffer.length === 0) {
+      throw new EmptyCoverError();
+    }
+    if (buffer.length > MAX_COVER_BYTES) {
+      throw new CoverTooLargeError(MAX_COVER_BYTES);
+    }
+
+    const current = await this.getOrCreate(tenantId);
+    if (current.coverUploaded) {
+      await this.deleteCoverBlob(tenantId).catch(() => {
+        // Best-effort: si el blob anterior ya no existe en storage, seguimos.
+      });
+    }
+
+    const requestedKey = `tenants/${tenantId}/branding/cover`;
+    const stored = await this.ctx.storage.uploadImage(requestedKey, buffer, input.contentType, {
+      maxWidth: 1600,
+    });
+
+    // Cache-buster basado en timestamp para que el browser refresque al cambiar.
+    const publicUrl = `/api/v1/modules/theming/tenants/${tenantId}/cover?v=${Date.now()}`;
+
+    const updated = await this.prisma.modThemingTenantTheme.update({
+      where: { tenantId },
+      data: {
+        coverUrl: publicUrl,
+        // Key y MIME REALES que devolvió el core (ver nota en uploadLogo).
+        coverStorageKey: stored.key,
+        coverMimeType: stored.contentType,
+      },
+    });
+    this.ctx.logger.info('mod.theming: cover uploaded', {
+      tenantId,
+      size: stored.size,
+      originalSize: buffer.length,
+      contentType: stored.contentType,
+      optimized: stored.optimized,
+    });
+
+    return this.toSnapshot(updated);
+  }
+
+  /**
+   * Blob de la portada para el endpoint público. `CoverNotFoundError` si no
+   * hay portada subida.
+   */
+  async getCoverBlob(tenantId: string): Promise<{ buffer: Buffer; mimeType: string }> {
+    const theme = await this.prisma.modThemingTenantTheme.findUnique({
+      where: { tenantId },
+    });
+    if (!theme || !theme.coverStorageKey || !theme.coverMimeType) {
+      throw new CoverNotFoundError();
+    }
+    const buffer = await this.ctx.storage.download(theme.coverStorageKey);
+    return { buffer, mimeType: theme.coverMimeType };
+  }
+
+  /** Quita la portada (blob + columnas): la tarjeta vuelve a la banda de color. */
+  async removeCover(tenantId: string): Promise<ThemeSnapshot> {
+    const current = await this.getOrCreate(tenantId);
+    if (current.coverUploaded) {
+      await this.deleteCoverBlob(tenantId).catch(() => {
+        // Best-effort.
+      });
+    }
+    const updated = await this.prisma.modThemingTenantTheme.update({
+      where: { tenantId },
+      data: {
+        coverUrl: null,
+        coverStorageKey: null,
+        coverMimeType: null,
+      },
+    });
+    this.ctx.logger.info('mod.theming: cover removed', { tenantId });
+    return this.toSnapshot(updated);
+  }
+
+  private async deleteCoverBlob(tenantId: string): Promise<void> {
+    const theme = await this.prisma.modThemingTenantTheme.findUnique({
+      where: { tenantId },
+    });
+    if (theme?.coverStorageKey) {
+      await this.ctx.storage.delete(theme.coverStorageKey);
+    }
+  }
+
   // -------------------- helpers privados --------------------
 
   private validate(dto: UpdateThemeDto): void {
@@ -470,6 +607,26 @@ export class ThemingService {
     ) {
       throw new SigninCopyTooLongError('signinSubheadline', MAX_SIGNIN_SUBHEADLINE_CHARS);
     }
+    // Defensa en profundidad: el DTO ya lo valida, pero el service se puede
+    // llamar sin pasar por el pipe (setup, scripts, otros módulos del core).
+    if (
+      dto.about !== undefined &&
+      dto.about !== null &&
+      dto.about.trim().length > MAX_ABOUT_CHARS
+    ) {
+      throw new AboutTooLongError(MAX_ABOUT_CHARS);
+    }
+    if (dto.socialLinks !== undefined) {
+      if (dto.socialLinks.length > MAX_SOCIAL_LINKS) {
+        throw new TooManySocialLinksError(MAX_SOCIAL_LINKS);
+      }
+      for (const link of dto.socialLinks) {
+        const known = (SOCIAL_LINK_KINDS as readonly string[]).includes(link.kind);
+        if (!known || socialLinkProblem(link.kind as SocialLinkKind, link.url) !== null) {
+          throw new InvalidSocialLinkError(link.url);
+        }
+      }
+    }
   }
 
   private toSnapshot(row: {
@@ -487,6 +644,12 @@ export class ThemingService {
     footerHtml: string | null;
     signinHeadline: string | null;
     signinSubheadline: string | null;
+    // Opcionales en el tipo: filas de antes de la migración (o dobles de test)
+    // no los traen, y el snapshot cae a «sin descripción, enlaces ni portada».
+    about?: string | null;
+    socialLinks?: unknown;
+    coverUrl?: string | null;
+    coverStorageKey?: string | null;
     updatedAt: Date;
   }): ThemeSnapshot {
     return {
@@ -509,6 +672,11 @@ export class ThemingService {
       footerHtml: row.footerHtml,
       signinHeadline: row.signinHeadline,
       signinSubheadline: row.signinSubheadline,
+      about: row.about?.trim() || null,
+      // La columna es JSON libre: solo pasan los enlaces que el DTO aceptaría.
+      socialLinks: parseSocialLinks(row.socialLinks),
+      coverUrl: row.coverUrl ?? null,
+      coverUploaded: (row.coverStorageKey ?? null) !== null,
       updatedAt: row.updatedAt.toISOString(),
     };
   }

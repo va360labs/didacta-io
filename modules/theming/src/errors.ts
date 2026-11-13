@@ -165,3 +165,63 @@ export class EmptyFaviconError extends ThemingError {
     super('THEMING_EMPTY_FAVICON', 'El archivo del favicon está vacío o el base64 es inválido.');
   }
 }
+
+export class AboutTooLongError extends ThemingError {
+  constructor(maxChars: number) {
+    super(
+      'THEMING_ABOUT_TOO_LONG',
+      `La descripción de la academia no puede pasar de ${maxChars} caracteres.`,
+      // String() a propósito: ver la nota de los demás límites numéricos.
+      { detail: String(maxChars) },
+    );
+  }
+}
+
+export class TooManySocialLinksError extends ThemingError {
+  constructor(max: number) {
+    super('THEMING_TOO_MANY_SOCIAL_LINKS', `Como mucho ${max} enlaces sociales.`, {
+      detail: String(max),
+    });
+  }
+}
+
+export class InvalidSocialLinkError extends ThemingError {
+  constructor(url: string) {
+    super(
+      'THEMING_INVALID_SOCIAL_LINK',
+      `El enlace "${url}" no es válido: tiene que empezar por https:// y ser de la red elegida.`,
+      { detail: url },
+    );
+  }
+}
+
+export class CoverTooLargeError extends ThemingError {
+  constructor(maxBytes: number) {
+    // Formateado como texto, igual que el logo (ICU no debe reformatearlo).
+    const maxMb = (maxBytes / 1024 / 1024).toFixed(1);
+    super('THEMING_COVER_TOO_LARGE', `La portada excede el máximo permitido de ${maxMb} MB.`, {
+      detail: maxMb,
+    });
+  }
+}
+
+export class CoverNotFoundError extends ThemingError {
+  constructor() {
+    super('THEMING_COVER_NOT_FOUND', 'Este tenant no tiene una portada subida.');
+  }
+}
+
+export class UnsupportedCoverTypeError extends ThemingError {
+  constructor(contentType: string, allowed: readonly string[]) {
+    super(
+      'THEMING_UNSUPPORTED_COVER_TYPE',
+      `El tipo "${contentType}" no está permitido para la portada. Permitidos: ${allowed.join(', ')}.`,
+    );
+  }
+}
+
+export class EmptyCoverError extends ThemingError {
+  constructor() {
+    super('THEMING_EMPTY_COVER', 'El archivo de la portada está vacío o el base64 es inválido.');
+  }
+}

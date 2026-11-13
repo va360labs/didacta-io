@@ -14,10 +14,12 @@ import { relTime } from '@/components/community-thread-card';
 import { CommunityUpcomingCard } from '@/components/community-upcoming-card';
 import { Icon } from '@/components/icon';
 import { InviteAndEarnCard } from '@/components/invite-and-earn-card';
+import { SocialIcon } from '@/components/social-icon';
 import { Card, CardContent } from '@/components/ui/card';
 import { formatNumber } from '@/lib/i18n/format';
 import { postPath } from '@/lib/post-link';
 import { publicProfileHref } from '@/lib/public-users';
+import { socialLinkName } from '@/lib/social-links';
 import { cn } from '@/lib/utils';
 import type { CommunitySidebar as SidebarData } from '@/modules/community';
 import { useCommunitySidebar } from '@/modules/community/sidebar-client';
@@ -26,8 +28,9 @@ import { useCommunitySidebar } from '@/modules/community/sidebar-client';
  * Barra lateral del feed de la comunidad: mezcla de la tarjeta del grupo de
  * Skool y la barra viva del aula de VA360.
  *
- *   1. Tarjeta de la academia: marca, dominio, titular, cifras (miembros · en
- *      línea · admins), caras y «Ajustes» para quien administra.
+ *   1. Tarjeta de la academia: portada (o su color), marca, dominio,
+ *      descripción, enlaces sociales, cifras (miembros · en línea · admins),
+ *      caras y «Ajustes» para quien administra.
  *   2. «Invita y gana» (modo sencillo, si el aula tiene referidos).
  *   3. Próximas citas (directos y eventos).
  *   4. Ranking del mes, top 5.
@@ -187,31 +190,54 @@ function AcademyMark({ academy, size }: { academy: SidebarData['academy']; size:
   );
 }
 
-function AcademyCard({ data }: { data: SidebarData }) {
+export function AcademyCard({ data }: { data: SidebarData }) {
   const t = useTranslations('comunidadComponentes');
   const { academy, members, canManage } = data;
   const wordmark = academy.logoUrl && academy.logoDisplayMode === 'logo_only';
   return (
     <Card className="overflow-hidden" data-testid="community-academy-card">
-      {/* Portada: el aula no tiene imagen de portada propia; la banda lleva su
-          logo sobre su color, que es lo que sí existe. */}
-      <div
-        className="grid h-24 place-items-center px-6"
-        style={{
-          background:
-            'linear-gradient(135deg, var(--color-brand-100) 0%, var(--color-brand-50) 100%)',
-        }}
-      >
-        {wordmark ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={academy.logoUrl!} alt="" className="max-h-14 max-w-full object-contain" />
-        ) : (
-          <span className="rounded-2xl shadow-sm">
-            <AcademyMark academy={academy} size={60} />
+      {academy.coverUrl ? (
+        // Portada propia (como la de un grupo de Skool), con la marca encima
+        // asomando por el borde de abajo.
+        <div className="relative">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={academy.coverUrl}
+            alt=""
+            className="block aspect-[2/1] w-full bg-bg-subtle object-cover"
+            data-testid="academy-cover"
+          />
+          <span className="absolute -bottom-7 left-5 rounded-2xl shadow-md ring-4 ring-surface">
+            {wordmark ? (
+              <span className="flex h-14 max-w-[180px] items-center rounded-2xl bg-surface px-3">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={academy.logoUrl!} alt="" className="max-h-10 max-w-full object-contain" />
+              </span>
+            ) : (
+              <AcademyMark academy={academy} size={56} />
+            )}
           </span>
-        )}
-      </div>
-      <CardContent className="p-5">
+        </div>
+      ) : (
+        // Sin portada: la banda lleva su logo sobre su color.
+        <div
+          className="grid h-24 place-items-center px-6"
+          style={{
+            background:
+              'linear-gradient(135deg, var(--color-brand-100) 0%, var(--color-brand-50) 100%)',
+          }}
+        >
+          {wordmark ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={academy.logoUrl!} alt="" className="max-h-14 max-w-full object-contain" />
+          ) : (
+            <span className="rounded-2xl shadow-sm">
+              <AcademyMark academy={academy} size={60} />
+            </span>
+          )}
+        </div>
+      )}
+      <CardContent className={cn('p-5', academy.coverUrl && 'pt-11')}>
         <h3
           className="font-display text-lg font-bold leading-tight text-text"
           style={{ letterSpacing: '-0.01em' }}
@@ -225,12 +251,13 @@ function AcademyCard({ data }: { data: SidebarData }) {
         ) : null}
         {academy.description ? (
           <p
-            className="mt-2.5 text-sm leading-snug text-text-muted"
+            className="mt-2.5 whitespace-pre-line break-words text-sm leading-snug text-text-muted"
             data-testid="academy-description"
           >
             {academy.description}
           </p>
         ) : null}
+        {academy.links.length > 0 ? <AcademyLinks links={academy.links} /> : null}
 
         <div className="mt-4 grid grid-flow-col auto-cols-fr divide-x divide-border-soft rounded-xl bg-bg-subtle py-2.5 text-center">
           <Stat
@@ -274,6 +301,41 @@ function AcademyCard({ data }: { data: SidebarData }) {
         ) : null}
       </CardContent>
     </Card>
+  );
+}
+
+/**
+ * Enlaces sociales del aula con el icono de su red (como en Skool). Abren en
+ * pestaña nueva sin dar acceso a la pestaña del aula (`noopener`) ni decir de
+ * dónde se viene (`noreferrer`). Solo llegan aquí los que la API valida.
+ */
+function AcademyLinks({ links }: { links: SidebarData['academy']['links'] }) {
+  const t = useTranslations('comunidadComponentes');
+  return (
+    <ul
+      className="mt-3 flex flex-wrap gap-2"
+      aria-label={t('sidebar.linksAria')}
+      data-testid="academy-links"
+    >
+      {links.map((l, i) => {
+        const name = socialLinkName(l.kind, l.url, t('sidebar.linkWeb'));
+        return (
+          <li key={`${i}-${l.url}`}>
+            <a
+              href={l.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              title={name}
+              aria-label={t('sidebar.linkAria', { name })}
+              data-kind={l.kind}
+              className="grid h-9 w-9 place-items-center rounded-full border border-border bg-surface text-text-muted transition-colors hover:border-brand-300 hover:bg-brand-50 hover:text-brand-700"
+            >
+              <SocialIcon kind={l.kind} size={18} />
+            </a>
+          </li>
+        );
+      })}
+    </ul>
   );
 }
 

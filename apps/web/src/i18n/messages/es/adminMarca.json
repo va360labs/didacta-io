@@ -1,4 +1,37 @@
 {
+  "academyProfile": {
+    "title": "Tu academia en la comunidad",
+    "description": "Lo que ven tus miembros en la tarjeta de la academia, junto al feed de la comunidad: portada, descripción y enlaces.",
+    "coverLabel": "Portada",
+    "coverUpload": "Subir una portada",
+    "coverFormats": "JPG, PNG, WebP o SVG, hasta 10 MB",
+    "coverHelp": "Una imagen horizontal (por ejemplo, 1600 × 800). Sustituye a la banda de color de la tarjeta.",
+    "coverChange": "Cambiar",
+    "coverRemove": "Quitar",
+    "coverUploading": "Subiendo…",
+    "coverRemoving": "Quitando…",
+    "coverAlt": "Portada de la academia",
+    "coverErrorType": "Ese archivo no vale: usa JPG, PNG, WebP o SVG.",
+    "coverErrorSize": "Pesa {mb} MB y el máximo son 10 MB.",
+    "coverError": "No se ha podido guardar la portada. Inténtalo de nuevo.",
+    "aboutLabel": "Descripción",
+    "aboutPlaceholder": "Qué es tu academia y para quién, en una o dos frases.",
+    "aboutHelp": "Si la dejas vacía, se usa el titular de tu pantalla de acceso.",
+    "linksLabel": "Enlaces",
+    "linksHelp": "WhatsApp, Telegram, Instagram, YouTube, TikTok, Facebook, LinkedIn, X o tu web. Pega el enlace y sale su icono.",
+    "linkAdd": "Añadir un enlace",
+    "linkAria": "Enlace {n}",
+    "linkRemove": "Quitar el enlace {n}",
+    "linkWeb": "Web",
+    "linksMax": "Como mucho {max} enlaces.",
+    "linksInvalid": "Revisa los enlaces marcados antes de guardar.",
+    "linkError": {
+      "https": "Tiene que empezar por https://",
+      "credentials": "Quita el usuario y la contraseña del enlace.",
+      "host": "No parece una dirección completa.",
+      "length": "Ese enlace es demasiado largo."
+    }
+  },
   "branding": {
     "title": "Branding",
     "headerDescription": "Personaliza la identidad visual de tu organización. Los cambios se guardan al hacer clic en <strong>Guardar</strong>; puedes ver una vista previa mientras editas.",

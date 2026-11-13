@@ -4,6 +4,7 @@
  */
 
 import { Injectable, Optional } from '@nestjs/common';
+import { parseSocialLinks, type SocialLink } from '@didacta/mod-theming';
 import { PrismaService } from '../../prisma/prisma.service';
 import { MessagingPresenceService } from '../messaging/messaging-presence.service';
 import { ModuleRegistryService } from '../module-registry.service';
@@ -19,14 +20,18 @@ import { TenantModulesService } from '../tenant-modules.service';
  *
  * Lecturas cross-module de SOLO LECTURA y siempre por `tenant_id` (ADR-016,
  * declaradas en `optionalModules` del manifest de mod.community):
- *  - marca: `mod_theming_tenant_theme` (logo y titular), como `SigninContextService`;
+ *  - marca: `mod_theming_tenant_theme` (logo, portada, descripción y enlaces),
+ *    como `SigninContextService`;
  *  - ranking: el service público de mod.gamification (`leaderboard`);
  *  - presencia: `MessagingPresenceService` (ZSET efímero de mod.messaging).
  *
  * Lo del aula es igual para todos sus miembros, así que se cachea por aula
  * unos segundos: entrar y salir del feed no repite el ranking ni los COUNT.
- * La presencia, en cambio, se lee en vivo y cuenta a quien mira; el botón de
- * ajustes (también de quien mira) lo pone el controller.
+ * La tarjeta de la academia (nombre, marca, dominio) NO entra en la caché: son
+ * tres lecturas por clave, y quien la cambia en Ajustes tiene que verla al
+ * volver a la comunidad, no medio minuto después. La presencia también se lee
+ * en vivo y cuenta a quien mira; el botón de ajustes (también de quien mira)
+ * lo pone el controller.
  */
 
 /** Cuántas caras enseña la tarjeta del aula. */
@@ -74,10 +79,17 @@ export interface CommunitySidebarData {
     name: string;
     logoUrl: string | null;
     logoDisplayMode: 'logo_only' | 'logo_and_name';
-    /** Titular propio del aula (mod.theming). `null` = no se pinta. */
+    /** Portada propia (mod.theming). `null` = banda con el color del aula. */
+    coverUrl: string | null;
+    /**
+     * Descripción propia del aula (mod.theming `about`); si no la hay, su
+     * titular de acceso, como hasta ahora. `null` = no se pinta.
+     */
     description: string | null;
     /** Dominio público del aula. `null` si solo hay uno local (no se comparte). */
     host: string | null;
+    /** Enlaces sociales, solo los válidos y en su orden. Vacío = no se pinta. */
+    links: SocialLink[];
   };
   members: {
     total: number;
@@ -97,7 +109,6 @@ type Person = { id: string; name: string | null; avatarUrl: string | null };
 
 /** Lo que es igual para todos los miembros del aula y se cachea. */
 interface TenantPart {
-  academy: CommunitySidebarData['academy'];
   total: number;
   admins: number | null;
   /** Los últimos en llegar, para completar las caras tras los de en línea. */
@@ -132,7 +143,7 @@ export class CommunitySidebarService {
    * aunque su stream de tiempo real aún no se haya registrado.
    */
   async get(tenantId: string, viewerId?: string): Promise<CommunitySidebarData> {
-    const part = await this.tenantPart(tenantId);
+    const [part, academy] = await Promise.all([this.tenantPart(tenantId), this.academy(tenantId)]);
     const live = part.presenceOn
       ? await this.online(tenantId, viewerId)
       : { count: 0, users: [] as Person[] };
@@ -151,7 +162,7 @@ export class CommunitySidebarService {
     }
 
     return {
-      academy: part.academy,
+      academy,
       members: {
         total: part.total,
         admins: part.admins,
@@ -187,8 +198,7 @@ export class CommunitySidebarService {
   private async build(tenantId: string): Promise<TenantPart> {
     const enabled = await this.enabledModules(tenantId);
     const active = { tenantId, status: 'ACTIVE' as const, deletedAt: null };
-    const [academy, total, admins, recent, leaderboard, recentComments] = await Promise.all([
-      this.academy(tenantId),
+    const [total, admins, recent, leaderboard, recentComments] = await Promise.all([
       this.prisma.user.count({ where: active }),
       this.prisma.user.count({
         where: { ...active, roles: { some: { role: { name: { in: ADMIN_ROLES } } } } },
@@ -203,7 +213,6 @@ export class CommunitySidebarService {
       this.recentComments(tenantId),
     ]);
     return {
-      academy,
       total,
       admins: admins > 0 ? admins : null,
       recent,
@@ -224,20 +233,32 @@ export class CommunitySidebarService {
       this.prisma.tenant.findUnique({ where: { id: tenantId }, select: { name: true } }),
       this.prisma.modThemingTenantTheme.findUnique({
         where: { tenantId },
-        select: { logoUrl: true, logoDisplayMode: true, signinHeadline: true },
+        select: {
+          logoUrl: true,
+          logoDisplayMode: true,
+          signinHeadline: true,
+          about: true,
+          coverUrl: true,
+          socialLinks: true,
+        },
       }),
       this.prisma.tenantDomain.findFirst({
         where: { tenantId, isPrimary: true, surface: 'APP' },
         select: { hostname: true },
       }),
     ]);
-    const description = theme?.signinHeadline?.trim();
+    // La descripción propia manda; sin ella, el titular con el que el aula ya
+    // se presenta en su pantalla de acceso (lo que se enseñaba hasta ahora).
+    const description = theme?.about?.trim() || theme?.signinHeadline?.trim();
     return {
       name: tenant?.name ?? '',
       logoUrl: theme?.logoUrl ?? null,
       logoDisplayMode: theme?.logoDisplayMode === 'logo_and_name' ? 'logo_and_name' : 'logo_only',
+      coverUrl: theme?.coverUrl ?? null,
       description: description ? description : null,
       host: domain && isShareableHost(domain.hostname) ? domain.hostname : null,
+      // JSON libre en la base: solo salen los enlaces que el DTO aceptaría.
+      links: parseSocialLinks(theme?.socialLinks),
     };
   }
 
