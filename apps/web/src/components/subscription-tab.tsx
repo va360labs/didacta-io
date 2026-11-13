@@ -519,7 +519,20 @@ function InvoicesList({ invoices }: { invoices: InvoiceRow[] }) {
         {invoices.map((inv) => (
           <li key={inv.id} className="flex flex-wrap items-center gap-3 p-3 text-sm">
             <span className="font-mono text-xs">{inv.stripeInvoiceId}</span>
-            <span>{formatCents(inv.amount, inv.currency.toUpperCase())}</span>
+            <span>
+              {formatCents(inv.totalCents ?? inv.amount, inv.currency.toUpperCase())}
+              {inv.creditAppliedCents ? (
+                <span
+                  className="block text-xs text-text-subtle"
+                  data-testid="factura-saldo-referidos"
+                >
+                  {t('subscription.saldoReferidos', {
+                    amount: formatCents(-inv.creditAppliedCents, inv.currency.toUpperCase()),
+                    paid: formatCents(inv.amount, inv.currency.toUpperCase()),
+                  })}
+                </span>
+              ) : null}
+            </span>
             <InvoiceStatusBadge status={inv.status} />
             <span className="text-text-muted">
               {formatDate(inv.periodStart)} – {formatDate(inv.periodEnd)}

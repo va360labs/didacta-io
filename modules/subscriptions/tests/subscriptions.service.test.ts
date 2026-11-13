@@ -23,6 +23,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import type Stripe from 'stripe';
 import {
+  invoiceCreditApplied,
   SubscriptionsService,
   type SubscriptionsEventPublisher,
   type CheckoutUrlBuilder,
@@ -937,6 +938,36 @@ describe('SubscriptionsService.handleWebhookEvent', () => {
     expect(ev).toBeTruthy();
     // Desde PENDING es la PRIMERA activación, no una recuperación de impago.
     expect(ev!.payload['recovery']).toBe(false);
+  });
+
+  it('cuota pagada en parte con saldo de referidos: se factura ENTERA y el saldo va aparte', async () => {
+    const { service, prisma, publisher } = buildSystem();
+    seedPendiente(prisma);
+
+    await service.handleWebhookEvent(
+      {
+        id: 'evt_saldo_referidos',
+        type: 'invoice.paid',
+        // Cuota de 30 €, 6 € de saldo a favor: Stripe cobra 24 € a la tarjeta.
+        data: {
+          object: makeStripeInvoice({
+            total: 3000,
+            amount_due: 2400,
+            amount_paid: 2400,
+            starting_balance: -600,
+            ending_balance: 0,
+          }),
+        },
+      } as unknown as Stripe.Event,
+      {},
+      { tenantId: 't' },
+    );
+
+    const inv = [...prisma.invoices.values()][0]!;
+    expect(inv).toMatchObject({ totalCents: 3000, creditAppliedCents: 600, amount: 2400 });
+    // La comisión de referidos sigue saliendo de lo cobrado de verdad.
+    const paid = publisher.events.find((e) => e.name === 'subscriptions.invoice.paid');
+    expect(paid!.payload['amount']).toBe(2400);
   });
 
   it('customer.subscription.updated de incomplete a active sobre PENDING → emite activated', async () => {
@@ -2185,5 +2216,18 @@ describe('SubscriptionsService — el evento ya lo archivó OTRA aula (fila que 
         { tenantId: 't' },
       ),
     ).rejects.toThrow(/row-level security/);
+  });
+});
+
+describe('invoiceCreditApplied (la línea «Pago con saldo de referidos»)', () => {
+  it('solo cuenta el saldo A FAVOR que Stripe gastó, nunca más del que había', () => {
+    expect(invoiceCreditApplied({ starting_balance: -600, ending_balance: 0 })).toBe(600);
+    // Había 10 € a favor; la factura gastó 6 € y quedan 4 €.
+    expect(invoiceCreditApplied({ starting_balance: -1000, ending_balance: -400 })).toBe(600);
+    // Sin saldo a favor, o con deuda (positivo): nada.
+    expect(invoiceCreditApplied({ starting_balance: 0, ending_balance: 0 })).toBe(0);
+    expect(invoiceCreditApplied({ starting_balance: 500, ending_balance: 0 })).toBe(0);
+    // Factura aún sin cerrar (ending null): nada todavía.
+    expect(invoiceCreditApplied({ starting_balance: -600, ending_balance: null } as never)).toBe(0);
   });
 });

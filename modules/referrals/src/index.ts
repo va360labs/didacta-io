@@ -28,6 +28,7 @@ export {
   CREDIT_MAX_SHARE_BPS,
   creditIdempotencyKey,
   REFERRAL_TERMS_VERSION,
+  REFERRAL_CREDIT_LABEL,
 } from './referrals.service.js';
 export type {
   ReferralsEventPublisher,

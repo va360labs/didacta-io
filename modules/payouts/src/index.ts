@@ -50,6 +50,8 @@ export type {
 } from './money.js';
 
 export { LedgerService, IDEMPOTENCY_KEYS, isSettlementEntryKey } from './ledger.service.js';
+export { creditAppliedInPresentment } from './handlers/invoice.js';
+export { creditInSettlementCurrency } from './settlement.service.js';
 export type {
   LedgerEntry,
   LedgerEntryInput,

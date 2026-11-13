@@ -3186,6 +3186,12 @@ model ModSubscriptionsInvoice {
   amount           Int
   currency         String                    @default("eur")
   /// URL hosted de Stripe a la factura — el alumno la ve si quiere descargar PDF.
+  /// Factura por la cuota ENTERA (`total` de Stripe). `amount` es lo cobrado:
+  /// con descuento por referidos, la cuota menos el saldo aplicado.
+  totalCents       Int?                      @map("total_cents")
+  /// Saldo a favor del cliente que Stripe gastó en la factura: la línea
+  /// «Pago con saldo de referidos».
+  creditAppliedCents Int                     @default(0) @map("credit_applied_cents")
   hostedInvoiceUrl String?                   @map("hosted_invoice_url")
   /// Cuándo Stripe la cobró exitosamente (NULL si OPEN/UNCOLLECTIBLE/VOID).
   paidAt           DateTime?                 @map("paid_at")

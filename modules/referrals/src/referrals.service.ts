@@ -143,6 +143,9 @@ export interface ReferralsPublicTerms {
   creditMaxSharePercent: number;
 }
 
+/** Cómo figura el descuento en la factura de la cuota (línea aparte). */
+export const REFERRAL_CREDIT_LABEL = 'Pago con saldo de referidos';
+
 /** Clave de idempotencia del abono en Stripe: la fila de la liquidación. */
 export function creditIdempotencyKey(payoutId: string): string {
   return `referrals-credit:${payoutId}`;
@@ -1738,7 +1741,8 @@ export class ReferralsService {
         customerId: p.customerId,
         amountCents: p.totalCents,
         currency: p.currency,
-        description: `Descuento por invitar (${p.count} ${p.count === 1 ? 'comisión' : 'comisiones'})`,
+        // Así figura en el historial de saldo del cliente y en la factura.
+        description: `${REFERRAL_CREDIT_LABEL} (${p.count} ${p.count === 1 ? 'comisión' : 'comisiones'})`,
         metadata: {
           didacta_kind: 'referral_credit',
           didacta_tenant_id: tenantId,

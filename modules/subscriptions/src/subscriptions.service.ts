@@ -1093,6 +1093,9 @@ export class SubscriptionsService {
       stripeInvoiceId: invoice.id,
       status,
       amount: status === 'PAID' ? invoice.amount_paid : invoice.amount_due,
+      // La cuota entera y, aparte, el saldo de referidos que Stripe gastó.
+      totalCents: typeof invoice.total === 'number' ? invoice.total : null,
+      creditAppliedCents: invoiceCreditApplied(invoice),
       currency: invoice.currency,
       hostedInvoiceUrl: invoice.hosted_invoice_url ?? null,
       paidAt: status === 'PAID' ? new Date() : null,
@@ -1159,4 +1162,22 @@ function mapStripeStatus(
 function isUniqueViolation(err: unknown): boolean {
   if ((err as { code?: string } | null)?.code === 'P2002') return true;
   return ((err as Error | null)?.message ?? '').includes('Unique constraint');
+}
+
+/**
+ * Saldo a favor del cliente que Stripe gastó en una factura (el descuento por
+ * referidos): `ending_balance − starting_balance` si el saldo de partida era a
+ * favor (negativo), nunca más de lo que había. Misma regla que
+ * `creditAppliedInPresentment` de mod.payouts, que lo usa para que la comisión
+ * de la plataforma se calcule sobre la cuota entera.
+ */
+export function invoiceCreditApplied(
+  invoice: Pick<Stripe.Invoice, 'starting_balance' | 'ending_balance'>,
+): number {
+  const starting = invoice.starting_balance;
+  const ending = invoice.ending_balance;
+  if (!Number.isInteger(starting) || starting >= 0) return 0;
+  if (!Number.isInteger(ending)) return 0;
+  const applied = Math.min(-starting, (ending as number) - starting);
+  return applied > 0 ? applied : 0;
 }

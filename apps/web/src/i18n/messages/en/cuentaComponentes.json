@@ -181,7 +181,8 @@
     "noInvoices": "No invoices yet.",
     "downloadPdf": "View / download PDF ↗",
     "unavailableTitle": "We couldn't load your subscriptions",
-    "unavailableDesc": "Please reload in a few minutes. This does not affect your payments or your access."
+    "unavailableDesc": "Please reload in a few minutes. This does not affect your payments or your access.",
+    "saldoReferidos": "Paid with referral balance: {amount} · charged {paid}"
   },
   "security": {
     "sessionsLoadError": "We could not load your sessions.",

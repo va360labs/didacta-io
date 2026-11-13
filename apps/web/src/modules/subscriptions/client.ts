@@ -70,7 +70,12 @@ export interface InvoiceRow {
   subscriptionId: string;
   stripeInvoiceId: string;
   status: InvoiceStatus;
+  /** Lo cobrado (cuota − saldo de referidos). */
   amount: number;
+  /** La cuota entera facturada (null en facturas anteriores al cambio). */
+  totalCents?: number | null;
+  /** «Pago con saldo de referidos»: el saldo que Stripe gastó. */
+  creditAppliedCents?: number;
   currency: string;
   hostedInvoiceUrl: string | null;
   paidAt: string | null;
