@@ -533,7 +533,7 @@
         "invalid": "This isn't valid.",
         "format": "Check the format.",
         "check_digit": "The check letter or digit doesn't match.",
-        "entity_mismatch": "Doesn't match «How do you sell?».",
+        "entity_mismatch": "Doesn't match “How do you sell?”.",
         "not_eu": "Only for EU countries.",
         "country_mismatch": "It isn't from your country.",
         "underage": "You must be of legal age."
