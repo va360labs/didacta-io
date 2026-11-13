@@ -44,10 +44,12 @@ import {
   Res,
   UnauthorizedException,
   ServiceUnavailableException,
+  Optional,
 } from '@nestjs/common';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { resolveWebBaseUrlForAuthRedirect } from '../../common/resolve-web-base-url';
+import { TenantResolverService } from '../../tenancy/tenant-resolver.service';
 import { SamlService } from './saml.service';
 
 @ApiTags('Auth · SAML')
@@ -55,7 +57,15 @@ import { SamlService } from './saml.service';
 export class SamlController {
   private readonly logger = new Logger(SamlController.name);
 
-  constructor(private readonly saml: SamlService) {}
+  constructor(
+    private readonly saml: SamlService,
+    /**
+     * Para que los tokens del login vayan al dominio del aula del usuario (ver
+     * `tokenRedirectBase`). Opcional solo para los tests que montan el
+     * controlador a mano: en la app siempre está (`TenancyModule` es global).
+     */
+    @Optional() private readonly tenantResolver?: TenantResolverService,
+  ) {}
 
   @Get(':tenantSlug/status')
   @ApiOperation({
@@ -105,16 +115,18 @@ export class SamlController {
     @Res({ passthrough: false }) res: FastifyReply,
     @Req() req: FastifyRequest,
   ): Promise<void> {
-    // El tenant solo se conoce tras procesar la respuesta del IdP (más abajo),
-    // así que esta base no lo deriva por TenantDomain — pasa por la variante
-    // endurecida (allowlist) para no exponerse a un Host manipulado.
+    // Base del redirect de ERROR (no lleva tokens): el aula aún no se conoce,
+    // así que pasa por la variante endurecida (allowlist) para no exponerse a
+    // un Host manipulado.
     const base = resolveWebBaseUrlForAuthRedirect(req);
     try {
       const result = await this.saml.handleAcs({
         samlResponse: body?.SAMLResponse,
         relayState: body?.RelayState,
       });
-      const url = new URL(`${base}/auth/callback`);
+      const url = new URL(
+        `${await this.tokenRedirectBase(result.user.tenantId, req)}/auth/callback`,
+      );
       url.searchParams.set('accessToken', result.tokens.accessToken);
       url.searchParams.set('refreshToken', result.tokens.refreshToken);
       url.searchParams.set('expiresIn', String(result.tokens.expiresIn));
@@ -157,6 +169,20 @@ export class SamlController {
       .header('Content-Type', 'application/xml; charset=utf-8')
       .header('Cache-Control', 'no-store')
       .send(xml);
+  }
+
+  /**
+   * Base del redirect que lleva los tokens: el dominio primario verificado del
+   * aula del usuario que acaba de entrar (sale de nuestra base), y si no tiene,
+   * la variante endurecida de siempre. Nunca el Host de la petición.
+   *
+   * Se calculaba antes de saber el aula, así que en un servidor con varias
+   * ganaba `WEB_PUBLIC_URL`: el login de cualquier aula aterrizaba con sus
+   * tokens en el dominio del despliegue.
+   */
+  private async tokenRedirectBase(tenantId: string, req: FastifyRequest): Promise<string> {
+    if (!this.tenantResolver) return resolveWebBaseUrlForAuthRedirect(req);
+    return this.tenantResolver.resolveTenantWebBaseUrlForAuthRedirect(tenantId, req);
   }
 }
 
