@@ -7,7 +7,9 @@
 
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 import { authStorage } from '@/lib/auth-storage';
+import { fetchTenantContext } from '@/lib/tenant-context';
 import {
+  buildPublicBrandStyle,
   buildThemeStyleBlock,
   SESSION_THEME_REFRESH_EVENT,
   THEME_UPDATED_EVENT,
@@ -51,6 +53,20 @@ export function TenantThemeProvider({ children }: { children: ReactNode }) {
   // consola de los usuarios con branding cacheado. La cache se aplica DESPUÉS
   // del mount (useEffect de abajo), donde ya no rompe la hidratación.
   const [theme, setTheme] = useState<TenantTheme | null>(null);
+  // Sin sesión: el color público del aula del dominio (página de venta,
+  // catálogo, acceso). Con sesión lo pisa el tema completo de arriba.
+  const [publicBrand, setPublicBrand] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void fetchTenantContext().then((res) => {
+      if (cancelled || !res.tenant) return;
+      setPublicBrand(buildPublicBrandStyle(res.tenant.brandHue, res.tenant.brandSaturation));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -127,6 +143,10 @@ export function TenantThemeProvider({ children }: { children: ReactNode }) {
 
   return (
     <TenantThemeContext.Provider value={theme}>
+      {!theme && publicBrand ? (
+        // Mismo origen que el tema: dos números validados (`buildPublicBrandStyle`).
+        <style data-didacta-brand="public" dangerouslySetInnerHTML={{ __html: publicBrand }} />
+      ) : null}
       {theme ? (
         <style
           // dangerouslySetInnerHTML es seguro acá porque el contenido proviene
