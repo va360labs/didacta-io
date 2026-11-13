@@ -17,6 +17,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import { initialsOf } from '@/components/user-chip';
 import { ApiHttpError } from '@/lib/api-client';
 import { authStorage } from '@/lib/auth-storage';
 import { asksSpanishDocument, isDocumentFieldValid } from '@/lib/document-id';
@@ -373,7 +374,7 @@ export default function OnboardingPage() {
                       : { background: 'linear-gradient(135deg, #2E7DCE 0%, #18B5A8 100%)' }
                   }
                 >
-                  {avatarUrl ? null : (name || email).slice(0, 1).toUpperCase()}
+                  {avatarUrl ? null : initialsOf(name.trim() || email, '?')}
                 </div>
                 <div className="min-w-0">
                   <p className="font-semibold">{name || '—'}</p>
