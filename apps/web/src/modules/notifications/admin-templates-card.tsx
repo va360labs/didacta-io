@@ -14,7 +14,7 @@
 /// Las partes estructurales (botón CTA, código OTP, botones de decisión) no
 /// son editables: un override nunca puede romper un email.
 ///
-/// Historia: nació como tab "Plantillas" de /admin/configuracion (solo keys
+/// Historia: nació como tab "Plantillas" de /admin/settings (solo keys
 /// del hub); en alpha.83 se consolidó aquí con el catálogo completo (regla #5:
 /// un solo camino).
 

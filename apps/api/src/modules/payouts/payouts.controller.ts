@@ -280,8 +280,8 @@ export class PayoutsController {
       '',
     );
     return {
-      returnUrl: `${base}/admin/cobros?vuelta=1`,
-      refreshUrl: `${base}/admin/cobros?renovar=1`,
+      returnUrl: `${base}/admin/payments?vuelta=1`,
+      refreshUrl: `${base}/admin/payments?renovar=1`,
     };
   }
 }

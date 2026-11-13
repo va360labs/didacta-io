@@ -7,7 +7,7 @@
  * Cliente del CATÁLOGO PÚBLICO de cursos sueltos (viaje 2 — mod.billing).
  *
  * Todos los endpoints van SIN bearer: el visitante no tiene cuenta y el tenant
- * se resuelve por dominio (Host), igual que la página de membresía (/unete).
+ * se resuelve por dominio (Host), igual que la página de membresía (/join).
  * Importes SIEMPRE en céntimos. El checkout es Stripe hosted (redirect) y la
  * cuenta del comprador se crea tras el pago con el email confirmado en Stripe.
  */

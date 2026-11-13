@@ -56,7 +56,7 @@ describe('classifySubscriptionStatus (web · paridad con el módulo)', () => {
 /**
  * Etiqueta de PANTALLA del estado de una suscripción.
  *
- * El bug que cierra: `/admin/solicitudes-miembros` pintaba el estado con
+ * El bug que cierra: `/admin/member-requests` pintaba el estado con
  * `classifySubscriptionStatus(...).label`, que redacta en español fijo porque
  * es el espejo del enum del backend, no copy. Un admin con la UI en inglés leía
  * «Activa» / «Dada de baja» en mitad de la frase.

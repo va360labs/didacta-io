@@ -42,12 +42,12 @@ export type SimpleTabId =
 
 /** Destinos del menú del avatar (perfil, certificados, progreso, referidos). */
 export const SIMPLE_AVATAR_LINKS = {
-  profile: '/cuenta',
-  certificates: '/mis-certificados',
-  progress: '/inicio/mi-panel',
-  referrals: '/referidos',
-  notifications: '/notificaciones',
-  messages: '/mensajes',
+  profile: '/account',
+  certificates: '/my-certificates',
+  progress: '/home/dashboard',
+  referrals: '/referrals',
+  notifications: '/notifications',
+  messages: '/messages',
 } as const;
 
 /**
@@ -56,12 +56,12 @@ export const SIMPLE_AVATAR_LINKS = {
  * retos dentro del ranking, los certificados en el curso y en el avatar.
  */
 const ABSORBED = new Set<string>([
-  '/comunidad/menciones',
-  '/mensajes',
-  '/retos',
-  '/mis-certificados',
-  '/inicio/mi-panel',
-  '/referidos',
+  '/community/mentions',
+  '/messages',
+  '/challenges',
+  '/my-certificates',
+  '/home/dashboard',
+  '/referrals',
 ]);
 
 /** Grupos que no van a «Más» porque ya son otra cosa en modo sencillo. */
@@ -85,31 +85,31 @@ export function buildSimpleTabs({ isAdmin, activeModules, hasSold }: SimpleNavIn
     const tabs: SimpleTab[] = [
       {
         id: 'comunidad',
-        href: '/comunidad',
+        href: '/community',
         labelKey: 'comunidad',
         icon: 'message',
-        matches: ['/comunidad', '/espacios'],
+        matches: ['/community', '/spaces'],
       },
       {
         id: 'cursos',
-        href: '/cursos',
+        href: '/courses',
         labelKey: 'cursos',
         icon: 'book',
-        matches: ['/cursos', '/rutas'],
+        matches: ['/courses', '/paths'],
       },
       {
         id: 'directos',
-        href: '/calendario',
+        href: '/calendar',
         labelKey: 'directos',
         icon: 'video',
-        matches: ['/calendario', '/eventos', '/clase'],
+        matches: ['/calendar', '/events', '/live'],
       },
       {
         id: 'miembros',
-        href: '/miembros',
+        href: '/members',
         labelKey: 'miembros',
         icon: 'users',
-        matches: ['/miembros', '/u'],
+        matches: ['/members', '/u'],
       },
     ];
     // El ranking solo existe si la academia usa puntos (mod.gamification).
@@ -119,7 +119,7 @@ export function buildSimpleTabs({ isAdmin, activeModules, hasSold }: SimpleNavIn
         href: '/leaderboard',
         labelKey: 'ranking',
         icon: 'trophy',
-        matches: ['/leaderboard', '/retos'],
+        matches: ['/leaderboard', '/challenges'],
       });
     }
     return tabs;
@@ -127,56 +127,56 @@ export function buildSimpleTabs({ isAdmin, activeModules, hasSold }: SimpleNavIn
   // Ventas: con cobros de plataforma (Didacta Cloud) es la pantalla de cobros;
   // sin ellos (Community con claves propias), la de la membresía, que es donde
   // se ponen precios y se ve quién paga.
-  const ventasHref = activeModules?.has('mod.payouts') ? '/admin/cobros' : '/admin/membresia';
+  const ventasHref = activeModules?.has('mod.payouts') ? '/admin/payments' : '/admin/membership';
   return [
     {
       id: 'empieza',
-      href: '/empieza',
+      href: '/start',
       labelKey: hasSold ? 'inicio' : 'empieza',
       icon: hasSold ? 'home' : 'target',
-      matches: ['/empieza'],
+      matches: ['/start'],
     },
     {
       id: 'comunidad',
-      href: '/comunidad',
+      href: '/community',
       labelKey: 'comunidad',
       icon: 'message',
-      matches: ['/comunidad', '/espacios'],
+      matches: ['/community', '/spaces'],
     },
     {
       id: 'cursos',
-      href: '/formador/cursos',
+      href: '/studio/courses',
       labelKey: 'cursos',
       icon: 'book',
-      matches: ['/formador/cursos', '/cursos'],
+      matches: ['/studio/courses', '/courses'],
     },
     {
       id: 'directos',
-      href: '/formador/aula-virtual',
+      href: '/studio/live',
       labelKey: 'directos',
       icon: 'video',
-      matches: ['/formador/aula-virtual', '/calendario', '/clase'],
+      matches: ['/studio/live', '/calendar', '/live'],
     },
     {
       id: 'alumnos',
-      href: '/admin/usuarios',
+      href: '/admin/users',
       labelKey: 'alumnos',
       icon: 'users',
-      matches: ['/admin/usuarios', '/miembros'],
+      matches: ['/admin/users', '/members'],
     },
     {
       id: 'ventas',
       href: ventasHref,
       labelKey: 'ventas',
       icon: 'briefcase',
-      matches: [ventasHref, '/admin/cobros', '/admin/membresia'],
+      matches: [ventasHref, '/admin/payments', '/admin/membership'],
     },
     {
       id: 'ajustes',
-      href: '/admin/configuracion',
+      href: '/admin/settings',
       labelKey: 'ajustes',
       icon: 'cog',
-      matches: ['/admin/configuracion', '/admin/branding'],
+      matches: ['/admin/settings', '/admin/branding'],
     },
   ];
 }

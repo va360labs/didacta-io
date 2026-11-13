@@ -143,7 +143,7 @@ test('referidos: una alumna invita, otra persona compra un curso suelto y la com
     '/api/v1/admin/simple-mode/publish',
     { method: 'POST', bearer, body: {} },
   );
-  expect(salePath).toBe('/catalogo/acuarela-desde-cero');
+  expect(salePath).toBe('/catalog/acuarela-desde-cero');
 
   // La alumna que invitará: alta por el panel y enlace de contraseña.
   const alumnaEmail = `alumna@${tenant.slug}.test`;
@@ -178,7 +178,7 @@ test('referidos: una alumna invita, otra persona compra un curso suelto y la com
   const creadora = await creadoraCtx.newPage();
   await signinPage(creadora, operador, tenant.password);
   await creadora.waitForURL((u) => !u.pathname.startsWith('/signin'), { timeout: 30_000 });
-  await creadora.goto('/admin/membresia');
+  await creadora.goto('/admin/membership');
   const seccion = creadora.locator('section#referidos');
   await expect(seccion).toBeVisible({ timeout: 30_000 });
   // Con el módulo ya activo en el aula el botón es «Encender»; sin él, «Activar los referidos».
@@ -197,7 +197,7 @@ test('referidos: una alumna invita, otra persona compra un curso suelto y la com
     'AlumnaInvita123!',
   );
   await alumna.waitForURL((u) => !u.pathname.startsWith('/signin'), { timeout: 30_000 });
-  await alumna.goto('/referidos');
+  await alumna.goto('/referrals');
   // Primera vez: declara ser mayor de 18 y acepta las condiciones del programa.
   const casilla = alumna.getByTestId('referidos-casilla');
   await expect(casilla).toBeVisible({ timeout: 30_000 });
@@ -208,7 +208,7 @@ test('referidos: una alumna invita, otra persona compra un curso suelto y la com
   const code = /ref=([a-z0-9]+)/i.exec((await enlace.textContent()) ?? '')?.[1];
   expect(code, 'código de referido de la alumna').toBeTruthy();
   // Con un solo curso a la venta, el enlace general ya lleva a él.
-  await expect(enlace).toContainText(`/catalogo`);
+  await expect(enlace).toContainText(`/catalog`);
 
   // ── 4. Otra persona, sin cuenta, compra con el enlace ──────────────────
   const compradoraCtx = await nuevo();

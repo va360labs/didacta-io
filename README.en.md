@@ -298,13 +298,13 @@ The three paths coexist in the same installation and combine freely:
 
 2. **You sell individual courses.** Publish a course, price it — with several
    purchase options if you want — and share your public catalogue at
-   `/catalogo`. Visitors pay by card through Stripe without registering first:
+   `/catalog`. Visitors pay by card through Stripe without registering first:
    their account is created automatically with the email confirmed at payment
    and they are enrolled instantly. Refunds revoke access on their own.
 
 3. **You sell memberships.** Create plans with the billing period (1–12
    months) and currency you want, with an optional trial. Your public sales
-   page at `/unete` shows the real catalogue; on subscribing, the student gets
+   page at `/join` shows the real catalogue; on subscribing, the student gets
    access to every course in the group you define. If they stop paying, access
    is revoked automatically — without touching anything you granted by hand.
 

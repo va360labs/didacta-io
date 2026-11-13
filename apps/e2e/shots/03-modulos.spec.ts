@@ -1175,7 +1175,7 @@ test('modulos · capturas', async ({ browser }) => {
       });
     }
     // El backfill puntúa la actividad ya existente (posts, comentarios,
-    // recursos, cursos): con él /retos y /leaderboard tienen números reales.
+    // recursos, cursos): con él /challenges y /leaderboard tienen números reales.
     await api('/api/v1/modules/gamification/admin/backfill', {
       method: 'POST',
       body: {},
@@ -1275,7 +1275,7 @@ test('modulos · capturas', async ({ browser }) => {
 
   // ── hello-world ──────────────────────────────────────────────────────
   await captura('hello-world', 'hello-world-1-modulos', async () => {
-    await admin.goto('/admin/configuracion?tab=modules');
+    await admin.goto('/admin/settings?tab=modules');
     const fila = admin.getByText(/mod\.hello-world@/);
     await expect(fila).toBeVisible({ timeout: 30_000 });
     await assertLocale(admin, LOCALE);
@@ -1284,14 +1284,14 @@ test('modulos · capturas', async ({ browser }) => {
 
   // ── ai-content ───────────────────────────────────────────────────────
   await captura('ai-content', 'ai-content-1-modulo', async () => {
-    await admin.goto('/admin/configuracion?tab=modules');
+    await admin.goto('/admin/settings?tab=modules');
     const fila = admin.getByText(/mod\.ai-content@/);
     await expect(fila).toBeVisible({ timeout: 30_000 });
     await shot(admin, walk('ai-content'), 'ai-content-1-modulo', { scrollTo: fila });
   });
 
   await captura('ai-content', 'ai-content-2-proveedores', async () => {
-    await admin.goto('/admin/ia/providers');
+    await admin.goto('/admin/ai/providers');
     await expect(
       admin.getByRole('heading', { name: t('adminEngagement', 'aiProviders.title') }),
     ).toBeVisible({ timeout: 30_000 });
@@ -1300,7 +1300,7 @@ test('modulos · capturas', async ({ browser }) => {
 
   // ── courses ──────────────────────────────────────────────────────────
   await captura('courses', 'courses-1-mis-cursos', async () => {
-    await admin.goto('/formador/cursos');
+    await admin.goto('/studio/courses');
     await expect(
       admin.getByRole('heading', { name: t('formadorCursos', 'myCoursesTitle') }),
     ).toBeVisible({ timeout: 30_000 });
@@ -1310,14 +1310,14 @@ test('modulos · capturas', async ({ browser }) => {
 
   await captura('courses', 'courses-2-builder', async () => {
     if (!cursoMarketing) throw new Error('no hay curso en borrador');
-    await admin.goto(`/formador/cursos/${cursoMarketing.id}`);
+    await admin.goto(`/studio/courses/${cursoMarketing.id}`);
     const publicar = admin.getByRole('button', { name: t('formadorCursos', 'publish') });
     await expect(publicar).toBeVisible({ timeout: 30_000 });
     await shot(admin, walk('courses'), 'courses-2-builder');
   });
 
   await captura('courses', 'courses-3-categorias', async () => {
-    await admin.goto('/admin/cursos/categorias');
+    await admin.goto('/admin/courses/categories');
     await expect(
       admin.getByRole('heading', { name: t('adminMonetizacion', 'categories.title') }),
     ).toBeVisible({ timeout: 30_000 });
@@ -1326,7 +1326,7 @@ test('modulos · capturas', async ({ browser }) => {
   });
 
   await captura('courses', 'courses-4-catalogo', async () => {
-    await alumna.goto('/cursos');
+    await alumna.goto('/courses');
     await expect(alumna.getByText(X.cursoEdicion.titulo)).toBeVisible({ timeout: 30_000 });
     await assertLocale(alumna, LOCALE);
     await shot(alumna, walk('courses'), 'courses-4-catalogo');
@@ -1335,7 +1335,7 @@ test('modulos · capturas', async ({ browser }) => {
   // ── learning ─────────────────────────────────────────────────────────
   await captura('learning', 'learning-1-drip', async () => {
     if (!cursoEdicion) throw new Error('no hay curso de edición');
-    await admin.goto(`/formador/cursos/${cursoEdicion.id}`);
+    await admin.goto(`/studio/courses/${cursoEdicion.id}`);
     const drip = admin.getByText(t('formadorCursos', 'dripTitle')).first();
     await expect(drip).toBeVisible({ timeout: 30_000 });
     await shot(admin, walk('learning'), 'learning-1-drip', { scrollTo: drip });
@@ -1343,7 +1343,7 @@ test('modulos · capturas', async ({ browser }) => {
 
   await captura('learning', 'learning-2-invitaciones', async () => {
     if (!cursoDemo) throw new Error('no hay curso demo');
-    await admin.goto(`/formador/cursos/${cursoDemo.id}`);
+    await admin.goto(`/studio/courses/${cursoDemo.id}`);
     const generar = admin.getByRole('button', { name: t('formadorCursos', 'generate') });
     await expect(generar).toBeVisible({ timeout: 30_000 });
     await shot(admin, walk('learning'), 'learning-2-invitaciones', { scrollTo: generar });
@@ -1351,7 +1351,7 @@ test('modulos · capturas', async ({ browser }) => {
 
   await captura('learning', 'learning-3-alumnos', async () => {
     if (!cursoDemo) throw new Error('no hay curso demo');
-    await admin.goto(`/formador/cursos/${cursoDemo.id}/alumnos`);
+    await admin.goto(`/studio/courses/${cursoDemo.id}/students`);
     await expect(
       admin.getByRole('heading', { name: t('formadorCursos', 'studentsTitle') }),
     ).toBeVisible({ timeout: 30_000 });
@@ -1360,7 +1360,7 @@ test('modulos · capturas', async ({ browser }) => {
   });
 
   await captura('learning', 'learning-4-ficha-alumno', async () => {
-    await alumna.goto(`/cursos/${X.cursoEdicion.slug}`);
+    await alumna.goto(`/courses/${X.cursoEdicion.slug}`);
     await expect(alumna.getByText(t('alumnoAprendizaje', 'yourProgress'))).toBeVisible({
       timeout: 30_000,
     });
@@ -1370,7 +1370,7 @@ test('modulos · capturas', async ({ browser }) => {
   // ── assessments (+ ai-grader comparte estado) ────────────────────────
   await captura('assessments', 'assessments-1-editor', async () => {
     if (!quizId) throw new Error('no hay quiz');
-    await admin.goto(`/formador/quizzes/${quizId}`);
+    await admin.goto(`/studio/quizzes/${quizId}`);
     await expect(admin.getByText(X.quiz.titulo).first()).toBeVisible({ timeout: 30_000 });
     await expect(admin.getByText(X.quiz.single.prompt).first()).toBeVisible({ timeout: 30_000 });
     await shot(admin, walk('assessments'), 'assessments-1-editor');
@@ -1378,7 +1378,7 @@ test('modulos · capturas', async ({ browser }) => {
 
   await captura('assessments', 'assessments-2-quiz-alumno', async () => {
     if (!quizId) throw new Error('no hay quiz');
-    await alumna.goto(`/cursos/${DEMO.course.slug}`);
+    await alumna.goto(`/courses/${DEMO.course.slug}`);
     await expect(alumna.getByText(t('alumnoAprendizaje', 'yourProgress'))).toBeVisible({
       timeout: 30_000,
     });
@@ -1433,7 +1433,7 @@ test('modulos · capturas', async ({ browser }) => {
   });
 
   await captura('assessments', 'assessments-3-correcciones', async () => {
-    await admin.goto('/formador/correcciones');
+    await admin.goto('/studio/grading');
     await expect(
       admin.getByRole('heading', { name: t('formadorAula', 'correcciones.title') }),
     ).toBeVisible({ timeout: 30_000 });
@@ -1442,7 +1442,7 @@ test('modulos · capturas', async ({ browser }) => {
   });
 
   await captura('ai-grader', 'ai-grader-1-pendientes', async () => {
-    await admin.goto('/formador/correcciones');
+    await admin.goto('/studio/grading');
     await expect(admin.getByText(X.quiz.titulo).first()).toBeVisible({ timeout: 30_000 });
     await shot(admin, walk('ai-grader'), 'ai-grader-1-pendientes');
   });
@@ -1456,7 +1456,7 @@ test('modulos · capturas', async ({ browser }) => {
     );
     const primero = pendientes[0];
     if (!primero) throw new Error('no hay intentos pendientes');
-    await admin.goto(`/formador/correcciones/${primero.id}`);
+    await admin.goto(`/studio/grading/${primero.id}`);
     await expect(admin.getByText(X.quiz.abierta.respuesta.slice(0, 40)).first()).toBeVisible({
       timeout: 30_000,
     });
@@ -1472,7 +1472,7 @@ test('modulos · capturas', async ({ browser }) => {
     );
     const primero = pendientes[0];
     if (!primero) throw new Error('no hay intentos pendientes');
-    await admin.goto(`/formador/correcciones/${primero.id}`);
+    await admin.goto(`/studio/grading/${primero.id}`);
     await expect(admin.getByText(X.quiz.abierta.respuesta.slice(0, 40)).first()).toBeVisible({
       timeout: 30_000,
     });
@@ -1480,7 +1480,7 @@ test('modulos · capturas', async ({ browser }) => {
   });
 
   await captura('ai-grader', 'ai-grader-3-proveedores', async () => {
-    await admin.goto('/admin/ia/providers');
+    await admin.goto('/admin/ai/providers');
     await expect(
       admin.getByRole('heading', { name: t('adminEngagement', 'aiProviders.title') }),
     ).toBeVisible({ timeout: 30_000 });
@@ -1489,7 +1489,7 @@ test('modulos · capturas', async ({ browser }) => {
 
   // ── ai-tutor ─────────────────────────────────────────────────────────
   await captura('ai-tutor', 'ai-tutor-1-proveedores', async () => {
-    await admin.goto('/admin/ia/providers');
+    await admin.goto('/admin/ai/providers');
     await expect(
       admin.getByRole('heading', { name: t('adminEngagement', 'aiProviders.title') }),
     ).toBeVisible({ timeout: 30_000 });
@@ -1497,7 +1497,7 @@ test('modulos · capturas', async ({ browser }) => {
   });
 
   await captura('ai-tutor', 'ai-tutor-2-panel-alumno', async () => {
-    await alumna.goto(`/cursos/${DEMO.course.slug}`);
+    await alumna.goto(`/courses/${DEMO.course.slug}`);
     const panel = alumna.getByText(t('playersContenido', 'aiTutor.title')).first();
     await expect(panel).toBeVisible({ timeout: 30_000 });
     await shot(alumna, walk('ai-tutor'), 'ai-tutor-2-panel-alumno', { scrollTo: panel });
@@ -1506,7 +1506,7 @@ test('modulos · capturas', async ({ browser }) => {
   await captura('ai-tutor', 'ai-tutor-3-admin-revision', async () => {
     // Sin clave de IA nadie ha preguntado: la pestaña Revisión sale con su
     // estado vacío, que la propuesta da por válido como captura de respaldo.
-    await admin.goto('/admin/ia/tutor');
+    await admin.goto('/admin/ai/tutor');
     await expect(
       admin.getByRole('heading', { name: t('adminEngagement', 'aiTutor.title') }),
     ).toBeVisible({
@@ -1517,7 +1517,7 @@ test('modulos · capturas', async ({ browser }) => {
 
   // ── access-groups ────────────────────────────────────────────────────
   await captura('access-groups', 'access-groups-1-lista', async () => {
-    await admin.goto('/admin/grupos-acceso');
+    await admin.goto('/admin/access-groups');
     await expect(
       admin.getByRole('heading', { name: t('adminUsuarios', 'groups.title') }),
     ).toBeVisible({
@@ -1528,7 +1528,7 @@ test('modulos · capturas', async ({ browser }) => {
   });
 
   await captura('access-groups', 'access-groups-2-gestion', async () => {
-    await admin.goto('/admin/grupos-acceso');
+    await admin.goto('/admin/access-groups');
     await expect(admin.getByText(X.grupoAvanzado).first()).toBeVisible({ timeout: 30_000 });
     const gestionar = admin.getByRole('button', { name: t('adminUsuarios', 'groups.manage') });
     // La fila del grupo «Varios cursos»: el contenedor más profundo que tiene
@@ -1546,7 +1546,7 @@ test('modulos · capturas', async ({ browser }) => {
   });
 
   await captura('access-groups', 'access-groups-3-membresia', async () => {
-    await admin.goto('/admin/membresia');
+    await admin.goto('/admin/membership');
     const selector = admin.locator('#cfg-group');
     await expect(selector).toBeVisible({ timeout: 30_000 });
     await shot(admin, walk('access-groups'), 'access-groups-3-membresia', { scrollTo: selector });
@@ -1554,7 +1554,7 @@ test('modulos · capturas', async ({ browser }) => {
 
   // ── subscriptions ────────────────────────────────────────────────────
   await captura('subscriptions', 'subscriptions-1-membresia-planes', async () => {
-    await admin.goto('/admin/membresia');
+    await admin.goto('/admin/membership');
     await expect(admin.locator('#plan-name')).toBeVisible({ timeout: 30_000 });
     const anual = admin.getByText(X.planAnual.nombre).first();
     await expect(anual).toBeVisible({ timeout: 30_000 });
@@ -1564,7 +1564,7 @@ test('modulos · capturas', async ({ browser }) => {
   });
 
   await captura('subscriptions', 'subscriptions-2-unete', async () => {
-    await publicPage.goto('/unete');
+    await publicPage.goto('/join');
     await expect(publicPage.getByText(DEMO.unete.title)).toBeVisible({ timeout: 30_000 });
     await expect(publicPage.getByText(X.planAnual.nombre).first()).toBeVisible({ timeout: 30_000 });
     await assertLocale(publicPage, LOCALE);
@@ -1573,7 +1573,7 @@ test('modulos · capturas', async ({ browser }) => {
 
   // ── billing ──────────────────────────────────────────────────────────
   await captura('billing', 'billing-1-stripe-config', async () => {
-    await admin.goto('/admin/configuracion?tab=pagos');
+    await admin.goto('/admin/settings?tab=pagos');
     // Con las claves falsas guardadas por el recorrido 2 el banner dice
     // «sin verificar»; si la tanda corre sin ese estado, cualquiera de los
     // banners de la tarjeta vale como pantalla real.
@@ -1591,7 +1591,7 @@ test('modulos · capturas', async ({ browser }) => {
 
   // ── payment-connections ──────────────────────────────────────────────
   await captura('payment-connections', 'payment-connections-1-conectar', async () => {
-    await admin.goto('/admin/integraciones/payment-connections');
+    await admin.goto('/admin/integrations/payment-connections');
     await expect(
       admin.getByRole('heading', { name: t('adminPagos', 'connections.title') }),
     ).toBeVisible({ timeout: 30_000 });
@@ -1599,7 +1599,7 @@ test('modulos · capturas', async ({ browser }) => {
   });
 
   await captura('payment-connections', 'payment-connections-2-dashboard', async () => {
-    await admin.goto('/admin/integraciones/payment-connections');
+    await admin.goto('/admin/integrations/payment-connections');
     const panel = admin.getByText(t('adminPagos', 'dashboard.title')).first();
     await expect(panel).toBeVisible({ timeout: 30_000 });
     await shot(admin, walk('payment-connections'), 'payment-connections-2-dashboard', {
@@ -1608,7 +1608,7 @@ test('modulos · capturas', async ({ browser }) => {
   });
 
   await captura('payment-connections', 'payment-connections-3-tiers', async () => {
-    await admin.goto('/admin/integraciones/payment-connections');
+    await admin.goto('/admin/integrations/payment-connections');
     const catalogo = admin.getByText(t('adminPagos', 'tiers.title')).first();
     await expect(catalogo).toBeVisible({ timeout: 30_000 });
     await expect(admin.getByText('Básico').first()).toBeVisible({ timeout: 30_000 });
@@ -1619,7 +1619,7 @@ test('modulos · capturas', async ({ browser }) => {
 
   // ── certificates ─────────────────────────────────────────────────────
   await captura('certificates', 'certificates-1-plantillas', async () => {
-    await admin.goto('/formador/certificados/templates');
+    await admin.goto('/studio/certificates/templates');
     await expect(
       admin.getByRole('heading', { name: t('formadorAula', 'certTemplates.title') }),
     ).toBeVisible({ timeout: 30_000 });
@@ -1630,7 +1630,7 @@ test('modulos · capturas', async ({ browser }) => {
   });
 
   await captura('certificates', 'certificates-2-editor', async () => {
-    await admin.goto('/formador/certificados/templates');
+    await admin.goto('/studio/certificates/templates');
     await admin
       .getByRole('button', { name: t('formadorAula', 'certTemplates.newTemplate') })
       .click();
@@ -1649,7 +1649,7 @@ test('modulos · capturas', async ({ browser }) => {
   });
 
   await captura('certificates', 'certificates-3-mis-certificados', async () => {
-    await alumna.goto('/mis-certificados');
+    await alumna.goto('/my-certificates');
     await expect(alumna.getByText(/^[A-Z]{2}-\d{4}-\d{6}$/).first()).toBeVisible({
       timeout: 30_000,
     });
@@ -1658,7 +1658,7 @@ test('modulos · capturas', async ({ browser }) => {
 
   await captura('certificates', 'certificates-4-verificar', async () => {
     if (!certificadoId) throw new Error('no hay certificado emitido');
-    await publicPage.goto(`/verificar/${certificadoId}`);
+    await publicPage.goto(`/verify/${certificadoId}`);
     await expect(publicPage.getByText(/[A-Z]{2}-\d{4}-\d{6}/).first()).toBeVisible({
       timeout: 30_000,
     });
@@ -1667,7 +1667,7 @@ test('modulos · capturas', async ({ browser }) => {
 
   // ── community ────────────────────────────────────────────────────────
   await captura('community', 'community-1-feed', async () => {
-    await alumna.goto('/comunidad');
+    await alumna.goto('/community');
     await expect(
       alumna.getByRole('heading', { name: t('comunidadComponentes', 'feedTitle') }),
     ).toBeVisible({ timeout: 30_000 });
@@ -1678,7 +1678,7 @@ test('modulos · capturas', async ({ browser }) => {
   });
 
   await captura('community', 'community-2-composer', async () => {
-    await admin.goto('/comunidad');
+    await admin.goto('/community');
     await admin.getByRole('button', { name: t('comunidadComponentes', 'newConversation') }).click();
     await admin
       .getByPlaceholder(t('comunidadComponentes', 'titlePlaceholder'))
@@ -1696,7 +1696,7 @@ test('modulos · capturas', async ({ browser }) => {
   });
 
   await captura('community', 'community-3-espacios', async () => {
-    await admin.goto('/admin/comunidad/espacios');
+    await admin.goto('/admin/community/spaces');
     await expect(
       admin.getByRole('heading', { name: t('adminEngagement', 'spaces.title') }),
     ).toBeVisible({ timeout: 30_000 });
@@ -1716,7 +1716,7 @@ test('modulos · capturas', async ({ browser }) => {
   });
 
   await captura('community', 'community-4-avisos', async () => {
-    await admin.goto('/admin/avisos');
+    await admin.goto('/admin/broadcasts');
     await expect(admin.locator('#broadcast-subject')).toBeVisible({ timeout: 30_000 });
     // El historial de abajo enseña el envío DONE que preparó la fase de
     // estado; el compositor se retrata escrito pero sin enviar.
@@ -1730,7 +1730,7 @@ test('modulos · capturas', async ({ browser }) => {
 
   // ── gamification ─────────────────────────────────────────────────────
   await captura('gamification', 'gamification-1-reglas', async () => {
-    await admin.goto('/admin/gamificacion');
+    await admin.goto('/admin/gamification');
     await admin.getByRole('tab', { name: t('adminEngagement', 'gamification.tabRules') }).click();
     await expect(admin.getByText(t('adminEngagement', 'rules.backfillTitle'))).toBeVisible({
       timeout: 30_000,
@@ -1739,7 +1739,7 @@ test('modulos · capturas', async ({ browser }) => {
   });
 
   await captura('gamification', 'gamification-2-entregas', async () => {
-    await admin.goto('/admin/gamificacion');
+    await admin.goto('/admin/gamification');
     await admin
       .getByRole('tab', { name: t('adminEngagement', 'gamification.tabSubmissions') })
       .click();
@@ -1748,7 +1748,7 @@ test('modulos · capturas', async ({ browser }) => {
   });
 
   await captura('gamification', 'gamification-3-retos', async () => {
-    await alumna.goto('/retos');
+    await alumna.goto('/challenges');
     await expect(alumna.getByText(X.retos[0].titulo).first()).toBeVisible({ timeout: 30_000 });
     await shot(alumna, walk('gamification'), 'gamification-3-retos');
   });
@@ -1763,7 +1763,7 @@ test('modulos · capturas', async ({ browser }) => {
 
   // ── messaging ────────────────────────────────────────────────────────
   await captura('messaging', 'messaging-1-bandeja', async () => {
-    await alumna.goto('/mensajes');
+    await alumna.goto('/messages');
     await expect(
       alumna.getByRole('heading', { name: t('alumnoSocial', 'mensajes.titulo') }),
     ).toBeVisible({ timeout: 30_000 });
@@ -1775,7 +1775,7 @@ test('modulos · capturas', async ({ browser }) => {
 
   await captura('messaging', 'messaging-3-profesores', async () => {
     if (!mensajeParaClicar) throw new Error('no hay conversación con el profesorado');
-    await alumna.goto('/mensajes');
+    await alumna.goto('/messages');
     // La lista enseña el último mensaje de cada conversación: clicar ese
     // texto abre el canal de profesores sin depender del título que ponga el
     // backend al hilo.
@@ -1788,7 +1788,7 @@ test('modulos · capturas', async ({ browser }) => {
   });
 
   await captura('messaging', 'messaging-2-directo', async () => {
-    await alumna.goto('/mensajes');
+    await alumna.goto('/messages');
     await alumna
       .getByRole('button', { name: t('alumnoSocial', 'mensajes.nuevaConversacion') })
       .click();
@@ -1803,13 +1803,13 @@ test('modulos · capturas', async ({ browser }) => {
 
   // ── zoom-live ────────────────────────────────────────────────────────
   await captura('zoom-live', 'zoom-live-1-credenciales', async () => {
-    await admin.goto('/admin/configuracion?tab=aula-virtual');
+    await admin.goto('/admin/settings?tab=aula-virtual');
     await expect(admin.locator('#zoom-account')).toBeVisible({ timeout: 30_000 });
     await shot(admin, walk('zoom-live'), 'zoom-live-1-credenciales');
   });
 
   await captura('zoom-live', 'zoom-live-2-aula-virtual', async () => {
-    await admin.goto('/formador/aula-virtual');
+    await admin.goto('/studio/live');
     await expect(admin.getByRole('heading', { name: t('formadorAula', 'aula.title') })).toBeVisible(
       {
         timeout: 30_000,
@@ -1823,7 +1823,7 @@ test('modulos · capturas', async ({ browser }) => {
     if (!sesionZoomId) throw new Error('no hay sesión de aula virtual');
     // ⚠️ Orden importante: la alumna aún NO está inscrita — es lo que enseña
     // el botón «Inscribirme». Su inscripción llega justo después, por API.
-    await alumna.goto(`/clase/${sesionZoomId}`);
+    await alumna.goto(`/live/${sesionZoomId}`);
     const inscribirse = alumna.getByRole('button', { name: t('alumnoAprendizaje', 'register') });
     await expect(inscribirse).toBeVisible({ timeout: 30_000 });
     await shot(alumna, walk('zoom-live'), 'zoom-live-3-clase-alumno');
@@ -1847,7 +1847,7 @@ test('modulos · capturas', async ({ browser }) => {
 
   await captura('zoom-live', 'zoom-live-4-asistencia', async () => {
     if (!sesionZoomId) throw new Error('no hay sesión de aula virtual');
-    await admin.goto(`/clase/${sesionZoomId}`);
+    await admin.goto(`/live/${sesionZoomId}`);
     await expect(admin.getByText(X.clase.tema).first()).toBeVisible({ timeout: 30_000 });
     const filaAlumna = admin.getByText(DEMO.alumna.name).last();
     await expect(filaAlumna).toBeVisible({ timeout: 30_000 });
@@ -1870,7 +1870,7 @@ test('modulos · capturas', async ({ browser }) => {
     if (!sesionZoomId) throw new Error('no hay sesión');
     // Antes de que la alumna responda: la tarjeta sale con los botones sin
     // seleccionar.
-    await alumna.goto(`/clase/${sesionZoomId}`);
+    await alumna.goto(`/live/${sesionZoomId}`);
     const panel = alumna.getByText(t('modSurveys', 'panelTitle')).first();
     await expect(panel).toBeVisible({ timeout: 30_000 });
     await shot(alumna, walk('surveys'), 'surveys-3-alumno-panel', { scrollTo: panel });
@@ -1910,7 +1910,7 @@ test('modulos · capturas', async ({ browser }) => {
   });
 
   await captura('surveys', 'surveys-1-admin-listado', async () => {
-    await admin.goto('/admin/encuestas');
+    await admin.goto('/admin/surveys');
     await expect(
       admin.getByRole('heading', { name: t('adminEngagement', 'surveys.title') }),
     ).toBeVisible({
@@ -1921,7 +1921,7 @@ test('modulos · capturas', async ({ browser }) => {
   });
 
   await captura('surveys', 'surveys-2-admin-resultados', async () => {
-    await admin.goto('/admin/encuestas');
+    await admin.goto('/admin/surveys');
     await admin
       .getByRole('button', { name: t('adminEngagement', 'surveys.results') })
       .first()
@@ -1957,7 +1957,7 @@ test('modulos · capturas', async ({ browser }) => {
   });
 
   await captura('fundae', 'fundae-4-grupo-detalle', async () => {
-    await admin.goto('/admin/fundae/grupos');
+    await admin.goto('/admin/fundae/groups');
     await expect(
       admin.getByRole('heading', { name: t('adminFundae', 'groups.title') }),
     ).toBeVisible({
@@ -1975,7 +1975,7 @@ test('modulos · capturas', async ({ browser }) => {
 
   // ── referrals ────────────────────────────────────────────────────────
   await captura('referrals', 'referrals-1-admin-config', async () => {
-    await admin.goto('/admin/referidos');
+    await admin.goto('/admin/referrals');
     await expect(
       admin.getByRole('heading', { name: t('adminMonetizacion', 'referrals.title') }),
     ).toBeVisible({
@@ -1987,7 +1987,7 @@ test('modulos · capturas', async ({ browser }) => {
   await captura('referrals', 'referrals-2-miembro', async () => {
     // La página crea el enlace de la alumna al entrar; con el programa activo
     // basta la visita.
-    await alumna.goto('/referidos');
+    await alumna.goto('/referrals');
     await expect(
       alumna.getByRole('heading', { name: t('alumnoSocial', 'referidos.titulo') }),
     ).toBeVisible({
@@ -1997,7 +1997,7 @@ test('modulos · capturas', async ({ browser }) => {
   });
 
   await captura('referrals', 'referrals-3-admin-comisiones', async () => {
-    await admin.goto('/admin/referidos');
+    await admin.goto('/admin/referrals');
     await expect(
       admin.getByRole('heading', { name: t('adminMonetizacion', 'referrals.title') }),
     ).toBeVisible({
@@ -2011,7 +2011,7 @@ test('modulos · capturas', async ({ browser }) => {
 
   // ── resources ────────────────────────────────────────────────────────
   await captura('resources', 'resources-4-nueva-coleccion', async () => {
-    await admin.goto('/recursos');
+    await admin.goto('/resources');
     await admin.getByRole('button', { name: t('alumnoAprendizaje', 'newCollection') }).click();
     await admin.locator('#col-title').fill(X.coleccionNueva.titulo);
     await admin.locator('#col-desc').fill(X.coleccionNueva.descripcion);
@@ -2031,7 +2031,7 @@ test('modulos · capturas', async ({ browser }) => {
   });
 
   await captura('resources', 'resources-1-colecciones', async () => {
-    await alumna.goto('/recursos');
+    await alumna.goto('/resources');
     await expect(
       alumna.getByRole('heading', { name: t('alumnoAprendizaje', 'resourcesTitle') }),
     ).toBeVisible({
@@ -2041,7 +2041,7 @@ test('modulos · capturas', async ({ browser }) => {
   });
 
   await captura('resources', 'resources-2-compartir', async () => {
-    await alumna.goto('/recursos');
+    await alumna.goto('/resources');
     await alumna.getByRole('button', { name: t('alumnoAprendizaje', 'shareResource') }).click();
     await alumna.locator('#res-title').fill(X.recursoModal.titulo);
     await alumna.locator('#res-collection').selectOption({ index: 0 });
@@ -2061,7 +2061,7 @@ test('modulos · capturas', async ({ browser }) => {
 
   await captura('resources', 'resources-3-coleccion', async () => {
     if (!coleccionRecursosId) throw new Error('no hay colección con recursos');
-    await alumna.goto(`/recursos/${coleccionRecursosId}`);
+    await alumna.goto(`/resources/${coleccionRecursosId}`);
     await expect(alumna.getByPlaceholder(t('alumnoAprendizaje', 'searchInCollection'))).toBeVisible(
       {
         timeout: 30_000,
@@ -2073,7 +2073,7 @@ test('modulos · capturas', async ({ browser }) => {
 
   // ── member-registration ──────────────────────────────────────────────
   await captura('member-registration', 'member-registration-1-config', async () => {
-    await admin.goto('/admin/configuracion?tab=registro');
+    await admin.goto('/admin/settings?tab=registro');
     await expect(admin.locator('#mr-approver')).toBeVisible({ timeout: 30_000 });
     await expect(admin.locator('#mr-bot-username')).toBeVisible({ timeout: 30_000 });
     await shot(admin, walk('member-registration'), 'member-registration-1-config');
@@ -2091,7 +2091,7 @@ test('modulos · capturas', async ({ browser }) => {
   });
 
   await captura('member-registration', 'member-registration-2-wizard', async () => {
-    await publicPage.goto('/inscripcion-miembros');
+    await publicPage.goto('/member-registration');
     await expect(publicPage.locator('#ins-email')).toBeVisible({ timeout: 30_000 });
     await publicPage.locator('#ins-email').fill(X.aspirante.email);
     await shot(publicPage, walk('member-registration'), 'member-registration-2-wizard');
@@ -2128,7 +2128,7 @@ test('modulos · capturas', async ({ browser }) => {
   });
 
   await captura('member-registration', 'member-registration-3-solicitudes', async () => {
-    await admin.goto('/admin/solicitudes-miembros');
+    await admin.goto('/admin/member-requests');
     await expect(
       admin.getByRole('heading', { name: t('adminUsuarios', 'requests.title') }),
     ).toBeVisible({
@@ -2195,7 +2195,7 @@ test('modulos · capturas', async ({ browser }) => {
   await captura('theming', 'theming-3-bienvenida-marca', async () => {
     // El asistente de la academia se «desanda» hasta el paso de marca. Va el
     // ÚLTIMO de la tanda: mientras la fila esté incompleta, el gate del shell
-    // mandaría cualquier otra pantalla del admin a /bienvenida.
+    // mandaría cualquier otra pantalla del admin a /welcome.
     await api('/api/v1/tenant-settings/onboarding/academy', {
       method: 'PUT',
       body: {
@@ -2205,7 +2205,7 @@ test('modulos · capturas', async ({ browser }) => {
       bearer: adminTok,
     });
     try {
-      await admin.goto('/bienvenida');
+      await admin.goto('/welcome');
       await expect(
         admin.getByRole('heading', { name: t('bienvenida', 'marcaTitulo') }),
       ).toBeVisible({
@@ -2214,7 +2214,7 @@ test('modulos · capturas', async ({ browser }) => {
       await shot(admin, walk('theming'), 'theming-3-bienvenida-marca');
     } finally {
       // Pase lo que pase, el asistente vuelve a quedar completado: si no, la
-      // siguiente sesión del admin rebotaría a /bienvenida.
+      // siguiente sesión del admin rebotaría a /welcome.
       await completeAcademyOnboarding(adminTok).catch((e: unknown) => {
         console.warn(
           `[modulos] ⚠️ no se pudo restaurar el onboarding de academia: ${e instanceof Error ? e.message : String(e)}`,

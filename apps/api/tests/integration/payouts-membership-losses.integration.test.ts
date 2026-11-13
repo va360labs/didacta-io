@@ -467,7 +467,7 @@ describeWithDb('Membresías × reembolsos, disputas y desconexión — Postgres 
 
   /**
    * Alta de una membresía de 29 €/mes por el webhook (`completed`): el
-   * checkout lo deja `/unete` con el adaptador de plataforma (`cs_…`
+   * checkout lo deja `/join` con el adaptador de plataforma (`cs_…`
    * registrado a nombre del aula) y el webhook ata `sub_…` y `cus_…`.
    */
   async function membershipSubscribed(tenantId: string): Promise<Membership> {

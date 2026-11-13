@@ -248,7 +248,7 @@ describeWithDb('Membresías por la plataforma — Postgres real como didacta_app
   }
 
   /**
-   * Un plan de 29 €/mes y su checkout tal y como lo deja `/unete` con el
+   * Un plan de 29 €/mes y su checkout tal y como lo deja `/join` con el
    * adaptador de plataforma: `cs_…` registrado a nombre del aula con el plan.
    * Y lo que Stripe tiene de la sesión.
    */

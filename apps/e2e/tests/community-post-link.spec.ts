@@ -6,12 +6,12 @@ import { injectSession } from '../helpers/auth';
  * URL única y compartible por post de la comunidad.
  *
  * Cubre:
- *  1. Abrir un post desde el feed cambia la URL a /comunidad/<id> (compartible)
- *     y "Copiar enlace" copia esa URL al portapapeles; cerrar restaura /comunidad.
- *  2. Deep-link logueado: entrar directo a /comunidad/<id> abre el post en modal
+ *  1. Abrir un post desde el feed cambia la URL a /community/<id> (compartible)
+ *     y "Copiar enlace" copia esa URL al portapapeles; cerrar restaura /community.
+ *  2. Deep-link logueado: entrar directo a /community/<id> abre el post en modal
  *     sobre el feed; cerrarlo deja la URL del feed sin apilar historial.
  *  3. Deep-link anónimo: pide login y, tras autenticarse, abre el post.
- *  4. Espacios: abrir un post desde /espacios/<slug> también muestra la URL
+ *  4. Espacios: abrir un post desde /spaces/<slug> también muestra la URL
  *     canónica y cerrar devuelve al espacio.
  *  5. Back/forward del navegador cierran y reabren el modal (estado derivado
  *     de la URL).
@@ -99,7 +99,7 @@ test.describe('mod.community · URL única por post', () => {
     await injectAlumnoSession(page, alumno);
     await context.grantPermissions(['clipboard-read', 'clipboard-write'], { origin: BASE_URL });
 
-    await page.goto('/comunidad');
+    await page.goto('/community');
     await expect(page.getByText(post.title).first()).toBeVisible({ timeout: 15_000 });
     await page.getByText(post.title).first().click();
 
@@ -108,18 +108,18 @@ test.describe('mod.community · URL única por post', () => {
     await expect(dialog.getByRole('heading', { name: post.title })).toBeVisible({
       timeout: 10_000,
     });
-    await expect(page).toHaveURL(new RegExp(`/comunidad/${post.id}$`));
+    await expect(page).toHaveURL(new RegExp(`/community/${post.id}$`));
 
     // Copiar enlace directo.
     await dialog.getByRole('button', { name: 'Copiar enlace directo' }).click();
     await expect(dialog.getByText('Enlace copiado')).toBeVisible();
     // Forma string: el tsconfig de e2e no incluye lib DOM (lib=['ES2023']).
     const copied = await page.evaluate<string>('navigator.clipboard.readText()');
-    expect(copied).toBe(`${BASE_URL}/comunidad/${post.id}`);
+    expect(copied).toBe(`${BASE_URL}/community/${post.id}`);
 
     // Cerrar restaura la URL del feed sin desmontar la página.
     await dialog.getByRole('button', { name: 'Cerrar' }).click();
-    await expect(page).toHaveURL(new RegExp('/comunidad$'));
+    await expect(page).toHaveURL(new RegExp('/community$'));
   });
 
   test('deep-link logueado abre el post en modal sobre el feed', async ({ page }) => {
@@ -129,18 +129,18 @@ test.describe('mod.community · URL única por post', () => {
     const alumno = await createOnboardedAlumno(stamp);
     await injectAlumnoSession(page, alumno);
 
-    await page.goto(`/comunidad/${post.id}`);
+    await page.goto(`/community/${post.id}`);
     const dialog = page.getByRole('dialog');
     await expect(dialog.getByRole('heading', { name: post.title })).toBeVisible({
       timeout: 15_000,
     });
-    // El feed queda detrás (misma experiencia que abrirlo desde /comunidad).
+    // El feed queda detrás (misma experiencia que abrirlo desde /community).
     await expect(page.getByRole('heading', { name: 'Comunidad' })).toBeVisible();
 
     // Cerrar tras el deep-link: la URL pasa a la del feed SIN apilar historial
     // (rama replaceState del hook — no hay entrada previa del feed que consumir).
     await dialog.getByRole('button', { name: 'Cerrar' }).click();
-    await expect(page).toHaveURL(new RegExp('/comunidad$'));
+    await expect(page).toHaveURL(new RegExp('/community$'));
     await expect(page.getByRole('dialog')).toBeHidden();
   });
 
@@ -151,7 +151,7 @@ test.describe('mod.community · URL única por post', () => {
     const alumno = await createOnboardedAlumno(stamp);
     await injectAlumnoSession(page, alumno);
 
-    await page.goto('/comunidad');
+    await page.goto('/community');
     await expect(page.getByText(post.title).first()).toBeVisible({ timeout: 15_000 });
     await page.getByText(post.title).first().click();
 
@@ -159,16 +159,16 @@ test.describe('mod.community · URL única por post', () => {
     await expect(dialog.getByRole('heading', { name: post.title })).toBeVisible({
       timeout: 10_000,
     });
-    await expect(page).toHaveURL(new RegExp(`/comunidad/${post.id}$`));
+    await expect(page).toHaveURL(new RegExp(`/community/${post.id}$`));
 
     // Atrás: vuelve a la URL del feed y el modal se cierra (estado ← URL).
     await page.goBack();
-    await expect(page).toHaveURL(new RegExp('/comunidad$'));
+    await expect(page).toHaveURL(new RegExp('/community$'));
     await expect(page.getByRole('dialog')).toBeHidden();
 
     // Adelante: la URL del post reabre el modal.
     await page.goForward();
-    await expect(page).toHaveURL(new RegExp(`/comunidad/${post.id}$`));
+    await expect(page).toHaveURL(new RegExp(`/community/${post.id}$`));
     await expect(page.getByRole('dialog').getByRole('heading', { name: post.title })).toBeVisible({
       timeout: 10_000,
     });
@@ -181,7 +181,7 @@ test.describe('mod.community · URL única por post', () => {
     const alumno = await createOnboardedAlumno(stamp);
 
     // Sin sesión: la ruta protegida manda a /signin…
-    await page.goto(`/comunidad/${post.id}`);
+    await page.goto(`/community/${post.id}`);
     await expect(page).toHaveURL(/\/signin/, { timeout: 15_000 });
 
     // …y tras el login vuelve al post compartido.
@@ -189,7 +189,7 @@ test.describe('mod.community · URL única por post', () => {
     await page.getByLabel(/Contraseña/).fill(alumno.password);
     await page.getByRole('button', { name: 'Entrar' }).click();
 
-    await expect(page).toHaveURL(new RegExp(`/comunidad/${post.id}$`), { timeout: 15_000 });
+    await expect(page).toHaveURL(new RegExp(`/community/${post.id}$`), { timeout: 15_000 });
     await expect(page.getByRole('dialog').getByRole('heading', { name: post.title })).toBeVisible({
       timeout: 15_000,
     });
@@ -208,7 +208,7 @@ test.describe('mod.community · URL única por post', () => {
     const alumno = await createOnboardedAlumno(stamp);
     await injectAlumnoSession(page, alumno);
 
-    await page.goto('/espacios/general');
+    await page.goto('/spaces/general');
     await expect(page.getByText(post.title).first()).toBeVisible({ timeout: 15_000 });
     await page.getByText(post.title).first().click();
 
@@ -216,9 +216,9 @@ test.describe('mod.community · URL única por post', () => {
     await expect(dialog.getByRole('heading', { name: post.title })).toBeVisible({
       timeout: 10_000,
     });
-    await expect(page).toHaveURL(new RegExp(`/comunidad/${post.id}$`));
+    await expect(page).toHaveURL(new RegExp(`/community/${post.id}$`));
 
     await dialog.getByRole('button', { name: 'Cerrar' }).click();
-    await expect(page).toHaveURL(new RegExp('/espacios/general$'));
+    await expect(page).toHaveURL(new RegExp('/spaces/general$'));
   });
 });

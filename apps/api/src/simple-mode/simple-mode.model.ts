@@ -50,7 +50,7 @@ export interface StartHereView {
   /** Curso al que lleva el paso 2 (el de la oferta, o el primero del aula). */
   firstCourseId: string | null;
   steps: Array<{ id: StepId; done: boolean }>;
-  /** Ruta del enlace de venta (`/catalogo/<slug>` o `/unete`) cuando ya está publicado. */
+  /** Ruta del enlace de venta (`/catalog/<slug>` o `/join`) cuando ya está publicado. */
   salePath: string | null;
   sales: { count: number; firstSaleAt: string | null };
   /** Personas del aula que no son del equipo (invitadas o ya dentro). */

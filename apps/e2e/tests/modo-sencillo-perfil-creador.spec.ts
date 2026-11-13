@@ -163,7 +163,7 @@ test('modo sencillo: la creadora se presenta (foto, nombre, bio) antes del alta 
   await page.getByRole('button', { name: 'Continue to my academy' }).click();
 
   // 5. El alta en 3 preguntas no vuelve a pedir nada del perfil.
-  await page.waitForURL(/\/bienvenida/, { timeout: 30_000 });
+  await page.waitForURL(/\/welcome/, { timeout: 30_000 });
   await expect(page.getByText('Question 1 of 3')).toBeVisible();
   await expect(page.locator('input[type="file"]')).toHaveCount(0);
   await expect(page.getByLabel(/Profile name/)).toHaveCount(0);
@@ -181,7 +181,7 @@ test('modo sencillo: la creadora se presenta (foto, nombre, bio) antes del alta 
   await page.getByRole('button', { name: 'Next' }).click();
   await page.getByLabel('Price').fill('49');
   await page.getByRole('button', { name: 'Create my academy' }).click();
-  await page.waitForURL(/\/empieza/, { timeout: 30_000 });
+  await page.waitForURL(/\/start/, { timeout: 30_000 });
   await expect(page.getByTestId('empieza-aqui')).toBeVisible();
 
   // 6. Su foto en la cabecera; «Empieza aquí» tampoco pide el perfil.
@@ -193,7 +193,7 @@ test('modo sencillo: la creadora se presenta (foto, nombre, bio) antes del alta 
 
   // 7. En la comunidad, su foto junto a su post de bienvenida (no solo en la
   //    caja de escribir, que también pinta a quien mira).
-  await page.goto(`${tenant.base}/comunidad`);
+  await page.goto(`${tenant.base}/community`);
   const post = page.getByRole('button').filter({ hasText: 'Welcome to Morning Pour' }).first();
   await expect(post).toBeVisible({ timeout: 20_000 });
   await expect(post.locator(`img[src="${yo.avatarUrl}"]`).first()).toHaveAttribute(
@@ -285,14 +285,14 @@ test('control: una sesión ya abierta de la creadora sin perfil entra por el per
   });
 
   // Por el gate del shell: perfil antes que alta.
-  await page.goto(`${tenant.base}/empieza`);
+  await page.goto(`${tenant.base}/start`);
   await page.waitForURL(/\/onboarding/, { timeout: 30_000 });
   await expect(
     page.getByRole('heading', { name: 'Introduce yourself to your students' }),
   ).toBeVisible();
 
   // Abriendo el alta directamente: también al perfil.
-  await page.goto(`${tenant.base}/bienvenida`);
+  await page.goto(`${tenant.base}/welcome`);
   await page.waitForURL(/\/onboarding/, { timeout: 30_000 });
   await expect(page.getByText('Question 1 of 3')).toHaveCount(0);
 
@@ -305,7 +305,7 @@ test('control: una sesión ya abierta de la creadora sin perfil entra por el per
       if (document.querySelector('[data-testid^="agente-ia-"]')) w.__panelAgente = true;
     }).observe(document, { childList: true, subtree: true });
   });
-  await page.goto(`${tenant.base}/formador/cursos`);
+  await page.goto(`${tenant.base}/studio/courses`);
   await page.waitForURL(/\/onboarding/, { timeout: 30_000 });
   await expect(
     page.getByRole('heading', { name: 'Introduce yourself to your students' }),

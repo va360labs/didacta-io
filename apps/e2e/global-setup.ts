@@ -253,7 +253,7 @@ async function prepareAdmin(
   assertPoliticaMfaCoincide(session, email, false);
   const token = session.tokens.accessToken;
   await completeOnboarding(token, baseUrl);
-  // El asistente de ACADEMIA (`/bienvenida`, alpha.112) es otro gate y va
+  // El asistente de ACADEMIA (`/welcome`, alpha.112) es otro gate y va
   // ANTES que el de perfil: sin cerrarlo, todo spec de UI de admin rebota.
   await completeAcademyOnboarding(token, baseUrl);
   return token;

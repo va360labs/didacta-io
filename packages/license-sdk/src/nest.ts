@@ -48,7 +48,7 @@ export interface LicenseModuleOptions {
   key?: string | null;
   /**
    * Fallback async cuando no hay key ni en `key` ni en `keyEnv`. Pensado para
-   * leer de `instance_setting` (panel `/admin/licencia`) sin que el SDK
+   * leer de `instance_setting` (panel `/admin/license`) sin que el SDK
    * dependa de Prisma — el caller (apps/api) inyecta el resuelto vía
    * `forRootAsync`. El resultado se carga con `source: 'admin-panel'`.
    */

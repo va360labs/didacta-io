@@ -3,15 +3,15 @@
  * de Stripe FIRMADOS (sin Stripe real, patrón membership-trial):
  *
  *  1. Admin activa la membresía + el programa de referidos (30 %, sin mínimo).
- *  2. Un miembro (referidor) obtiene su enlace /unete?ref=CODE.
- *  3. Visita anónima a /unete?ref → clic registrado + código persistido.
+ *  2. Un miembro (referidor) obtiene su enlace /join?ref=CODE.
+ *  3. Visita anónima a /join?ref → clic registrado + código persistido.
  *  4. checkout.session.completed con referralCode en metadata → alta del
  *     comprador + atribución (bridge, vía outbox).
  *  5. invoice.paid de 9,90 € → comisión PENDING de 2,97 € (30 %).
  *  6. Reintento del webhook y AUTO-referido → no duplican ni atribuyen.
  *  7. Admin aprueba la comisión y registra la liquidación (referencia externa)
  *     → PAID, visible para el miembro.
- *  8. UI: /referidos (miembro) y /admin/referidos (admin) muestran datos reales.
+ *  8. UI: /referrals (miembro) y /admin/referrals (admin) muestran datos reales.
  *
  * Requiere el backend con SUBSCRIPTIONS_WEBHOOK_SECRET=<E2E_STRIPE_WEBHOOK_SECRET>.
  */
@@ -138,13 +138,13 @@ test.describe('Referidos — flujo completo (webhooks Stripe firmados)', () => {
     expect(me.status, 'GET /modules/referrals/me').toBe(200);
     const code = me.body.code;
     expect(code).toMatch(/^[a-z2-9]{8}$/);
-    expect(me.body.url).toContain(`/unete?ref=${code}`);
+    expect(me.body.url).toContain(`/join?ref=${code}`);
 
     const stats = async (): Promise<MemberStats> =>
       (await api<MemberStats>('/modules/referrals/me/stats', { bearer: referrerToken })).body;
 
-    // ── 3. Visita anónima a /unete?ref=CODE: clic + persistencia client-side ──
-    await page.goto(`/unete?ref=${code}`);
+    // ── 3. Visita anónima a /join?ref=CODE: clic + persistencia client-side ──
+    await page.goto(`/join?ref=${code}`);
     await expect
       .poll(async () => (await stats()).clicks, { timeout: 20_000 })
       .toBeGreaterThanOrEqual(1);
@@ -276,7 +276,7 @@ test.describe('Referidos — flujo completo (webhooks Stripe firmados)', () => {
     expect(payout.body.totalCents).toBe(297);
     await expect.poll(async () => (await stats()).totals.paidCents, { timeout: 10_000 }).toBe(297);
 
-    // ── 7. UI del miembro: /referidos con enlace, altas y pagado ──
+    // ── 7. UI del miembro: /referrals con enlace, altas y pagado ──
     await page.goto('/signin');
     await injectSession(page, {
       accessToken: referrerToken,
@@ -292,7 +292,7 @@ test.describe('Referidos — flujo completo (webhooks Stripe firmados)', () => {
         onboardingCompletedAt: new Date().toISOString(),
       },
     });
-    await page.goto('/referidos');
+    await page.goto('/referrals');
     await expect(page.getByRole('heading', { name: 'Referidos' })).toBeVisible({
       timeout: 15_000,
     });
@@ -308,7 +308,7 @@ test.describe('Referidos — flujo completo (webhooks Stripe firmados)', () => {
     await expect(page.getByTestId('referrals-promo-button')).toBeVisible();
     await expect(page.getByTestId('referrals-promo-button')).toHaveText('Plan de Referidos 30%');
 
-    // ── 8. UI del admin: /admin/referidos con config y ranking ──
+    // ── 8. UI del admin: /admin/referrals con config y ranking ──
     const adminSession = await (async () => {
       const { signin } = await import('../helpers/api');
       return signin({
@@ -331,7 +331,7 @@ test.describe('Referidos — flujo completo (webhooks Stripe firmados)', () => {
         onboardingCompletedAt: new Date().toISOString(),
       },
     });
-    await page.goto('/admin/referidos');
+    await page.goto('/admin/referrals');
     await expect(page.getByRole('heading', { name: 'Programa de referidos' })).toBeVisible({
       timeout: 15_000,
     });

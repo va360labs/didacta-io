@@ -5,8 +5,8 @@
 
 /// Extension point del módulo `mod.certificates` hacia el core.
 ///
-/// El catálogo agrega 2 sidebar items: `/mis-certificados` (alumno,
-/// grupo Aprendizaje) y `/formador/certificados/templates` (formador).
+/// El catálogo agrega 2 sidebar items: `/my-certificates` (alumno,
+/// grupo Aprendizaje) y `/studio/certificates/templates` (formador).
 
 import type { ModuleWebExtension } from '@/lib/module-registry';
 
@@ -15,13 +15,13 @@ export const certificatesExtension: ModuleWebExtension = {
   sidebarItems: [
     {
       group: 'Aprendizaje',
-      href: '/mis-certificados',
+      href: '/my-certificates',
       label: 'Mis certificados',
       icon: 'award',
     },
     {
       group: 'Formador',
-      href: '/formador/certificados/templates',
+      href: '/studio/certificates/templates',
       label: 'Plantillas certificado',
       icon: 'award',
       requiresRole: 'formador',

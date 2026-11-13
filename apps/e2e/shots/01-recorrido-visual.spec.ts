@@ -135,9 +135,9 @@ test('recorrido visual · 22 capturas', async ({ browser }) => {
   const adminToken = await readAccessToken(admin);
   await setProfileLocale(adminToken);
 
-  // El asistente de puesta en marcha de la academia (`/bienvenida`, alpha.112)
+  // El asistente de puesta en marcha de la academia (`/welcome`, alpha.112)
   // se cierra por API: su gate va ANTES que el de perfil y sin esto el
-  // recorrido rebota a `/bienvenida` en la primera pantalla del panel.
+  // recorrido rebota a `/welcome` en la primera pantalla del panel.
   await completeAcademyOnboarding(adminToken);
 
   // ──────────────────────────────────────────────────────── 2 · onboarding ──
@@ -208,7 +208,7 @@ test('recorrido visual · 22 capturas', async ({ browser }) => {
   await brandingSave.click();
 
   // ───────────────────────────────────────────────────────────── 5 · curso ──
-  await admin.goto('/formador/cursos/nuevo');
+  await admin.goto('/studio/courses/new');
   await expect(admin.locator('#title')).toBeVisible({ timeout: 30_000 });
   await admin.locator('#title').fill(DEMO.course.title);
   await admin.locator('#category').fill(DEMO.course.category);
@@ -218,7 +218,7 @@ test('recorrido visual · 22 capturas', async ({ browser }) => {
   await shot(admin, WALKTHROUGH, '08-curso-nuevo');
 
   await admin.getByRole('button', { name: t('playersContenido', 'newCourse.submit') }).click();
-  await admin.waitForURL(/\/formador\/cursos\/[0-9a-f-]{10,}/, { timeout: 30_000 });
+  await admin.waitForURL(/\/studio\/courses\/[0-9a-f-]{10,}/, { timeout: 30_000 });
   const courseId = admin.url().split('/').pop()!;
 
   // Sección + lección por la interfaz: la 09 retrata justo el alta de la lección.
@@ -282,7 +282,7 @@ test('recorrido visual · 22 capturas', async ({ browser }) => {
   });
 
   // Catálogo público de venta: el curso no tiene precio, así que está vacío.
-  await publicPage.goto('/catalogo');
+  await publicPage.goto('/catalog');
   await assertLocale(publicPage, LOCALE);
   await shot(publicPage, WALKTHROUGH, '13-catalogo-publico');
 
@@ -301,7 +301,7 @@ test('recorrido visual · 22 capturas', async ({ browser }) => {
   });
   await mailpitClear();
 
-  await admin.goto('/admin/usuarios/invitar');
+  await admin.goto('/admin/users/invite');
   await expect(admin.locator('#email')).toBeVisible({ timeout: 30_000 });
   await admin.locator('#email').fill(DEMO.alumna.email);
   await admin.locator('#name').fill(DEMO.alumna.name);
@@ -310,7 +310,7 @@ test('recorrido visual · 22 capturas', async ({ browser }) => {
     annotations: [{ target: inviteCta, label: t('adminUsuarios', 'invite.submit') }],
   });
   await inviteCta.click();
-  await admin.waitForURL(/\/admin\/usuarios/, { timeout: 30_000 });
+  await admin.waitForURL(/\/admin\/users/, { timeout: 30_000 });
 
   const inviteMail = await mailpitWaitFor(DEMO.alumna.email);
   const resetToken = extractResetToken(inviteMail);
@@ -350,12 +350,12 @@ test('recorrido visual · 22 capturas', async ({ browser }) => {
     bearer: alumnaSession.tokens.accessToken,
   }).catch(() => undefined);
 
-  await alumna.goto('/cursos');
+  await alumna.goto('/courses');
   await expect(alumna.getByText(DEMO.course.title)).toBeVisible({ timeout: 30_000 });
   await assertLocale(alumna, LOCALE);
   await shot(alumna, WALKTHROUGH, '16-alumna-catalogo');
 
-  await alumna.goto(`/cursos/${DEMO.course.slug}`);
+  await alumna.goto(`/courses/${DEMO.course.slug}`);
   const codeInput = alumna.locator('#code');
   await expect(codeInput).toBeVisible({ timeout: 30_000 });
   await codeInput.fill(invitationCode);
@@ -401,7 +401,7 @@ test('recorrido visual · 22 capturas', async ({ browser }) => {
     annotations: [{ target: downloadCert, label: t('alumnoAprendizaje', 'downloadCertificate') }],
   });
 
-  await alumna.goto('/mis-certificados');
+  await alumna.goto('/my-certificates');
   const certNumber = alumna.getByText(/^[A-Z]{2}-\d{4}-\d{6}$/).first();
   await expect(certNumber).toBeVisible({ timeout: 30_000 });
   await shot(alumna, WALKTHROUGH, '21-alumna-mis-certificados', {
@@ -409,7 +409,7 @@ test('recorrido visual · 22 capturas', async ({ browser }) => {
   });
 
   // ──────────────────────────────────────────────────────── 9 · licencia ──
-  await admin.goto('/admin/licencia');
+  await admin.goto('/admin/license');
   await expect(admin.getByTestId('license-status-banner')).toBeVisible({ timeout: 30_000 });
   await assertLocale(admin, LOCALE);
   await shot(admin, WALKTHROUGH, '22-admin-licencia');

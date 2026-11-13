@@ -37,7 +37,7 @@ import { resolvePublicHost } from '../../common/resolve-public-host';
  * Endpoints del módulo mod.referrals.
  *
  * - Miembro (JWT): su código/enlace y sus stats.
- * - Público (`POST track`): registro de clics de /unete?ref= — tenant por
+ * - Público (`POST track`): registro de clics de /join?ref= — tenant por
  *   Host, sin sesión (el visitante aún no tiene cuenta). Best-effort.
  * - Admin (JWT + rol): config del programa, comisiones, referidores,
  *   aprobaciones/revocaciones y liquidaciones.
@@ -116,13 +116,13 @@ export class ReferralsController {
   @ApiBearerAuth()
   @ApiOperation({
     summary:
-      'Código de referido del usuario (creándolo si no existe) y su enlace completo a /unete. 404 si el programa está inactivo; 403 si exige membresía activa y no la tiene.',
+      'Código de referido del usuario (creándolo si no existe) y su enlace completo a /join. 404 si el programa está inactivo; 403 si exige membresía activa y no la tiene.',
   })
   async me(@CurrentUser() user: SessionClaims | undefined, @Req() req: FastifyRequest) {
     const u = this.requireUser(user);
     const { code } = await this.registry.getReferralsService().getOrCreateCode(u.tenantId, u.sub);
     const base = await this.tenantResolver.resolveTenantWebBaseUrl(u.tenantId, req);
-    return { code, url: `${base}/unete?ref=${encodeURIComponent(code)}` };
+    return { code, url: `${base}/join?ref=${encodeURIComponent(code)}` };
   }
 
   @Post('me/terms')
@@ -242,7 +242,7 @@ export class ReferralsController {
   @HttpCode(200)
   @ApiOperation({
     summary:
-      'Registra un clic de /unete?ref=CODE (tenant por Host, dedupe por código+día+IP). Best-effort: nunca falla por código inválido o programa inactivo.',
+      'Registra un clic de /join?ref=CODE (tenant por Host, dedupe por código+día+IP). Best-effort: nunca falla por código inválido o programa inactivo.',
   })
   async track(
     @Req() req: FastifyRequest,

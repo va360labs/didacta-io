@@ -166,7 +166,7 @@ interface OnboardingStatus {
  * TODA ruta autenticada a `/onboarding` mientras `onboardingCompletedAt` sea
  * falsy, y los usuarios que siembra `seed.ts` (y los que los specs crean con
  * `signup`) nacen con el campo a null. Es la causa única de la mayoría de los
- * fallos que parecían de producto: el test navegaba a `/comunidad` y acababa
+ * fallos que parecían de producto: el test navegaba a `/community` y acababa
  * en el asistente.
  *
  * Idempotente: si ya estaba cerrado devuelve el timestamp existente sin
@@ -192,10 +192,10 @@ export async function completeOnboarding(bearer: string, baseUrl?: string): Prom
 }
 
 /**
- * Cierra el asistente de puesta en marcha de la ACADEMIA (`/bienvenida`,
+ * Cierra el asistente de puesta en marcha de la ACADEMIA (`/welcome`,
  * alpha.112+). Es un gate DISTINTO del onboarding de perfil y va ANTES: el
  * shell manda a cualquier admin con este asistente sin completar a
- * `/bienvenida`, así que sin este paso todo spec de UI que navegue como admin
+ * `/welcome`, así que sin este paso todo spec de UI que navegue como admin
  * rebota al asistente y falla con síntomas que parecen de producto — la misma
  * clase de degradación que ya costó una sesión con el onboarding de perfil.
  *

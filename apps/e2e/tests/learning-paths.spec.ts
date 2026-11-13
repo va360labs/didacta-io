@@ -271,7 +271,7 @@ test.describe('Rutas de aprendizaje — lifecycle (UC-17)', () => {
 
   test('formador archiva la ruta → ya no aparece en listado público', async () => {
     const { body: formadorPaths } = await api<Array<{ id: string; title: string }>>(
-      `${PATHS_BASE}/formador`,
+      `${PATHS_BASE}/studio`,
       { bearer: adminToken },
     );
     const path = (formadorPaths as Array<{ id: string; title: string }>).find((p) =>
@@ -309,7 +309,7 @@ test.describe('Rutas de aprendizaje — lifecycle (UC-17)', () => {
 
   test('formador accede al panel y ve rutas de todos los estados', async () => {
     const { status, body } = await api<Array<{ title: string; status: string }>>(
-      `${PATHS_BASE}/formador`,
+      `${PATHS_BASE}/studio`,
       { bearer: adminToken },
     );
     expect(status).toBe(200);
@@ -320,7 +320,7 @@ test.describe('Rutas de aprendizaje — lifecycle (UC-17)', () => {
   // ─── 12. Alumno no puede acceder al panel formador ───────────────────────────
 
   test('alumno sin rol editor recibe 403 al acceder al panel formador', async () => {
-    const { status } = await api(`${PATHS_BASE}/formador`, { bearer: alumnoToken });
+    const { status } = await api(`${PATHS_BASE}/studio`, { bearer: alumnoToken });
     expect(status).toBe(403);
   });
 });

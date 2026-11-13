@@ -7,12 +7,12 @@
 
 /// Sección de administración `/admin/emails` — personalización de todos los
 /// emails y notificaciones que envía la plataforma. Antes vivía como tab
-/// "Plantillas" de /admin/configuracion y solo cubría las keys del hub; en
+/// "Plantillas" de /admin/settings y solo cubría las keys del hub; en
 /// alpha.83 se consolidó aquí (regla #5) sobre el catálogo completo, que
 /// incluye también los emails transaccionales (reset de contraseña, OTP,
 /// bienvenidas, membresía, avisos de renovación…).
 ///
-/// La configuración del TRANSPORTE (SMTP) sigue en /admin/configuracion,
+/// La configuración del TRANSPORTE (SMTP) sigue en /admin/settings,
 /// tab "Notificaciones": es infraestructura, no contenido.
 
 import Link from 'next/link';
@@ -28,7 +28,7 @@ export default function AdminEmailsPage() {
         <p className="mt-1 text-sm text-text-muted">
           {t.rich('emails.subtitle', {
             link: (chunks) => (
-              <Link href="/admin/configuracion" className="text-brand-700 hover:underline">
+              <Link href="/admin/settings" className="text-brand-700 hover:underline">
                 {chunks}
               </Link>
             ),

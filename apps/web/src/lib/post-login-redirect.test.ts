@@ -19,8 +19,8 @@ function stubSessionStorage() {
 
 describe('sanitizeInternalPath', () => {
   it('acepta rutas internas con query', () => {
-    expect(sanitizeInternalPath('/comunidad/abc-123')).toBe('/comunidad/abc-123');
-    expect(sanitizeInternalPath('/comunidad/abc?comment=c1')).toBe('/comunidad/abc?comment=c1');
+    expect(sanitizeInternalPath('/community/abc-123')).toBe('/community/abc-123');
+    expect(sanitizeInternalPath('/community/abc?comment=c1')).toBe('/community/abc?comment=c1');
   });
 
   it('rechaza URLs externas y protocol-relative (open redirect)', () => {
@@ -37,7 +37,7 @@ describe('sanitizeInternalPath', () => {
     expect(sanitizeInternalPath('/\r\n//evil.test')).toBeNull();
     // Dot-segment que esquivaría el filtro anti-bucle textual
     expect(sanitizeInternalPath('/./signin')).toBeNull();
-    expect(sanitizeInternalPath('/comunidad/../signin')).toBeNull();
+    expect(sanitizeInternalPath('/community/../signin')).toBeNull();
   });
 
   it('rechaza pantallas de auth y la raíz (evita bucles y redirects vacíos)', () => {
@@ -58,8 +58,8 @@ describe('rememberIntendedPath / consumeIntendedPath', () => {
   });
 
   it('guarda y consume una sola vez', () => {
-    rememberIntendedPath('/comunidad/abc-123');
-    expect(consumeIntendedPath()).toBe('/comunidad/abc-123');
+    rememberIntendedPath('/community/abc-123');
+    expect(consumeIntendedPath()).toBe('/community/abc-123');
     expect(consumeIntendedPath()).toBeNull();
   });
 
@@ -69,13 +69,13 @@ describe('rememberIntendedPath / consumeIntendedPath', () => {
   });
 
   it('no pisa un destino válido con uno inválido', () => {
-    rememberIntendedPath('/comunidad/abc');
+    rememberIntendedPath('/community/abc');
     rememberIntendedPath('/signin');
-    expect(consumeIntendedPath()).toBe('/comunidad/abc');
+    expect(consumeIntendedPath()).toBe('/community/abc');
   });
 
   it('clearIntendedPath borra el destino sin consumirlo (logout)', () => {
-    rememberIntendedPath('/comunidad/abc');
+    rememberIntendedPath('/community/abc');
     clearIntendedPath();
     expect(consumeIntendedPath()).toBeNull();
   });

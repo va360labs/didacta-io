@@ -8,7 +8,7 @@ import type { Certificate } from '@/modules/certificates';
 /**
  * URL del flujo "Add to Profile" de LinkedIn pre-rellenado con los datos del
  * certificado. `certUrl` apunta a la página pública de verificación
- * (`/verificar/<id>`), así la credencial en LinkedIn es verificable.
+ * (`/verify/<id>`), así la credencial en LinkedIn es verificable.
  * `organizationName` es el nombre del tenant emisor (resuelto por host).
  * `courseName` viene ya resuelto por el caller (con su fallback traducido).
  */
@@ -24,7 +24,7 @@ export function linkedInAddUrl(
     name: courseName,
     organizationName,
     certId: cert.number,
-    certUrl: `${origin}/verificar/${cert.id}`,
+    certUrl: `${origin}/verify/${cert.id}`,
   });
   if (!Number.isNaN(issued.getTime())) {
     params.set('issueYear', String(issued.getFullYear()));

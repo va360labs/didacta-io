@@ -245,7 +245,7 @@ export const HUB_TEMPLATE_DEFAULTS: Record<string, TemplateDef> = {
   },
   // Clases en directo (mod.zoom-live, ADR-017): confirmación de inscripción y
   // aviso de cancelación a inscritos. El enlace de la clase viaja en
-  // {{classUrl}} — el joinUrl de Zoom NUNCA va por email: se ve en /clase/[id]
+  // {{classUrl}} — el joinUrl de Zoom NUNCA va por email: se ve en /live/[id]
   // solo estando inscrito.
   'zoom.class.registration.confirmed': {
     subject: 'Inscripción confirmada: {{topic}}',
@@ -263,7 +263,7 @@ export const HUB_TEMPLATE_DEFAULTS: Record<string, TemplateDef> = {
   },
 
   // Encuestas (mod.surveys, bloque 2): invitación anónima al terminar cada
-  // clase en directo. El enlace apunta a la página de la clase (/clase/[id]),
+  // clase en directo. El enlace apunta a la página de la clase (/live/[id]),
   // donde vive el panel de la encuesta.
   'surveys.post_class.invitation': {
     subject: 'Valora la clase: {{topic}}',
@@ -785,7 +785,7 @@ const HUB_TEMPLATE_META: Record<
   'community.broadcast': {
     name: 'Aviso de la comunidad (broadcast)',
     description:
-      'Aviso masivo enviado desde /admin/avisos. El asunto y el cuerpo los escribe el admin al enviarlo.',
+      'Aviso masivo enviado desde /admin/broadcasts. El asunto y el cuerpo los escribe el admin al enviarlo.',
     category: 'community',
     channels: ['IN_APP', 'EMAIL'],
     variables: [
@@ -897,7 +897,7 @@ const HUB_TEMPLATE_META: Record<
     variables: [
       { name: 'topic', description: 'Título de la clase' },
       { name: 'startsAt', description: 'Fecha y hora de inicio formateadas' },
-      { name: 'classUrl', description: 'Enlace a la página de la clase (/clase/…)' },
+      { name: 'classUrl', description: 'Enlace a la página de la clase (/live/…)' },
       { name: 'calendarGoogleUrl', description: 'Enlace para añadir la clase a Google Calendar' },
       {
         name: 'calendarIcsUrl',
@@ -916,7 +916,7 @@ const HUB_TEMPLATE_META: Record<
       { name: 'topic', description: 'Título de la clase' },
       { name: 'startsAt', description: 'Cuándo empieza, en la zona horaria del formador' },
       { name: 'hoursBefore', description: 'Horas de antelación del aviso (2 por defecto)' },
-      { name: 'classUrl', description: 'Enlace a la página de la clase (/clase/…)' },
+      { name: 'classUrl', description: 'Enlace a la página de la clase (/live/…)' },
       { name: 'calendarGoogleUrl', description: 'Enlace para añadir la clase a Google Calendar' },
       {
         name: 'calendarIcsUrl',
@@ -944,7 +944,7 @@ const HUB_TEMPLATE_META: Record<
     channels: ['IN_APP', 'EMAIL'],
     variables: [
       { name: 'topic', description: 'Título de la clase' },
-      { name: 'surveyUrl', description: 'Enlace a la página de la clase (/clase/…)' },
+      { name: 'surveyUrl', description: 'Enlace a la página de la clase (/live/…)' },
       { name: 'tenantName', description: 'Nombre de la plataforma' },
     ],
   },
@@ -956,7 +956,7 @@ const HUB_TEMPLATE_META: Record<
     channels: ['IN_APP', 'EMAIL'],
     variables: [
       { name: 'topic', description: 'Título de la clase' },
-      { name: 'surveyUrl', description: 'Enlace a la página de la clase (/clase/…)' },
+      { name: 'surveyUrl', description: 'Enlace a la página de la clase (/live/…)' },
       { name: 'tenantName', description: 'Nombre de la plataforma' },
     ],
   },

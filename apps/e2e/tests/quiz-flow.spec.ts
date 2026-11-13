@@ -53,7 +53,7 @@ test.describe('mod.assessments — flujo del alumno', () => {
     // 1) Catálogo y entrada al curso, matrícula por código de invitación (el
     // botón "Matricularme" de matrícula libre fue eliminado globalmente, ver
     // inscribe-by-api.spec.ts).
-    await page.goto(`/cursos/${course.slug}`);
+    await page.goto(`/courses/${course.slug}`);
     await page.getByLabel(/código de invitación/i).fill(invitation.code);
     await page.getByRole('button', { name: 'Canjear código' }).click();
     await expect(page.getByText('Tu progreso')).toBeVisible({ timeout: 15_000 });

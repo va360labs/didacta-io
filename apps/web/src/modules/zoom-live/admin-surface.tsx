@@ -5,7 +5,7 @@
  * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
  */
 
-/// Tab "Aula virtual" de /admin/configuracion: formulario de credenciales Zoom
+/// Tab "Aula virtual" de /admin/settings: formulario de credenciales Zoom
 /// Server-to-Server del módulo mod.zoom-live.
 ///
 /// mod.zoom-live es un módulo BUILT-IN (no se instala por ZIP del marketplace),

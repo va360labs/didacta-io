@@ -20,7 +20,7 @@ import { TokenService, type SessionClaims, type SignedTokens } from './token.ser
  *  - Suspender a un usuario borraba sus sesiones… que no existían. El endpoint
  *    prometía «invalida sus sessions activas» y en la práctica no echaba a
  *    nadie: el suspendido seguía operando hasta que su access token caducaba.
- *  - «Sesiones activas» en /cuenta salía siempre vacío y «cerrar sesión» no
+ *  - «Sesiones activas» en /account salía siempre vacío y «cerrar sesión» no
  *    hacía nada.
  *
  * Emitir el token y registrar la sesión pasan a ser la MISMA operación, para

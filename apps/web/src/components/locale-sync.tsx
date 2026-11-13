@@ -12,7 +12,7 @@
  *  1. Registra el locale activo y la timezone del perfil en el singleton de
  *     `user-prefs` para que los helpers de `@/lib/i18n/format` no necesiten
  *     parámetros en client components.
- *  2. Tras login (o tras guardar el idioma en /cuenta u onboarding, que ya
+ *  2. Tras login (o tras guardar el idioma en /account u onboarding, que ya
  *     disparan `didacta:session-updated`), si `profile.locale` difiere de la
  *     cookie `didacta_locale`, la reescribe y hace `router.refresh()` — los
  *     RSC se re-renderizan con `<html lang>` y catálogo nuevos, sin recarga

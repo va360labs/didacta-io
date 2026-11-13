@@ -189,7 +189,7 @@ export class StorageController {
     const requestedKey = `tenants/${user.tenantId}/uploads/${Date.now()}-${unguessable}-${safeName || 'image'}`;
 
     // Adapter per-tenant: si el tenant configuró storage S3 propio en
-    // /admin/configuracion, usamos su bucket. Si no, fallback al adapter
+    // /admin/settings, usamos su bucket. Si no, fallback al adapter
     // global (env STORAGE_DRIVER) — compat con tenants que no migraron.
     const storage = await this.factory.getStorageForTenant(user.tenantId);
 

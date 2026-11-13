@@ -6,7 +6,7 @@ import { injectSession } from '../helpers/auth';
  * Vista previa de cursos para editores (profesor/admin) SIN publicarlos.
  *
  * Un curso DRAFT no es visible para alumnos, pero un editor debe poder abrir
- * `/cursos/<slug>` y ver el contenido en modo vista previa (sin matrícula ni
+ * `/courses/<slug>` y ver el contenido en modo vista previa (sin matrícula ni
  * tracking de progreso).
  */
 test.describe('Vista previa de curso (editor, sin publicar)', () => {
@@ -64,7 +64,7 @@ test.describe('Vista previa de curso (editor, sin publicar)', () => {
         mfaEnabled: true,
       },
     });
-    await page.goto(`/cursos/${slug}`);
+    await page.goto(`/courses/${slug}`);
 
     // Banner de vista previa + contenido de la lección visibles (sin publicar).
     await expect(page.getByText('Vista previa', { exact: false }).first()).toBeVisible({

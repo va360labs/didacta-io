@@ -29,7 +29,7 @@ describe('firstAccessDoor', () => {
 
   it('modo sencillo: con el perfil hecho, sigue al alta en 3 preguntas', () => {
     expect(firstAccessDoor(estado({ administra: true, sencillo: true, perfilHecho: true }))).toBe(
-      '/bienvenida',
+      '/welcome',
     );
   });
 
@@ -48,7 +48,7 @@ describe('firstAccessDoor', () => {
   });
 
   it('modo completo: el orden de siempre, primero la academia (la foto es obligatoria)', () => {
-    expect(firstAccessDoor(estado({ administra: true }))).toBe('/bienvenida');
+    expect(firstAccessDoor(estado({ administra: true }))).toBe('/welcome');
     expect(firstAccessDoor(estado({ administra: true, academiaHecha: true }))).toBe('/onboarding');
     expect(
       firstAccessDoor(estado({ administra: true, academiaHecha: true, perfilHecho: true })),
@@ -87,8 +87,8 @@ describe('administra', () => {
 });
 
 describe('afterProfilePath', () => {
-  it('el creador sigue hacia su academia; el resto, a /inicio', () => {
-    expect(afterProfilePath(true)).toBe('/empieza');
-    expect(afterProfilePath(false)).toBe('/inicio');
+  it('el creador sigue hacia su academia; el resto, a /home', () => {
+    expect(afterProfilePath(true)).toBe('/start');
+    expect(afterProfilePath(false)).toBe('/home');
   });
 });

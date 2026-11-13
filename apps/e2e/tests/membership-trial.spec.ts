@@ -9,7 +9,7 @@
  *  1. checkout.session.completed → sub TRIALING + grupo concedido + enrollment.
  *  2. DRIP DE TRIAL: solo las N primeras lecciones disponibles; el resto
  *     bloqueado server-side (content null + progreso 403 TRIAL_CONTENT_LOCKED).
- *  3. UI: /cuenta muestra la membresía ("En prueba" + Pagar ahora) y el player
+ *  3. UI: /account muestra la membresía ("En prueba" + Pagar ahora) y el player
  *     muestra el candado "Disponible cuando pase el periodo de prueba".
  *  4. FIN DE TRIAL SIN PAGO (invoice.payment_failed) → UNPAID inmediato, SIN
  *     grace → acceso revocado (enrollment CANCELLED, contenido enmascarado).
@@ -253,7 +253,7 @@ test.describe('Membresía — trial completo (webhooks Stripe firmados)', () => 
     });
     expect(trackOk.status).toBe(200);
 
-    // ── 7. UI: /cuenta gestiona la membresía y el player muestra el candado ──
+    // ── 7. UI: /account gestiona la membresía y el player muestra el candado ──
     await page.goto('/signin');
     await injectSession(page, {
       accessToken: buyerToken,
@@ -269,12 +269,12 @@ test.describe('Membresía — trial completo (webhooks Stripe firmados)', () => 
         onboardingCompletedAt: new Date().toISOString(),
       },
     });
-    await page.goto('/cuenta?tab=suscripcion');
+    await page.goto('/account?tab=suscripcion');
     await expect(page.getByText(`Plan E2E ${stamp}`)).toBeVisible({ timeout: 20_000 });
     await expect(page.getByText('En prueba')).toBeVisible();
     await expect(page.getByRole('button', { name: 'Pagar ahora y activar' })).toBeVisible();
 
-    await page.goto(`/cursos/curso-trial-e2e-${stamp}`);
+    await page.goto(`/courses/curso-trial-e2e-${stamp}`);
     // La 3ª lección lleva el candado del trial en el índice.
     await expect(page.getByText('🔒 tras la prueba')).toBeVisible({ timeout: 20_000 });
     await page.getByRole('button', { name: /Lección 3/ }).click();

@@ -3,7 +3,7 @@ import { adminTokenForBootstrap, API_URL, signup } from '../helpers/api';
 import { injectSession } from '../helpers/auth';
 
 /**
- * Panel de calidad del tutor IA (/admin/ia/tutor).
+ * Panel de calidad del tutor IA (/admin/ai/tutor).
  *
  * Cubre los caminos que NO necesitan un proveedor de IA configurado: listado
  * de preguntas y respuestas, autorización, validación y el informe mensual.
@@ -173,7 +173,7 @@ test.describe('Tutor IA · informe mensual (API)', () => {
 });
 
 test.describe('Tutor IA · pantalla del admin', () => {
-  test('/admin/ia/tutor abre con sus tres pestañas', async ({ page, baseURL }) => {
+  test('/admin/ai/tutor abre con sus tres pestañas', async ({ page, baseURL }) => {
     // El login va contra el origen de la web para que el token valga para el
     // backend al que la web proxea de verdad, sea cual sea.
     const signin = await page.request.post(`${baseURL}/api/v1/auth/signin`, {
@@ -200,7 +200,7 @@ test.describe('Tutor IA · pantalla del admin', () => {
       },
     });
 
-    await page.goto('/admin/ia/tutor');
+    await page.goto('/admin/ai/tutor');
 
     await expect(page.getByRole('heading', { name: 'Tutor IA', level: 1 })).toBeVisible();
     await expect(page.getByRole('tab', { name: 'Revisión' })).toBeVisible();

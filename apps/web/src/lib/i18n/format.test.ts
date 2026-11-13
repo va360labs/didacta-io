@@ -89,9 +89,9 @@ describe('formatCents', () => {
 
   /**
    * La regla, escrita en el par de importes con el que se decidió: los dos
-   * lados del programa de referidos (`/referidos` y `/admin/referidos`) pintan
+   * lados del programa de referidos (`/referrals` y `/admin/referrals`) pintan
    * la MISMA comisión, así que tienen que escribirla igual. El `amountLabel`
-   * de `/admin/referidos` conservaba el céntimo cero y es el que se unificó.
+   * de `/admin/referrals` conservaba el céntimo cero y es el que se unificó.
    *
    * NBSP explícito (` `): es lo que mete Intl entre importe y símbolo, y
    * un espacio normal daría un rojo indistinguible a simple vista.

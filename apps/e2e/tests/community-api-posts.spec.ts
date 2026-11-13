@@ -5,7 +5,7 @@
  *  2. Publica por API → el post nace firmado por el DUEÑO de la key, con
  *     `source='api'`, y aparece en el feed de la comunidad.
  *  3. Una key sin el scope recibe 403 (contrato de scopes).
- *  4. Auditoría en el admin: /admin/comunidad/publicaciones-api lista el post
+ *  4. Auditoría en el admin: /admin/community/api-posts lista el post
  *     agrupado por usuario, y la pestaña Documentación de /admin/api-keys lo documenta.
  */
 
@@ -154,7 +154,7 @@ test.describe('Comunidad — publicación por API key', () => {
       },
     });
 
-    await page.goto('/admin/comunidad/publicaciones-api');
+    await page.goto('/admin/community/api-posts');
     await expect(page.getByRole('heading', { name: 'Publicaciones por API' })).toBeVisible({
       timeout: 15_000,
     });

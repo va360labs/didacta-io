@@ -41,8 +41,8 @@ export function buildGroups({
     label: 'Inicio',
     icon: 'home',
     items: [
-      { href: '/comunidad', label: 'Feed de la comunidad', icon: 'globe', exactMatch: true },
-      { href: '/inicio/mi-panel', label: 'Mi panel', icon: 'chart', exactMatch: true },
+      { href: '/community', label: 'Feed de la comunidad', icon: 'globe', exactMatch: true },
+      { href: '/home/dashboard', label: 'Mi panel', icon: 'chart', exactMatch: true },
     ],
   };
 
@@ -51,23 +51,23 @@ export function buildGroups({
     label: 'Aprendizaje',
     icon: 'book',
     // "Rutas de aprendizaje" se ocultó del menú por ahora (mismo criterio que
-    // /grupos en el bloque 9): la ruta /rutas sigue viva y el formador conserva
+    // /groups en el bloque 9): la ruta /paths sigue viva y el formador conserva
     // "Mis rutas", solo desaparece la entrada del alumno.
     items: [
-      { href: '/cursos', label: 'Cursos', icon: 'book' },
-      { href: '/mis-certificados', label: 'Certificados', icon: 'award' },
+      { href: '/courses', label: 'Cursos', icon: 'book' },
+      { href: '/my-certificates', label: 'Certificados', icon: 'award' },
     ],
   };
 
   // ── Agenda ─────────────────────────────────────────────────────────────────
   // Bloque 9: "Eventos en directo" se fusionó con el calendario (pestaña
-  // "Eventos" en /calendario; /eventos redirige allí). El grupo "Grupos" se
-  // ocultó del menú mientras la feature no esté activa — la ruta /grupos sigue
+  // "Eventos" en /calendar; /events redirige allí). El grupo "Grupos" se
+  // ocultó del menú mientras la feature no esté activa — la ruta /groups sigue
   // existiendo, solo desaparece la entrada (un menú vacío es peor que ninguno).
   const agenda: SidebarGroup = {
     label: 'Agenda',
     icon: 'calendar',
-    items: [{ href: '/calendario', label: 'Calendario', icon: 'calendar' }],
+    items: [{ href: '/calendar', label: 'Calendario', icon: 'calendar' }],
   };
 
   // ── Personas ───────────────────────────────────────────────────────────────
@@ -75,12 +75,12 @@ export function buildGroups({
     label: 'Personas',
     icon: 'users',
     items: [
-      { href: '/miembros', label: 'Miembros', icon: 'users' },
+      { href: '/members', label: 'Miembros', icon: 'users' },
       // 'Clasificación' y 'Retos' los aporta la extensión de mod.gamification,
       // así desaparecen si el tenant desactiva el módulo (el /leaderboard
       // anterior era fijo y se quedaba vacío).
-      { href: '/mensajes', label: 'Mensajes', icon: 'messages' },
-      { href: '/referidos', label: 'Referidos', icon: 'sparkles' },
+      { href: '/messages', label: 'Mensajes', icon: 'messages' },
+      { href: '/referrals', label: 'Referidos', icon: 'sparkles' },
     ],
   };
 
@@ -102,10 +102,10 @@ export function buildGroups({
     label: 'Formador',
     icon: 'edit',
     items: [
-      { href: '/formador', label: 'Panel', icon: 'chart', exactMatch: true },
-      { href: '/formador/cursos', label: 'Mis cursos', icon: 'book' },
-      { href: '/formador/rutas', label: 'Mis rutas', icon: 'route' },
-      { href: '/formador/correcciones', label: 'Correcciones', icon: 'check' },
+      { href: '/studio', label: 'Panel', icon: 'chart', exactMatch: true },
+      { href: '/studio/courses', label: 'Mis cursos', icon: 'book' },
+      { href: '/studio/paths', label: 'Mis rutas', icon: 'route' },
+      { href: '/studio/grading', label: 'Correcciones', icon: 'check' },
     ],
   };
 
@@ -134,12 +134,12 @@ export function buildGroups({
  * "General" — un control de navegación disfrazado de sección. Ahora lo pinta
  * el propio sidebar en la cabecera (`SidebarContent.backLink`).
  */
-export const ADMIN_BACK_LINK = { href: '/comunidad', label: 'Volver a la app' } as const;
+export const ADMIN_BACK_LINK = { href: '/community', label: 'Volver a la app' } as const;
 
 /** Rutas del área admin que muestran un badge con el trabajo pendiente. */
 export const ADMIN_BADGE_ROUTES = {
-  memberRequests: '/admin/solicitudes-miembros',
-  arrears: '/admin/impagos',
+  memberRequests: '/admin/member-requests',
+  arrears: '/admin/delinquents',
 } as const;
 
 /**
@@ -192,7 +192,7 @@ export function buildAdminGroups({ isSuperAdmin }: { isSuperAdmin: boolean }): S
     icon: 'chart',
     items: [
       // Las métricas de negocio son la pestaña "Negocio" de este mismo panel
-      // (/admin/metricas redirige allí): dos dashboards competiendo obligaban
+      // (/admin/metrics redirige allí): dos dashboards competiendo obligaban
       // a adivinar cuál abrir.
       { href: '/admin', label: 'Panel', icon: 'chart', exactMatch: true },
     ],
@@ -206,10 +206,10 @@ export function buildAdminGroups({ isSuperAdmin }: { isSuperAdmin: boolean }): S
     label: 'Personas y accesos',
     icon: 'users',
     items: [
-      { href: '/admin/usuarios', label: 'Usuarios y roles', icon: 'users' },
-      { href: '/admin/solicitudes-miembros', label: 'Solicitudes de inscripción', icon: 'user' },
-      { href: '/admin/invitaciones', label: 'Invitaciones', icon: 'mail' },
-      { href: '/admin/grupos-acceso', label: 'Grupos de acceso', icon: 'lock' },
+      { href: '/admin/users', label: 'Usuarios y roles', icon: 'users' },
+      { href: '/admin/member-requests', label: 'Solicitudes de inscripción', icon: 'user' },
+      { href: '/admin/invitations', label: 'Invitaciones', icon: 'mail' },
+      { href: '/admin/access-groups', label: 'Grupos de acceso', icon: 'lock' },
     ],
   };
 
@@ -217,9 +217,9 @@ export function buildAdminGroups({ isSuperAdmin }: { isSuperAdmin: boolean }): S
     label: 'Comunidad',
     icon: 'hash',
     items: [
-      { href: '/admin/comunidad/espacios', label: 'Espacios', icon: 'hash' },
-      { href: '/admin/comunidad/tags', label: 'Tags', icon: 'message' },
-      { href: '/admin/comunidad/publicaciones-api', label: 'Publicaciones API', icon: 'code' },
+      { href: '/admin/community/spaces', label: 'Espacios', icon: 'hash' },
+      { href: '/admin/community/tags', label: 'Tags', icon: 'message' },
+      { href: '/admin/community/api-posts', label: 'Publicaciones API', icon: 'code' },
     ],
   };
 
@@ -230,9 +230,9 @@ export function buildAdminGroups({ isSuperAdmin }: { isSuperAdmin: boolean }): S
     label: 'Contenido',
     icon: 'book',
     items: [
-      { href: '/admin/cursos/categorias', label: 'Categorías de cursos', icon: 'book' },
-      { href: '/admin/competencias', label: 'Competencias', icon: 'award' },
-      { href: '/admin/imagenes', label: 'Imágenes', icon: 'image' },
+      { href: '/admin/courses/categories', label: 'Categorías de cursos', icon: 'book' },
+      { href: '/admin/competencies', label: 'Competencias', icon: 'award' },
+      { href: '/admin/images', label: 'Imágenes', icon: 'image' },
     ],
   };
 
@@ -244,19 +244,19 @@ export function buildAdminGroups({ isSuperAdmin }: { isSuperAdmin: boolean }): S
     label: 'Ingresos',
     icon: 'briefcase',
     items: [
-      { href: '/admin/membresia', label: 'Membresía', icon: 'sparkles' },
+      { href: '/admin/membership', label: 'Membresía', icon: 'sparkles' },
       // Cobros de plataforma (Didacta Cloud): solo si `mod.payouts` está en el
       // registro, que solo pasa con PAYMENTS_PLATFORM_STRIPE_SECRET_KEY. En
       // Community no aparece y los pagos siguen en Configuración → Pagos.
       {
-        href: '/admin/cobros',
+        href: '/admin/payments',
         label: 'Cobros',
         icon: 'briefcase',
         requiresModule: 'mod.payouts',
         strictModule: true,
       },
-      { href: '/admin/impagos', label: 'Impagos', icon: 'alert' },
-      { href: '/admin/referidos', label: 'Referidos', icon: 'trending' },
+      { href: '/admin/delinquents', label: 'Impagos', icon: 'alert' },
+      { href: '/admin/referrals', label: 'Referidos', icon: 'trending' },
     ],
   };
 
@@ -267,7 +267,7 @@ export function buildAdminGroups({ isSuperAdmin }: { isSuperAdmin: boolean }): S
     icon: 'mail',
     items: [
       { href: '/admin/emails', label: 'Emails', icon: 'mail' },
-      { href: '/admin/avisos', label: 'Avisos', icon: 'megaphone' },
+      { href: '/admin/broadcasts', label: 'Avisos', icon: 'megaphone' },
     ],
   };
 
@@ -277,8 +277,8 @@ export function buildAdminGroups({ isSuperAdmin }: { isSuperAdmin: boolean }): S
     icon: 'palette',
     items: [
       { href: '/admin/branding', label: 'Branding', icon: 'palette' },
-      { href: '/admin/dominios', label: 'Dominios propios', icon: 'globe' },
-      { href: '/admin/configuracion', label: 'Configuración', icon: 'cog' },
+      { href: '/admin/domains', label: 'Dominios propios', icon: 'globe' },
+      { href: '/admin/settings', label: 'Configuración', icon: 'cog' },
     ],
   };
 
@@ -292,7 +292,7 @@ export function buildAdminGroups({ isSuperAdmin }: { isSuperAdmin: boolean }): S
       { href: '/admin/api-keys', label: 'Claves API', icon: 'code' },
       { href: '/admin/webhooks', label: 'Webhooks', icon: 'link' },
       { href: '/admin/rate-limit', label: 'Límites de API', icon: 'trending' },
-      { href: '/admin/ia/providers', label: 'Proveedores de IA', icon: 'sparkles' },
+      { href: '/admin/ai/providers', label: 'Proveedores de IA', icon: 'sparkles' },
     ],
   };
 
@@ -303,11 +303,11 @@ export function buildAdminGroups({ isSuperAdmin }: { isSuperAdmin: boolean }): S
     label: 'Seguridad',
     icon: 'shield',
     items: [
-      { href: '/admin/seguridad', label: 'Políticas de acceso', icon: 'shield' },
+      { href: '/admin/security', label: 'Políticas de acceso', icon: 'shield' },
       // Features EE con UI: siempre visibles (patrón EeGate); el backend gatea.
       { href: '/admin/sso', label: 'Identidad (SSO)', icon: 'lock' },
       { href: '/admin/scim', label: 'Aprovisionamiento (SCIM)', icon: 'users' },
-      { href: '/admin/auditoria', label: 'Auditoría', icon: 'eye' },
+      { href: '/admin/audit', label: 'Auditoría', icon: 'eye' },
     ],
   };
 
@@ -334,7 +334,7 @@ export function buildAdminGroups({ isSuperAdmin }: { isSuperAdmin: boolean }): S
       items: [
         { href: '/admin/tenants', label: 'Tenants', icon: 'building' },
         { href: '/admin/marketplace', label: 'Marketplace módulos', icon: 'package' },
-        { href: '/admin/licencia', label: 'Licencia', icon: 'shield' },
+        { href: '/admin/license', label: 'Licencia', icon: 'shield' },
       ],
     });
   }

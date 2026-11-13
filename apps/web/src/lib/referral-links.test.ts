@@ -6,7 +6,7 @@
 import { describe, expect, it } from 'vitest';
 import { buildReferralLinks, readReferralParam } from './referral-links';
 
-const personalUrl = 'https://aula.ejemplo.test/unete?ref=abc23xyz';
+const personalUrl = 'https://aula.ejemplo.test/join?ref=abc23xyz';
 const cursoA = { slug: 'acuarela-desde-cero', title: 'Acuarela desde cero' };
 const cursoB = { slug: 'oleo', title: 'Óleo' };
 
@@ -26,17 +26,17 @@ describe('buildReferralLinks (Invita y gana para todo lo que se vende)', () => {
         courses: [cursoA],
       }),
     ).toEqual({
-      general: 'https://aula.ejemplo.test/catalogo/acuarela-desde-cero?ref=abc23xyz',
+      general: 'https://aula.ejemplo.test/catalog/acuarela-desde-cero?ref=abc23xyz',
       products: [],
       onSale: { membership: false, courses: 1 },
     });
   });
 
-  it('solo la membresía: el general es /unete', () => {
+  it('solo la membresía: el general es /join', () => {
     expect(
       buildReferralLinks({ personalUrl, code: 'abc23xyz', membershipOnSale: true, courses: [] }),
     ).toEqual({
-      general: 'https://aula.ejemplo.test/unete?ref=abc23xyz',
+      general: 'https://aula.ejemplo.test/join?ref=abc23xyz',
       products: [],
       onSale: { membership: true, courses: 0 },
     });
@@ -49,29 +49,29 @@ describe('buildReferralLinks (Invita y gana para todo lo que se vende)', () => {
       membershipOnSale: false,
       courses: [cursoA, cursoB],
     });
-    expect(r.general).toBe('https://aula.ejemplo.test/catalogo?ref=abc23xyz');
+    expect(r.general).toBe('https://aula.ejemplo.test/catalog?ref=abc23xyz');
     expect(r.products).toEqual([
       {
         kind: 'course',
         title: 'Acuarela desde cero',
-        url: 'https://aula.ejemplo.test/catalogo/acuarela-desde-cero?ref=abc23xyz',
+        url: 'https://aula.ejemplo.test/catalog/acuarela-desde-cero?ref=abc23xyz',
       },
       {
         kind: 'course',
         title: 'Óleo',
-        url: 'https://aula.ejemplo.test/catalogo/oleo?ref=abc23xyz',
+        url: 'https://aula.ejemplo.test/catalog/oleo?ref=abc23xyz',
       },
     ]);
   });
 
-  it('membresía y cursos: general a /unete y la membresía la primera de la lista', () => {
+  it('membresía y cursos: general a /join y la membresía la primera de la lista', () => {
     const r = buildReferralLinks({
       personalUrl,
       code: 'abc23xyz',
       membershipOnSale: true,
       courses: [cursoA],
     });
-    expect(r.general).toBe('https://aula.ejemplo.test/unete?ref=abc23xyz');
+    expect(r.general).toBe('https://aula.ejemplo.test/join?ref=abc23xyz');
     expect(r.products.map((p) => p.kind)).toEqual(['membership', 'course']);
     expect(r.products.every((p) => p.url.endsWith('?ref=abc23xyz'))).toBe(true);
   });

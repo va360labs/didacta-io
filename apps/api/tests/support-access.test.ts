@@ -215,7 +215,7 @@ describe('U8 · emitir', () => {
   it('el enlace apunta al aula del cliente y lleva el token escapado', async () => {
     const { service } = makeHarness();
     const issued = await service.grant(ACTOR, TENANT_ID, { reason: MOTIVO }, 'https://acme.test');
-    expect(issued.redeemUrl.startsWith('https://acme.test/soporte/acceso?token=')).toBe(true);
+    expect(issued.redeemUrl.startsWith('https://acme.test/support/access?token=')).toBe(true);
     expect(new URL(issued.redeemUrl).searchParams.get('token')).toBe(issued.token);
   });
 

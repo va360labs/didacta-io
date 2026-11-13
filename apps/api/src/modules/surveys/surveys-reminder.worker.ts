@@ -32,7 +32,7 @@ function reminderDelayHours(): number {
  */
 function classUrl(webBase: string, sessionId: string): string {
   const base = webBase.trim().replace(/\/+$/, '');
-  return base ? `${base}/clase/${sessionId}` : '';
+  return base ? `${base}/live/${sessionId}` : '';
 }
 
 /**

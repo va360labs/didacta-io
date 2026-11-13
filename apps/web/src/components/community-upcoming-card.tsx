@@ -16,7 +16,7 @@ import { formatDate, formatTime } from '@/lib/i18n/format';
 /**
  * Bloque «Próximas citas» de la barra derecha del feed de la comunidad.
  *
- * Adelanta lo que ya vive en `/calendario` para que al abrir la comunidad se
+ * Adelanta lo que ya vive en `/calendar` para que al abrir la comunidad se
  * vea de un vistazo qué hay por delante, sin navegar. Mismas fuentes que el
  * calendario (mod.events + mod.zoom-live) vía `lib/agenda`.
  */
@@ -62,7 +62,7 @@ export function CommunityUpcomingCard() {
         <div className="flex items-center justify-between gap-2">
           <h4 className="font-display text-base font-semibold text-text">{t('upcomingTitle')}</h4>
           <Link
-            href="/calendario"
+            href="/calendar"
             className="text-xs font-medium text-brand-700 hover:underline"
             aria-label={t('seeCalendarAria')}
           >
@@ -122,7 +122,7 @@ export function CommunityUpcomingCard() {
                   // enlazan al calendario, que es donde se gestionan.
                 >
                   <Link
-                    href={(item.href ?? '/calendario?vista=eventos') as never}
+                    href={(item.href ?? '/calendar?vista=eventos') as never}
                     className="block hover:opacity-80"
                   >
                     {inner}

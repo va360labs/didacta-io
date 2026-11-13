@@ -12,7 +12,7 @@ import { injectSession } from '../helpers/auth';
  *  - Contrato del endpoint admin: GET /connections como super_admin → 200 lista.
  *  - Validación: POST /connections con una API key con formato inválido → 400.
  *  - Gate de rol en backend: sin super_admin (token vacío) → 401/403.
- *  - UI: el panel `/admin/integraciones/payment-connections` carga para
+ *  - UI: el panel `/admin/integrations/payment-connections` carga para
  *    super_admin y muestra el form de conexión.
  *
  * El flujo completo conectar→reconciliar→invitar se valida manualmente contra
@@ -71,7 +71,7 @@ test.describe('mod.payment-connections — contrato admin + render del panel', (
     await page.goto('/signin');
     await injectSession(page, { accessToken: bearer, user: adminUser });
 
-    await page.goto('/admin/integraciones/payment-connections');
+    await page.goto('/admin/integrations/payment-connections');
     await expect(page.getByRole('heading', { name: 'Conexiones de pago' })).toBeVisible({
       timeout: 15_000,
     });

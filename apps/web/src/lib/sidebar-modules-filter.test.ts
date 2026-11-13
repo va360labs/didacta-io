@@ -6,16 +6,16 @@ const sample: SidebarGroup[] = [
   {
     label: 'Aprendizaje',
     items: [
-      { href: '/cursos', label: 'Catálogo', icon: 'book' },
-      { href: '/comunidad', label: 'Comunidad', icon: 'users', requiresModule: 'mod.community' },
-      { href: '/notificaciones', label: 'Notificaciones', icon: 'bell' },
+      { href: '/courses', label: 'Catálogo', icon: 'book' },
+      { href: '/community', label: 'Comunidad', icon: 'users', requiresModule: 'mod.community' },
+      { href: '/notifications', label: 'Notificaciones', icon: 'bell' },
     ],
   },
   {
     label: 'Formador',
     items: [
       {
-        href: '/formador/aula-virtual',
+        href: '/studio/live',
         label: 'Aula virtual',
         icon: 'calendar',
         requiresModule: 'mod.zoom-live',
@@ -63,9 +63,9 @@ describe('filterByActiveModules · strictModule (entradas que solo existen en al
     {
       label: 'Ingresos',
       items: [
-        { href: '/admin/membresia', label: 'Membresía', icon: 'sparkles' },
+        { href: '/admin/membership', label: 'Membresía', icon: 'sparkles' },
         {
-          href: '/admin/cobros',
+          href: '/admin/payments',
           label: 'Cobros',
           icon: 'briefcase',
           requiresModule: 'mod.payouts',

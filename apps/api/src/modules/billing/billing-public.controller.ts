@@ -112,7 +112,7 @@ interface PublicCatalogCourse {
  * Endpoints PÚBLICOS de la venta de cursos sueltos (viaje 2).
  *
  * Sin JWT: el visitante aún no tiene cuenta — el tenant se resuelve por el
- * Host del request, igual que la página de membresía (/unete) y el registro.
+ * Host del request, igual que la página de membresía (/join) y el registro.
  * El checkout es de Stripe hosted: aquí solo se genera la URL de la session;
  * la cuenta se materializa en el webhook tras el pago (provisioning).
  *
@@ -293,9 +293,9 @@ export class BillingPublicController {
         // aula, sin autorreferidos) cuando el pago se completa.
         ...(dto.referralCode ? { referralCode: dto.referralCode.toLowerCase() } : {}),
         // Retorno a las páginas PÚBLICAS del catálogo: el comprador aún no tiene
-        // sesión y las de /cursos/checkout viven tras el gate de login.
-        successUrl: `${base}/catalogo/checkout/success?session_id={CHECKOUT_SESSION_ID}`,
-        cancelUrl: `${base}/catalogo/checkout/cancel`,
+        // sesión y las de /courses/checkout viven tras el gate de login.
+        successUrl: `${base}/catalog/checkout/success?session_id={CHECKOUT_SESSION_ID}`,
+        cancelUrl: `${base}/catalog/checkout/cancel`,
       });
       await this.consents.attachSession(tenantId, consentId, {
         sessionId: result.sessionId,

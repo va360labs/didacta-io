@@ -6,7 +6,7 @@
 /**
  * Destino pendiente tras el login ("deep link"): cuando un usuario anónimo
  * intenta entrar a una ruta protegida (p. ej. el enlace compartido de un post,
- * `/comunidad/<id>`), guardamos esa ruta ANTES de mandarlo a /signin y la
+ * `/community/<id>`), guardamos esa ruta ANTES de mandarlo a /signin y la
  * consumimos al completar cualquier flujo de autenticación (password, MFA
  * verify/setup, OIDC o WP-SSO). Los gates del shell (onboarding pendiente,
  * contraseña temporal) re-guardan el destino antes de desviar, así el valor

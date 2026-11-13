@@ -440,7 +440,7 @@ export class LearningPathsService {
       // no 100 %. Con el umbral por defecto (75) un curso acabado al 90 %
       // seguía saliendo aquí como "siguiente paso" para siempre.
       if (!courseEnrollment || courseEnrollment.status !== 'COMPLETED') {
-        return { courseId, lessonId: null, courseUrl: `/cursos/${courseId}` };
+        return { courseId, lessonId: null, courseUrl: `/courses/${courseId}` };
       }
     }
     return null;

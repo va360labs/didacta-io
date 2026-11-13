@@ -187,7 +187,7 @@ test.describe('Inscripción externa por API', () => {
       user: alumno.user,
     });
 
-    await page.goto(`/cursos/${course.slug}`);
+    await page.goto(`/courses/${course.slug}`);
     await expect(page.getByRole('heading', { name: 'Empieza este curso' })).toBeVisible({
       timeout: 15_000,
     });

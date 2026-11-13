@@ -29,13 +29,13 @@ interface Tab {
  * Grupos, Certificados, área Admin…) se alcanzan por la pestaña "Menú", que
  * abre el drawer con la navegación completa. Todas las rutas existen como
  * páginas índice reales (sin enlaces a 404). "Feed" también queda activa dentro
- * de un espacio de comunidad (`/espacios/...`), que es contenido del feed.
+ * de un espacio de comunidad (`/spaces/...`), que es contenido del feed.
  */
 const TABS: Tab[] = [
-  { href: '/comunidad', labelKey: 'feed', icon: 'globe', matches: ['/comunidad', '/espacios'] },
-  { href: '/cursos', labelKey: 'cursos', icon: 'book', matches: ['/cursos'] },
-  { href: '/miembros', labelKey: 'miembros', icon: 'users', matches: ['/miembros'] },
-  { href: '/cuenta', labelKey: 'perfil', icon: 'user', matches: ['/cuenta'] },
+  { href: '/community', labelKey: 'feed', icon: 'globe', matches: ['/community', '/spaces'] },
+  { href: '/courses', labelKey: 'cursos', icon: 'book', matches: ['/courses'] },
+  { href: '/members', labelKey: 'miembros', icon: 'users', matches: ['/members'] },
+  { href: '/account', labelKey: 'perfil', icon: 'user', matches: ['/account'] },
 ];
 
 function isActive(pathname: string, matches: string[]): boolean {

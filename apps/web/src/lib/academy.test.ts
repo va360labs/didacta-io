@@ -31,7 +31,7 @@ import {
 
 const HERE = dirname(fileURLToPath(import.meta.url)); // apps/web/src/lib
 const APP_DIR = join(HERE, '..', 'app');
-const BIENVENIDA_DIR = join(APP_DIR, 'bienvenida');
+const BIENVENIDA_DIR = join(APP_DIR, 'welcome');
 
 describe('modo de cobro del asistente', () => {
   it('solo `mode: platform` es modo plataforma; null, own, none y nada son el de siempre', () => {
@@ -57,7 +57,7 @@ describe('modo de cobro del asistente', () => {
     ]);
     expect(pasosContables('platform')).toBe(5);
     expect(destinos('platform')).not.toHaveProperty('correo');
-    expect(destinos('platform').cobros).toBe('/admin/cobros');
+    expect(destinos('platform').cobros).toBe('/admin/payments');
   });
 
   it('own / sin plataforma: tarjeta de claves, con correo, exactamente como antes', () => {
@@ -167,9 +167,9 @@ function rutasDelCodigo(): string[] {
 
 describe('los destinos del asistente son rutas que existen', () => {
   it('el comprobador de rutas funciona (resuelve grupos y dinámicos, y rechaza inventadas)', () => {
-    expect(existe('/admin/cobros')).toBe(true); // vive en (app)
-    expect(existe('/formador/cursos/abc')).toBe(true); // [id]
-    expect(existe('/admin/configuracion?tab=pagos')).toBe(true);
+    expect(existe('/admin/payments')).toBe(true); // vive en (app)
+    expect(existe('/studio/courses/abc')).toBe(true); // [id]
+    expect(existe('/admin/settings?tab=pagos')).toBe(true);
     expect(existe('/admin/billing-inventado')).toBe(false);
   });
 
@@ -183,7 +183,7 @@ describe('los destinos del asistente son rutas que existen', () => {
   it('enlaces y redirecciones escritos en el código del asistente', () => {
     const rutas = rutasDelCodigo();
     // Que el escaneo encuentre algo: si no, el test pasaría sin mirar nada.
-    expect(rutas).toEqual(expect.arrayContaining(['/signin', '/inicio']));
+    expect(rutas).toEqual(expect.arrayContaining(['/signin', '/home']));
     expect(rutas.filter((r) => !existe(r))).toEqual([]);
   });
 });

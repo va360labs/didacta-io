@@ -12,7 +12,7 @@
  * Cubre:
  *  1. Catálogo público por API sin token: curso publicado con su oferta
  *     (precio, tachado, % derivado); oferta de id no-UUID → 404.
- *  2. UI sin sesión: /catalogo pinta la tarjeta y /catalogo/[slug] la ficha
+ *  2. UI sin sesión: /catalog pinta la tarjeta y /catalog/[slug] la ficha
  *     con el CTA de compra (nunca redirige a /signin).
  *  3. Compra anónima: webhook firmado sobre una order PENDING sin dueño →
  *     crea la cuenta del comprador (email confirmado en Stripe), completa la
@@ -169,8 +169,8 @@ test.describe('Viaje 2 público — catálogo y compra anónima (F4)', () => {
     const ctx = await browser.newContext();
     const page = await ctx.newPage();
 
-    await page.goto('/catalogo');
-    await expect(page).toHaveURL(/\/catalogo$/); // sin redirect a /signin
+    await page.goto('/catalog');
+    await expect(page).toHaveURL(/\/catalog$/); // sin redirect a /signin
     const card = page
       .getByTestId('catalogo-card')
       .filter({ hasText: `Curso Venta Pública E2E ${stamp}` });
@@ -179,7 +179,7 @@ test.describe('Viaje 2 público — catálogo y compra anónima (F4)', () => {
     await expect(card).toContainText('99'); // tachado
 
     await card.click();
-    await expect(page).toHaveURL(new RegExp(`/catalogo/curso-venta-publica-e2e-${stamp}$`));
+    await expect(page).toHaveURL(new RegExp(`/catalog/curso-venta-publica-e2e-${stamp}$`));
     await expect(page.getByRole('button', { name: 'Comprar ahora' })).toBeEnabled();
     await expect(page.getByText('Pago único · Acceso inmediato')).toBeVisible();
     await ctx.close();

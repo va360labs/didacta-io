@@ -11,7 +11,7 @@ import { zoomLiveApi, type ZoomSession } from '@/modules/zoom-live';
  * las clases en directo (mod.zoom-live) sin acoplar los módulos entre sí — la
  * composición vive en el host, nunca en un módulo (ADR-016/ADR-017).
  *
- * La consumen la vista `/calendario` y el bloque «Próximas citas» del feed de
+ * La consumen la vista `/calendar` y el bloque «Próximas citas» del feed de
  * la comunidad.
  */
 export interface CalendarItem {
@@ -85,7 +85,7 @@ export function toItems(events: CommunityEvent[], sessions: ZoomSession[]): Cale
       isRegistered: s.isRegistered,
       location: null,
       status: s.status === 'CANCELLED' ? null : s.status,
-      href: `/clase/${s.id}`,
+      href: `/live/${s.id}`,
     }));
   return [...fromEvents, ...fromSessions].sort(
     (a, b) => new Date(a.startAt).getTime() - new Date(b.startAt).getTime(),

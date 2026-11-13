@@ -7,7 +7,7 @@ import type { ModuleWebExtension } from '@/lib/module-registry';
 
 /**
  * mod.resources — biblioteca de recursos por colecciones (bloque 4). La
- * sección /recursos cuelga del grupo 'Aprendizaje' del menú principal: es la
+ * sección /resources cuelga del grupo 'Aprendizaje' del menú principal: es la
  * razón más barata para entrar en el aula ("el recurso está aquí, no en
  * Telegram").
  */
@@ -16,7 +16,7 @@ export const resourcesExtension: ModuleWebExtension = {
   sidebarItems: [
     {
       group: 'Aprendizaje',
-      href: '/recursos',
+      href: '/resources',
       label: 'Recursos',
       icon: 'download-cloud',
     },

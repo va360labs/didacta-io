@@ -215,7 +215,7 @@ const LOCALE_LABELS: Record<SupportedLocale, string> = {
 };
 
 /**
- * Opciones del selector de idioma de `/cuenta` y `/onboarding`.
+ * Opciones del selector de idioma de `/account` y `/onboarding`.
  *
  * DERIVADO de `SUPPORTED_LOCALES`, no una lista aparte. Cuando era una lista
  * suelta ofrecía `pt-BR`, que no tiene catálogo: se elegía portugués, la API lo

@@ -234,7 +234,7 @@ export function SimpleReferrals() {
         aria-label={t('migasAria')}
         className="flex items-center gap-1.5 text-sm text-text-subtle"
       >
-        <Link href="/cuenta" className="hover:text-text">
+        <Link href="/account" className="hover:text-text">
           {t('migaPerfil')}
         </Link>
         <Icon name="chevron-right" size={14} />

@@ -42,7 +42,7 @@ const listQuerySchema = z.object({
  * Endpoints CRUD de empresas bonificadas Fundae (LMS-79).
  * Path: `/api/v1/admin/fundae/companies` — bajo el prefijo admin para
  * que el guard MFA aplique automáticamente y para coincidir con la URL
- * que la UI Next.js consume desde `/admin/fundae/empresas`.
+ * que la UI Next.js consume desde `/admin/fundae/companies`.
  */
 @ApiTags('Admin · Fundae · Empresas')
 @ApiBearerAuth()

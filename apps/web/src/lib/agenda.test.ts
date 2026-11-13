@@ -133,7 +133,7 @@ describe('phaseOf', () => {
     isRegistered: false,
     location: null,
     status: 'SCHEDULED',
-    href: '/clase/s1',
+    href: '/live/s1',
   };
   const t = (iso: string) => new Date(iso).getTime();
 

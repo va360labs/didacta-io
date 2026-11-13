@@ -19,20 +19,27 @@ describe('parseClaseEmbed — marcador', () => {
 
   it('el marcador gana sobre un enlace suelto', () => {
     const otro = '11111111-2222-3333-4444-555555555555';
-    const parsed = parseClaseEmbed(`Mira /clase/${otro}\n\n<!--didacta-clase:${ID}-->`);
+    const parsed = parseClaseEmbed(`Mira /live/${otro}\n\n<!--didacta-clase:${ID}-->`);
     expect(parsed.sessionId).toBe(ID);
   });
 });
 
 describe('parseClaseEmbed — enlace pegado a mano', () => {
   it('reconoce una URL absoluta y la quita del texto', () => {
-    const parsed = parseClaseEmbed(`Os dejo la clase: https://aula.example.com/clase/${ID}`);
+    const parsed = parseClaseEmbed(`Os dejo la clase: https://aula.example.com/live/${ID}`);
     expect(parsed.sessionId).toBe(ID);
     expect(parsed.cleanBody).toBe('Os dejo la clase:');
   });
 
+  it('sigue reconociendo la ruta de antes (/clase/<uuid>) de los posts ya guardados', () => {
+    const parsed = parseClaseEmbed(`Os dejo la clase: https://aula.example.com/clase/${ID}`);
+    expect(parsed.sessionId).toBe(ID);
+    expect(parsed.cleanBody).toBe('Os dejo la clase:');
+    expect(parseClaseEmbed(`Apuntaos en /clase/${ID}/ ya`).sessionId).toBe(ID);
+  });
+
   it('reconoce una ruta relativa', () => {
-    const parsed = parseClaseEmbed(`Apuntaos en /clase/${ID}/ antes del lunes`);
+    const parsed = parseClaseEmbed(`Apuntaos en /live/${ID}/ antes del lunes`);
     expect(parsed.sessionId).toBe(ID);
     expect(parsed.cleanBody).toBe('Apuntaos en antes del lunes');
   });
@@ -49,7 +56,7 @@ describe('parseClaseEmbed — sin clase', () => {
     expect(parseClaseEmbed(body)).toEqual({ cleanBody: body, sessionId: null });
   });
 
-  it('ignora un /clase/ que no lleva uuid', () => {
-    expect(parseClaseEmbed('mira /clase/12345').sessionId).toBeNull();
+  it('ignora un /live/ que no lleva uuid', () => {
+    expect(parseClaseEmbed('mira /live/12345').sessionId).toBeNull();
   });
 });

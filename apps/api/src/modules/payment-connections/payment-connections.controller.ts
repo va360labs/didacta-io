@@ -462,7 +462,7 @@ export class PaymentConnectionsController {
   @ApiOperation({
     summary:
       'Tier efectivo (manual o derivado de pagos) de un conjunto de usuarios. ' +
-      'Param `userIds` = lista separada por comas. Lo consume /admin/usuarios.',
+      'Param `userIds` = lista separada por comas. Lo consume /admin/users.',
   })
   async getUserTiers(
     @Query('userIds') userIds: string | undefined,
@@ -872,7 +872,7 @@ export class PaymentConnectionsController {
   @ApiOperation({
     summary:
       'Suscripción(es) externa(s) del usuario autenticado, para la pestaña ' +
-      'Suscripción de /cuenta. No expone datos de otros usuarios.',
+      'Suscripción de /account. No expone datos de otros usuarios.',
   })
   async getMySubscription(@CurrentUser() rawUser: SessionClaims | undefined) {
     if (!rawUser) throw new UnauthorizedException();
@@ -896,7 +896,7 @@ export class PaymentConnectionsController {
   ) {
     if (!rawUser) throw new UnauthorizedException();
     const webBaseUrl = await this.tenantResolver.resolveTenantWebBaseUrl(rawUser.tenantId, req);
-    const returnUrl = `${webBaseUrl.replace(/\/$/, '')}/cuenta?tab=suscripcion`;
+    const returnUrl = `${webBaseUrl.replace(/\/$/, '')}/account?tab=suscripcion`;
     const url = await this.registry
       .getPaymentConnectionsService()
       .createMyBillingPortalSession(rawUser.tenantId, rawUser.sub, body.subscriberId, returnUrl);

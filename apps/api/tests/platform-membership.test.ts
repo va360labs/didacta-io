@@ -10,7 +10,7 @@
  *    registrado de los métodos sobre objetos que ya existen (suscripciones
  *    heredadas → claves propias; de plataforma → clave del operador); el
  *    portal del cliente con la configuración del creador.
- *  - La puerta de venta de `/unete` (cuenta no lista → sin planes y 409).
+ *  - La puerta de venta de `/join` (cuenta no lista → sin planes y 409).
  *  - `POST /modules/subscriptions/me/portal` y la marca `billingPortal`.
  *  - Ataque: `invoice.paid` firmado por el aula B en el webhook HEREDADO que
  *    nombra una suscripción de plataforma del aula A → 403 sin procesar nada.
@@ -184,8 +184,8 @@ function build(
 
 const MEMBERSHIP_CHECKOUT = {
   priceId: 'price_x',
-  successUrl: 'https://aula.test/unete?status=success',
-  cancelUrl: 'https://aula.test/unete?status=cancel',
+  successUrl: 'https://aula.test/join?status=success',
+  cancelUrl: 'https://aula.test/join?status=cancel',
   trialDays: 7,
   allowPromotionCodes: true,
   clientReferenceId: PLAN,
@@ -334,7 +334,10 @@ describe('PlatformSubscriptionsStripeAdapter · portal del cliente', () => {
     );
     const result = await (
       await adapters.subscriptions(A)
-    ).createPortalSession({ customerId: 'cus_1Plataforma', returnUrl: 'https://aula.test/cuenta' });
+    ).createPortalSession({
+      customerId: 'cus_1Plataforma',
+      returnUrl: 'https://aula.test/account',
+    });
     expect(result.url).toBe('https://billing.test/plataforma@acct_1Creadora');
     expect(log).toEqual([
       ['portal', 'forTenant', A],
@@ -343,7 +346,7 @@ describe('PlatformSubscriptionsStripeAdapter · portal del cliente', () => {
         'createPortalSession',
         {
           customerId: 'cus_1Plataforma',
-          returnUrl: 'https://aula.test/cuenta',
+          returnUrl: 'https://aula.test/account',
           configurationId: 'bpc_1Creadora',
         },
       ],
@@ -354,12 +357,12 @@ describe('PlatformSubscriptionsStripeAdapter · portal del cliente', () => {
     const { adapters, log } = build(READY, { own: true });
     await (
       await adapters.subscriptions(A)
-    ).createPortalSession({ customerId: 'cus_1Heredado', returnUrl: 'https://aula.test/cuenta' });
+    ).createPortalSession({ customerId: 'cus_1Heredado', returnUrl: 'https://aula.test/account' });
     expect(log).toEqual([
       [
         'propia',
         'createPortalSession',
-        { customerId: 'cus_1Heredado', returnUrl: 'https://aula.test/cuenta' },
+        { customerId: 'cus_1Heredado', returnUrl: 'https://aula.test/account' },
       ],
     ]);
   });
@@ -399,9 +402,9 @@ describe('PlatformSubscriptionsStripeAdapter · saldo de cliente (descuento por 
   });
 });
 
-// ───────────────────────── /unete ─────────────────────────
+// ───────────────────────── /join ─────────────────────────
 
-describe('PlatformCheckoutGate en /unete (MembershipPublicController)', () => {
+describe('PlatformCheckoutGate en /join (MembershipPublicController)', () => {
   const PLAN_USD = '44444444-4444-4444-8444-444444444444';
   const PAGE = {
     headline: 'Hazte miembro',
@@ -575,12 +578,12 @@ describe('POST /modules/subscriptions/me/portal y la marca billingPortal', () =>
     });
     expect(subs.createBillingPortalSession).toHaveBeenCalledWith(A, 'alumna', {
       subscriptionId: 's1',
-      returnUrl: 'https://aula.test/cuenta?tab=suscripcion',
+      returnUrl: 'https://aula.test/account?tab=suscripcion',
     });
     await ctrl.portal(user, { headers: {} } as never, undefined);
     expect(subs.createBillingPortalSession).toHaveBeenLastCalledWith(A, 'alumna', {
       subscriptionId: undefined,
-      returnUrl: 'https://aula.test/cuenta?tab=suscripcion',
+      returnUrl: 'https://aula.test/account?tab=suscripcion',
     });
   });
 

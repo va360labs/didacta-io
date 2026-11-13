@@ -4,8 +4,8 @@
  * El sidebar/admin-nav está hardcodeado en `app/(app)/layout.tsx` y los módulos
  * añaden items vía `sidebarItems`. Nada garantizaba que una ruta nueva tuviera
  * su entrada de menú: features reales quedaban inaccesibles (p.ej. el bug del
- * label 'Profesor' vs 'Formador' que ocultó /formador/aula-virtual, o
- * /admin/fundae/grupos sin enlace). Y al revés: un item de menú podía apuntar a
+ * label 'Profesor' vs 'Formador' que ocultó /studio/live, o
+ * /admin/fundae/groups sin enlace). Y al revés: un item de menú podía apuntar a
  * una página que no existe (p.ej. /super/users → 404).
  *
  * Este test es ESTÁTICO (lee los archivos de rutas + la nav), corre en CI sin
@@ -47,44 +47,44 @@ const MODULES_DIR = join(WEB_SRC, 'modules');
  */
 type AllowKind = 'reachable' | 'external' | 'knownGap';
 const ALLOWLIST: Record<string, { kind: AllowKind; reason: string }> = {
-  '/admin/fundae/empresas': {
+  '/admin/fundae/companies': {
     kind: 'reachable',
     reason: 'botón "Empresas bonificadas" en /admin/fundae',
   },
-  '/admin/fundae/grupos': {
+  '/admin/fundae/groups': {
     kind: 'reachable',
     reason: 'botón "Grupos bonificables" en /admin/fundae',
   },
-  '/admin/tenants/nuevo': { kind: 'reachable', reason: 'acción "Nuevo tenant" en /admin/tenants' },
-  '/admin/usuarios/invitar': { kind: 'reachable', reason: 'acción "Invitar" en /admin/usuarios' },
-  '/admin/usuarios/importar': {
+  '/admin/tenants/new': { kind: 'reachable', reason: 'acción "Nuevo tenant" en /admin/tenants' },
+  '/admin/users/invite': { kind: 'reachable', reason: 'acción "Invitar" en /admin/users' },
+  '/admin/users/import': {
     kind: 'reachable',
-    reason: 'acción "Importar CSV" en /admin/usuarios',
+    reason: 'acción "Importar CSV" en /admin/users',
   },
-  '/formador/cursos/nuevo': {
+  '/studio/courses/new': {
     kind: 'reachable',
-    reason: 'acción "Nuevo curso" en /formador/cursos',
+    reason: 'acción "Nuevo curso" en /studio/courses',
   },
-  '/formador/rutas/nueva': { kind: 'reachable', reason: 'acción "Nueva ruta" en /formador/rutas' },
-  '/inicio': {
+  '/studio/paths/new': { kind: 'reachable', reason: 'acción "Nueva ruta" en /studio/paths' },
+  '/home': {
     kind: 'reachable',
-    reason: 'redirige a /comunidad (stub histórico, referenciado en layout)',
+    reason: 'redirige a /community (stub histórico, referenciado en layout)',
   },
-  '/notificaciones': { kind: 'reachable', reason: 'icono de campana (notifications-bell)' },
-  '/admin/integraciones/api': {
+  '/notifications': { kind: 'reachable', reason: 'icono de campana (notifications-bell)' },
+  '/admin/integrations/api': {
     kind: 'reachable',
     reason: 'enlace "Integración API" en /admin/api-keys (documentación en vivo para integradores)',
   },
-  '/admin/cursos/imagenes': {
+  '/admin/courses/images': {
     kind: 'external',
     reason:
-      'redirect legacy a /admin/imagenes: se mantiene para no romper enlaces guardados, por eso no está en la nav',
+      'redirect legacy a /admin/images: se mantiene para no romper enlaces guardados, por eso no está en la nav',
   },
   // ── Fusiones de la reordenación del panel admin ────────────────────────────
   // Cuatro pantallas se convirtieron en pestañas de otra. Las rutas viejas
   // sobreviven como redirect para enlaces guardados y documentación ya
   // repartida, y por eso NO están en la nav (tenerlas duplicaría la entrada).
-  '/admin/metricas': {
+  '/admin/metrics': {
     kind: 'external',
     reason: 'redirect a /admin?tab=negocio (las métricas son pestaña del panel)',
   },
@@ -101,17 +101,17 @@ const ALLOWLIST: Record<string, { kind: AllowKind; reason: string }> = {
     kind: 'external',
     reason: 'redirect a /admin/webhooks?tab=zoom (entregas de Zoom como pestaña de Webhooks)',
   },
-  '/cursos/checkout/success': { kind: 'external', reason: 'redirect de Stripe (success_url)' },
-  '/cursos/checkout/cancel': { kind: 'external', reason: 'redirect de Stripe (cancel_url)' },
-  '/eventos': {
+  '/courses/checkout/success': { kind: 'external', reason: 'redirect de Stripe (success_url)' },
+  '/courses/checkout/cancel': { kind: 'external', reason: 'redirect de Stripe (cancel_url)' },
+  '/events': {
     kind: 'reachable',
     reason:
-      'redirige a /calendario?vista=eventos (bloque 9: fusionado en la pestaña "Eventos" del calendario; la ruta se conserva para enlaces guardados)',
+      'redirige a /calendar?vista=eventos (bloque 9: fusionado en la pestaña "Eventos" del calendario; la ruta se conserva para enlaces guardados)',
   },
-  '/cuenta/suscripciones': {
+  '/account/subscriptions': {
     kind: 'reachable',
     reason:
-      'redirige a /cuenta?tab=suscripcion (la gestión vive en la pestaña "Suscripción" de /cuenta). La ruta se conserva como success_url/cancel_url del checkout de Stripe.',
+      'redirige a /account?tab=suscripcion (la gestión vive en la pestaña "Suscripción" de /account). La ruta se conserva como success_url/cancel_url del checkout de Stripe.',
   },
 };
 
@@ -243,7 +243,7 @@ describe('guard anti-huérfanas del sidebar', () => {
   });
 
   it('todo destino del asistente de bienvenida es una ruta que existe', async () => {
-    // El primer asistente enlazó /admin/cursos y /admin/billing — ninguna de
+    // El primer asistente enlazó /admin/courses y /admin/billing — ninguna de
     // las dos existió jamás como ruta, y los dos 404 llegaron a producción
     // porque nada lo comprobaba. Los destinos viven en lib/academy.ts para
     // que este test los importe y el fallo sea de CI, no de un cliente.
@@ -254,7 +254,7 @@ describe('guard anti-huérfanas del sidebar', () => {
       .filter(([, path]) => !routeSet.has(path));
     expect(
       rotos.map(([paso, path]) => `${paso} → ${path}`),
-      `Destinos del asistente /bienvenida que apuntan a rutas SIN page.tsx (404):`,
+      `Destinos del asistente /welcome que apuntan a rutas SIN page.tsx (404):`,
     ).toEqual([]);
   });
 

@@ -23,7 +23,7 @@
  *  - `Eliminar configuración` borra las dos rows (smtp + smtp_meta) y deja
  *    al tenant cayendo al fallback global (si lo hay) o sin SMTP.
  *
- * Estilo: matchea el resto de `/admin/configuracion` (shadcn/ui Card/Input/
+ * Estilo: matchea el resto de `/admin/settings` (shadcn/ui Card/Input/
  * Button/Select + paleta de tokens `brand-`, `success-`, `warning-`,
  * `danger-`).
  */

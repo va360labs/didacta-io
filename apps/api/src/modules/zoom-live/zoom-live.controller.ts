@@ -60,7 +60,7 @@ function viewerOf(user: SessionClaims): { userId: string; isStaff: boolean } {
 const uuidSchema = z.string().uuid();
 
 /**
- * `/clase/<id>` es una URL compartible públicamente: un id malformado debe
+ * `/live/<id>` es una URL compartible públicamente: un id malformado debe
  * responder 404 (la web muestra "Clase no encontrada"), no un 500 de Prisma
  * (P2023) al comparar contra una columna @db.Uuid.
  */
@@ -142,7 +142,7 @@ export class ZoomLiveController {
     const viewer = viewerOf(user);
     const view = await this.registry.getZoomLiveService().register(user.tenantId, user.sub, id);
     // El staff que se inscribe no debe perder `startUrl` en la respuesta
-    // (la página /clase reemplaza su estado con este payload).
+    // (la página /live reemplaza su estado con este payload).
     return viewer.isStaff
       ? this.registry.getZoomLiveService().getForHost(user.tenantId, id, viewer)
       : view;

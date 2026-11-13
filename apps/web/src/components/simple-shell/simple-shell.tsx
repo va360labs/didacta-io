@@ -181,7 +181,7 @@ export function SimpleShell({
         {banners}
         <header className="border-b border-border bg-surface">
           <div className="mx-auto flex h-[60px] max-w-[1180px] items-center gap-2 px-4 lg:px-6">
-            <BrandLink href={isAdmin ? '/empieza' : '/comunidad'} session={session} />
+            <BrandLink href={isAdmin ? '/start' : '/community'} session={session} />
             <button
               type="button"
               onClick={() => setSearchOpen(true)}

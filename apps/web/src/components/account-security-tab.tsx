@@ -24,10 +24,10 @@ import type { TranslatorLike } from '@/lib/i18n/labels';
 import { meApi, type ActiveSession } from '@/lib/me';
 
 /**
- * Contenido de la pestaña "Seguridad" del perfil (/cuenta): cambio de
- * contraseña, sesiones activas y MFA. Antes vivía en la ruta /cuenta/seguridad,
+ * Contenido de la pestaña "Seguridad" del perfil (/account): cambio de
+ * contraseña, sesiones activas y MFA. Antes vivía en la ruta /account/seguridad,
  * que se eliminó para consolidar todo en el perfil. El gate de contraseña
- * temporal (`mustChangePassword`) redirige a /cuenta?tab=seguridad.
+ * temporal (`mustChangePassword`) redirige a /account?tab=seguridad.
  */
 export function AccountSecurityTab() {
   const t = useTranslations('cuentaComponentes');

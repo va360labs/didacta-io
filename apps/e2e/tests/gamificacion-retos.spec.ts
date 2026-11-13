@@ -7,7 +7,7 @@ import { injectSession } from '../helpers/auth';
  *  - Las reglas se siembran solas con los pesos del ranking anterior (post 10,
  *    comentario 5), así el traspaso no mueve a nadie de puesto.
  *  - Los niveles y los retos nacen VACÍOS: los crea el operador.
- *  - El admin crea un reto y lo abre; un ALUMNO lo ve en /retos y entrega con
+ *  - El admin crea un reto y lo abre; un ALUMNO lo ve en /challenges y entrega con
  *    prueba; el admin lo aprueba y los puntos aparecen en la clasificación.
  *  - Reglas de integridad: no se entrega dos veces el mismo reto (409), no se
  *    revisa dos veces la misma entrega (409), y el relleno del histórico es
@@ -74,7 +74,7 @@ test.describe('Puntos, niveles y retos (mod.gamification)', () => {
     expect(createRes.status, 'crear reto').toBe(201);
     const challenge = (await createRes.json()) as { id: string };
 
-    // 4. Un alumno nuevo ve el reto en /retos y entrega con prueba.
+    // 4. Un alumno nuevo ve el reto en /challenges y entrega con prueba.
     const student = await signup({
       tenantSlug,
       email: `reto.alumno.${stamp}@e2e.test`,
@@ -82,7 +82,7 @@ test.describe('Puntos, niveles y retos (mod.gamification)', () => {
       name: 'Alumna de retos',
     });
     await fullSession(page, student as never);
-    await page.goto('/retos');
+    await page.goto('/challenges');
     // exact: true — si no, colisiona con el h2 "Retos abiertos" de más abajo.
     await expect(page.getByRole('heading', { name: 'Retos', exact: true })).toBeVisible();
     await expect(page.getByText(title).first()).toBeVisible();
@@ -134,7 +134,7 @@ test.describe('Puntos, niveles y retos (mod.gamification)', () => {
     });
     const adminAuth = (await adminAuthRes.json()) as never;
     await fullSession(page, adminAuth);
-    await page.goto('/admin/gamificacion');
+    await page.goto('/admin/gamification');
     await expect(page.getByRole('heading', { name: 'Puntos y retos' })).toBeVisible();
 
     await page.getByRole('tab', { name: 'Entregas' }).click();
@@ -199,7 +199,7 @@ test.describe('Puntos, niveles y retos (mod.gamification)', () => {
     const adminAuth = (await adminAuthRes.json()) as never;
     await fullSession(page, adminAuth);
 
-    await page.goto('/admin/gamificacion');
+    await page.goto('/admin/gamification');
     await page.getByRole('tab', { name: 'Niveles' }).click();
 
     // Un beneficio cuelga de un nivel y NO se concede solo: se solicita y una
@@ -282,8 +282,8 @@ test.describe('Puntos, niveles y retos (mod.gamification)', () => {
     expect(denied.status, 'solicitar sin nivel suficiente').toBe(409);
 
     await fullSession(page, student as never);
-    await page.goto('/retos');
-    // .first(): el mismo perk se pinta dos veces en /retos — resumido dentro
+    await page.goto('/challenges');
+    // .first(): el mismo perk se pinta dos veces en /challenges — resumido dentro
     // de la tarjeta de su nivel (LevelCard) y como PerkCard independiente.
     await expect(page.getByText(`Píldora a medida ${stamp}`).first()).toBeVisible();
     // Acotado al stamp: ejecuciones anteriores dejan sus propios niveles.

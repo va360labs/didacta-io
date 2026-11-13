@@ -5,6 +5,7 @@
 
 import { NextResponse, type NextRequest } from 'next/server';
 import { LOCALE_COOKIE } from './i18n/config';
+import { legacyRedirectPath } from './lib/legacy-routes';
 import { SITE_PATH_PREFIX } from './lib/site-routing';
 import {
   pickSuspendedCatalog,
@@ -21,7 +22,7 @@ import {
  *    `true` en memoria del runtime — se invalida solo al restart del worker).
  *
  *    Bug previo: el matcher solo cubría rutas de auth (`/`, `/signin`, etc.).
- *    Las rutas autenticadas dentro de `(app)` (`/cursos`, `/admin`, etc.)
+ *    Las rutas autenticadas dentro de `(app)` (`/courses`, `/admin`, etc.)
  *    pasaban directo y el shell de la app se renderizaba aunque el sistema no
  *    tuviera tenants, dejando un estado roto pero accesible.
  *
@@ -117,6 +118,23 @@ function esHostSiempreValido(hostname: string): boolean {
   return false;
 }
 
+/**
+ * Servir el aula. Si la ruta es una de las de antes en español
+ * (`/catalogo/<slug>`, `/formador/cursos`…), 308 a la nueva conservando los
+ * segmentos dinámicos y la query entera (`?ref=`, `?session_id=`). Ver
+ * `lib/legacy-routes.ts`.
+ *
+ * Solo en el aula: en el dominio del SITIO público las rutas son las páginas
+ * que ha creado el operador (`/cursos` puede ser una de ellas) y no se tocan.
+ */
+function servirAula(req: NextRequest): NextResponse {
+  const nueva = legacyRedirectPath(req.nextUrl.pathname);
+  if (!nueva) return NextResponse.next();
+  const url = req.nextUrl.clone();
+  url.pathname = nueva;
+  return NextResponse.redirect(url, 308);
+}
+
 async function resolverHost(
   host: string,
 ): Promise<{ known: boolean; surface: HostSurface; suspended: boolean }> {
@@ -185,13 +203,13 @@ export async function middleware(req: NextRequest) {
     });
   }
 
-  if (ALLOW_UNKNOWN_HOSTS) return NextResponse.next();
+  if (ALLOW_UNKNOWN_HOSTS) return servirAula(req);
 
   const rawHost = req.headers.get('x-forwarded-host') ?? req.headers.get('host');
-  if (!rawHost) return NextResponse.next();
+  if (!rawHost) return servirAula(req);
   const host = (rawHost.split(',')[0] ?? rawHost).trim().toLowerCase();
   const hostname = host.startsWith('[') ? host : (host.split(':')[0] ?? host);
-  if (esHostSiempreValido(hostname)) return NextResponse.next();
+  if (esHostSiempreValido(hostname)) return servirAula(req);
 
   const { known, surface, suspended } = await resolverHost(host);
   if (suspended) {
@@ -218,7 +236,7 @@ export async function middleware(req: NextRequest) {
       }`;
       return NextResponse.rewrite(url);
     }
-    return NextResponse.next();
+    return servirAula(req);
   }
 
   // 404 pelado, sin marca: si este nombre no es de nadie, no hay nada que

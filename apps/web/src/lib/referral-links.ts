@@ -9,7 +9,7 @@ import { fetchTenantContext } from '@/lib/tenant-context';
 
 /**
  * Enlaces de «Invita y gana» para TODO lo que vende el aula: la membresía
- * (`/unete`) y cada curso suelto a la venta (`/catalogo/<slug>`), todos con el
+ * (`/join`) y cada curso suelto a la venta (`/catalog/<slug>`), todos con el
  * `?ref=` del alumno. Cualquiera de ellos genera comisión al comprar.
  */
 
@@ -55,22 +55,22 @@ export function buildReferralLinks(input: {
 
   const products: ReferralProductLink[] = [
     ...(input.membershipOnSale
-      ? [{ kind: 'membership' as const, title: null, url: withRef('/unete') }]
+      ? [{ kind: 'membership' as const, title: null, url: withRef('/join') }]
       : []),
     ...input.courses.map((c) => ({
       kind: 'course' as const,
       title: c.title,
-      url: withRef(`/catalogo/${encodeURIComponent(c.slug)}`),
+      url: withRef(`/catalog/${encodeURIComponent(c.slug)}`),
     })),
   ];
   const onSale = { membership: input.membershipOnSale, courses: input.courses.length };
   if (products.length === 0) return { general: null, products: [], onSale };
 
   const general = input.membershipOnSale
-    ? withRef('/unete')
+    ? withRef('/join')
     : products.length === 1
       ? products[0]!.url
-      : withRef('/catalogo');
+      : withRef('/catalog');
   return { general, products: products.length > 1 ? products : [], onSale };
 }
 

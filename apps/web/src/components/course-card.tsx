@@ -33,7 +33,7 @@ export interface CourseCardData {
 
 interface Props {
   course: CourseCardData;
-  /** Si quieres un href custom (ej. detalle de formador). Default: /cursos/{slug}. */
+  /** Si quieres un href custom (ej. detalle de formador). Default: /courses/{slug}. */
   href?: string;
 }
 
@@ -63,7 +63,7 @@ function pickGradient(seed: string): string {
 export function CourseCard({ course, href }: Props) {
   const t = useTranslations('playersContenido');
   const tCommon = useTranslations('common');
-  const target = href ?? (`/cursos/${course.slug}` as const);
+  const target = href ?? (`/courses/${course.slug}` as const);
   const status = resolveStatus(course);
   const cover = course.thumbnailUrl ? null : pickGradient(course.slug || course.id || course.title);
   const progress = typeof course.progressPercent === 'number' ? course.progressPercent : null;

@@ -25,8 +25,8 @@ const METADATA = {
 
 const PARAMS = {
   priceId: 'price_1Abc',
-  successUrl: 'https://aula.test/unete?status=success',
-  cancelUrl: 'https://aula.test/unete?status=cancel',
+  successUrl: 'https://aula.test/join?status=success',
+  cancelUrl: 'https://aula.test/join?status=cancel',
   customerEmail: 'alumna@example.com',
   trialDays: 7,
   allowPromotionCodes: true,
@@ -74,8 +74,8 @@ function capture(options?: SubscriptionsStripeAdapterOptions) {
 const OWN_SNAPSHOT = JSON.stringify({
   mode: 'subscription',
   line_items: [{ price: 'price_1Abc', quantity: 1 }],
-  success_url: 'https://aula.test/unete?status=success',
-  cancel_url: 'https://aula.test/unete?status=cancel',
+  success_url: 'https://aula.test/join?status=success',
+  cancel_url: 'https://aula.test/join?status=cancel',
   customer_email: 'alumna@example.com',
   client_reference_id: '22222222-2222-4222-8222-222222222222',
   allow_promotion_codes: true,
@@ -152,12 +152,12 @@ describe('SubscriptionsStripeSdkAdapter.createPortalSession', () => {
     const { adapter, portals } = capture();
     const result = await adapter.createPortalSession({
       customerId: 'cus_Alumna',
-      returnUrl: 'https://aula.test/cuenta?tab=suscripcion',
+      returnUrl: 'https://aula.test/account?tab=suscripcion',
     });
     expect(result).toEqual({ url: 'https://billing.stripe.test/p/session/x' });
     expect(portals[0]).toEqual({
       customer: 'cus_Alumna',
-      return_url: 'https://aula.test/cuenta?tab=suscripcion',
+      return_url: 'https://aula.test/account?tab=suscripcion',
     });
   });
 
@@ -168,12 +168,12 @@ describe('SubscriptionsStripeSdkAdapter.createPortalSession', () => {
     });
     await adapter.createPortalSession({
       customerId: 'cus_Alumna',
-      returnUrl: 'https://aula.test/cuenta',
+      returnUrl: 'https://aula.test/account',
       configurationId: 'bpc_1Creador',
     });
     expect(portals[0]).toEqual({
       customer: 'cus_Alumna',
-      return_url: 'https://aula.test/cuenta',
+      return_url: 'https://aula.test/account',
       configuration: 'bpc_1Creador',
       on_behalf_of: 'acct_1Creador',
     });

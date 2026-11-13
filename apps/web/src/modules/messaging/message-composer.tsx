@@ -12,7 +12,7 @@ import { Icon } from '@/components/icon';
 import { MESSAGE_MAX_LENGTH, TYPING_THROTTLE_MS } from './constants';
 
 /**
- * Campo de escritura compartido por `/mensajes` y el hilo del chat flotante.
+ * Campo de escritura compartido por `/messages` y el hilo del chat flotante.
  *
  * Aquí vive el acelerador del indicador «está escribiendo» (ADR-019): como
  * mucho un aviso cada `TYPING_THROTTLE_MS`, y ninguno con el campo vacío. Al

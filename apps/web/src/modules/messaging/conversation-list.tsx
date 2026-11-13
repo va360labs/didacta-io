@@ -11,7 +11,7 @@ import { ConversationBadge } from './conversation-badge';
 import { keyOf, previewOf, relTime } from './shared';
 
 /**
- * Grupo de conversaciones de la bandeja. Lo usan la página `/mensajes` y el
+ * Grupo de conversaciones de la bandeja. Lo usan la página `/messages` y el
  * panel del chat flotante — una sola implementación de la fila, para que las dos
  * superficies no diverjan (regla #5).
  */

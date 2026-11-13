@@ -828,7 +828,7 @@ describe('classifySubscriptionStatus', () => {
     }
   });
 
-  it('es tolerante con mayúsculas/espacios y cae a "Desconocido" si no lo reconoce', () => {
+  it('es tolerante con mayúsculas/spaces y cae a "Desconocido" si no lo reconoce', () => {
     expect(classifySubscriptionStatus('  ACTIVE ').entitled).toBe(true);
     const unknown = classifySubscriptionStatus('rarísimo');
     expect(unknown.category).toBe('unknown');
@@ -1383,17 +1383,17 @@ describe('me/subscription (self-service del usuario)', () => {
       TENANT,
       'user_1',
       'subr_1',
-      'https://aula.test/cuenta?tab=suscripcion',
+      'https://aula.test/account?tab=suscripcion',
     );
     expect(url).toContain('cus_me');
-    expect(url).toContain(encodeURIComponent('https://aula.test/cuenta?tab=suscripcion'));
+    expect(url).toContain(encodeURIComponent('https://aula.test/account?tab=suscripcion'));
   });
 
   it('createMyBillingPortalSession: la suscripción de otro usuario → NotFound (no la abre)', async () => {
     const svc = buildService();
     svc.prisma.subscribers.set('me-1', { id: 'subr_1', ...BASE_SUB });
     await expect(
-      svc.service.createMyBillingPortalSession(TENANT, 'otro_user', 'subr_1', 'https://x/cuenta'),
+      svc.service.createMyBillingPortalSession(TENANT, 'otro_user', 'subr_1', 'https://x/account'),
     ).rejects.toBeInstanceOf(PaymentConnectionNotFoundError);
   });
 
@@ -1401,7 +1401,7 @@ describe('me/subscription (self-service del usuario)', () => {
     const svc = buildService();
     svc.prisma.subscribers.set('me-1', { id: 'subr_pp', ...BASE_SUB, provider: 'paypal' });
     await expect(
-      svc.service.createMyBillingPortalSession(TENANT, 'user_1', 'subr_pp', 'https://x/cuenta'),
+      svc.service.createMyBillingPortalSession(TENANT, 'user_1', 'subr_pp', 'https://x/account'),
     ).rejects.toBeInstanceOf(PaymentPortalUnavailableError);
   });
 });

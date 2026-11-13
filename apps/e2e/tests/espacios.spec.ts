@@ -8,8 +8,8 @@
  * Cubre:
  *  - Sidebar ESPACIOS: sección visible, items de BD, botón "+" según rol
  *  - CreateSpaceModal: campos, validación, modo icono/emoji, preview, submit
- *  - Página /espacios/[space]: heading sin "#", icono correcto (no texto crudo)
- *  - Panel admin /admin/comunidad/espacios: lista, crear, editar, borrar
+ *  - Página /spaces/[space]: heading sin "#", icono correcto (no texto crudo)
+ *  - Panel admin /admin/community/spaces: lista, crear, editar, borrar
  *  - SpaceIcon: renderiza SVG o emoji, nunca texto crudo como "message"
  *  - Consistencia visual: sin datos de cartón
  */
@@ -73,7 +73,7 @@ async function withAdminSession(
 
 test.describe('Sidebar — sección ESPACIOS', () => {
   test('la sección ESPACIOS es visible en el sidebar', async ({ page }) => {
-    await withAdminSession(page, '/comunidad');
+    await withAdminSession(page, '/community');
     const sidebar = page.locator('aside').first();
     // El label del grupo es "Foros" en el DOM desde el bloque 9 de simplificación
     // de navegación (`app/(app)/layout.tsx`); el CSS text-transform:uppercase es
@@ -84,7 +84,7 @@ test.describe('Sidebar — sección ESPACIOS', () => {
   test('el sidebar carga espacios reales de la BD (al menos 1 item en ESPACIOS)', async ({
     page,
   }) => {
-    await withAdminSession(page, '/comunidad');
+    await withAdminSession(page, '/community');
     const sidebar = page.locator('aside').first();
     // La sección arranca PLEGADA y sólo enseña el contador (botón "Foros N"),
     // así que los enlaces no están en el DOM hasta desplegarla. Antes se
@@ -94,21 +94,21 @@ test.describe('Sidebar — sección ESPACIOS', () => {
     await expect(toggle).toBeVisible({ timeout: 8000 });
     await toggle.click();
 
-    // Debe haber al menos un link dentro de la sección apuntando a /espacios/
-    const espaciosLinks = sidebar.locator('a[href^="/espacios/"]');
+    // Debe haber al menos un link dentro de la sección apuntando a /spaces/
+    const espaciosLinks = sidebar.locator('a[href^="/spaces/"]');
     await expect(espaciosLinks.first()).toBeVisible({ timeout: 8000 });
     const count = await espaciosLinks.count();
     expect(count).toBeGreaterThan(0);
   });
 
   test('como alumno (rol) NO hay botón "+" junto a ESPACIOS', async ({ page }) => {
-    await withAdminSession(page, '/comunidad', ['alumno']);
+    await withAdminSession(page, '/community', ['alumno']);
     const sidebar = page.locator('aside').first();
     await expect(sidebar.getByRole('button', { name: /Añadir a Foros/i })).not.toBeVisible();
   });
 
   test('como admin SÍ hay botón "+" junto a ESPACIOS', async ({ page }) => {
-    await withAdminSession(page, '/comunidad');
+    await withAdminSession(page, '/community');
     const sidebar = page.locator('aside').first();
     await expect(sidebar.getByRole('button', { name: /Añadir a Foros/i })).toBeVisible();
   });
@@ -116,7 +116,7 @@ test.describe('Sidebar — sección ESPACIOS', () => {
   test('los items de ESPACIOS no muestran texto crudo de IconName (bug regresión)', async ({
     page,
   }) => {
-    await withAdminSession(page, '/comunidad');
+    await withAdminSession(page, '/community');
     const sidebar = page.locator('aside').first();
     await page.waitForTimeout(1500);
     const sidebarText = await sidebar.innerText();
@@ -128,7 +128,7 @@ test.describe('Sidebar — sección ESPACIOS', () => {
   });
 
   test('el sidebar NO muestra "1.240 miembros" hardcodeado (dato de cartón)', async ({ page }) => {
-    await withAdminSession(page, '/comunidad');
+    await withAdminSession(page, '/community');
     const sidebar = page.locator('aside').first();
     await expect(sidebar.getByText('1.240 miembros')).not.toBeVisible();
   });
@@ -138,7 +138,7 @@ test.describe('Sidebar — sección ESPACIOS', () => {
 
 test.describe('CreateSpaceModal — modal de creación de espacio', () => {
   test.beforeEach(async ({ page }) => {
-    await withAdminSession(page, '/comunidad');
+    await withAdminSession(page, '/community');
     await page.getByRole('button', { name: /Añadir a Foros/i }).click();
     await expect(page.getByRole('dialog', { name: 'Nuevo espacio' })).toBeVisible();
   });
@@ -206,11 +206,11 @@ test.describe('CreateSpaceModal — modal de creación de espacio', () => {
   });
 });
 
-// ── BLOQUE 3: Página /espacios/[space] ────────────────────────────────────
+// ── BLOQUE 3: Página /spaces/[space] ────────────────────────────────────
 
-test.describe('Página /espacios/[space]', () => {
-  test('/espacios/general — heading visible sin "#" (bug regresión)', async ({ page }) => {
-    await withAdminSession(page, '/espacios/general');
+test.describe('Página /spaces/[space]', () => {
+  test('/spaces/general — heading visible sin "#" (bug regresión)', async ({ page }) => {
+    await withAdminSession(page, '/spaces/general');
     const heading = page.getByRole('heading', { level: 1 });
     await heading.waitFor({ state: 'visible' });
     const text = await heading.innerText();
@@ -218,8 +218,8 @@ test.describe('Página /espacios/[space]', () => {
     expect(text.trim().length).toBeGreaterThan(0);
   });
 
-  test('/espacios/anuncios — heading visible sin "#"', async ({ page }) => {
-    await withAdminSession(page, '/espacios/anuncios');
+  test('/spaces/anuncios — heading visible sin "#"', async ({ page }) => {
+    await withAdminSession(page, '/spaces/anuncios');
     const heading = page.getByRole('heading', { level: 1 });
     await heading.waitFor({ state: 'visible' });
     const text = await heading.innerText();
@@ -229,7 +229,7 @@ test.describe('Página /espacios/[space]', () => {
   test('el icono de cabecera no muestra texto crudo de IconName (bug regresión)', async ({
     page,
   }) => {
-    await withAdminSession(page, '/espacios/general');
+    await withAdminSession(page, '/spaces/general');
     await page.waitForTimeout(2000); // networkidle nunca resuelve con SSE activo
     // La caja del icono en la cabecera contiene un SVG, no texto
     const iconBox = page.locator('header div.grid').first();
@@ -240,12 +240,12 @@ test.describe('Página /espacios/[space]', () => {
   });
 
   test('botón "Nueva publicación" visible', async ({ page }) => {
-    await withAdminSession(page, '/espacios/general');
+    await withAdminSession(page, '/spaces/general');
     await expect(page.getByRole('button', { name: 'Nueva publicación' })).toBeVisible();
   });
 
   test('el compositor se abre al pulsar "Nueva publicación"', async ({ page }) => {
-    await withAdminSession(page, '/espacios/general');
+    await withAdminSession(page, '/spaces/general');
     await page.getByRole('button', { name: 'Nueva publicación' }).click();
     // El modal PostComposerModal debe aparecer. Se busca POR NOMBRE, no con
     // `[role="dialog"]`.first(): el drawer de navegación móvil es también un
@@ -259,7 +259,7 @@ test.describe('Página /espacios/[space]', () => {
   });
 
   test('el selector de ordenación tiene las 3 opciones', async ({ page }) => {
-    await withAdminSession(page, '/espacios/general');
+    await withAdminSession(page, '/spaces/general');
     // getByRole('option') no funciona con <select> nativo cerrado — usar locator directo
     const select = page.locator('select');
     await expect(select).toBeVisible({ timeout: 8000 });
@@ -270,12 +270,12 @@ test.describe('Página /espacios/[space]', () => {
   });
 
   test('el sidebar derecho muestra "Acerca del espacio"', async ({ page }) => {
-    await withAdminSession(page, '/espacios/general');
+    await withAdminSession(page, '/spaces/general');
     await expect(page.getByText('Acerca del espacio')).toBeVisible();
   });
 
   test('los iconos en "Otros espacios" no muestran texto crudo', async ({ page }) => {
-    await withAdminSession(page, '/espacios/general');
+    await withAdminSession(page, '/spaces/general');
     await page.waitForTimeout(2000); // networkidle nunca resuelve con SSE activo
     const otherSection = page.getByText('Otros espacios').locator('..');
     if (await otherSection.isVisible().catch(() => false)) {
@@ -291,7 +291,7 @@ test.describe('Página /espacios/[space]', () => {
   });
 
   test('el feed carga (skeleton → posts o empty state)', async ({ page }) => {
-    await withAdminSession(page, '/espacios/general');
+    await withAdminSession(page, '/spaces/general');
     await page.waitForTimeout(2000); // networkidle nunca resuelve con SSE activo
     // Debe mostrar posts o empty state, nunca un error
     const hasError = await page
@@ -302,24 +302,24 @@ test.describe('Página /espacios/[space]', () => {
   });
 });
 
-// ── BLOQUE 4: Panel admin /admin/comunidad/espacios ───────────────────────
+// ── BLOQUE 4: Panel admin /admin/community/spaces ───────────────────────
 
-test.describe('Panel admin — /admin/comunidad/espacios', () => {
+test.describe('Panel admin — /admin/community/spaces', () => {
   test('la página carga sin error 500', async ({ page }) => {
-    await withAdminSession(page, '/admin/comunidad/espacios');
+    await withAdminSession(page, '/admin/community/spaces');
     await expect(page.getByText('Internal Server Error')).not.toBeVisible();
     await expect(page.getByText('Application error')).not.toBeVisible();
   });
 
   test('muestra un heading con "Espacios"', async ({ page }) => {
-    await withAdminSession(page, '/admin/comunidad/espacios');
-    await expect(page.getByRole('heading', { name: /espacios/i }).first()).toBeVisible({
+    await withAdminSession(page, '/admin/community/spaces');
+    await expect(page.getByRole('heading', { name: /spaces/i }).first()).toBeVisible({
       timeout: 8000,
     });
   });
 
   test('lista al menos un espacio (datos reales de BD)', async ({ page }) => {
-    await withAdminSession(page, '/admin/comunidad/espacios');
+    await withAdminSession(page, '/admin/community/spaces');
     // El admin usa una lista ul/li (no tabla). Cada item tiene un botón "Editar".
     const items = page.locator('li').filter({ has: page.locator('button', { hasText: 'Editar' }) });
     await expect(items.first()).toBeVisible({ timeout: 8000 });
@@ -328,18 +328,18 @@ test.describe('Panel admin — /admin/comunidad/espacios', () => {
   });
 
   test('muestra el slug "general" en la lista', async ({ page }) => {
-    await withAdminSession(page, '/admin/comunidad/espacios');
+    await withAdminSession(page, '/admin/community/spaces');
     // El slug se renderiza como "/general · orden N" — el slash lo hace inequívoco
     await expect(page.getByText('/general').first()).toBeVisible({ timeout: 8000 });
   });
 
   test('espacios de sistema muestran el icono de candado 🔒', async ({ page }) => {
-    await withAdminSession(page, '/admin/comunidad/espacios');
+    await withAdminSession(page, '/admin/community/spaces');
     await expect(page.getByText('🔒').first()).toBeVisible({ timeout: 8000 });
   });
 
   test('existe formulario para crear nuevo espacio', async ({ page }) => {
-    await withAdminSession(page, '/admin/comunidad/espacios');
+    await withAdminSession(page, '/admin/community/spaces');
     // count() es síncrono — esperar a que React hidrate antes de contar
     await expect(page.locator('input[placeholder]').first()).toBeVisible({ timeout: 8000 });
     const count = await page.locator('input[placeholder]').count();
@@ -347,13 +347,13 @@ test.describe('Panel admin — /admin/comunidad/espacios', () => {
   });
 
   test('el toggle Icono/Emoji existe en el formulario admin', async ({ page }) => {
-    await withAdminSession(page, '/admin/comunidad/espacios');
+    await withAdminSession(page, '/admin/community/spaces');
     await expect(page.getByRole('button', { name: 'Icono' }).first()).toBeVisible();
     await expect(page.getByRole('button', { name: 'Emoji' }).first()).toBeVisible();
   });
 
   test('el sortOrder es visible en la lista', async ({ page }) => {
-    await withAdminSession(page, '/admin/comunidad/espacios');
+    await withAdminSession(page, '/admin/community/spaces');
     // El orden se muestra inline como "orden N" en la descripción de cada espacio
     await expect(page.getByText(/orden \d+/).first()).toBeVisible({ timeout: 8000 });
   });
@@ -362,34 +362,34 @@ test.describe('Panel admin — /admin/comunidad/espacios', () => {
 // ── BLOQUE 5: Consistencia visual y rutas ────────────────────────────────
 
 test.describe('Consistencia visual y rutas', () => {
-  test('/inicio redirige a /comunidad (sin ruta duplicada)', async ({ page }) => {
-    await withAdminSession(page, '/inicio');
-    await expect(page).toHaveURL(/\/comunidad/);
+  test('/home redirige a /community (sin ruta duplicada)', async ({ page }) => {
+    await withAdminSession(page, '/home');
+    await expect(page).toHaveURL(/\/community/);
   });
 
   test('la sección ESPACIOS en el sidebar tiene el label en mayúsculas (CSS)', async ({ page }) => {
-    await withAdminSession(page, '/comunidad');
+    await withAdminSession(page, '/community');
     // El DOM tiene "Foros"; la clase CSS "uppercase" lo hace aparecer en mayúsculas visualmente.
     await expect(page.locator('aside').first().getByText('Foros', { exact: true })).toBeVisible();
   });
 
-  test('/comunidad no da error 500', async ({ page }) => {
-    await withAdminSession(page, '/comunidad');
+  test('/community no da error 500', async ({ page }) => {
+    await withAdminSession(page, '/community');
     await expect(page.getByText('Internal Server Error')).not.toBeVisible();
   });
 
-  test('/espacios/general no da error 500', async ({ page }) => {
-    await withAdminSession(page, '/espacios/general');
+  test('/spaces/general no da error 500', async ({ page }) => {
+    await withAdminSession(page, '/spaces/general');
     await expect(page.getByText('Internal Server Error')).not.toBeVisible();
   });
 
-  test('/admin/comunidad/espacios no da error 500', async ({ page }) => {
-    await withAdminSession(page, '/admin/comunidad/espacios');
+  test('/admin/community/spaces no da error 500', async ({ page }) => {
+    await withAdminSession(page, '/admin/community/spaces');
     await expect(page.getByText('Internal Server Error')).not.toBeVisible();
   });
 
   test('el sidebar muestra el nombre del tenant, no texto de error', async ({ page }) => {
-    await withAdminSession(page, '/comunidad');
+    await withAdminSession(page, '/community');
     const sidebar = page.locator('aside').first();
     // No debe haber mensajes de error en el sidebar
     await expect(sidebar.getByText('Error')).not.toBeVisible();

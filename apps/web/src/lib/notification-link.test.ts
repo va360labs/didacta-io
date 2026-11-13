@@ -11,7 +11,7 @@ describe('notificationLink', () => {
   it('comentario en post → hilo enfocado en el comentario con acción Responder', () => {
     expect(
       notificationLink('community.comment.on_post', { postId: 'p1', commentId: 'c1' }, tEs),
-    ).toEqual({ href: '/comunidad/p1?comment=c1', actionLabel: 'Responder' });
+    ).toEqual({ href: '/community/p1?comment=c1', actionLabel: 'Responder' });
   });
 
   it('respuesta → enfoca el comentario padre (para seguir la conversación)', () => {
@@ -21,18 +21,18 @@ describe('notificationLink', () => {
         { postId: 'p1', commentId: 'c2', parentCommentId: 'c1' },
         tEs,
       ),
-    ).toEqual({ href: '/comunidad/p1?comment=c1', actionLabel: 'Responder' });
+    ).toEqual({ href: '/community/p1?comment=c1', actionLabel: 'Responder' });
   });
 
   it('respuesta sin parentCommentId cae al nuevo comentario', () => {
     expect(
       notificationLink('community.reply.to_comment', { postId: 'p1', commentId: 'c2' }, tEs),
-    ).toEqual({ href: '/comunidad/p1?comment=c2', actionLabel: 'Responder' });
+    ).toEqual({ href: '/community/p1?comment=c2', actionLabel: 'Responder' });
   });
 
   it('mención → acción Ver', () => {
     expect(notificationLink('community.mention', { postId: 'p1', commentId: 'c1' }, tEs)).toEqual({
-      href: '/comunidad/p1?comment=c1',
+      href: '/community/p1?comment=c1',
       actionLabel: 'Ver',
     });
   });

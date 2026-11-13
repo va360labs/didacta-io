@@ -23,7 +23,7 @@ interface Props {
 
 /**
  * Cola de comentarios pendientes de moderación para el profesor.
- * Se renderiza dentro del builder del curso (/formador/cursos/[id])
+ * Se renderiza dentro del builder del curso (/studio/courses/[id])
  * y agrega TODOS los pendientes del curso, agrupados por lección.
  *
  * Si no hay pendientes, no muestra nada (silenciosa cuando no hay nada

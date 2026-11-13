@@ -7,14 +7,14 @@ import type { ModuleWebExtension } from '@/lib/module-registry';
 
 /**
  * mod.surveys — encuestas y NPS (bloque 2). El item de sidebar cuelga del
- * grupo 'Comunidad' del área admin; el panel del alumno vive en /clase/[id].
+ * grupo 'Comunidad' del área admin; el panel del alumno vive en /live/[id].
  */
 export const surveysExtension: ModuleWebExtension = {
   name: 'mod.surveys',
   sidebarItems: [
     {
       group: 'Contenido',
-      href: '/admin/encuestas',
+      href: '/admin/surveys',
       label: 'Encuestas',
       icon: 'chart',
       requiresRole: 'tenant_admin',

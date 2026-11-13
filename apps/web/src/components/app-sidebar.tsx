@@ -375,7 +375,7 @@ export function SidebarContent({
 
         <div className="flex flex-col items-center gap-1.5 border-t border-white/8 px-2 py-3">
           <Link
-            href={'/cuenta' as never}
+            href={'/account' as never}
             onClick={onNavigate}
             title={t('sidebar.myProfile')}
             aria-label={t('sidebar.myProfile')}
@@ -709,17 +709,17 @@ export function SidebarContent({
       </nav>
 
       {/* ── User strip ── */}
-      {/* La identidad (avatar + nombre) ES el enlace a "Mi perfil" (/cuenta).
+      {/* La identidad (avatar + nombre) ES el enlace a "Mi perfil" (/account).
           No hay item de menú separado: se accede pulsando el nombre del usuario. */}
       <div className="border-t border-white/8 px-3.5 py-3">
         <div className="flex items-center gap-1.5">
           <Link
-            href={'/cuenta' as never}
+            href={'/account' as never}
             onClick={onNavigate}
             title={t('sidebar.myProfile')}
             aria-label={t('sidebar.myProfile')}
             className={
-              (pathname?.startsWith('/cuenta') ? 'bg-white/8 ' : 'hover:bg-white/5 ') +
+              (pathname?.startsWith('/account') ? 'bg-white/8 ' : 'hover:bg-white/5 ') +
               'flex min-w-0 flex-1 items-center gap-2.5 rounded-lg px-1.5 py-1 transition-colors'
             }
           >

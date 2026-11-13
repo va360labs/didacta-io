@@ -6,9 +6,9 @@
  */
 
 /**
- * Tarjeta "Registro público" del tab Registro de `/admin/configuracion` (A3
+ * Tarjeta "Registro público" del tab Registro de `/admin/settings` (A3
  * de `work/migracion-env-a-panel.md`). Distinta de `MemberRegistrationSettingsCard`
- * (esa gestiona `/inscripcion-miembros` — solicitudes con aprobación manual);
+ * (esa gestiona `/member-registration` — solicitudes con aprobación manual);
  * esta gestiona si `POST /auth/signup` (alta directa, sin aprobación) está
  * abierto para ESTE tenant. `tenant_setting` scope `auth` key `signup`.
  *

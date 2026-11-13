@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test';
 import { bootstrapScenario, API_URL } from '../helpers/api';
 
 /**
- * Spec G5.1: el toggle de "resumen semanal de comunidad" en `/cuenta`
+ * Spec G5.1: el toggle de "resumen semanal de comunidad" en `/account`
  * debe **persistir tras reload**. Verifica el flow completo:
  *   1. GET /modules/community/me/preferences → digestOptOut=false (default).
  *   2. PUT con digestOptOut=true → 200.
@@ -36,7 +36,7 @@ test.describe('Comunidad · digest opt-out persistente (G5.1)', () => {
     if (initial.status === 403 || initial.status === 404) {
       test.skip(
         true,
-        'El módulo community no está habilitado para el tenant E2E (403/404 — habilitar en /admin/configuracion).',
+        'El módulo community no está habilitado para el tenant E2E (403/404 — habilitar en /admin/settings).',
       );
       return;
     }

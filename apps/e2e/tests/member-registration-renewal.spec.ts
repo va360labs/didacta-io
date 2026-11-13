@@ -3,7 +3,7 @@ import { adminTokenForBootstrap, API_URL } from '../helpers/api';
 
 /**
  * Spec e2e del recordatorio de pago desde el panel de solicitudes de inscripción
- * (`/admin/solicitudes-miembros`): endpoints `GET .../renewal-context` y
+ * (`/admin/member-requests`): endpoints `GET .../renewal-context` y
  * `POST .../renewal-email` del admin del módulo (`/modules/member-registration/admin`).
  *
  * API-driven (igual que member-registration.spec.ts). Cubrimos los caminos

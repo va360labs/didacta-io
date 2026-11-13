@@ -19,7 +19,7 @@
  * (apps/api/src/auth/me.controller.ts) la refleja. Antes eran tres listas
  * independientes y por eso `pt-BR` llegó a estar en el selector y en la API sin
  * existir en los catálogos: el usuario elegía portugués, la API lo guardaba,
- * `/cuenta` le confirmaba «Português (Brasil)» y la UI seguía en español.
+ * `/account` le confirmaba «Português (Brasil)» y la UI seguía en español.
  *
  * `toSupportedLocale()` sigue degradando cualquier tag ajeno —`pt-BR` incluido—
  * porque en base de datos quedan valores que la UI ya no ofrece: perfiles

@@ -17,7 +17,7 @@
  * LicenseExceptionFilter (registrado globalmente en `main.ts`).
  *
  * Cada acción persistente registra un entry en el audit log con prefijo
- * `tenancy.custom_domain.<verb>` para que el panel /admin/auditoria pueda
+ * `tenancy.custom_domain.<verb>` para que el panel /admin/audit pueda
  * filtrar por tipo de evento.
  */
 

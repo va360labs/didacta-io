@@ -80,7 +80,7 @@ import { WebhooksModule } from './webhooks/webhooks.module';
     // License SDK: cargamos la licencia al boot. Precedencia env > BD
     // (work/migracion-env-a-panel.md §1): si DIDACTA_LICENSE_KEY está seteada
     // se usa esa; si no, `keyProvider` cae a `instance_setting` (lo que
-    // guarda /admin/licencia). Exponemos LicenseService como provider global
+    // guarda /admin/license). Exponemos LicenseService como provider global
     // para el gateado de capabilities Enterprise con @RequiresCapability.
     LicenseModule.forRootAsync({
       imports: [InstanceSettingsModule],
@@ -92,7 +92,7 @@ import { WebhooksModule } from './webhooks/webhooks.module';
       }),
     }),
     ApiLicenseModule,
-    // `/admin/licencia`: gestionar la key desde el panel con recarga en
+    // `/admin/license`: gestionar la key desde el panel con recarga en
     // caliente (sin esto, guardar no surtía efecto hasta reiniciar).
     LicenseAdminModule,
     // Sexto piloto License SDK — gate feat:api.rate_limit.elevated end-to-end.

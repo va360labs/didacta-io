@@ -16,7 +16,7 @@ import { ModuleRegistryService } from '../module-registry.service';
  * in-app + email (plantilla `surveys.post_class.invitation`, personalizable en
  * /admin/emails).
  *
- * El enlace del email apunta a la página de la clase (/clase/[id]), donde vive
+ * El enlace del email apunta a la página de la clase (/live/[id]), donde vive
  * el panel de la encuesta — no hay URL propia de encuesta.
  *
  * TODO es best-effort: un fallo aquí JAMÁS afecta al cierre de la clase ni al
@@ -34,7 +34,7 @@ interface SessionEndedPayload {
  */
 function classUrl(webBase: string, sessionId: string): string {
   const base = webBase.trim().replace(/\/+$/, '');
-  return base ? `${base}/clase/${sessionId}` : '';
+  return base ? `${base}/live/${sessionId}` : '';
 }
 
 @Injectable()

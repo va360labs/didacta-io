@@ -61,7 +61,7 @@ test.describe('Biblioteca de recursos por colecciones (mod.resources)', () => {
     });
     const adminAuth = (await adminAuthRes.json()) as never;
     await fullSession(page, adminAuth);
-    await page.goto('/recursos');
+    await page.goto('/resources');
     await expect(page.getByTestId('collection-card').first()).toBeVisible();
 
     await page.getByRole('button', { name: 'Nueva colección' }).click();
@@ -79,7 +79,7 @@ test.describe('Biblioteca de recursos por colecciones (mod.resources)', () => {
       name: 'Alumno Recursos',
     });
     await fullSession(page, alumno as never);
-    await page.goto(`/recursos/${workflows!.id}`);
+    await page.goto(`/resources/${workflows!.id}`);
     await expect(page.getByRole('heading', { name: 'Workflows de clase' })).toBeVisible();
 
     await page.getByRole('button', { name: 'Compartir recurso' }).click();

@@ -16,7 +16,7 @@
  *   2. `tenantPrimaryHostname` si se pasa: el dominio primario **verificado**
  *      del tenant (`TenantDomain.isPrimary`), resuelto por el caller (ver
  *      `TenantResolverService.resolveTenantWebBaseUrl`). Fuente más confiable
- *      que el Host del request — el admin ya lo declaró en `/admin/dominios`.
+ *      que el Host del request — el admin ya lo declaró en `/admin/domains`.
  *   3. Derivar del request entrante: `${proto}://${host}` usando los headers
  *      `X-Forwarded-Proto` / `X-Forwarded-Host` que Traefik (el reverse proxy
  *      delante de la API) inyecta — p.ej. `x-forwarded-host=dev.didacta.io`,

@@ -33,7 +33,7 @@ import { communityApi } from '@/modules/community';
  * Onboarding de primera vez (gate bloqueante). El shell `(app)` redirige aquí
  * mientras `onboardingCompletedAt` sea null. Captura foto (obligatoria), nombre
  * (obligatorio), bio, idioma/zona horaria, DNI/NIE y preferencias de
- * notificación, y al completar marca el onboarding y entra a /inicio.
+ * notificación, y al completar marca el onboarding y entra a /home.
  *
  * En modo sencillo, quien LLEVA la academia pasa por este mismo paso en su
  * primer acceso, antes del alta en 3 preguntas (ver `lib/first-access.ts`):
@@ -51,7 +51,7 @@ export default function OnboardingPage() {
   const creador = isCreatorProfile(authStorage.getSession()?.user.roles, simpleMode);
   const tc = useTranslations('modoSencillo.perfil.creador');
   // Dentro del efecto de carga el modo aún puede no haber llegado: se mira la
-  // caché, y sin ella /inicio (el gate del shell sabe llevar al creador).
+  // caché, y sin ella /home (el gate del shell sabe llevar al creador).
   const creadorAhora = () =>
     isCreatorProfile(authStorage.getSession()?.user.roles, readSimpleModeCache());
   const tErrors = useTranslations('errors');
@@ -98,7 +98,7 @@ export default function OnboardingPage() {
         setEmail(p.email);
         setName(p.name ?? '');
         setBio(p.bio ?? '');
-        // Normalizado: ver el mismo comentario en `/cuenta`. Un locale
+        // Normalizado: ver el mismo comentario en `/account`. Un locale
         // guardado que el selector ya no ofrece dejaría el `<select>` sin
         // opción que casar.
         setLocale(toSupportedLocale(p.locale));
@@ -198,7 +198,7 @@ export default function OnboardingPage() {
         authStorage.saveSession(session);
       }
       // Deep link pendiente de antes del login (enlace compartido) → ahí. Si
-      // no, el creador sigue hacia su academia y el resto a /inicio.
+      // no, el creador sigue hacia su academia y el resto a /home.
       router.replace(consumeIntendedPath() ?? afterProfilePath(creador));
     } catch (e) {
       setError(

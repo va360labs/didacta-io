@@ -36,31 +36,31 @@ async function withSession(page: Parameters<typeof injectSession>[0], url: strin
 }
 
 test.describe('Redesign smoke — páginas principales', () => {
-  test('/inicio redirige a /comunidad', async ({ page }) => {
-    await withSession(page, '/inicio');
-    await expect(page).toHaveURL(/\/comunidad/);
+  test('/home redirige a /community', async ({ page }) => {
+    await withSession(page, '/home');
+    await expect(page).toHaveURL(/\/community/);
   });
 
-  test('/inicio/mi-panel muestra heading y stat cards', async ({ page }) => {
-    await withSession(page, '/inicio/mi-panel');
+  test('/home/dashboard muestra heading y stat cards', async ({ page }) => {
+    await withSession(page, '/home/dashboard');
     await expect(page.getByRole('heading', { name: 'Mi panel' })).toBeVisible();
     await expect(page.getByText('Cursos en marcha')).toBeVisible();
     await expect(page.getByText('Progreso medio')).toBeVisible();
   });
 
-  test('/espacios/general muestra heading y botón compositor', async ({ page }) => {
-    await withSession(page, '/espacios/general');
+  test('/spaces/general muestra heading y botón compositor', async ({ page }) => {
+    await withSession(page, '/spaces/general');
     await expect(page.getByRole('heading', { name: 'General' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Nueva publicación' })).toBeVisible();
   });
 
-  test('/espacios/anuncios muestra heading', async ({ page }) => {
-    await withSession(page, '/espacios/anuncios');
+  test('/spaces/anuncios muestra heading', async ({ page }) => {
+    await withSession(page, '/spaces/anuncios');
     await expect(page.getByRole('heading', { name: 'Anuncios' })).toBeVisible();
   });
 
-  test('/grupos muestra heading y tabs', async ({ page }) => {
-    await withSession(page, '/grupos');
+  test('/groups muestra heading y tabs', async ({ page }) => {
+    await withSession(page, '/groups');
     await expect(page.getByRole('heading', { name: 'Grupos' })).toBeVisible();
     await expect(page.getByRole('button', { name: /Mis grupos/ })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Explorar' })).toBeVisible();
@@ -71,8 +71,8 @@ test.describe('Redesign smoke — páginas principales', () => {
     await expect(page.getByText('No hay grupos disponibles')).toBeVisible();
   });
 
-  test('/grupos/[id] inexistente muestra "Grupo no encontrado"', async ({ page }) => {
-    await withSession(page, '/grupos/slug-que-no-existe');
+  test('/groups/[id] inexistente muestra "Grupo no encontrado"', async ({ page }) => {
+    await withSession(page, '/groups/slug-que-no-existe');
     await expect(page.getByText('Grupo no encontrado')).toBeVisible();
   });
 
@@ -85,15 +85,15 @@ test.describe('Redesign smoke — páginas principales', () => {
     await expect(page.getByRole('button', { name: 'Global' })).toBeVisible();
   });
 
-  test('/eventos redirige a la pestaña Eventos del calendario', async ({ page }) => {
-    // Bloque 9 (simplificar navegación): /eventos se fusionó con /calendario.
-    await withSession(page, '/eventos');
-    await expect(page).toHaveURL(/\/calendario\?vista=eventos/);
+  test('/events redirige a la pestaña Eventos del calendario', async ({ page }) => {
+    // Bloque 9 (simplificar navegación): /events se fusionó con /calendar.
+    await withSession(page, '/events');
+    await expect(page).toHaveURL(/\/calendar\?vista=eventos/);
     await expect(page.getByText('No hay eventos programados')).toBeVisible();
   });
 
-  test('/calendario muestra grid y navegación entre meses', async ({ page }) => {
-    await withSession(page, '/calendario');
+  test('/calendar muestra grid y navegación entre meses', async ({ page }) => {
+    await withSession(page, '/calendar');
     await expect(page.getByText('Agenda · Calendario')).toBeVisible();
     // Cabeceras de días L M X J V S D
     await expect(page.getByText('L').first()).toBeVisible();
@@ -110,15 +110,15 @@ test.describe('Redesign smoke — páginas principales', () => {
     await expect(page.locator('h2').filter({ hasText: /\d{4}/ })).toBeVisible();
   });
 
-  test('/miembros muestra heading y buscador', async ({ page }) => {
-    await withSession(page, '/miembros');
+  test('/members muestra heading y buscador', async ({ page }) => {
+    await withSession(page, '/members');
     await expect(page.getByRole('heading', { name: 'Miembros' })).toBeVisible();
     // Para rol alumno: empty state del directorio público
     await expect(page.getByText('Directorio de miembros')).toBeVisible();
   });
 
-  test('/mensajes muestra heading y área vacía', async ({ page }) => {
-    await withSession(page, '/mensajes');
+  test('/messages muestra heading y área vacía', async ({ page }) => {
+    await withSession(page, '/messages');
     await expect(page.getByRole('heading', { name: 'Mensajes' })).toBeVisible();
     // El panel derecho sin conversación seleccionada. Antes se afirmaban aquí
     // "No tienes conversaciones todavía." y "Mensajes directos", copys que

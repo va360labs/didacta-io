@@ -12,7 +12,7 @@ import { SpaceIcon } from '@/components/space-icon';
 import type { ConversationView } from './client';
 
 /**
- * Distintivo de una conversación, compartido por `/mensajes` y el chat flotante.
+ * Distintivo de una conversación, compartido por `/messages` y el chat flotante.
  *
  * Salas → cuadro redondeado con el icono y color REALES del espacio (los que el
  * operador configuró en mod.community). El mockup dibujaba un `#` genérico: se

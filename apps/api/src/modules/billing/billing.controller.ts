@@ -202,8 +202,8 @@ export class BillingController {
       courseId,
       optionId: body?.optionId,
       ...(body?.referralCode ? { referralCode: body.referralCode.toLowerCase() } : {}),
-      successUrl: `${webBaseUrl}/cursos/checkout/success?session_id={CHECKOUT_SESSION_ID}`,
-      cancelUrl: `${webBaseUrl}/cursos/checkout/cancel`,
+      successUrl: `${webBaseUrl}/courses/checkout/success?session_id={CHECKOUT_SESSION_ID}`,
+      cancelUrl: `${webBaseUrl}/courses/checkout/cancel`,
     });
     await this.consents.attachSession(user.tenantId, consentId, {
       sessionId: result.sessionId,

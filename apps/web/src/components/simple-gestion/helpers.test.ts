@@ -48,8 +48,8 @@ describe('directos sencillos', () => {
 
 describe('alumnos y ajustes sencillos', () => {
   it('el enlace para compartir solo existe tras publicar', () => {
-    expect(shareUrl('https://academia.didacta.io/', '/catalogo/curso')).toBe(
-      'https://academia.didacta.io/catalogo/curso',
+    expect(shareUrl('https://academia.didacta.io/', '/catalog/curso')).toBe(
+      'https://academia.didacta.io/catalog/curso',
     );
     expect(shareUrl('https://academia.didacta.io', null)).toBeNull();
   });

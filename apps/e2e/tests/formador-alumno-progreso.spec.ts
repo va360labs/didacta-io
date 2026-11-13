@@ -23,8 +23,8 @@ import { injectSession } from '../helpers/auth';
  *   modules[].lessons[] con watchedSeconds / resumePositionSec / completed /
  *   completedAt / lastAccessedAt. Las lecciones nunca empezadas aparecen en 0.
  *
- * UI nueva: /formador/cursos/[id]/alumnos/[enrollmentId] con botón "Ver progreso"
- * en la tabla de /formador/cursos/[id]/alumnos.
+ * UI nueva: /studio/courses/[id]/students/[enrollmentId] con botón "Ver progreso"
+ * en la tabla de /studio/courses/[id]/students.
  *
  * Estado de cobertura: las 4 pruebas están ACTIVAS. Las guardas 401/403 no
  * dependen de datos; el happy-path de shape y el flujo UI requieren stack vivo
@@ -193,7 +193,7 @@ test.describe('Detalle de progreso por lección de un alumno (HU-FORM-003)', () 
     });
 
     // Tabla de alumnos del curso → clic en "Ver progreso" del alumno.
-    await page.goto(`/formador/cursos/${scenario.course.id}/alumnos`);
+    await page.goto(`/studio/courses/${scenario.course.id}/students`);
     await expect(page.getByRole('heading', { name: 'Alumnos del curso' })).toBeVisible();
     const row = page.getByRole('row', { name: new RegExp(scenario.alumno.email, 'i') });
     await row.getByRole('link', { name: /Ver progreso/i }).click();
@@ -201,7 +201,7 @@ test.describe('Detalle de progreso por lección de un alumno (HU-FORM-003)', () 
     // Página de detalle: nombre del alumno + StatCard "Tiempo total visto" +
     // al menos una fila de lección con su estado.
     await expect(page).toHaveURL(
-      new RegExp(`/formador/cursos/${scenario.course.id}/alumnos/${ours!.id}$`),
+      new RegExp(`/studio/courses/${scenario.course.id}/students/${ours!.id}$`),
     );
     await expect(page.getByText(scenario.alumno.email)).toBeVisible();
     await expect(page.getByText(/Tiempo total visto/i)).toBeVisible();

@@ -40,11 +40,11 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
  */
 export function agentScreenFor(pathname: string | null | undefined): AgentScreenMatch | null {
   const path = (pathname ?? '').split('?')[0]!.replace(/\/+$/, '') || '/';
-  if (path === '/formador/cursos') return { screen: 'courses' };
-  if (path === '/formador/cursos/nuevo') return { screen: 'course-new' };
-  const course = /^\/formador\/cursos\/([^/]+)$/.exec(path);
+  if (path === '/studio/courses') return { screen: 'courses' };
+  if (path === '/studio/courses/new') return { screen: 'course-new' };
+  const course = /^\/studio\/courses\/([^/]+)$/.exec(path);
   if (course && UUID.test(course[1]!)) return { screen: 'course-edit', courseId: course[1] };
-  if (path === '/formador/aula-virtual') return { screen: 'live' };
+  if (path === '/studio/live') return { screen: 'live' };
   return null;
 }
 

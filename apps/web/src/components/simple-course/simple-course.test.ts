@@ -48,9 +48,9 @@ describe('¿se puede comprar ya?', () => {
     expect(saleState({ salePath: null, steps: paso(true) })).toBe('unpublished');
   });
   it('publicado sin cobros: NO se puede comprar', () => {
-    expect(saleState({ salePath: '/catalogo/x', steps: paso(false) })).toBe('not-purchasable');
+    expect(saleState({ salePath: '/catalog/x', steps: paso(false) })).toBe('not-purchasable');
   });
   it('publicado con cobros: a la venta', () => {
-    expect(saleState({ salePath: '/catalogo/x', steps: paso(true) })).toBe('on-sale');
+    expect(saleState({ salePath: '/catalog/x', steps: paso(true) })).toBe('on-sale');
   });
 });

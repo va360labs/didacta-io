@@ -194,7 +194,7 @@ export class PrismaAuditLogService implements AuditLogService {
   }
 
   /**
-   * Listado de entradas para el panel /admin/auditoria. Soporta filtros por
+   * Listado de entradas para el panel /admin/audit. Soporta filtros por
    * actor, acción, tipo de recurso y rango de fechas. Devuelve hasta `limit`
    * (default 100, máximo 500) ordenadas por timestamp desc.
    *

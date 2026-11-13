@@ -4,7 +4,7 @@
  */
 
 /**
- * MembershipService — venta de MEMBRESÍA por suscripción (página pública /unete).
+ * MembershipService — venta de MEMBRESÍA por suscripción (página pública /join).
  *
  * A diferencia de SubscriptionsService (suscripción POR CURSO de un usuario ya
  * logueado), la membresía:
@@ -324,7 +324,7 @@ export class MembershipService {
   // ---------------- Página pública ----------------
 
   /**
-   * Datos que pinta /unete. Lanza MembershipPageInactiveError si la página no
+   * Datos que pinta /join. Lanza MembershipPageInactiveError si la página no
    * está activada por el admin. Lee cursos PUBLISHED de mod.courses (lectura
    * cross-module permitida en core first-party, filtrada por tenant y
    * declarada en el manifest).

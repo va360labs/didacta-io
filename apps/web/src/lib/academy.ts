@@ -57,7 +57,7 @@ export type OnboardingStep = (typeof ONBOARDING_STEPS)[number];
  * Adónde llevan los pasos que se resuelven en otra pantalla del panel, y los
  * pendientes del resumen. Vive aquí (no en la página) para que un test pueda
  * afirmar que cada destino es una RUTA QUE EXISTE: el primer asistente enlazaba
- * `/admin/cursos` (nunca existió) y `/admin/billing` (tampoco), y ambos 404
+ * `/admin/courses` (nunca existió) y `/admin/billing` (tampoco), y ambos 404
  * llegaron a producción porque nada los comprobaba.
  *
  * - `cobros`: la cuenta de Stripe del tenant se pega en Configuración →
@@ -67,10 +67,10 @@ export type OnboardingStep = (typeof ONBOARDING_STEPS)[number];
  *   «Notificaciones». `/admin/emails` son las plantillas, otra cosa.
  */
 export const DESTINOS: Partial<Record<OnboardingStep, string>> = {
-  curso: '/formador/cursos',
-  alumnos: '/admin/usuarios/invitar',
-  cobros: '/admin/configuracion?tab=pagos',
-  correo: '/admin/configuracion?tab=notifications',
+  curso: '/studio/courses',
+  alumnos: '/admin/users/invite',
+  cobros: '/admin/settings?tab=pagos',
+  correo: '/admin/settings?tab=notifications',
 };
 
 /**
@@ -116,7 +116,7 @@ export function destinos(setup: PaymentsSetup): Partial<Record<OnboardingStep, s
   if (setup === 'own') return DESTINOS;
   const plataforma: Partial<Record<OnboardingStep, string>> = {
     ...DESTINOS,
-    cobros: '/admin/cobros',
+    cobros: '/admin/payments',
   };
   delete plataforma.correo;
   return plataforma;
@@ -169,7 +169,7 @@ export function ajustarAlModo(
  * El pase del asistente.
  *
  * El gate del shell autenticado manda a todo admin con el asistente sin
- * completar a `/bienvenida` — es lo que lo hace bloqueante. Pero los enlaces
+ * completar a `/welcome` — es lo que lo hace bloqueante. Pero los enlaces
  * DEL PROPIO asistente («Abrir la configuración de cobros», el editor del
  * curso, los pendientes del resumen) abren pestaña nueva… que pasa por ese
  * mismo gate y volvía rebotada al asistente: sus enlaces eran imposibles de

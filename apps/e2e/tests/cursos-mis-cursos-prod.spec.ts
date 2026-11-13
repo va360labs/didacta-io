@@ -3,7 +3,7 @@ import { signin } from '../helpers/api';
 import { injectSession } from '../helpers/auth';
 
 /**
- * Verificación de humo en PRODUCCIÓN de las secciones de /cursos.
+ * Verificación de humo en PRODUCCIÓN de las secciones de /courses.
  *
  * No crea nada: entra con la cuenta de pruebas ya existente por el formulario
  * real de /signin y comprueba que ve sus cursos arriba y el resto abajo, con
@@ -16,7 +16,7 @@ import { injectSession } from '../helpers/auth';
  */
 const enabled = process.env.PROD_SMOKE === '1';
 
-test.describe('PROD · /cursos dividido en secciones', () => {
+test.describe('PROD · /courses dividido en secciones', () => {
   test.skip(!enabled, 'Solo se ejecuta con PROD_SMOKE=1 (verificación manual contra producción)');
 
   test('la cuenta de pruebas ve "Mis cursos" y "Otros cursos de …" debajo', async ({ page }) => {
@@ -38,7 +38,7 @@ test.describe('PROD · /cursos dividido en secciones', () => {
       user: { ...sesion.user, onboardingCompletedAt: new Date().toISOString() },
     });
 
-    await page.goto('/cursos');
+    await page.goto('/courses');
 
     const misCursos = page.getByRole('heading', { name: 'Mis cursos', exact: true });
     const otrosCursos = page.getByRole('heading', { name: /^Otros cursos de .+/ });

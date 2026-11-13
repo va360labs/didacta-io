@@ -207,12 +207,12 @@ test('agente de IA: panel al crear lecciones, clave, comandos y un agente crea u
   const { tenant, courseId, ctx, page } = await aulaConCreadora(browser);
 
   // ── En «Empieza aquí» no hay panel: no es una pantalla de creación ──────
-  await page.goto(`${tenant.base}/empieza`);
+  await page.goto(`${tenant.base}/start`);
   await expect(page.getByTestId('empieza-aqui')).toBeVisible({ timeout: 20_000 });
   await expect(page.getByTestId('agente-ia-panel')).toHaveCount(0);
 
   // ── Al crear lecciones sí, con el título real del curso ────────────────
-  await page.goto(`${tenant.base}/formador/cursos/${courseId}`);
+  await page.goto(`${tenant.base}/studio/courses/${courseId}`);
   await expect(page.getByTestId('editor-sencillo')).toBeVisible({ timeout: 20_000 });
   const panel = page.getByTestId('agente-ia-panel');
   await expect(panel).toBeVisible();
@@ -301,7 +301,7 @@ test('agente de IA: panel al crear lecciones, clave, comandos y un agente crea u
     );
   }
   // La creadora lo ve en su aula, en borrador, con sus lecciones en orden.
-  await page.goto(`${tenant.base}/formador/cursos/${String(curso['id'])}`);
+  await page.goto(`${tenant.base}/studio/courses/${String(curso['id'])}`);
   await expect(page.getByTestId('editor-sencillo')).toBeVisible({ timeout: 20_000 });
   await expect(page.getByText('1. Milk texture')).toBeVisible();
   await expect(page.getByText('3. The rosetta')).toBeVisible();
@@ -365,15 +365,15 @@ test('agente de IA: solo en gestión — ni en la comunidad ni en los espacios a
     });
     spaces = [{ slug: 'general' }];
   }
-  const espacio = `/espacios/${spaces[0]!.slug}`;
+  const espacio = `/spaces/${spaces[0]!.slug}`;
 
   // Control: la creadora SÍ lo ve en la gestión de directos (la comprobación
   // de abajo discrimina: el panel existe para ella).
-  await page.goto(`${tenant.base}/formador/aula-virtual`);
+  await page.goto(`${tenant.base}/studio/live`);
   await expect(page.getByTestId('agente-ia-panel')).toBeVisible({ timeout: 20_000 });
   await expect(page.getByTestId('agente-ia-panel').locator('[data-screen="live"]')).toBeVisible();
   // Y NO en la comunidad ni en los espacios, aunque sea la administradora.
-  for (const ruta of ['/comunidad', espacio]) {
+  for (const ruta of ['/community', espacio]) {
     await page.goto(`${tenant.base}${ruta}`);
     await sinPanel(page);
   }
@@ -386,7 +386,7 @@ test('agente de IA: solo en gestión — ni en la comunidad ni en los espacios a
   });
   const a = await actx.newPage();
   await signin(a, tenant, email);
-  for (const ruta of ['/comunidad', espacio, '/cursos']) {
+  for (const ruta of ['/community', espacio, '/courses']) {
     await a.goto(`${tenant.base}${ruta}`);
     await sinPanel(a);
   }
@@ -415,7 +415,7 @@ test('agente de IA a 390 px: botón en la página y hoja inferior, sin tapar ni 
     width: 390,
     height: 844,
   });
-  await page.goto(`${tenant.base}/formador/cursos/${courseId}`);
+  await page.goto(`${tenant.base}/studio/courses/${courseId}`);
   await expect(page.getByTestId('editor-sencillo')).toBeVisible({ timeout: 20_000 });
   // En el móvil no hay columna: un botón dentro de la página.
   await expect(page.getByTestId('agente-ia-panel')).toBeHidden();

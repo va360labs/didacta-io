@@ -23,7 +23,7 @@ import { injectSession } from '../helpers/auth';
  *      expediente. Sin este control, un 200 después no probaría nada — podría
  *      estar abierto para cualquiera.
  *   5. El admin concede el acceso → el inspector ve el grupo y el expediente
- *      por API, y la pantalla `/seguimiento` los pinta (participante, horas e
+ *      por API, y la pantalla `/inspection` los pinta (participante, horas e
  *      itinerario lección a lección).
  *   6. El admin lo retira → vuelve el 403 y la pantalla deja de ofrecer nada.
  *
@@ -255,7 +255,7 @@ test.describe('Fundae · Acceso de seguimiento (LMS-123)', () => {
       refreshToken: inspector.tokens.refreshToken,
       user: inspector.user,
     });
-    await page.goto('/seguimiento');
+    await page.goto('/inspection');
 
     await expect(page.getByRole('heading', { name: /Seguimiento/i })).toBeVisible();
     await expect(page.getByText(`Acción seguimiento E2E ${stamp}`)).toBeVisible();

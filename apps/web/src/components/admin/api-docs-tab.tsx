@@ -121,7 +121,7 @@ function UuidCell({ id }: { id: string }) {
   );
 }
 
-/** Pestaña "Documentación" de /admin/api-keys. Antes `/admin/integraciones/api`. */
+/** Pestaña "Documentación" de /admin/api-keys. Antes `/admin/integrations/api`. */
 export function ApiDocsTab() {
   const t = useTranslations('adminApi');
   const [groups, setGroups] = useState<AccessGroupListItem[] | null>(null);
@@ -303,7 +303,7 @@ export function ApiDocsTab() {
               {t.rich('docs.groupsEmpty', {
                 link: (chunks) => (
                   <Link
-                    href="/admin/grupos-acceso"
+                    href="/admin/access-groups"
                     className="font-semibold text-brand-700 underline"
                   >
                     {chunks}
@@ -475,7 +475,7 @@ export function ApiDocsTab() {
               strong: (chunks) => <strong>{chunks}</strong>,
               link: (chunks) => (
                 <Link
-                  href="/admin/comunidad/publicaciones-api"
+                  href="/admin/community/api-posts"
                   className="font-semibold text-brand-700 hover:underline"
                 >
                   {chunks}

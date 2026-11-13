@@ -93,7 +93,7 @@ export class MembershipAccessGroupsBridge implements OnModuleInit {
     if (!groupId) {
       this.logger.error(
         { tenantId, userId, subscriptionId },
-        'MembershipAccessGroupsBridge: membresía activada SIN grupo configurado — asignar a mano en /admin/membresia',
+        'MembershipAccessGroupsBridge: membresía activada SIN grupo configurado — asignar a mano en /admin/membership',
       );
       return;
     }

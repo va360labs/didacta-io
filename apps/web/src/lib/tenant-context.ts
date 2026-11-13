@@ -35,7 +35,7 @@ export interface TenantPublicInfo {
   brandHue?: number;
   brandSaturation?: number;
   stats?: TenantPublicStats;
-  /** El tenant tiene /unete activa: solo entonces el login enlaza la membresía. */
+  /** El tenant tiene /join activa: solo entonces el login enlaza la membresía. */
   membershipPageActive?: boolean;
   /**
    * Puerta de suscripción, versión pública: `LOCKED` si el aula está en pausa,

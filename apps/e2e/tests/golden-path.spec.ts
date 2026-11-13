@@ -20,7 +20,7 @@ import { injectSession } from '../helpers/auth';
  * 2. UI: el alumno ya logueado (token inyectado) entra al catálogo.
  * 3. UI: matricularse en el curso, completar la lección (vía API), refrescar.
  * 4. UI: ver tarjeta de certificado lista para descarga.
- * 5. UI: ir a /mis-certificados y verificar que el certificado aparece.
+ * 5. UI: ir a /my-certificates y verificar que el certificado aparece.
  */
 
 test.describe('Golden path del alumno', () => {
@@ -38,7 +38,7 @@ test.describe('Golden path del alumno', () => {
     });
 
     // 1) Catálogo
-    await page.goto('/cursos');
+    await page.goto('/courses');
     await expect(page.getByRole('heading', { name: 'Catálogo' })).toBeVisible();
     await expect(page.getByText(scenario.course.title)).toBeVisible();
 
@@ -46,7 +46,7 @@ test.describe('Golden path del alumno', () => {
     // "Matricularme" de matrícula libre fue eliminado globalmente, ver
     // inscribe-by-api.spec.ts).
     await page.getByText(scenario.course.title).click();
-    await expect(page).toHaveURL(new RegExp(`/cursos/${scenario.course.slug}$`));
+    await expect(page).toHaveURL(new RegExp(`/courses/${scenario.course.slug}$`));
     await page.getByLabel(/código de invitación/i).fill(scenario.invitationCode);
 
     // Sincronizamos contra la respuesta REAL del POST de canje, no contra un
@@ -95,8 +95,8 @@ test.describe('Golden path del alumno', () => {
     const downloadBtn = page.getByRole('button', { name: /Descargar certificado/ });
     await expect(downloadBtn).toBeVisible({ timeout: 15_000 });
 
-    // 5) Ir a /mis-certificados
-    await page.goto('/mis-certificados');
+    // 5) Ir a /my-certificates
+    await page.goto('/my-certificates');
     await expect(page.getByRole('heading', { name: 'Mis certificados' })).toBeVisible();
     await expect(page.getByText(scenario.course.title)).toBeVisible({ timeout: 10_000 });
     // El número correlativo tiene formato LS-{año}-{6 dígitos}

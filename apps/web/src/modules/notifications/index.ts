@@ -5,7 +5,7 @@
 
 /// Extension point del módulo `mod.notifications`.
 ///
-/// alpha.83 — el tab "Plantillas" de /admin/configuracion se consolidó en la
+/// alpha.83 — el tab "Plantillas" de /admin/settings se consolidó en la
 /// sección dedicada `/admin/emails` (regla #5: un solo camino al mismo
 /// destino), que ahora cubre el catálogo COMPLETO de emails del producto
 /// (transaccionales + hub). El tab "Notificaciones · SMTP" sigue viviendo en

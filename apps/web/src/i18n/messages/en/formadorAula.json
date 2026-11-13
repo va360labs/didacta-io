@@ -91,7 +91,7 @@
     "acceptedAnswersLabel": "Accepted answers (one per line)",
     "acceptedAnswersPlaceholder": "Paris\nparis\nFRANCE, capital",
     "acceptedAnswersHint": "The comparison is insensitive to case, accents and spacing: \"Paris\" will match \"PARÍS\".",
-    "openTypeWarning": "This type is not auto-graded. When a student submits the quiz, the attempt will stay in <strong>PENDING_REVIEW</strong> until you grade it manually from the pending panel (<code>/formador/correcciones</code>).",
+    "openTypeWarning": "This type is not auto-graded. When a student submits the quiz, the attempt will stay in <strong>PENDING_REVIEW</strong> until you grade it manually from the pending panel (<code>/studio/grading</code>).",
     "optionsTitle": "Options (mark the correct ones)",
     "markOptionCorrect": "Mark option {number} as correct",
     "optionPlaceholder": "Option {number}",

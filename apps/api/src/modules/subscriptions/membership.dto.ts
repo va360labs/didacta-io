@@ -7,7 +7,7 @@ import { z } from 'zod';
 import { withdrawalWaiverSchema } from '../purchase-consent/withdrawal-waiver';
 
 /**
- * DTOs zod de la membresía (página pública /unete + admin).
+ * DTOs zod de la membresía (página pública /join + admin).
  * Importes SIEMPRE en céntimos (int) — nunca floats de dinero.
  */
 
@@ -20,7 +20,7 @@ export const membershipCheckoutSchema = z.object({
    */
   email: z.string().email().max(200).optional(),
   /**
-   * Código de atribución OPCIONAL (programa de referidos, ?ref= de /unete).
+   * Código de atribución OPCIONAL (programa de referidos, ?ref= de /join).
    * Opaco para la membresía: viaja en la metadata de Stripe y lo interpreta
    * mod.referrals en el fulfillment. Formato del generador de códigos.
    */

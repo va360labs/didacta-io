@@ -287,7 +287,7 @@ describe('NotificationHub · el botón del correo lleva al aula del tenant', () 
 
 describe('class-links · la base la pone quien llama (el tenant), no una variable global', () => {
   it('compone los tres enlaces sobre la base recibida', () => {
-    expect(classUrl(`${AULA_A}/`, SESSION)).toBe(`${AULA_A}/clase/${SESSION}`);
+    expect(classUrl(`${AULA_A}/`, SESSION)).toBe(`${AULA_A}/live/${SESSION}`);
     expect(calendarIcsUrl(AULA_A, SESSION)).toBe(
       `${AULA_A}/api/v1/modules/zoom-live/sessions/${SESSION}/calendar.ics`,
     );
@@ -328,12 +328,12 @@ describe('ZoomLiveNotificationsBridge · confirmación de inscripción', () => {
     const deB = sends.filter((s) => s.tenantId === TENANT_B);
     expect(deA.length).toBe(2); // in-app + email
     for (const s of deA) {
-      expect(s.variables.classUrl).toBe(`${AULA_A}/clase/${SESSION}`);
+      expect(s.variables.classUrl).toBe(`${AULA_A}/live/${SESSION}`);
       expect(String(s.variables.calendarIcsUrl).startsWith(`${AULA_A}/api/v1/`)).toBe(true);
       expect(String(s.variables.calendarGoogleUrl).startsWith(`${AULA_A}/api/v1/`)).toBe(true);
     }
     for (const s of deB) {
-      expect(s.variables.classUrl).toBe(`${AULA_B}/clase/${SESSION}`);
+      expect(s.variables.classUrl).toBe(`${AULA_B}/live/${SESSION}`);
     }
     expect(JSON.stringify(sends)).not.toContain('pool.example.test');
   });
@@ -371,8 +371,8 @@ describe('ZoomReminderWorker · recordatorio de clase', () => {
     const deB = sends.filter((s) => s.tenantId === TENANT_B);
     expect(deA.length).toBeGreaterThan(0);
     expect(deB.length).toBeGreaterThan(0);
-    for (const s of deA) expect(s.variables.classUrl).toBe(`${AULA_A}/clase/${SESSION}`);
-    for (const s of deB) expect(s.variables.classUrl).toBe(`${AULA_B}/clase/${SESSION_B}`);
+    for (const s of deA) expect(s.variables.classUrl).toBe(`${AULA_A}/live/${SESSION}`);
+    for (const s of deB) expect(s.variables.classUrl).toBe(`${AULA_B}/live/${SESSION_B}`);
     expect(JSON.stringify(sends)).not.toContain('pool.example.test');
   });
 });
@@ -417,7 +417,7 @@ describe('ZoomCalendarController · el .ics guarda el enlace del aula del tenant
   it('URL y LOCATION del evento apuntan al dominio del tenant dueño de la clase', async () => {
     const { reply, sent } = makeReply();
     await makeController(TENANT_A).ics(SESSION, reply);
-    expect(sent.body).toContain(`${AULA_A}/clase/${SESSION}`);
+    expect(sent.body).toContain(`${AULA_A}/live/${SESSION}`);
     expect(sent.body).not.toContain('pool.example.test');
   });
 
@@ -426,7 +426,7 @@ describe('ZoomCalendarController · el .ics guarda el enlace del aula del tenant
     await makeController(TENANT_B).google(SESSION, reply);
     expect(sent.code).toBe(302);
     const location = decodeURIComponent(sent.headers['Location'] ?? '');
-    expect(location).toContain(`${AULA_B}/clase/${SESSION}`);
+    expect(location).toContain(`${AULA_B}/live/${SESSION}`);
     expect(location).not.toContain('pool.example.test');
   });
 });
@@ -456,10 +456,10 @@ describe('SurveysReminderWorker · recordatorio de encuesta', () => {
 
     expect(out).toEqual({ surveys: 2, reminders: 2 });
     for (const s of sends.filter((x) => x.tenantId === TENANT_A)) {
-      expect(s.variables.surveyUrl).toBe(`${AULA_A}/clase/${SESSION}`);
+      expect(s.variables.surveyUrl).toBe(`${AULA_A}/live/${SESSION}`);
     }
     for (const s of sends.filter((x) => x.tenantId === TENANT_B)) {
-      expect(s.variables.surveyUrl).toBe(`${AULA_B}/clase/${SESSION}`);
+      expect(s.variables.surveyUrl).toBe(`${AULA_B}/live/${SESSION}`);
     }
     expect(sends.length).toBe(4); // 2 tenants × (in-app + email)
     expect(JSON.stringify(sends)).not.toContain('pool.example.test');
@@ -487,7 +487,7 @@ describe('SurveysZoomBridge · invitación a la encuesta al terminar la clase', 
     expect(sends.length).toBe(2);
     for (const s of sends) {
       expect(s.templateKey).toBe('surveys.post_class.invitation');
-      expect(s.variables.surveyUrl).toBe(`${AULA_B}/clase/${SESSION}`);
+      expect(s.variables.surveyUrl).toBe(`${AULA_B}/live/${SESSION}`);
     }
     expect(JSON.stringify(sends)).not.toContain('pool.example.test');
   });
@@ -525,7 +525,7 @@ describe('CommunityBroadcastWorker · aviso masivo', () => {
   it('la publicación y la baja enlazan al aula del tenant del aviso', async () => {
     const sends = await runBatch(TENANT_A);
     const email = sends.find((s) => s.channel === 'email')!;
-    expect(email.variables.postUrl).toBe(`${AULA_A}/comunidad`);
+    expect(email.variables.postUrl).toBe(`${AULA_A}/community`);
     const unsubUrl = String(email.variables.unsubUrl);
     expect(unsubUrl.startsWith(`${AULA_A}/api/v1/modules/community/unsubscribe?token=`)).toBe(true);
     // El token sigue siendo el del destinatario en SU tenant.
@@ -538,7 +538,7 @@ describe('CommunityBroadcastWorker · aviso masivo', () => {
     const sends = await runBatch(TENANT_B);
     const email = sends.find((s) => s.channel === 'email')!;
     expect(String(email.variables.unsubUrl).startsWith(`${AULA_B}/`)).toBe(true);
-    expect(email.variables.postUrl).toBe(`${AULA_B}/comunidad`);
+    expect(email.variables.postUrl).toBe(`${AULA_B}/community`);
   });
 
   it('sin dirección conocida no compone enlaces relativos: los omite', async () => {

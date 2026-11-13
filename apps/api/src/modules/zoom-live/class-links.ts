@@ -31,7 +31,7 @@ function clean(webBase: string): string {
 /** Página de la clase — el único sitio donde se ve el `joinUrl` (ADR-017). */
 export function classUrl(webBase: string, sessionId: string): string {
   const base = clean(webBase);
-  return base ? `${base}/clase/${sessionId}` : '';
+  return base ? `${base}/live/${sessionId}` : '';
 }
 
 /** Descarga del `.ics`: Outlook, Apple Calendar y cualquier cliente estándar. */

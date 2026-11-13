@@ -38,7 +38,7 @@ const optimizeSchema = z.object({
 type OptimizeDto = z.infer<typeof optimizeSchema>;
 
 /**
- * Reoptimización de las imágenes YA subidas del tenant (/admin/imagenes).
+ * Reoptimización de las imágenes YA subidas del tenant (/admin/images).
  *
  * Lo que entra nuevo ya nace optimizado en la capa de storage; esto es para el
  * histórico. Reservado a administradores: repunta filas de varios módulos.

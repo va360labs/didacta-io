@@ -6,7 +6,7 @@
  */
 
 /**
- * Tarjeta de identidad del tenant en `/admin/configuracion`. Permite al
+ * Tarjeta de identidad del tenant en `/admin/settings`. Permite al
  * super_admin renombrar la organización (campo `tenant.name`) desde la UI
  * sin tocar curl. Consume el endpoint `PATCH /api/v1/admin/tenants/:id`
  * (alpha.77, super_admin-only) y el `GET /api/v1/admin/tenants/:id` para

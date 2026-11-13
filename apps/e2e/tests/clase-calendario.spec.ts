@@ -224,7 +224,7 @@ test.describe('mod.zoom-live · añadir clase al calendario', () => {
     });
   });
 
-  test('al inscribirse en /clase/[id] se ofrece guardar la clase en el calendario', async ({
+  test('al inscribirse en /live/[id] se ofrece guardar la clase en el calendario', async ({
     page,
   }) => {
     const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'demo';
@@ -263,7 +263,7 @@ test.describe('mod.zoom-live · añadir clase al calendario', () => {
       user: { ...alumno.user, onboardingCompletedAt: new Date().toISOString() },
     });
 
-    await page.goto(`/clase/${clase.id}`);
+    await page.goto(`/live/${clase.id}`);
     await expect(page.getByRole('heading', { name: topic })).toBeVisible();
 
     // Antes de inscribirse no hay nada que guardar.

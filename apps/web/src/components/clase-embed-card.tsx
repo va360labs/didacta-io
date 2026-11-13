@@ -21,7 +21,7 @@ import { cn } from '@/lib/utils';
  *
  * La renderiza cualquier post que referencie una sesión de mod.zoom-live (ver
  * `lib/clase-embed.ts`): el anuncio automático que publica el host al crear la
- * clase, o un post donde alguien pegó el enlace `/clase/<id>`.
+ * clase, o un post donde alguien pegó el enlace `/live/<id>`.
  *
  * Permite inscribirse y unirse SIN salir del feed. El estado se recarga con la
  * respuesta del servidor, que es quien decide si el `joinUrl` es visible
@@ -96,7 +96,7 @@ export function ClaseEmbedCard({ sessionId }: { sessionId: string }) {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
-  /** Se abre al inscribirse desde el feed, igual que en /clase/[id]. */
+  /** Se abre al inscribirse desde el feed, igual que en /live/[id]. */
   const [calendarOpen, setCalendarOpen] = useState(false);
 
   useEffect(() => {
@@ -246,7 +246,7 @@ export function ClaseEmbedCard({ sessionId }: { sessionId: string }) {
         <div className="flex shrink-0 flex-wrap items-center gap-2">
           {past ? (
             <Link
-              href={`/clase/${session.id}`}
+              href={`/live/${session.id}`}
               className="rounded-lg border border-border px-3 py-1.5 text-xs font-semibold text-text-muted transition-colors hover:border-border-strong hover:text-text"
             >
               {t('claseEmbed.viewClass')}
@@ -270,7 +270,7 @@ export function ClaseEmbedCard({ sessionId }: { sessionId: string }) {
                 </a>
               ) : null}
               <Link
-                href={`/clase/${session.id}`}
+                href={`/live/${session.id}`}
                 className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs font-semibold text-(--didacta-growth)"
               >
                 <Icon name="check" size={13} />
@@ -289,7 +289,7 @@ export function ClaseEmbedCard({ sessionId }: { sessionId: string }) {
                 {pending ? t('claseEmbed.registerPending') : t('claseEmbed.register')}
               </button>
               <Link
-                href={`/clase/${session.id}`}
+                href={`/live/${session.id}`}
                 className="rounded-lg border border-border px-3 py-1.5 text-xs font-semibold text-text-muted transition-colors hover:border-border-strong hover:text-text"
               >
                 {t('claseEmbed.details')}

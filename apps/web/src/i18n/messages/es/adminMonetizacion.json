@@ -33,7 +33,7 @@
     "planCreated": "Plan creado.",
     "planDeleted": "Plan eliminado (o desactivado si ya tenía ventas).",
     "configTitle": "Página pública",
-    "configDescription": "Contenido de /unete y qué concede la compra. El testimonial solo se muestra si lo rellenas (cita + autor).",
+    "configDescription": "Contenido de /join y qué concede la compra. El testimonial solo se muestra si lo rellenas (cita + autor).",
     "pageActiveLabel": "Página de compra activa",
     "headlineLabel": "Título",
     "groupLabel": "Grupo de acceso que concede",
@@ -69,7 +69,7 @@
   },
   "referrals": {
     "title": "Programa de referidos",
-    "intro": "Los miembros comparten su enlace de /unete y ganan un % de los cobros reales de quien entra. La liquidación es manual con referencia externa (v1 sin pagos automáticos).",
+    "intro": "Los miembros comparten su enlace de /join y ganan un % de los cobros reales de quien entra. La liquidación es manual con referencia externa (v1 sin pagos automáticos).",
     "configTitle": "Configuración",
     "configDescription": "Los cambios no recalculan comisiones ya devengadas: cada comisión sella el % vigente en el momento del cobro.",
     "activeLabel": "Programa activo",

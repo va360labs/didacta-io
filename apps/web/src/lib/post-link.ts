@@ -8,12 +8,12 @@
  * compartir/enlazar posts: la usan el feed (sync de URL al abrir el modal),
  * el botón "Copiar enlace" del detalle y los links de notificaciones.
  *
- * La ruta `/comunidad/<id>` renderiza el feed con ese post abierto en modal
+ * La ruta `/community/<id>` renderiza el feed con ese post abierto en modal
  * (misma experiencia que abrirlo desde el feed).
  */
 
 export function postPath(postId: string, opts: { commentId?: string } = {}): string {
-  const base = `/comunidad/${encodeURIComponent(postId)}`;
+  const base = `/community/${encodeURIComponent(postId)}`;
   return opts.commentId ? `${base}?comment=${encodeURIComponent(opts.commentId)}` : base;
 }
 
@@ -24,8 +24,8 @@ export function postShareUrl(postId: string): string {
 
 /** Extrae el postId si el path es la URL canónica de un post; null si no lo es. */
 export function parsePostPath(pathname: string): string | null {
-  const m = pathname.match(/^\/comunidad\/([^/]+)$/);
+  const m = pathname.match(/^\/community\/([^/]+)$/);
   const id = m?.[1];
-  if (!id || id === 'menciones') return null;
+  if (!id || id === 'mentions') return null;
   return decodeURIComponent(id);
 }

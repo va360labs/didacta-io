@@ -100,7 +100,7 @@ export function SimpleStudents() {
           <p className="mt-1 text-text-muted">{t('sub')}</p>
         </div>
         <Link
-          href="/admin/usuarios/invitar"
+          href="/admin/users/invite"
           className="inline-flex h-11 items-center gap-2 rounded-xl bg-brand-600 px-5 font-semibold text-white hover:bg-brand-700"
         >
           <Icon name="mail" size={17} />
@@ -130,7 +130,7 @@ export function SimpleStudents() {
         ) : link === null ? (
           <div className="mt-1 flex flex-wrap items-center justify-between gap-3 text-sm text-text-muted">
             <span>{t('sinEnlaceTexto')}</span>
-            <Link href="/empieza" className="font-semibold text-brand-600 hover:underline">
+            <Link href="/start" className="font-semibold text-brand-600 hover:underline">
               {t('sinEnlaceBoton')}
             </Link>
           </div>
@@ -156,7 +156,7 @@ export function SimpleStudents() {
           <h2 className="mt-4 text-lg font-bold text-text">{t('vacioTitulo')}</h2>
           <p className="mx-auto mt-2 max-w-[54ch] text-text-muted">{t('vacioTexto')}</p>
           <Link
-            href="/admin/usuarios/invitar"
+            href="/admin/users/invite"
             className="mt-5 inline-flex h-11 items-center gap-2 rounded-xl bg-brand-600 px-5 font-semibold text-white hover:bg-brand-700"
           >
             <Icon name="mail" size={17} />
@@ -209,7 +209,7 @@ export function SimpleStudents() {
                     {t(`estado.${u.status}` as 'estado.ACTIVE')}
                   </span>
                   <Link
-                    href={`/admin/usuarios/${u.id}`}
+                    href={`/admin/users/${u.id}`}
                     className="text-sm font-semibold text-brand-600 hover:underline"
                   >
                     {t('verFicha')}
@@ -233,7 +233,7 @@ export function SimpleStudents() {
       )}
 
       <Link
-        href="/admin/grupos-acceso"
+        href="/admin/access-groups"
         className="mt-4 flex items-center gap-3 rounded-2xl bg-bg-subtle p-4 text-sm hover:bg-border-soft"
       >
         <Icon name="lock" size={18} />

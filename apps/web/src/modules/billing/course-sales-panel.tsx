@@ -101,7 +101,7 @@ export function CourseSalesPanel({ courseId }: { courseId: string }) {
  * Enseña el precio de ENTRADA (el plan más barato de todos, que es el mensual),
  * no el del plan destacado: el objetivo aquí no es vender el plan óptimo sino
  * que el alumno vea que acceder a todo cuesta menos que este curso suelto. El
- * detalle de los tres planes ya lo da /unete.
+ * detalle de los tres planes ya lo da /join.
  *
  * Va en dorado de marca, no en el coral de "warning": es una oferta premium y
  * el coral la hacía parecer una advertencia.
@@ -128,7 +128,7 @@ function CajaAccesoTotal({
           })}
         </p>
         <Link
-          href="/unete"
+          href="/join"
           className="acceso-total-cta inline-flex w-full items-center justify-center rounded-lg px-4 py-2.5 text-sm font-semibold transition-colors"
         >
           {t('membership.cta')}
@@ -243,7 +243,7 @@ export function LockedContentActions({ courseId }: { courseId: string }) {
       ) : null}
       {plan ? (
         <Link
-          href="/unete"
+          href="/join"
           className="inline-flex items-center justify-center rounded-lg bg-warning-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-warning-700"
         >
           {t('membership.unlockAll')}

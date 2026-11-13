@@ -22,7 +22,7 @@ import { membershipCheckoutSchema, type MembershipCheckoutDto } from './membersh
 import { resolvePublicHost } from '../../common/resolve-public-host';
 
 /**
- * Endpoints PÚBLICOS de la página de membresía (/unete).
+ * Endpoints PÚBLICOS de la página de membresía (/join).
  *
  * Sin JWT: el visitante aún no tiene cuenta — el tenant se resuelve por el
  * Host del request (igual que /modules/member-registration y /signin). El checkout es de
@@ -110,8 +110,8 @@ export class MembershipPublicController {
         // metadata de Stripe porque su fila de `user` no existe todavía: se
         // crea en el webhook, después del salto a la pasarela.
         locale: readRequestLocale(req.headers),
-        successUrl: `${base}/unete?status=success`,
-        cancelUrl: `${base}/unete?status=cancel`,
+        successUrl: `${base}/join?status=success`,
+        cancelUrl: `${base}/join?status=cancel`,
       });
       await this.consents.attachSession(tenantId, consentId, { sessionId });
       // Client context solo para trazabilidad en logs de acceso (no se persiste aquí).

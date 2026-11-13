@@ -10,7 +10,7 @@ import { resolveSenderName, type SmtpSenderIdentity } from './smtp-sender-identi
 
 /**
  * Schema de la config SMTP que cada tenant configura desde
- * `/admin/configuracion`. Se persiste cifrada con AES-256-GCM en
+ * `/admin/settings`. Se persiste cifrada con AES-256-GCM en
  * `tenant_setting` bajo (moduleName='notifications', key='smtp', is_secret=true).
  */
 /**

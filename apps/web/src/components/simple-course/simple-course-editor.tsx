@@ -115,7 +115,7 @@ export function SimpleCourseEditor({ courseId }: { courseId: string }) {
   return (
     <div className="mx-auto max-w-[760px]" data-testid="editor-sencillo">
       <Link
-        href="/formador/cursos"
+        href="/studio/courses"
         className="inline-flex items-center gap-1.5 text-sm font-semibold text-text-muted hover:text-text"
       >
         <Icon name="arrow-left" size={15} />
@@ -155,7 +155,7 @@ export function SimpleCourseEditor({ courseId }: { courseId: string }) {
           {published ? t('estadoPublicado') : t('estadoBorrador')}
         </span>
         <a
-          href={`/cursos/${course.slug}`}
+          href={`/courses/${course.slug}`}
           target="_blank"
           rel="noreferrer"
           className="inline-flex items-center gap-1 font-semibold text-brand-600 hover:underline"
@@ -314,7 +314,7 @@ export function SimpleCourseEditor({ courseId }: { courseId: string }) {
       {!published ? (
         <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-bg-subtle p-4 text-sm text-text-muted">
           <span>{t('publicarDesde')}</span>
-          <Link href="/empieza" className="font-semibold text-brand-600 hover:underline">
+          <Link href="/start" className="font-semibold text-brand-600 hover:underline">
             {t('irEmpieza')}
           </Link>
         </div>
@@ -560,7 +560,7 @@ export function SimpleNewCourse() {
           title: title.trim(),
           slug: i === 1 ? base : `${base}-${i}`,
         });
-        router.push(`/formador/cursos/${c.id}`);
+        router.push(`/studio/courses/${c.id}`);
         return;
       } catch (err) {
         if ((err as { code?: string }).code !== 'COURSE_SLUG_EXISTS') break;
@@ -572,7 +572,7 @@ export function SimpleNewCourse() {
   return (
     <form onSubmit={submit} className="mx-auto max-w-[560px]">
       <Link
-        href="/formador/cursos"
+        href="/studio/courses"
         className="inline-flex items-center gap-1.5 text-sm font-semibold text-text-muted hover:text-text"
       >
         <Icon name="arrow-left" size={15} />

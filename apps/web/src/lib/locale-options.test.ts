@@ -3,12 +3,12 @@ import { SUPPORTED_LOCALES, toSupportedLocale } from '@/i18n/config';
 import { LOCALE_OPTIONS } from './me';
 
 /**
- * El selector de idioma de `/cuenta` y `/onboarding`.
+ * El selector de idioma de `/account` y `/onboarding`.
  *
  * El fallo que cubren estos tests: `LOCALE_OPTIONS` era una lista suelta,
  * independiente de `SUPPORTED_LOCALES`, y ofrecía `pt-BR` — un idioma sin
  * catálogo de mensajes. El usuario elegía portugués, la API lo guardaba,
- * `/cuenta` le confirmaba «Português (Brasil)» y la interfaz seguía en español.
+ * `/account` le confirmaba «Português (Brasil)» y la interfaz seguía en español.
  */
 describe('LOCALE_OPTIONS', () => {
   it('no ofrece pt-BR: el producto no lo tiene traducido', () => {
@@ -30,7 +30,7 @@ describe('LOCALE_OPTIONS', () => {
 
   it('CAMINO DEGRADADO: un locale guardado que ya no se ofrece casa con una opción real', () => {
     // `pt-BR` sigue en base de datos (perfiles anteriores a la retirada y altas
-    // por SCIM). `/cuenta` y `/onboarding` normalizan antes de pintar el
+    // por SCIM). `/account` y `/onboarding` normalizan antes de pintar el
     // `<select>`; sin eso el desplegable no casaría con ninguna opción y
     // quedaría en blanco.
     const almacenados = ['pt-BR', 'fr-FR', 'zz', ''];

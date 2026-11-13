@@ -512,7 +512,7 @@ export class IntegrationsService {
           title: next.title,
           moduleId: next.moduleId,
           moduleTitle: next.moduleTitle,
-          url: `${webBaseUrl.replace(/\/$/, '')}/clase/${next.id}`,
+          url: `${webBaseUrl.replace(/\/$/, '')}/live/${next.id}`,
         }
       : null;
 

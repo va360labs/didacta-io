@@ -12,7 +12,7 @@
     "HTML": "Inline HTML rendered in the player. Useful for slides or microcopy.",
     "PDF": "PDF URL. Shown in an iframe at 70dvh.",
     "TEXT": "Long plain text. Line breaks are preserved.",
-    "QUIZ": "Create a new quiz or link an existing one by ID. The quiz editor lives at /formador/quizzes/'<id>'.",
+    "QUIZ": "Create a new quiz or link an existing one by ID. The quiz editor lives at /studio/quizzes/'<id>'.",
     "SCORM": "Upload the SCORM 1.2 / 2004 package ZIP. The system unzips it, parses imsmanifest.xml and serves it in an iframe."
   },
   "enrollStatus": {
@@ -63,7 +63,7 @@
   "categoryLabel": "Category",
   "categoryNone": "— No category —",
   "categoryPlaceholder": "E.g.: Technology",
-  "categoryTip": "Tip: the admin can curate categories with color and icon at <code>/admin/cursos/categorias</code>.",
+  "categoryTip": "Tip: the admin can curate categories with color and icon at <code>/admin/courses/categories</code>.",
   "estimatedLabel": "Estimated duration (min)",
   "estimatedPlaceholder": "E.g.: 90",
   "heroTitle": "Hero highlights",

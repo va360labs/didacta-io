@@ -71,7 +71,7 @@ export default function AdminMarketplacePage() {
           {t.rich('intro', {
             code: (chunks) => <code>{chunks}</code>,
             link: (chunks) => (
-              <a href="/admin/configuracion" className="underline">
+              <a href="/admin/settings" className="underline">
                 {chunks}
               </a>
             ),
@@ -278,7 +278,7 @@ function InstalledList() {
         <CardDescription>
           {t.rich('installedDescription', {
             link: (chunks) => (
-              <a href="/admin/configuracion" className="underline">
+              <a href="/admin/settings" className="underline">
                 {chunks}
               </a>
             ),

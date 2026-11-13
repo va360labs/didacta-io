@@ -237,7 +237,7 @@ export class AgentService {
         title: c.title,
         status: c.status,
         lessons: count.get(c.id) ?? 0,
-        editPath: `/formador/cursos/${c.id}`,
+        editPath: `/studio/courses/${c.id}`,
       })),
     };
   }
@@ -250,7 +250,7 @@ export class AgentService {
       title: course.title,
       description: course.description,
       status: course.status,
-      editPath: `/formador/cursos/${course.id}`,
+      editPath: `/studio/courses/${course.id}`,
       lessons: lessons.map((l, i) => ({
         id: l.id,
         number: i + 1,
@@ -282,7 +282,7 @@ export class AgentService {
           id: course.id,
           title: course.title,
           status: course.status,
-          editPath: `/formador/cursos/${course.id}`,
+          editPath: `/studio/courses/${course.id}`,
           note: 'Created as a draft. The owner publishes it with its price from "Start here".',
         };
       } catch (err) {
@@ -346,7 +346,7 @@ export class AgentService {
       title: lesson.title,
       type,
       hasContent: lessonHasContent(type, content),
-      editPath: `/formador/cursos/${course.id}`,
+      editPath: `/studio/courses/${course.id}`,
     };
   }
 
@@ -411,7 +411,7 @@ export class AgentService {
           timezone: s.timezone,
           durationMinutes: s.durationMinutes,
           status: s.status,
-          path: `/clase/${s.id}`,
+          path: `/live/${s.id}`,
         })),
     };
   }
@@ -442,7 +442,7 @@ export class AgentService {
       timezone: s.timezone,
       durationMinutes: s.durationMinutes,
       announced: args.announce ?? false,
-      path: `/clase/${s.id}`,
+      path: `/live/${s.id}`,
     };
   }
 
@@ -498,7 +498,7 @@ export class AgentService {
       },
       'api',
     );
-    return { id: post.id, title: post.title, space, path: `/comunidad/${post.id}` };
+    return { id: post.id, title: post.title, space, path: `/community/${post.id}` };
   }
 
   // ── Apoyo ──────────────────────────────────────────────────────────────────

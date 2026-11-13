@@ -47,20 +47,20 @@ describe('isGateFreePath — lo que sigue abierto con el aula en pausa', () => {
     '/reset-password',
     '/mfa/verify',
     '/auth/callback',
-    '/soporte/acceso',
+    '/support/access',
   ])('%s sigue abierta (hay que poder entrar a pagar)', (path) => {
     expect(isGateFreePath(path)).toBe(true);
   });
 
   it.each([
     '/',
-    '/inicio',
-    '/cursos/abc',
+    '/home',
+    '/courses/abc',
     '/admin',
     '/signup',
-    '/catalogo',
-    '/unete',
-    '/sitio',
+    '/catalog',
+    '/join',
+    '/site',
     '/signin-x',
   ])('%s enseña la pausa', (path) => {
     expect(isGateFreePath(path)).toBe(false);

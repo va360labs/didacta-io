@@ -69,7 +69,7 @@ test.describe('clases en directo · calendario y comunidad', () => {
       user: { ...alumno.user, onboardingCompletedAt: new Date().toISOString() },
     });
 
-    await page.goto('/calendario');
+    await page.goto('/calendar');
     await expect(page.getByText('Agenda · Calendario')).toBeVisible();
 
     // Sin cambiar de mes: la píldora está en la celda del día correspondiente
@@ -119,7 +119,7 @@ test.describe('clases en directo · calendario y comunidad', () => {
       user: { ...alumno.user, onboardingCompletedAt: new Date().toISOString() },
     });
 
-    await page.goto('/comunidad');
+    await page.goto('/community');
     await expect(page.getByRole('heading', { name: 'Comunidad' })).toBeVisible();
 
     // (2) Bloque «Próximas citas» con la clase, sin ir al calendario.
@@ -139,7 +139,7 @@ test.describe('clases en directo · calendario y comunidad', () => {
     await expect(tarjeta.getByText('Inscrito')).toBeVisible();
     // El click en la tarjeta no debe abrir el modal del post.
     await expect(page.getByRole('dialog')).toHaveCount(0);
-    await expect(page).toHaveURL(/\/comunidad$/);
+    await expect(page).toHaveURL(/\/community$/);
   });
 
   test('sin marcar «anunciar» la clase no se publica en el feed', async ({ page }) => {
@@ -175,7 +175,7 @@ test.describe('clases en directo · calendario y comunidad', () => {
       user: { ...alumno.user, onboardingCompletedAt: new Date().toISOString() },
     });
 
-    await page.goto('/comunidad');
+    await page.goto('/community');
     await expect(page.getByRole('heading', { name: 'Comunidad' })).toBeVisible();
 
     // Sí sale en «Próximas citas» (es una clase real del tenant)…
@@ -186,7 +186,7 @@ test.describe('clases en directo · calendario y comunidad', () => {
 });
 
 /**
- * Edición de una clase en directo desde /formador/aula-virtual, incluyendo
+ * Edición de una clase en directo desde /studio/live, incluyendo
  * anunciarla a posteriori: el caso real es una clase creada sin marcar
  * «anunciar» que luego se quiere publicar en la comunidad.
  */
@@ -229,16 +229,16 @@ test.describe('clases en directo · editar y anunciar', () => {
       },
     });
 
-    await page.goto('/formador/aula-virtual');
+    await page.goto('/studio/live');
     await expect(page.getByRole('heading', { name: 'Aula virtual' })).toBeVisible();
 
     // De partida NO hay anuncio en el feed.
-    await page.goto('/comunidad');
+    await page.goto('/community');
     await expect(page.getByRole('heading', { name: original })).toHaveCount(0);
 
     // Editar: cambiar el título y marcar «anunciar».
     const renombrada = `Clase renombrada ${stamp}`;
-    await page.goto('/formador/aula-virtual');
+    await page.goto('/studio/live');
     await page.getByTestId(`editar-clase-${clase.id}`).click();
     await expect(page.getByRole('heading', { name: 'Editar clase en directo' })).toBeVisible();
 
@@ -261,21 +261,21 @@ test.describe('clases en directo · editar y anunciar', () => {
     await expect(page.getByRole('heading', { name: renombrada })).toBeVisible();
 
     // Y ahora sí hay anuncio en el feed, con su tarjeta e inscripción.
-    await page.goto('/comunidad');
+    await page.goto('/community');
     const tarjeta = page.getByTestId(`clase-embed-${clase.id}`);
     await expect(tarjeta).toBeVisible();
     await expect(page.getByRole('heading', { name: renombrada })).toBeVisible();
 
     // Segunda edición SIN marcar la casilla: no duplica el post y lo sincroniza.
     const definitiva = `Clase definitiva ${stamp}`;
-    await page.goto('/formador/aula-virtual');
+    await page.goto('/studio/live');
     await page.getByTestId(`editar-clase-${clase.id}`).click();
     await page.locator('#topic').fill(definitiva);
     await expect(page.getByTestId('anunciar-clase')).not.toBeChecked();
     await page.getByRole('button', { name: 'Guardar cambios' }).click();
     await expect(page.getByRole('heading', { name: definitiva })).toBeVisible();
 
-    await page.goto('/comunidad');
+    await page.goto('/community');
     // Un único post, con el título ya actualizado.
     await expect(page.getByRole('heading', { name: definitiva })).toHaveCount(1);
     await expect(page.getByRole('heading', { name: renombrada })).toHaveCount(0);

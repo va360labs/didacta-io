@@ -31,7 +31,7 @@ import { useMessagingStream } from './use-messaging-stream';
  *
  * Antes este provider pedía la lista completa de conversaciones y se quedaba
  * solo con el número de no-leídos; el resto (salas, últimos mensajes, autores)
- * se tiraba y la página `/mensajes` volvía a pedirlo. Ahora la lista vive aquí y
+ * se tiraba y la página `/messages` volvía a pedirlo. Ahora la lista vive aquí y
  * la consumen las dos superficies —la página y el chat flotante— sin duplicar
  * peticiones ni lógica de merge.
  */

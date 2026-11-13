@@ -278,7 +278,7 @@ function ScimPanel() {
             <p className="text-xs">
               {t.rich('scim.usersOnlyDescription', {
                 code: (chunks) => <code className="font-mono">{chunks}</code>,
-                usersLink: (chunks) => <a href="/admin/usuarios">{chunks}</a>,
+                usersLink: (chunks) => <a href="/admin/users">{chunks}</a>,
               })}
             </p>
           </div>

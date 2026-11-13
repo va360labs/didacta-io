@@ -3,7 +3,7 @@ import { adminTokenForBootstrap, API_URL, createPublishedCourse, signup } from '
 import { injectSession } from '../helpers/auth';
 
 /**
- * /cursos se divide en dos secciones: "Mis cursos" (donde el alumno está
+ * /courses se divide en dos secciones: "Mis cursos" (donde el alumno está
  * matriculado) primero, y debajo "Otros cursos de <organización>", donde el
  * nombre de la organización viene del tenant (nunca hardcodeado).
  */
@@ -50,7 +50,7 @@ test.describe('Catálogo dividido en "Mis cursos" y "Otros cursos"', () => {
       // el shell secuestraría la navegación hacia /onboarding.
       user: { ...alumno.user, onboardingCompletedAt: new Date().toISOString() },
     });
-    await page.goto('/cursos');
+    await page.goto('/courses');
 
     // 1) Ambas secciones existen. El título de la segunda incluye el nombre del
     // tenant resuelto en runtime: comprobamos el prefijo, no un literal.
@@ -117,7 +117,7 @@ test.describe('Catálogo dividido en "Mis cursos" y "Otros cursos"', () => {
       // el shell secuestraría la navegación hacia /onboarding.
       user: { ...alumno.user, onboardingCompletedAt: new Date().toISOString() },
     });
-    await page.goto('/cursos');
+    await page.goto('/courses');
 
     await expect(page.getByRole('heading', { name: 'Mis cursos', exact: true })).toBeVisible({
       timeout: 20_000,

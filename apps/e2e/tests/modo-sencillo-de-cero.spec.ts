@@ -95,7 +95,7 @@ test('modo sencillo: de cero a enlace de venta con precio', async ({ browser }) 
   await expect(page.getByRole('heading', { name: 'Tus notificaciones' })).toBeVisible();
   await c.click(page.getByRole('button', { name: 'Continuar' }));
   await c.click(page.getByRole('button', { name: 'Seguir con mi academia' }));
-  await page.waitForURL(/\/bienvenida/, { timeout: 30_000 });
+  await page.waitForURL(/\/welcome/, { timeout: 30_000 });
 
   // Alta en 3 preguntas.
   await c.fill(page.getByLabel('Nombre de la academia'), 'Taller de Acuarela');
@@ -108,7 +108,7 @@ test('modo sencillo: de cero a enlace de venta con precio', async ({ browser }) 
   await c.click(page.getByRole('button', { name: 'Siguiente' }));
   await c.fill(page.getByLabel('Precio'), '49');
   await c.click(page.getByRole('button', { name: 'Crear mi academia' }));
-  await page.waitForURL(/\/empieza/, { timeout: 30_000 });
+  await page.waitForURL(/\/start/, { timeout: 30_000 });
   await expect(page.getByTestId('empieza-aqui')).toBeVisible();
   // Lo que dejó el alta: academia con nombre, precio y enlace aún apagado.
   await expect(page.locator('[data-step="price"][data-done="1"]')).toContainText('49');
@@ -141,12 +141,12 @@ test('modo sencillo: de cero a enlace de venta con precio', async ({ browser }) 
       .first()
       .getByRole('link', { name: /Empieza aquí/ }),
   );
-  await page.waitForURL(/\/empieza/);
+  await page.waitForURL(/\/start/);
   await c.click(page.getByTestId('publicar'));
   await expect(page.getByTestId('copiar-enlace')).toBeEnabled({ timeout: 20_000 });
   await c.click(page.getByTestId('copiar-enlace'));
   const enlace = await page.evaluate(() => navigator.clipboard.readText());
-  expect(enlace).toContain('/catalogo/acuarela-desde-cero');
+  expect(enlace).toContain('/catalog/acuarela-desde-cero');
 
   // El precio salió hacia el doble de Stripe (nunca hacia Stripe real).
   expect(

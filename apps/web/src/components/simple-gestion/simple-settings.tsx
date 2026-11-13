@@ -8,7 +8,7 @@
 import Link from 'next/link';
 import { useEffect, useState, type FormEvent } from 'react';
 import { useTranslations } from 'next-intl';
-import { PasoMarca } from '@/app/bienvenida/paso-marca';
+import { PasoMarca } from '@/app/welcome/paso-marca';
 import { Icon } from '@/components/icon';
 import { academyApi, type Academy } from '@/lib/academy';
 import { authStorage } from '@/lib/auth-storage';
@@ -171,7 +171,7 @@ export function SimpleSettings() {
       </form>
 
       <Link
-        href="/admin/configuracion?completo=1"
+        href="/admin/settings?completo=1"
         className="mt-4 flex items-center gap-3 rounded-2xl border border-border bg-surface p-4 hover:border-border-strong"
       >
         <Icon name="cog" size={20} />

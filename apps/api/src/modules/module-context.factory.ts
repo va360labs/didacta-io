@@ -329,7 +329,7 @@ export class ModuleContextFactory implements OnApplicationShutdown {
     return adapter;
   }
 
-  /** Invalidar el cache tras un cambio de config en /admin/configuracion. */
+  /** Invalidar el cache tras un cambio de config en /admin/settings. */
   invalidateTenantStorage(tenantId: string): void {
     this.tenantStorageCache.delete(tenantId);
   }

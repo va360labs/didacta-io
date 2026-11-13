@@ -6,8 +6,8 @@
 /// Extension point del módulo `mod.ai-grader` hacia el core.
 ///
 /// Aporta el item "Correcciones" al sidebar del formador. La página
-/// `/formador/correcciones` lista los attempts pendientes y el detalle
-/// vive en `/formador/correcciones/:id`.
+/// `/studio/grading` lista los attempts pendientes y el detalle
+/// vive en `/studio/grading/:id`.
 
 import type { ModuleWebExtension } from '@/lib/module-registry';
 
@@ -16,7 +16,7 @@ export const aiGraderExtension: ModuleWebExtension = {
   sidebarItems: [
     {
       group: 'Formador',
-      href: '/formador/correcciones',
+      href: '/studio/grading',
       label: 'Correcciones',
       icon: 'check',
       requiresRole: 'formador',

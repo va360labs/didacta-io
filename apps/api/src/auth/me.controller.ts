@@ -41,7 +41,7 @@ import { ZodValidationPipe } from './zod-validation.pipe';
  * pintar, el usuario acaba con un perfil que la UI no puede representar.
  *
  * `pt-BR` estuvo aquí sin tener catálogo de mensajes: se elegía portugués,
- * esto lo persistía, `/cuenta` confirmaba «Português (Brasil)» y la interfaz
+ * esto lo persistía, `/account` confirmaba «Português (Brasil)» y la interfaz
  * seguía en español. Retirado — se responde 400.
  *
  * Los perfiles que YA lo tienen guardado no se tocan: el degradado a español

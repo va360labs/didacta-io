@@ -8,7 +8,7 @@ import { formatDate, formatTime } from '@/lib/i18n/format';
 import type { TranslatorLike } from '@/lib/i18n/labels';
 import type { ConversationView } from './client';
 
-/** Piezas compartidas por la página `/mensajes` y el chat flotante. */
+/** Piezas compartidas por la página `/messages` y el chat flotante. */
 
 export const STAFF_ROLES = ['formador', 'tenant_admin', 'super_admin'];
 
@@ -57,7 +57,7 @@ export function relTime(iso: string, t: TranslatorLike): string {
 
 /**
  * `t` = `useTranslations('modMessaging')`, y es OBLIGATORIO: los 6 call-sites
- * (los 4 de `use-conversation-thread` y los 2 de `/mensajes`) le pasan el suyo.
+ * (los 4 de `use-conversation-thread` y los 2 de `/messages`) le pasan el suyo.
  * No hay rama degradada a español — un `t` opcional aquí significaba español en
  * la UI inglesa sin que fallara ningún test.
  */

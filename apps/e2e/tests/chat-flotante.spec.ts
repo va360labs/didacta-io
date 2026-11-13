@@ -47,7 +47,7 @@ function sendMessage(user: E2eUser, conversationId: string, body: string) {
   return messagingApi(user, `/conversations/${conversationId}/messages`, { body });
 }
 
-async function signInAs(page: Page, user: E2eUser, path = '/comunidad') {
+async function signInAs(page: Page, user: E2eUser, path = '/community') {
   await page.goto('/signin');
   await injectSession(page, {
     accessToken: user.tokens.accessToken,
@@ -75,7 +75,7 @@ test.describe('chat flotante', () => {
     ).toHaveCount(0);
 
     // Sigue presente en otra sección del shell.
-    await page.goto('/cursos');
+    await page.goto('/courses');
     await expect(page.getByTestId('chat-pill')).toBeVisible({ timeout: 20_000 });
   });
 
@@ -98,8 +98,8 @@ test.describe('chat flotante', () => {
       name: `E2E Flotante B ${stamp}`,
     });
 
-    // A abre un DM con B desde /mensajes y escribe.
-    await signInAs(page, userA, '/mensajes');
+    // A abre un DM con B desde /messages y escribe.
+    await signInAs(page, userA, '/messages');
     await expect(page.getByTestId('mensajes-page')).toBeVisible({ timeout: 20_000 });
     await page.getByTestId('new-dm-button').click();
     await page.getByTestId('new-dm-search').fill(`E2E Flotante B ${stamp}`);
@@ -129,7 +129,7 @@ test.describe('chat flotante', () => {
       'la cara del último autor es real, no un marcador',
     ).toBeVisible();
 
-    // Al desplegar, la misma lista agrupada de /mensajes.
+    // Al desplegar, la misma lista agrupada de /messages.
     await pill.click();
     const panel = pageB.getByTestId('chat-panel');
     await expect(panel).toBeVisible();
@@ -157,7 +157,7 @@ test.describe('chat flotante', () => {
       name: `E2E Typing B ${stamp}`,
     });
 
-    await signInAs(page, userA, '/mensajes');
+    await signInAs(page, userA, '/messages');
     await page.getByTestId('new-dm-button').click();
     await page.getByTestId('new-dm-search').fill(`E2E Typing B ${stamp}`);
     await page.getByTestId('new-dm-member').first().click();
@@ -242,7 +242,7 @@ test.describe('chat flotante', () => {
       name: `E2E Responde B ${stamp}`,
     });
 
-    await signInAs(page, userA, '/mensajes');
+    await signInAs(page, userA, '/messages');
     await page.getByTestId('new-dm-button').click();
     await page.getByTestId('new-dm-search').fill(`E2E Responde B ${stamp}`);
     await page.getByTestId('new-dm-member').first().click();
@@ -254,7 +254,7 @@ test.describe('chat flotante', () => {
     // B está estudiando: abre el catálogo y contesta desde el panel.
     const ctxB = await browser.newContext();
     const pageB = await ctxB.newPage();
-    await signInAs(pageB, userB, '/cursos');
+    await signInAs(pageB, userB, '/courses');
     const urlAntes = pageB.url();
 
     await pageB.getByTestId('chat-pill').click();
@@ -419,7 +419,7 @@ test.describe('chat flotante', () => {
     await page.getByTestId('chat-pill').click();
     await expect(page.getByTestId('chat-panel')).toBeVisible();
 
-    await page.goto('/cursos');
+    await page.goto('/courses');
     await expect(page.getByTestId('chat-panel')).toBeVisible({ timeout: 20_000 });
 
     await page.reload();

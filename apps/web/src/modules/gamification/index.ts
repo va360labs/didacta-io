@@ -24,7 +24,7 @@ export const gamificationExtension: ModuleWebExtension = {
     },
     {
       group: 'Personas',
-      href: '/retos',
+      href: '/challenges',
       label: 'Retos',
       icon: 'target',
     },
@@ -35,7 +35,7 @@ export const gamificationExtension: ModuleWebExtension = {
       // lo descartaba en silencio y el panel era invisible para los
       // tenant_admin, que son justo su destinatario.
       group: 'Personas y accesos',
-      href: '/admin/gamificacion',
+      href: '/admin/gamification',
       label: 'Puntos y retos',
       icon: 'trophy',
       requiresRole: 'tenant_admin',

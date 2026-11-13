@@ -12,7 +12,7 @@ import { uploadCommunityImage } from '@/lib/community-upload';
 import { apiErrorMessage } from '@/lib/i18n/api-error';
 
 /**
- * Iniciales para el fallback del avatar (mismo criterio que /cuenta y el
+ * Iniciales para el fallback del avatar (mismo criterio que /account y el
  * sidebar: 1ª+última palabra del nombre, o las 2 primeras letras del email).
  */
 function initialsOf(name: string | null, email: string): string {

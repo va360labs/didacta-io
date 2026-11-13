@@ -610,7 +610,7 @@ describe('AiTutorChatService.ask · conocimiento validado', () => {
         {
           id: 'corr-1',
           question: '¿cómo descargo la factura?',
-          answer: 'Desde /cuenta → Facturación, botón Descargar.',
+          answer: 'Desde /account → Facturación, botón Descargar.',
           distance: 0.12,
         },
       ],
@@ -630,7 +630,7 @@ describe('AiTutorChatService.ask · conocimiento validado', () => {
 
     const system = (chatSpy as unknown as ReturnType<typeof vi.fn>).mock.calls[0]![0].system;
     expect(system).toContain('RESPUESTAS YA VALIDADAS POR EL EQUIPO');
-    expect(system).toContain('/cuenta → Facturación');
+    expect(system).toContain('/account → Facturación');
     expect(system).toContain('tienen prioridad sobre el CONTEXTO');
   });
 

@@ -345,7 +345,7 @@ describeWithDb('Modo sencillo — Postgres real como didacta_app (RLS forzada)',
       amountCents: 8900,
       courseSlug: 'torno-basico',
     });
-    expect(vista.salePath).toBe('/catalogo/torno-basico');
+    expect(vista.salePath).toBe('/catalog/torno-basico');
     expect(vista.sales.count).toBe(1);
     expect(vista.students).toBe(1);
 

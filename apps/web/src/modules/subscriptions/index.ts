@@ -6,7 +6,7 @@
 /// Extension point del módulo `mod.subscriptions` hacia el core.
 ///
 /// `mod.subscriptions` no aporta sidebar items: la única superficie es
-/// `/cuenta/suscripciones`, página personal del usuario que cuelga del
+/// `/account/subscriptions`, página personal del usuario que cuelga del
 /// popup del avatar (no del sidebar). El entry sigue declarándose para
 /// que `filterByActiveModulesOptional` reconozca el módulo.
 

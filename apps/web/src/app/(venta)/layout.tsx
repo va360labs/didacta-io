@@ -6,7 +6,7 @@
 import type { ReactNode } from 'react';
 
 /**
- * Layout del route group `(venta)`: páginas públicas de COMPRA (p. ej. /unete).
+ * Layout del route group `(venta)`: páginas públicas de COMPRA (p. ej. /join).
  * Es hermano de `(public)` pero ANCHO (aquel es max-w-lg para wizards): la
  * página de membresía es un layout de dos columnas estilo checkout. Sin gate
  * de sesión — el visitante aún no tiene cuenta.

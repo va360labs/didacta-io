@@ -35,7 +35,7 @@ export interface DeleteSettingOptions {
  * encryption at-rest para credenciales.
  *
  * Reemplaza el stub in-memory `StubTenantConfig`. Cada admin de tenant
- * configura desde `/admin/configuracion` su SMTP, Zoom, etc., y los valores
+ * configura desde `/admin/settings` su SMTP, Zoom, etc., y los valores
  * marcados como secretos se cifran con `SecretCipherService` antes de tocar
  * la DB.
  *

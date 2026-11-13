@@ -349,7 +349,7 @@ describe('IntegrationsService · estado del alumno', () => {
       title: 'Dos',
       moduleId: 'mod-1',
       moduleTitle: 'Introducción',
-      url: `${WEB_BASE}/clase/les-2`,
+      url: `${WEB_BASE}/live/les-2`,
     });
     expect(state.course?.lessonsCompleted).toBe(1);
     expect(state.course?.lessonsTotal).toBe(3);
@@ -494,7 +494,7 @@ describe('IntegrationsService · estado del alumno', () => {
       COURSE_ID,
       `${WEB_BASE}/`,
     );
-    expect(state.course?.nextLesson?.url).toBe(`${WEB_BASE}/clase/les-1`);
+    expect(state.course?.nextLesson?.url).toBe(`${WEB_BASE}/live/les-1`);
   });
 
   it('devuelve la membresía viva, con el nombre del plan resuelto', async () => {

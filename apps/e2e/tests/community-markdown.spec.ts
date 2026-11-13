@@ -69,7 +69,7 @@ test.describe('mod.community · markdown en posts', () => {
       },
     });
 
-    await page.goto(`/comunidad/${post.id}`);
+    await page.goto(`/community/${post.id}`);
     const dialog = page.getByRole('dialog');
     await expect(dialog.getByRole('heading', { name: `Digest markdown E2E ${stamp}` })).toBeVisible(
       { timeout: 15_000 },
@@ -133,7 +133,7 @@ test.describe('mod.community · markdown en posts', () => {
       },
     });
 
-    await page.goto('/comunidad');
+    await page.goto('/community');
     await expect(page.getByText(`Card markdown E2E ${stamp}`)).toBeVisible({ timeout: 15_000 });
     // La card muestra el <strong> renderizado, no los asteriscos.
     await expect(page.locator('strong', { hasText: 'Punto clave:' }).first()).toBeVisible();

@@ -186,7 +186,7 @@ describe('BillingPublicController — checkout anónimo', () => {
     ).not.toHaveBeenCalled();
   });
 
-  it('inicia el checkout SIN usuario, con retorno a las páginas públicas /catalogo', async () => {
+  it('inicia el checkout SIN usuario, con retorno a las páginas públicas /catalog', async () => {
     const { controller, billing } = makeController({ courseFirst: { status: 'PUBLISHED' } });
 
     const result = await controller.checkout(req(), COURSE, {
@@ -201,8 +201,8 @@ describe('BillingPublicController — checkout anónimo', () => {
     expect(args.userId).toBeNull();
     expect(args.userEmail).toBe('visitante@example.com');
     expect(args.optionId).toBe('33333333-3333-4333-8333-333333333333');
-    expect(args.successUrl).toContain('/catalogo/checkout/success?session_id=');
-    expect(args.cancelUrl).toContain('/catalogo/checkout/cancel');
+    expect(args.successUrl).toContain('/catalog/checkout/success?session_id=');
+    expect(args.cancelUrl).toContain('/catalog/checkout/cancel');
   });
 });
 

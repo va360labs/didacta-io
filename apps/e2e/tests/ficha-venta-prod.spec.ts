@@ -40,7 +40,7 @@ test.describe('PROD · ficha de venta del curso', () => {
       if (r.status() >= 400) errores.push(`http ${r.status()} ${r.url()}`);
     });
 
-    await page.goto(`/cursos/${slug}`);
+    await page.goto(`/courses/${slug}`);
     await page.waitForTimeout(4000);
     if (errores.length) console.log('--- DIAGNÓSTICO ---\n' + errores.join('\n'));
 
@@ -72,7 +72,7 @@ test.describe('PROD · ficha de venta del curso', () => {
     // bloqueado de abajo), así que se compara el de la caja de forma exacta.
     await expect(page.getByRole('link', { name: 'Ver membresías', exact: true })).toHaveAttribute(
       'href',
-      '/unete',
+      '/join',
     );
 
     // El muro de contenido bloqueado ahora sí ofrece salida.

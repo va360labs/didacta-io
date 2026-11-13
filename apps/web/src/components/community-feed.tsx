@@ -44,9 +44,9 @@ const ALL_TAGS = 'Todo';
 /**
  * Feed de la comunidad + modal de detalle con URL canónica por post.
  *
- * Lo renderizan `/comunidad` (feed sin post abierto) y `/comunidad/[id]`
+ * Lo renderizan `/community` (feed sin post abierto) y `/community/[id]`
  * (deep-link compartible: mismo feed con el post abierto en modal). Abrir un
- * post desde el feed actualiza la URL a `/comunidad/<id>` sin desmontar el
+ * post desde el feed actualiza la URL a `/community/<id>` sin desmontar el
  * feed; cerrar el modal la restaura.
  */
 export function CommunityFeed({
@@ -77,9 +77,9 @@ export function CommunityFeed({
   const [activeTag, setActiveTag] = useState<string>(ALL_TAGS);
   const [sort, setSort] = useState<PostSort>('recent');
   // El post abierto se deriva de la URL (usePathname); en el deep-link
-  // /comunidad/[id] la propia URL ya abre el modal, sin estado extra.
+  // /community/[id] la propia URL ya abre el modal, sin estado extra.
   const { selectedPostId, openPost, closePost } = usePostModalRoute({
-    fallbackPath: '/comunidad',
+    fallbackPath: '/community',
   });
 
   // Contador de peticiones: solo pinta la ÚLTIMA que se pidió. Cambiar de tag
@@ -356,7 +356,7 @@ export function CommunityFeed({
           {/* Modo sencillo: invitar está donde se habla con la comunidad. */}
           {simple ? <InviteAndEarnCard /> : null}
           {/* Lo primero: al abrir la comunidad se ve qué hay por delante sin
-              tener que ir hasta /calendario. */}
+              tener que ir hasta /calendar. */}
           <CommunityUpcomingCard />
 
           {simple ? null : (

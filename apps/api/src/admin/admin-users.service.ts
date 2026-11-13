@@ -227,7 +227,7 @@ export class AdminUsersService {
    * (viaje 1: invitar CON aula, no a un campus vacío). El grupo se valida ANTES
    * de crear el user para que un id inválido falle sin dejar el alta a medias;
    * si el fan-out de matrículas falla después, el user queda creado igualmente
-   * y el operador lo ve en el grupo desde /admin/grupos-acceso (fail-soft).
+   * y el operador lo ve en el grupo desde /admin/access-groups (fail-soft).
    */
   async invite(
     tenantId: string,

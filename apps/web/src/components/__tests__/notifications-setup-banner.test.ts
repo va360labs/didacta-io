@@ -70,14 +70,14 @@ describe('NotificationsSetupBanner — texto sin jerga', () => {
 
 describe('un solo aviso en la pantalla del correo (con la tarjeta de beta.13)', () => {
   it('solo se oculta donde se ve la tarjeta del correo (Configuración → Notificaciones)', () => {
-    const cfg = '/admin/configuracion';
+    const cfg = '/admin/settings';
     expect(isViewingSmtpSettings(cfg, 'notifications', ADMIN)).toBe(true);
     // Sin ?tab: Notificaciones es la que abre por defecto para tenant_admin…
     expect(isViewingSmtpSettings(cfg, null, ADMIN)).toBe(true);
     // …y General para super_admin: ahí no hay tarjeta del correo, el aviso sigue.
     expect(isViewingSmtpSettings(cfg, null, ['super_admin'])).toBe(false);
     expect(isViewingSmtpSettings(cfg, 'general', ADMIN)).toBe(false);
-    expect(isViewingSmtpSettings('/admin/cobros', 'notifications', ADMIN)).toBe(false);
+    expect(isViewingSmtpSettings('/admin/payments', 'notifications', ADMIN)).toBe(false);
     expect(isViewingSmtpSettings(null, null, ADMIN)).toBe(false);
   });
 

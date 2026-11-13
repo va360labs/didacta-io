@@ -22,7 +22,7 @@ import { calendarVariables } from './class-links';
  * corta a perderse la clase.
  *
  * El joinUrl de Zoom NUNCA viaja por email: el enlace que se envía es la
- * página de la clase (/clase/[id]), donde el gating server-side decide.
+ * página de la clase (/live/[id]), donde el gating server-side decide.
  *
  * Best-effort: un fallo del hub jamás afecta a la inscripción ni a la
  * cancelación (el hub además no relanza errores de SMTP).

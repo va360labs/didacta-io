@@ -154,8 +154,8 @@ function Step({
       ? formatCents(offer.amountCents, offer.currency.toUpperCase())
       : '';
   const courseHref = view.firstCourseId
-    ? `/formador/cursos/${view.firstCourseId}`
-    : '/formador/cursos/nuevo';
+    ? `/studio/courses/${view.firstCourseId}`
+    : '/studio/courses/new';
   const addLessonHref = view.firstCourseId ? `${courseHref}?anadir=1` : courseHref;
 
   const result: Record<StepId, string> = {
@@ -167,10 +167,10 @@ function Step({
     invite: t('pasos.invite.hecho', { n: view.students }),
   };
   const editHref: Partial<Record<StepId, string>> = {
-    academy: '/admin/configuracion',
+    academy: '/admin/settings',
     course: courseHref,
     payments: view.paymentsSetupPath,
-    invite: '/admin/usuarios/invitar',
+    invite: '/admin/users/invite',
   };
 
   if (done && !(id === 'price' && editing)) {
@@ -285,7 +285,7 @@ function StepAction({
     'mt-4 inline-flex h-11 items-center gap-2 rounded-xl bg-brand-600 px-5 text-[15px] font-semibold text-white hover:bg-brand-700 disabled:opacity-50';
   if (id === 'academy')
     return (
-      <Link href="/admin/configuracion" className={primary}>
+      <Link href="/admin/settings" className={primary}>
         <Icon name="palette" size={18} />
         {t('pasos.academy.boton')}
       </Link>
@@ -316,7 +316,7 @@ function StepAction({
     );
   if (id === 'publish') return <PublishButton view={view} onChange={onChange} />;
   return (
-    <Link href="/admin/usuarios/invitar" className={primary}>
+    <Link href="/admin/users/invite" className={primary}>
       <Icon name="mail" size={18} />
       {t('pasos.invite.boton')}
     </Link>
@@ -464,8 +464,8 @@ function PublishButton({ view, onChange }: { view: StartHereView; onChange: () =
 /** Ruta del enlace de venta: la publicada o, si aún no, la que tendrá. */
 export function plannedSalePath(view: StartHereView): string | null {
   if (view.salePath) return view.salePath;
-  if (view.offer?.kind === 'membership') return '/unete';
-  return view.offer?.courseSlug ? `/catalogo/${view.offer.courseSlug}` : null;
+  if (view.offer?.kind === 'membership') return '/join';
+  return view.offer?.courseSlug ? `/catalog/${view.offer.courseSlug}` : null;
 }
 
 function SaleLinkCard({ view, origin }: { view: StartHereView; origin: string }) {
@@ -482,7 +482,7 @@ function SaleLinkCard({ view, origin }: { view: StartHereView; origin: string })
     offer && offer.amountCents > 0
       ? formatCents(offer.amountCents, offer.currency.toUpperCase())
       : '';
-  const asStudent = published ? path : offer?.courseSlug ? `/cursos/${offer.courseSlug}` : null;
+  const asStudent = published ? path : offer?.courseSlug ? `/courses/${offer.courseSlug}` : null;
 
   async function copy() {
     try {
@@ -625,7 +625,7 @@ function Resumen({ view }: { view: StartHereView }) {
             {view.sales.count}
           </div>
           <Link
-            href="/admin/cobros"
+            href="/admin/payments"
             className="text-sm font-semibold text-brand-600 hover:underline"
           >
             {t('resumen.verVentas')}
@@ -651,7 +651,7 @@ function Resumen({ view }: { view: StartHereView }) {
             </div>
           ) : (
             <Link
-              href="/formador/aula-virtual"
+              href="/studio/live"
               className="mt-1 block text-sm font-semibold text-brand-600 hover:underline"
             >
               {t('resumen.programar')}
@@ -676,7 +676,7 @@ function Resumen({ view }: { view: StartHereView }) {
             <span className="text-sm text-text-muted">{t('referidos.texto')}</span>
           </div>
           <Link
-            href="/admin/cobros#referidos"
+            href="/admin/payments#referidos"
             className="inline-flex h-10 items-center rounded-xl bg-brand-600 px-4 text-sm font-semibold text-white hover:bg-brand-700"
           >
             {t('referidos.boton')}

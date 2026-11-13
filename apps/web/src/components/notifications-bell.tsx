@@ -21,10 +21,10 @@ export function NotificationsBell() {
   const { unreadCount, refresh } = useNotificationsContext();
   const pathname = usePathname();
 
-  // Si el alumno está en /notificaciones, refrescar el contador cuando cambia
+  // Si el alumno está en /notifications, refrescar el contador cuando cambia
   // de página (por si marcó alguna como leída).
   useEffect(() => {
-    if (pathname === '/notificaciones') {
+    if (pathname === '/notifications') {
       const t = setTimeout(() => refresh(), 1500);
       return () => clearTimeout(t);
     }
@@ -33,7 +33,7 @@ export function NotificationsBell() {
 
   return (
     <Link
-      href="/notificaciones"
+      href="/notifications"
       className="relative inline-flex items-center justify-center rounded-md p-2 text-neutral-600 hover:bg-neutral-100 dark:text-neutral-300 dark:hover:bg-neutral-800"
       aria-label={
         unreadCount > 0

@@ -280,7 +280,7 @@ describe('alta en 3 preguntas', () => {
     // Sin nombre de persona inventado: el creador firma con el nombre de su academia.
     expect(db.user.name).toBe('Taller de Acuarela');
     expect(db.user.onboardingCompletedAt).toBeInstanceOf(Date);
-    // Sustituye al asistente antiguo: el shell ya no manda a /bienvenida.
+    // Sustituye al asistente antiguo: el shell ya no manda a /welcome.
     expect(db.settings.get('academy')).toMatchObject({ completedAt: expect.any(String) });
   });
 
@@ -360,7 +360,7 @@ describe('publicar', () => {
     await service.quickStart(T, { id: U }, ALTA);
     db.lessons.push({ type: 'TEXT', content: { text: 'Bienvenida' }, module: { courseId: 'c1' } });
     const { salePath } = await service.publish(T, U);
-    expect(salePath).toBe('/catalogo/acuarela-desde-cero');
+    expect(salePath).toBe('/catalog/acuarela-desde-cero');
     expect(db.courses[0]?.status).toBe('PUBLISHED');
     expect(billing.upsertCoursePrice).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -372,10 +372,10 @@ describe('publicar', () => {
     );
   });
 
-  it('membresía: enciende /unete', async () => {
+  it('membresía: enciende /join', async () => {
     const { db, service } = mundo({ paymentsReady: true });
     await service.quickStart(T, { id: U }, { ...ALTA, offer: 'membership' });
-    expect((await service.publish(T, U)).salePath).toBe('/unete');
+    expect((await service.publish(T, U)).salePath).toBe('/join');
     expect(db.membershipActive).toBe(true);
   });
 });
@@ -396,7 +396,7 @@ describe('Empieza aquí', () => {
     });
     expect(view.salePath).toBeNull();
     // Sin cobros de plataforma, los cobros se conectan con las claves propias.
-    expect(view.paymentsSetupPath).toBe('/admin/configuracion?tab=pagos');
+    expect(view.paymentsSetupPath).toBe('/admin/settings?tab=pagos');
 
     // Una lección VACÍA no completa el paso; con texto, sí.
     db.lessons.push({ type: 'TEXT', content: {}, module: { courseId: 'c1' } });
@@ -422,7 +422,7 @@ describe('Empieza aquí', () => {
     await service.publish(T, U);
     db.ordersCompleted = 1;
     const view = await service.startHere(T);
-    expect(view.salePath).toBe('/catalogo/acuarela-desde-cero');
+    expect(view.salePath).toBe('/catalog/acuarela-desde-cero');
     expect(view.steps.find((s) => s.id === 'publish')?.done).toBe(true);
     expect(view.sales).toEqual({ count: 1, firstSaleAt: '2026-11-12T10:00:00.000Z' });
     expect(view.steps.find((s) => s.id === 'invite')?.done).toBe(true);
@@ -435,7 +435,7 @@ describe('Empieza aquí', () => {
     await service.publish(T, U);
     stripeResolver.resolve.mockResolvedValue(null as never);
     const view = await service.startHere(T);
-    expect(view.salePath).toBe('/catalogo/acuarela-desde-cero');
+    expect(view.salePath).toBe('/catalog/acuarela-desde-cero');
     expect(view.steps.find((s) => s.id === 'payments')?.done).toBe(false);
     expect(view.steps.find((s) => s.id === 'publish')?.done).toBe(false);
   });
@@ -488,7 +488,7 @@ describe('aulas que ya trabajaban antes del modo sencillo', () => {
       // Sin portada: la tarjeta del enlace pinta el degradado de reserva.
       courseCoverUrl: null,
     });
-    expect(view.salePath).toBe('/catalogo/torno-basico');
+    expect(view.salePath).toBe('/catalog/torno-basico');
     expect(view.sales.count).toBe(6);
     expect(view.students).toBe(14);
   });
@@ -558,7 +558,7 @@ describe('aulas que ya trabajaban antes del modo sencillo', () => {
     );
     const view = await service.startHere(T);
     expect(view.offer).toMatchObject({ kind: 'membership', planId: 'p-mes', amountCents: 1900 });
-    expect(view.salePath).toBe('/unete');
+    expect(view.salePath).toBe('/join');
   });
 
   it('adoptar: con trabajo hecho se salta el alta de cero (idempotente) y no toca nombre ni cursos', async () => {

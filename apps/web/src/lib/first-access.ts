@@ -7,7 +7,7 @@
  * Primer acceso: en qué orden van los dos asistentes bloqueantes.
  *
  *  · El de PERFIL (`/onboarding`): foto, nombre, idioma y avisos.
- *  · El de ACADEMIA (`/bienvenida`): en modo sencillo, el alta en 3
+ *  · El de ACADEMIA (`/welcome`): en modo sencillo, el alta en 3
  *    preguntas; en el completo, el asistente de puesta en marcha.
  *
  * Lo decide una función pura para que el gate del shell y sus tests digan lo
@@ -22,7 +22,7 @@
  *     obligatoria y exigirla antes de dejarle tocar lo que ha comprado era un
  *     primer contacto pésimo.
  */
-export type FirstAccessDoor = '/onboarding' | '/bienvenida';
+export type FirstAccessDoor = '/onboarding' | '/welcome';
 
 export interface FirstAccessState {
   /** `tenant_admin` o `super_admin` del aula. */
@@ -40,9 +40,9 @@ export function firstAccessDoor(s: FirstAccessState): FirstAccessDoor | null {
   if (!s.administra) return s.perfilHecho ? null : '/onboarding';
   if (s.sencillo) {
     if (!s.perfilHecho) return '/onboarding';
-    return s.academiaHecha ? null : '/bienvenida';
+    return s.academiaHecha ? null : '/welcome';
   }
-  if (!s.academiaHecha) return '/bienvenida';
+  if (!s.academiaHecha) return '/welcome';
   return s.perfilHecho ? null : '/onboarding';
 }
 
@@ -70,5 +70,5 @@ export function isCreatorProfile(
  * preguntas, el gate del shell lo lleva a ella; si ya la hizo, se queda ahí.
  */
 export function afterProfilePath(creator: boolean): string {
-  return creator ? '/empieza' : '/inicio';
+  return creator ? '/start' : '/home';
 }

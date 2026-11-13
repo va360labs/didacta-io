@@ -27,7 +27,7 @@ import { communityApi, useCommunityTags, type Post } from '@/modules/community';
  * Un admin ve además el expediente completo (compras, suscripción, formación,
  * actividad, mensajes, acceso y sanciones).
  *
- * Es UNA sola ruta a propósito: `/admin/usuarios/[id]` redirige aquí. La regla
+ * Es UNA sola ruta a propósito: `/admin/users/[id]` redirige aquí. La regla
  * del proyecto prohíbe dos caminos al mismo destino, y con «pulsar un nombre
  * desde cualquier sección» tener dos fichas distintas era garantía de acabar
  * en la equivocada.

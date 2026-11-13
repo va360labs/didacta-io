@@ -6,7 +6,7 @@
  */
 
 /**
- * Pestaña "Suscripción" de /cuenta.
+ * Pestaña "Suscripción" de /account.
  *
  * Muestra DOS fuentes de suscripción del usuario:
  *  1. Su plan en la cuenta de pago EXTERNA del tenant (mod.payment-connections),
@@ -14,7 +14,7 @@
  *  2. Sus suscripciones recurrentes a cursos (mod.subscriptions): ver / cancelar
  *     / facturas.
  *
- * Antes vivía como página suelta en /cuenta/suscripciones (ruta huérfana). Todo
+ * Antes vivía como página suelta en /account/subscriptions (ruta huérfana). Todo
  * CE, sin EeGate.
  */
 

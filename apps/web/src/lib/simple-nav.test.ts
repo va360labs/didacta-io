@@ -18,7 +18,7 @@ import { moduleExtensions } from '@/modules';
 
 const ESPACIOS: SidebarGroup = {
   label: 'Foros',
-  items: [{ href: '/espacios/general', label: 'General', icon: 'hash' }],
+  items: [{ href: '/spaces/general', label: 'General', icon: 'hash' }],
 };
 
 /** Árbol COMPLETO de hoy para un rol, con las extensiones de los módulos. */
@@ -66,8 +66,8 @@ describe('modo sencillo: pestañas', () => {
   it('Ventas apunta a los cobros de plataforma solo si existen', () => {
     const conCobros = buildSimpleTabs({ isAdmin: true, activeModules: TODOS, hasSold: false });
     const sin = buildSimpleTabs({ isAdmin: true, activeModules: new Set(), hasSold: false });
-    expect(conCobros.find((t) => t.id === 'ventas')?.href).toBe('/admin/cobros');
-    expect(sin.find((t) => t.id === 'ventas')?.href).toBe('/admin/membresia');
+    expect(conCobros.find((t) => t.id === 'ventas')?.href).toBe('/admin/payments');
+    expect(sin.find((t) => t.id === 'ventas')?.href).toBe('/admin/membership');
   });
 
   it('móvil: 4 pestañas y «Más»', () => {
@@ -89,9 +89,9 @@ describe('modo sencillo: pestañas', () => {
 
   it('pestaña activa por prefijo más largo', () => {
     const tabs = buildSimpleTabs({ isAdmin: true, activeModules: TODOS, hasSold: false });
-    expect(activeSimpleTab('/formador/cursos/abc', tabs)).toBe('cursos');
-    expect(activeSimpleTab('/espacios/general', tabs)).toBe('comunidad');
-    expect(activeSimpleTab('/admin/cobros', tabs)).toBe('ventas');
+    expect(activeSimpleTab('/studio/courses/abc', tabs)).toBe('cursos');
+    expect(activeSimpleTab('/spaces/general', tabs)).toBe('comunidad');
+    expect(activeSimpleTab('/admin/payments', tabs)).toBe('ventas');
     expect(activeSimpleTab('/admin/webhooks', tabs)).toBeNull();
   });
 });
@@ -117,13 +117,13 @@ describe('modo sencillo: «Más» no pierde nada', () => {
     const tabs = buildSimpleTabs({ isAdmin: true, activeModules: null, hasSold: false });
     const hrefs = buildSimpleMore(full, tabs).flatMap((g) => g.items.map((i) => i.href));
     for (const h of [
-      '/comunidad',
-      '/formador/cursos',
-      '/admin/usuarios',
-      '/admin/configuracion',
-      '/comunidad/menciones',
-      '/mensajes',
-      '/mis-certificados',
+      '/community',
+      '/studio/courses',
+      '/admin/users',
+      '/admin/settings',
+      '/community/mentions',
+      '/messages',
+      '/my-certificates',
     ]) {
       expect(hrefs).not.toContain(h);
     }

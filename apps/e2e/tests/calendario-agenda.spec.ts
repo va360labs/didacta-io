@@ -3,7 +3,7 @@ import { adminTokenForBootstrap, API_URL, signup } from '../helpers/api';
 import { injectSession } from '../helpers/auth';
 
 /**
- * La vista Agenda de /calendario tiene que mostrar clases PASADAS, EN CURSO y
+ * La vista Agenda de /calendar tiene que mostrar clases PASADAS, EN CURSO y
  * PRÓXIMAS aunque caigan fuera del mes que se está mirando.
  *
  * Regresión que cubre: el calendario solo pedía el mes visible, así que una
@@ -22,7 +22,7 @@ function isoIn(days: number, hour = 18): string {
   return d.toISOString();
 }
 
-test.describe('/calendario · agenda con pasadas, en curso y próximas', () => {
+test.describe('/calendar · agenda con pasadas, en curso y próximas', () => {
   test('muestra una clase del mes siguiente y una pasada, fuera del mes visible', async ({
     page,
   }) => {
@@ -76,7 +76,7 @@ test.describe('/calendario · agenda con pasadas, en curso y próximas', () => {
       user: { ...alumno.user, onboardingCompletedAt: new Date().toISOString() },
     });
 
-    await page.goto('/calendario');
+    await page.goto('/calendar');
     await expect(page.getByText('Agenda · Calendario')).toBeVisible();
 
     // La agenda se pide en una petición APARTE de la rejilla y alimenta la
