@@ -11,14 +11,17 @@ import { startStripeDouble, type StripeDouble } from '../helpers/stripe-double';
 /**
  * MODO SENCILLO (Didacta Cloud): de cero a enlace de venta.
  *
- * Una creadora recién llegada define su contraseña, entra, contesta el alta en
- * 3 preguntas, añade una lección de texto, publica y copia su enlace. Un
- * visitante abre el enlace y ve el botón de compra. Cuenta los clics y los
+ * Una creadora recién llegada define su contraseña, entra, se presenta a sus
+ * alumnos (perfil: deja la foto para luego y escribe su nombre), contesta el
+ * alta en 3 preguntas, añade una lección de texto, publica y copia su enlace.
+ * Un visitante abre el enlace y ve el botón de compra. Cuenta los clics y los
  * campos rellenados desde que entra (el acceso, igual en cualquier modo, se
  * cuenta aparte). Los cobros están conectados con la cuenta de pruebas del
  * arnés; el precio se crea en el doble de Stripe.
  *
  * Objetivo: < 15 clics y < 8 campos hasta tener el enlace de venta con precio.
+ * Medido: 13 clics y 6 campos (el perfil suma 4 clics y 1 campo a los 9/5 de
+ * antes).
  */
 
 interface Contador {
@@ -81,6 +84,17 @@ test('modo sencillo: de cero a enlace de venta con precio', async ({ browser }) 
 
   // ── Desde que entra: el camino hasta vender ─────────────────────────────
   const c = contar();
+
+  // Primero se presenta a sus alumnos: el mismo paso de perfil que el alumno,
+  // con la foto opcional. Sin foto, el botón dice que la deja para luego.
+  await page.waitForURL(/\/onboarding/, { timeout: 30_000 });
+  await expect(page.getByRole('heading', { name: 'Preséntate a tus alumnos' })).toBeVisible();
+  await c.click(page.getByRole('button', { name: 'Dejar para luego' }));
+  await c.fill(page.getByLabel(/Nombre de perfil/), 'Clara Acuarela');
+  await c.click(page.getByRole('button', { name: 'Continuar' }));
+  await expect(page.getByRole('heading', { name: 'Tus notificaciones' })).toBeVisible();
+  await c.click(page.getByRole('button', { name: 'Continuar' }));
+  await c.click(page.getByRole('button', { name: 'Seguir con mi academia' }));
   await page.waitForURL(/\/bienvenida/, { timeout: 30_000 });
 
   // Alta en 3 preguntas.
@@ -99,6 +113,8 @@ test('modo sencillo: de cero a enlace de venta con precio', async ({ browser }) 
   // Lo que dejó el alta: academia con nombre, precio y enlace aún apagado.
   await expect(page.locator('[data-step="price"][data-done="1"]')).toContainText('49');
   await expect(page.getByTestId('copiar-enlace')).toBeDisabled();
+  // Sin foto, la cabecera lleva sus iniciales (las del nombre que dio).
+  await expect(page.getByRole('button', { name: 'Tu perfil' })).toHaveText('CA');
 
   // Paso 2: una lección de texto.
   await c.click(page.getByRole('link', { name: 'Añadir mi primera lección' }));
