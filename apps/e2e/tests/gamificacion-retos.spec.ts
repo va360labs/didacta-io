@@ -174,10 +174,10 @@ test.describe('Puntos, niveles y retos (mod.gamification)', () => {
     });
     expect(reReview.status, 'segunda revisión de la misma entrega').toBe(409);
 
-    // 9. El alumno aparece en la clasificación con esos puntos.
+    // 9. El alumno aparece en el ranking con esos puntos.
     await fullSession(page, student as never);
     await page.goto('/leaderboard');
-    await expect(page.getByRole('heading', { name: 'Clasificación' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Ranking', exact: true })).toBeVisible();
     await page.getByRole('button', { name: 'Global' }).click();
     await expect(page.getByText('Alumna de retos').first()).toBeVisible();
   });

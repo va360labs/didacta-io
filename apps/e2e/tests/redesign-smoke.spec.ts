@@ -78,8 +78,9 @@ test.describe('Redesign smoke — páginas principales', () => {
 
   test('/leaderboard muestra heading y filtros', async ({ page }) => {
     await withSession(page, '/leaderboard');
-    // La página pasó a mod.gamification y se renombró a "Clasificación".
-    await expect(page.getByRole('heading', { name: 'Clasificación' })).toBeVisible();
+    // La página pasó a mod.gamification; se llama «Ranking», como la pestaña
+    // del modo sencillo (antes «Clasificación» aquí y «Ranking» allí).
+    await expect(page.getByRole('heading', { name: 'Ranking', exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Este mes' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Esta semana' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Global' })).toBeVisible();

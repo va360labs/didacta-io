@@ -10,6 +10,7 @@ import { useTranslations } from 'next-intl';
 import { UserChip } from '@/components/user-chip';
 import { formatNumber } from '@/lib/i18n/format';
 import {
+  RankingTabs,
   gamificationApi,
   type LeaderboardEntry,
   type LeaderboardRange,
@@ -60,9 +61,12 @@ export default function LeaderboardPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="font-display text-2xl font-bold text-text">{t('leaderboard.titulo')}</h1>
-        <p className="mt-1 text-sm text-text-muted">{t('leaderboard.subtitulo')}</p>
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h1 className="font-display text-2xl font-bold text-text">{t('leaderboard.titulo')}</h1>
+          <p className="mt-1 text-sm text-text-muted">{t('leaderboard.subtitulo')}</p>
+        </div>
+        <RankingTabs />
       </div>
 
       {standing && standing.points > 0 ? (
