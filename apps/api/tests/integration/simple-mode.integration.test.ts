@@ -178,7 +178,10 @@ describeWithDb('Modo sencillo — Postgres real como didacta_app (RLS forzada)',
       where: { tenantId: tenantA },
       select: { moduleName: true, key: true },
     });
+    // El alta en 3 preguntas guarda también el idioma del aula como ajuste
+    // (`academy/locale`): manda sobre la deducción en el resto del producto.
     expect(ajustes.map((a) => `${a.moduleName}/${a.key}`).sort()).toEqual([
+      'academy/locale',
       'onboarding/academy',
       'simple-mode/offer',
       'simple-mode/state',
