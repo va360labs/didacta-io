@@ -15,11 +15,14 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import Fastify, { type FastifyInstance } from 'fastify';
 import { registerSecurityHeaders } from '../src/common/security-headers';
+import { resolveTrustProxy } from '../src/common/trust-proxy';
 
 let app: FastifyInstance | null = null;
 
 async function buildApp(): Promise<FastifyInstance> {
-  const instance = Fastify({ trustProxy: 1 });
+  // Mismo `trustProxy` que `main.ts` (default: 1 salto). Fastify >= 5.12 ya no
+  // acepta un número suelto: falla cerrado y no lee `X-Forwarded-*`.
+  const instance = Fastify({ trustProxy: resolveTrustProxy({}) });
   registerSecurityHeaders(instance);
   instance.get('/api/v1/cursos', async () => ({ ok: true }));
   instance.get('/api/docs', async (_req, reply) => reply.type('text/html').send('<html></html>'));
