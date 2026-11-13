@@ -10,6 +10,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { PaymentsConnectCard } from '@/components/admin/payments-connect-card';
 import { Icon } from '@/components/icon';
+import { START_HERE_CHANGED_EVENT } from '@/components/simple-shell/simple-shell';
 import { adminModulesApi } from '@/lib/admin-modules';
 import { authStorage } from '@/lib/auth-storage';
 import { formatCents, formatDate } from '@/lib/i18n/format';
@@ -128,6 +129,10 @@ export function SimpleSales({
                   onReturnHandled={() => {
                     onReturnHandled?.();
                     void load();
+                    // Al volver de Stripe los cobros pueden quedar listos: el
+                    // contador de «Empieza aquí» de la barra se queda viejo si
+                    // no se le avisa.
+                    window.dispatchEvent(new Event(START_HERE_CHANGED_EVENT));
                   }}
                 />
               </div>

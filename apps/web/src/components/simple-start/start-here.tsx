@@ -16,6 +16,7 @@ import {
   parseAmount,
   saleState,
   simpleModeApi,
+  startHereHeadline,
   type StartHereView,
   type StepId,
 } from '@/lib/simple-mode';
@@ -72,14 +73,15 @@ export function StartHere() {
   const pending = view.steps.filter((s) => !s.done).length;
   const doneCount = view.steps.length - pending;
   const current = currentStep(view.steps);
+  const headline = startHereHeadline(view);
 
   return (
     <div className="grid grid-cols-[minmax(0,1fr)] gap-8 lg:grid-cols-[minmax(0,1fr)_340px] lg:items-start">
       <section className="min-w-0 max-w-[720px]" data-testid="empieza-aqui">
         <h1 className="text-[26px] leading-tight font-extrabold tracking-tight text-text lg:text-[30px]">
-          {sold
+          {headline === 'celebra'
             ? t('celebra', { n: view.sales.count })
-            : pending === 0
+            : headline === 'listo'
               ? t('tituloListo')
               : t('titulo')}
         </h1>

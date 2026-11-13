@@ -125,6 +125,21 @@ export function saleState(view: Pick<StartHereView, 'salePath' | 'steps'>): Sale
   return view.steps.find((s) => s.id === 'payments')?.done ? 'on-sale' : 'not-purchasable';
 }
 
+/**
+ * Titular de «Empieza aquí»: tras la primera venta, la celebración; con la
+ * oferta ya a la venta (publicada y con cobros), «ya está a la venta» aunque
+ * quede invitar a los primeros alumnos; si no, «casi lista para vender».
+ */
+export type StartHereHeadline = 'celebra' | 'listo' | 'casi';
+
+export function startHereHeadline(
+  view: Pick<StartHereView, 'salePath' | 'steps' | 'sales'>,
+): StartHereHeadline {
+  if (view.sales.count > 0) return 'celebra';
+  if (view.steps.every((s) => s.done) || saleState(view) === 'on-sale') return 'listo';
+  return 'casi';
+}
+
 /** «49», «49,90» o «49.90» → unidad mínima de la moneda; `null` si no vale. */
 export function parseAmount(raw: string, currency: string): number | null {
   const n = Number(raw.trim().replace(/\s/g, '').replace(',', '.'));
