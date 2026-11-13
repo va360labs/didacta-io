@@ -35,7 +35,7 @@ function requireSuperAdmin(user: SessionClaims | undefined): SessionClaims {
 }
 
 /**
- * `/admin/licencia`: pegar la clave, validación en vivo, estado
+ * `/admin/license`: pegar la clave, validación en vivo, estado
  * (community/active/grace/expired/invalid/dev), plan, organización,
  * expiración, capabilities activas y warnings — B1 de
  * `work/migracion-env-a-panel.md`.

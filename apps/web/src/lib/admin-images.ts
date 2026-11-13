@@ -6,7 +6,7 @@
 import { apiFetch } from './api-client';
 
 /**
- * Cliente de /admin/imagenes: inventario y reoptimización del histórico de
+ * Cliente de /admin/images: inventario y reoptimización del histórico de
  * imágenes del tenant. Lo que se sube nuevo ya nace optimizado en el backend,
  * así que esto solo sirve para lo que entró antes.
  */

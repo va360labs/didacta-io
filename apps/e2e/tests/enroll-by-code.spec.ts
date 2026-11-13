@@ -44,14 +44,14 @@ test.describe('Matriculación por código de invitación', () => {
     await injectSession(page, {
       accessToken: alumno.tokens.accessToken,
       // Sin esto el alumno recién creado cae en el gate de onboarding
-      // obligatorio al navegar a /cursos/[slug] en vez de ver la card de
+      // obligatorio al navegar a /courses/[slug] en vez de ver la card de
       // matrícula (mismo fallo que redesign-smoke.spec.ts ya documenta).
       user: { ...alumno.user, onboardingCompletedAt: new Date().toISOString() },
     });
 
     // 1) Entrar al detalle del curso (sin estar matriculado): la card pre-enrolment
     // tiene heading "Empieza este curso" + botón "Matricularme" + form de código.
-    await page.goto(`/cursos/${course.slug}`);
+    await page.goto(`/courses/${course.slug}`);
     await expect(page.getByRole('heading', { name: 'Empieza este curso' })).toBeVisible({
       timeout: 15_000,
     });

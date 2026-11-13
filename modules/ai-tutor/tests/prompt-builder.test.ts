@@ -291,14 +291,14 @@ describe('buildPrompt · respuestas validadas por el equipo', () => {
         {
           id: 'c1',
           question: '¿cómo descargo mi factura?',
-          answer: 'En /cuenta → Facturación, botón Descargar.',
+          answer: 'En /account → Facturación, botón Descargar.',
           distance: 0.1,
         },
       ],
     });
     expect(system).toContain('RESPUESTAS YA VALIDADAS POR EL EQUIPO');
     expect(system).toContain('tienen prioridad sobre el CONTEXTO');
-    expect(system).toContain('En /cuenta → Facturación, botón Descargar.');
+    expect(system).toContain('En /account → Facturación, botón Descargar.');
   });
 
   it('la regla 0 le dice al modelo que no delate la corrección', () => {

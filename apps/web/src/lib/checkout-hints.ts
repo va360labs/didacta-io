@@ -4,7 +4,7 @@
  */
 
 /**
- * Lo que las páginas públicas de venta (catálogo, ficha de curso y `/unete`)
+ * Lo que las páginas públicas de venta (catálogo, ficha de curso y `/join`)
  * cuentan del pago según lo que diga el SERVIDOR. Las dos señales solo llegan
  * cuando la instalación cobra por la plataforma; sin ellas (Community, o un
  * servidor anterior) las páginas son las de siempre.

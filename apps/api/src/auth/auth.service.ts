@@ -53,7 +53,7 @@ const DEFAULT_SIGNUP_ROLE = 'alumno';
  *     prueba — precedencia máxima, igual que el resto de env vars del operador.
  *   - `tenant_setting` scope `auth` key `signup` (`{ enabled: true }`): lo abre
  *     SOLO para ese tenant. Decisión de negocio del tenant (¿acepto altas
- *     públicas?), no del despliegue — encaja en `/admin/configuracion`.
+ *     públicas?), no del despliegue — encaja en `/admin/settings`.
  */
 function isSignupEnabledByEnv(): boolean {
   return process.env['AUTH_SIGNUP_ENABLED'] === 'true';
@@ -501,7 +501,7 @@ export class AuthService {
    *
    * NOTA: la política tenant-wide (`feat:mfa.enforcement`) sigue activa
    * con su propio flujo (`MfaPolicyService`). Si el tenant_admin la
-   * habilita en `/admin/seguridad`, los usuarios reciben el aviso
+   * habilita en `/admin/security`, los usuarios reciben el aviso
    * `mfaRequiredSoon` independientemente del valor de esta env var.
    *
    * - Si no configuró MFA: hay que forzar setup en primer login.

@@ -10,7 +10,7 @@
 /// Dorado con borde de brillo giratorio (ver .referral-promo-ring en
 /// globals.css). Solo se muestra si el programa está ACTIVO para el tenant y
 /// el % que anuncia es el REAL de la config (regla #3: cero datos inventados).
-/// Enlaza al área del miembro /referidos.
+/// Enlaza al área del miembro /referrals.
 
 import { useTranslations } from 'next-intl';
 import Link from 'next/link';
@@ -45,7 +45,7 @@ export function ReferralsPromoButton() {
 
   return (
     <Link
-      href="/referidos"
+      href="/referrals"
       data-testid="referrals-promo-button"
       className="referral-promo-ring hidden shrink-0 sm:inline-flex"
       aria-label={t('referrals.promoAria', { percent })}

@@ -40,7 +40,7 @@ import {
 } from '@/lib/admin-smtp';
 
 /// Ruta al tab de notificaciones del panel, enlazable desde fuera.
-const RUTA_AJUSTES = '/admin/configuracion?tab=notifications';
+const RUTA_AJUSTES = '/admin/settings?tab=notifications';
 
 export function NotificationsSetupBanner({ roles }: { roles: readonly string[] }) {
   const t = useTranslations('shell');

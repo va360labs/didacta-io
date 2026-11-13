@@ -109,12 +109,12 @@ test.describe('Panel de administración reordenado', () => {
     await expect(back).toBeVisible();
     await expect(nav.getByRole('link', { name: 'Volver a la app' })).toHaveCount(0);
     await back.click();
-    await expect(page).toHaveURL(/\/comunidad$/);
+    await expect(page).toHaveURL(/\/community$/);
   });
 
   test('fase 2 — las cuatro fusiones responden y las rutas viejas redirigen', async ({ page }) => {
     // Métricas → pestaña del panel.
-    await page.goto('/admin/metricas');
+    await page.goto('/admin/metrics');
     await expect(page).toHaveURL(/\/admin\?tab=negocio/);
     await expect(page.getByRole('tab', { name: 'Negocio' })).toHaveAttribute(
       'aria-selected',
@@ -137,7 +137,7 @@ test.describe('Panel de administración reordenado', () => {
     await expect(page).toHaveURL(/\/admin\/sso\?tab=wordpress/);
 
     // Documentación de API → pestaña de Claves API.
-    await page.goto('/admin/integraciones/api');
+    await page.goto('/admin/integrations/api');
     await expect(page).toHaveURL(/\/admin\/api-keys\?tab=docs/);
     await expect(page.getByRole('heading', { name: 'Claves API' })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Integración API' })).toBeVisible();

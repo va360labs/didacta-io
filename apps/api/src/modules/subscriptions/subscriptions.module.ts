@@ -34,7 +34,7 @@ import { MembershipAccessGroupsBridge } from './membership-access-groups.bridge'
   controllers: [
     SubscriptionsController,
     SubscriptionsWebhookController,
-    // Membresía (página pública /unete): venta de "acceso a todo" por
+    // Membresía (página pública /join): venta de "acceso a todo" por
     // suscripción con planes parametrizables.
     MembershipPublicController,
     MembershipAdminController,

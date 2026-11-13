@@ -7,7 +7,7 @@
 ///
 /// El catálogo `apps/web/src/modules/index.ts` importa esta constante y la
 /// agrega al `moduleExtensions[]`. El core consume el agregado desde
-/// `/admin/configuracion`, sidebar, etc. Para añadir una nueva
+/// `/admin/settings`, sidebar, etc. Para añadir una nueva
 /// superficie del módulo (ej. una página dedicada del formador), se
 /// declara aquí — sin tocar el core.
 
@@ -32,7 +32,7 @@ export const zoomLiveExtension: ModuleWebExtension = {
   sidebarItems: [
     {
       group: 'Formador',
-      href: '/formador/aula-virtual',
+      href: '/studio/live',
       label: 'Aula virtual',
       icon: 'calendar',
       requiresRole: 'formador',

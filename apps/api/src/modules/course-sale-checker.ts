@@ -36,7 +36,7 @@ export type CourseSaleCatalogDb = Pick<
  *  2. **Suscripción al curso** — existe una suscripción por ese curso.
  *  3. **Se entrega con algo que se paga** — el curso pertenece a un grupo de
  *     acceso que se concede a cambio de dinero:
- *       - el grupo de la MEMBRESÍA (`/unete`, `mod.subscriptions`), o
+ *       - el grupo de la MEMBRESÍA (`/join`, `mod.subscriptions`), o
  *       - un grupo vinculado a un TIER de pago (`linkedTierName`, que el sync
  *         de `mod.payment-connections` reparte a quien tiene la suscripción en
  *         Stripe/PayPal/WooCommerce).

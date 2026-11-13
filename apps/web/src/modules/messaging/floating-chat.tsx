@@ -34,7 +34,7 @@ import { useConversationThread } from './use-conversation-thread';
  *
  * Píldora fija abajo a la derecha con las caras de quien acaba de escribir y la
  * sala donde está pasando; al desplegarse, la MISMA lista agrupada de
- * `/mensajes` y el hilo completo, para responder sin abandonar la página.
+ * `/messages` y el hilo completo, para responder sin abandonar la página.
  *
  * Sustituye al icono de mensajes del header: un solo indicador de no-leídos en
  * pantalla (regla #5). Todo lo que pinta sale de la API — si no hay dato, lo
@@ -606,7 +606,7 @@ function ChatPanel({
           </div>
           <div className="border-t border-border-soft px-4 py-3">
             <a
-              href="/mensajes"
+              href="/messages"
               className="text-[13px] font-semibold text-brand-600 hover:text-brand-700"
               data-testid="chat-panel-see-all"
             >

@@ -26,7 +26,7 @@ const uuidSchema = z.string().uuid();
  * **Públicos a propósito** (sin `JwtAuthGuard`): a estos enlaces se llega
  * desde el email de confirmación y desde el recordatorio de 2h antes, y un
  * cliente de correo no manda bearer token. La credencial es el UUID de la
- * sesión — el mismo modelo del enlace compartible `/clase/<id>` (ADR-017).
+ * sesión — el mismo modelo del enlace compartible `/live/<id>` (ADR-017).
  *
  * Qué se expone: título, hora y duración, que es exactamente lo que ya ve
  * cualquiera que abra ese enlace. Qué NO: el `joinUrl` de Zoom, la

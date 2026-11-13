@@ -250,7 +250,7 @@ export class SimpleModeService {
    * Un aula que pasa al modo sencillo con trabajo hecho (cursos, alumnos o
    * ventas) NO puede encontrarse el alta «de cero»: crearía un segundo curso
    * y pisaría el nombre. Se adopta tal cual: se da por hecho el asistente de
-   * academia (el gate del aula deja de mandarla a `/bienvenida`) y se anota.
+   * academia (el gate del aula deja de mandarla a `/welcome`) y se anota.
    * Un aula vacía no se adopta: para ella el alta en 3 preguntas es el camino.
    *
    * Idempotente. La comprobación es del servidor: el cliente solo pregunta.
@@ -281,7 +281,7 @@ export class SimpleModeService {
 
   /**
    * Publica la oferta y la pone a la venta. Curso: lo publica y crea su opción
-   * de compra con el precio guardado. Membresía: enciende la página `/unete`.
+   * de compra con el precio guardado. Membresía: enciende la página `/join`.
    * Devuelve la RUTA del enlace de venta (el host lo pone el navegador, que ya
    * está en el dominio del aula).
    */
@@ -304,7 +304,7 @@ export class SimpleModeService {
       const membership = this.registry.getMembershipService();
       await membership.updatePlan(tenantId, offer.planId, { active: true });
       await membership.updateConfig(tenantId, { active: true });
-      return { salePath: '/unete' };
+      return { salePath: '/join' };
     }
 
     if (!offer.courseId) {
@@ -332,7 +332,7 @@ export class SimpleModeService {
     }
 
     await this.upsertSinglePrice(tenantId, course.id, offer, course.title);
-    return { salePath: `/catalogo/${course.slug}` };
+    return { salePath: `/catalog/${course.slug}` };
   }
 
   // ── Empieza aquí ─────────────────────────────────────────────────────────
@@ -347,7 +347,7 @@ export class SimpleModeService {
     const course = offer?.courseId
       ? await this.prisma.modCoursesCourse.findFirst({
           where: { id: offer.courseId, tenantId, deletedAt: null },
-          select: { id: true, slug: true, title: true, status: true },
+          select: { id: true, slug: true, title: true, status: true, thumbnailUrl: true },
         })
       : null;
 
@@ -376,9 +376,9 @@ export class SimpleModeService {
 
     const salePath = published
       ? offer?.kind === 'membership'
-        ? '/unete'
+        ? '/join'
         : course
-          ? `/catalogo/${course.slug}`
+          ? `/catalog/${course.slug}`
           : null
       : null;
 
@@ -390,6 +390,7 @@ export class SimpleModeService {
             ...offer,
             courseTitle: course?.title ?? null,
             courseSlug: course?.slug ?? null,
+            courseCoverUrl: course?.thumbnailUrl ?? null,
           }
         : null,
       firstCourseId: courseDone.courseId,
@@ -398,7 +399,7 @@ export class SimpleModeService {
       sales,
       students: invited,
       nextLive,
-      paymentsSetupPath: this.payoutsGate ? '/admin/cobros' : '/admin/configuracion?tab=pagos',
+      paymentsSetupPath: this.payoutsGate ? '/admin/payments' : '/admin/settings?tab=pagos',
     };
   }
 

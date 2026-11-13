@@ -17,8 +17,8 @@
  *    además la tarjeta de claves: conviven hasta que el alta llega a lista.
  *
  * El estado nunca se calcula aquí: lo da la API, que lo lee de Stripe. Al
- * volver del alta (`?vuelta=1`) se pide con `sync=1`; si Stripe manda de vuelta
- * porque el enlace caducó (`?renovar=1`) se pide uno nuevo y se reenvía.
+ * volver del alta (`?return=1`) se pide con `sync=1`; si Stripe manda de vuelta
+ * porque el enlace caducó (`?refresh=1`) se pide uno nuevo y se reenvía.
  */
 
 import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
@@ -52,7 +52,7 @@ export interface PaymentsConnectCardProps {
   whenPlatformOff?: ReactNode;
   /** Se llama una vez si la instalación NO está en modo plataforma. */
   onPlatformUnavailable?: () => void;
-  /** Acción tras volver del alta (`?vuelta=1`) o con el enlace caducado (`?renovar=1`). */
+  /** Acción tras volver del alta (`?return=1`) o con el enlace caducado (`?refresh=1`). */
   returnAction?: 'sync' | 'renew' | null;
   /** Para limpiar la query de la URL tras procesarla. */
   onReturnHandled?: () => void;

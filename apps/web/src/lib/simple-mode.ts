@@ -118,6 +118,8 @@ export interface OfferView {
   currency: string;
   courseTitle: string | null;
   courseSlug: string | null;
+  /** Portada del curso de la oferta; `null` sin portada o con membresía. */
+  courseCoverUrl: string | null;
 }
 
 export interface StartHereView {

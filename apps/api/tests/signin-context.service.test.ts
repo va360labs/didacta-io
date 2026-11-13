@@ -113,7 +113,7 @@ describe('SigninContextService', () => {
     expect(ctx.stats).toEqual({ activeMembers: 3, publishedCourses: 0 });
   });
 
-  it('sin membresía configurada, el login no enlaza /unete', async () => {
+  it('sin membresía configurada, el login no enlaza /join', async () => {
     const { prisma } = makePrisma({ theme: null, membershipActive: null });
     const service = new SigninContextService(prisma, makeLogger());
 

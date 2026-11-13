@@ -52,7 +52,7 @@ type ApiCreatePostDto = z.infer<typeof apiCreatePostSchema>;
  * hora. El AUTOR del post es el usuario dueño de la key (quien la creó): cada
  * admin usa su propia key y lo publicado queda firmado por él. Los posts
  * creados por aquí llevan `source='api'` y se auditan en
- * /admin/comunidad/publicaciones-api.
+ * /admin/community/api-posts.
  */
 @ApiTags('Comunidad (API externa)')
 @ApiSecurity('ApiKey')
@@ -107,7 +107,7 @@ export class CommunityApiController {
       'espacio "general" si existe). Con `notifyAll: true` se avisa además por EMAIL + ' +
       'campana a todos los miembros (`important` ignora las bajas de avisos). Requiere una ' +
       'API key con scope `community:post` en el header `Authorization: ApiKey lmsk_…`. El ' +
-      'post queda marcado con origen API y es auditable en /admin/comunidad/publicaciones-api.',
+      'post queda marcado con origen API y es auditable en /admin/community/api-posts.',
   })
   @ApiBody({
     schema: {
@@ -205,8 +205,7 @@ export class CommunityApiController {
       if (!match) {
         throw new UnprocessableEntityException({
           message: `El espacio "${dto.space}" no existe. Espacios válidos: ${
-            spaces.map((s) => s.slug).join(', ') ||
-            '(ninguno — créalos en /admin/comunidad/espacios)'
+            spaces.map((s) => s.slug).join(', ') || '(ninguno — créalos en /admin/community/spaces)'
           }. Consulta GET /community-api/spaces.`,
           code: 'COMMUNITY_SPACE_UNKNOWN',
         });

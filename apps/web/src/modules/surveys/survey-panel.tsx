@@ -19,7 +19,7 @@ import {
 } from './client';
 
 /**
- * Panel de la encuesta post-clase en /clase/[id]. Se renderiza solo si la
+ * Panel de la encuesta post-clase en /live/[id]. Se renderiza solo si la
  * clase tiene encuesta (creada al terminar el directo o por el admin). La
  * respuesta es anónima; si el usuario ya respondió muestra el agradecimiento.
  */

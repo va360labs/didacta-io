@@ -54,7 +54,7 @@ export interface SigninBrandingContext {
   logoDisplayMode: 'logo_only' | 'logo_and_name';
   stats: SigninBrandingStats;
   /**
-   * True si el tenant tiene activada la página pública de membresía (/unete).
+   * True si el tenant tiene activada la página pública de membresía (/join).
    * El login solo enseña el enlace "Ver la membresía" cuando lleva a algún
    * sitio — en un tenant sin membresía sería un enlace a un 404.
    */

@@ -3,7 +3,7 @@ import { adminTokenForBootstrap, API_URL, signup } from '../helpers/api';
 import { injectSession } from '../helpers/auth';
 
 /**
- * Bloque 7 — Panel de métricas del negocio (/admin/metricas):
+ * Bloque 7 — Panel de métricas del negocio (/admin/metrics):
  *  - El endpoint agrega NPS, ventas, impagos, altas/bajas, conexiones y tutor
  *    IA con las formas esperadas (todo de BD local).
  *  - Un alumno recibe 403.
@@ -85,9 +85,9 @@ test.describe('Métricas del negocio (bloque 7)', () => {
       refreshToken: adminAuth.tokens.refreshToken,
       user: { ...adminAuth.user, onboardingCompletedAt: new Date().toISOString() },
     });
-    // /admin/metricas es ahora un redirect a la pestaña "Negocio" del panel:
+    // /admin/metrics es ahora un redirect a la pestaña "Negocio" del panel:
     // los KPIs dejaron de tener pantalla propia para no competir con /admin.
-    await page.goto('/admin/metricas');
+    await page.goto('/admin/metrics');
     await expect(page).toHaveURL(/\/admin\?tab=negocio/);
     await expect(page.getByRole('heading', { name: 'Panel del tenant' })).toBeVisible();
     await expect(page.getByText('NPS (30 días)')).toBeVisible();

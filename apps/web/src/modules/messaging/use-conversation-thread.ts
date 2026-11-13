@@ -16,7 +16,7 @@ import { humanizeError } from './shared';
  * Toda la mecánica de una conversación abierta: histórico paginado, envío,
  * marcado de leído, merge del realtime y avisos de escritura.
  *
- * Vive en un hook porque lo usan DOS superficies —la página `/mensajes` y el
+ * Vive en un hook porque lo usan DOS superficies —la página `/messages` y el
  * hilo del chat flotante— y es justo donde más fácil se descuadran los
  * no-leídos si cada una lleva su propia copia (regla #5).
  */

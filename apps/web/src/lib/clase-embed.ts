@@ -12,9 +12,11 @@
 ///     (`ZoomLiveCommunityBridge` en la API). Mismo patrón que el marcador de
 ///     adjuntos de `modules/community/attachments.ts`: metadato invisible
 ///     pegado al body, que el render separa del texto.
-///  2. **Enlace pegado a mano** a `/clase/<uuid>` (absoluto o relativo) dentro
+///  2. **Enlace pegado a mano** a `/live/<uuid>` (absoluto o relativo) dentro
 ///     del texto. Así un miembro que comparte el enlace de una clase obtiene
-///     la misma tarjeta rica sin saber nada del marcador.
+///     la misma tarjeta rica sin saber nada del marcador. También vale
+///     `/clase/<uuid>`, la ruta en español de antes: está en publicaciones ya
+///     guardadas y tiene que seguir dando la tarjeta.
 ///
 /// Esta es la ÚNICA fuente de verdad del formato: cualquier render del body
 /// debe pasar por `parseClaseEmbed`.
@@ -23,8 +25,12 @@ const CLASE_MARKER = '<!--didacta-clase:';
 
 const UUID = '[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}';
 const MARKER_RE = new RegExp(`<!--didacta-clase:(${UUID})-->`);
-/** `https://host/clase/<uuid>` o `/clase/<uuid>`, con o sin barra final. */
-const CLASE_URL_RE = new RegExp(`(?:https?://[^\\s/]+)?/clase/(${UUID})/?`, 'g');
+/**
+ * `https://host/live/<uuid>` o `/live/<uuid>`, con o sin barra final. También
+ * `/clase/<uuid>`, la ruta en español de antes: está en publicaciones ya
+ * guardadas y tiene que seguir dando la tarjeta.
+ */
+const CLASE_URL_RE = new RegExp(`(?:https?://[^\\s/]+)?/(?:live|clase)/(${UUID})/?`, 'g');
 
 export interface ParsedClaseEmbed {
   /** Texto visible del post, sin marcador y sin la URL ya representada. */

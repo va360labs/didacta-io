@@ -13,7 +13,7 @@
  *     cuenta de pago conectada (Stripe / PayPal / WooCommerce…), poblado por el
  *     botón "Sincronizar desde pagos".
  *
- * Tier EFECTIVO mostrado en /admin/usuarios = manual si existe, si no el
+ * Tier EFECTIVO mostrado en /admin/users = manual si existe, si no el
  * derivado, si no "Desconocido". El modelo es multi-proveedor (derivedProvider)
  * para que WooCommerce/WP Subscriptions encaje sin rediseño.
  */
@@ -158,7 +158,7 @@ export class PaymentTiersService {
 
   // ---------------- Tiers de usuario ----------------
 
-  /** Tier efectivo (batch) para un conjunto de usuarios — lo usa /admin/usuarios. */
+  /** Tier efectivo (batch) para un conjunto de usuarios — lo usa /admin/users. */
   async getUserTiers(tenantId: string, userIds: string[]): Promise<UserTierView[]> {
     if (userIds.length === 0) return [];
     const rows = await this.prisma.modPaymentConnectionsUserTier.findMany({

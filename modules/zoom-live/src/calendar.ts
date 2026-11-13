@@ -13,7 +13,7 @@
  *  - URL de Outlook Web / Office 365: idem para quien vive en Microsoft.
  *
  * Qué NO viaja aquí: el `joinUrl` de Zoom. El enlace del evento apunta a
- * `/clase/<id>` y es la página la que decide si enseñarlo (gating
+ * `/live/<id>` y es la página la que decide si enseñarlo (gating
  * server-side, ADR-017). Un `.ics` se reenvía, se sincroniza a móviles y se
  * comparte entre calendarios: meter el joinUrl dentro sería regalar el acceso
  * a la clase a cualquiera que reciba el evento.
@@ -26,7 +26,7 @@ export interface CalendarEventInput {
   startTime: Date;
   durationMinutes: number;
   /**
-   * URL absoluta a `/clase/<id>` en el aula del tenant, o '' si el host no
+   * URL absoluta a `/live/<id>` en el aula del tenant, o '' si el host no
    * conoce su dirección pública (ni dominio del tenant ni `WEB_PUBLIC_URL`).
    */
   classUrl: string;

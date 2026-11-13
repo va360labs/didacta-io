@@ -34,8 +34,8 @@ import { dossierApi, type UserDossier } from '@/lib/dossier';
  * Expediente de un usuario, visible solo para admins dentro de `/u/[id]`.
  *
  * Va aquí y no en una página aparte a propósito: la regla del proyecto prohíbe
- * dos caminos al mismo destino, y ya existía el histórico de `/inicio` contra
- * `/comunidad`. Con esto, pulsar un nombre desde cualquier sección lleva
+ * dos caminos al mismo destino, y ya existía el histórico de `/home` contra
+ * `/community`. Con esto, pulsar un nombre desde cualquier sección lleva
  * siempre al mismo sitio; lo que cambia es cuánto ve quien mira.
  */
 
@@ -1025,7 +1025,7 @@ function MensajesTab({ d }: { d: UserDossier }) {
  * Pestaña de acceso. Además de mostrar, ACTÚA: suspender, reactivar, reenviar
  * el email de contraseña y gestionar roles.
  *
- * Estas acciones venían de `/admin/usuarios/[id]`, que ahora redirige aquí.
+ * Estas acciones venían de `/admin/users/[id]`, que ahora redirige aquí.
  * Consolidar la ruta sin traerse las acciones habría sido perder funcionalidad,
  * no simplificar.
  */

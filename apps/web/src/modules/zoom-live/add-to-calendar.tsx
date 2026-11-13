@@ -15,7 +15,7 @@
  * pantalla generan exactamente el mismo evento — nada que mantener por
  * duplicado en el cliente.
  *
- * Ninguno lleva el `joinUrl` de Zoom: el evento apunta a `/clase/<id>` y es
+ * Ninguno lleva el `joinUrl` de Zoom: el evento apunta a `/live/<id>` y es
  * esa página la que decide si enseñarlo (gating server-side, ADR-017).
  */
 

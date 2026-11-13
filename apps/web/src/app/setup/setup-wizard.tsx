@@ -288,7 +288,7 @@ export function SetupWizard() {
           />
         )}
 
-        {step === 'tour' && <StepTour onFinish={() => router.push('/cursos')} />}
+        {step === 'tour' && <StepTour onFinish={() => router.push('/courses')} />}
       </section>
 
       <footer className="mt-8 text-center text-xs text-text-subtle">{t('setup.footer')}</footer>

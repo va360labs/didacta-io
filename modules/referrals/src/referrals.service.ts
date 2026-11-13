@@ -614,7 +614,7 @@ export class ReferralsService {
   }
 
   /**
-   * Registra un clic de /unete?ref=CODE. Best-effort silencioso: código
+   * Registra un clic de /join?ref=CODE. Best-effort silencioso: código
    * inválido, programa inactivo o clic duplicado (mismo día + misma IP)
    * devuelven false sin romper la página de venta.
    */
@@ -1846,7 +1846,7 @@ export class ReferralsService {
 
   // ---------------- Vistas (miembro y admin) ----------------
 
-  /** Stats del área del miembro (/referidos). Datos reales, cero inventos. */
+  /** Stats del área del miembro (/referrals). Datos reales, cero inventos. */
   async memberStats(tenantId: string, userId: string) {
     const [config, codeRow] = await Promise.all([
       this.getConfig(tenantId),

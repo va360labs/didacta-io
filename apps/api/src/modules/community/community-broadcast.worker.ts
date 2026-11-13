@@ -146,7 +146,7 @@ export class CommunityBroadcastWorker implements OnApplicationBootstrap, OnModul
     // academias esa variable es el dominio general, y tanto «ver la
     // publicación» como el enlace de baja mandaban a un aula que no es la del
     // destinatario. Sin dirección conocida no se compone ningún enlace (antes
-    // salían relativos, `/comunidad`, que en un correo no llevan a ningún sitio).
+    // salían relativos, `/community`, que en un correo no llevan a ningún sitio).
     const webBase = await this.factory.getTenantWebBaseUrl(broadcast.tenantId);
     // El enlace viaja SOLO (sin su frase): «Ver la publicación:» y la nota de
     // baja son copy del producto y viven en la plantilla `community.broadcast`,
@@ -154,7 +154,7 @@ export class CommunityBroadcastWorker implements OnApplicationBootstrap, OnModul
     // llegaban al hub dentro de `variables` y ninguna traducción los alcanzaba:
     // un miembro con `locale = en-US` recibía el aviso de su admin con el pie
     // de baja en español.
-    const postUrl = broadcast.postId && webBase ? `${webBase}/comunidad` : '';
+    const postUrl = broadcast.postId && webBase ? `${webBase}/community` : '';
     let sent = 0;
     let failed = 0;
     let skipped = 0;

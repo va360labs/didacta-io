@@ -5,7 +5,7 @@
 
 /**
  * Validador de DNI/NIE español para validación INLINE en los formularios de
- * perfil (onboarding y /cuenta). Espejo exacto de
+ * perfil (onboarding y /account). Espejo exacto de
  * `apps/api/src/auth/document-id.ts`, que es quien tiene la última palabra en
  * `PATCH /me` — aquí solo adelantamos el error al campo para que el usuario no
  * descubra el problema al final del asistente (issue #59). Si cambia el de la
@@ -41,7 +41,7 @@ export function isValidDocumentId(value: string): boolean {
 /**
  * Azúcar para los formularios: un campo OPCIONAL es válido si está vacío o si,
  * una vez normalizado, pasa el checksum. Centraliza el criterio para que
- * onboarding y /cuenta no lo dupliquen.
+ * onboarding y /account no lo dupliquen.
  */
 export function isDocumentFieldValid(raw: string): boolean {
   const trimmed = raw.trim();
@@ -51,7 +51,7 @@ export function isDocumentFieldValid(raw: string): boolean {
 /**
  * ¿Se pide el DNI/NIE en el alta? Es un documento ESPAÑOL (solo sirve para
  * pedir facturas en España): a quien usa la interfaz en otro idioma se le
- * ahorra un campo que no le aplica. Sigue disponible en /cuenta.
+ * ahorra un campo que no le aplica. Sigue disponible en /account.
  */
 export function asksSpanishDocument(uiLocale: string): boolean {
   return uiLocale.toLowerCase().startsWith('es');

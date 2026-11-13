@@ -7,8 +7,8 @@ import { ApiHttpError, apiFetch } from '@/lib/api-client';
 import { authStorage } from '@/lib/auth-storage';
 
 /**
- * Client de mod.referrals: área del miembro (/referidos), captura del enlace
- * en /unete?ref= y administración (/admin/referidos).
+ * Client de mod.referrals: área del miembro (/referrals), captura del enlace
+ * en /join?ref= y administración (/admin/referrals).
  */
 
 const BASE = '/api/v1/modules/referrals';
@@ -255,7 +255,7 @@ export const referralsApi = {
 };
 
 /** Página pública con las condiciones del programa (es/en según el idioma). */
-export const REFERRAL_TERMS_PATH = '/condiciones-referidos';
+export const REFERRAL_TERMS_PATH = '/referral-terms';
 
 export interface ReferralsPublicTerms {
   version: string;

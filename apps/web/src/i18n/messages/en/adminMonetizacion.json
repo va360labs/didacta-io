@@ -33,7 +33,7 @@
     "planCreated": "Plan created.",
     "planDeleted": "Plan deleted (or deactivated if it already had sales).",
     "configTitle": "Public page",
-    "configDescription": "Content of /unete and what the purchase grants. The testimonial is only shown if you fill it in (quote + author).",
+    "configDescription": "Content of /join and what the purchase grants. The testimonial is only shown if you fill it in (quote + author).",
     "pageActiveLabel": "Purchase page active",
     "headlineLabel": "Title",
     "groupLabel": "Access group it grants",
@@ -69,7 +69,7 @@
   },
   "referrals": {
     "title": "Referral program",
-    "intro": "Members share their /unete link and earn a % of the real payments of whoever joins. Payouts are manual with an external reference (v1 without automatic payments).",
+    "intro": "Members share their /join link and earn a % of the real payments of whoever joins. Payouts are manual with an external reference (v1 without automatic payments).",
     "configTitle": "Configuration",
     "configDescription": "Changes do not recalculate commissions already accrued: each commission seals the % in force at the time of payment.",
     "activeLabel": "Program active",

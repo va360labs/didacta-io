@@ -14,8 +14,13 @@
  * OAuth o nada, no está.
  */
 
-/** Pantallas de creación manual del modo sencillo en las que el panel aparece. */
-export type AgentScreen = 'courses' | 'course-new' | 'course-edit' | 'live' | 'community';
+/**
+ * Pantallas de GESTIÓN del modo sencillo en las que el panel aparece. Ni la
+ * comunidad ni los espacios: son la zona de los miembros, y ahí el panel
+ * (claves, comandos de terminal) estorba y confunde aunque quien mire sea el
+ * administrador.
+ */
+export type AgentScreen = 'courses' | 'course-new' | 'course-edit' | 'live';
 
 export interface AgentScreenMatch {
   screen: AgentScreen;
@@ -26,19 +31,20 @@ export interface AgentScreenMatch {
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
- * Las pantallas donde hoy se crea algo a mano y el agente puede hacerlo por
- * ti. Las que el agente NO puede hacer (invitar alumnos, precios y
+ * Las pantallas de gestión donde hoy se crea algo a mano y el agente puede
+ * hacerlo por ti. Las que el agente NO puede hacer (invitar alumnos, precios y
  * publicación) se quedan fuera a propósito: el panel no promete lo que la
- * puerta de agentes no deja hacer.
+ * puerta de agentes no deja hacer. Y las zonas de miembro (comunidad,
+ * espacios, cursos del alumno) tampoco, aunque el agente sepa publicar en la
+ * comunidad: el panel solo se enseña donde se gestiona el aula.
  */
 export function agentScreenFor(pathname: string | null | undefined): AgentScreenMatch | null {
   const path = (pathname ?? '').split('?')[0]!.replace(/\/+$/, '') || '/';
-  if (path === '/formador/cursos') return { screen: 'courses' };
-  if (path === '/formador/cursos/nuevo') return { screen: 'course-new' };
-  const course = /^\/formador\/cursos\/([^/]+)$/.exec(path);
+  if (path === '/studio/courses') return { screen: 'courses' };
+  if (path === '/studio/courses/new') return { screen: 'course-new' };
+  const course = /^\/studio\/courses\/([^/]+)$/.exec(path);
   if (course && UUID.test(course[1]!)) return { screen: 'course-edit', courseId: course[1] };
-  if (path === '/formador/aula-virtual') return { screen: 'live' };
-  if (path === '/comunidad' || /^\/espacios\/[^/]+$/.test(path)) return { screen: 'community' };
+  if (path === '/studio/live') return { screen: 'live' };
   return null;
 }
 

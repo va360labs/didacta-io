@@ -15,7 +15,7 @@
  *   - Sin discovery dinámico de userinfo extendido — usamos sólo claims del
  *     id_token (sub, email, name, email_verified).
  *   - Sin role mapping desde el IdP — todos los users provisioned automáticamente
- *     reciben role `student`. Los admins lo cambian luego en /admin/usuarios.
+ *     reciben role `student`. Los admins lo cambian luego en /admin/users.
  *
  * Persistencia:
  *   - Config per-tenant en `tenant_setting` (module='sso', key='oidc.config',

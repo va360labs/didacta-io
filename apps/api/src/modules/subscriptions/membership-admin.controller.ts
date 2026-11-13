@@ -38,7 +38,7 @@ const ADMIN_ROLES = new Set(['super_admin', 'tenant_admin']);
 
 /**
  * Administración de la membresía: planes (precio/periodicidad/trial/tachado)
- * y configuración de la página pública /unete. Solo admins del tenant.
+ * y configuración de la página pública /join. Solo admins del tenant.
  */
 @ApiTags('Membresía (admin)')
 @ApiBearerAuth()

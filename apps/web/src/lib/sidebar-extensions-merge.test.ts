@@ -8,8 +8,8 @@ function makeGroups(): SidebarGroup[] {
     {
       label: 'Formador',
       items: [
-        { href: '/formador', label: 'Panel', icon: 'home' },
-        { href: '/formador/cursos', label: 'Mis cursos', icon: 'book' },
+        { href: '/studio', label: 'Panel', icon: 'home' },
+        { href: '/studio/courses', label: 'Mis cursos', icon: 'book' },
       ],
     },
     {
@@ -26,7 +26,7 @@ describe('mergeExtensionSidebarItems', () => {
       sidebarItems: [
         {
           group: 'Formador',
-          href: '/formador/aula-virtual',
+          href: '/studio/live',
           label: 'Aula virtual',
           icon: 'calendar',
         },
@@ -35,9 +35,9 @@ describe('mergeExtensionSidebarItems', () => {
     const result = mergeExtensionSidebarItems(makeGroups(), [ext], new Set(['formador']));
     const formador = result.find((g) => g.label === 'Formador')!;
     expect(formador.items.map((i) => i.href)).toEqual([
-      '/formador',
-      '/formador/cursos',
-      '/formador/aula-virtual',
+      '/studio',
+      '/studio/courses',
+      '/studio/live',
     ]);
     expect(formador.items.at(-1)?.requiresModule).toBe('mod.zoom-live');
   });
@@ -48,7 +48,7 @@ describe('mergeExtensionSidebarItems', () => {
         label: 'Formador',
         items: [
           {
-            href: '/formador/aula-virtual',
+            href: '/studio/live',
             label: 'Aula virtual',
             icon: 'calendar',
             requiresModule: 'mod.zoom-live',
@@ -61,7 +61,7 @@ describe('mergeExtensionSidebarItems', () => {
       sidebarItems: [
         {
           group: 'Formador',
-          href: '/formador/aula-virtual',
+          href: '/studio/live',
           label: 'Aula virtual',
           icon: 'calendar',
         },
@@ -70,7 +70,7 @@ describe('mergeExtensionSidebarItems', () => {
     const result = mergeExtensionSidebarItems(groups, [ext], new Set(['formador']));
     const formador = result.find((g) => g.label === 'Formador')!;
     // Solo UN item con ese href, no duplicado.
-    const matches = formador.items.filter((i) => i.href === '/formador/aula-virtual');
+    const matches = formador.items.filter((i) => i.href === '/studio/live');
     expect(matches).toHaveLength(1);
   });
 
@@ -97,7 +97,7 @@ describe('mergeExtensionSidebarItems', () => {
       sidebarItems: [
         {
           group: 'Integraciones y API',
-          href: '/admin/integraciones/migrator-learndash',
+          href: '/admin/integrations/migrator-learndash',
           label: 'Migrar desde LearnDash',
           icon: 'download-cloud',
           requiresRole: 'super_admin',
@@ -108,14 +108,14 @@ describe('mergeExtensionSidebarItems', () => {
     expect(
       noSuper
         .find((g) => g.label === 'Integraciones y API')!
-        .items.find((i) => i.href === '/admin/integraciones/migrator-learndash'),
+        .items.find((i) => i.href === '/admin/integrations/migrator-learndash'),
     ).toBeUndefined();
 
     const withSuper = mergeExtensionSidebarItems(makeGroups(), [ext], new Set(['super_admin']));
     expect(
       withSuper
         .find((g) => g.label === 'Integraciones y API')!
-        .items.find((i) => i.href === '/admin/integraciones/migrator-learndash'),
+        .items.find((i) => i.href === '/admin/integrations/migrator-learndash'),
     ).toBeDefined();
   });
 
@@ -125,7 +125,7 @@ describe('mergeExtensionSidebarItems', () => {
       sidebarItems: [
         {
           group: 'Formador',
-          href: '/formador/aula-virtual',
+          href: '/studio/live',
           label: 'Aula virtual',
           icon: 'calendar',
           requiresRole: 'formador',
@@ -140,14 +140,12 @@ describe('mergeExtensionSidebarItems', () => {
     expect(
       tenantAdminOnly
         .find((g) => g.label === 'Formador')!
-        .items.find((i) => i.href === '/formador/aula-virtual'),
+        .items.find((i) => i.href === '/studio/live'),
     ).toBeUndefined();
 
     const formador = mergeExtensionSidebarItems(makeGroups(), [ext], new Set(['formador']));
     expect(
-      formador
-        .find((g) => g.label === 'Formador')!
-        .items.find((i) => i.href === '/formador/aula-virtual'),
+      formador.find((g) => g.label === 'Formador')!.items.find((i) => i.href === '/studio/live'),
     ).toBeDefined();
   });
 
@@ -172,7 +170,7 @@ describe('mergeExtensionSidebarItems', () => {
         sidebarItems: [
           {
             group: 'Formador',
-            href: '/formador/aula-virtual',
+            href: '/studio/live',
             label: 'Aula virtual',
             icon: 'calendar',
             requiresRole: 'formador',
@@ -187,9 +185,7 @@ describe('mergeExtensionSidebarItems', () => {
         .items.find((i) => i.href === '/admin/fundae'),
     ).toBeDefined();
     expect(
-      asSuper
-        .find((g) => g.label === 'Formador')!
-        .items.find((i) => i.href === '/formador/aula-virtual'),
+      asSuper.find((g) => g.label === 'Formador')!.items.find((i) => i.href === '/studio/live'),
     ).toBeDefined();
   });
 
@@ -210,20 +206,20 @@ describe('mergeExtensionSidebarItems', () => {
       sidebarItems: [
         {
           group: 'Formador',
-          href: '/comunidad',
+          href: '/community',
           label: 'Comunidad',
           icon: 'users',
           exactMatch: true,
         },
-        { group: 'Formador', href: '/comunidad/menciones', label: 'Menciones', icon: 'message' },
+        { group: 'Formador', href: '/community/mentions', label: 'Menciones', icon: 'message' },
       ],
     };
     const result = mergeExtensionSidebarItems(makeGroups(), [ext], new Set());
     const formador = result.find((g) => g.label === 'Formador')!;
-    expect(formador.items.find((i) => i.href === '/comunidad')?.exactMatch).toBe(true);
+    expect(formador.items.find((i) => i.href === '/community')?.exactMatch).toBe(true);
     // El item hijo no lo lleva → undefined (no se inyecta false).
     expect(
-      formador.items.find((i) => i.href === '/comunidad/menciones')?.exactMatch,
+      formador.items.find((i) => i.href === '/community/mentions')?.exactMatch,
     ).toBeUndefined();
   });
 

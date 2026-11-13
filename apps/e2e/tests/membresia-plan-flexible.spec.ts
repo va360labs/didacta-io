@@ -7,7 +7,7 @@ import { API_URL, adminTokenForBootstrap } from '../helpers/api';
  *
  * Cubre:
  *  - crear un plan SEMESTRAL en USD y verlo en la página pública /membership/page
- *    con su periodicidad y su moneda (lo que pinta /unete);
+ *    con su periodicidad y su moneda (lo que pinta /join);
  *  - editar la periodicidad a un valor sin nombre clásico (bimestral);
  *  - la moneda por defecto sigue siendo eur si el admin no la indica;
  *  - periodicidades fuera de 1..12 (o moneda malformada) → 400.
@@ -80,7 +80,7 @@ test.describe('Membresía: periodicidad 1..12 y moneda por plan (F7)', () => {
     expect(plan.currency).toBe('usd');
 
     try {
-      // La página pública (la que consume /unete, sin bearer) lo enseña tal cual.
+      // La página pública (la que consume /join, sin bearer) lo enseña tal cual.
       const pageRes = await fetch(`${API_URL}/api/v1/membership/page`);
       expect(pageRes.ok, 'GET /membership/page sin auth').toBe(true);
       const page = (await pageRes.json()) as { plans: PlanView[] };

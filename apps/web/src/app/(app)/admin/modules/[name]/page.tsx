@@ -183,7 +183,7 @@ function GeneralTab({ module }: { module: InstalledModuleSummary }) {
           <CardDescription>
             {t.rich('tenantActivationDescription', {
               link: (chunks) => (
-                <a href="/admin/configuracion" className="underline">
+                <a href="/admin/settings" className="underline">
                   {chunks}
                 </a>
               ),

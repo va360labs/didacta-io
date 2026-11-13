@@ -39,7 +39,7 @@ test.describe('mod.messaging · mensajes', () => {
       accessToken: userA.tokens.accessToken,
       user: { ...userA.user, onboardingCompletedAt: new Date().toISOString() },
     });
-    await page.goto('/mensajes');
+    await page.goto('/messages');
     await expect(page.getByTestId('mensajes-page')).toBeVisible({ timeout: 15_000 });
 
     // A abre un DM con B desde el buscador de miembros.
@@ -67,7 +67,7 @@ test.describe('mod.messaging · mensajes', () => {
       accessToken: userB.tokens.accessToken,
       user: { ...userB.user, onboardingCompletedAt: new Date().toISOString() },
     });
-    await pageB.goto('/mensajes');
+    await pageB.goto('/messages');
 
     const dmItemB = pageB
       .getByTestId('conversation-item-dm')
@@ -117,7 +117,7 @@ test.describe('mod.messaging · mensajes', () => {
       accessToken: userA.tokens.accessToken,
       user: { ...userA.user, onboardingCompletedAt: new Date().toISOString() },
     });
-    await page.goto('/mensajes');
+    await page.goto('/messages');
 
     // Las salas espejan los espacios reales de la comunidad (seed: "General").
     const sala = page.getByTestId('conversation-item-space').first();
@@ -139,7 +139,7 @@ test.describe('mod.messaging · mensajes', () => {
       accessToken: userB.tokens.accessToken,
       user: { ...userB.user, onboardingCompletedAt: new Date().toISOString() },
     });
-    await pageB.goto('/mensajes');
+    await pageB.goto('/messages');
     const salaB = pageB
       .getByTestId('conversation-item-space')
       .filter({ hasText: salaTitle.trim() })
@@ -173,7 +173,7 @@ test.describe('mod.messaging · mensajes', () => {
       accessToken: alumno.tokens.accessToken,
       user: { ...alumno.user, onboardingCompletedAt: new Date().toISOString() },
     });
-    await page.goto('/mensajes');
+    await page.goto('/messages');
 
     // El canal "Profesores" existe sin que el alumno haga nada (auto-provisión).
     const facultyItem = page.getByTestId('conversation-item-faculty').first();
@@ -207,7 +207,7 @@ test.describe('mod.messaging · mensajes', () => {
         onboardingCompletedAt: new Date().toISOString(),
       },
     });
-    await pageStaff.goto('/mensajes');
+    await pageStaff.goto('/messages');
 
     const consultaItem = pageStaff
       .getByTestId('conversation-item-faculty')

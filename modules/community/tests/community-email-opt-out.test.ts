@@ -10,7 +10,7 @@ import { CommunityService } from '../src/community.service.js';
  * Darse de baja de los correos de la comunidad es UNA decisión.
  *
  * Hay dos marcas por historia: `digestOptOut` (el interruptor «Comunidad ·
- * Email» de /cuenta) y `broadcastOptOut` (el enlace de baja de un correo). Cada
+ * Email» de /account) y `broadcastOptOut` (el enlace de baja de un correo). Cada
  * una cortaba solo lo suyo: quien pulsaba «darse de baja» en un aviso seguía
  * recibiendo el resumen semanal, y quien apagaba el interruptor seguía
  * recibiendo los avisos.
@@ -197,7 +197,7 @@ describe('baja de los correos de la comunidad · una baja corta los dos correos'
     expect(await t.digestRecipients()).toEqual(['u1']);
   });
 
-  it('una baja antigua hecha solo desde /cuenta (digestOptOut) también corta los avisos', async () => {
+  it('una baja antigua hecha solo desde /account (digestOptOut) también corta los avisos', async () => {
     const t = setup({
       users: [user('u1'), user('u2')],
       prefs: [{ tenantId: TENANT, userId: 'u2', digestOptOut: true, broadcastOptOut: false }],
@@ -205,7 +205,7 @@ describe('baja de los correos de la comunidad · una baja corta los dos correos'
     expect(await t.broadcastRecipients()).toEqual(['u1']);
   });
 
-  it('apagar el interruptor de /cuenta corta el resumen Y los avisos', async () => {
+  it('apagar el interruptor de /account corta el resumen Y los avisos', async () => {
     const t = setup({ users: [user('u1'), user('u2')] });
 
     const out = await t.service.updateUserPreferences(TENANT, 'u2', { digestOptOut: true });
@@ -215,7 +215,7 @@ describe('baja de los correos de la comunidad · una baja corta los dos correos'
     expect(await t.broadcastRecipients()).toEqual(['u1']);
   });
 
-  it('/cuenta enseña apagado el interruptor de quien se dio de baja por enlace', async () => {
+  it('/account enseña apagado el interruptor de quien se dio de baja por enlace', async () => {
     const t = setup({
       users: [user('u1')],
       prefs: [{ tenantId: TENANT, userId: 'u1', digestOptOut: false, broadcastOptOut: true }],
@@ -223,7 +223,7 @@ describe('baja de los correos de la comunidad · una baja corta los dos correos'
     expect(await t.service.getUserPreferences(TENANT, 'u1')).toEqual({ digestOptOut: true });
   });
 
-  it('volver a encenderlo en /cuenta reactiva los dos correos, también tras una baja por enlace', async () => {
+  it('volver a encenderlo en /account reactiva los dos correos, también tras una baja por enlace', async () => {
     const t = setup({ users: [user('u1')] });
     await t.service.setCommunityEmailOptOut(TENANT, 'u1', true);
     expect(await t.digestRecipients()).toEqual([]);

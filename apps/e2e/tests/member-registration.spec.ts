@@ -239,7 +239,7 @@ test.describe('Inscripción de miembros · gate Telegram + OTP + validación man
     expect(res.status, 'verificationToken inválido → 401').toBe(401);
   });
 
-  test('GET decision con token inválido → redirect a /inscripcion-miembros/decision?outcome=invalid', async () => {
+  test('GET decision con token inválido → redirect a /member-registration/decision?outcome=invalid', async () => {
     // No seguimos el redirect (no queremos cargar el frontend): inspeccionamos
     // el 302 y el header Location directamente.
     const res = await fetch(
@@ -250,7 +250,7 @@ test.describe('Inscripción de miembros · gate Telegram + OTP + validación man
     );
     expect(res.status, 'decision con token inválido → 302').toBe(302);
     const location = res.headers.get('location') ?? '';
-    expect(location).toContain('/inscripcion-miembros/decision');
+    expect(location).toContain('/member-registration/decision');
     expect(location).toContain('outcome=invalid');
   });
 });

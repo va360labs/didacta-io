@@ -40,7 +40,7 @@ export interface ModuleLocalizedText {
 
 export interface ModuleAdminConfigTab {
   /// Identificador único en el conjunto de tabs del panel
-  /// `/admin/configuracion`. Por convención = slug del módulo sin prefijo
+  /// `/admin/settings`. Por convención = slug del módulo sin prefijo
   /// `mod.` (ej. `mod.zoom-live` → `zoom-live`).
   key: string;
   label: ModuleLocalizedText;
@@ -93,8 +93,8 @@ export interface ModuleSidebarItem {
   requiresRole?: 'super_admin' | 'tenant_admin' | 'formador';
   /// Si es `true`, el item se marca activo solo cuando el pathname coincide
   /// EXACTAMENTE con `href` (no por prefijo). Necesario para items "padre"
-  /// como `/comunidad` que de otro modo se marcarían activos en rutas hijas
-  /// como `/comunidad/menciones`.
+  /// como `/community` que de otro modo se marcarían activos en rutas hijas
+  /// como `/community/mentions`.
   exactMatch?: boolean;
 }
 
@@ -147,7 +147,7 @@ export interface ModuleWebExtension {
   /// contra `activeModules` del tenant para decidir si renderizar las
   /// extensions o no.
   name: string;
-  /// Tabs adicionales en `/admin/configuracion`.
+  /// Tabs adicionales en `/admin/settings`.
   adminConfigTabs?: ModuleAdminConfigTab[];
   /// Items adicionales en el sidebar.
   sidebarItems?: ModuleSidebarItem[];

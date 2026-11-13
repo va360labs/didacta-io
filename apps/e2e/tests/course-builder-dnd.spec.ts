@@ -73,7 +73,7 @@ test.describe('Constructor de cursos del formador (UI kit Didacta)', () => {
         mfaEnabled: true,
       },
     });
-    await page.goto(`/formador/cursos/${course.id}`);
+    await page.goto(`/studio/courses/${course.id}`);
 
     // 3. Hero muestra el título y métricas correctas.
     await expect(page.getByRole('heading', { name: `Constructor E2E ${stamp}` })).toBeVisible({
@@ -165,7 +165,7 @@ test.describe('Constructor de cursos del formador (UI kit Didacta)', () => {
         mfaEnabled: true,
       },
     });
-    await page.goto(`/formador/cursos/${course.id}`);
+    await page.goto(`/studio/courses/${course.id}`);
 
     // Abrir el formulario de alta de lección.
     await page.getByRole('button', { name: /Añadir lección/ }).click();

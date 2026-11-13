@@ -11,8 +11,7 @@
     "courseNew": "Create a course called “…” with 6 text lessons from these notes: …",
     "courseEdit": "Create 5 lessons for my course “{curso}” from this outline: …",
     "courseEditSinTitulo": "Create 5 lessons for this course from this outline: …",
-    "live": "Schedule a live class next Tuesday at 7 pm (my time) called “Q&A” with this Zoom link: …",
-    "community": "Write and post a welcome message for new students in the General space."
+    "live": "Schedule a live class next Tuesday at 7 pm (my time) called “Q&A” with this Zoom link: …"
   },
   "copiar": "Copy",
   "copiado": "Copied",
@@ -52,7 +51,7 @@
       "paso": "Add this to .mcp.json in your project (GitHub Copilot in agent mode):"
     }
   },
-  "puede": "It creates and edits courses and lessons, schedules live classes and posts in the community. What it creates stays as a draft: you publish it.",
+  "puede": "It creates and edits courses and lessons, schedules live classes and posts in the community. New courses stay as drafts until you publish them; live classes, community posts and lessons added to a published course are visible right away.",
   "noPuede": "It doesn’t set prices, put anything on sale, delete anything or invite anyone.",
   "chatgpt": "ChatGPT can’t connect with a key yet."
 }

@@ -63,13 +63,13 @@ import {
  */
 /**
  * Destino del cambio de contraseña: la pestaña Seguridad del perfil
- * (`/cuenta?tab=seguridad`). El usuario con contraseña temporal
- * (`mustChangePassword`) es forzado a `/cuenta`; esa ruta queda exenta del
+ * (`/account?tab=seguridad`). El usuario con contraseña temporal
+ * (`mustChangePassword`) es forzado a `/account`; esa ruta queda exenta del
  * redirect para no entrar en bucle. (Antes había una página dedicada
- * `/cuenta/seguridad`; se consolidó en el tab.)
+ * `/account/seguridad`; se consolidó en el tab.)
  */
-const ACCOUNT_PATH = '/cuenta';
-const CHANGE_PASSWORD_REDIRECT = '/cuenta?tab=seguridad';
+const ACCOUNT_PATH = '/account';
+const CHANGE_PASSWORD_REDIRECT = '/account?tab=seguridad';
 /** Evita repetir la consulta del asistente de academia en cada navegación. */
 const ACADEMIA_LISTA_KEY = 'didacta:academia-lista';
 
@@ -109,7 +109,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
      * (`lib/first-access.ts`), con sus tests.
      *
      * El de perfil (`/onboarding`) pide foto, nombre e idioma. El de academia
-     * (`/bienvenida`) le pone nombre y marca al negocio recién comprado. En el
+     * (`/welcome`) le pone nombre y marca al negocio recién comprado. En el
      * modo completo la foto es obligatoria y exigirla antes de dejarle tocar
      * su academia a quien acaba de pagar era un primer contacto pésimo: ahí va
      * primero la academia. En el modo sencillo la foto se puede dejar para
@@ -136,7 +136,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
        * El PASE del asistente. Sus enlaces («Abrir la configuración de
        * cobros», el editor del curso, los pendientes del resumen) abren
        * pestaña nueva — y una pestaña nueva pasa por ESTE gate, que sin el
-       * pase la devolvía a `/bienvenida`: los enlaces del asistente eran
+       * pase la devolvía a `/welcome`: los enlaces del asistente eran
        * imposibles de usar. El pase vive en localStorage (las pestañas lo
        * comparten), caduca solo y NO marca ACADEMIA_LISTA_KEY: al expirar,
        * el asistente vuelve a ser bloqueante como siempre.
@@ -176,7 +176,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
     setSession(current);
   }, [router, pathname]);
 
-  // Refresco en caliente de la sesión: /cuenta (y el onboarding) actualizan el
+  // Refresco en caliente de la sesión: /account (y el onboarding) actualizan el
   // nombre/avatar en localStorage y disparan este evento para que el sidebar se
   // re-renderice al instante sin navegar ni recargar.
   useEffect(() => {
@@ -306,7 +306,7 @@ function Shell({
   }, [simpleMode]);
 
   // Listener para actualización en caliente desde la misma página: cuando
-  // /admin/configuracion termina un toggle, dispatchea
+  // /admin/settings termina un toggle, dispatchea
   // `window.dispatchEvent(new Event('didacta:modules-changed'))` y el
   // sidebar se refresca sin esperar a la próxima navegación.
   useEffect(() => {
@@ -363,7 +363,7 @@ function Shell({
     canAdd: isAdmin,
     onAdd: isAdmin ? () => setCreateSpaceOpen(true) : undefined,
     items: rawSpaces.map((s) => ({
-      href: `/espacios/${s.slug}`,
+      href: `/spaces/${s.slug}`,
       label: s.title,
       icon: (isIconName(s.icon) ? s.icon : 'hash') as IconName,
       emoji: isIconName(s.icon) ? undefined : s.icon,
@@ -395,9 +395,9 @@ function Shell({
   const mergedGroups = mergeExtensionSidebarItems(baseGroups, moduleExtensions, userRoles);
   if (!isAdminArea && inspectionGroups.length > 0) {
     const aprendizaje = mergedGroups.find((g) => g.label === 'Aprendizaje');
-    if (aprendizaje && !aprendizaje.items.some((i) => i.href === '/seguimiento')) {
+    if (aprendizaje && !aprendizaje.items.some((i) => i.href === '/inspection')) {
       aprendizaje.items.push({
-        href: '/seguimiento',
+        href: '/inspection',
         label: 'Seguimiento Fundae',
         icon: 'eye',
         requiresModule: 'mod.fundae',
@@ -423,12 +423,12 @@ function Shell({
   const tenantName = hostTenant?.name?.trim() || formatTenantName(session.user.tenantSlug);
   const sectionExtras = useMemo(
     () => [
-      { href: '/cuenta', label: t('sections.myProfile') },
-      // /grupos ya no tiene item en el sidebar (bloque 9) pero la ruta sigue viva.
-      { href: '/grupos', label: t('sections.groups') },
-      // Ídem /rutas: item del alumno retirado del menú, la página sigue accesible
+      { href: '/account', label: t('sections.myProfile') },
+      // /groups ya no tiene item en el sidebar (bloque 9) pero la ruta sigue viva.
+      { href: '/groups', label: t('sections.groups') },
+      // Ídem /paths: item del alumno retirado del menú, la página sigue accesible
       // por URL y desde el detalle de una ruta.
-      { href: '/rutas', label: t('sections.learningPaths') },
+      { href: '/paths', label: t('sections.learningPaths') },
     ],
     [t],
   );

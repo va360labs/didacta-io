@@ -75,7 +75,7 @@ export function SimpleLive() {
 
   async function copy(id: string) {
     try {
-      await navigator.clipboard.writeText(`${window.location.origin}/clase/${id}`);
+      await navigator.clipboard.writeText(`${window.location.origin}/live/${id}`);
       setCopied(id);
       setTimeout(() => setCopied((c) => (c === id ? null : c)), 2000);
     } catch {

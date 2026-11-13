@@ -521,7 +521,7 @@ function SsoPanel() {
             <p className="text-xs">
               {t.rich('oidc.guideNoteDesc', {
                 code: (chunks) => <code className="font-mono">{chunks}</code>,
-                link: (chunks) => <a href="/admin/usuarios">{chunks}</a>,
+                link: (chunks) => <a href="/admin/users">{chunks}</a>,
               })}
             </p>
           </div>

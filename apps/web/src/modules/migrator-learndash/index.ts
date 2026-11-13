@@ -11,7 +11,7 @@
 /// `modules/migrator-learndash/src/ui/` y se distribuye dentro del ZIP
 /// firmado del módulo.
 ///
-/// El sidebar item apunta a `/admin/integraciones/migrator-learndash`, una
+/// El sidebar item apunta a `/admin/integrations/migrator-learndash`, una
 /// page genérica del host que hace `loadModuleUI('mod.migrator-learndash',
 /// 'admin')` y renderiza el componente default del bundle.
 ///
@@ -32,7 +32,7 @@ export const migratorLearndashExtension: ModuleWebExtension = {
       // grupos EXISTENTES, así que apuntar a un grupo inexistente descartaba
       // el item en silencio. Va en "Administración" junto a Marketplace/Tenants.
       group: 'Plataforma',
-      href: '/admin/integraciones/migrator-learndash',
+      href: '/admin/integrations/migrator-learndash',
       label: 'Migrar desde LearnDash',
       icon: 'download-cloud',
       requiresRole: 'super_admin',

@@ -112,7 +112,7 @@ describe('deriveChecklist', () => {
 
   it('todos los hrefs son rutas internas del panel', () => {
     for (const item of deriveChecklist(inputs())) {
-      expect(item.href, item.key).toMatch(/^\/(admin|formador)\//);
+      expect(item.href, item.key).toMatch(/^\/(admin|studio)\//);
     }
   });
 });
@@ -143,12 +143,12 @@ describe('primeros pasos con cobros de plataforma (Didacta Cloud)', () => {
     progress: { ...PROGRESO_TODO_HECHO, done: ['curso', 'alumnos'], skipped: ['cobros'] },
   };
 
-  it('cobros = conectar cobros (/admin/cobros) y el correo no se reclama', () => {
+  it('cobros = conectar cobros (/admin/payments) y el correo no se reclama', () => {
     const items = deriveChecklist({ ...base, platformPayoutsReady: false });
     expect(items.find((i) => i.key === 'cobros')).toEqual({
       key: 'cobros',
       done: false,
-      href: '/admin/cobros',
+      href: '/admin/payments',
     });
     expect(items.some((i) => i.key === 'correo')).toBe(false);
   });
@@ -160,7 +160,7 @@ describe('primeros pasos con cobros de plataforma (Didacta Cloud)', () => {
 
   it('sin cobros de plataforma: el correo y las claves de siempre', () => {
     const items = deriveChecklist({ ...base, platformPayoutsReady: null });
-    expect(items.find((i) => i.key === 'cobros')?.href).not.toBe('/admin/cobros');
+    expect(items.find((i) => i.key === 'cobros')?.href).not.toBe('/admin/payments');
     expect(items.find((i) => i.key === 'correo')?.done).toBe(false);
   });
 });

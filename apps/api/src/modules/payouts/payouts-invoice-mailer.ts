@@ -174,7 +174,7 @@ export class PayoutsInvoiceMailer {
           serviceName: invoices.config.serviceName,
           invoice: data.view,
         });
-        const link = base ? `${base.replace(/\/+$/, '')}/admin/cobros` : null;
+        const link = base ? `${base.replace(/\/+$/, '')}/admin/payments` : null;
         const html =
           `<div style="font-family:system-ui,-apple-system,Segoe UI,sans-serif;font-size:15px;line-height:1.55;color:#0f172a;max-width:560px">` +
           textToHtmlParagraphs(texts.body) +

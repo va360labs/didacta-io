@@ -587,7 +587,7 @@ export class ZoomLiveService {
    * calendario (`/calendar.ics` y los deeplinks), al que se llega desde un
    * email — y un cliente de correo no lleva bearer token. El UUID de la
    * sesión hace de credencial, igual que en el enlace compartible
-   * `/clase/<id>` (ADR-017).
+   * `/live/<id>` (ADR-017).
    *
    * Devuelve solo lo que ya es público en ese enlace: título, hora y
    * duración. Ni la descripción interna, ni el `joinUrl`, ni el roster.

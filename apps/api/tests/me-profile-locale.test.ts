@@ -7,7 +7,7 @@ import { ALLOWED_LOCALES, updateProfileSchema } from '../src/auth/me.controller'
  * `pt-BR` estuvo en `ALLOWED_LOCALES` sin tener catálogo de mensajes en la web.
  * La consecuencia no era cosmética: el endpoint PERSISTÍA el valor, así que un
  * usuario acababa con un perfil en un idioma que la interfaz no sabe pintar y
- * `/cuenta` se lo confirmaba («Português (Brasil)») mientras la UI seguía en
+ * `/account` se lo confirmaba («Português (Brasil)») mientras la UI seguía en
  * español. Quitarlo del selector sin quitarlo de aquí habría dejado la API
  * guardando lo mismo por SCIM, por curl o por un cliente viejo.
  */

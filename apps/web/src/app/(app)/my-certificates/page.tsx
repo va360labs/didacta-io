@@ -1,0 +1,195 @@
+'use client';
+
+/**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
+import Link from 'next/link';
+import { useEffect, useState } from 'react';
+import { useTranslations } from 'next-intl';
+import { Icon } from '@/components/icon';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
+import { ApiHttpError } from '@/lib/api-client';
+import { apiErrorMessage } from '@/lib/i18n/api-error';
+import { formatDate } from '@/lib/i18n/format';
+import { openLinkedIn } from '@/lib/certificate-linkedin';
+import { useTenantDisplayName } from '@/lib/tenant-context';
+import { certificatesApi, type Certificate } from '@/modules/certificates';
+
+function formatIssuedAt(iso: string): string {
+  try {
+    return formatDate(iso, { year: 'numeric', month: 'long', day: 'numeric' });
+  } catch {
+    return iso;
+  }
+}
+
+export default function MisCertificadosPage() {
+  const tenantName = useTenantDisplayName();
+  const t = useTranslations('alumnoAprendizaje');
+  const tErrors = useTranslations('errors');
+  const [certs, setCerts] = useState<Certificate[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
+
+  useEffect(() => {
+    let aborted = false;
+    void certificatesApi
+      .listMine()
+      .then((data) => {
+        if (!aborted) setCerts(data);
+      })
+      .catch((e) => {
+        if (!aborted)
+          setError(e instanceof ApiHttpError ? apiErrorMessage(e, tErrors) : t('certsLoadError'));
+      });
+    return () => {
+      aborted = true;
+    };
+    // Deps limitadas a la carga inicial: `t`/`tErrors` solo se usan para
+    // componer el mensaje de error, no son entradas del fetch.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function handleDownload(cert: Certificate) {
+    setDownloadingId(cert.id);
+    setError(null);
+    try {
+      await certificatesApi.openInNewTab(cert.id, `${cert.number}.pdf`);
+    } catch (e) {
+      setError(e instanceof ApiHttpError ? apiErrorMessage(e, tErrors) : t('pdfDownloadError'));
+    } finally {
+      setDownloadingId(null);
+    }
+  }
+
+  return (
+    <section className="space-y-8">
+      <header>
+        <h1
+          className="font-display text-2xl font-bold tracking-tight text-text"
+          style={{ letterSpacing: '-0.02em' }}
+        >
+          {t('myCertificates')}
+        </h1>
+        <p className="mt-2 max-w-2xl text-text-muted">{t('certsSubtitle')}</p>
+      </header>
+
+      {error ? (
+        <div
+          role="alert"
+          className="rounded-lg border border-danger-100 bg-danger-50 p-3 text-sm text-danger-700"
+        >
+          {error}
+        </div>
+      ) : null}
+
+      {certs === null ? (
+        <div className="grid gap-5 md:grid-cols-2">
+          {[0, 1].map((i) => (
+            <div key={i} className="skeleton h-48 w-full" />
+          ))}
+        </div>
+      ) : certs.length === 0 ? (
+        <Card>
+          <CardContent className="flex flex-col items-center gap-3 p-12 text-center">
+            <div
+              aria-hidden="true"
+              className="flex h-20 w-20 items-center justify-center rounded-2xl"
+              style={{
+                background: 'var(--didacta-info-bg)',
+                color: 'var(--didacta-info-fg)',
+              }}
+            >
+              <Icon name="award" size={40} />
+            </div>
+            <h3 className="font-display text-2xl font-semibold">{t('noCertsTitle')}</h3>
+            <p className="max-w-md text-text-muted">{t('noCertsHint')}</p>
+            <Button asChild className="mt-2">
+              <Link href="/courses">{t('viewCatalog')}</Link>
+            </Button>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="grid gap-5 md:grid-cols-2">
+          {certs.map((cert) => {
+            const courseTitle = cert.snapshot?.courseTitle ?? t('courseFallback');
+            return (
+              <Card key={cert.id} className="flex h-full flex-col overflow-hidden p-0">
+                {/* Cover institucional Azul noche con award icon prominente */}
+                <div
+                  className="relative flex flex-col items-center justify-center px-6 py-8 text-white"
+                  style={{
+                    background: 'linear-gradient(135deg, #0D1B2A 0%, #1E5AA8 100%)',
+                  }}
+                >
+                  {/* Book motif sutil */}
+                  <svg
+                    aria-hidden="true"
+                    className="pointer-events-none absolute inset-x-0 bottom-0 h-12 w-full opacity-25"
+                    viewBox="0 0 200 60"
+                    preserveAspectRatio="none"
+                  >
+                    <path d="M0 40 Q100 0 200 40 L200 60 L0 60 Z" fill="rgba(255,255,255,.18)" />
+                    <path
+                      d="M0 50 Q100 10 200 50"
+                      stroke="rgba(255,255,255,.4)"
+                      strokeWidth="1.5"
+                      fill="none"
+                    />
+                  </svg>
+
+                  <div className="relative z-10 flex flex-col items-center gap-2">
+                    <div
+                      aria-hidden="true"
+                      className="grid h-12 w-12 place-items-center rounded-full bg-white/15 text-white"
+                    >
+                      <Icon name="award" size={28} />
+                    </div>
+                    <p className="label-uppercase text-white/70">{t('certOfCompletion')}</p>
+                    <p className="font-display text-2xl font-bold tabular-nums">{cert.number}</p>
+                  </div>
+                </div>
+
+                <CardContent className="flex flex-1 flex-col gap-4 p-6">
+                  <div>
+                    <h3
+                      className="font-display text-xl font-bold leading-tight text-text"
+                      style={{ letterSpacing: '-0.01em' }}
+                    >
+                      {courseTitle}
+                    </h3>
+                    <p className="mt-1.5 text-sm text-text-subtle">
+                      {t('issuedOn', { date: formatIssuedAt(cert.issuedAt) })}
+                    </p>
+                  </div>
+                  <div className="mt-auto flex items-center gap-2">
+                    <Button
+                      onClick={() => handleDownload(cert)}
+                      disabled={downloadingId === cert.id}
+                    >
+                      <Icon name="award" size={16} />
+                      {downloadingId === cert.id ? t('downloading') : t('downloadPdf')}
+                    </Button>
+                    <Button
+                      variant="secondary"
+                      onClick={() => openLinkedIn(cert, tenantName, courseTitle)}
+                    >
+                      {t('addToLinkedIn')}
+                    </Button>
+                    <Badge variant="premium" dot className="ml-auto">
+                      {t('verified')}
+                    </Badge>
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+      )}
+    </section>
+  );
+}

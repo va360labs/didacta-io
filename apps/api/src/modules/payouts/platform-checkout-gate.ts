@@ -21,7 +21,7 @@ import { PayoutsRuntime } from './payouts-runtime.service';
 export const PAYOUTS_NOT_READY_OFFER_REASON = 'payouts_not_ready';
 
 /**
- * Lo que la venta PÚBLICA (catálogo, ficha, `/unete`) necesita saber del cobro
+ * Lo que la venta PÚBLICA (catálogo, ficha, `/join`) necesita saber del cobro
  * de un aula, resuelto con UNA sola consulta del modo.
  */
 export interface PublicCheckoutInfo {
@@ -59,7 +59,7 @@ export function withLocalCurrencyHint<T extends { readonly currency: string }>(
 
 /**
  * Puerta de la VENTA en modo plataforma, para los controladores de compra de
- * `mod.billing` (público y de alumno) y, desde E5, de la membresía (`/unete`).
+ * `mod.billing` (público y de alumno) y, desde E5, de la membresía (`/join`).
  *
  *  - Oferta: si el tenant cobra por la plataforma y su cuenta conectada aún no
  *    puede vender, el curso no está a la venta (`forSale: false` con motivo).

@@ -83,7 +83,7 @@ describe('SubscriptionsService.createBillingPortalSession', () => {
       sub({ id: 's-curso', courseId: 'c', stripeCustomerId: 'cus_curso', createdAt: at(3) }),
     ]);
     const result = await service.createBillingPortalSession(T, 'alumna', {
-      returnUrl: 'https://aula.test/cuenta?tab=suscripcion',
+      returnUrl: 'https://aula.test/account?tab=suscripcion',
     });
     expect(result).toEqual({
       url: 'https://billing.stripe.test/cus_viva',
@@ -91,7 +91,7 @@ describe('SubscriptionsService.createBillingPortalSession', () => {
     });
     expect(createPortalSession).toHaveBeenCalledWith({
       customerId: 'cus_viva',
-      returnUrl: 'https://aula.test/cuenta?tab=suscripcion',
+      returnUrl: 'https://aula.test/account?tab=suscripcion',
     });
   });
 

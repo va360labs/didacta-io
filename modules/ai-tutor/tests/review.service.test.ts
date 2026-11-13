@@ -243,7 +243,7 @@ describe('AiTutorReviewService.review', () => {
       'msg-1',
       {
         status: 'CORRECTED',
-        respuestaCorregida: 'En /cuenta → Facturación.',
+        respuestaCorregida: 'En /account → Facturación.',
         aplicaATodosLosCursos: true,
       },
       'admin-1',

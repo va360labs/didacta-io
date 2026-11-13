@@ -13,10 +13,10 @@
 /// Tampoco puede empezar por `_`: en el App Router una carpeta con guion bajo
 /// es una carpeta privada y no genera ruta, que es justo lo contrario de lo
 /// que hace falta aquí.
-export const SITE_PATH_PREFIX = '/sitio';
+export const SITE_PATH_PREFIX = '/site';
 
 /// Convierte la ruta interna reescrita de vuelta en la que pidió el visitante.
-/// `/sitio/blog/x` → `/blog/x`, y `/sitio` → `/`.
+/// `/site/blog/x` → `/blog/x`, y `/site` → `/`.
 export function publicPathnameFromSegments(segments: readonly string[] | undefined): string {
   if (!segments || segments.length === 0) return '/';
   return `/${segments.join('/')}`;

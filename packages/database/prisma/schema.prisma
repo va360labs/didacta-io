@@ -148,7 +148,7 @@ model TenantDomain {
 // Reemplaza el stub in-memory anterior. Los valores marcados con is_secret se
 // cifran con AES-256-GCM usando TENANT_SETTINGS_ENC_KEY del env. Los no
 // secretos viajan en value_json plano. Cada admin de tenant configura desde
-// /admin/configuracion sus credenciales SMTP, Zoom, etc.
+// /admin/settings sus credenciales SMTP, Zoom, etc.
 // ============================================================================
 
 model TenantSetting {
@@ -234,10 +234,10 @@ model User {
   emailVerified         Boolean    @default(false) @map("email_verified")
   name                  String?
   /// Biografía corta del usuario, opcional. Se captura en el onboarding y se
-  /// edita en /cuenta. Máx 280 caracteres.
+  /// edita en /account. Máx 280 caracteres.
   bio                   String?    @db.VarChar(280)
   /// Cargo / puesto del usuario (ej. "Director de Formación"). Opcional,
-  /// editable por el propio usuario en /cuenta. Máx 120.
+  /// editable por el propio usuario en /account. Máx 120.
   jobTitle              String?    @map("job_title") @db.VarChar(120)
   /// Departamento / área (ej. "Talento y Cultura"). Opcional. Máx 120.
   department            String?    @db.VarChar(120)
@@ -532,7 +532,7 @@ model ApiKey {
 // NOTIFICATION PREFERENCES (core) — matriz canal × categoría por usuario.
 // Una fila por combinación (categoría, canal). Si no hay fila, el default es
 // "activado" (lo resuelve la API). El usuario las configura en el onboarding y
-// en /cuenta. El módulo community conserva su propio `digestOptOut`; el
+// en /account. El módulo community conserva su propio `digestOptOut`; el
 // frontend reconcilia la celda COMMUNITY×EMAIL con esa preferencia, sin
 // acoplamiento cross-módulo en backend. Reutiliza el enum core
 // NotificationChannel (solo EMAIL/IN_APP son configurables; WEBHOOK es a nivel
@@ -773,7 +773,7 @@ enum NotificationChannel {
 
 /// Cada notificación que el NotificationHub envía o intenta enviar.
 /// El channel IN_APP siempre se persiste y es leído por el alumno desde
-/// /notificaciones. Los demás canales también persisten para auditoría:
+/// /notifications. Los demás canales también persisten para auditoría:
 /// el campo `sentAt`/`failedAt` registra el resultado del adapter.
 // ============================================================================
 // COMPRAS HECHAS FUERA — el historial del alumno cuando la tienda no es Didacta
@@ -964,7 +964,7 @@ model ModCommunityMention {
 /// Categorías curadas de cursos para el catálogo. Reemplazan al string
 /// libre `mod_courses_course.category` (que se mantiene como referencia
 /// por nombre para no romper datos existentes). El admin las gestiona
-/// desde /admin/cursos/categorias y el builder ofrece un select.
+/// desde /admin/courses/categories y el builder ofrece un select.
 ///
 /// Multi-categoría con pivote queda como follow-up: el modelo actual
 /// soporta una sola categoría por curso (campo `category: string` que
@@ -2466,7 +2466,7 @@ model MemberRegistrationDecisionToken {
 }
 
 /// Lista de referencia de estado de pago de miembros, gestionada por el admin
-/// (panel /admin/impagos: alta manual + import CSV). Desde F2.3 la clave de
+/// (panel /admin/delinquents: alta manual + import CSV). Desde F2.3 la clave de
 /// negocio es el EMAIL (con `user_id` vinculado si se resolvió); `telegram_id`
 /// queda como clave LEGACY opcional de la era del gate Telegram. El join con la
 /// inscripción es lógico dentro del mismo tenant (sin FK). Permite mostrar
@@ -2494,7 +2494,7 @@ model MemberPaymentFlag {
 }
 
 /// Resultado del lookup automático de suscripción al registrarse un miembro en
-/// /inscripcion-miembros. Un job no bloqueante busca la suscripción del email en
+/// /member-registration. Un job no bloqueante busca la suscripción del email en
 /// las cuentas de pago conectadas (Stripe/PayPal/WooCommerce) y guarda aquí el
 /// resultado para que el admin lo vea al validar la solicitud.
 model MemberSubscriptionLookup {
@@ -3087,7 +3087,7 @@ model ModSubscriptionsSubscription {
   @@map("mod_subscriptions_subscription")
 }
 
-/// Plan de MEMBRESÍA vendible en la página pública de compra (/unete).
+/// Plan de MEMBRESÍA vendible en la página pública de compra (/join).
 ///
 /// El admin lo parametriza (precio, periodicidad, trial, precio tachado) sin
 /// tocar Stripe: el Product/Price de Stripe se crea PEREZOSAMENTE en el primer
@@ -3131,12 +3131,12 @@ model ModSubscriptionsPlan {
 
 /// Configuración (1 fila por tenant) de la página pública de membresía.
 ///
-/// Todo lo que se pinta en /unete sale de aquí + de los planes + del catálogo
+/// Todo lo que se pinta en /join sale de aquí + de los planes + del catálogo
 /// real de cursos. El testimonial es opcional y el bloque NO se muestra si
 /// está vacío (prohibido inventar personas — regla del proyecto).
 model ModSubscriptionsMembershipConfig {
   tenantId          String   @id @map("tenant_id") @db.Uuid
-  /// Página pública activa. En false, /unete devuelve "no disponible".
+  /// Página pública activa. En false, /join devuelve "no disponible".
   active            Boolean  @default(false)
   /// Título grande de la tarjeta ("Hazte miembro Pro").
   headline          String   @default("Hazte miembro")
@@ -3172,7 +3172,7 @@ model ModSubscriptionsMembershipConfig {
 /// las genera Stripe automáticamente al cierre de cada periodo.
 ///
 /// Guardamos las invoices localmente para mostrarle al alumno su historial
-/// de pagos en /cuenta/suscripciones sin ir a Stripe en cada render.
+/// de pagos en /account/subscriptions sin ir a Stripe en cada render.
 model ModSubscriptionsInvoice {
   id               String                    @id @default(uuid()) @db.Uuid
   tenantId         String                    @map("tenant_id") @db.Uuid
@@ -4021,7 +4021,7 @@ enum ReferralCommissionStatus {
 /// Configuración (1 fila por tenant) del programa de referidos.
 model ModReferralsConfig {
   tenantId                String   @id @map("tenant_id") @db.Uuid
-  /// Programa activo. En false: /referidos avisa y no se registran clics
+  /// Programa activo. En false: /referrals avisa y no se registran clics
   /// ni atribuciones nuevas (las comisiones existentes no se tocan).
   active                  Boolean  @default(false)
   /// Comisión en puntos básicos (bps) sobre el importe cobrado: 3000 = 30 %.
@@ -4042,7 +4042,7 @@ model ModReferralsConfig {
   /// Exigir membresía activa (ACTIVE/TRIALING) del referidor al DEVENGAR.
   /// Default false: no toda academia vende membresías (whitelabel).
   requireActiveMembership Boolean  @default(false) @map("require_active_membership")
-  /// Copy editable del área del miembro (/referidos). Sin datos inventados:
+  /// Copy editable del área del miembro (/referrals). Sin datos inventados:
   /// lo escribe el operador; vacío = solo la UI funcional.
   memberCopy              String?  @map("member_copy")
   /// El alumno con membresía puede cobrar lo ganado como descuento en su
@@ -4083,7 +4083,7 @@ model ModReferralsCode {
   tenantId  String   @map("tenant_id") @db.Uuid
   /// ID lógico del usuario (tabla core `user`, sin FK cross-module).
   userId    String   @map("user_id") @db.Uuid
-  /// Slug corto que viaja en /unete?ref=CODE. Único por tenant.
+  /// Slug corto que viaja en /join?ref=CODE. Único por tenant.
   code      String
   createdAt DateTime @default(now()) @map("created_at")
 
@@ -4094,7 +4094,7 @@ model ModReferralsCode {
   @@map("mod_referrals_code")
 }
 
-/// Clic registrado al aterrizar en /unete?ref=CODE. Dedupe por
+/// Clic registrado al aterrizar en /join?ref=CODE. Dedupe por
 /// (código, día, hash de IP) — el mismo visitante el mismo día cuenta una vez.
 model ModReferralsClick {
   id        String   @id @default(uuid()) @db.Uuid
@@ -4594,7 +4594,7 @@ model ModGamificationProfile {
 }
 
 /// Catálogo de reglas de puntuación. Se siembra en runtime con los pesos por
-/// defecto y el operador los edita desde /admin/gamificacion.
+/// defecto y el operador los edita desde /admin/gamification.
 model ModGamificationRule {
   id       String  @id @default(uuid()) @db.Uuid
   tenantId String  @map("tenant_id") @db.Uuid

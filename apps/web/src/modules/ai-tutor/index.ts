@@ -6,7 +6,7 @@
 /// Extension point del módulo `mod.ai-tutor` hacia el core.
 ///
 /// La superficie del alumno es el panel embebido `AiTutorPanel` (componente
-/// core) dentro de la vista de curso. La del admin es `/admin/ia/tutor`:
+/// core) dentro de la vista de curso. La del admin es `/admin/ai/tutor`:
 /// revisar qué se le pregunta al tutor, corregir lo que responde mal y ver el
 /// informe mensual de temas. Cuelga de 'Contenido' y no de 'Integraciones y
 /// API' a propósito — quien juzga si una respuesta es correcta es quien conoce
@@ -24,7 +24,7 @@ export const aiTutorExtension: ModuleWebExtension = {
   sidebarItems: [
     {
       group: 'Contenido',
-      href: '/admin/ia/tutor',
+      href: '/admin/ai/tutor',
       label: 'Tutor IA',
       icon: 'sparkles',
       requiresRole: 'tenant_admin',

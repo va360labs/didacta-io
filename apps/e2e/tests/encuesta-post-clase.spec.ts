@@ -6,7 +6,7 @@ import { injectSession } from '../helpers/auth';
  * Bloque 2 — Encuesta post-clase (mod.surveys):
  *  - El admin crea una clase y fuerza la creación de la encuesta (endpoint
  *    idempotente, sin esperar al webhook de Zoom).
- *  - Un alumno la responde desde /clase/[id] (respuesta anónima) y ve el
+ *  - Un alumno la responde desde /live/[id] (respuesta anónima) y ve el
  *    agradecimiento; recargar mantiene el estado (alreadyAnswered).
  *  - El segundo envío del mismo alumno devuelve 409 por API.
  *  - El admin ve los agregados: 1 respuesta, NPS 100 (un 10), texto libre.
@@ -75,7 +75,7 @@ test.describe('Encuesta post-clase (mod.surveys)', () => {
       refreshToken: alumno.tokens.refreshToken,
       user: { ...alumno.user, onboardingCompletedAt: new Date().toISOString() },
     });
-    await page.goto(`/clase/${session.id}`);
+    await page.goto(`/live/${session.id}`);
 
     const panel = page.getByTestId('survey-panel');
     await expect(panel.getByText('Valora esta clase')).toBeVisible();

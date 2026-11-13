@@ -53,7 +53,7 @@ const RUTAS_LIBRES = [
   '/reset-password',
   '/mfa',
   '/auth',
-  '/soporte',
+  '/support',
   '/setup',
 ];
 

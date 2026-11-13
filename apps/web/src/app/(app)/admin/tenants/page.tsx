@@ -77,7 +77,7 @@ export default function TenantsPage() {
         </div>
         {capacity?.canCreate ? (
           <Button asChild>
-            <Link href="/admin/tenants/nuevo">{t('tenants.createButton')}</Link>
+            <Link href="/admin/tenants/new">{t('tenants.createButton')}</Link>
           </Button>
         ) : capacity ? (
           <Button disabled title={t('tenants.createLockedTitle')}>

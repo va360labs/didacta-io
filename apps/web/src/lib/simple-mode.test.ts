@@ -24,14 +24,14 @@ describe('startHereHeadline', () => {
 
   it('publicada pero sin cobros: sigue «casi» (nadie puede pagar aún)', () => {
     expect(
-      startHereHeadline(vista(['academy', 'course', 'price'], { salePath: '/catalogo/x' })),
+      startHereHeadline(vista(['academy', 'course', 'price'], { salePath: '/catalog/x' })),
     ).toBe('casi');
   });
 
   it('a la venta aunque falte invitar: «ya está a la venta»', () => {
     expect(
       startHereHeadline(
-        vista(['academy', 'course', 'price', 'payments', 'publish'], { salePath: '/catalogo/x' }),
+        vista(['academy', 'course', 'price', 'payments', 'publish'], { salePath: '/catalog/x' }),
       ),
     ).toBe('listo');
   });
@@ -40,7 +40,7 @@ describe('startHereHeadline', () => {
     expect(
       startHereHeadline(
         vista(['academy', 'course', 'price', 'payments', 'publish', 'invite'], {
-          salePath: '/catalogo/x',
+          salePath: '/catalog/x',
         }),
       ),
     ).toBe('listo');
@@ -50,7 +50,7 @@ describe('startHereHeadline', () => {
     expect(
       startHereHeadline(
         vista(['academy', 'course', 'price', 'payments', 'publish', 'invite'], {
-          salePath: '/catalogo/x',
+          salePath: '/catalog/x',
           ventas: 1,
         }),
       ),

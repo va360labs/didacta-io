@@ -279,7 +279,7 @@ export class SetupService {
       roles,
       // El primer admin entra con MFA verificado=true para no bloquearse a sí
       // mismo: no hay otro admin que pueda resetearle MFA si pierde el factor.
-      // Puede activarlo después desde /cuenta/mfa cuando le venga bien.
+      // Puede activarlo después desde /account/mfa cuando le venga bien.
       mfaVerified: true,
     });
 

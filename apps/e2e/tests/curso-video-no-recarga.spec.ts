@@ -74,7 +74,7 @@ test.describe('El vídeo embebido no se recarga en cada reporte de progreso', ()
       },
     });
 
-    await page.goto(`/cursos/${course.slug}`);
+    await page.goto(`/courses/${course.slug}`);
 
     // El iframe embebido debe montarse dentro del contenido de la lección.
     const embed = page.locator('iframe#e2e-embed');

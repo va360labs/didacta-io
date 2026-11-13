@@ -15,8 +15,8 @@ import { StripeSdkAdapter, type StripeAdapterOptions } from '../src/stripe.clien
 
 const PARAMS = {
   priceId: 'price_1Abc',
-  successUrl: 'https://aula.test/cursos/checkout/success?session_id={CHECKOUT_SESSION_ID}',
-  cancelUrl: 'https://aula.test/cursos/checkout/cancel',
+  successUrl: 'https://aula.test/courses/checkout/success?session_id={CHECKOUT_SESSION_ID}',
+  cancelUrl: 'https://aula.test/courses/checkout/cancel',
   customerEmail: 'alumna@example.com',
   allowPromotionCodes: true,
   metadata: {
@@ -59,8 +59,8 @@ function captureCreate(options?: StripeAdapterOptions) {
 const OWN_SNAPSHOT = JSON.stringify({
   mode: 'payment',
   line_items: [{ price: 'price_1Abc', quantity: 1 }],
-  success_url: 'https://aula.test/cursos/checkout/success?session_id={CHECKOUT_SESSION_ID}',
-  cancel_url: 'https://aula.test/cursos/checkout/cancel',
+  success_url: 'https://aula.test/courses/checkout/success?session_id={CHECKOUT_SESSION_ID}',
+  cancel_url: 'https://aula.test/courses/checkout/cancel',
   customer_email: 'alumna@example.com',
   allow_promotion_codes: true,
   client_reference_id: '44444444-4444-4444-8444-444444444444',

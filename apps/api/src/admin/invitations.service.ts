@@ -298,7 +298,7 @@ export class InvitationsService {
    * `AdminUsersService.invite()`/`startBulkInvite()` — aditivo, no toca los
    * grupos que ya tuviera). Pensado para el cohort "sin ningún curso
    * asignado": sin esto, un lote entraría a un aula vacía y habría que
-   * arreglarlo persona por persona desde `/admin/grupos-acceso`.
+   * arreglarlo persona por persona desde `/admin/access-groups`.
    */
   async startBatch(
     tenantId: string,

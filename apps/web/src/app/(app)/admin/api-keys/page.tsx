@@ -9,7 +9,7 @@
  * Admin · Claves API.
  *
  * Dos pestañas: las claves en sí y la documentación EN VIVO para integradores
- * (antes `/admin/integraciones/api`, una página huérfana del menú a la que solo
+ * (antes `/admin/integrations/api`, una página huérfana del menú a la que solo
  * se llegaba por un enlace enterrado en esta misma cabecera).
  */
 

@@ -10,7 +10,7 @@
  *
  * Dos pestañas:
  *   - "Actividad": el pulso del aula (usuarios, cursos, matrículas, certificados).
- *   - "Negocio":   los KPIs del lunes, antes en `/admin/metricas` (que ahora
+ *   - "Negocio":   los KPIs del lunes, antes en `/admin/metrics` (que ahora
  *     redirige aquí). Eran dos dashboards compitiendo, cada uno con su entrada
  *     de menú y ninguna pista de cuál abrir.
  *
@@ -45,7 +45,7 @@ export default function AdminDashboardPage() {
     ? (requested as TabKey)
     : 'actividad';
 
-  // La pestaña vive en la URL para que `/admin/metricas` pueda redirigir a
+  // La pestaña vive en la URL para que `/admin/metrics` pueda redirigir a
   // `/admin?tab=negocio` y el enlace sea compartible.
   function selectTab(next: string): void {
     router.replace(next === 'actividad' ? '/admin' : `/admin?tab=${next}`);
@@ -159,7 +159,7 @@ function ActivityTab(): ReactNode {
             hint={t('dashboard.statActiveUsersHint')}
             icon="users"
             tone="info"
-            href="/admin/usuarios"
+            href="/admin/users"
           />
           <StatCard
             label={t('dashboard.statCourses')}
@@ -167,7 +167,7 @@ function ActivityTab(): ReactNode {
             hint={t('dashboard.statCoursesHint')}
             icon="book"
             tone="info"
-            href="/formador/cursos"
+            href="/studio/courses"
           />
           <StatCard
             label={t('dashboard.statEnrollments')}
@@ -209,7 +209,7 @@ function rangeLabel(r: StatsRange, t: TranslatorLike): string {
 }
 
 /**
- * Tarjeta con la URL pública de onboarding de miembros (`/inscripcion-miembros`).
+ * Tarjeta con la URL pública de onboarding de miembros (`/member-registration`).
  * La URL se arma con el origin actual → funciona en cualquier dominio del tenant
  * sin hardcodear. El admin la comparte con los miembros actuales para que se
  * den de alta (gate Telegram + aprobación manual).
@@ -219,7 +219,7 @@ function MemberOnboardingCard(): ReactNode {
   const [url, setUrl] = useState('');
   const [copied, setCopied] = useState(false);
   useEffect(() => {
-    setUrl(window.location.origin + '/inscripcion-miembros');
+    setUrl(window.location.origin + '/member-registration');
   }, []);
   const copy = (): void => {
     if (!url || !navigator.clipboard) return;

@@ -168,7 +168,8 @@ export class McpController {
           instructions: [
             `You are connected to the online academy "${name ?? 'Didacta'}".`,
             'You can create and edit courses and lessons, schedule live classes and post in the community, on behalf of the academy owner.',
-            'Everything you create stays as a draft: the owner publishes it (with its price) from "Start here".',
+            'New courses are created as drafts: the owner publishes them (with their price) from "Start here".',
+            'Live classes, community posts and lessons added to a course that is already published are visible to members right away: confirm with the owner before creating them.',
             'You cannot publish, set prices, delete anything, invite people or email the members.',
             'Write the content in the language the owner uses with you.',
           ].join(' '),

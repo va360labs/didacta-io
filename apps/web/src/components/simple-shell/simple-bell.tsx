@@ -160,7 +160,7 @@ export function SimpleBell() {
             ) : (
               visible.slice(0, 30).map((n) => {
                 const link = notificationLink(n.templateKey, n.metadata, tLib);
-                const href = link?.href ?? '/notificaciones';
+                const href = link?.href ?? '/notifications';
                 return (
                   <li key={n.id}>
                     <button
@@ -210,7 +210,7 @@ export function SimpleBell() {
           </ul>
           <div className="border-t border-border px-4 py-3 text-center">
             <Link
-              href="/notificaciones"
+              href="/notifications"
               onClick={close}
               className="text-sm font-bold text-brand-600 hover:underline"
             >

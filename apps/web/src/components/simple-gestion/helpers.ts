@@ -4,6 +4,7 @@
  */
 
 import { wallTimeToIso } from '@/modules/zoom-live/wall-time';
+import { queryParam } from '@/lib/legacy-routes';
 
 /**
  * Lógica pura del bloque «Gestión» del modo sencillo (directos, alumnos,
@@ -61,8 +62,8 @@ export function onlyStudents<T extends { roles: string[] }>(users: readonly T[])
   return users.filter((u) => !u.roles.some((r) => STAFF.has(r)));
 }
 
-/** La vista completa de Ajustes se fuerza con `?completo=1` o con un `?tab=` (enlace a una sección avanzada). */
+/** La vista completa de Ajustes se fuerza con `?full=1` (o `?completo=1`, el de antes) o con un `?tab=` (enlace a una sección avanzada). */
 export function wantsFullSettings(params: { get(name: string): string | null } | null): boolean {
   if (!params) return false;
-  return params.get('completo') === '1' || Boolean(params.get('tab')?.trim());
+  return queryParam(params, 'full') === '1' || Boolean(params.get('tab')?.trim());
 }

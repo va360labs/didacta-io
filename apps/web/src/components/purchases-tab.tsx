@@ -6,7 +6,7 @@
  */
 
 /**
- * Pestaña «Compras» de /cuenta: lo que el alumno compró en la tienda del centro.
+ * Pestaña «Compras» de /account: lo que el alumno compró en la tienda del centro.
  *
  * ── Por qué esto vive aquí y no en la web de quien vende ────────────────────
  * Cuando el centro monta su propia tienda, el alumno acaba con las clases en un
@@ -65,7 +65,7 @@ const ESTADO_CLAVE = {
 /**
  * Carga mis compras.
  *
- * Se expone como hook para que /cuenta pueda decidir **si enseña la pestaña**
+ * Se expone como hook para que /account pueda decidir **si enseña la pestaña**
  * antes de que nadie la pulse: una pestaña vacía en toda instalación que no
  * venda desde fuera es ruido permanente en el perfil de todo el mundo.
  */
@@ -86,7 +86,7 @@ export function useMyPurchases() {
       setError(null);
     } catch (e) {
       // Un fallo aquí NO puede tumbar el perfil: las compras son una sección
-      // más de /cuenta, y quien viene a cambiar su contraseña tiene derecho a
+      // más de /account, y quien viene a cambiar su contraseña tiene derecho a
       // hacerlo aunque esta lista no cargue.
       setError(e instanceof ApiHttpError ? e.message : 'error');
     } finally {

@@ -15,7 +15,7 @@
  *     auditoría pueda filtrarlos.
  *   - Cero FKs cross-module: este service NO toca tabla de roles ni asigna
  *     ningún rol al user creado. Los roles los asigna el admin del tenant
- *     manualmente en /admin/usuarios después.
+ *     manualmente en /admin/users después.
  *
  * Lo que NO hace este piloto:
  *   - No envía email de invite (los IdPs gestionan el alta de credenciales en
@@ -264,7 +264,7 @@ export class ScimService {
     // Map active → status. Si el user ya estaba SUSPENDED (sanción manual del
     // admin), un PATCH active=true NO lo des-suspende — mejor no pisar acción
     // de admin con un PATCH SCIM. Para reactivarlo, el admin debe pasar por
-    // /admin/usuarios. active=false sí marca DEACTIVATED siempre (los IdPs
+    // /admin/users. active=false sí marca DEACTIVATED siempre (los IdPs
     // necesitan poder cortar acceso desde su lado).
     let nextStatus: typeof user.status | undefined = undefined;
     if (nextActive === true) {

@@ -300,7 +300,7 @@ describe('ResourcesService', () => {
     ).rejects.toBeInstanceOf(ResourcesValidationError);
     // FILE local: SOLO el prefijo del storage — ni rutas de la app ni //host.
     await expect(
-      service.create({ ...resourceInput(collectionId), url: '/admin/usuarios' }),
+      service.create({ ...resourceInput(collectionId), url: '/admin/users' }),
     ).rejects.toBeInstanceOf(ResourcesValidationError);
     await expect(
       service.create({ ...resourceInput(collectionId), url: '//evil.example/x.json' }),

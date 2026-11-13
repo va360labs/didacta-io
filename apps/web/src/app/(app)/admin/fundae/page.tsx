@@ -106,13 +106,13 @@ export default function FundaePage() {
         </div>
         <div className="flex items-center gap-2">
           <Button asChild type="button" variant="secondary">
-            <Link href="/admin/fundae/grupos">
+            <Link href="/admin/fundae/groups">
               <Icon name="users" size={14} />
               {t('actions.groupsLink')}
             </Link>
           </Button>
           <Button asChild type="button" variant="secondary">
-            <Link href="/admin/fundae/empresas">
+            <Link href="/admin/fundae/companies">
               <Icon name="building" size={14} />
               {t('actions.companiesLink')}
             </Link>

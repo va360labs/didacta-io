@@ -11,7 +11,7 @@ import type { MessageView } from './client';
 import { dayLabel, timeLabel } from './shared';
 
 /**
- * Timeline de burbujas de una conversación, compartido por `/mensajes` y por el
+ * Timeline de burbujas de una conversación, compartido por `/messages` y por el
  * hilo del chat flotante.
  */
 export function MessageTimeline({

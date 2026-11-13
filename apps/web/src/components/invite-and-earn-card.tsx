@@ -92,7 +92,7 @@ export function InviteAndEarnCard({
           </div>
         </div>
         <Link
-          href="/referidos"
+          href="/referrals"
           className="mt-3 inline-flex h-9 items-center rounded-lg bg-brand-600 px-3 text-sm font-semibold text-white hover:bg-brand-700"
         >
           {t('referidos.activarEnlace')}
@@ -173,7 +173,7 @@ export function InviteAndEarnCard({
         </details>
       ) : null}
       <Link
-        href="/referidos"
+        href="/referrals"
         className="mt-3 inline-block text-sm font-semibold text-brand-600 hover:underline"
       >
         {t('referidos.verGanado')}

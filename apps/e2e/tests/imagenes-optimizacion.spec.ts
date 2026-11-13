@@ -87,7 +87,7 @@ test.describe('Imágenes · optimización en toda la plataforma', () => {
     expect(body.contentType).toBe('image/svg+xml');
   });
 
-  test('el inventario de /admin/imagenes responde con totales coherentes', async () => {
+  test('el inventario de /admin/images responde con totales coherentes', async () => {
     const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'demo';
     const bearer = await adminTokenForBootstrap(tenantSlug);
 
@@ -120,7 +120,7 @@ test.describe('Imágenes · optimización en toda la plataforma', () => {
     expect([401, 403]).toContain(res.status);
   });
 
-  test('/admin/imagenes pinta el inventario y sustituye a la vieja de cursos', async ({ page }) => {
+  test('/admin/images pinta el inventario y sustituye a la vieja de cursos', async ({ page }) => {
     const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'demo';
     const bearer = await adminTokenForBootstrap(tenantSlug);
 
@@ -152,7 +152,7 @@ test.describe('Imágenes · optimización en toda la plataforma', () => {
       },
     });
 
-    await page.goto('/admin/imagenes');
+    await page.goto('/admin/images');
     await expect(page.getByRole('heading', { name: 'Imágenes', exact: true })).toBeVisible({
       timeout: 15_000,
     });
@@ -163,7 +163,7 @@ test.describe('Imágenes · optimización en toda la plataforma', () => {
 
     // La ruta vieja de "Imágenes de cursos" ya no es un segundo camino al mismo
     // sitio: redirige aquí (regla de no duplicar secciones).
-    await page.goto('/admin/cursos/imagenes');
-    await expect(page).toHaveURL(/\/admin\/imagenes$/, { timeout: 15_000 });
+    await page.goto('/admin/courses/images');
+    await expect(page).toHaveURL(/\/admin\/images$/, { timeout: 15_000 });
   });
 });

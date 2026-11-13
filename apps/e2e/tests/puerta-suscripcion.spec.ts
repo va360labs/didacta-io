@@ -173,7 +173,7 @@ test.describe('Puerta de suscripción del aula', () => {
     expect((await get('/api/v1/modules/courses', alumno.accessToken)).status).toBe(200);
 
     const adminPage = await pageAs(browser, admin);
-    await adminPage.goto('/inicio');
+    await adminPage.goto('/home');
     const banner = adminPage.getByTestId('subscription-trial-banner');
     await expect(banner).toBeVisible();
     await expect(banner).toContainText('Prueba gratis');
@@ -186,7 +186,7 @@ test.describe('Puerta de suscripción del aula', () => {
 
     const alumnoPage = await pageAs(browser, alumno);
     // El shell está pintado (cabecera con la campana) y aun así no hay franja.
-    await gotoShell(alumnoPage, '/inicio');
+    await gotoShell(alumnoPage, '/home');
     await expect(alumnoPage.getByTestId('subscription-trial-banner')).toHaveCount(0);
     await expect(alumnoPage.getByTestId('subscription-lock')).toHaveCount(0);
     await alumnoPage.context().close();
@@ -239,7 +239,7 @@ test.describe('Puerta de suscripción del aula', () => {
     await setGate({ state: 'LOCKED', actionUrl: ACTION_URL });
 
     const adminPage = await pageAs(browser, admin);
-    await adminPage.goto('/inicio');
+    await adminPage.goto('/home');
     const lockAdmin = adminPage.getByTestId('subscription-lock');
     await expect(lockAdmin).toHaveAttribute('data-variant', 'admin');
     await expect(
@@ -255,7 +255,7 @@ test.describe('Puerta de suscripción del aula', () => {
     await adminPage.context().close();
 
     const alumnoPage = await pageAs(browser, alumno);
-    await alumnoPage.goto('/cursos');
+    await alumnoPage.goto('/courses');
     const lockAlumno = alumnoPage.getByTestId('subscription-lock');
     await expect(lockAlumno).toHaveAttribute('data-variant', 'other');
     await expect(
@@ -280,7 +280,7 @@ test.describe('Puerta de suscripción del aula', () => {
     // Sin sesión, una página pública del aula también enseña la pausa.
     const anon = await browser.newContext({ locale: 'es-ES' });
     const anonPage = await anon.newPage();
-    await anonPage.goto('/catalogo');
+    await anonPage.goto('/catalog');
     await expect(anonPage.getByTestId('subscription-lock')).toHaveAttribute(
       'data-variant',
       'other',
@@ -308,7 +308,7 @@ test.describe('Puerta de suscripción del aula', () => {
     expect((await get('/api/v1/modules/courses', alumno.accessToken)).status).toBe(200);
 
     const adminPage = await pageAs(browser, admin);
-    await gotoShell(adminPage, '/inicio');
+    await gotoShell(adminPage, '/home');
     await expect(adminPage.getByTestId('subscription-trial-banner')).toHaveCount(0);
     await expect(adminPage.getByTestId('subscription-lock')).toHaveCount(0);
     await adminPage.context().close();

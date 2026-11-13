@@ -418,10 +418,10 @@ export class ModuleRegistryService implements OnModuleInit {
 
     const successUrlBase =
       process.env['BILLING_SUCCESS_URL_BASE'] ??
-      `${process.env['AUTH_URL'] ?? 'http://localhost:3000'}/cursos`;
+      `${process.env['AUTH_URL'] ?? 'http://localhost:3000'}/courses`;
     const cancelUrlBase =
       process.env['BILLING_CANCEL_URL_BASE'] ??
-      `${process.env['AUTH_URL'] ?? 'http://localhost:3000'}/cursos`;
+      `${process.env['AUTH_URL'] ?? 'http://localhost:3000'}/courses`;
     const urls: CheckoutUrlBuilder = {
       successUrl: (courseId) => `${successUrlBase}/${courseId}?paid=1`,
       cancelUrl: (courseId) => `${cancelUrlBase}/${courseId}?cancelled=1`,
@@ -481,10 +481,10 @@ export class ModuleRegistryService implements OnModuleInit {
 
     const subsSuccessBase =
       process.env['SUBSCRIPTIONS_SUCCESS_URL_BASE'] ??
-      `${process.env['AUTH_URL'] ?? 'http://localhost:3000'}/cuenta/suscripciones`;
+      `${process.env['AUTH_URL'] ?? 'http://localhost:3000'}/account/subscriptions`;
     const subsCancelBase =
       process.env['SUBSCRIPTIONS_CANCEL_URL_BASE'] ??
-      `${process.env['AUTH_URL'] ?? 'http://localhost:3000'}/cuenta/suscripciones`;
+      `${process.env['AUTH_URL'] ?? 'http://localhost:3000'}/account/subscriptions`;
     const subsUrls: SubsCheckoutUrlBuilder = {
       successUrl: (courseId) => `${subsSuccessBase}?course=${courseId}&status=success`,
       cancelUrl: (courseId) => `${subsCancelBase}?course=${courseId}&status=cancel`,
@@ -522,7 +522,7 @@ export class ModuleRegistryService implements OnModuleInit {
     );
     const subscriptionsModule = buildSubscriptionsModule(this.subscriptions);
 
-    // Membresía (página pública /unete): config y planes funcionan SIN Stripe
+    // Membresía (página pública /join): config y planes funcionan SIN Stripe
     // (el admin puede dejarlo todo listo antes de configurar la key); el
     // checkout lanza StripeConfigMissingError → 503 si falta.
     this.membership = new MembershipService(prisma, subscriptionsStripeFor, subsPublisher);
@@ -1153,7 +1153,7 @@ export class ModuleRegistryService implements OnModuleInit {
     return this.subscriptions ?? null;
   }
 
-  /** Membresía (página pública /unete). SIEMPRE inicializado tras el boot. */
+  /** Membresía (página pública /join). SIEMPRE inicializado tras el boot. */
   getMembershipService(): MembershipService {
     if (!this.membership) {
       throw new Error('MembershipService no está inicializado (boot incompleto).');

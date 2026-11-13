@@ -161,7 +161,7 @@ describe('envío', () => {
       ['creadora@aula.test', expect.stringMatching(/^Te descontaremos 1,75\s€/)],
       ['socio@aula.test', "We'll take €1.75 from your next payouts"],
     ]);
-    expect(sent[0]!.text).toContain('https://ana.test/admin/cobros');
+    expect(sent[0]!.text).toContain('https://ana.test/admin/payments');
   });
 
   it('al operador: solo con correo configurado y por el SMTP global', async () => {

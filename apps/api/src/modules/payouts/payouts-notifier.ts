@@ -307,7 +307,7 @@ export class PayoutsEmailNotifier implements PayoutsNotifier {
           bodyHtml: textToHtmlParagraphs(t.body),
           bodyText: t.body,
           ...(base
-            ? { cta: { label: t.cta, url: `${base.replace(/\/+$/, '')}/admin/cobros` } }
+            ? { cta: { label: t.cta, url: `${base.replace(/\/+$/, '')}/admin/payments` } }
             : {}),
         });
         const result = await smtp.send(

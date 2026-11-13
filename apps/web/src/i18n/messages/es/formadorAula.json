@@ -91,7 +91,7 @@
     "acceptedAnswersLabel": "Respuestas aceptadas (una por línea)",
     "acceptedAnswersPlaceholder": "París\nParis\nFRANCIA, capital",
     "acceptedAnswersHint": "La comparación es insensible a mayúsculas, acentos y espaciado: \"Paris\" coincidirá con \"PARÍS\".",
-    "openTypeWarning": "Este tipo no se auto-corrige. Cuando un alumno envíe el quiz, el intento quedará en <strong>PENDING_REVIEW</strong> hasta que lo corrijas manualmente desde el panel de pendientes (<code>/formador/correcciones</code>).",
+    "openTypeWarning": "Este tipo no se auto-corrige. Cuando un alumno envíe el quiz, el intento quedará en <strong>PENDING_REVIEW</strong> hasta que lo corrijas manualmente desde el panel de pendientes (<code>/studio/grading</code>).",
     "optionsTitle": "Opciones (marca las correctas)",
     "markOptionCorrect": "Marcar opción {number} como correcta",
     "optionPlaceholder": "Opción {number}",

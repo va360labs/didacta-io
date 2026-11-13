@@ -45,7 +45,7 @@ test.describe('Navegación móvil — drawer + bottom nav', () => {
   test('móvil: rail oculto, hamburguesa + bottom-nav; el drawer abre, navega y cierra', async ({
     page,
   }) => {
-    await withSession(page, '/comunidad', MOBILE);
+    await withSession(page, '/community', MOBILE);
 
     const hamburger = page.getByRole('button', { name: 'Abrir menú de navegación' });
     const tabBar = page.getByRole('navigation', { name: 'Navegación principal' });
@@ -78,13 +78,13 @@ test.describe('Navegación móvil — drawer + bottom nav', () => {
     await tabBar.getByRole('button', { name: 'Menú' }).click();
     await expect(drawer).toBeVisible();
     await drawer.getByRole('link', { name: 'Cursos', exact: true }).click();
-    await expect(page).toHaveURL(/\/cursos/);
+    await expect(page).toHaveURL(/\/courses/);
     // Al navegar el drawer se cierra solo.
     await expect(drawer).toBeHidden();
   });
 
   test('escritorio: rail visible, sin hamburguesa ni bottom-nav', async ({ page }) => {
-    await withSession(page, '/comunidad', DESKTOP);
+    await withSession(page, '/community', DESKTOP);
 
     // Rail persistente presente (sus enlaces existen; el drawer queda display:none).
     await expect(page.getByRole('link', { name: 'Feed de la comunidad' })).toBeVisible();

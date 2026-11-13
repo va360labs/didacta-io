@@ -40,7 +40,7 @@ export function SimpleCoursesList() {
         </div>
         {courses && courses.length > 0 ? (
           <Link
-            href="/formador/cursos/nuevo"
+            href="/studio/courses/new"
             className="inline-flex h-11 items-center gap-2 rounded-xl bg-brand-600 px-5 font-semibold text-white hover:bg-brand-700"
           >
             <Icon name="plus" size={17} />
@@ -68,7 +68,7 @@ export function SimpleCoursesList() {
           <h2 className="mt-4 text-lg font-bold text-text">{t('vacioTitulo')}</h2>
           <p className="mx-auto mt-2 max-w-[54ch] text-text-muted">{t('vacioTexto')}</p>
           <Link
-            href="/formador/cursos/nuevo"
+            href="/studio/courses/new"
             className="mt-5 inline-flex h-11 items-center gap-2 rounded-xl bg-brand-600 px-5 font-semibold text-white hover:bg-brand-700"
           >
             <Icon name="plus" size={17} />
@@ -82,7 +82,7 @@ export function SimpleCoursesList() {
             return (
               <li key={c.id}>
                 <Link
-                  href={`/formador/cursos/${c.id}`}
+                  href={`/studio/courses/${c.id}`}
                   className="flex h-full flex-col overflow-hidden rounded-2xl border border-border bg-surface hover:border-border-strong"
                 >
                   {c.thumbnailUrl ? (

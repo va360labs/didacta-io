@@ -66,14 +66,14 @@ async function creadoraConCurso(page: Page, tenant: FreshTenant): Promise<void> 
   await expect(page.getByRole('heading', { name: 'Tus notificaciones' })).toBeVisible();
   await page.getByRole('button', { name: 'Continuar' }).click();
   await page.getByRole('button', { name: 'Seguir con mi academia' }).click();
-  await page.waitForURL(/\/bienvenida/, { timeout: 30_000 });
+  await page.waitForURL(/\/welcome/, { timeout: 30_000 });
   await page.getByLabel('Nombre de la academia').fill('Morning Pour');
   await page.getByRole('button', { name: 'Siguiente' }).click();
   await page.getByLabel('¿Cómo se llama el curso?').fill('Espresso at Home');
   await page.getByRole('button', { name: 'Siguiente' }).click();
   await page.getByLabel('Precio').fill('49');
   await page.getByRole('button', { name: 'Crear mi academia' }).click();
-  await page.waitForURL(/\/empieza/, { timeout: 30_000 });
+  await page.waitForURL(/\/start/, { timeout: 30_000 });
 }
 
 async function tokenDe(tenant: FreshTenant, email: string): Promise<string> {
@@ -182,7 +182,7 @@ test('modo sencillo: subir el vídeo de una lección y que la alumna lo vea', as
     .first()
     .getByRole('link', { name: /Empieza aquí/ })
     .click();
-  await page.waitForURL(/\/empieza/);
+  await page.waitForURL(/\/start/);
   await page.getByTestId('publicar').click();
   await expect(page.getByTestId('copiar-enlace')).toBeEnabled({ timeout: 20_000 });
 
@@ -226,7 +226,7 @@ test('modo sencillo: subir el vídeo de una lección y que la alumna lo vea', as
   await apage.locator('input[autocomplete="current-password"]').fill(tenant.password);
   await apage.locator('button[type="submit"]').click();
   await apage.waitForURL((u) => !u.pathname.startsWith('/signin'), { timeout: 30_000 });
-  await apage.goto(`${tenant.base}/cursos/${tras.course.slug}`);
+  await apage.goto(`${tenant.base}/courses/${tras.course.slug}`);
   const iframe = apage.locator(`iframe[src*="/embed/"][src*="${guid}"]`);
   await expect(iframe).toBeAttached({ timeout: 30_000 });
   // Firmada: la biblioteca de Cloud no se sirve sin token.

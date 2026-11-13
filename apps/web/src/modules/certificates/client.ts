@@ -134,7 +134,7 @@ export const certificatesApi = {
 
   /**
    * Verificación PÚBLICA de un certificado por su id (sin sesión). Devuelve solo
-   * datos no sensibles. La usa la página pública `/verificar/[id]`.
+   * datos no sensibles. La usa la página pública `/verify/[id]`.
    */
   async verifyPublic(id: string): Promise<PublicCertificateView> {
     return apiFetch<PublicCertificateView>(

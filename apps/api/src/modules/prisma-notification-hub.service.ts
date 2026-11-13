@@ -41,7 +41,7 @@ export interface TenantWebBaseResolver {
  *
  * Estado de los adapters:
  * - **IN_APP**: implementado. La notificación se persiste y queda visible
- *   en `/notificaciones` para el alumno hasta que la marca como leída.
+ *   en `/notifications` para el alumno hasta que la marca como leída.
  * - **EMAIL**: implementado **per-tenant** desde PR #A2. Lee la config SMTP
  *   cifrada de `tenant_setting` (módulo `notifications`, key `smtp`) vía
  *   `TenantConfigService` y envía con `nodemailer`. Si el tenant no
@@ -273,7 +273,7 @@ export class PrismaNotificationHubService implements NotificationHubService {
         await this.markFailed(args.notificationId, 'smtp_not_configured');
         this.logger.log(
           { notificationId: args.notificationId, tenantId: args.tenantId },
-          'EMAIL skip: el tenant no configuró SMTP en /admin/configuracion',
+          'EMAIL skip: el tenant no configuró SMTP en /admin/settings',
         );
         return;
       }

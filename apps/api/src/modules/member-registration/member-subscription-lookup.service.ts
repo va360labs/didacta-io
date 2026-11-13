@@ -24,7 +24,7 @@ export type MemberLookupResult = MemberSubscriptionLookupResult & {
 /**
  * Lookup automático de la suscripción de un miembro al registrarse.
  *
- * Cuando alguien se inscribe en `/inscripcion-miembros`, se lanza el lookup SIN
+ * Cuando alguien se inscribe en `/member-registration`, se lanza el lookup SIN
  * bloquear la respuesta al usuario: persiste una fila PENDING y, en segundo
  * plano (fire-and-forget), busca la suscripción del email en TODAS las cuentas
  * de pago conectadas (Stripe/PayPal/WooCommerce) vía mod.payment-connections,

@@ -390,7 +390,7 @@ export class MemberRegistrationPublicController {
     if (preview.outcome !== 'confirm') {
       void res
         .status(302)
-        .redirect(`${web}/inscripcion-miembros/decision?outcome=${preview.outcome}`);
+        .redirect(`${web}/member-registration/decision?outcome=${preview.outcome}`);
       return;
     }
     const q = new URLSearchParams({
@@ -398,7 +398,7 @@ export class MemberRegistrationPublicController {
       action: preview.action ?? '',
       member: preview.memberName ?? '',
     });
-    void res.status(302).redirect(`${web}/inscripcion-miembros/decision?${q.toString()}`);
+    void res.status(302).redirect(`${web}/member-registration/decision?${q.toString()}`);
   }
 
   /**

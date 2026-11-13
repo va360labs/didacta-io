@@ -13,7 +13,7 @@ import { injectSession } from '../helpers/auth';
  * 1. Admin crea curso con lección QUIZ vinculada a quiz SHORT_ANSWER (5 pts).
  * 2. Alumno se matricula y responde el quiz con texto libre.
  * 3. El attempt queda en PENDING_REVIEW (UI lo refleja).
- * 4. Admin abre /formador/correcciones → ve el pendiente → entra al detalle.
+ * 4. Admin abre /studio/grading → ve el pendiente → entra al detalle.
  * 5. Admin asigna 5 pts (= max) y envía calificación.
  * 6. Alumno refresca → ve la lección completada (gracias al bridge a mod.learning).
  *
@@ -52,7 +52,7 @@ test.describe('mod.assessments — corrección manual end-to-end', () => {
       // ficha del curso (mismo idiom que golden-path.spec.ts).
       user: { ...alumno.user, onboardingCompletedAt: new Date().toISOString() },
     });
-    await page.goto(`/cursos/${course.slug}`);
+    await page.goto(`/courses/${course.slug}`);
     // Matrícula por código de invitación: el botón "Matricularme" de
     // matrícula libre fue eliminado globalmente (ver inscribe-by-api.spec.ts).
     await page.getByLabel(/código de invitación/i).fill(invitation.code);
@@ -90,11 +90,11 @@ test.describe('mod.assessments — corrección manual end-to-end', () => {
         roles: ['super_admin', 'tenant_admin'],
         mfaEnabled: true,
         // Sin esto el gate de onboarding secuestra la navegación a
-        // /formador/correcciones (mismo idiom que la sesión del alumno).
+        // /studio/grading (mismo idiom que la sesión del alumno).
         onboardingCompletedAt: new Date().toISOString(),
       },
     });
-    await adminPage.goto('/formador/correcciones');
+    await adminPage.goto('/studio/grading');
     await expect(adminPage.getByRole('heading', { name: 'Correcciones pendientes' })).toBeVisible({
       timeout: 15_000,
     });
@@ -113,7 +113,7 @@ test.describe('mod.assessments — corrección manual end-to-end', () => {
     await adminPage.getByRole('button', { name: 'Enviar calificación' }).click();
 
     // Vuelve al panel de pendientes vacío
-    await expect(adminPage).toHaveURL(/\/formador\/correcciones$/, { timeout: 15_000 });
+    await expect(adminPage).toHaveURL(/\/studio\/grading$/, { timeout: 15_000 });
 
     // 5) Alumno refresca → lección completada
     await page.reload();

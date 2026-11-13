@@ -11,7 +11,7 @@ import {
  * Spec del listado de alumnos por curso (HU-FORM-002).
  *
  * Bootstrap: admin crea curso, alumno se matricula y completa la lección.
- * Verifica que el endpoint /formador/cursos/:id/alumnos lo devuelve con
+ * Verifica que el endpoint /studio/courses/:id/students lo devuelve con
  * el progreso correcto.
  */
 

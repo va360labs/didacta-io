@@ -164,7 +164,7 @@ const obj = (
 });
 
 const DRAFT_NOTE =
-  'Everything you create stays as a DRAFT: the academy owner reviews it and publishes it (with its price) from "Start here". You cannot publish, set prices, delete anything or invite people.';
+  'New courses are created as a DRAFT: the academy owner reviews them and publishes them (with their price) from "Start here". You cannot publish courses, set prices, delete anything or invite people.';
 
 export const AGENT_TOOLS: readonly AgentTool[] = [
   {

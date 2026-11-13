@@ -56,10 +56,10 @@ import { SupportAccessService } from './support-access.service';
     AdminTenantsController,
     AdminModulesController,
     AdminStatsController,
-    // Bloque 7 — KPIs de negocio (/admin/metricas): NPS, ventas, impagos,
+    // Bloque 7 — KPIs de negocio (/admin/metrics): NPS, ventas, impagos,
     // altas/bajas, conexiones y uso del tutor IA, todo de la BD local.
     AdminBusinessMetricsController,
-    // Reoptimización del histórico de imágenes (/admin/imagenes). Lo que se
+    // Reoptimización del histórico de imágenes (/admin/images). Lo que se
     // sube nuevo ya nace optimizado en la capa de storage.
     AdminImagesController,
     // Gestión de API keys del tenant (Administración → Claves API). Reusa

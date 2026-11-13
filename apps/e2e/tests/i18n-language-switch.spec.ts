@@ -126,7 +126,7 @@ const SIDEBAR_GROUPS = ['Inicio', 'Aprendizaje', 'Agenda', 'Personas'] as const;
 /** Items del sidebar de un alumno que no dependen de módulos opcionales. */
 const SIDEBAR_ITEMS = ['Feed de la comunidad', 'Mi panel', 'Cursos', 'Calendario'] as const;
 
-/** Cabecera de la página de inicio (`/comunidad` → `CommunityFeed`). */
+/** Cabecera de la página de inicio (`/community` → `CommunityFeed`). */
 const HOME_TITLE = (c: CatalogName) => msg(c, 'comunidadComponentes', 'feedTitle');
 const HOME_SUBTITLE = (c: CatalogName) => msg(c, 'comunidadComponentes', 'feedSubtitle');
 const HOME_NEW_POST = (c: CatalogName) => msg(c, 'comunidadComponentes', 'newConversation');
@@ -141,7 +141,7 @@ const SIDEBAR_SEARCH = (c: CatalogName) => msg(c, 'shell', 'sidebar', 'search');
 
 /**
  * Endpoint real de cambio de idioma: el MISMO que usa el formulario de
- * `/cuenta` (`meApi.updateProfile`, apps/web/src/app/(app)/cuenta/page.tsx:198).
+ * `/account` (`meApi.updateProfile`, apps/web/src/app/(app)/account/page.tsx:198).
  * Acepta `es-ES | es-AR | en-US | pt-BR` (`ALLOWED_LOCALES`,
  * apps/api/src/auth/me.controller.ts:38) — o sea que es MÁS permisivo que el
  * catálogo, que sólo tiene `es` y `en`.
@@ -247,7 +247,7 @@ async function assertShellInCatalog(page: Page, catalog: CatalogName): Promise<v
     `buscador del sidebar en ${catalog}`,
   ).toBeVisible();
 
-  // — Página de inicio: `/comunidad` es donde aterriza la sesión (`/inicio`
+  // — Página de inicio: `/community` es donde aterriza la sesión (`/home`
   //   redirige ahí). El h1 se scopea por rol para no chocar con el subtítulo
   //   "Comunidad"/"Community" de la cabecera del sidebar.
   const title = pair(HOME_TITLE);
@@ -296,7 +296,7 @@ async function openHome(
     refreshToken: session.tokens.refreshToken,
     user: session.user,
   });
-  await page.goto('/comunidad');
+  await page.goto('/community');
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -315,7 +315,7 @@ test.describe('Cambio de idioma (i18n es-ES ↔ en-US)', () => {
     await assertLocale(page, token, 'es-ES');
     await assertShellInCatalog(page, 'es');
 
-    // 2. Cambio de idioma por el mismo endpoint que el formulario de /cuenta.
+    // 2. Cambio de idioma por el mismo endpoint que el formulario de /account.
     await setProfileLocale(token, 'en-US');
 
     // 3. Recarga. Ojo: el HTML del servidor todavía sale en español, porque la

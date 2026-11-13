@@ -3,12 +3,12 @@ import { adminTokenForBootstrap, API_URL, signin } from '../helpers/api';
 import { injectSession } from '../helpers/auth';
 
 /**
- * Spec UI del card SMTP en `/admin/configuracion` (tab Notificaciones) +
+ * Spec UI del card SMTP en `/admin/settings` (tab Notificaciones) +
  * contrato del endpoint admin-smtp dedicado (#79 / alpha.75 backend, alpha.76
  * UI).
  *
  * Cubre:
- *  - El admin entra a /admin/configuracion → la tab "Notificaciones" carga
+ *  - El admin entra a /admin/settings → la tab "Notificaciones" carga
  *    el card con el banner de estado.
  *  - Guardar credenciales falsas (smtp.example.test) → banner pasa a
  *    "configurado pero sin verificar" (verifiedAt sigue null porque el
@@ -69,9 +69,9 @@ test.describe('Admin SMTP settings — UI + contrato admin-smtp', () => {
       },
     });
 
-    // Navegamos a /admin/configuracion. Para super_admin el tab inicial es
+    // Navegamos a /admin/settings. Para super_admin el tab inicial es
     // "General", así que clicamos el tab "Notificaciones" explícitamente.
-    await page.goto('/admin/configuracion');
+    await page.goto('/admin/settings');
     await expect(page.getByRole('heading', { name: 'Configuración del tenant' })).toBeVisible({
       timeout: 15_000,
     });

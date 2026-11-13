@@ -8,9 +8,9 @@
 /**
  * Tarjeta «Primeros pasos» del panel (lote de feedback de onboarding).
  *
- * Vive encima del feed de comunidad — el aterrizaje real de `/inicio` — y
+ * Vive encima del feed de comunidad — el aterrizaje real de `/home` — y
  * solo para admins con el asistente de bienvenida COMPLETADO: mientras no lo
- * esté, el gate del shell ya manda a `/bienvenida` y esta tarjeta sobraría.
+ * esté, el gate del shell ya manda a `/welcome` y esta tarjeta sobraría.
  *
  * Cada ítem se deriva de datos reales (ver `lib/getting-started.ts`) y las
  * fuentes se leen en paralelo y best-effort: una API caída omite su ítem, no

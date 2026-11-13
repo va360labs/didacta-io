@@ -14,7 +14,7 @@ import { injectSession } from '../helpers/auth';
  *   4. UI admin: el panel de drip del editor de curso muestra el calendario
  *      (captura screenshot).
  *   5. vínculo tier→grupo: PATCH linkedTierName persiste y el grupo aparece con el
- *      badge del tier en /admin/grupos-acceso (captura screenshot).
+ *      badge del tier en /admin/access-groups (captura screenshot).
  *
  * Self-contained: usa signin plano (sin tocar el MFA del admin seed). Las
  * capturas quedan en apps/e2e/drip-evidence/*.png como evidencia revisable.
@@ -342,7 +342,7 @@ test('4) UI alumno: la lección bloqueada muestra candado + card "no disponible"
     accessToken: studentToken,
     user: { ...studentUser, onboardingCompletedAt: studentOnboardedAt },
   });
-  await page.goto(`/cursos/${courseSlug}`);
+  await page.goto(`/courses/${courseSlug}`);
 
   // El candado "🔒" con la pista de días aparece en la lista de lecciones.
   await expect(page.getByText(/🔒/).first()).toBeVisible({ timeout: 45000 });
@@ -357,7 +357,7 @@ test('4) UI alumno: la lección bloqueada muestra candado + card "no disponible"
 test('5) UI admin: el panel de drip del editor muestra el calendario', async ({ page }) => {
   await page.goto('/signin');
   await injectSession(page, { accessToken: adminToken, user: adminUser });
-  await page.goto(`/formador/cursos/${courseId}`);
+  await page.goto(`/studio/courses/${courseId}`);
 
   await expect(page.getByText('Liberación programada (drip)')).toBeVisible({ timeout: 20000 });
   // Anclamos al tier REAL creado en setup (no a un regex genérico que un
@@ -384,10 +384,10 @@ test('6) vínculo tier→grupo: PATCH linkedTierName persiste + badge en UI', as
   );
   expect(patched.body.linkedTierName, 'linkedTierName persiste').toBe(`Evidencia ${stamp}`);
 
-  // UI: el grupo aparece con el badge "Tier: ..." en /admin/grupos-acceso.
+  // UI: el grupo aparece con el badge "Tier: ..." en /admin/access-groups.
   await page.goto('/signin');
   await injectSession(page, { accessToken: adminToken, user: adminUser });
-  await page.goto('/admin/grupos-acceso');
+  await page.goto('/admin/access-groups');
   await expect(page.getByText(new RegExp(`Tier:\\s*Evidencia ${stamp}`))).toBeVisible({
     timeout: 20000,
   });

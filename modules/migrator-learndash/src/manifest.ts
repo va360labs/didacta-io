@@ -232,7 +232,7 @@ export const manifest: ModuleManifest = {
   // alpha.60: surface 'admin' bundleada como parte del ZIP firmado del
   // módulo (ADR-015). El host la descubre, la lista en su sidebar dinámico
   // (cuando esté implementado el sidebar runtime-driven; mientras tanto la
-  // page /admin/integraciones/migrator-learndash usa loadModuleUI directo)
+  // page /admin/integrations/migrator-learndash usa loadModuleUI directo)
   // y la renderiza con role-gate previo.
   surfaces: {
     admin: {

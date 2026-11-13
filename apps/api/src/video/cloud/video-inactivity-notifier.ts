@@ -87,7 +87,7 @@ export class VideoInactivityEmailNotifier implements VideoInactivityNotifier {
           title: t.title,
           bodyHtml: textToHtmlParagraphs(t.body),
           bodyText: t.body,
-          ...(base ? { cta: { label: t.cta, url: `${base.replace(/\/+$/, '')}/formador` } } : {}),
+          ...(base ? { cta: { label: t.cta, url: `${base.replace(/\/+$/, '')}/studio` } } : {}),
         });
         const result = await smtp.send(
           resolved.config,

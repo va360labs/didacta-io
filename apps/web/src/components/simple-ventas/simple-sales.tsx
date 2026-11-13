@@ -46,10 +46,10 @@ const TONE: Record<string, string> = {
  * venta con su precio, las últimas ventas y los referidos («Tus alumnos venden
  * por ti»). Todo con datos reales de cobros (`mod.payouts`), del modo sencillo
  * y del programa de referidos; lo técnico sigue en la vista completa
- * (`?completo=1` en la misma ruta).
+ * (`?full=1` en la misma ruta).
  *
- * `platform`: Didacta Cloud cobra por la plataforma (/admin/cobros).
- * `own`: el aula cobra con su propia cuenta (/admin/membresia sin cobros de
+ * `platform`: Didacta Cloud cobra por la plataforma (/admin/payments).
+ * `own`: el aula cobra con su propia cuenta (/admin/membership sin cobros de
  * plataforma): no hay resumen de cobros, solo enlace, precio y referidos.
  */
 export function SimpleSales({
@@ -207,7 +207,7 @@ export function SimpleSales({
                   </a>
                 ) : (
                   <Link
-                    href="/empieza"
+                    href="/start"
                     className="inline-flex h-10 items-center rounded-xl bg-brand-600 px-4 text-sm font-semibold text-white hover:bg-brand-700"
                   >
                     {t('vacio.botonPublicar')}
@@ -327,12 +327,12 @@ function SaleLinkCard({
   const path =
     view.salePath ??
     (offer?.kind === 'membership'
-      ? '/unete'
+      ? '/join'
       : offer?.courseSlug
-        ? `/catalogo/${offer.courseSlug}`
+        ? `/catalog/${offer.courseSlug}`
         : null);
   const url = path ? `${origin}${path}` : '';
-  const asStudent = published ? path : offer?.courseSlug ? `/cursos/${offer.courseSlug}` : null;
+  const asStudent = published ? path : offer?.courseSlug ? `/courses/${offer.courseSlug}` : null;
 
   async function copy() {
     try {
@@ -793,7 +793,7 @@ function ReferralsSection() {
             </>
           )}
           <Link
-            href="/admin/referidos"
+            href="/admin/referrals"
             className="mt-3 inline-block text-sm font-semibold text-brand-600 hover:underline"
           >
             {t('verDetalle')}

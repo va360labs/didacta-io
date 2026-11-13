@@ -2,7 +2,7 @@
  * Copyright (c) VA360 LABS S.L.
  * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
  *
- * Orquesta la licencia desde `/admin/licencia`: precedencia env > BD (§1 de
+ * Orquesta la licencia desde `/admin/license`: precedencia env > BD (§1 de
  * `work/migracion-env-a-panel.md`), validación en vivo antes de persistir, y
  * recarga del `LicenseService` global tras cada cambio — sin esto, guardar
  * desde el panel no surtiría efecto hasta reiniciar el contenedor (el

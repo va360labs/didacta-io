@@ -48,7 +48,7 @@ describe('certificado dentro del curso (modo sencillo)', () => {
       ),
     );
     expect(url.origin).toBe('https://www.linkedin.com');
-    expect(url.searchParams.get('certUrl')).toBe('https://aula.example/verificar/c1');
+    expect(url.searchParams.get('certUrl')).toBe('https://aula.example/verify/c1');
     expect(url.searchParams.get('name')).toBe('Acuarela desde cero');
     expect(url.searchParams.get('organizationName')).toBe('Taller de Acuarela');
     expect(url.searchParams.get('issueYear')).toBe('2026');

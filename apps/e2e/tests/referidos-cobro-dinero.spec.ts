@@ -146,14 +146,14 @@ test('referidos: casilla de mayor de 18, cobro en dinero con datos, pago y justi
     'AlumnaCobra123!',
   );
   await alumna.waitForURL((u) => !u.pathname.startsWith('/signin'), { timeout: 30_000 });
-  await alumna.goto('/referidos');
+  await alumna.goto('/referrals');
   const casilla = alumna.getByTestId('referidos-casilla');
   await expect(casilla).toBeVisible({ timeout: 30_000 });
   await expect(alumna.getByTestId('referidos-enlace')).toHaveCount(0);
   // Enlaza a las condiciones públicas del aula.
   await expect(casilla.getByRole('link', { name: 'Leer las condiciones' })).toHaveAttribute(
     'href',
-    '/condiciones-referidos',
+    '/referral-terms',
   );
   const activar = casilla.getByRole('button', { name: 'Activar mi enlace' });
   await expect(activar).toBeDisabled();
@@ -169,7 +169,7 @@ test('referidos: casilla de mayor de 18, cobro en dinero con datos, pago y justi
   // Las condiciones públicas se leen sin sesión, con las cifras del aula.
   const anonCtx = await nuevo();
   const anon = await anonCtx.newPage();
-  await anon.goto('/condiciones-referidos');
+  await anon.goto('/referral-terms');
   const condiciones = anon.getByTestId('condiciones-referidos');
   await expect(condiciones).toContainText('mayor de 18 años', { timeout: 30_000 });
   await expect(condiciones).toContainText('80 %');
@@ -211,7 +211,7 @@ test('referidos: casilla de mayor de 18, cobro en dinero con datos, pago y justi
   await creadora.locator('input[autocomplete="current-password"]').fill(tenant.password);
   await creadora.locator('button[type="submit"]').click();
   await creadora.waitForURL((u) => !u.pathname.startsWith('/signin'), { timeout: 30_000 });
-  await creadora.goto('/admin/membresia');
+  await creadora.goto('/admin/membership');
   const pedido = creadora.getByTestId('cobro-pedido');
   await expect(pedido).toContainText('Lucía Pérez Gil', { timeout: 30_000 });
   await expect(pedido).toContainText('ES91 2100 0418 4502 0005 1332');

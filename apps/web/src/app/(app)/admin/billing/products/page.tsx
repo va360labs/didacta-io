@@ -9,7 +9,7 @@
  * Panel admin · Productos de pago (mod.billing).
  *
  * Vincula cursos del tenant a `Stripe Price IDs` para que el botón
- * "Comprar curso" del catálogo (`/cursos/[slug]`) abra Checkout. Tras pago,
+ * "Comprar curso" del catálogo (`/courses/[slug]`) abra Checkout. Tras pago,
  * el bridge `BillingLearningBridge` matricula al alumno automáticamente.
  *
  * Reglas:
@@ -79,7 +79,7 @@ function ActionErrorMessage({ error }: { error: ActionError }) {
       {error.stripeMissing ? (
         <>
           {' '}
-          <Link href="/admin/configuracion" className="font-semibold underline">
+          <Link href="/admin/settings" className="font-semibold underline">
             {t('billing.stripeMissingCta')}
           </Link>
           .

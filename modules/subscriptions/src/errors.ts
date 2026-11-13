@@ -147,7 +147,7 @@ export class MembershipConfigIncompleteError extends SubscriptionsError {
  * Ya hay una membresía viva para ese email: no se abre un segundo checkout.
  *
  * Existe porque la membresía puede venderse desde más de un escaparate (la
- * página `/unete` del aula y una tienda externa que use la API), y sin esta
+ * página `/join` del aula y una tienda externa que use la API), y sin esta
  * comprobación la misma persona acaba con dos suscripciones cobrándose a la vez
  * y una sola de ellas dándole acceso. El `detail` lleva el estado de la que ya
  * tiene, que es lo que necesita el front para decidir si mandarla a su cuenta

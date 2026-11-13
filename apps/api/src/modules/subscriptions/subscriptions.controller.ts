@@ -154,7 +154,7 @@ export class SubscriptionsController {
     const subs = await svc.listMine(user.tenantId, user.sub);
 
     // Las filas de MEMBRESÍA (courseId null + planId) se enriquecen con el
-    // nombre real del plan para que /cuenta muestre "Membresía Anual" y no un
+    // nombre real del plan para que /account muestre "Membresía Anual" y no un
     // UUID. Las de curso se enriquecen con el título del curso.
     const planIds = [...new Set(subs.map((s) => s.planId).filter((x): x is string => !!x))];
     const courseIds = [...new Set(subs.map((s) => s.courseId).filter((x): x is string => !!x))];
@@ -216,7 +216,7 @@ export class SubscriptionsController {
       .getSubscriptionsService()
       .createBillingPortalSession(user.tenantId, user.sub, {
         subscriptionId: body?.subscriptionId,
-        returnUrl: `${base}/cuenta?tab=suscripcion`,
+        returnUrl: `${base}/account?tab=suscripcion`,
       });
   }
 

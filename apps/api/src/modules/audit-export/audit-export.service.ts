@@ -11,7 +11,7 @@
  * Decisiones de diseño:
  *
  *  - Reusamos `PrismaAuditLogService.list()` para no duplicar el filtro
- *    tenant-strict (mismo filtro que el panel /admin/auditoria). Pasamos un
+ *    tenant-strict (mismo filtro que el panel /admin/audit). Pasamos un
  *    `limit` alto por si se exportan rangos largos; en producción esto se
  *    paginará con cursor (out of scope del piloto).
  *  - Serializamos a NDJSON (line-delimited JSON) para que sea apto a herramientas

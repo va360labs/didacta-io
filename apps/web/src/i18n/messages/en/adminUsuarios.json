@@ -254,7 +254,7 @@
     "title": "Member registration",
     "open": "Open",
     "closed": "Closed",
-    "description": "How people join your community through <code>/inscripcion-miembros</code>: choose which verifications you require before each request reaches you. The final approval is always yours (1-click email or the requests panel).",
+    "description": "How people join your community through <code>/member-registration</code>: choose which verifications you require before each request reaches you. The final approval is always yours (1-click email or the requests panel).",
     "enabledLabel": "Registration enabled (visitors can request access)",
     "enabledSwitch": "Registration enabled",
     "verifiersLegend": "Required verifications",

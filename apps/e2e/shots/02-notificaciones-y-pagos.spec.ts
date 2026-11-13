@@ -27,10 +27,10 @@ import { assertLocale, setSwitch, shot } from './lib/shot';
 
 const WALKTHROUGH = 'notificaciones-y-pagos';
 
-/** Abre `/admin/configuracion` en la pestaña pedida. No hay parámetro de URL. */
+/** Abre `/admin/settings` en la pestaña pedida. No hay parámetro de URL. */
 async function openConfigTab(page: Page, tabKey: 'notifications' | 'pagos'): Promise<void> {
-  if (!page.url().includes('/admin/configuracion')) {
-    await page.goto('/admin/configuracion');
+  if (!page.url().includes('/admin/settings')) {
+    await page.goto('/admin/settings');
   }
   await expect(page.getByRole('heading', { name: t('adminMarca', 'config.title') })).toBeVisible({
     timeout: 30_000,
@@ -104,7 +104,7 @@ test('notificaciones y pagos · 18 capturas', async ({ browser }) => {
   await expect(admin.getByTestId('stripe-banner-none')).toBeVisible({ timeout: 30_000 });
   await shot(admin, WALKTHROUGH, '07-pagos-vacio');
 
-  await admin.goto('/admin/membresia');
+  await admin.goto('/admin/membership');
   const stripeWarning = admin.getByText(
     t('adminMonetizacion', 'membership.stripeWarning')
       .replace(/<\/?link>/g, '')
@@ -147,7 +147,7 @@ test('notificaciones y pagos · 18 capturas', async ({ browser }) => {
   });
 
   // ────────────────────────────────────────────────── 3 · Membresía ──
-  await admin.goto('/admin/grupos-acceso');
+  await admin.goto('/admin/access-groups');
   await expect(admin.locator('#ag-name')).toBeVisible({ timeout: 30_000 });
   await admin.locator('#ag-name').fill(DEMO.accessGroup.name);
   await admin.locator('#ag-kind').selectOption('ALL_COURSES');
@@ -158,7 +158,7 @@ test('notificaciones y pagos · 18 capturas', async ({ browser }) => {
   await createGroup.click();
   await expect(admin.getByText(DEMO.accessGroup.name).first()).toBeVisible({ timeout: 30_000 });
 
-  await admin.goto('/admin/membresia');
+  await admin.goto('/admin/membership');
   await expect(admin.locator('#plan-name')).toBeVisible({ timeout: 30_000 });
   await admin.locator('#plan-name').fill(DEMO.plan.name);
   await admin.locator('#plan-amount').fill(DEMO.plan.price);
@@ -179,7 +179,7 @@ test('notificaciones y pagos · 18 capturas', async ({ browser }) => {
     scrollTo: admin.getByText(DEMO.plan.name).first(),
   });
 
-  // ───────────────────────────────────────── 4 · página pública /unete ──
+  // ───────────────────────────────────────── 4 · página pública /join ──
   // Recarga obligatoria: al crear el plan, la página vuelve a pedir la config
   // y `applyConfig()` reescribe el estado del formulario. Si se teclea encima
   // sin esperar, la respuesta llega a mitad y borra lo escrito — que es
@@ -211,7 +211,7 @@ test('notificaciones y pagos · 18 capturas', async ({ browser }) => {
 
   const publicCtx = await newShotContext(browser);
   const publicPage = await newShotPage(publicCtx);
-  await publicPage.goto('/unete');
+  await publicPage.goto('/join');
   await expect(publicPage.getByText(DEMO.unete.title)).toBeVisible({ timeout: 30_000 });
   await assertLocale(publicPage, LOCALE);
   await shot(publicPage, WALKTHROUGH, '18-unete-publico');

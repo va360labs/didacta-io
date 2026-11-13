@@ -2,7 +2,7 @@
  * Copyright (c) VA360 LABS S.L.
  * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
  *
- * Tests del reoptimizador del histórico de imágenes (/admin/imagenes).
+ * Tests del reoptimizador del histórico de imágenes (/admin/images).
  *
  * Lo que importa aquí no es comprimir (eso ya lo cubre image-optimizing-storage)
  * sino el repunte: después de crear el blob nuevo hay que dejar la fila dueña

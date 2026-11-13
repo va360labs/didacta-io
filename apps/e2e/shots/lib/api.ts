@@ -79,10 +79,10 @@ export async function setProfileLocale(bearer: string, locale = LOCALE): Promise
 }
 
 /**
- * Da por hecho el asistente de puesta en marcha de la ACADEMIA (`/bienvenida`,
+ * Da por hecho el asistente de puesta en marcha de la ACADEMIA (`/welcome`,
  * alpha.112+). Es distinto del onboarding de PERFIL (`/onboarding`): el gate
  * de `(app)/layout.tsx` manda a los admins con este asistente sin completar a
- * `/bienvenida` ANTES de mirar el perfil, así que sin este paso el recorrido
+ * `/welcome` ANTES de mirar el perfil, así que sin este paso el recorrido
  * no puede pisar ninguna pantalla del panel. El asistente en sí ya se retrata
  * en la documentación con sus propias capturas; aquí solo se cierra.
  */

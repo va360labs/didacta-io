@@ -167,4 +167,4 @@ jobs:
             Módulo marketplace **${{ env.MODULE_NAME }}** v${{ steps.ver.outputs.version }} (ZIP firmado).
 
             - sha256: `${{ steps.sign.outputs.zip-sha256 }}`
-            - Instalación: subir el ZIP en `/admin/integraciones` (drag & drop).
+            - Instalación: subir el ZIP en `/admin/integrations` (drag & drop).

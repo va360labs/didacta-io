@@ -97,7 +97,7 @@ test('modo completo (hoy): de cero a enlace de venta con precio', async ({ brows
 
   // ── Asistente de academia (8 pasos) ─────────────────────────────────────
   tramo('asistente');
-  await page.waitForURL(/\/bienvenida/, { timeout: 30_000 });
+  await page.waitForURL(/\/welcome/, { timeout: 30_000 });
   await click(await botonVisible(page, /^Empezar$/));
   await fill(page.locator('#nombre-academia'), 'Taller de Acuarela');
   await click(await botonVisible(page, /^Continuar$/)); // nombre
@@ -107,16 +107,16 @@ test('modo completo (hoy): de cero a enlace de venta con precio', async ({ brows
   await click(await botonVisible(page, /^(Ahora no|Continuar)$/)); // cobros
   await click(await botonVisible(page, /^(Ahora no|Continuar)$/)); // correo
   await click(await botonVisible(page, /Entrar en mi academia/));
-  await page.waitForURL((u) => !u.pathname.startsWith('/bienvenida'), { timeout: 30_000 });
+  await page.waitForURL((u) => !u.pathname.startsWith('/welcome'), { timeout: 30_000 });
 
   // ── Curso: Mis cursos → Nuevo curso → título → Crear ────────────────────
   tramo('curso');
   await click(page.getByRole('link', { name: 'Mis cursos' }).first());
-  await page.waitForURL(/\/formador\/cursos$/);
+  await page.waitForURL(/\/studio\/courses$/);
   await click(page.getByText('Crear curso nuevo').first());
   await fill(page.locator('#title'), 'Acuarela desde cero');
   await click(page.locator('form button[type="submit"]').last());
-  await page.waitForURL(/\/formador\/cursos\/[0-9a-f-]{36}/, { timeout: 20_000 });
+  await page.waitForURL(/\/studio\/courses\/[0-9a-f-]{36}/, { timeout: 20_000 });
   const slug = 'acuarela-desde-cero';
 
   // ── Sección y lección de texto ──────────────────────────────────────────
@@ -159,11 +159,11 @@ test('modo completo (hoy): de cero a enlace de venta con precio', async ({ brows
 
   // ── Enlace de venta: la interfaz NO lo ofrece en ningún sitio ───────────
   // Ni botón de copiar ni enlace a la ficha pública: la creadora tiene que
-  // saber que existe /catalogo/<slug> y escribirlo en la barra. Se cuenta
+  // saber que existe /catalog/<slug> y escribirlo en la barra. Se cuenta
   // como 1 campo (escribir la dirección).
   tramo('enlace');
   tramos.enlace!.fields += 1;
-  const enlace = `${tenant.base}/catalogo/${slug}`;
+  const enlace = `${tenant.base}/catalog/${slug}`;
 
   // ── Visitante ───────────────────────────────────────────────────────────
   const visitante = await browser.newContext({ locale: 'es-ES' });

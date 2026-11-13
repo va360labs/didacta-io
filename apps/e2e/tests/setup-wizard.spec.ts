@@ -32,7 +32,7 @@ test.describe('Wizard de setup — token de un solo uso', () => {
     // `#__next-route-announcer__` con el mismo role. El mensaje real vive en
     // el div de error de StepAdmin — lo buscamos por texto.
     await expect(page.getByText('Falta el token de setup en la URL')).toBeVisible();
-    // No hubo sesión: seguimos en el wizard, no en /cursos.
+    // No hubo sesión: seguimos en el wizard, no en /courses.
     await expect(page).toHaveURL(/\/setup$/);
   });
 
@@ -49,7 +49,7 @@ test.describe('Wizard de setup — token de un solo uso', () => {
     });
 
     // El admin recién creado nunca pasó por onboarding — post-login-redirect
-    // lo manda ahí primero, no a /cursos directamente.
+    // lo manda ahí primero, no a /courses directamente.
     await page.getByRole('button', { name: 'Empezar' }).click();
     await expect(page).toHaveURL(/\/onboarding$/);
 

@@ -244,7 +244,7 @@ export function isViewingSmtpSettings(
   tab: string | null,
   roles: readonly string[],
 ): boolean {
-  if (pathname !== '/admin/configuracion') return false;
+  if (pathname !== '/admin/settings') return false;
   const shown = tab || (roles.includes('super_admin') ? 'general' : 'notifications');
   return shown === 'notifications';
 }

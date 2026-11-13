@@ -4,7 +4,7 @@
  */
 
 /**
- * Cliente de la MEMBRESÍA: página pública /unete + administración.
+ * Cliente de la MEMBRESÍA: página pública /join + administración.
  *
  * Los endpoints públicos van SIN bearer (el visitante no tiene cuenta; el
  * tenant se resuelve por dominio). Los de admin requieren JWT de admin.

@@ -12,7 +12,7 @@ const base: CalendarEventInput = {
   topic: 'Clase de prospección',
   startTime: new Date('2026-12-01T16:00:00.000Z'),
   durationMinutes: 90,
-  classUrl: 'https://aula.example.test/clase/11111111-2222-3333-4444-555555555555',
+  classUrl: 'https://aula.example.test/live/11111111-2222-3333-4444-555555555555',
   organizerName: 'Demo',
   now: new Date('2026-11-30T10:00:00.000Z'),
 };
@@ -45,7 +45,7 @@ describe('buildIcsEvent', () => {
   it('NUNCA incluye el joinUrl de Zoom — un .ics se reenvía (ADR-017)', () => {
     const ics = buildIcsEvent(base);
     expect(ics).not.toMatch(/zoom\.us/i);
-    expect(ics).toContain('/clase/11111111-2222-3333-4444-555555555555');
+    expect(ics).toContain('/live/11111111-2222-3333-4444-555555555555');
   });
 
   it('escapa comas, puntos y coma, barras y saltos de línea del título', () => {

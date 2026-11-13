@@ -18,7 +18,7 @@
 ///
 /// La política tenant-wide (`feat:mfa.enforcement` capability EE) sigue
 /// independiente — vive en `MfaPolicyService` y se gestiona desde
-/// `/admin/seguridad`. Ese flujo sigue funcionando aunque este flag esté
+/// `/admin/security`. Ese flujo sigue funcionando aunque este flag esté
 /// off: si el tenant_admin lo activa, sus usuarios reciben el aviso
 /// `mfaRequiredSoon` y eventualmente pasan por enforcement.
 

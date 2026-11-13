@@ -53,13 +53,13 @@ const UNKNOWN_ACTOR_NAME: NotificationValue = {
 /**
  * Quién se ha dado de baja de los correos de la comunidad (resumen semanal y
  * avisos masivos). Hay dos marcas por historia —`digestOptOut` la pone el
- * interruptor «Comunidad · Email» de /cuenta, `broadcastOptOut` el enlace de
+ * interruptor «Comunidad · Email» de /account, `broadcastOptOut` el enlace de
  * baja de un correo—, pero para quien las pone son UNA decisión: «no me
  * escribáis». Cualquiera de las dos corta los dos correos.
  *
  * Con cada marca cortando solo lo suyo, quien pulsaba «darse de baja» en un
  * aviso seguía recibiendo el resumen cada semana, y quien apagaba el
- * interruptor de /cuenta seguía recibiendo los avisos.
+ * interruptor de /account seguía recibiendo los avisos.
  */
 const COMMUNITY_EMAIL_OPT_OUT = {
   OR: [{ digestOptOut: true }, { broadcastOptOut: true }],
@@ -235,7 +235,7 @@ export class CommunityService {
   /**
    * Lista los adjuntos (imágenes y archivos) de los posts del tenant para la
    * Galería de comunidad. Si `query.tag` viene, filtra al espacio/tag; si no,
-   * agrega todos los espacios (galería global de /comunidad).
+   * agrega todos los espacios (galería global de /community).
    *
    * Los adjuntos no viven en una tabla propia: están serializados en el body
    * de cada post. Escaneamos hasta `ATTACHMENT_POST_SCAN_LIMIT` posts recientes
@@ -782,7 +782,7 @@ export class CommunityService {
       where: { tenantId_userId: { tenantId, userId } },
     });
     // `digestOptOut` es lo que pinta el interruptor «Comunidad · Email» de
-    // /cuenta: quien se dio de baja desde el enlace de un correo lo ve apagado,
+    // /account: quien se dio de baja desde el enlace de un correo lo ve apagado,
     // que es exactamente lo que pidió.
     return { digestOptOut: (row?.digestOptOut ?? false) || (row?.broadcastOptOut ?? false) };
   }
@@ -792,10 +792,10 @@ export class CommunityService {
    * para añadir más campos sin migración: solo se actualizan las claves
    * presentes en el patch.
    *
-   * `digestOptOut` mueve las DOS marcas: el interruptor de /cuenta es «correos
+   * `digestOptOut` mueve las DOS marcas: el interruptor de /account es «correos
    * de la comunidad», y quien lo apaga no quiere ni el resumen ni los avisos.
    * Con una sola, quien lo apagaba seguía recibiendo avisos — y quien se había
-   * dado de baja por enlace no podía volver a darse de alta desde /cuenta.
+   * dado de baja por enlace no podía volver a darse de alta desde /account.
    */
   async updateUserPreferences(
     tenantId: string,

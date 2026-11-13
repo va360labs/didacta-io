@@ -186,7 +186,7 @@ export class SupportAccessService {
         token,
         reason,
         expiresAt: expiresAt.toISOString(),
-        redeemUrl: `${webBaseUrl}/soporte/acceso?token=${encodeURIComponent(token)}`,
+        redeemUrl: `${webBaseUrl}/support/access?token=${encodeURIComponent(token)}`,
       };
     });
   }

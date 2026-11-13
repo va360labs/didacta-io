@@ -270,7 +270,7 @@ export default [
   },
   {
     files: [
-      'apps/web/src/app/(app)/admin/seguridad/page.tsx',
+      'apps/web/src/app/(app)/admin/security/page.tsx',
       'apps/web/src/components/restriction-shield.tsx',
     ],
     rules: {
@@ -296,14 +296,14 @@ export default [
   {
     files: [
       'apps/web/src/app/(app)/admin/fundae/page.tsx',
-      'apps/web/src/app/(app)/formador/aula-virtual/page.tsx',
+      'apps/web/src/app/(app)/studio/live/page.tsx',
       // El segmento dinamico va con comodin: minimatch leeria '[id]' como
       // una clase de caracteres y el patron no casaria con nada.
-      'apps/web/src/app/(app)/formador/cursos/*/course-editor.tsx',
-      'apps/web/src/app/(app)/mensajes/page.tsx',
+      'apps/web/src/app/(app)/studio/courses/*/course-editor.tsx',
+      'apps/web/src/app/(app)/messages/page.tsx',
       'apps/web/src/app/(auth)/mfa/verify/mfa-verify-form.tsx',
-      'apps/web/src/app/bienvenida/page.tsx',
-      'apps/web/src/app/bienvenida/paso-curso.tsx',
+      'apps/web/src/app/welcome/page.tsx',
+      'apps/web/src/app/welcome/paso-curso.tsx',
       'apps/web/src/app/setup/setup-wizard.tsx',
       'apps/web/src/components/command-palette.tsx',
       'apps/web/src/components/new-course-form.tsx',

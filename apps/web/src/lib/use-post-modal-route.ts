@@ -10,10 +10,10 @@ import { useRef } from 'react';
 import { parsePostPath, postPath } from '@/lib/post-link';
 
 /**
- * Sincroniza el modal de detalle de post con la URL canónica `/comunidad/<id>`.
+ * Sincroniza el modal de detalle de post con la URL canónica `/community/<id>`.
  *
- * Lo comparten el feed general (`/comunidad`), el deep-link (`/comunidad/[id]`)
- * y los feeds por espacio (`/espacios/[space]`): al abrir un post el navegador
+ * Lo comparten el feed general (`/community`), el deep-link (`/community/[id]`)
+ * y los feeds por espacio (`/spaces/[space]`): al abrir un post el navegador
  * muestra una URL única y compartible SIN desmontar el feed (pushState shallow,
  * soportado por el App Router); al cerrar se restaura la URL del feed original.
  *

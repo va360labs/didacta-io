@@ -53,7 +53,7 @@ export const GAMIFICATION_EVENT = {
  * Reglas de actividad. Las dos primeras conservan los pesos del ranking
  * anterior (post × 10, comentario × 5) para que el traspaso no mueva a nadie
  * de puesto; el resto son señales que ya existían en el bus y nadie escuchaba.
- * Todo esto es editable por el operador en /admin/gamificacion.
+ * Todo esto es editable por el operador en /admin/gamification.
  */
 export const DEFAULT_RULES: ReadonlyArray<{
   key: string;

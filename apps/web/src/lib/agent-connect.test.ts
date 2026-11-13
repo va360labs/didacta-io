@@ -27,34 +27,35 @@ const IN = {
   name: 'morningpour',
 };
 
-describe('agentScreenFor: solo las pantallas de creación manual', () => {
+describe('agentScreenFor: solo las pantallas de gestión con creación manual', () => {
   it.each([
-    ['/formador/cursos', 'courses'],
-    ['/formador/cursos/', 'courses'],
-    ['/formador/cursos/nuevo', 'course-new'],
-    [`/formador/cursos/${ID}`, 'course-edit'],
-    [`/formador/cursos/${ID}?anadir=1`, 'course-edit'],
-    ['/formador/aula-virtual', 'live'],
-    ['/comunidad', 'community'],
-    ['/espacios/general', 'community'],
+    ['/studio/courses', 'courses'],
+    ['/studio/courses/', 'courses'],
+    ['/studio/courses/new', 'course-new'],
+    [`/studio/courses/${ID}`, 'course-edit'],
+    [`/studio/courses/${ID}?add=1`, 'course-edit'],
+    ['/studio/live', 'live'],
   ])('%s → %s', (path, screen) => {
     expect(agentScreenFor(path)?.screen).toBe(screen);
   });
 
   it('el editor lleva el id del curso para el ejemplo', () => {
-    expect(agentScreenFor(`/formador/cursos/${ID}`)).toEqual({
+    expect(agentScreenFor(`/studio/courses/${ID}`)).toEqual({
       screen: 'course-edit',
       courseId: ID,
     });
   });
 
   it.each([
-    '/empieza',
-    '/admin/usuarios', // invitar: el agente no da de alta personas
-    '/admin/cobros', // precios y cobros: tocan dinero
-    '/formador/cursos/no-es-un-id',
-    '/comunidad/menciones',
-    '/cursos',
+    '/start',
+    '/admin/users', // invitar: el agente no da de alta personas
+    '/admin/payments', // precios y cobros: tocan dinero
+    '/studio/courses/no-es-un-id',
+    // Zona de miembros: nunca, aunque quien mire sea el administrador.
+    '/community',
+    '/community/mentions',
+    '/spaces/general',
+    '/courses',
     '',
     null,
   ])('%s → sin panel', (path) => {

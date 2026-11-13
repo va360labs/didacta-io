@@ -8,9 +8,9 @@
 /**
  * KPIs del negocio — la pestaña "Negocio" del panel de administración.
  *
- * Vivía en su propia página `/admin/metricas`, compitiendo con `/admin` por ser
+ * Vivía en su propia página `/admin/metrics`, compitiendo con `/admin` por ser
  * "el dashboard": dos entradas de menú y ninguna pista de cuál abrir. Ahora es
- * una pestaña del panel y `/admin/metricas` redirige aquí.
+ * una pestaña del panel y `/admin/metrics` redirige aquí.
  *
  * Todo sale de la BD local (webhooks ya materializados); nada de APIs externas
  * en caliente.
@@ -149,7 +149,7 @@ export function BusinessMetricsPanel() {
           })}
           icon="bell"
           tone={arrears.total > 0 ? 'warn' : 'success'}
-          href="/admin/impagos"
+          href="/admin/delinquents"
         />
         <StatCard
           label={t('signupsLabel')}

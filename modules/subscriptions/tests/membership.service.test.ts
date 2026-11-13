@@ -772,7 +772,7 @@ describe('MembershipService · checkout', () => {
 
   /**
    * El guard de duplicados. La membresía se vende desde más de un escaparate
-   * (la página /unete y una tienda externa por API), así que sin esto la misma
+   * (la página /join y una tienda externa por API), así que sin esto la misma
    * persona acaba con dos suscripciones cobrándose por un solo acceso.
    */
   describe('no se le vende dos veces al mismo', () => {

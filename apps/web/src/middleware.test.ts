@@ -117,7 +117,7 @@ describe('middleware · host gate', () => {
     expect(html).not.toBe('Not Found');
   });
 
-  it.each(['/', '/signin', '/signup', '/forgot-password', '/cursos', '/admin/usuarios'])(
+  it.each(['/', '/signin', '/signup', '/forgot-password', '/courses', '/admin/users'])(
     'en un aula suspendida %s tampoco sirve la app: no hay login que intentar',
     async (path) => {
       const middleware = await loadMiddleware();
@@ -253,6 +253,68 @@ describe('pickSuspendedCatalog', () => {
     ['pt-BR', 'en', 'es'],
   ] as const)('cookie=%s, Accept-Language=%s → %s', (cookie, accept, expected) => {
     expect(pickSuspendedCatalog(cookie, accept)).toBe(expected);
+  });
+});
+
+describe('middleware · rutas viejas en español → 308 a la nueva', () => {
+  const SITIO = 'www.aula-activa.test';
+  beforeEach(() => {
+    hosts[SITIO] = { known: true, slug: 'aula-activa', surface: 'SITE', suspended: false };
+  });
+
+  it('el enlace de venta compartido conserva el slug y el ?ref=', async () => {
+    const mw = await loadMiddleware();
+    const res = await mw(request(ACTIVA, '/catalogo/acuarela?ref=ANA&utm_source=ig'));
+    expect(res.status).toBe(308);
+    expect(res.headers.get('location')).toBe(
+      `https://${ACTIVA}/catalog/acuarela?ref=ANA&utm_source=ig`,
+    );
+  });
+
+  it('la vuelta de Stripe de un pago en curso llega a la nueva con su session_id', async () => {
+    const mw = await loadMiddleware();
+    const res = await mw(request(ACTIVA, '/cursos/checkout/success?session_id=cs_test_123'));
+    expect(res.status).toBe(308);
+    expect(res.headers.get('location')).toBe(
+      `https://${ACTIVA}/courses/checkout/success?session_id=cs_test_123`,
+    );
+  });
+
+  it('segmento español debajo de uno dinámico: /formador/cursos/<id>/alumnos/<m>', async () => {
+    const mw = await loadMiddleware();
+    const res = await mw(request(ACTIVA, '/formador/cursos/c-1/alumnos/e-9'));
+    expect(res.headers.get('location')).toBe(`https://${ACTIVA}/studio/courses/c-1/students/e-9`);
+  });
+
+  it('también en localhost (el aula sin dominio de un self-host)', async () => {
+    const mw = await loadMiddleware();
+    const res = await mw(
+      new NextRequest('http://localhost:3000/verificar/abc', {
+        headers: new Headers({ host: 'localhost:3000' }),
+      }),
+    );
+    expect(res.status).toBe(308);
+    expect(res.headers.get('location')).toBe('http://localhost:3000/verify/abc');
+  });
+
+  it('control: la ruta nueva se sirve sin redirección', async () => {
+    const mw = await loadMiddleware();
+    const res = await mw(request(ACTIVA, '/catalog/acuarela?ref=ANA'));
+    expect(pasa(res)).toBe(true);
+    expect(res.headers.get('location')).toBeNull();
+  });
+
+  it('en el dominio del SITIO público no se redirige: /cursos puede ser una página suya', async () => {
+    const mw = await loadMiddleware();
+    const res = await mw(request(SITIO, '/cursos'));
+    expect(res.status).not.toBe(308);
+    expect(res.headers.get('x-middleware-rewrite')).toBe(`https://${SITIO}/site/cursos`);
+  });
+
+  it('un host que no es de nadie sigue en 404, sin redirigir', async () => {
+    const mw = await loadMiddleware();
+    const res = await mw(request(LIBRE, '/catalogo/x'));
+    expect(res.status).toBe(404);
   });
 });
 

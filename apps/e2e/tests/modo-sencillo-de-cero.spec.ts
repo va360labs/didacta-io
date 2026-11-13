@@ -5,7 +5,7 @@
 
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import { writeFileSync } from 'node:fs';
-import { freshTenant } from '../helpers/simple-tenant';
+import { freshTenant, sql } from '../helpers/simple-tenant';
 import { startStripeDouble, type StripeDouble } from '../helpers/stripe-double';
 
 /**
@@ -95,7 +95,7 @@ test('modo sencillo: de cero a enlace de venta con precio', async ({ browser }) 
   await expect(page.getByRole('heading', { name: 'Tus notificaciones' })).toBeVisible();
   await c.click(page.getByRole('button', { name: 'Continuar' }));
   await c.click(page.getByRole('button', { name: 'Seguir con mi academia' }));
-  await page.waitForURL(/\/bienvenida/, { timeout: 30_000 });
+  await page.waitForURL(/\/welcome/, { timeout: 30_000 });
 
   // Alta en 3 preguntas.
   await c.fill(page.getByLabel('Nombre de la academia'), 'Taller de Acuarela');
@@ -108,11 +108,14 @@ test('modo sencillo: de cero a enlace de venta con precio', async ({ browser }) 
   await c.click(page.getByRole('button', { name: 'Siguiente' }));
   await c.fill(page.getByLabel('Precio'), '49');
   await c.click(page.getByRole('button', { name: 'Crear mi academia' }));
-  await page.waitForURL(/\/empieza/, { timeout: 30_000 });
+  await page.waitForURL(/\/start/, { timeout: 30_000 });
   await expect(page.getByTestId('empieza-aqui')).toBeVisible();
   // Lo que dejó el alta: academia con nombre, precio y enlace aún apagado.
   await expect(page.locator('[data-step="price"][data-done="1"]')).toContainText('49');
   await expect(page.getByTestId('copiar-enlace')).toBeDisabled();
+  // El curso aún no tiene portada: la tarjeta del enlace pinta el degradado.
+  await expect(page.getByTestId('enlace-portada-reserva')).toBeVisible();
+  await expect(page.getByTestId('enlace-portada')).toHaveCount(0);
   // Sin foto, la cabecera lleva sus iniciales (las del nombre que dio).
   await expect(page.getByRole('button', { name: 'Tu perfil' })).toHaveText('CA');
 
@@ -138,12 +141,12 @@ test('modo sencillo: de cero a enlace de venta con precio', async ({ browser }) 
       .first()
       .getByRole('link', { name: /Empieza aquí/ }),
   );
-  await page.waitForURL(/\/empieza/);
+  await page.waitForURL(/\/start/);
   await c.click(page.getByTestId('publicar'));
   await expect(page.getByTestId('copiar-enlace')).toBeEnabled({ timeout: 20_000 });
   await c.click(page.getByTestId('copiar-enlace'));
   const enlace = await page.evaluate(() => navigator.clipboard.readText());
-  expect(enlace).toContain('/catalogo/acuarela-desde-cero');
+  expect(enlace).toContain('/catalog/acuarela-desde-cero');
 
   // El precio salió hacia el doble de Stripe (nunca hacia Stripe real).
   expect(
@@ -172,6 +175,22 @@ test('modo sencillo: de cero a enlace de venta con precio', async ({ browser }) 
     writeFileSync(process.env.E2E_RECUENTO_FILE, JSON.stringify(resultado, null, 2));
   expect(c.clicks).toBeLessThan(15);
   expect(c.fields).toBeLessThan(8);
+
+  // ── Con portada, la tarjeta del enlace enseña ESA portada ───────────────
+  // (fuera del recuento). Una imagen servida por el propio aula, que carga
+  // de verdad: una rota da `naturalWidth` 0.
+  sql(
+    `UPDATE mod_courses_course SET thumbnail_url = '/brand/anagrama.png' ` +
+      `WHERE slug = 'acuarela-desde-cero' AND tenant_id = (SELECT id FROM tenant WHERE slug = '${tenant.slug}')`,
+  );
+  await page.reload();
+  const portada = page.getByTestId('enlace-portada');
+  await expect(portada).toBeVisible({ timeout: 20_000 });
+  await expect(portada).toHaveAttribute('src', '/brand/anagrama.png');
+  await expect
+    .poll(() => portada.evaluate((img: HTMLImageElement) => img.complete && img.naturalWidth > 0))
+    .toBe(true);
+  await expect(page.getByTestId('enlace-portada-reserva')).toHaveCount(0);
   await visitante.close();
   await ctx.close();
 });

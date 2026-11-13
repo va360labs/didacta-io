@@ -5,7 +5,7 @@
 
 /**
  * Mapea una notificación (templateKey + metadata) a un destino navegable dentro
- * de la app. Lo comparten la lista `/notificaciones` y el toast en vivo para que
+ * de la app. Lo comparten la lista `/notifications` y el toast en vivo para que
  * "ir directamente a responder" sea un único lugar de verdad.
  *
  * Devuelve `null` cuando la notificación no tiene una acción de navegación
@@ -25,7 +25,7 @@ function str(value: unknown): string | null {
 
 /**
  * `t` = `useTranslations('libShared')` del componente que la llama, y es
- * OBLIGATORIO: los dos únicos llamantes (`/notificaciones` y el toaster) le
+ * OBLIGATORIO: los dos únicos llamantes (`/notifications` y el toaster) le
  * pasan el suyo. No hay rama degradada a español — un `t` opcional aquí
  * significaba español en la UI inglesa sin que fallara ningún test.
  */

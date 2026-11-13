@@ -254,7 +254,7 @@
     "title": "Registro de miembros",
     "open": "Abierto",
     "closed": "Cerrado",
-    "description": "Cómo entra la gente a tu comunidad por <code>/inscripcion-miembros</code>: elige qué verificaciones exiges antes de que te llegue cada solicitud. La aprobación final siempre es tuya (email de 1 click o panel de solicitudes).",
+    "description": "Cómo entra la gente a tu comunidad por <code>/member-registration</code>: elige qué verificaciones exiges antes de que te llegue cada solicitud. La aprobación final siempre es tuya (email de 1 click o panel de solicitudes).",
     "enabledLabel": "Registro habilitado (los visitantes pueden solicitar acceso)",
     "enabledSwitch": "Registro habilitado",
     "verifiersLegend": "Verificaciones exigidas",

@@ -50,7 +50,7 @@ test.describe('Admin — correo para respuestas', () => {
       },
     });
 
-    await page.goto('/admin/configuracion?tab=notifications');
+    await page.goto('/admin/settings?tab=notifications');
     const card = page.getByTestId('reply-to-card');
     await expect(card).toBeVisible({ timeout: 15_000 });
     await expect(card.getByText('Correo para respuestas').first()).toBeVisible();

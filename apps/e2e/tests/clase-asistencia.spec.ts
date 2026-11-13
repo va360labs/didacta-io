@@ -224,7 +224,7 @@ test.describe('mod.zoom-live · asistencia real (ADR-018)', () => {
     }).catch(() => {});
   });
 
-  test('el panel de asistencia se renderiza en /clase/[id] para staff', async ({ page }) => {
+  test('el panel de asistencia se renderiza en /live/[id] para staff', async ({ page }) => {
     const tenantSlug = process.env.E2E_TENANT_SLUG ?? 'demo';
     const stamp = Date.now();
     const adminEmail = process.env.E2E_ADMIN_EMAIL;
@@ -290,7 +290,7 @@ test.describe('mod.zoom-live · asistencia real (ADR-018)', () => {
       user: { ...adminSession.user, onboardingCompletedAt: new Date().toISOString() },
     });
 
-    await page.goto(`/clase/${session.id}`);
+    await page.goto(`/live/${session.id}`);
     await expect(page.getByRole('heading', { name: `Asistencia UI ${stamp}` })).toBeVisible();
 
     // El panel solo existe en esta página, así que no hace falta acotarlo.
