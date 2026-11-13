@@ -399,7 +399,7 @@ const configFieldSchema = z.object({
   // Textarea/JSON
   rows: z.number().int().min(1).max(50).optional(),
   // JSON schema validation (for type: 'json')
-  schema: z.record(z.unknown()).optional(),
+  schema: z.record(z.string(), z.unknown()).optional(),
 });
 
 const moduleConfigSchema = z.record(z.string().min(1).max(60), configFieldSchema).optional();

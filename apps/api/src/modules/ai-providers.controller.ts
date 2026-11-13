@@ -44,7 +44,7 @@ const upsertConfigSchema = z.object({
   model: z.string().trim().max(200).optional(),
   apiKey: z.string().min(1).max(1000),
   baseUrl: z.string().url().optional(),
-  extraHeaders: z.record(z.string()).optional(),
+  extraHeaders: z.record(z.string(), z.string()).optional(),
   enabled: z.boolean().optional(),
   notas: z.string().max(2000).optional(),
 });
