@@ -102,6 +102,21 @@ export async function loadMyReferralLinks(): Promise<
   return { commissionBps: stats.commissionBps, code: me.code, links };
 }
 
+/**
+ * Qué vende HOY el aula (membresía y número de cursos), sin pedir el código:
+ * sirve para explicar el programa antes de que el alumno acepte las condiciones.
+ */
+export async function loadOnSale(): Promise<{ membership: boolean; courses: number }> {
+  const [ctx, catalog] = await Promise.all([
+    fetchTenantContext().catch(() => null),
+    getPublicCatalog().catch(() => ({ courses: [] })),
+  ]);
+  return {
+    membership: ctx?.tenant?.membershipPageActive === true,
+    courses: catalog.courses.length,
+  };
+}
+
 /** Los enlaces del alumno según lo que el aula tenga HOY a la venta. */
 export async function loadReferralLinks(me: { code: string; url: string }): Promise<ReferralLinks> {
   const [ctx, catalog] = await Promise.all([

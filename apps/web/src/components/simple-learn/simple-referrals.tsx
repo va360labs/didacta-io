@@ -21,7 +21,7 @@ import {
   type MemberReferralStats,
   type ReferralCommissionStatus,
 } from '@/lib/referrals';
-import { loadReferralLinks, type ReferralProductLink } from '@/lib/referral-links';
+import { loadOnSale, loadReferralLinks, type ReferralProductLink } from '@/lib/referral-links';
 import { useTenantDisplayName } from '@/lib/tenant-context';
 import { cn } from '@/lib/utils';
 
@@ -148,7 +148,11 @@ export function SimpleReferrals() {
         setStats(s);
         if (!s.programActive) return;
         // Sin la casilla (mayor de 18 + condiciones) no se pide el enlace.
-        if (s.terms && !s.terms.accepted) return;
+        if (s.terms && !s.terms.accepted) {
+          // Sin enlace todavía, pero el «Cómo funciona» ya habla de lo que se vende.
+          void loadOnSale().then((o) => !cancelled && setOnSale(onSaleKind(o)));
+          return;
+        }
         // Enlace general + uno por producto: vale para todo lo que vende el aula.
         referralsApi
           .me()
