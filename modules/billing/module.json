@@ -24,6 +24,9 @@
     },
     {
       "name": "billing.order.refunded"
+    },
+    {
+      "name": "billing.order.partially_refunded"
     }
   ],
   "hooks": [],

@@ -22,6 +22,9 @@
     },
     {
       "name": "referrals.payout.recorded"
+    },
+    {
+      "name": "referrals.credit.returned"
     }
   ],
   "hooks": [],

@@ -37,6 +37,9 @@
       "name": "subscriptions.invoice.refunded"
     },
     {
+      "name": "subscriptions.invoice.partially_refunded"
+    },
+    {
       "name": "subscriptions.membership.activated"
     },
     {
