@@ -51,6 +51,23 @@ async function api<T = Record<string, unknown>>(
   return { status: res.status, body: (text ? JSON.parse(text) : {}) as T };
 }
 
+/**
+ * El referidor declara ser mayor de 18 y acepta la versión VIGENTE de las
+ * condiciones del programa: sin eso la API no le da enlace (403
+ * REFERRALS_TERMS_REQUIRED). La versión se lee de las condiciones públicas,
+ * como hace la casilla de la UI.
+ */
+async function aceptarCondiciones(bearer: string): Promise<void> {
+  const terms = await api<{ version: string }>('/modules/referrals/public/terms');
+  expect(terms.status, 'GET /modules/referrals/public/terms').toBe(200);
+  const ok = await api('/modules/referrals/me/terms', {
+    method: 'POST',
+    bearer,
+    body: { version: terms.body.version, adult: true },
+  });
+  expect(ok.status, 'POST /modules/referrals/me/terms').toBeLessThan(300);
+}
+
 interface MemberStats {
   programActive: boolean;
   clicks: number;
@@ -132,6 +149,7 @@ test.describe('Referidos — flujo completo (webhooks Stripe firmados)', () => {
     });
     const referrerToken = referrer.tokens.accessToken;
     const tenantId = referrer.user.tenantId;
+    await aceptarCondiciones(referrerToken);
     const me = await api<{ code: string; url: string }>('/modules/referrals/me', {
       bearer: referrerToken,
     });
@@ -363,6 +381,7 @@ test.describe('Referidos — flujo completo (webhooks Stripe firmados)', () => {
     });
     const referrerToken = referrer.tokens.accessToken;
     const tenantId = referrer.user.tenantId;
+    await aceptarCondiciones(referrerToken);
     const me = await api<{ code: string }>('/modules/referrals/me', { bearer: referrerToken });
     expect(me.status).toBe(200);
     const code = me.body.code;
