@@ -22,7 +22,7 @@ import { sessionRegistryStub } from './helpers/session-registry-stub';
  *   - handleAcs rechaza user inactivo.
  */
 
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 import { NotFoundException, UnauthorizedException } from '@nestjs/common';
 import { SamlService } from '../src/sso/saml/saml.service';
 import {
@@ -171,9 +171,9 @@ function makeFakeTokens() {
 
 class TestSamlService extends SamlService {
   public providerStub: {
-    getAuthorizeUrlAsync: ReturnType<typeof vi.fn>;
-    validatePostResponseAsync: ReturnType<typeof vi.fn>;
-    generateServiceProviderMetadata: ReturnType<typeof vi.fn>;
+    getAuthorizeUrlAsync: Mock<(...args: any[]) => any>;
+    validatePostResponseAsync: Mock<(...args: any[]) => any>;
+    generateServiceProviderMetadata: Mock<(...args: any[]) => any>;
   } = {
     getAuthorizeUrlAsync: vi.fn(
       async (relayState: string) =>
@@ -187,9 +187,9 @@ class TestSamlService extends SamlService {
   public parseFails: Error | null = null;
 
   protected override buildProvider(): {
-    getAuthorizeUrlAsync: ReturnType<typeof vi.fn>;
-    validatePostResponseAsync: ReturnType<typeof vi.fn>;
-    generateServiceProviderMetadata: ReturnType<typeof vi.fn>;
+    getAuthorizeUrlAsync: Mock<(...args: any[]) => any>;
+    validatePostResponseAsync: Mock<(...args: any[]) => any>;
+    generateServiceProviderMetadata: Mock<(...args: any[]) => any>;
   } {
     // El cast es seguro: el shape del stub es el mismo que SamlProviderLike
     // (los signatures matchean). vitest fn() permite stub flexible.

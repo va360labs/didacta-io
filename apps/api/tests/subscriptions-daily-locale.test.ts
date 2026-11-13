@@ -18,7 +18,7 @@
  * cae a `HUB_DEFAULT_LOCALE` — un camino degradado nombrado, con test.
  */
 
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 import { SubscriptionsDailyWorker } from '../src/modules/payment-connections/subscriptions-daily.worker';
 import { HUB_DEFAULT_LOCALE } from '../src/modules/notifications/email-template-catalog';
 
@@ -220,7 +220,7 @@ describe('worker diario · resumen a los admins', () => {
     // Perder el idioma es aceptable; perder el aviso no.
     expect(enviados).toHaveLength(1);
     expect(enviados[0]!.html).toContain('<html lang="es">');
-    expect((logger as { warn: ReturnType<typeof vi.fn> }).warn).toHaveBeenCalled();
+    expect((logger as { warn: Mock<(...args: any[]) => any> }).warn).toHaveBeenCalled();
   });
 });
 
@@ -360,8 +360,8 @@ describe('worker diario · a una cuenta eliminada no se le escribe', () => {
       admins: ['admin@example.test'],
       suscriptores: [UN_SUSCRIPTOR[0]!],
     });
-    const findMany = (prisma as unknown as { user: { findMany: ReturnType<typeof vi.fn> } }).user
-      .findMany;
+    const findMany = (prisma as unknown as { user: { findMany: Mock<(...args: any[]) => any> } })
+      .user.findMany;
     const original = findMany.getMockImplementation()!;
     findMany.mockImplementation(async (args: { where: { deletedAt?: unknown } }) => {
       if (args.where.deletedAt) throw new Error('db down');

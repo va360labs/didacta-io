@@ -1,5 +1,5 @@
 import { Logger } from '@nestjs/common';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
 import {
   TenantStripeResolverService,
   buildGlobalFallbackFlagReader,
@@ -433,8 +433,8 @@ describe('TenantStripeResolverService', () => {
    * que el valor efectivo cambia.
    */
   describe('el corte del fallback no es silencioso', () => {
-    let errorLog: ReturnType<typeof vi.spyOn>;
-    let warnLog: ReturnType<typeof vi.spyOn>;
+    let errorLog: MockInstance<(...args: unknown[]) => void>;
+    let warnLog: MockInstance<(...args: unknown[]) => void>;
 
     beforeEach(() => {
       process.env['STRIPE_SECRET_KEY'] = 'sk_test_global';

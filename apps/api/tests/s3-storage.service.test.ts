@@ -7,9 +7,10 @@ vi.mock('@aws-sdk/client-s3', async () => {
   const actual = await vi.importActual<typeof import('@aws-sdk/client-s3')>('@aws-sdk/client-s3');
   return {
     ...actual,
-    S3Client: vi.fn(() => ({
-      send: sendMock,
-    })),
+    // vitest 4: un mock que se invoca con `new` necesita `function`/`class`, no flecha.
+    S3Client: vi.fn(function () {
+      return { send: sendMock };
+    }),
   };
 });
 

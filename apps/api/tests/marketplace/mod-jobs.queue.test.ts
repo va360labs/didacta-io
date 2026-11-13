@@ -23,20 +23,19 @@ const queueAdd = vi.fn(
 const queueClose = vi.fn(async () => undefined);
 
 vi.mock('bullmq', () => ({
-  Queue: vi.fn().mockImplementation(() => ({
-    add: queueAdd,
-    close: queueClose,
-  })),
+  // vitest 4: un mock que se invoca con `new` necesita `function`/`class`, no flecha.
+  Queue: vi.fn().mockImplementation(function () {
+    return { add: queueAdd, close: queueClose };
+  }),
 }));
 
 const redisPing = vi.fn(async () => 'PONG');
 const redisQuit = vi.fn(async () => undefined);
 
 vi.mock('ioredis', () => {
-  const Ctor = vi.fn().mockImplementation(() => ({
-    ping: redisPing,
-    quit: redisQuit,
-  }));
+  const Ctor = vi.fn().mockImplementation(function () {
+    return { ping: redisPing, quit: redisQuit };
+  });
   return { default: Ctor };
 });
 

@@ -29,7 +29,7 @@ import { sessionRegistryStub } from './helpers/session-registry-stub';
  *   - flowStore consume el state una sola vez (defensa replay).
  */
 
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 import {
   BadRequestException,
   NotFoundException,
@@ -70,12 +70,12 @@ interface FakePrisma {
   _tenants: FakeTenant[];
   _users: FakeUserRow[];
   tenant: {
-    findUnique: ReturnType<typeof vi.fn>;
+    findUnique: Mock<(...args: any[]) => any>;
   };
   user: {
-    findUnique: ReturnType<typeof vi.fn>;
-    create: ReturnType<typeof vi.fn>;
-    update: ReturnType<typeof vi.fn>;
+    findUnique: Mock<(...args: any[]) => any>;
+    create: Mock<(...args: any[]) => any>;
+    update: Mock<(...args: any[]) => any>;
   };
 }
 
@@ -144,9 +144,9 @@ function makeFakePrisma(): FakePrisma {
 }
 
 interface FakeTenantConfigStore {
-  set: ReturnType<typeof vi.fn>;
-  get: ReturnType<typeof vi.fn>;
-  delete: ReturnType<typeof vi.fn>;
+  set: Mock<(...args: any[]) => any>;
+  get: Mock<(...args: any[]) => any>;
+  delete: Mock<(...args: any[]) => any>;
   _records: Map<string, { value: unknown; isSecret: boolean }>;
 }
 
