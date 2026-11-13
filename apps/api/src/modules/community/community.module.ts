@@ -6,6 +6,7 @@
 import { forwardRef, Module } from '@nestjs/common';
 import { APP_FILTER } from '@nestjs/core';
 import { AuthModule } from '../../auth/auth.module';
+import { MessagingModule } from '../messaging/messaging.module';
 import { ModulesModule } from '../modules.module';
 import { CommunityController } from './community.controller';
 import { CommunityPublicController } from './community-public.controller';
@@ -13,6 +14,7 @@ import { CommunityApiController } from './community-api.controller';
 import { CommunityErrorFilter } from './community-error.filter';
 import { CommunityDigestWorker } from './community-digest.worker';
 import { CommunityBroadcastWorker } from './community-broadcast.worker';
+import { CommunitySidebarService } from './community-sidebar.service';
 import {
   CommunityDigestMetrics,
   communityDigestMetricsProviders,
@@ -25,13 +27,14 @@ import {
 /// Convención sub-módulo (ADR-011): forwardRef recíproco con ModulesModule
 /// para romper el ciclo a través de ModuleRegistryService.
 @Module({
-  imports: [AuthModule, forwardRef(() => ModulesModule)],
+  imports: [AuthModule, forwardRef(() => ModulesModule), forwardRef(() => MessagingModule)],
   controllers: [CommunityController, CommunityPublicController, CommunityApiController],
   providers: [
     ...communityDigestMetricsProviders,
     CommunityDigestMetrics,
     CommunityDigestWorker,
     CommunityBroadcastWorker,
+    CommunitySidebarService,
     { provide: APP_FILTER, useClass: CommunityErrorFilter },
   ],
 })

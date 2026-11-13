@@ -37,6 +37,24 @@ import {
  */
 const ATTACHMENT_POST_SCAN_LIMIT = 1000;
 
+/** «Últimos comentarios» de la barra lateral: cuántos por defecto y como mucho. */
+const RECENT_COMMENTS_DEFAULT = 3;
+const RECENT_COMMENTS_MAX = 10;
+/** Largo del extracto de cada comentario en la barra lateral. */
+const RECENT_COMMENT_EXCERPT = 100;
+
+/** Un comentario reciente, listo para la barra lateral del feed. */
+export interface RecentComment {
+  id: string;
+  postId: string;
+  postTitle: string;
+  authorId: string;
+  authorDisplayName: string | null;
+  /** Una línea, sin el marcador de adjuntos. Puede quedar vacío (solo adjuntos). */
+  excerpt: string;
+  createdAt: Date;
+}
+
 /**
  * CAMINO DEGRADADO NOMBRADO: quien comentó o mencionó no tiene `displayName`.
  *
@@ -309,6 +327,52 @@ export class CommunityService {
           })
         : [];
     return { ...post, reactions: [...post.reactions, ...commentReactions] };
+  }
+
+  /**
+   * Últimos comentarios del aula, con el post al que pertenecen.
+   *
+   * Alimenta «Últimos comentarios» de la barra lateral del feed: un post de
+   * hace semanas con respuestas de hoy no se mueve de su sitio en el feed, y
+   * esto es lo que enseña que la comunidad está viva.
+   *
+   * Solo lo que cualquier miembro puede abrir: nada borrado ni oculto por
+   * moderación, ni comentarios visibles dentro de un post oculto. Lo oculto no
+   * se promociona aquí ni siquiera para quien modera.
+   */
+  async listRecentComments(
+    tenantId: string,
+    limit = RECENT_COMMENTS_DEFAULT,
+  ): Promise<RecentComment[]> {
+    const take = Math.min(Math.max(1, Math.trunc(limit) || 1), RECENT_COMMENTS_MAX);
+    const rows = await this.prisma.modCommunityComment.findMany({
+      where: {
+        tenantId,
+        deletedAt: null,
+        hiddenAt: null,
+        post: { tenantId, deletedAt: null, hiddenAt: null },
+      },
+      orderBy: { createdAt: 'desc' },
+      take,
+      select: {
+        id: true,
+        postId: true,
+        authorId: true,
+        authorDisplayName: true,
+        body: true,
+        createdAt: true,
+        post: { select: { title: true } },
+      },
+    });
+    return rows.map((c) => ({
+      id: c.id,
+      postId: c.postId,
+      postTitle: c.post.title,
+      authorId: c.authorId,
+      authorDisplayName: c.authorDisplayName,
+      excerpt: excerpt(stripAttachmentMarker(c.body), RECENT_COMMENT_EXCERPT),
+      createdAt: c.createdAt,
+    }));
   }
 
   async deletePost(tenantId: string, actorId: string, postId: string) {
@@ -1309,6 +1373,15 @@ export function excerpt(body: string, max = 140): string {
   const oneLine = body.replace(/\s+/g, ' ').trim();
   if (oneLine.length <= max) return oneLine;
   return `${oneLine.slice(0, max - 1).trimEnd()}…`;
+}
+
+/**
+ * Quita del body los comentarios HTML, incluido el marcador de adjuntos que
+ * serializa el compositor (`<!--didacta-attachments:{…}-->`): en un extracto
+ * saldría el JSON de las imágenes en vez del texto.
+ */
+export function stripAttachmentMarker(body: string): string {
+  return body.replace(/<!--[\s\S]*?(?:-->|$)/g, ' ');
 }
 
 /**

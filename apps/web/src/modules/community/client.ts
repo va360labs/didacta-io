@@ -120,6 +120,48 @@ export interface CommunityAttachment {
   createdAt: string;
 }
 
+/** Persona tal como la enseña la barra lateral (nunca un correo). */
+export interface SidebarPerson {
+  id: string;
+  /** `null` = la UI pinta su «Miembro» traducido. */
+  name: string | null;
+  avatarUrl: string | null;
+}
+
+/**
+ * Barra lateral del feed (`GET /modules/community/sidebar`). Cada bloque viene
+ * `null` o vacío cuando el aula no tiene ese dato: la UI no lo pinta.
+ */
+export interface CommunitySidebar {
+  academy: {
+    name: string;
+    logoUrl: string | null;
+    logoDisplayMode: 'logo_only' | 'logo_and_name';
+    description: string | null;
+    host: string | null;
+  };
+  members: {
+    total: number;
+    admins: number | null;
+    online: number | null;
+    faces: Array<SidebarPerson & { online: boolean }>;
+  };
+  leaderboard: {
+    range: 'month';
+    entries: Array<SidebarPerson & { rank: number; points: number }>;
+  } | null;
+  recentComments: Array<{
+    id: string;
+    postId: string;
+    postTitle: string;
+    author: SidebarPerson;
+    excerpt: string;
+    createdAt: string;
+  }>;
+  /** Quien mira administra el aula: ve el botón «Ajustes». */
+  canManage: boolean;
+}
+
 export const communityApi = {
   async listPosts(
     opts: {
@@ -141,6 +183,13 @@ export const communityApi = {
     if (opts.source) params.set('source', opts.source);
     const path = `/api/v1/modules/community/posts${params.toString() ? `?${params}` : ''}`;
     return apiFetch<Post[]>(path, { method: 'GET' }, withAuth());
+  },
+  async getSidebar(): Promise<CommunitySidebar> {
+    return apiFetch<CommunitySidebar>(
+      '/api/v1/modules/community/sidebar',
+      { method: 'GET' },
+      withAuth(),
+    );
   },
   async listAttachments(opts: { tag?: string } = {}): Promise<CommunityAttachment[]> {
     const params = new URLSearchParams();

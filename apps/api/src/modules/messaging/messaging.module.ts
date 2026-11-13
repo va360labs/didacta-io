@@ -31,5 +31,8 @@ import { MessagingStreamService } from './messaging-stream.service';
     MessagingStreamService,
     { provide: APP_FILTER, useClass: MessagingErrorFilter },
   ],
+  // La presencia es del aula entera (ADR-019): la barra lateral de la comunidad
+  // lee la MISMA instancia (su espejo local es el único dato sin Redis).
+  exports: [MessagingPresenceService],
 })
 export class MessagingModule {}

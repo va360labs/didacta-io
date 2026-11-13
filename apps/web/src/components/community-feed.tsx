@@ -10,9 +10,12 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { CommunityAvatar } from '@/components/community-avatar';
 import { CommunityGalleryModal } from '@/components/community-gallery-modal';
 import { CommunityTagChip } from '@/components/community-tag-chip';
+import {
+  CommunitySidebarAside,
+  CommunitySidebarCollapsible,
+  useIsDesktop,
+} from '@/components/community-sidebar';
 import { ThreadCard, TAG_COLORS } from '@/components/community-thread-card';
-import { CommunityUpcomingCard } from '@/components/community-upcoming-card';
-import { InviteAndEarnCard } from '@/components/invite-and-earn-card';
 import { usePublicUsers } from '@/lib/public-users';
 import { Icon } from '@/components/icon';
 import { PostComposerModal } from '@/components/post-composer-modal';
@@ -81,6 +84,9 @@ export function CommunityFeed({
   const { selectedPostId, openPost, closePost } = usePostModalRoute({
     fallbackPath: '/community',
   });
+  // Comentario a enfocar al abrir un post desde «Últimos comentarios».
+  const [focus, setFocus] = useState<{ postId: string; commentId: string } | null>(null);
+  const desktop = useIsDesktop();
 
   // Contador de peticiones: solo pinta la ÚLTIMA que se pidió. Cambiar de tag
   // A a B rápido lanza dos `listPosts` y las respuestas pueden volver
@@ -138,6 +144,58 @@ export function CommunityFeed({
     }
   }
 
+  function openComment(postId: string, commentId: string) {
+    setFocus({ postId, commentId });
+    openPost(postId);
+  }
+
+  // Modo completo: los tags activos siguen en la barra, al final.
+  const activeTagsCard = (
+    <Card>
+      <CardContent className="p-5">
+        <h4 className="font-display text-base font-semibold text-text">{t('activeTags')}</h4>
+        <div className="mt-3 space-y-2">
+          {allTags
+            .filter((tag) => tag !== ALL_TAGS)
+            .map((tag, i) => {
+              const curated = tagsByName.get(tag);
+              const swatchColor = curated?.color ?? TAG_COLORS[i % TAG_COLORS.length]!;
+              return (
+                <div
+                  key={tag}
+                  className={cn(
+                    'flex items-center gap-2.5 py-1.5',
+                    i > 0 ? 'border-t border-border-soft pt-3' : '',
+                  )}
+                >
+                  <span
+                    aria-hidden="true"
+                    className="block h-7 w-7 rounded-lg"
+                    style={{ background: swatchColor, opacity: 0.18 }}
+                  />
+                  <span className="min-w-0 flex-1 wrap-break-word text-sm font-medium text-text">
+                    {tag}
+                  </span>
+                  <span className="text-xs text-text-subtle tabular-nums">
+                    {posts?.filter((p) => p.tags.includes(tag)).length ?? 0}
+                  </span>
+                </div>
+              );
+            })}
+          {allTags.length <= 1 ? <p className="text-xs text-text-subtle">{t('noTags')}</p> : null}
+        </div>
+      </CardContent>
+    </Card>
+  );
+
+  const mobileSidebar = (
+    <CommunitySidebarCollapsible
+      simple={simple}
+      onOpenComment={openComment}
+      extra={simple ? null : activeTagsCard}
+    />
+  );
+
   return (
     <section className="space-y-6">
       <PostComposerModal
@@ -152,6 +210,10 @@ export function CommunityFeed({
         onClose={() => setGalleryOpen(false)}
         title={t('galleryTitle')}
       />
+
+      {/* Móvil: la barra va plegada ARRIBA (nombre, miembros, quién está); en
+          el modo completo, debajo del título de la página. */}
+      {!desktop && simple ? mobileSidebar : null}
 
       {simple ? (
         <div className="flex flex-col gap-3">
@@ -222,6 +284,7 @@ export function CommunityFeed({
           </div>
         </header>
       )}
+      {!desktop && !simple ? mobileSidebar : null}
 
       <div
         className={cn(
@@ -351,72 +414,13 @@ export function CommunityFeed({
           )}
         </div>
 
-        {/* Sidebar derecha */}
-        <aside className="flex min-w-0 flex-col gap-4">
-          {/* Modo sencillo: invitar está donde se habla con la comunidad. */}
-          {simple ? <InviteAndEarnCard /> : null}
-          {/* Lo primero: al abrir la comunidad se ve qué hay por delante sin
-              tener que ir hasta /calendar. */}
-          <CommunityUpcomingCard />
-
-          {simple ? null : (
-            <>
-              <Card>
-                <CardContent className="p-5">
-                  <h4 className="font-display text-base font-semibold text-text">
-                    {t('activity')}
-                  </h4>
-                  <div className="mt-3 divide-y divide-border-soft text-sm">
-                    {/* Solo datos reales: nº de publicaciones del feed actual. Las
-                    métricas "Respuestas útiles"/"Reconocimientos" se quitaron por
-                    no tener endpoint que las respalde (regla: cero datos de cartón). */}
-                    <ActivityRow label={t('postsInFeed')} value={posts?.length ?? 0} />
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardContent className="p-5">
-                  <h4 className="font-display text-base font-semibold text-text">
-                    {t('activeTags')}
-                  </h4>
-                  <div className="mt-3 space-y-2">
-                    {allTags
-                      .filter((tag) => tag !== ALL_TAGS)
-                      .map((tag, i) => {
-                        const curated = tagsByName.get(tag);
-                        const swatchColor = curated?.color ?? TAG_COLORS[i % TAG_COLORS.length]!;
-                        return (
-                          <div
-                            key={tag}
-                            className={cn(
-                              'flex items-center gap-2.5 py-1.5',
-                              i > 0 ? 'border-t border-border-soft pt-3' : '',
-                            )}
-                          >
-                            <span
-                              aria-hidden="true"
-                              className="block h-7 w-7 rounded-lg"
-                              style={{ background: swatchColor, opacity: 0.18 }}
-                            />
-                            <span className="min-w-0 flex-1 wrap-break-word text-sm font-medium text-text">
-                              {tag}
-                            </span>
-                            <span className="text-xs text-text-subtle tabular-nums">
-                              {posts?.filter((p) => p.tags.includes(tag)).length ?? 0}
-                            </span>
-                          </div>
-                        );
-                      })}
-                    {allTags.length <= 1 ? (
-                      <p className="text-xs text-text-subtle">{t('noTags')}</p>
-                    ) : null}
-                  </div>
-                </CardContent>
-              </Card>
-            </>
-          )}
-        </aside>
+        {desktop ? (
+          <CommunitySidebarAside
+            simple={simple}
+            onOpenComment={openComment}
+            extra={simple ? null : activeTagsCard}
+          />
+        ) : null}
       </div>
 
       <Dialog
@@ -431,35 +435,18 @@ export function CommunityFeed({
         {selectedPostId ? (
           <PostDetailView
             postId={selectedPostId}
-            focusCommentId={selectedPostId === initialPostId ? focusCommentId : undefined}
+            focusCommentId={
+              selectedPostId === initialPostId
+                ? focusCommentId
+                : focus?.postId === selectedPostId
+                  ? focus.commentId
+                  : undefined
+            }
             onClose={closePost}
             onChanged={() => void reload({ sort, tag: activeTag })}
           />
         ) : null}
       </Dialog>
     </section>
-  );
-}
-
-function ActivityRow({
-  label,
-  value,
-  tone,
-}: {
-  label: string;
-  value: number;
-  tone?: 'success' | 'info';
-}) {
-  const color =
-    tone === 'success'
-      ? 'text-[var(--didacta-success-fg)]'
-      : tone === 'info'
-        ? 'text-[var(--didacta-info-fg)]'
-        : 'text-text';
-  return (
-    <div className="flex items-center justify-between py-2">
-      <span className="text-text-muted">{label}</span>
-      <strong className={cn('tabular-nums font-semibold', color)}>{value}</strong>
-    </div>
   );
 }
