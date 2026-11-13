@@ -20,7 +20,7 @@ interface CommunityTagChipProps {
 
 /**
  * Chip de tag de comunidad. Si el tenant tiene un tag curado con ese
- * nombre, lo pinta con su color/icono; si no, cae al `<Badge variant="info">`
+ * nombre, lo pinta con su color/icono; si no, cae al `<Badge variant="primary">` (color del aula)
  * por defecto. Preserva compatibilidad con tags libres sin curar.
  */
 export function CommunityTagChip({ name, tag, onClick, className }: CommunityTagChipProps) {
@@ -29,14 +29,14 @@ export function CommunityTagChip({ name, tag, onClick, className }: CommunityTag
     if (onClick) {
       return (
         <button type="button" onClick={onClick} className={cn('rounded-full', className)}>
-          <Badge variant="info" className="cursor-pointer hover:opacity-80">
+          <Badge variant="primary" className="cursor-pointer hover:opacity-80">
             {name}
           </Badge>
         </button>
       );
     }
     return (
-      <Badge variant="info" className={className}>
+      <Badge variant="primary" className={className}>
         {name}
       </Badge>
     );

@@ -121,7 +121,8 @@ test.describe('comunidad · barra lateral (modo sencillo)', () => {
     await apiAs(aula.host, '/api/v1/modules/theming/me', {
       method: 'PUT',
       bearer: T,
-      body: { signinHeadline: HEADLINE },
+      // Coral: el color del aula tiene que verse, no el azul de Didacta.
+      body: { signinHeadline: HEADLINE, brandHue: 14, brandSaturation: 72 },
     });
 
     priya = await alumno(aula, `priya-${stamp}`, 'Priya Nair');
@@ -238,6 +239,32 @@ test.describe('comunidad · barra lateral (modo sencillo)', () => {
     // …y no el del modo completo (título, «New conversation», galería).
     await expect(page.getByRole('button', { name: 'New conversation' })).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Gallery' })).toHaveCount(0);
+    await ctx.close();
+  });
+
+  test('los chips de espacio y las iniciales llevan el color del aula, no el azul fijo', async ({
+    browser,
+  }) => {
+    const { ctx, page } = await abrir(browser, aula, priya, 1440, 900);
+    await expect(page.getByText('Which grinder for a small budget?').first()).toBeVisible({
+      timeout: 30_000,
+    });
+    const colores = await page.evaluate(() => {
+      const probe = document.createElement('span');
+      probe.className = 'text-brand-700';
+      document.body.appendChild(probe);
+      const marca = getComputedStyle(probe).color;
+      probe.remove();
+      // El chip del primer post (span con el texto del espacio).
+      const chips = [...document.querySelectorAll('span')].filter(
+        (el) => el.textContent === 'General' && el.className.includes('rounded-full'),
+      );
+      return { marca, chip: chips[0] ? getComputedStyle(chips[0]).color : null };
+    });
+    expect(colores.chip).not.toBeNull();
+    expect(colores.chip).toBe(colores.marca);
+    // #1E5AA8 / #1e5aa8 = rgb(30, 90, 168): el azul de Didacta.
+    expect(colores.chip).not.toBe('rgb(30, 90, 168)');
     await ctx.close();
   });
 

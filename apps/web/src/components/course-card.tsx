@@ -37,11 +37,12 @@ interface Props {
   href?: string;
 }
 
+// Portada de reserva (curso sin imagen): degradados del color del aula.
 const COVER_GRADIENTS = [
-  'linear-gradient(135deg, #0D1B2A 0%, #1E5AA8 100%)',
-  'linear-gradient(135deg, #18B5A8 0%, #2E7DCE 100%)',
-  'linear-gradient(135deg, #1E5AA8 0%, #2E7DCE 100%)',
-  'linear-gradient(135deg, #2E7DCE 0%, #18B5A8 100%)',
+  'linear-gradient(135deg, var(--color-brand-900) 0%, var(--color-brand-600) 100%)',
+  'linear-gradient(135deg, var(--didacta-growth) 0%, var(--color-brand-500) 100%)',
+  'linear-gradient(135deg, var(--color-brand-700) 0%, var(--color-brand-400) 100%)',
+  'linear-gradient(135deg, var(--color-brand-500) 0%, var(--didacta-growth) 100%)',
 ];
 
 function pickGradient(seed: string): string {
@@ -69,7 +70,7 @@ export function CourseCard({ course, href }: Props) {
   const progress = typeof course.progressPercent === 'number' ? course.progressPercent : null;
   const categoriesByName = useCourseCategories();
   const curatedCategory = course.category ? categoriesByName.get(course.category) : undefined;
-  const ctaTone = status === 'completed' ? 'success' : 'info';
+  const ctaTone = status === 'completed' ? 'success' : 'brand';
   const ctaLabel =
     status === 'completed'
       ? t('courseCard.ctaCertificate')
@@ -85,7 +86,7 @@ export function CourseCard({ course, href }: Props) {
     >
       <Card interactive className="flex h-full flex-col overflow-hidden p-0">
         {/* Cover 16:9 — la portada se muestra entera (object-contain) sobre un
-            fondo neutro, sin recortar el banner. Fallback: gradient Didacta. */}
+            fondo neutro, sin recortar el banner. Fallback: degradado del aula. */}
         <div className="relative aspect-video w-full overflow-hidden bg-subtle">
           {course.thumbnailUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
@@ -122,7 +123,7 @@ export function CourseCard({ course, href }: Props) {
           <div className="flex flex-wrap items-center gap-1.5 text-xs font-medium text-text-muted">
             <Badge
               variant={
-                status === 'completed' ? 'success' : status === 'pending' ? 'warning' : 'info'
+                status === 'completed' ? 'success' : status === 'pending' ? 'warning' : 'primary'
               }
               dot
             >
@@ -177,7 +178,7 @@ export function CourseCard({ course, href }: Props) {
             {progress != null ? (
               <Progress
                 value={progress}
-                tone={status === 'completed' ? 'success' : 'info'}
+                tone={status === 'completed' ? 'success' : 'brand'}
                 label={t('courseCard.progressLabel', { percent: Math.round(progress) })}
               />
             ) : null}
@@ -196,9 +197,7 @@ export function CourseCard({ course, href }: Props) {
               <span
                 className={cn(
                   'inline-flex items-center gap-1.5 text-xs font-semibold',
-                  ctaTone === 'success'
-                    ? 'text-[var(--didacta-success-fg)]'
-                    : 'text-[var(--didacta-info-fg)]',
+                  ctaTone === 'success' ? 'text-[var(--didacta-success-fg)]' : 'text-brand-700',
                 )}
               >
                 {ctaLabel}

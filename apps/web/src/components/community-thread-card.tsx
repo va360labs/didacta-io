@@ -19,7 +19,14 @@ import { parseClaseEmbed } from '@/lib/clase-embed';
 import { formatDate } from '@/lib/i18n/format';
 import type { TranslatorLike } from '@/lib/i18n/labels';
 
-export const TAG_COLORS = ['#1E5AA8', '#18B5A8', '#FF6F61', '#2E7DCE', '#0D1B2A'];
+/** Paleta de los tags sin curar: la marca del aula y los acentos de Didacta. */
+export const TAG_COLORS = [
+  'var(--color-brand-600)',
+  'var(--didacta-growth)',
+  'var(--didacta-coral)',
+  'var(--color-brand-400)',
+  'var(--didacta-night)',
+];
 
 /** Máximo de miniaturas de adjuntos que mostramos en la tarjeta del feed. */
 const MAX_FEED_THUMBS = 6;

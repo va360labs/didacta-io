@@ -189,7 +189,7 @@ export const MentionTextarea = forwardRef<HTMLTextAreaElement, ComponentProps<ty
                 aria-selected={idx === highlightIdx}
                 className={
                   idx === highlightIdx
-                    ? 'flex cursor-pointer items-center gap-2 bg-[var(--didacta-info-bg)] px-3 py-2 text-sm text-[var(--didacta-info-fg)]'
+                    ? 'flex cursor-pointer items-center gap-2 bg-brand-50 px-3 py-2 text-sm text-brand-700'
                     : 'flex cursor-pointer items-center gap-2 px-3 py-2 text-sm hover:bg-surface-2'
                 }
                 onMouseEnter={() => setHighlightIdx(idx)}

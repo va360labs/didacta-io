@@ -114,7 +114,8 @@ export function UserAvatar({
           aria-hidden="true"
           className="grid h-full w-full place-items-center font-display font-bold text-white"
           style={{
-            background: 'linear-gradient(135deg, #1E5AA8 0%, #18B5A8 100%)',
+            background:
+              'linear-gradient(135deg, var(--color-brand-700) 0%, var(--color-brand-400) 100%)',
             fontSize: `${Math.round(size * 0.34)}px`,
           }}
         >

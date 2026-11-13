@@ -180,7 +180,7 @@ export function ClaseEmbedCard({ sessionId }: { sessionId: string }) {
               // Borde degradado sin utilidades: dos fondos, el interior tapa
               // el relleno y deja ver 1px del degradado exterior.
               backgroundImage:
-                'linear-gradient(var(--color-surface), var(--color-surface)), linear-gradient(135deg, var(--didacta-growth), var(--didacta-trust))',
+                'linear-gradient(var(--color-surface), var(--color-surface)), linear-gradient(135deg, var(--didacta-growth), var(--color-brand-500))',
               backgroundOrigin: 'border-box',
               backgroundClip: 'padding-box, border-box',
               borderWidth: '1.5px',
