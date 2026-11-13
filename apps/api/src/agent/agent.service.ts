@@ -14,6 +14,11 @@ import { ModuleAccessInterceptor } from '../modules/module-access.interceptor';
 import { ModuleRegistryService } from '../modules/module-registry.service';
 import { PrismaAuditLogService } from '../modules/prisma-audit-log.service';
 import { PrismaService } from '../prisma/prisma.service';
+import {
+  academyLocale,
+  type AcademyDefaultsPrisma,
+  type AcademyLocale,
+} from '../common/academy-defaults';
 import { isAgentScope } from './agent-scopes';
 import {
   AGENT_TOOLS,
@@ -126,6 +131,14 @@ export class AgentService {
       select: { name: true },
     });
     return t?.name ?? null;
+  }
+
+  /**
+   * Idioma del aula (es/en), para los textos que el servidor pone por su
+   * cuenta, como el nombre por defecto de la clave del panel.
+   */
+  async academyLocale(tenantId: string): Promise<AcademyLocale> {
+    return academyLocale(this.prisma as unknown as AcademyDefaultsPrisma, tenantId);
   }
 
   async call(

@@ -81,6 +81,7 @@ const auditLog = { record: vi.fn(async () => undefined) };
 const seen: { user?: SessionClaims; als?: string } = {};
 const agent = {
   academyName: vi.fn(async () => 'Aula A'),
+  academyLocale: vi.fn(async (): Promise<'es' | 'en'> => 'es'),
   visibleTools: vi.fn(async (u: SessionClaims) =>
     AGENT_TOOLS.filter((t) => u.roles.includes(t.scope)),
   ),
@@ -421,5 +422,28 @@ describe('POST /agent/keys — la clave del panel', () => {
         metadata: expect.objectContaining({ purpose: 'agent' }),
       }),
     );
+  });
+
+  it('sin nombre, la clave se llama como en el idioma del aula', async () => {
+    agent.academyLocale.mockResolvedValueOnce('en');
+    expect((await create(await bearer(['tenant_admin']))).statusCode).toBe(201);
+    expect(apiKeys.create).toHaveBeenLastCalledWith(expect.objectContaining({ name: 'AI agent' }));
+    expect(agent.academyLocale).toHaveBeenCalledWith('tenant-A');
+
+    agent.academyLocale.mockResolvedValueOnce('es');
+    await create(await bearer(['tenant_admin']));
+    expect(apiKeys.create).toHaveBeenLastCalledWith(
+      expect.objectContaining({ name: 'Agente de IA' }),
+    );
+
+    // Si no puede saberlo, español (el idioma por defecto del aula); un nombre
+    // explícito manda siempre.
+    agent.academyLocale.mockRejectedValueOnce(new Error('sin base'));
+    await create(await bearer(['tenant_admin']));
+    expect(apiKeys.create).toHaveBeenLastCalledWith(
+      expect.objectContaining({ name: 'Agente de IA' }),
+    );
+    await create(await bearer(['tenant_admin']), { name: 'Mi Claude' });
+    expect(apiKeys.create).toHaveBeenLastCalledWith(expect.objectContaining({ name: 'Mi Claude' }));
   });
 });
