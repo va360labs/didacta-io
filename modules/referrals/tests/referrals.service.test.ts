@@ -1364,6 +1364,25 @@ describe('descuento en la cuota: lo que ve el alumno (memberStats.credit)', () =
 });
 
 describe('descuento en la cuota: redeemAsCredit', () => {
+  it('el abono en Stripe se describe como la línea de la factura: «Pago con saldo de referidos»', async () => {
+    const { port } = fakeCreditPort();
+    const descriptions: string[] = [];
+    const spy: ReferralsCreditPort = {
+      retrieveBalance: port.retrieveBalance,
+      credit: async (tenantId, p) => {
+        descriptions.push(p.description);
+        return port.credit(tenantId, p);
+      },
+    };
+    const { prisma, service } = build({ creditPort: spy });
+    seedMember(prisma, [
+      { amountCents: 400, status: 'APPROVED' },
+      { amountCents: 200, status: 'APPROVED' },
+    ]);
+    await service.redeemAsCredit(TENANT, 'referrer-1');
+    expect(descriptions).toEqual(['Pago con saldo de referidos (2 comisiones)']);
+  });
+
   it('abona lo canjeable con la clave de su liquidación; las comisiones quedan PAID con la referencia', async () => {
     const { port, calls } = fakeCreditPort();
     const { prisma, service, events } = build({ creditPort: port });

@@ -2220,6 +2220,27 @@ describe('SubscriptionsService — el evento ya lo archivó OTRA aula (fila que 
 });
 
 describe('invoiceCreditApplied (la línea «Pago con saldo de referidos»)', () => {
+  it('factura real de Stripe con saldo aplicado: total = cuota entera, el saldo aparte y lo cobrado es la diferencia', () => {
+    // Forma de una factura de Stripe cuando el cliente tenía 6 € a favor
+    // (customer balance): `subtotal` y `total` son la cuota; el saldo no es un
+    // descuento (`total_discount_amounts` vacío) sino `starting_balance`, y
+    // `amount_due` es lo que se cobra a la tarjeta.
+    const stripeInvoice = {
+      subtotal: 3000,
+      total: 3000,
+      total_discount_amounts: [],
+      starting_balance: -600,
+      ending_balance: 0,
+      amount_due: 2400,
+      amount_paid: 2400,
+    };
+    const credit = invoiceCreditApplied(stripeInvoice);
+    expect(stripeInvoice.total).toBe(stripeInvoice.subtotal);
+    expect(stripeInvoice.total_discount_amounts).toEqual([]);
+    expect(credit).toBe(600);
+    expect(stripeInvoice.amount_paid + credit).toBe(stripeInvoice.total);
+  });
+
   it('solo cuenta el saldo A FAVOR que Stripe gastó, nunca más del que había', () => {
     expect(invoiceCreditApplied({ starting_balance: -600, ending_balance: 0 })).toBe(600);
     // Había 10 € a favor; la factura gastó 6 € y quedan 4 €.

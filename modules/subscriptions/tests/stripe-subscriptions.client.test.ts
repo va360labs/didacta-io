@@ -260,6 +260,55 @@ describe('saldo de cliente (descuento por referidos)', () => {
     ]);
   });
 
+  it('el descuento es SALDO del cliente, no un cupón: Stripe factura la cuota entera y lo aplica como línea aparte', async () => {
+    // Si el adaptador tocara la suscripción, los cupones o el precio para
+    // hacer el descuento, la factura saldría por menos de la cuota. Aquí solo
+    // existe el saldo del cliente: cualquier otro recurso se registra.
+    const touched: string[] = [];
+    const created: unknown[] = [];
+    const fake = new Proxy(
+      {
+        customers: {
+          retrieve: async () => ({ id: 'cus_1', balance: 0, currency: 'eur' }),
+          createBalanceTransaction: async (_id: string, params: unknown) => {
+            created.push(params);
+            return { id: 'cbtxn_1', object: 'customer_balance_transaction' };
+          },
+        },
+      },
+      {
+        get(target, prop: string) {
+          if (prop !== 'customers' && prop !== 'then') touched.push(prop);
+          return (target as Record<string, unknown>)[prop];
+        },
+      },
+    );
+    const adapter = new SubscriptionsStripeSdkAdapter(
+      'sk_test_x',
+      'whsec_x',
+      function FakeStripe() {
+        return fake;
+      } as never,
+    );
+    await adapter.creditCustomerBalance({
+      customerId: 'cus_1',
+      amountCents: 600,
+      currency: 'eur',
+      description: 'Pago con saldo de referidos (2 comisiones)',
+      metadata: {},
+      idempotencyKey: 'referrals-credit:p1',
+    });
+    expect(created).toEqual([
+      {
+        amount: -600,
+        currency: 'eur',
+        description: 'Pago con saldo de referidos (2 comisiones)',
+        metadata: {},
+      },
+    ]);
+    expect(touched).toEqual([]);
+  });
+
   it('nunca abona 0 ni negativos', async () => {
     const { adapter, created } = balanceWorld({ id: 'cus_1', balance: 0, currency: 'eur' });
     for (const amountCents of [0, -5, 1.5]) {
