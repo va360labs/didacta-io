@@ -313,7 +313,7 @@ test.describe('Panel admin — /admin/community/spaces', () => {
 
   test('muestra un heading con "Espacios"', async ({ page }) => {
     await withAdminSession(page, '/admin/community/spaces');
-    await expect(page.getByRole('heading', { name: /spaces/i }).first()).toBeVisible({
+    await expect(page.getByRole('heading', { name: /espacios/i }).first()).toBeVisible({
       timeout: 8000,
     });
   });
