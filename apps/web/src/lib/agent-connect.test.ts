@@ -27,7 +27,7 @@ const IN = {
   name: 'morningpour',
 };
 
-describe('agentScreenFor: solo las pantallas de creación manual', () => {
+describe('agentScreenFor: solo las pantallas de gestión con creación manual', () => {
   it.each([
     ['/formador/cursos', 'courses'],
     ['/formador/cursos/', 'courses'],
@@ -35,8 +35,6 @@ describe('agentScreenFor: solo las pantallas de creación manual', () => {
     [`/formador/cursos/${ID}`, 'course-edit'],
     [`/formador/cursos/${ID}?anadir=1`, 'course-edit'],
     ['/formador/aula-virtual', 'live'],
-    ['/comunidad', 'community'],
-    ['/espacios/general', 'community'],
   ])('%s → %s', (path, screen) => {
     expect(agentScreenFor(path)?.screen).toBe(screen);
   });
@@ -53,7 +51,10 @@ describe('agentScreenFor: solo las pantallas de creación manual', () => {
     '/admin/usuarios', // invitar: el agente no da de alta personas
     '/admin/cobros', // precios y cobros: tocan dinero
     '/formador/cursos/no-es-un-id',
+    // Zona de miembros: nunca, aunque quien mire sea el administrador.
+    '/comunidad',
     '/comunidad/menciones',
+    '/espacios/general',
     '/cursos',
     '',
     null,

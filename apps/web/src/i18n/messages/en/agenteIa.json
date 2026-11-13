@@ -11,8 +11,7 @@
     "courseNew": "Create a course called “…” with 6 text lessons from these notes: …",
     "courseEdit": "Create 5 lessons for my course “{curso}” from this outline: …",
     "courseEditSinTitulo": "Create 5 lessons for this course from this outline: …",
-    "live": "Schedule a live class next Tuesday at 7 pm (my time) called “Q&A” with this Zoom link: …",
-    "community": "Write and post a welcome message for new students in the General space."
+    "live": "Schedule a live class next Tuesday at 7 pm (my time) called “Q&A” with this Zoom link: …"
   },
   "copiar": "Copy",
   "copiado": "Copied",

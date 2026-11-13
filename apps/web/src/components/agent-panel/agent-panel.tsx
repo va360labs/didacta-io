@@ -33,8 +33,9 @@ import { cn } from '@/lib/utils';
 /**
  * Panel «Hazlo más rápido con tu agente de IA» del MODO SENCILLO.
  *
- * Solo para quien administra el aula y solo en las pantallas donde hoy se
- * crea algo a mano (`agentScreenFor`). Explica qué pedirle al agente en ESA
+ * Solo para quien administra el aula y solo en las pantallas de gestión donde
+ * hoy se crea algo a mano (`agentScreenFor`): nunca en la comunidad ni en las
+ * zonas de miembro. Explica qué pedirle al agente en ESA
  * pantalla, crea la clave de conexión (se enseña una vez) y da el comando o
  * la configuración de cada agente con la URL del servidor MCP del aula y la
  * clave ya puestas.
@@ -267,9 +268,7 @@ function PanelBody({
         ? t('ejemplos.courseNew')
         : match.screen === 'courses'
           ? t('ejemplos.courses')
-          : match.screen === 'live'
-            ? t('ejemplos.live')
-            : t('ejemplos.community');
+          : t('ejemplos.live');
 
   return (
     <div className="grid gap-4 p-4" data-screen={match.screen}>

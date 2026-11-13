@@ -19,7 +19,9 @@ import { apiAs, freshTenant, sql, type FreshTenant } from '../helpers/simple-ten
  *  2. Con ESA clave, un cliente MCP (JSON-RPC por la web, como un agente)
  *     crea un curso con lecciones, y la creadora lo ve en su aula.
  *  3. Plegado se recuerda tras recargar. Revocar la clave cierra el MCP.
- *  4. Una alumna del aula no ve el panel. En «Empieza aquí» tampoco sale.
+ *  4. Solo en zonas de gestión: la creadora (admin) NO lo ve en la comunidad
+ *     ni en los espacios, y una alumna no lo ve nunca. En «Empieza aquí»
+ *     tampoco sale.
  *  5. A 390 px: botón en la página y hoja inferior, sin desbordar.
  */
 
@@ -336,12 +338,45 @@ test('agente de IA: panel al crear lecciones, clave, comandos y un agente crea u
   await ctx.close();
 });
 
-test('agente de IA: una alumna nunca ve el panel', async ({ browser }) => {
+/** Ni panel, ni pestaña plegada, ni botón del móvil. */
+async function sinPanel(page: Page) {
+  await expect(page.getByTestId('simple-shell')).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByTestId('agente-ia-panel')).toHaveCount(0);
+  await expect(page.getByTestId('agente-ia-plegado')).toHaveCount(0);
+  await expect(page.getByTestId('agente-ia-movil')).toHaveCount(0);
+}
+
+test('agente de IA: solo en gestión — ni en la comunidad ni en los espacios aunque seas admin, y una alumna nunca', async ({
+  browser,
+}) => {
   test.setTimeout(180_000);
   const { tenant, operador, page, ctx } = await aulaConCreadora(browser);
-  // Control: la creadora SÍ lo ve en la comunidad.
-  await page.goto(`${tenant.base}/comunidad`);
+  // Un espacio real del aula (si el alta no trae ninguno, se crea uno).
+  let spaces = await apiAs<Array<{ slug: string }>>(
+    tenant.host,
+    '/api/v1/modules/community/spaces',
+    { bearer: operador },
+  );
+  if (spaces.length === 0) {
+    await apiAs(tenant.host, '/api/v1/modules/community/spaces', {
+      method: 'POST',
+      bearer: operador,
+      body: { slug: 'general', title: 'General' },
+    });
+    spaces = [{ slug: 'general' }];
+  }
+  const espacio = `/espacios/${spaces[0]!.slug}`;
+
+  // Control: la creadora SÍ lo ve en la gestión de directos (la comprobación
+  // de abajo discrimina: el panel existe para ella).
+  await page.goto(`${tenant.base}/formador/aula-virtual`);
   await expect(page.getByTestId('agente-ia-panel')).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByTestId('agente-ia-panel').locator('[data-screen="live"]')).toBeVisible();
+  // Y NO en la comunidad ni en los espacios, aunque sea la administradora.
+  for (const ruta of ['/comunidad', espacio]) {
+    await page.goto(`${tenant.base}${ruta}`);
+    await sinPanel(page);
+  }
   await ctx.close();
 
   const email = await alumna(tenant, operador);
@@ -351,12 +386,9 @@ test('agente de IA: una alumna nunca ve el panel', async ({ browser }) => {
   });
   const a = await actx.newPage();
   await signin(a, tenant, email);
-  for (const ruta of ['/comunidad', '/cursos']) {
+  for (const ruta of ['/comunidad', espacio, '/cursos']) {
     await a.goto(`${tenant.base}${ruta}`);
-    await expect(a.getByTestId('simple-shell')).toBeVisible({ timeout: 20_000 });
-    await expect(a.getByTestId('agente-ia-panel')).toHaveCount(0);
-    await expect(a.getByTestId('agente-ia-plegado')).toHaveCount(0);
-    await expect(a.getByTestId('agente-ia-movil')).toHaveCount(0);
+    await sinPanel(a);
   }
   // Y la API tampoco le deja acuñar una clave de agente (403, no 401: tiene
   // sesión válida, le falta ser admin).

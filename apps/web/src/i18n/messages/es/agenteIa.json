@@ -11,8 +11,7 @@
     "courseNew": "Crea un curso llamado «…» con 6 lecciones de texto a partir de estas notas: …",
     "courseEdit": "Crea 5 lecciones para mi curso «{curso}» a partir de este guion: …",
     "courseEditSinTitulo": "Crea 5 lecciones para este curso a partir de este guion: …",
-    "live": "Programa un directo el martes que viene a las 19:00 (mi hora) llamado «Preguntas y respuestas» con este enlace de Zoom: …",
-    "community": "Escribe y publica en el espacio General un mensaje de bienvenida para los alumnos nuevos."
+    "live": "Programa un directo el martes que viene a las 19:00 (mi hora) llamado «Preguntas y respuestas» con este enlace de Zoom: …"
   },
   "copiar": "Copiar",
   "copiado": "Copiado",
