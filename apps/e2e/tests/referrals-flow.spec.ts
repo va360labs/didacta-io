@@ -51,6 +51,23 @@ async function api<T = Record<string, unknown>>(
   return { status: res.status, body: (text ? JSON.parse(text) : {}) as T };
 }
 
+/**
+ * Desde los puntos legales del programa (ADR-057), sin aceptar la versión
+ * vigente de las condiciones y declarar ser mayor de edad no hay enlace
+ * (403 REFERRALS_TERMS_REQUIRED) ni se atribuyen comisiones. Es lo que hace el
+ * alumno en la UI al marcar la casilla; aquí, por la API.
+ */
+async function acceptReferralTerms(bearer: string): Promise<void> {
+  const terms = await api<{ version: string }>('/modules/referrals/public/terms');
+  expect(terms.status, 'GET /modules/referrals/public/terms').toBe(200);
+  const accepted = await api('/modules/referrals/me/terms', {
+    method: 'POST',
+    bearer,
+    body: { version: terms.body.version, adult: true },
+  });
+  expect(accepted.status, 'POST /modules/referrals/me/terms').toBe(200);
+}
+
 interface MemberStats {
   programActive: boolean;
   clicks: number;
@@ -132,6 +149,7 @@ test.describe('Referidos — flujo completo (webhooks Stripe firmados)', () => {
     });
     const referrerToken = referrer.tokens.accessToken;
     const tenantId = referrer.user.tenantId;
+    await acceptReferralTerms(referrerToken);
     const me = await api<{ code: string; url: string }>('/modules/referrals/me', {
       bearer: referrerToken,
     });
@@ -363,6 +381,7 @@ test.describe('Referidos — flujo completo (webhooks Stripe firmados)', () => {
     });
     const referrerToken = referrer.tokens.accessToken;
     const tenantId = referrer.user.tenantId;
+    await acceptReferralTerms(referrerToken);
     const me = await api<{ code: string }>('/modules/referrals/me', { bearer: referrerToken });
     expect(me.status).toBe(200);
     const code = me.body.code;

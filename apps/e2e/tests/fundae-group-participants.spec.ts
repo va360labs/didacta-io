@@ -208,7 +208,7 @@ test.describe('Fundae · Participantes de grupo bonificable (LMS-82)', () => {
       {
         method: 'POST',
         bearer,
-        body: { userId: '00000000-0000-0000-0000-000000000099' },
+        body: { userId: '00000000-0000-4000-8000-000000000099' },
       },
     );
     expect(enrollOnCancelled.status).toBe(409);

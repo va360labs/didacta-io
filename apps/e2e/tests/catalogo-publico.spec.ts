@@ -180,7 +180,12 @@ test.describe('Viaje 2 público — catálogo y compra anónima (F4)', () => {
 
     await card.click();
     await expect(page).toHaveURL(new RegExp(`/catalogo/curso-venta-publica-e2e-${stamp}$`));
-    await expect(page.getByRole('button', { name: 'Comprar ahora' })).toBeEnabled();
+    // Contenido digital: sin la casilla de renuncia al desistimiento (acceso
+    // inmediato) no se puede pagar. El botón espera a que se marque.
+    const comprar = page.getByRole('button', { name: 'Comprar ahora' });
+    await expect(comprar).toBeDisabled();
+    await page.getByTestId('withdrawal-waiver').getByRole('checkbox').check();
+    await expect(comprar).toBeEnabled();
     await expect(page.getByText('Pago único · Acceso inmediato')).toBeVisible();
     await ctx.close();
   });

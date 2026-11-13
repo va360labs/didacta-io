@@ -80,7 +80,7 @@ test.describe('mod.zoom-live · sesiones síncronas', () => {
         hostEmail: process.env.E2E_ADMIN_EMAIL ?? 'admin@example.test',
         timezone: 'UTC',
         // lessonId arbitrario sin courseId.
-        lessonId: '00000000-0000-0000-0000-000000000001',
+        lessonId: '00000000-0000-4000-8000-000000000001',
       }),
     });
     expect(res.status).toBe(422);
