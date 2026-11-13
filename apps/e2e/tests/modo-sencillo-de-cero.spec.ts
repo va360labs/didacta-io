@@ -119,6 +119,9 @@ test('modo sencillo: de cero a enlace de venta con precio', async ({ browser }) 
   // Paso 2: una lección de texto.
   await c.click(page.getByRole('link', { name: 'Añadir mi primera lección' }));
   await expect(page.getByTestId('editor-sencillo')).toBeVisible();
+  // El panel del agente de IA va abierto a la derecha del editor: el recuento
+  // se mide con él delante y no le suma ni un clic.
+  await expect(page.getByTestId('agente-ia-panel')).toBeVisible();
   await c.click(page.getByTestId('tipo-TEXT'));
   await c.fill(page.getByLabel('Título de la lección'), 'Bienvenida');
   await c.fill(

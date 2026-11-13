@@ -84,6 +84,16 @@ async function definirYEntrar(page: Page, url: string, email: string, password: 
   await page.locator('button[type="submit"]').click();
 }
 
+/**
+ * El panel «Hazlo más rápido con tu agente de IA» no tiene nada que hacer en
+ * el primer acceso: ni la columna, ni la pestaña plegada, ni el botón de móvil.
+ */
+async function sinPanelDelAgente(page: Page) {
+  await expect(page.getByTestId('agente-ia-panel')).toHaveCount(0);
+  await expect(page.getByTestId('agente-ia-plegado')).toHaveCount(0);
+  await expect(page.getByTestId('agente-ia-movil')).toHaveCount(0);
+}
+
 async function contextoEn(browser: import('@playwright/test').Browser, tenant: FreshTenant) {
   const ctx = await browser.newContext({ locale: 'en-US', viewport: { width: 1440, height: 900 } });
   await ctx.addCookies([{ name: 'didacta_locale', value: 'en-US', url: tenant.base }]);
@@ -120,6 +130,8 @@ test('modo sencillo: la creadora se presenta (foto, nombre, bio) antes del alta 
   // El nombre provisional del aula (su slug) no se le enseña.
   await expect(page.getByText(`Welcome to ${tenant.slug}`)).toHaveCount(0);
   await expect(page.getByText(/see it next to your posts/)).toBeVisible();
+  // Es admin, pero el paso de perfil no es una pantalla de creación.
+  await sinPanelDelAgente(page);
 
   // 2. Sin foto el botón la deja para luego; con foto, «Continue».
   await expect(page.getByRole('button', { name: 'Skip for now' })).toBeEnabled();
@@ -155,6 +167,7 @@ test('modo sencillo: la creadora se presenta (foto, nombre, bio) antes del alta 
   await expect(page.getByText('Question 1 of 3')).toBeVisible();
   await expect(page.locator('input[type="file"]')).toHaveCount(0);
   await expect(page.getByLabel(/Profile name/)).toHaveCount(0);
+  await sinPanelDelAgente(page);
 
   const yo = usuario(tenant.creatorEmail, tenant.slug);
   expect(yo.name).toBe('Clara Fernhill');
@@ -282,5 +295,24 @@ test('control: una sesión ya abierta de la creadora sin perfil entra por el per
   await page.goto(`${tenant.base}/bienvenida`);
   await page.waitForURL(/\/onboarding/, { timeout: 30_000 });
   await expect(page.getByText('Question 1 of 3')).toHaveCount(0);
+
+  // Entrando por una pantalla de creación (donde luego SÍ tendrá el panel del
+  // agente de IA), el gate la lleva al perfil sin pintar el panel ni un instante.
+  await page.addInitScript(() => {
+    const w = window as unknown as { __panelAgente?: boolean };
+    w.__panelAgente = false;
+    new MutationObserver(() => {
+      if (document.querySelector('[data-testid^="agente-ia-"]')) w.__panelAgente = true;
+    }).observe(document, { childList: true, subtree: true });
+  });
+  await page.goto(`${tenant.base}/formador/cursos`);
+  await page.waitForURL(/\/onboarding/, { timeout: 30_000 });
+  await expect(
+    page.getByRole('heading', { name: 'Introduce yourself to your students' }),
+  ).toBeVisible();
+  await sinPanelDelAgente(page);
+  expect(
+    await page.evaluate(() => (window as unknown as { __panelAgente?: boolean }).__panelAgente),
+  ).toBe(false);
   await ctx.close();
 });
