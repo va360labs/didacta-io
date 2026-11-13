@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 import {
   AlreadyEnrolledError,
   CourseNotPublishedError,
@@ -80,29 +80,29 @@ const FULL_PERMISSIONS_CONFIG: ModuleDidactaConfig = {
 
 interface PrismaMock {
   user: {
-    findFirst: ReturnType<typeof vi.fn>;
-    findUniqueOrThrow: ReturnType<typeof vi.fn>;
-    update: ReturnType<typeof vi.fn>;
+    findFirst: Mock<(...args: any[]) => any>;
+    findUniqueOrThrow: Mock<(...args: any[]) => any>;
+    update: Mock<(...args: any[]) => any>;
   };
   modCoursesCourse: {
-    findFirst: ReturnType<typeof vi.fn>;
-    update: ReturnType<typeof vi.fn>;
+    findFirst: Mock<(...args: any[]) => any>;
+    update: Mock<(...args: any[]) => any>;
   };
   modCoursesModule: {
-    findFirst: ReturnType<typeof vi.fn>;
-    update: ReturnType<typeof vi.fn>;
+    findFirst: Mock<(...args: any[]) => any>;
+    update: Mock<(...args: any[]) => any>;
   };
   modCoursesLesson: {
-    findFirst: ReturnType<typeof vi.fn>;
-    update: ReturnType<typeof vi.fn>;
+    findFirst: Mock<(...args: any[]) => any>;
+    update: Mock<(...args: any[]) => any>;
   };
   modAssessmentsQuiz: {
-    findFirst: ReturnType<typeof vi.fn>;
-    update: ReturnType<typeof vi.fn>;
+    findFirst: Mock<(...args: any[]) => any>;
+    update: Mock<(...args: any[]) => any>;
   };
   modLearningEnrollment: {
-    findFirst: ReturnType<typeof vi.fn>;
-    update: ReturnType<typeof vi.fn>;
+    findFirst: Mock<(...args: any[]) => any>;
+    update: Mock<(...args: any[]) => any>;
   };
 }
 
@@ -157,29 +157,29 @@ function makeTenantContextMock(
 
 interface MockServices {
   courses: {
-    createCourse: ReturnType<typeof vi.fn>;
-    updateCourse: ReturnType<typeof vi.fn>;
-    publishCourse: ReturnType<typeof vi.fn>;
-    createModule: ReturnType<typeof vi.fn>;
-    createLesson: ReturnType<typeof vi.fn>;
-    moveLessonToModule: ReturnType<typeof vi.fn>;
+    createCourse: Mock<(...args: any[]) => any>;
+    updateCourse: Mock<(...args: any[]) => any>;
+    publishCourse: Mock<(...args: any[]) => any>;
+    createModule: Mock<(...args: any[]) => any>;
+    createLesson: Mock<(...args: any[]) => any>;
+    moveLessonToModule: Mock<(...args: any[]) => any>;
   };
   learning: {
-    enrollByAdmin: ReturnType<typeof vi.fn>;
+    enrollByAdmin: Mock<(...args: any[]) => any>;
   };
   assessments: {
-    createQuiz: ReturnType<typeof vi.fn>;
-    updateQuiz: ReturnType<typeof vi.fn>;
+    createQuiz: Mock<(...args: any[]) => any>;
+    updateQuiz: Mock<(...args: any[]) => any>;
   };
   adminUsers: {
-    invite: ReturnType<typeof vi.fn>;
+    invite: Mock<(...args: any[]) => any>;
   };
   storage: {
-    upload: ReturnType<typeof vi.fn>;
-    uploadImage: ReturnType<typeof vi.fn>;
-    download: ReturnType<typeof vi.fn>;
-    delete: ReturnType<typeof vi.fn>;
-    getSignedUrl: ReturnType<typeof vi.fn>;
+    upload: Mock<(...args: any[]) => any>;
+    uploadImage: Mock<(...args: any[]) => any>;
+    download: Mock<(...args: any[]) => any>;
+    delete: Mock<(...args: any[]) => any>;
+    getSignedUrl: Mock<(...args: any[]) => any>;
   };
 }
 
