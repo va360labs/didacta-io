@@ -7,5 +7,13 @@
     "title": "Esta aula está suspendida",
     "body": "Ahora mismo no se puede acceder a ella.",
     "owner": "Si eres su responsable, revisa tu suscripción."
+  },
+  "zonas": {
+    "espana": "España",
+    "europa": "Europa",
+    "norteamerica": "Norteamérica",
+    "latam": "América Latina",
+    "argentina": "Argentina",
+    "utc": "UTC"
   }
 }

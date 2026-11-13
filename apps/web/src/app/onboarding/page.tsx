@@ -25,7 +25,15 @@ import { afterProfilePath, isCreatorProfile } from '@/lib/first-access';
 import { consumeIntendedPath } from '@/lib/post-login-redirect';
 import { apiErrorMessage } from '@/lib/i18n/api-error';
 import { toSupportedLocale } from '@/i18n/config';
-import { LOCALE_OPTIONS, meApi, TIMEZONE_OPTIONS, type NotificationPreference } from '@/lib/me';
+import {
+  LOCALE_OPTIONS,
+  meApi,
+  TIMEZONE_OPTIONS,
+  extraTimezone,
+  type NotificationPreference,
+} from '@/lib/me';
+import { firstAccessTimeZone } from '@/lib/i18n/first-access';
+import { getBrowserTimeZone } from '@/lib/i18n/user-prefs';
 import { useTenantContext } from '@/lib/tenant-context';
 import { communityApi } from '@/modules/community';
 
@@ -55,6 +63,7 @@ export default function OnboardingPage() {
   const creadorAhora = () =>
     isCreatorProfile(authStorage.getSession()?.user.roles, readSimpleModeCache());
   const tErrors = useTranslations('errors');
+  const tCommon = useTranslations('common');
   const { tenant } = useTenantContext();
   const [loading, setLoading] = useState(true);
   const [step, setStep] = useState(0);
@@ -101,8 +110,12 @@ export default function OnboardingPage() {
         // Normalizado: ver el mismo comentario en `/account`. Un locale
         // guardado que el selector ya no ofrece dejaría el `<select>` sin
         // opción que casar.
-        setLocale(toSupportedLocale(p.locale));
-        setTimezone(p.timezone);
+        // Primer acceso: nadie le ha preguntado aún. El idioma con el que está
+        // viendo el aula y la zona de su navegador (si no la hay, la del
+        // perfil, que para un alumno creado por el servidor es la del aula).
+        // Antes se proponían UTC y español, y casi nadie los cambiaba.
+        setLocale(toSupportedLocale(uiLocale));
+        setTimezone(firstAccessTimeZone(p.timezone, getBrowserTimeZone()));
         setDocumentId(p.documentId ?? '');
         setAvatarUrl(p.avatarUrl);
         setError(null);
@@ -328,8 +341,9 @@ export default function OnboardingPage() {
                 <div className="space-y-1.5">
                   <Label htmlFor="ob-tz">{t('onboarding.timezoneLabel')}</Label>
                   <Select id="ob-tz" value={timezone} onChange={(e) => setTimezone(e.target.value)}>
+                    {extraTimezone(timezone) ? <option value={timezone}>{timezone}</option> : null}
                     {TIMEZONE_OPTIONS.map((g) => (
-                      <optgroup key={g.group} label={g.group}>
+                      <optgroup key={g.group} label={tCommon(`zonas.${g.group}`)}>
                         {g.values.map((tz) => (
                           <option key={tz} value={tz}>
                             {tz}

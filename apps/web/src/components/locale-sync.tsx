@@ -29,7 +29,8 @@ import { useLocale } from 'next-intl';
 import { toSupportedLocale } from '@/i18n/config';
 import { authStorage } from '@/lib/auth-storage';
 import { readLocaleCookie, writeLocaleCookie } from '@/lib/i18n/locale-cookie';
-import { setUserFormatPrefs } from '@/lib/i18n/user-prefs';
+import { firstAccessPatch } from '@/lib/i18n/first-access';
+import { getBrowserTimeZone, setUserFormatPrefs } from '@/lib/i18n/user-prefs';
 import { meApi } from '@/lib/me';
 
 export function LocaleSync() {
@@ -53,8 +54,29 @@ export function LocaleSync() {
     let cancelled = false;
     meApi
       .getProfile(token)
-      .then((p) => {
+      .then(async (p) => {
         if (cancelled) return;
+        // Primer acceso: la zona y el idioma del navegador pasan al perfil, en
+        // vez de que el perfil por defecto (UTC, español) se imponga.
+        const patch = firstAccessPatch({
+          onboarded: Boolean(
+            p.onboardingCompletedAt ?? authStorage.getSession()?.user.onboardingCompletedAt,
+          ),
+          profileLocale: p.locale,
+          profileTimeZone: p.timezone,
+          cookieLocale: readLocaleCookie(),
+          browserTimeZone: getBrowserTimeZone(),
+        });
+        if (patch) {
+          try {
+            await meApi.updateProfile(token, patch);
+            if (patch.timezone) p = { ...p, timezone: patch.timezone };
+            if (patch.locale) p = { ...p, locale: patch.locale };
+          } catch {
+            /* sin red: se reintenta en la próxima carga */
+          }
+          if (cancelled) return;
+        }
         setUserFormatPrefs({ timeZone: p.timezone || undefined });
         const wanted = toSupportedLocale(p.locale);
         if (wanted !== toSupportedLocale(readLocaleCookie())) {

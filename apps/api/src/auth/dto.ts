@@ -15,6 +15,14 @@ export const signupSchema = z.object({
   email: z.string().email(),
   password: z.string().min(12).max(128),
   name: z.string().min(1).max(120).optional(),
+  /**
+   * Zona horaria del navegador (IANA) y el idioma en el que estaba la página.
+   * Solo se usan al CREAR la cuenta: sin ellos el alumno nacía en UTC y en
+   * español aunque estuviera en Madrid y en un aula en inglés. Una zona que no
+   * es IANA se ignora (cae a la del aula).
+   */
+  timezone: z.string().max(64).optional(),
+  locale: z.string().max(10).optional(),
 });
 export type SignupDto = z.infer<typeof signupSchema>;
 

@@ -27,6 +27,7 @@ import {
   type TemplateOverridePrisma,
 } from '../notifications/email-template-catalog';
 import { sanitizeCheckoutLocale } from '../../common/checkout-locale';
+import { newUserTimeZone, type AcademyDefaultsPrisma } from '../../common/academy-defaults';
 import { PrismaAuditLogService } from '../prisma-audit-log.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { SmtpAdapterService } from '../smtp-adapter.service';
@@ -93,6 +94,12 @@ export class MembershipProvisioningService {
     const passwordHash = await this.passwords.hash(randomBytes(16).toString('base64url'));
     const role = await this.prisma.role.findUnique({ where: { name: DEFAULT_ALUMNO_ROLE } });
 
+    // Aún no ha abierto el aula: hasta su primer acceso (que toma la zona de su
+    // navegador) los correos le llegan con la hora del aula, no en UTC.
+    const timezone = await newUserTimeZone(
+      this.prisma as unknown as AcademyDefaultsPrisma,
+      tenantId,
+    );
     const user = await this.prisma.$transaction(async (tx) => {
       const created = await tx.user.create({
         data: {
@@ -100,6 +107,7 @@ export class MembershipProvisioningService {
           email,
           name: args.name,
           status: 'ACTIVE',
+          timezone,
           passwordHash,
           // El comprador define su contraseña con el enlace mágico; forzar
           // además el cambio le obligaría a un segundo login.

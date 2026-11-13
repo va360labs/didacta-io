@@ -23,6 +23,8 @@ import { SessionRegistryService, SessionRevokedError } from './session-registry.
 import { TokenService, type SignedTokens } from './token.service';
 import type { SigninDto, SignupDto } from './dto';
 import { storedEmailFor } from './email-lookup';
+import { ALLOWED_LOCALES } from './me.controller';
+import { newUserTimeZone, type AcademyDefaultsPrisma } from '../common/academy-defaults';
 
 export class AmbiguousTenantError extends UnauthorizedException {
   constructor(public readonly candidateSlugs: string[]) {
@@ -194,6 +196,16 @@ export class AuthService {
     const defaultRole = await this.prisma.role.findUnique({
       where: { name: DEFAULT_SIGNUP_ROLE },
     });
+    // Zona e idioma con los que nace: los del navegador si los manda (la zona,
+    // si no, la del aula). El usuario los cambia luego en su perfil.
+    const timezone = await newUserTimeZone(
+      this.prisma as unknown as AcademyDefaultsPrisma,
+      tenant.id,
+      dto.timezone,
+    );
+    const locale = (ALLOWED_LOCALES as readonly string[]).includes(dto.locale ?? '')
+      ? dto.locale
+      : undefined;
     const user = await this.prisma.$transaction(async (tx) => {
       const created = await tx.user.create({
         data: {
@@ -202,6 +214,8 @@ export class AuthService {
           name: dto.name ?? null,
           passwordHash,
           status: 'ACTIVE',
+          timezone,
+          ...(locale ? { locale } : {}),
         },
         include: {
           roles: { include: { role: true } },
