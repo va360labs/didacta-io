@@ -76,7 +76,7 @@ export function buildGroups({
     icon: 'users',
     items: [
       { href: '/members', label: 'Miembros', icon: 'users' },
-      // 'Clasificación' y 'Retos' los aporta la extensión de mod.gamification,
+      // 'Ranking' y 'Retos' los aporta la extensión de mod.gamification,
       // así desaparecen si el tenant desactiva el módulo (el /leaderboard
       // anterior era fijo y se quedaba vacío).
       { href: '/messages', label: 'Mensajes', icon: 'messages' },
@@ -200,7 +200,7 @@ export function buildAdminGroups({ isSuperAdmin }: { isSuperAdmin: boolean }): S
 
   // Todo lo que es "un ser humano en la plataforma". Recibe 'Puntos y retos'
   // de mod.gamification — el engagement de miembros es gestión de personas, y
-  // así espeja el menú principal, donde Clasificación y Retos cuelgan de
+  // así espeja el menú principal, donde Ranking y Retos cuelgan de
   // 'Personas'.
   const personas: SidebarGroup = {
     label: 'Personas y accesos',

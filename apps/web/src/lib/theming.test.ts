@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildThemeStyleBlock, type TenantTheme } from './theming';
+import { buildPublicBrandStyle, buildThemeStyleBlock, type TenantTheme } from './theming';
 
 function makeTheme(overrides: Partial<TenantTheme> = {}): TenantTheme {
   return {
@@ -54,5 +54,26 @@ describe('buildThemeStyleBlock', () => {
     const css = buildThemeStyleBlock(makeTheme({ customCss: ':root { --radius-card: 12px; }' }));
     expect(css).toContain('/* custom-css del tenant */');
     expect(css).toContain('--radius-card: 12px;');
+  });
+});
+
+describe('buildPublicBrandStyle (pantallas sin sesión: página de venta, catálogo, acceso)', () => {
+  it('pinta el color del aula: hue y saturación', () => {
+    const css = buildPublicBrandStyle(24, 80)!;
+    expect(css).toContain('--brand-h: 24;');
+    expect(css).toContain('--brand-s: 80%;');
+  });
+
+  it('sin saturación válida, solo el hue', () => {
+    const css = buildPublicBrandStyle(150, 'x')!;
+    expect(css).toContain('--brand-h: 150;');
+    expect(css).not.toContain('--brand-s');
+  });
+
+  it('nada que no sea un número en rango llega como CSS', () => {
+    expect(buildPublicBrandStyle('24; } body { display:none', 80)).toBeNull();
+    expect(buildPublicBrandStyle(undefined, undefined)).toBeNull();
+    expect(buildPublicBrandStyle(999, 50)).toBeNull();
+    expect(buildPublicBrandStyle(Number.NaN, 50)).toBeNull();
   });
 });

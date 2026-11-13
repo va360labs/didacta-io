@@ -11,6 +11,7 @@ import { Icon, type IconName } from '@/components/icon';
 import { formatDate, formatNumber } from '@/lib/i18n/format';
 import { labelOr, type TranslatorLike } from '@/lib/i18n/labels';
 import {
+  RankingTabs,
   RequestPerkModal,
   SubmitChallengeModal,
   gamificationApi,
@@ -116,6 +117,7 @@ export default function RetosPage() {
   return (
     <div className="space-y-8">
       <h1 className="sr-only">{t('retos.titulo')}</h1>
+      <RankingTabs />
 
       <Hero
         standing={standing}
@@ -546,7 +548,7 @@ function PerkCard({
             <button
               type="button"
               onClick={() => setOpen(true)}
-              className="rounded-lg bg-(--didacta-trust) px-3 py-1.5 text-sm font-medium text-white"
+              className="rounded-lg bg-brand-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-700"
             >
               {t('retos.pedirlo')}
             </button>
@@ -620,7 +622,7 @@ function ChallengeCard({
           <button
             type="button"
             onClick={() => setOpen(true)}
-            className="rounded-lg bg-(--didacta-trust) px-4 py-2 text-sm font-medium text-white"
+            className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700"
           >
             {t('retos.entregar')}
           </button>

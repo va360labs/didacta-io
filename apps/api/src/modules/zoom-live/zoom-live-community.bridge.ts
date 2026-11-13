@@ -8,6 +8,12 @@ import type { DomainEvent } from '@didacta/core-kernel';
 import { Logger as PinoLogger } from 'nestjs-pino';
 import { ModuleContextFactory } from '../module-context.factory';
 import { ModuleRegistryService } from '../module-registry.service';
+import {
+  academyDateLocale,
+  academyLocale,
+  type AcademyDefaultsPrisma,
+  type AcademyLocale,
+} from '../../common/academy-defaults';
 
 /**
  * Puente mod.zoom-live → mod.community (composición en el host: el emisor no
@@ -51,20 +57,75 @@ function claseMarker(sessionId: string): string {
   return `<!--didacta-clase:${sessionId}-->`;
 }
 
-function formatWhen(startTime: Date, timezone: string): string {
+/** Textos del anuncio en cada idioma del aula (es/en: no hay más catálogos). */
+const ANNOUNCEMENT_TEXTS: Record<
+  AcademyLocale,
+  { headline: (topic: string) => string; cta: string; tag: string; minutes: string }
+> = {
+  es: {
+    headline: (topic) => `Clase en directo: **${topic}**.`,
+    cta: 'Inscríbete desde aquí para recibir el enlace de la clase.',
+    tag: 'Clases en directo',
+    minutes: 'min',
+  },
+  en: {
+    headline: (topic) => `Live class: **${topic}**.`,
+    cta: 'Sign up here to get the link to the class.',
+    tag: 'Live classes',
+    minutes: 'min',
+  },
+};
+
+/**
+ * Fecha del anuncio en el idioma del aula y en la zona de la clase. Exportada
+ * para los tests.
+ */
+export function formatWhen(startTime: Date, timezone: string, locale: AcademyLocale): string {
+  const tag = academyDateLocale(locale);
   try {
-    return startTime.toLocaleString('es-ES', {
+    return startTime.toLocaleString(tag, {
       timeZone: timezone,
       weekday: 'long',
       day: 'numeric',
       month: 'long',
       hour: '2-digit',
       minute: '2-digit',
+      // La hora es la de la clase: con su zona, quien lo lee desde otra no la
+      // toma por suya («19:00 CET», «07:00 PM GMT+1»).
+      timeZoneName: 'short',
     });
   } catch {
     // Timezone IANA inválida: no rompemos el anuncio.
-    return startTime.toLocaleString('es-ES');
+    return startTime.toLocaleString(tag);
   }
+}
+
+/**
+ * Título, cuerpo y etiqueta del post que anuncia una clase, en el idioma del
+ * aula. Función pura (tests en `zoom-live-community.bridge.test.ts`).
+ */
+export function announcementPost(
+  session: {
+    topic: string;
+    description: string | null;
+    startTime: Date;
+    timezone: string;
+    durationMinutes: number;
+  },
+  sessionId: string,
+  locale: AcademyLocale,
+): { title: string; body: string; tag: string } {
+  const tx = ANNOUNCEMENT_TEXTS[locale];
+  const body = [
+    tx.headline(session.topic),
+    `🗓️ ${formatWhen(session.startTime, session.timezone, locale)} · ${session.durationMinutes} ${tx.minutes}.`,
+    session.description?.trim() ? `\n${session.description.trim()}` : '',
+    `\n${tx.cta}`,
+    `\n${claseMarker(sessionId)}`,
+  ]
+    .filter(Boolean)
+    .join('\n');
+  return { title: session.topic, body, tag: tx.tag };
 }
 
 @Injectable()
@@ -150,15 +211,10 @@ export class ZoomLiveCommunityBridge implements OnModuleInit {
     });
     if (!existing && !announce) return;
 
-    const cuerpo = [
-      `Clase en directo: **${session.topic}**.`,
-      `🗓️ ${formatWhen(session.startTime, session.timezone)} · ${session.durationMinutes} min.`,
-      session.description?.trim() ? `\n${session.description.trim()}` : '',
-      '\nInscríbete desde aquí para recibir el enlace de Zoom.',
-      `\n${marker}`,
-    ]
-      .filter(Boolean)
-      .join('\n');
+    // El post lo leen todos los alumnos: va en el idioma del aula, no en el de
+    // quien programa la clase (antes era siempre español).
+    const locale = await academyLocale(prisma as unknown as AcademyDefaultsPrisma, tenantId);
+    const post = announcementPost(session, sessionId, locale);
 
     if (existing) {
       // Editar como el AUTOR original: `updatePost` autoriza al dueño o a un
@@ -166,8 +222,8 @@ export class ZoomLiveCommunityBridge implements OnModuleInit {
       await this.registry
         .getCommunityService()
         .updatePost(tenantId, { id: existing.authorId, canModerate: true }, existing.id, {
-          title: session.topic,
-          body: cuerpo,
+          title: post.title,
+          body: post.body,
         });
       this.logger.log(
         { tenantId, sessionId, postId: existing.id },
@@ -184,13 +240,13 @@ export class ZoomLiveCommunityBridge implements OnModuleInit {
     });
     if (!user) return;
 
-    const post = await this.registry.getCommunityService().createPost(
+    const created = await this.registry.getCommunityService().createPost(
       tenantId,
       { id: user.id, displayName: user.name },
       {
-        title: session.topic,
-        body: cuerpo,
-        tags: ['Clases en directo'],
+        title: post.title,
+        body: post.body,
+        tags: [post.tag],
         // El anuncio se queda en el feed: no dispara el broadcast por email a
         // todo el tenant. Eso lo decide un admin publicando a mano.
         notifyAll: false,
@@ -200,7 +256,7 @@ export class ZoomLiveCommunityBridge implements OnModuleInit {
     );
 
     this.logger.log(
-      { tenantId, sessionId, postId: post.id },
+      { tenantId, sessionId, postId: created.id, locale },
       'mod.community: clase en directo anunciada en el feed',
     );
   }

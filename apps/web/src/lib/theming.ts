@@ -201,3 +201,23 @@ export function buildThemeStyleBlock(theme: TenantTheme): string {
   }
   return lines.join('\n');
 }
+
+/**
+ * Color de marca del aula para las pantallas SIN sesión (página de venta,
+ * catálogo, `/join`, acceso). Con sesión manda el tema completo
+ * (`buildThemeStyleBlock`); sin ella solo se conoce el color público del
+ * contexto del aula (`/auth/tenant-context`), y antes no se aplicaba: el
+ * botón de compra y el fondo salían en el azul de Didacta aunque el logo
+ * fuera el del aula. Solo números en rango: nada del servidor llega como CSS.
+ */
+export function buildPublicBrandStyle(hue: unknown, saturation: unknown): string | null {
+  const h = typeof hue === 'number' && Number.isFinite(hue) ? Math.round(hue) : null;
+  const s =
+    typeof saturation === 'number' && Number.isFinite(saturation) ? Math.round(saturation) : null;
+  if (h === null || h < 0 || h > 360) return null;
+  const sat = s !== null && s >= 0 && s <= 100 ? s : null;
+  const lines = [':root {', `  --brand-h: ${h};`];
+  if (sat !== null) lines.push(`  --brand-s: ${sat}%;`);
+  lines.push('}');
+  return lines.join('\n');
+}

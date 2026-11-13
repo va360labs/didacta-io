@@ -7,5 +7,13 @@
     "title": "This academy is suspended",
     "body": "It can't be accessed right now.",
     "owner": "If you are responsible for it, check your subscription."
+  },
+  "zonas": {
+    "espana": "Spain",
+    "europa": "Europe",
+    "norteamerica": "North America",
+    "latam": "Latin America",
+    "argentina": "Argentina",
+    "utc": "UTC"
   }
 }

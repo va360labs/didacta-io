@@ -19,7 +19,7 @@ export const gamificationExtension: ModuleWebExtension = {
     {
       group: 'Personas',
       href: '/leaderboard',
-      label: 'Clasificación',
+      label: 'Ranking',
       icon: 'trophy',
     },
     {
@@ -45,6 +45,7 @@ export const gamificationExtension: ModuleWebExtension = {
 
 // Convención: los consumidores importan SIEMPRE desde '@/modules/gamification'.
 export { RequestPerkModal, SubmitChallengeModal } from './challenge-modals';
+export { RankingTabs } from './ranking-tabs';
 export {
   gamificationApi,
   gamificationAdminApi,

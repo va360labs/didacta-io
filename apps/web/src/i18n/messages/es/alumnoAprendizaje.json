@@ -1,10 +1,10 @@
 {
   "lessonType": {
-    "VIDEO": "Video",
+    "VIDEO": "Vídeo",
     "HTML": "Lectura",
     "PDF": "PDF",
     "TEXT": "Texto",
-    "QUIZ": "Quiz"
+    "QUIZ": "Cuestionario"
   },
   "sessionStatus": {
     "SCHEDULED": "Programada",
@@ -51,7 +51,7 @@
   "invalidInviteCode": "El código no es válido o ya fue usado.",
   "backToCatalog": "← Volver al catálogo",
   "previewBadge": "Vista previa",
-  "previewNote": "Lo ves como editor, sin matrícula: el progreso no se guarda y los quizzes/SCORM se activan al matricularse.",
+  "previewNote": "Lo ves como editor, sin matrícula: el progreso no se guarda y los cuestionarios/SCORM se activan al matricularse.",
   "moduleCount": "{count, plural, one {<strong>#</strong> módulo} other {<strong>#</strong> módulos}}",
   "lessonCount": "{count, plural, one {<strong>#</strong> lección} other {<strong>#</strong> lecciones}}",
   "contentDuration": "<strong>{duration}</strong> de contenido",

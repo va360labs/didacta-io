@@ -11,6 +11,12 @@ import {
 } from '@didacta/mod-courses';
 import { SpaceAlreadyExistsError } from '@didacta/mod-community';
 import { PrismaService } from '../prisma/prisma.service';
+import {
+  academyLocale,
+  writeAcademyLocale,
+  type AcademyDefaultsPrisma,
+  type AcademyLocaleWriter,
+} from '../common/academy-defaults';
 import { ModuleRegistryService } from '../modules/module-registry.service';
 import { TenantStripeResolverService } from '../modules/tenant-stripe-resolver.service';
 import { PlatformCheckoutGate } from '../modules/payouts/platform-checkout-gate';
@@ -46,6 +52,12 @@ interface SimpleModeState {
    * ventas): se adoptó tal cual, sin alta en 3 preguntas.
    */
   adoptedAt?: string | null;
+  /**
+   * Idioma en el que la creadora montó el aula (el de la interfaz en el alta
+   * en 3 preguntas). Es «el idioma del aula» para lo que el servidor escribe a
+   * todos: ver `common/academy-defaults.ts`.
+   */
+  locale?: SimpleLocale;
 }
 
 /** Color por defecto del tema (el azul de Didacta): igual = el creador no lo tocó. */
@@ -131,6 +143,12 @@ export class SimpleModeService {
     const academyName = input.academyName.trim();
     const offerTitle = (input.title ?? '').trim() || academyName;
     await this.assertCurrency(tenantId, input.currency, input.amountCents);
+    // El idioma de la academia: el elegido en el alta o, si no llega, el que ya
+    // tenga el aula. Con él se crean el curso, los espacios y el post, y queda
+    // como ajuste del aula (lo que ven los visitantes, los correos…).
+    const locale: SimpleLocale =
+      input.locale ??
+      (await academyLocale(this.prisma as unknown as AcademyDefaultsPrisma, tenantId));
 
     await this.prisma.tenant.update({ where: { id: tenantId }, data: { name: academyName } });
 
@@ -158,10 +176,11 @@ export class SimpleModeService {
         previous.courseId &&
         (await this.courseExists(tenantId, previous.courseId))
           ? previous.courseId
-          : await this.createDraftCourse(tenantId, creator.id, offerTitle, input.locale);
-      if (previous?.courseId === courseId) {
+          : await this.createDraftCourse(tenantId, creator.id, offerTitle, locale);
+      if (previous?.courseId === courseId || input.coverUrl) {
         await this.registry.getCoursesService().updateCourse(tenantId, creator.id, courseId, {
-          title: offerTitle,
+          ...(previous?.courseId === courseId ? { title: offerTitle } : {}),
+          ...(input.coverUrl ? { thumbnailUrl: input.coverUrl } : {}),
         });
       }
       offer = {
@@ -200,14 +219,18 @@ export class SimpleModeService {
     }
     await this.writeSetting(tenantId, creator.id, OFFER_KEY, offer);
 
-    await this.ensureCommunity(
-      tenantId,
-      { id: creator.id, displayName },
-      academyName,
-      input.locale,
-    );
+    await this.ensureCommunity(tenantId, { id: creator.id, displayName }, academyName, locale);
 
-    await this.writeState(tenantId, creator.id, { quickStartAt: new Date().toISOString() });
+    await this.writeState(tenantId, creator.id, {
+      quickStartAt: new Date().toISOString(),
+      locale,
+    });
+    await writeAcademyLocale(
+      this.prisma as unknown as AcademyLocaleWriter,
+      tenantId,
+      locale,
+      creator.id,
+    );
     await this.completeLegacyWizard(tenantId, creator.id);
     return { offer };
   }

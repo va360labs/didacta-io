@@ -332,5 +332,16 @@
     "tooLong": "Máximo {max} caracteres ({current} actuales).",
     "saving": "Guardando…",
     "save": "Guardar"
+  },
+  "idiomaAula": {
+    "title": "Idioma de la academia",
+    "description": "El idioma con el que ven la academia quienes aún no han elegido el suyo: la página de venta, el catálogo, el acceso y los correos. Cada usuario puede cambiar el suyo en su perfil.",
+    "label": "Idioma",
+    "deducido": "Aún no se ha elegido: ahora se usa el del perfil de quien administra la academia. Guárdalo para fijarlo.",
+    "save": "Guardar",
+    "saving": "Guardando…",
+    "saved": "Idioma guardado.",
+    "error": "No se ha podido guardar el idioma. Inténtalo de nuevo.",
+    "loadError": "No se ha podido cargar el idioma de la academia."
   }
 }

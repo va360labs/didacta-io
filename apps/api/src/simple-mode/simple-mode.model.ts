@@ -4,6 +4,7 @@
  */
 
 import { z } from 'zod';
+import { courseImageUrlSchema } from '@didacta/mod-courses';
 
 /**
  * Tipos, textos y funciones PURAS del modo sencillo. Separados del servicio
@@ -95,7 +96,18 @@ export const quickStartSchema = z.object({
   title: z.string().trim().max(160).optional(),
   amountCents: z.number().int().positive().max(100_000_000),
   currency: currencySchema,
-  locale: z.enum(['es', 'en']).default('es'),
+  /**
+   * Idioma de la academia (se elige en el alta, preseleccionado con el de la
+   * interfaz). Queda como ajuste del aula. Sin él (un cliente anterior), el que
+   * ya tenga el aula: el que fijó el aprovisionamiento o el deducido.
+   */
+  locale: z.enum(['es', 'en']).optional(),
+  /**
+   * Portada del curso (opcional: el alta no obliga a nada más). La URL que
+   * devuelve la subida de imágenes del aula; se guarda en `thumbnailUrl`.
+   * Con membresía se ignora.
+   */
+  coverUrl: courseImageUrlSchema.optional(),
 });
 export type QuickStartInput = z.infer<typeof quickStartSchema>;
 

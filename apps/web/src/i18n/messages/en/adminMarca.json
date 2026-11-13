@@ -332,5 +332,16 @@
     "tooLong": "Maximum {max} characters ({current} currently).",
     "saving": "Saving…",
     "save": "Save"
+  },
+  "idiomaAula": {
+    "title": "Academy language",
+    "description": "The language the academy is shown in to people who haven't chosen their own yet: the sales page, the catalogue, sign-in and emails. Each user can change their own in their profile.",
+    "label": "Language",
+    "deducido": "Not chosen yet: the academy currently uses the language of its administrator's profile. Save it to set it.",
+    "save": "Save",
+    "saving": "Saving…",
+    "saved": "Language saved.",
+    "error": "The language couldn't be saved. Please try again.",
+    "loadError": "The academy language couldn't be loaded."
   }
 }

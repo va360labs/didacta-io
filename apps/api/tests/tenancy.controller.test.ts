@@ -11,8 +11,41 @@ const TENANT = {
   surface: 'APP' as const,
 };
 
+/** Ajustes y administradoras del aula, para el idioma. */
+interface Aula {
+  academyLocale?: unknown;
+  simpleState?: unknown;
+  adminLocales?: string[];
+}
+
+function fakePrisma(aula: Aula) {
+  return {
+    tenantSetting: {
+      findUnique: vi.fn(
+        async (args: {
+          where: { tenantId_moduleName_key: { moduleName: string; key: string } };
+        }) => {
+          const { moduleName, key } = args.where.tenantId_moduleName_key;
+          if (moduleName === 'academy' && key === 'locale') {
+            return aula.academyLocale === undefined ? null : { valueJson: aula.academyLocale };
+          }
+          if (moduleName === 'simple-mode' && key === 'state') {
+            return aula.simpleState === undefined ? null : { valueJson: aula.simpleState };
+          }
+          return null;
+        },
+      ),
+    },
+    user: {
+      findMany: vi.fn(async () =>
+        (aula.adminLocales ?? []).map((locale) => ({ locale, timezone: 'UTC' })),
+      ),
+    },
+  };
+}
+
 /** `'suspended'` = el host es de un tenant que existe pero está suspendido. */
-function makeController(resolved: typeof TENANT | null | 'suspended') {
+function makeController(resolved: typeof TENANT | null | 'suspended', aula: Aula = {}) {
   const resolveByHost = vi.fn(async (_host: string | undefined) =>
     resolved === 'suspended' ? null : resolved,
   );
@@ -32,12 +65,16 @@ function makeController(resolved: typeof TENANT | null | 'suspended') {
   const resolveByRequest = vi.fn(async (req: { headers: Record<string, string> }) =>
     resolveByHost(req.headers['x-forwarded-host'] ?? req.headers['host']),
   );
-  const controller = new TenancyController({
-    resolveByHost,
-    resolveByRequest,
-    resolveHostStatusByRequest,
-  } as unknown as TenantResolverService);
-  return { controller, resolveByHost };
+  const prisma = fakePrisma(aula);
+  const controller = new TenancyController(
+    {
+      resolveByHost,
+      resolveByRequest,
+      resolveHostStatusByRequest,
+    } as unknown as TenantResolverService,
+    prisma as never,
+  );
+  return { controller, resolveByHost, prisma };
 }
 
 /** La forma exacta con la que llega una petición en producción. */
@@ -100,5 +137,54 @@ describe('TenancyController', () => {
     const { controller, resolveByHost } = makeController(null);
     await controller.resolve(reqTrasProxy('cualquiera.didacta.io'));
     expect(resolveByHost).not.toHaveBeenCalledWith('localhost:4000');
+  });
+
+  describe('locale (idioma del aula para quien entra sin cookie)', () => {
+    it('el ajuste del aula manda, aunque el perfil de quien administra esté en otro idioma', async () => {
+      const { controller, resolveByHost } = makeController(TENANT, {
+        academyLocale: 'en',
+        simpleState: { locale: 'es' },
+        adminLocales: ['es-ES'],
+      });
+      expect(await controller.locale(reqTrasProxy('aula-demo.didacta.io'))).toEqual({
+        locale: 'en',
+      });
+      expect(resolveByHost).toHaveBeenCalledWith('aula-demo.didacta.io');
+    });
+
+    it('sin ajuste, la deducción de respaldo (alta sencilla, luego perfil)', async () => {
+      const conAlta = makeController(TENANT, { simpleState: { locale: 'en' } });
+      expect(await conAlta.controller.locale(reqTrasProxy('aula-demo.didacta.io'))).toEqual({
+        locale: 'en',
+      });
+      const conPerfil = makeController(TENANT, { adminLocales: ['en-US'] });
+      expect(await conPerfil.controller.locale(reqTrasProxy('aula-demo.didacta.io'))).toEqual({
+        locale: 'en',
+      });
+      const sinNada = makeController(TENANT);
+      expect(await sinNada.controller.locale(reqTrasProxy('aula-demo.didacta.io'))).toEqual({
+        locale: 'es',
+      });
+    });
+
+    it('un ajuste con un idioma sin catálogo se ignora', async () => {
+      const { controller } = makeController(TENANT, {
+        academyLocale: 'pt-BR',
+        adminLocales: ['en-US'],
+      });
+      expect(await controller.locale(reqTrasProxy('aula-demo.didacta.io'))).toEqual({
+        locale: 'en',
+      });
+    });
+
+    it('un host que no es de ningún aula activa: null, sin leer nada', async () => {
+      const { controller, prisma } = makeController(null, { academyLocale: 'en' });
+      expect(await controller.locale(reqTrasProxy('zzz.didacta.io'))).toEqual({ locale: null });
+      expect(prisma.tenantSetting.findUnique).not.toHaveBeenCalled();
+      const suspendida = makeController('suspended', { academyLocale: 'en' });
+      expect(await suspendida.controller.locale(reqTrasProxy('x.didacta.io'))).toEqual({
+        locale: null,
+      });
+    });
   });
 });

@@ -31,8 +31,10 @@ import { cn } from '@/lib/utils';
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 // La timezone que manda es la de la sesión (`session.timezone`): la clase
-// ocurre a una hora concreta del calendario del host, no de quien mira. Si
-// llega una zona inválida, se cae al formato sin timezone explícita.
+// ocurre a una hora concreta del calendario del host, no de quien mira. Por
+// eso la hora lleva su zona («19:00 CET», «7:00 PM GMT+1»): sin ella, quien
+// mira desde otra zona la leía como suya. Si llega una zona inválida, se cae
+// al formato sin timezone explícita.
 function formatFullDate(iso: string, tz: string): string {
   try {
     return formatDateTime(iso, {
@@ -42,6 +44,7 @@ function formatFullDate(iso: string, tz: string): string {
       month: 'long',
       hour: '2-digit',
       minute: '2-digit',
+      timeZoneName: 'short',
     });
   } catch {
     return formatDateTime(iso);
@@ -283,8 +286,7 @@ export function ClaseEmbedCard({ sessionId }: { sessionId: string }) {
                 type="button"
                 onClick={() => void handleRegister()}
                 disabled={pending}
-                className="inline-flex items-center gap-1.5 rounded-lg px-3.5 py-2 text-xs font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
-                style={{ background: 'var(--didacta-trust)' }}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-3.5 py-2 text-xs font-semibold text-white transition-colors hover:bg-brand-700 disabled:opacity-50"
               >
                 {pending ? t('claseEmbed.registerPending') : t('claseEmbed.register')}
               </button>

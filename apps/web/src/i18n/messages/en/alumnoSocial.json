@@ -315,5 +315,10 @@
     "mencionComentario": "You were mentioned as <mark>@{handle}</mark> in a comment.",
     "mencionPost": "You were mentioned as <mark>@{handle}</mark> in a post.",
     "irHilo": "Go to the thread →"
+  },
+  "rankingTabs": {
+    "aria": "Leaderboard and challenges",
+    "ranking": "Leaderboard",
+    "retos": "Challenges"
   }
 }

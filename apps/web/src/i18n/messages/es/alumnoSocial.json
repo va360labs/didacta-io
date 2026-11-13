@@ -156,7 +156,7 @@
     "tplMatricula": "Te matriculaste en un curso",
     "tplCursoCompletado": "Completaste un curso",
     "tplCertificado": "Tu certificado está listo",
-    "tplQuizAprobado": "Aprobaste un quiz",
+    "tplQuizAprobado": "Aprobaste un cuestionario",
     "tplQuizNoAlcanzado": "No alcanzaste el umbral",
     "tplQuizCorregido": "Tu intento fue corregido",
     "tplMencion": "Te mencionaron en la comunidad",
@@ -249,16 +249,16 @@
     "rangoMes": "Este mes",
     "rangoSemana": "Esta semana",
     "rangoGlobal": "Global",
-    "errorCarga": "No se pudo cargar la clasificación.",
-    "titulo": "Clasificación",
+    "errorCarga": "No se pudo cargar el ranking.",
+    "titulo": "Ranking",
     "subtitulo": "Puntos de la comunidad por publicar, responder, compartir recursos y terminar cursos.",
     "tusPuntos": "Tus puntos",
     "tuPuesto": "Tu puesto",
     "deTotal": "de {total}",
     "tuNivel": "Tu nivel",
-    "cargando": "Cargando clasificación…",
+    "cargando": "Cargando el ranking…",
     "vacioTitulo": "Aún no hay actividad registrada",
-    "vacioNota": "La clasificación aparecerá cuando los miembros publiquen, comenten o compartan recursos.",
+    "vacioNota": "El ranking aparecerá cuando los miembros publiquen, comenten o compartan recursos.",
     "colMiembro": "Miembro",
     "colPuntos": "Puntos"
   },
@@ -315,5 +315,10 @@
     "mencionComentario": "Te mencionaron como <mark>@{handle}</mark> en un comentario.",
     "mencionPost": "Te mencionaron como <mark>@{handle}</mark> en un post.",
     "irHilo": "Ir al hilo →"
+  },
+  "rankingTabs": {
+    "aria": "Ranking y retos",
+    "ranking": "Ranking",
+    "retos": "Retos"
   }
 }

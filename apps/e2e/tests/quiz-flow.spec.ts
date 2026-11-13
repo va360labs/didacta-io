@@ -67,7 +67,9 @@ test.describe('mod.assessments — flujo del alumno', () => {
     await expect(page.getByRole('heading', { name: 'Quiz E2E', exact: true })).toBeVisible({
       timeout: 10_000,
     });
-    await page.getByRole('button', { name: /Empezar quiz|Reintentar quiz/ }).click();
+    await page
+      .getByRole('button', { name: /Empezar cuestionario|Reintentar cuestionario/ })
+      .click();
 
     // 4) Marcar la opción correcta y enviar.
     // El QuizPlayer renderiza `<label><input type="radio" name="q-..." /><span>{label}</span></label>`

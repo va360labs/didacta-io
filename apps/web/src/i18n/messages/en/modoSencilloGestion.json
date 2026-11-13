@@ -84,11 +84,17 @@
     "error": "Could not save. Try again.",
     "faltaNombre": "Write the name of your academy.",
     "modoTitulo": "Use the full mode",
-    "modoTexto": "You will see every advanced option in a side menu. You can come back to the simple mode whenever you like.",
+    "modoTexto": "You will see every advanced option in a side menu. You can come back to the simple mode whenever you like from Settings.",
     "modoBoton": "Switch to the full mode",
     "modoConfirmar": "Switch to the full mode? You can come back whenever you like.",
     "avanzadas": "All advanced options",
-    "avanzadasAyuda": "Email, payments with your own account, Zoom, language and more."
+    "avanzadasAyuda": "Email, payments with your own account, Zoom, language and more.",
+    "volverTitulo": "Back to the simple mode",
+    "volverTexto": "A short menu at the top, “Start here” and editors without the advanced options. Nothing is deleted: the advanced options stay here whenever you need them.",
+    "volverBoton": "Back to the simple mode",
+    "volverCambiando": "Switching…",
+    "idioma": "Academy language",
+    "idiomaAyuda": "It's used on your sales page, your catalogue and in emails to people who haven't chosen a language yet. Each student can change their own in their profile."
   },
   "cursos": {
     "titulo": "Courses",

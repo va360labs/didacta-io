@@ -6,12 +6,14 @@
  */
 
 import Image from 'next/image';
-import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 import { Icon } from '@/components/icon';
+import { ACADEMY_LOCALE_NAMES, ACADEMY_LOCALES, type AcademyLocale } from '@/i18n/config';
 import { authStorage } from '@/lib/auth-storage';
 import { formatCents } from '@/lib/i18n/format';
 import { parseAmount, simpleModeApi, suggestCurrency } from '@/lib/simple-mode';
+import { storageApi } from '@/lib/storage';
 import { useTenantContext } from '@/lib/tenant-context';
 import { cn } from '@/lib/utils';
 
@@ -19,10 +21,11 @@ type Offer = 'course' | 'membership';
 
 /**
  * Alta en 3 preguntas del MODO SENCILLO (sustituye al asistente de 12
- * pantallas): nombre de la academia, qué vende (curso o membresía, con su
- * nombre) y cuánto cuesta. Al terminar quedan creados el curso en borrador o
- * el plan, los espacios básicos y un post de bienvenida, y lleva a «Empieza
- * aquí». A la derecha (debajo en el móvil), cómo lo verán los alumnos.
+ * pantallas): nombre de la academia (y su idioma, ya elegido: el de la
+ * interfaz), qué vende (curso o membresía, con su nombre) y cuánto cuesta. Al
+ * terminar quedan creados el curso en borrador o el plan, los espacios básicos
+ * y un post de bienvenida, y lleva a «Empieza aquí». A la derecha (debajo en el
+ * móvil), cómo lo verán los alumnos.
  */
 export function AltaSencilla() {
   const t = useTranslations('modoSencillo.alta');
@@ -32,6 +35,10 @@ export function AltaSencilla() {
   useEffect(() => setHost(window.location.host), []);
   const [paso, setPaso] = useState<1 | 2 | 3>(1);
   const [nombre, setNombre] = useState('');
+  // Idioma de la academia: preseleccionado con el de la interfaz (el de la
+  // creadora, o el que fijó Cloud al crear el aula). No suma clics: solo se
+  // toca si se quiere otro.
+  const [idioma, setIdioma] = useState<AcademyLocale>(locale.startsWith('en') ? 'en' : 'es');
   const [oferta, setOferta] = useState<Offer>('course');
   const [titulo, setTitulo] = useState('');
   const [importe, setImporte] = useState('');
@@ -39,6 +46,24 @@ export function AltaSencilla() {
   const [moneda, setMoneda] = useState('eur');
   const [error, setError] = useState<string | null>(null);
   const [creando, setCreando] = useState(false);
+  // Portada del curso: opcional, no suma pasos ni clics al alta. Se sube al
+  // elegirla y viaja con el alta; se cambia luego desde el editor del curso.
+  const [portada, setPortada] = useState<string | null>(null);
+  const [subiendoPortada, setSubiendoPortada] = useState(false);
+  const portadaRef = useRef<HTMLInputElement>(null);
+
+  async function elegirPortada(file: File) {
+    setSubiendoPortada(true);
+    setError(null);
+    try {
+      const r = await storageApi.uploadImage(file, { optimize: { maxWidth: 1600 } });
+      setPortada(r.url);
+    } catch {
+      setError(t('portadaError'));
+    } finally {
+      setSubiendoPortada(false);
+    }
+  }
 
   // Si el nombre del aula no es el autogenerado (el slug), se propone.
   useEffect(() => {
@@ -81,9 +106,10 @@ export function AltaSencilla() {
         academyName: nombre.trim(),
         offer: oferta,
         title: titulo.trim() || undefined,
+        ...(oferta === 'course' && portada ? { coverUrl: portada } : {}),
         amountCents: cents,
         currency: moneda,
-        locale: locale.startsWith('en') ? 'en' : 'es',
+        locale: idioma,
       });
       // El servidor ya dio por hechos el perfil y el asistente: la sesión de la
       // pestaña lo refleja para que el shell no vuelva a mandar aquí.
@@ -156,6 +182,22 @@ export function AltaSencilla() {
                   {t('direccion', { host: host.replace(/:\d+$/, '') })}
                 </p>
               ) : null}
+              <label htmlFor="alta-idioma" className="mt-6 block text-sm font-semibold text-text">
+                {t('idiomaLabel')}
+              </label>
+              <select
+                id="alta-idioma"
+                value={idioma}
+                onChange={(e) => setIdioma(e.target.value as AcademyLocale)}
+                className="mt-1.5 h-12 w-full max-w-[240px] rounded-xl border border-border bg-surface px-3 text-base font-semibold text-text outline-none focus:border-brand-600 focus:ring-4 focus:ring-brand-100"
+              >
+                {ACADEMY_LOCALES.map((l) => (
+                  <option key={l} value={l} lang={l}>
+                    {ACADEMY_LOCALE_NAMES[l]}
+                  </option>
+                ))}
+              </select>
+              <p className="mt-1.5 text-sm text-text-subtle">{t('idiomaAyuda')}</p>
             </>
           ) : paso === 2 ? (
             <>
@@ -221,6 +263,44 @@ export function AltaSencilla() {
                 maxLength={160}
                 className="mt-1.5 h-12 w-full rounded-xl border border-border bg-surface px-4 text-base text-text outline-none focus:border-brand-600 focus:ring-4 focus:ring-brand-100"
               />
+              {oferta === 'course' ? (
+                <div className="mt-4 flex flex-wrap items-center gap-3">
+                  <input
+                    ref={portadaRef}
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp,image/gif"
+                    className="hidden"
+                    data-testid="alta-portada-fichero"
+                    onChange={(e) => {
+                      const f = e.target.files?.[0];
+                      e.target.value = '';
+                      if (f) void elegirPortada(f);
+                    }}
+                  />
+                  <button
+                    type="button"
+                    disabled={subiendoPortada}
+                    onClick={() => portadaRef.current?.click()}
+                    className="inline-flex items-center gap-2 text-sm font-semibold text-text-muted hover:text-text disabled:opacity-60"
+                  >
+                    <Icon name="image" size={16} />
+                    {subiendoPortada
+                      ? t('portadaSubiendo')
+                      : portada
+                        ? t('portadaCambiar')
+                        : t('portadaAnadir')}
+                  </button>
+                  {portada && !subiendoPortada ? (
+                    <button
+                      type="button"
+                      onClick={() => setPortada(null)}
+                      className="text-sm font-semibold text-text-subtle hover:text-danger-700"
+                    >
+                      {t('portadaQuitar')}
+                    </button>
+                  ) : null}
+                </div>
+              ) : null}
             </>
           ) : (
             <>
@@ -326,7 +406,17 @@ export function AltaSencilla() {
             </div>
             <div className="bg-bg-subtle p-4">
               <div className="overflow-hidden rounded-xl border border-border bg-surface">
-                <div className="h-28 bg-[linear-gradient(135deg,hsl(var(--brand-h)_70%_88%),hsl(174_60%_86%))] lg:h-36" />
+                {oferta === 'course' && portada ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={portada}
+                    alt=""
+                    className="h-28 w-full object-cover lg:h-36"
+                    data-testid="alta-portada-vista"
+                  />
+                ) : (
+                  <div className="h-28 bg-[linear-gradient(135deg,hsl(var(--brand-h)_70%_88%),hsl(174_60%_86%))] lg:h-36" />
+                )}
                 <div className="p-3.5">
                   <strong className="block text-[17px] text-text">
                     {paso >= 2 ? tituloVisible : t('tuCurso')}

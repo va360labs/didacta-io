@@ -626,8 +626,9 @@ describe('PrismaNotificationHubService', () => {
 
   // ==========================================================================
   // i18n: `locale` es OPCIONAL. Sin él, el hub resuelve `user.locale` a partir
-  // de `to`. Los tres caminos degradados aterrizan en es-ES a propósito; si
-  // alguno dejara de hacerlo en silencio, estos tests lo cazan.
+  // de `to`. Sin fila o sin idioma, el del aula (aquí, sin ajuste: es-ES); con
+  // un idioma sin catálogo, el copy español. Si alguno dejara de hacerlo en
+  // silencio, estos tests lo cazan.
   // ==========================================================================
   describe('resolución del idioma del destinatario (locale opcional)', () => {
     const EN_ENROLLMENT = 'You have just enrolled in the course';
@@ -696,6 +697,45 @@ describe('PrismaNotificationHubService', () => {
         ]);
         expect(n!.body, `locale=${JSON.stringify(locale)}`).toContain(ES_ENROLLMENT);
       }
+    });
+
+    it('degradados (a) y (b) en un aula en inglés: el idioma del aula, no el español', async () => {
+      async function enAulaInglesa(users: UserRow[]) {
+        const prisma = makeFakePrisma(users);
+        // El ajuste del aula (Ajustes, alta sencilla o aprovisionamiento).
+        Object.assign(prisma, {
+          tenantSetting: {
+            async findUnique(args: {
+              where: { tenantId_moduleName_key: { moduleName: string; key: string } };
+            }) {
+              const { moduleName, key } = args.where.tenantId_moduleName_key;
+              return moduleName === 'academy' && key === 'locale' ? { valueJson: 'en' } : null;
+            },
+          },
+        });
+        const svc = new PrismaNotificationHubService(prisma as never, noopLogger);
+        await svc.send({
+          tenantId: 't1',
+          channel: 'in-app',
+          templateKey: 'enrollment.created',
+          to: 'u1',
+          variables: { course: 'NodeJS' },
+        });
+        return prisma._rows[0]!;
+      }
+      expect((await enAulaInglesa([])).body).toContain(EN_ENROLLMENT);
+      expect(
+        (await enAulaInglesa([{ id: 'u1', tenantId: 't1', email: 'a@example.com', locale: ' ' }]))
+          .body,
+      ).toContain(EN_ENROLLMENT);
+      // Quien SÍ tiene idioma propio lo conserva aunque el aula esté en inglés.
+      expect(
+        (
+          await enAulaInglesa([
+            { id: 'u1', tenantId: 't1', email: 'a@example.com', locale: 'es-ES' },
+          ])
+        ).body,
+      ).toContain(ES_ENROLLMENT);
     });
 
     it('degradado (c): locale sin catálogo (pt-BR) → copy español', async () => {

@@ -17,7 +17,12 @@ import { MembershipProvisioningService } from '../src/modules/subscriptions/memb
 const TENANT = 'tenant-1';
 const CTX = { ip: '203.0.113.9', userAgent: 'vitest' } as never;
 
-function montar(createdLocale?: string, existente?: { id: string } | null) {
+function montar(
+  createdLocale?: string,
+  existente?: { id: string } | null,
+  /** Ajuste `academy/locale` del aula (el idioma del aula). */
+  idiomaAula?: string,
+) {
   const tx = {
     user: { create: vi.fn().mockResolvedValue({ id: 'user-nuevo', locale: createdLocale }) },
     userRole: { create: vi.fn() },
@@ -29,6 +34,14 @@ function montar(createdLocale?: string, existente?: { id: string } | null) {
     tenant: { findUnique: vi.fn().mockResolvedValue({ name: 'Academia Demo' }) },
     modThemingTenantTheme: { findUnique: vi.fn().mockResolvedValue(null) },
     notificationTemplate: { findUnique: vi.fn().mockResolvedValue(null) },
+    tenantSetting: {
+      findUnique: vi.fn(
+        async (q: { where: { tenantId_moduleName_key: { moduleName: string; key: string } } }) =>
+          q.where.tenantId_moduleName_key.moduleName === 'academy' && idiomaAula
+            ? { valueJson: idiomaAula }
+            : null,
+      ),
+    },
   } as never;
   const passwords = { hash: vi.fn().mockResolvedValue('$argon2$hash') } as never;
   const passwordReset = {
@@ -135,14 +148,21 @@ describe('MembershipProvisioningService · captura del idioma de la compra', () 
     expect((smtp as unknown as { send: ReturnType<typeof vi.fn> }).send).not.toHaveBeenCalled();
   });
 
-  it('CAMINO DEGRADADO: sin locale o con uno que la API no persiste, el campo se OMITE', async () => {
-    // Omitirlo (en vez de escribir el de referencia a mano) deja que la columna
-    // tome su default de BD, que es exactamente `HUB_DEFAULT_LOCALE`.
+  it('sin locale capturado (o uno que la API no persiste): el idioma del aula, no el de la columna', async () => {
+    // Antes se omitía y la columna tomaba su default (español) aunque el aula
+    // fuera inglesa: la bienvenida le llegaba en español a un comprador inglés.
     for (const locale of [undefined, '', '   ', 'pt-BR', 'en', 'zz-ZZ', '../etc']) {
       vi.clearAllMocks();
-      const { svc, tx } = montar();
-      await svc.provision({ ...args, locale });
-      expect(tx.user.create.mock.calls[0]![0].data, String(locale)).not.toHaveProperty('locale');
+      const aulaInglesa = montar(undefined, null, 'en');
+      await aulaInglesa.svc.provision({ ...args, locale });
+      expect(aulaInglesa.tx.user.create.mock.calls[0]![0].data.locale, String(locale)).toBe(
+        'en-US',
+      );
+      const aulaSinAjuste = montar();
+      await aulaSinAjuste.svc.provision({ ...args, locale });
+      expect(aulaSinAjuste.tx.user.create.mock.calls[0]![0].data.locale, String(locale)).toBe(
+        'es-ES',
+      );
     }
   });
 

@@ -6,7 +6,10 @@
 import { Controller, Get, Req } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { FastifyRequest } from 'fastify';
+import { academyLocale, type AcademyDefaultsPrisma } from '../common/academy-defaults';
 import { resolvePublicHost } from '../common/resolve-public-host';
+import { PrismaService } from '../prisma/prisma.service';
+import { runAsTenant } from './tenant-context.storage';
 import { TenantResolverService } from './tenant-resolver.service';
 
 /**
@@ -34,7 +37,10 @@ import { TenantResolverService } from './tenant-resolver.service';
 @ApiTags('Tenancy')
 @Controller('tenancy')
 export class TenancyController {
-  constructor(private readonly tenantResolver: TenantResolverService) {}
+  constructor(
+    private readonly tenantResolver: TenantResolverService,
+    private readonly prisma: PrismaService,
+  ) {}
 
   @Get('resolve')
   @ApiOperation({
@@ -54,5 +60,34 @@ export class TenancyController {
       surface: tenant?.surface ?? null,
       suspended: resolution.status === 'suspended',
     };
+  }
+
+  /**
+   * Idioma del aula de este dominio, para quien entra sin cookie de idioma ni
+   * sesión: la web lo usa para pintar la página de venta, el catálogo, /join o
+   * el acceso en el idioma del aula y no siempre en español. Es público como la
+   * propia página (el idioma de un aula no es un secreto) y aparte de
+   * `resolve`, que corre en cada navegación y tiene que seguir siendo una sola
+   * consulta: este solo se pide cuando no hay cookie, y la web lo cachea.
+   *
+   * `locale: null` = host que no es de ningún aula activa (la web se queda con
+   * su idioma por defecto).
+   */
+  @Get('locale')
+  @ApiOperation({
+    summary: 'Idioma del aula del host del request: { locale: "es" | "en" | null }.',
+    description:
+      'Mismo host que `resolve` (`X-Forwarded-Host` y, si no, `Host`). El idioma es el ajuste del aula (Ajustes, alta en 3 preguntas o aprovisionamiento) y, en las aulas sin ajuste, el deducido. `null` si el host no es de ningún aula activa.',
+  })
+  async locale(@Req() req: FastifyRequest): Promise<{ locale: string | null }> {
+    const tenant = await this.tenantResolver.resolveByHost(resolvePublicHost(req));
+    if (!tenant) return { locale: null };
+    // RLS forzada: `tenant_setting` y `user` solo se leen dentro del aula.
+    const locale = await runAsTenant(
+      tenant.id,
+      () => academyLocale(this.prisma as unknown as AcademyDefaultsPrisma, tenant.id),
+      { traceLabel: 'tenancy-locale' },
+    );
+    return { locale };
   }
 }

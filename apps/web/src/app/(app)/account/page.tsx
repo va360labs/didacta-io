@@ -43,6 +43,7 @@ import {
   LOCALE_OPTIONS,
   meApi,
   TIMEZONE_OPTIONS,
+  extraTimezone,
   type NotificationPreference,
   type UserProfile,
 } from '@/lib/me';
@@ -780,6 +781,7 @@ function EditProfileForm(props: {
 }) {
   const p = props;
   const t = useTranslations('alumnoSocial');
+  const tCommon = useTranslations('common');
   return (
     <Card>
       <CardHeader>
@@ -867,8 +869,11 @@ function EditProfileForm(props: {
                 value={p.timezone}
                 onChange={(e) => p.setTimezone(e.target.value)}
               >
+                {extraTimezone(p.timezone) ? (
+                  <option value={p.timezone}>{p.timezone}</option>
+                ) : null}
                 {TIMEZONE_OPTIONS.map((g) => (
-                  <optgroup key={g.group} label={g.group}>
+                  <optgroup key={g.group} label={tCommon(`zonas.${g.group}`)}>
                     {g.values.map((tz) => (
                       <option key={tz} value={tz}>
                         {tz}

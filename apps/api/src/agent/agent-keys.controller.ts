@@ -16,6 +16,17 @@ import { ZodValidationPipe } from '../auth/zod-validation.pipe';
 import type { SessionClaims } from '../auth/token.service';
 import { PrismaAuditLogService } from '../modules/prisma-audit-log.service';
 import { PANEL_AGENT_SCOPES } from './agent-scopes';
+import { AgentService } from './agent.service';
+import type { AcademyLocale } from '../common/academy-defaults';
+
+/**
+ * Nombre de la clave cuando el panel no manda uno. Sale en `/admin/api-keys`,
+ * así que va en el idioma del aula (antes, «Agente de IA» siempre).
+ */
+export const DEFAULT_AGENT_KEY_NAME: Record<AcademyLocale, string> = {
+  es: 'Agente de IA',
+  en: 'AI agent',
+};
 
 /** Ruta del servidor MCP del aula, relativa al dominio del aula. */
 export const MCP_PATH = '/api/v1/mcp';
@@ -45,6 +56,7 @@ export class AgentKeysController {
   constructor(
     private readonly apiKeys: ApiKeyService,
     private readonly auditLog: PrismaAuditLogService,
+    private readonly agent: AgentService,
   ) {}
 
   @Post()
@@ -62,7 +74,11 @@ export class AgentKeysController {
     const created = await this.apiKeys.create({
       tenantId: u.tenantId,
       userId: u.sub,
-      name: body.name ?? 'Agente de IA',
+      name:
+        body.name ??
+        DEFAULT_AGENT_KEY_NAME[
+          await this.agent.academyLocale(u.tenantId).catch((): AcademyLocale => 'es')
+        ],
       scopes: [...PANEL_AGENT_SCOPES],
     });
     await this.auditLog.record({

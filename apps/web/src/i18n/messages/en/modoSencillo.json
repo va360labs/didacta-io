@@ -105,7 +105,14 @@
     "unirme": "Join",
     "error": "Could not create it. Check the details and try again.",
     "faltaNombre": "Write the name of your academy.",
-    "faltaPrecio": "Write a price greater than zero."
+    "faltaPrecio": "Write a price greater than zero.",
+    "portadaAnadir": "Add a cover (optional)",
+    "portadaCambiar": "Change the cover",
+    "portadaQuitar": "Remove",
+    "portadaSubiendo": "Uploading the cover…",
+    "portadaError": "The cover could not be uploaded. You can carry on without it and add it later.",
+    "idiomaLabel": "Academy language",
+    "idiomaAyuda": "Your students and visitors will see your academy in this language. You can change it in Settings."
   },
   "empieza": {
     "titulo": "Your academy is almost ready to sell",
@@ -254,6 +261,43 @@
       "reintentar": "Try again",
       "enlaceSolo": "Video link (YouTube, Vimeo…)",
       "esperaSubida": "Wait until the video finishes uploading to save."
+    },
+    "cuestionario": "Quiz",
+    "cuestionarioAyuda": "Questions with a pass mark",
+    "portada": {
+      "titulo": "Cover",
+      "ayuda": "It shows on the course card and on your sales page. Landscape (16:9) works best.",
+      "alt": "Course cover",
+      "subir": "Upload cover",
+      "cambiar": "Change cover",
+      "quitar": "Remove",
+      "subiendo": "Uploading…",
+      "error": "The image could not be uploaded. Try a JPG or PNG under 10 MB."
+    },
+    "quiz": {
+      "tituloPlaceholder": "For example: Check what you have learned",
+      "aprobado": "Pass mark",
+      "aprobadoOpcion": "{pct}%",
+      "aprobadoAyuda": "of answers correct",
+      "pregunta": "Question {n}",
+      "preguntaPlaceholder": "Write the question",
+      "marcaCorrecta": "Mark the correct answer",
+      "marcaCorrectas": "Mark every correct answer",
+      "correctaAria": "Answer {n} is correct",
+      "respuestaPlaceholder": "Answer {n}",
+      "quitarRespuesta": "Remove answer {n}",
+      "anadirRespuesta": "Add answer",
+      "varias": "More than one correct answer",
+      "quitarPregunta": "Remove",
+      "anadirPregunta": "Add question",
+      "errores": {
+        "tituloCorto": "Give it a title of at least 3 letters.",
+        "sinPreguntas": "Add at least one question.",
+        "preguntaCorta": "Write question {n}.",
+        "pocasRespuestas": "Question {n} needs at least two answers.",
+        "sinCorrecta": "Mark the correct answer for question {n}.",
+        "unaCorrecta": "Question {n} has more than one correct answer: tick “More than one correct answer” or keep just one."
+      }
     }
   },
   "perfil": {

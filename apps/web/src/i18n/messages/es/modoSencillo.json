@@ -105,7 +105,14 @@
     "unirme": "Unirme",
     "error": "No se ha podido crear. Revisa los datos e inténtalo de nuevo.",
     "faltaNombre": "Escribe el nombre de tu academia.",
-    "faltaPrecio": "Escribe un precio mayor que cero."
+    "faltaPrecio": "Escribe un precio mayor que cero.",
+    "portadaAnadir": "Añadir una portada (opcional)",
+    "portadaCambiar": "Cambiar la portada",
+    "portadaQuitar": "Quitar",
+    "portadaSubiendo": "Subiendo la portada…",
+    "portadaError": "No se ha podido subir la portada. Puedes seguir sin ella y ponerla luego.",
+    "idiomaLabel": "Idioma de la academia",
+    "idiomaAyuda": "Así verán tu academia tus alumnos y visitantes. Puedes cambiarlo en Ajustes."
   },
   "empieza": {
     "titulo": "Tu academia está casi lista para vender",
@@ -254,6 +261,43 @@
       "reintentar": "Volver a probar",
       "enlaceSolo": "Enlace del vídeo (YouTube, Vimeo…)",
       "esperaSubida": "Espera a que termine de subirse el vídeo para guardar."
+    },
+    "cuestionario": "Cuestionario",
+    "cuestionarioAyuda": "Preguntas con nota para aprobar",
+    "portada": {
+      "titulo": "Portada",
+      "ayuda": "Sale en la tarjeta del curso y en tu página de venta. Mejor en horizontal (16:9).",
+      "alt": "Portada del curso",
+      "subir": "Subir portada",
+      "cambiar": "Cambiar portada",
+      "quitar": "Quitar",
+      "subiendo": "Subiendo…",
+      "error": "No se ha podido subir la imagen. Prueba con un JPG o PNG de menos de 10 MB."
+    },
+    "quiz": {
+      "tituloPlaceholder": "Por ejemplo: Comprueba lo que has aprendido",
+      "aprobado": "Nota para aprobar",
+      "aprobadoOpcion": "{pct} %",
+      "aprobadoAyuda": "de respuestas correctas",
+      "pregunta": "Pregunta {n}",
+      "preguntaPlaceholder": "Escribe la pregunta",
+      "marcaCorrecta": "Marca la respuesta correcta",
+      "marcaCorrectas": "Marca todas las respuestas correctas",
+      "correctaAria": "La respuesta {n} es correcta",
+      "respuestaPlaceholder": "Respuesta {n}",
+      "quitarRespuesta": "Quitar la respuesta {n}",
+      "anadirRespuesta": "Añadir respuesta",
+      "varias": "Varias respuestas correctas",
+      "quitarPregunta": "Quitar",
+      "anadirPregunta": "Añadir pregunta",
+      "errores": {
+        "tituloCorto": "Ponle un título de al menos 3 letras.",
+        "sinPreguntas": "Añade al menos una pregunta.",
+        "preguntaCorta": "Escribe la pregunta {n}.",
+        "pocasRespuestas": "La pregunta {n} necesita al menos dos respuestas.",
+        "sinCorrecta": "Marca la respuesta correcta de la pregunta {n}.",
+        "unaCorrecta": "La pregunta {n} tiene más de una respuesta correcta: marca «Varias respuestas correctas» o deja solo una."
+      }
     }
   },
   "perfil": {

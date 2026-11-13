@@ -84,11 +84,17 @@
     "error": "No se ha podido guardar. Inténtalo de nuevo.",
     "faltaNombre": "Escribe el nombre de tu academia.",
     "modoTitulo": "Usar el modo completo",
-    "modoTexto": "Verás todas las opciones avanzadas en un menú lateral. Puedes volver al modo sencillo cuando quieras.",
+    "modoTexto": "Verás todas las opciones avanzadas en un menú lateral. Puedes volver al modo sencillo cuando quieras desde Configuración.",
     "modoBoton": "Cambiar al modo completo",
     "modoConfirmar": "¿Cambiar al modo completo? Podrás volver cuando quieras.",
     "avanzadas": "Todas las opciones avanzadas",
-    "avanzadasAyuda": "Correo, cobros con tu propia cuenta, Zoom, idioma y más."
+    "avanzadasAyuda": "Correo, cobros con tu propia cuenta, Zoom, idioma y más.",
+    "volverTitulo": "Volver al modo sencillo",
+    "volverTexto": "Menú corto arriba, «Empieza aquí» y editores sin opciones avanzadas. No se borra nada: lo avanzado sigue aquí cuando lo necesites.",
+    "volverBoton": "Volver al modo sencillo",
+    "volverCambiando": "Cambiando…",
+    "idioma": "Idioma de la academia",
+    "idiomaAyuda": "Es el de tu página de venta, tu catálogo y los correos a quien aún no ha elegido idioma. Cada alumno puede cambiar el suyo en su perfil."
   },
   "cursos": {
     "titulo": "Cursos",

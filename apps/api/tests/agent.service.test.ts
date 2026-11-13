@@ -7,7 +7,7 @@ import { CourseNotFoundError, CourseSlugAlreadyExistsError } from '@didacta/mod-
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { AgentRateLimiter } from '../src/agent/agent-rate-limiter';
 import { AGENT_SCOPES, PANEL_AGENT_SCOPES } from '../src/agent/agent-scopes';
-import { AGENT_TOOLS } from '../src/agent/agent-tools';
+import { AGENT_TOOLS, AGENT_UI_NAMES, localizeAgentText } from '../src/agent/agent-tools';
 import { AgentService, slugFromTitle } from '../src/agent/agent.service';
 import { ALLOWED_API_KEY_SCOPES, grantableApiKeyScopes } from '../src/auth/api-key-scopes';
 import type { SessionClaims } from '../src/auth/token.service';
@@ -194,6 +194,38 @@ describe('puertas comunes a todas las herramientas', () => {
     expect(courses.createCourse).not.toHaveBeenCalled();
   });
 
+  it('los nombres de pantalla de las herramientas salen en el idioma del aula', async () => {
+    const descripcion = async () =>
+      (await service.visibleTools(user())).find((t) => t.name === 'create_course')!.description;
+    // Sin ajuste ni perfil legible: español.
+    expect(await descripcion()).toContain('from "Empieza aquí"');
+    Object.assign(prisma, {
+      tenantSetting: {
+        findUnique: vi.fn(
+          async (q: { where: { tenantId_moduleName_key: { moduleName: string; key: string } } }) =>
+            q.where.tenantId_moduleName_key.moduleName === 'academy' ? { valueJson: 'en' } : null,
+        ),
+      },
+    });
+    const en = await descripcion();
+    expect(en).toContain('from "Start here"');
+    for (const tool of await service.visibleTools(user())) {
+      expect(tool.description, tool.name).not.toContain('{{ui:');
+    }
+    // El catálogo de origen no se toca: cada aula localiza su copia.
+    expect(AGENT_TOOLS.find((t) => t.name === 'create_course')!.description).toContain(
+      '{{ui:startHere}}',
+    );
+  });
+
+  it('localizeAgentText: los dos idiomas, y una marca desconocida se deja tal cual', () => {
+    expect(localizeAgentText('from "{{ui:startHere}}"', 'es')).toBe('from "Empieza aquí"');
+    expect(localizeAgentText('the "{{ui:agentPanel}}" panel', 'en')).toBe(
+      `the "${AGENT_UI_NAMES.agentPanel.en}" panel`,
+    );
+    expect(localizeAgentText('{{ui:nope}}', 'es')).toBe('{{ui:nope}}');
+  });
+
   it('módulo apagado en el aula: ni se ve ni se usa', async () => {
     enabled.delete('mod.zoom-live');
     const visible = (await service.visibleTools(user())).map((t) => t.name);
@@ -282,7 +314,11 @@ describe('cursos y lecciones', () => {
     const r = (await service.call(user(), 'key-1', 'create_course', {
       title: 'Espresso at Home',
       description: 'From bean to cup',
-    })) as { id: string; status: string };
+    })) as { id: string; status: string; note: string };
+    // La nota cita la pantalla con el nombre del aula (aquí, sin ajuste: español).
+    expect(r.note).toBe(
+      'Created as a draft. The owner publishes it with its price from "Empieza aquí".',
+    );
     expect(courses.createCourse).toHaveBeenLastCalledWith(TENANT, OWNER, {
       title: 'Espresso at Home',
       slug: 'espresso-at-home-2',

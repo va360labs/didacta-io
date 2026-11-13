@@ -168,7 +168,9 @@ describe('lección de vídeo en el modo sencillo', () => {
     expect(c.querySelector('label[for="leccion-video"]')?.textContent).toBe(
       'Video link (YouTube, Vimeo…)',
     );
-    expect(c.querySelector('input[type="file"]')).toBeNull();
+    // Ni un selector de fichero de vídeo en la lección (el de la portada del
+    // curso vive aparte, fuera del formulario).
+    expect(c.querySelector('[data-testid="form-leccion"] input[type="file"]')).toBeNull();
     // Elegir «Vídeo» ya no crea una lección.
     expect(lessonWrites()).toEqual([]);
   });

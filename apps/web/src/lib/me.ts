@@ -179,26 +179,50 @@ export const meApi = {
   },
 };
 
-const TIMEZONE_GROUPS: Record<string, string[]> = {
-  Argentina: [
-    'America/Argentina/Buenos_Aires',
-    'America/Argentina/Cordoba',
-    'America/Argentina/Mendoza',
-  ],
-  España: ['Europe/Madrid', 'Atlantic/Canary'],
-  'América Latina': [
-    'America/Mexico_City',
-    'America/Sao_Paulo',
-    'America/Santiago',
-    'America/Bogota',
-    'America/Lima',
-  ],
-  UTC: ['UTC'],
-};
+/**
+ * Zonas del selector de `/account` y `/onboarding`, por grupos. El `group` es
+ * una clave de `common.zonas.*` (antes eran rótulos en español fijos, que un
+ * alumno de un aula en inglés veía tal cual).
+ */
+export type TimezoneGroupId = 'espana' | 'europa' | 'norteamerica' | 'latam' | 'argentina' | 'utc';
 
-export const TIMEZONE_OPTIONS: Array<{ group: string; values: string[] }> = Object.entries(
-  TIMEZONE_GROUPS,
-).map(([group, values]) => ({ group, values }));
+export const TIMEZONE_OPTIONS: Array<{ group: TimezoneGroupId; values: string[] }> = [
+  { group: 'espana', values: ['Europe/Madrid', 'Atlantic/Canary'] },
+  { group: 'europa', values: ['Europe/London', 'Europe/Lisbon', 'Europe/Paris', 'Europe/Berlin'] },
+  {
+    group: 'norteamerica',
+    values: ['America/New_York', 'America/Chicago', 'America/Denver', 'America/Los_Angeles'],
+  },
+  {
+    group: 'latam',
+    values: [
+      'America/Mexico_City',
+      'America/Sao_Paulo',
+      'America/Santiago',
+      'America/Bogota',
+      'America/Lima',
+    ],
+  },
+  {
+    group: 'argentina',
+    values: [
+      'America/Argentina/Buenos_Aires',
+      'America/Argentina/Cordoba',
+      'America/Argentina/Mendoza',
+    ],
+  },
+  { group: 'utc', values: ['UTC'] },
+];
+
+/**
+ * La zona actual si no está en la lista (la del navegador de quien entra por
+ * primera vez puede ser cualquiera): se ofrece aparte para que el selector no
+ * enseñe otra distinta de la que se va a guardar.
+ */
+export function extraTimezone(current: string): string | null {
+  if (!current) return null;
+  return TIMEZONE_OPTIONS.some((g) => g.values.includes(current)) ? null : current;
+}
 
 /**
  * Etiqueta de cada idioma elegible. En su propio idioma a propósito: quien

@@ -15,6 +15,11 @@ import { PasswordResetService } from '../auth/password-reset.service';
 import { AccessGroupsService } from '../modules/access-groups/access-groups.service';
 import { PrismaAuditLogService } from '../modules/prisma-audit-log.service';
 import { PrismaService } from '../prisma/prisma.service';
+import {
+  newUserLocale,
+  newUserTimeZone,
+  type AcademyDefaultsPrisma,
+} from '../common/academy-defaults';
 import { AccountStateService } from '../auth/account-state.service';
 import { assertSignupsAllowed } from '../tenancy/signup-freeze';
 
@@ -279,6 +284,13 @@ export class AdminUsersService {
       await this.accessGroups.getGroup(tenantId, dto.accessGroupId);
     }
 
+    // Hasta su primer acceso (que toma la zona de su navegador), la del aula; y
+    // el idioma del aula, que es en el que le llega la invitación.
+    const timezone = await newUserTimeZone(
+      this.prisma as unknown as AcademyDefaultsPrisma,
+      tenantId,
+    );
+    const locale = await newUserLocale(this.prisma as unknown as AcademyDefaultsPrisma, tenantId);
     const user = await this.prisma.$transaction(async (tx) => {
       const created = await tx.user.create({
         data: {
@@ -286,6 +298,8 @@ export class AdminUsersService {
           email: dto.email,
           name: dto.name ?? null,
           status: 'ACTIVE',
+          timezone,
+          locale,
         },
       });
       await tx.userRole.create({

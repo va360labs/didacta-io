@@ -18,6 +18,8 @@ function makeMocks(opts?: {
   issuedToken?: { rawToken: string } | null;
   /** Idioma de la fila recién creada del comprador (columna `user.locale`). */
   createdLocale?: string;
+  /** Ajuste `academy/locale` del aula (el idioma del aula). */
+  idiomaAula?: string;
 }) {
   const created = { id: 'user-nuevo', locale: opts?.createdLocale };
   const userRoleCreate = vi.fn();
@@ -45,6 +47,14 @@ function makeMocks(opts?: {
     tenant: { findUnique: vi.fn().mockResolvedValue({ name: 'Academia Demo' }) },
     modThemingTenantTheme: { findUnique: vi.fn().mockResolvedValue(null) },
     notificationTemplate: { findUnique: vi.fn().mockResolvedValue(null) },
+    tenantSetting: {
+      findUnique: vi.fn(
+        async (q: { where: { tenantId_moduleName_key: { moduleName: string; key: string } } }) =>
+          q.where.tenantId_moduleName_key.moduleName === 'academy' && opts?.idiomaAula
+            ? { valueJson: opts.idiomaAula }
+            : null,
+      ),
+    },
   } as never;
   const passwords = { hash: vi.fn().mockResolvedValue('$argon2$hash') } as never;
   const passwordReset = {
@@ -206,6 +216,15 @@ describe('BillingProvisioningService · idioma del comprador', () => {
     expect(mail.html).toContain(
       'Después podrás iniciar sesión desde https://academia.example.com/signin con tu email.',
     );
+  });
+
+  it('comprador nuevo sin idioma capturado: nace con el del aula (la bienvenida sale en él)', async () => {
+    const aulaInglesa = makeMocks({ idiomaAula: 'en' });
+    await aulaInglesa.svc.provision(args);
+    expect(aulaInglesa.tx.user.create.mock.calls[0]![0].data.locale).toBe('en-US');
+    const conCheckout = makeMocks({ idiomaAula: 'en' });
+    await conCheckout.svc.provision({ ...args, locale: 'es-AR' });
+    expect(conCheckout.tx.user.create.mock.calls[0]![0].data.locale).toBe('es-AR');
   });
 
   it('CAMINO DEGRADADO: fila sin locale o con uno sin catálogo → español, nunca un hueco', async () => {

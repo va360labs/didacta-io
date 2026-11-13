@@ -4,7 +4,39 @@
  */
 
 import { z } from 'zod';
+import type { AcademyLocale } from '../common/academy-defaults';
 import type { AgentScope } from './agent-scopes';
+
+/**
+ * Nombres de la INTERFAZ que citan las instrucciones y las herramientas del
+ * agente. El resto del texto va en inglés (es para el modelo), pero estos los
+ * repite el agente a la persona tal cual («publícalo desde "Start here"»): en un
+ * aula en español tienen que ser los que esa persona ve en pantalla. Son los de
+ * los catálogos de la web (`modoSencillo.nav.empieza`, `agenteIa.titulo`).
+ */
+export const AGENT_UI_NAMES = {
+  startHere: { es: 'Empieza aquí', en: 'Start here' },
+  agentPanel: { es: 'Hazlo más rápido con tu agente de IA', en: 'Do it faster with your AI agent' },
+} as const satisfies Record<string, Record<AcademyLocale, string>>;
+
+export type AgentUiName = keyof typeof AGENT_UI_NAMES;
+
+/** Marca un nombre de la interfaz dentro de un texto del agente. */
+export function uiName(name: AgentUiName): string {
+  return `{{ui:${name}}}`;
+}
+
+/** Pone en un texto del agente los nombres de la interfaz en el idioma del aula. */
+export function localizeAgentText(text: string, locale: AcademyLocale): string {
+  return text.replace(/\{\{ui:(\w+)\}\}/g, (marca, name: string) =>
+    name in AGENT_UI_NAMES ? AGENT_UI_NAMES[name as AgentUiName][locale] : marca,
+  );
+}
+
+/** La herramienta tal cual la ve el agente de un aula: su descripción, localizada. */
+export function localizeAgentTool(tool: AgentTool, locale: AcademyLocale): AgentTool {
+  return { ...tool, description: localizeAgentText(tool.description, locale) };
+}
 
 /**
  * Catálogo de herramientas del servidor MCP del aula.
@@ -163,8 +195,7 @@ const obj = (
   additionalProperties: false,
 });
 
-const DRAFT_NOTE =
-  'New courses are created as a DRAFT: the academy owner reviews them and publishes them (with their price) from "Start here". You cannot publish courses, set prices, delete anything or invite people.';
+const DRAFT_NOTE = `New courses are created as a DRAFT: the academy owner reviews them and publishes them (with their price) from "${uiName('startHere')}". You cannot publish courses, set prices, delete anything or invite people.`;
 
 export const AGENT_TOOLS: readonly AgentTool[] = [
   {

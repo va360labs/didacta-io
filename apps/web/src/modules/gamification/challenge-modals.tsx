@@ -60,7 +60,7 @@ function FileField({
       />
       <label
         htmlFor={id}
-        className="cursor-pointer rounded-lg bg-(--didacta-trust) px-3 py-2 text-sm font-semibold text-white hover:opacity-90"
+        className="cursor-pointer rounded-lg bg-brand-600 px-3 py-2 text-sm font-semibold text-white hover:bg-brand-700"
       >
         {fileName ? t('file.change') : t('file.pick')}
       </label>

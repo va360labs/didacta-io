@@ -1,5 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import { catalogOf, DEFAULT_LOCALE, toSupportedLocale } from './config';
+import {
+  academyUiLocale,
+  ACADEMY_LOCALE_NAMES,
+  ACADEMY_LOCALES,
+  catalogOf,
+  DEFAULT_LOCALE,
+  isAcademyLocale,
+  isUsableLocaleCookie,
+  resolveRequestLocale,
+  toSupportedLocale,
+} from './config';
 
 describe('toSupportedLocale', () => {
   it('null/undefined/vacío → default es-ES', () => {
@@ -43,5 +53,42 @@ describe('catalogOf', () => {
 
   it('en-US usa catálogo en', () => {
     expect(catalogOf('en-US')).toBe('en');
+  });
+});
+
+describe('resolveRequestLocale (cookie → idioma del aula → es-ES)', () => {
+  it('la cookie manda: es la elección del visitante o la de su perfil', () => {
+    expect(resolveRequestLocale('es-AR', 'en')).toBe('es-AR');
+    expect(resolveRequestLocale('en-US', 'es')).toBe('en-US');
+    expect(resolveRequestLocale('en', 'es')).toBe('en-US');
+  });
+
+  it('sin cookie, el idioma del aula (visitantes de la venta, catálogo, /join, acceso)', () => {
+    expect(resolveRequestLocale(undefined, 'en')).toBe('en-US');
+    expect(resolveRequestLocale(null, 'es')).toBe('es-ES');
+    expect(resolveRequestLocale('', 'en')).toBe('en-US');
+  });
+
+  it('una cookie con un idioma que la interfaz no tiene no cuenta como elección', () => {
+    expect(isUsableLocaleCookie('pt-BR')).toBe(false);
+    expect(isUsableLocaleCookie('; DROP')).toBe(false);
+    expect(isUsableLocaleCookie('es-ES')).toBe(true);
+    expect(isUsableLocaleCookie('EN-gb')).toBe(true);
+    expect(resolveRequestLocale('pt-BR', 'en')).toBe('en-US');
+  });
+
+  it('sin cookie ni idioma del aula (API caída, host ajeno): es-ES, como siempre', () => {
+    expect(resolveRequestLocale(undefined, null)).toBe(DEFAULT_LOCALE);
+    expect(resolveRequestLocale('xx', undefined)).toBe(DEFAULT_LOCALE);
+  });
+
+  it('idiomas del aula: los de los catálogos, con su nombre en su idioma', () => {
+    expect(ACADEMY_LOCALES).toEqual(['es', 'en']);
+    expect(ACADEMY_LOCALE_NAMES).toEqual({ es: 'Español', en: 'English' });
+    expect(isAcademyLocale('en')).toBe(true);
+    expect(isAcademyLocale('pt-BR')).toBe(false);
+    expect(isAcademyLocale(null)).toBe(false);
+    expect(academyUiLocale('en')).toBe('en-US');
+    expect(academyUiLocale('es')).toBe('es-ES');
   });
 });

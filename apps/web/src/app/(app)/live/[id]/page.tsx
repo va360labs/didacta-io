@@ -236,7 +236,11 @@ export default function ClasePage() {
                 })}
               >
                 <Icon name="calendar" size={14} className="mr-1 inline-block align-[-2px]" />
-                <span className="capitalize">{formatStartLocal(session.startTime)}</span>
+                {/* `first-letter` y no `capitalize`: «jueves, 19 de noviembre de 2026»
+                    salía «Jueves, 19 De Noviembre De 2026» (y «At» en inglés). */}
+                <span className="inline-block first-letter:uppercase" data-testid="fecha-directo">
+                  {formatStartLocal(session.startTime)}
+                </span>
                 {' · '}
                 <Icon name="clock" size={14} className="mr-1 inline-block align-[-2px]" />
                 {t('minutesShort', { minutes: session.durationMinutes })}

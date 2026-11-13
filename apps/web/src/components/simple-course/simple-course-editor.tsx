@@ -10,26 +10,63 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import { useTranslations } from 'next-intl';
 import { Icon, type IconName } from '@/components/icon';
+import { authStorage } from '@/lib/auth-storage';
 import { coursesApi, type CourseDetail, type CourseLesson, type LessonType } from '@/lib/courses';
+import { meApi } from '@/lib/me';
 import { storageApi } from '@/lib/storage';
 import { useVideoQuota, useVideoUpload, type VideoQuotaState } from '@/lib/use-video-upload';
 import { cn } from '@/lib/utils';
+import { SimpleQuizForm } from './simple-quiz-form';
 import { SimpleVideoField } from './simple-video-field';
 import { toSlug } from './slug';
 import { queryParam } from '@/lib/legacy-routes';
 
-type SimpleKind = 'VIDEO' | 'TEXT' | 'PDF';
+type SimpleKind = 'VIDEO' | 'TEXT' | 'PDF' | 'QUIZ';
 
 const KINDS: Array<{
   kind: SimpleKind;
   icon: IconName;
-  label: 'video' | 'texto' | 'archivo';
-  help: 'videoAyuda' | 'textoAyuda' | 'archivoAyuda';
+  label: 'video' | 'texto' | 'archivo' | 'cuestionario';
+  help: 'videoAyuda' | 'textoAyuda' | 'archivoAyuda' | 'cuestionarioAyuda';
 }> = [
   { kind: 'VIDEO', icon: 'video', label: 'video', help: 'videoAyuda' },
   { kind: 'TEXT', icon: 'file', label: 'texto', help: 'textoAyuda' },
   { kind: 'PDF', icon: 'download-cloud', label: 'archivo', help: 'archivoAyuda' },
+  { kind: 'QUIZ', icon: 'help', label: 'cuestionario', help: 'cuestionarioAyuda' },
 ];
+
+/** Icono de una lección en la lista (el mismo que su tipo en el selector). */
+function lessonIcon(type: LessonType): IconName {
+  return KINDS.find((k) => k.kind === type)?.icon ?? 'file';
+}
+
+/** Tipos que el selector ofrece: el cuestionario solo con evaluaciones activas. */
+export function availableKinds(assessmentsActive: boolean | null): SimpleKind[] {
+  return KINDS.map((k) => k.kind).filter((k) => k !== 'QUIZ' || assessmentsActive !== false);
+}
+
+/**
+ * ¿Está activo un módulo en el aula? `null` mientras no se sabe (se asume que
+ * sí, como hace el menú).
+ */
+function useModuleActive(name: string): boolean | null {
+  const [active, setActive] = useState<boolean | null>(null);
+  useEffect(() => {
+    const token = authStorage.getAccessToken();
+    if (!token) return;
+    let cancelled = false;
+    meApi
+      .getMyModules(token)
+      .then((r) => {
+        if (!cancelled) setActive(r.activeModules.includes(name));
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [name]);
+  return active;
+}
 
 /**
  * Título de la lección a partir del nombre del fichero, si la creadora aún no
@@ -75,6 +112,7 @@ export function SimpleCourseEditor({ courseId }: { courseId: string }) {
   // ¿Puede el aula subir vídeos? Se pregunta una vez para el selector y los
   // formularios: si no puede, «Vídeo» lo dice en vez de esconder la subida.
   const video = useVideoQuota();
+  const kinds = availableKinds(useModuleActive('mod.assessments'));
 
   const load = useCallback(async () => {
     try {
@@ -146,6 +184,8 @@ export function SimpleCourseEditor({ courseId }: { courseId: string }) {
         </div>
       </form>
 
+      <CourseCover courseId={courseId} coverUrl={course.thumbnailUrl} onChanged={load} />
+
       <div className="mt-3 flex flex-wrap items-center gap-2 text-sm">
         <span
           className={cn(
@@ -200,23 +240,34 @@ export function SimpleCourseEditor({ courseId }: { courseId: string }) {
           {lessons.map((lesson, i) =>
             editing === lesson.id ? (
               <li key={lesson.id} className="border-b border-border p-4 last:border-b-0">
-                <LessonForm
-                  kind={
-                    (lesson.type === 'PDF' || lesson.type === 'VIDEO'
-                      ? lesson.type
-                      : 'TEXT') as SimpleKind
-                  }
-                  lesson={lesson}
-                  video={video}
-                  onCancel={async (changed) => {
-                    setEditing(null);
-                    if (changed) await load();
-                  }}
-                  onSaved={async () => {
-                    setEditing(null);
-                    await load();
-                  }}
-                />
+                {lesson.type === 'QUIZ' ? (
+                  <SimpleQuizForm
+                    lesson={lesson}
+                    onCancel={() => setEditing(null)}
+                    onSaved={async () => {
+                      setEditing(null);
+                      await load();
+                    }}
+                  />
+                ) : (
+                  <LessonForm
+                    kind={
+                      (lesson.type === 'PDF' || lesson.type === 'VIDEO'
+                        ? lesson.type
+                        : 'TEXT') as SimpleKind
+                    }
+                    lesson={lesson}
+                    video={video}
+                    onCancel={async (changed) => {
+                      setEditing(null);
+                      if (changed) await load();
+                    }}
+                    onSaved={async () => {
+                      setEditing(null);
+                      await load();
+                    }}
+                  />
+                )}
               </li>
             ) : (
               <li
@@ -224,16 +275,7 @@ export function SimpleCourseEditor({ courseId }: { courseId: string }) {
                 className="flex items-center gap-3 border-b border-border px-4 py-3 last:border-b-0"
               >
                 <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-bg-subtle text-text-muted">
-                  <Icon
-                    name={
-                      lesson.type === 'VIDEO'
-                        ? 'video'
-                        : lesson.type === 'PDF'
-                          ? 'download-cloud'
-                          : 'file'
-                    }
-                    size={16}
-                  />
+                  <Icon name={lessonIcon(lesson.type)} size={16} />
                 </span>
                 <div className="min-w-0 flex-1">
                   <div className="truncate font-semibold text-text">
@@ -258,8 +300,13 @@ export function SimpleCourseEditor({ courseId }: { courseId: string }) {
         {adding === 'choose' ? (
           <div className="border-t border-border p-4">
             <p className="text-sm font-semibold text-text">{t('tipoTitulo')}</p>
-            <div className="mt-3 grid gap-2 sm:grid-cols-3">
-              {KINDS.map((k) => (
+            <div
+              className={cn(
+                'mt-3 grid gap-2',
+                kinds.length > 3 ? 'sm:grid-cols-2 lg:grid-cols-4' : 'sm:grid-cols-3',
+              )}
+            >
+              {KINDS.filter((k) => kinds.includes(k.kind)).map((k) => (
                 <button
                   key={k.kind}
                   type="button"
@@ -288,6 +335,18 @@ export function SimpleCourseEditor({ courseId }: { courseId: string }) {
             >
               {t('cancelar')}
             </button>
+          </div>
+        ) : adding === 'QUIZ' ? (
+          <div className="border-t border-border p-4">
+            <SimpleQuizForm
+              getModuleId={moduleId}
+              onCancel={() => setAdding(null)}
+              onSaved={async () => {
+                setAdding(null);
+                await load();
+                window.dispatchEvent(new Event('didacta:empieza-cambio'));
+              }}
+            />
           </div>
         ) : adding ? (
           <div className="border-t border-border p-4">
@@ -321,6 +380,121 @@ export function SimpleCourseEditor({ courseId }: { courseId: string }) {
         </div>
       ) : null}
     </div>
+  );
+}
+
+/**
+ * Portada del curso en el editor sencillo: la que sale en la tarjeta del enlace
+ * de venta, en la página de venta y en las tarjetas de curso (sin ella, el
+ * degradado de reserva). Usa la misma subida de imágenes que el modo completo
+ * (optimizada a 1600 px) y se guarda al elegirla, sin botón aparte.
+ */
+function CourseCover({
+  courseId,
+  coverUrl,
+  onChanged,
+}: {
+  courseId: string;
+  coverUrl: string | null;
+  onChanged: () => Promise<void>;
+}) {
+  const t = useTranslations('modoSencillo.curso.portada');
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function save(url: string | null) {
+    await coursesApi.update(courseId, { thumbnailUrl: url });
+    await onChanged();
+    window.dispatchEvent(new Event('didacta:empieza-cambio'));
+  }
+
+  async function pick(file: File) {
+    setBusy(true);
+    setError(null);
+    try {
+      const r = await storageApi.uploadImage(file, { optimize: { maxWidth: 1600 } });
+      await save(r.url);
+    } catch {
+      setError(t('error'));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function remove() {
+    setBusy(true);
+    setError(null);
+    try {
+      await save(null);
+    } catch {
+      setError(t('error'));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <section className="mt-5" data-testid="portada-curso">
+      <h2 className="text-sm font-semibold text-text-muted">{t('titulo')}</h2>
+      <div className="mt-1.5 flex flex-wrap items-center gap-4">
+        {coverUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={coverUrl}
+            alt={t('alt')}
+            className="aspect-video w-48 shrink-0 rounded-xl border border-border object-cover"
+            data-testid="portada-imagen"
+          />
+        ) : (
+          <div
+            aria-hidden
+            className="aspect-video w-48 shrink-0 rounded-xl bg-[linear-gradient(135deg,hsl(var(--brand-h)_70%_88%),hsl(174_60%_86%))]"
+          />
+        )}
+        <div className="min-w-0 flex-1">
+          <p className="max-w-[46ch] text-sm text-text-muted">{t('ayuda')}</p>
+          <input
+            ref={fileRef}
+            id="portada-fichero"
+            type="file"
+            accept="image/png,image/jpeg,image/webp,image/gif"
+            className="hidden"
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              e.target.value = '';
+              if (f) void pick(f);
+            }}
+          />
+          <div className="mt-2.5 flex flex-wrap items-center gap-3">
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => fileRef.current?.click()}
+              className="inline-flex h-10 items-center gap-2 rounded-xl border border-border bg-surface px-4 text-sm font-semibold text-text hover:border-border-strong disabled:opacity-50"
+              data-testid="subir-portada"
+            >
+              <Icon name="image" size={16} />
+              {busy ? t('subiendo') : coverUrl ? t('cambiar') : t('subir')}
+            </button>
+            {coverUrl && !busy ? (
+              <button
+                type="button"
+                onClick={() => void remove()}
+                className="text-sm font-semibold text-text-muted hover:text-danger-700"
+              >
+                {t('quitar')}
+              </button>
+            ) : null}
+          </div>
+          {error ? (
+            <p role="alert" className="mt-2 text-sm font-semibold text-danger-700">
+              {error}
+            </p>
+          ) : null}
+        </div>
+      </div>
+    </section>
   );
 }
 

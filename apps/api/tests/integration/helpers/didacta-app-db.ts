@@ -25,8 +25,12 @@ const APP_PASSWORD = process.env['RLS_TEST_APP_PASSWORD'] ?? 'rls_test_didacta_a
 
 const REPO_ROOT = resolve(__dirname, '../../../../..');
 
-/** Aplica un .sql con `docker exec … psql -f -`, igual que el entrypoint. */
-export function applySqlFileViaPsql(relPath: string): void {
+/**
+ * Aplica un .sql con `docker exec … psql -f -`, igual que el entrypoint.
+ * `user` permite correrlo con otro rol (p. ej. `didacta_app`, sin superuser ni
+ * BYPASSRLS) para probar que el fichero respeta la RLS forzada.
+ */
+export function applySqlFileViaPsql(relPath: string, opts: { user?: string } = {}): void {
   const sql = readFileSync(resolve(REPO_ROOT, relPath), 'utf8');
   execFileSync(
     'docker',
@@ -36,7 +40,7 @@ export function applySqlFileViaPsql(relPath: string): void {
       PG_CONTAINER,
       'psql',
       '-U',
-      PG_USER,
+      opts.user ?? PG_USER,
       '-d',
       PG_DB,
       '-v',

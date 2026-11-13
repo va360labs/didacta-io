@@ -10,6 +10,7 @@ import { useTranslations } from 'next-intl';
 import { UserChip } from '@/components/user-chip';
 import { formatNumber } from '@/lib/i18n/format';
 import {
+  RankingTabs,
   gamificationApi,
   type LeaderboardEntry,
   type LeaderboardRange,
@@ -60,9 +61,12 @@ export default function LeaderboardPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="font-display text-2xl font-bold text-text">{t('leaderboard.titulo')}</h1>
-        <p className="mt-1 text-sm text-text-muted">{t('leaderboard.subtitulo')}</p>
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h1 className="font-display text-2xl font-bold text-text">{t('leaderboard.titulo')}</h1>
+          <p className="mt-1 text-sm text-text-muted">{t('leaderboard.subtitulo')}</p>
+        </div>
+        <RankingTabs />
       </div>
 
       {standing && standing.points > 0 ? (
@@ -107,7 +111,7 @@ export default function LeaderboardPage() {
             onClick={() => setRange(value)}
             className={`rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors ${
               range === value
-                ? 'border-(--didacta-trust) bg-(--didacta-trust)/10 text-(--didacta-trust)'
+                ? 'border-brand-600 bg-brand-50 text-brand-700'
                 : 'border-border text-text-muted hover:text-text'
             }`}
           >

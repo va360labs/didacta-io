@@ -14,6 +14,11 @@ import { ModuleAccessInterceptor } from '../modules/module-access.interceptor';
 import { ModuleRegistryService } from '../modules/module-registry.service';
 import { PrismaAuditLogService } from '../modules/prisma-audit-log.service';
 import { PrismaService } from '../prisma/prisma.service';
+import {
+  academyLocale,
+  type AcademyDefaultsPrisma,
+  type AcademyLocale,
+} from '../common/academy-defaults';
 import { isAgentScope } from './agent-scopes';
 import {
   AGENT_TOOLS,
@@ -23,6 +28,9 @@ import {
   type createCourseInput,
   type createLessonInput,
   findAgentTool,
+  localizeAgentText,
+  localizeAgentTool,
+  uiName,
   type getCourseInput,
   type listCoursesInput,
   type scheduleLiveClassInput,
@@ -110,11 +118,13 @@ export class AgentService {
   /** Herramientas que esta clave ve: las de sus scopes, de módulos activos en el aula. */
   async visibleTools(user: SessionClaims): Promise<AgentTool[]> {
     const scopes = new Set(user.roles.filter(isAgentScope));
+    const locale = await this.academyLocale(user.tenantId);
     const out: AgentTool[] = [];
     for (const tool of AGENT_TOOLS) {
       if (!scopes.has(tool.scope)) continue;
       if (!(await this.moduleAccess.isEnabled(user.tenantId, tool.module))) continue;
-      out.push(tool);
+      // Los nombres de pantalla que cita, en el idioma del aula.
+      out.push(localizeAgentTool(tool, locale));
     }
     return out;
   }
@@ -126,6 +136,20 @@ export class AgentService {
       select: { name: true },
     });
     return t?.name ?? null;
+  }
+
+  /**
+   * Idioma del aula (es/en), para los textos que el servidor pone por su
+   * cuenta, como el nombre por defecto de la clave del panel o los nombres de
+   * pantalla que citan las instrucciones del agente.
+   */
+  async academyLocale(tenantId: string): Promise<AcademyLocale> {
+    return academyLocale(this.prisma as unknown as AcademyDefaultsPrisma, tenantId);
+  }
+
+  /** Un texto para el agente con los nombres de la interfaz en el idioma del aula. */
+  async localize(tenantId: string, text: string): Promise<string> {
+    return localizeAgentText(text, await this.academyLocale(tenantId));
   }
 
   async call(
@@ -140,7 +164,10 @@ export class AgentService {
     if (!user.roles.includes(tool.scope)) {
       throw new AgentToolError(
         'AGENT_SCOPE_MISSING',
-        `This key does not have the "${tool.scope}" permission needed for ${name}. Create a new key from the "Do it faster with your AI agent" panel.`,
+        await this.localize(
+          user.tenantId,
+          `This key does not have the "${tool.scope}" permission needed for ${name}. Create a new key from the "${uiName('agentPanel')}" panel.`,
+        ),
       );
     }
     if (!(await this.moduleAccess.isEnabled(user.tenantId, tool.module))) {
@@ -283,7 +310,10 @@ export class AgentService {
           title: course.title,
           status: course.status,
           editPath: `/studio/courses/${course.id}`,
-          note: 'Created as a draft. The owner publishes it with its price from "Start here".',
+          note: await this.localize(
+            tenantId,
+            `Created as a draft. The owner publishes it with its price from "${uiName('startHere')}".`,
+          ),
         };
       } catch (err) {
         if (!(err instanceof CourseSlugAlreadyExistsError)) throw err;
