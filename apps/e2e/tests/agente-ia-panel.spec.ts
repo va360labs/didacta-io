@@ -5,7 +5,7 @@
 
 import { createHash, randomBytes } from 'node:crypto';
 import http from 'node:http';
-import { expect, test, type Browser, type Page } from '@playwright/test';
+import { expect, test, type Browser, type Locator, type Page } from '@playwright/test';
 import { apiAs, freshTenant, sql, type FreshTenant } from '../helpers/simple-tenant';
 
 /**
@@ -164,6 +164,40 @@ async function alumna(tenant: FreshTenant, operador: string) {
   return email;
 }
 
+const AGENTES = [
+  ['claude-code', 'Claude Code'],
+  ['codex', 'Codex'],
+  ['hermes', 'Hermes'],
+  ['grok', 'Grok'],
+  ['cursor', 'Cursor'],
+  ['vscode', 'VS Code'],
+] as const;
+
+/**
+ * Cada pestaña del panel enseña el logo de su herramienta: un SVG del propio
+ * aula (`/agents/<id>.svg`, nada de CDNs) que CARGA de verdad (una imagen
+ * rota da `naturalWidth` 0), a 16 px, decorativo (el nombre que se lee es el
+ * de la pestaña) y con el nombre entero al lado, sin cortarse.
+ */
+async function logosEnLasPestanas(scope: Locator) {
+  for (const [id, nombre] of AGENTES) {
+    const tab = scope.getByRole('tab', { name: nombre, exact: true });
+    await expect(tab).toBeVisible();
+    await expect(tab).toHaveAttribute('data-testid', `agente-ia-tab-${id}`);
+    const logo = tab.getByTestId(`agente-ia-logo-${id}`);
+    await expect(logo).toBeVisible();
+    await expect(logo).toHaveAttribute('src', `/agents/${id}.svg`);
+    await expect(logo).toHaveAttribute('alt', '');
+    await expect
+      .poll(() => logo.evaluate((img: HTMLImageElement) => img.complete && img.naturalWidth > 0))
+      .toBe(true);
+    const caja = (await logo.boundingBox())!;
+    expect([Math.round(caja.width), Math.round(caja.height)]).toEqual([16, 16]);
+    const etiqueta = tab.getByText(nombre, { exact: true });
+    expect(await etiqueta.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
+  }
+}
+
 test('agente de IA: panel al crear lecciones, clave, comandos y un agente crea un curso de verdad', async ({
   browser,
 }) => {
@@ -188,6 +222,10 @@ test('agente de IA: panel al crear lecciones, clave, comandos y un agente crea u
   const editor = await page.getByTestId('editor-sencillo').boundingBox();
   const caja = await panel.boundingBox();
   expect(editor && caja && editor.x + editor.width <= caja.x).toBe(true);
+
+  // Cada pestaña lleva el logo de su herramienta, servido por el aula, y el
+  // nombre entero al lado.
+  await logosEnLasPestanas(panel);
 
   // Antes de crear la clave, el comando lleva el marcador.
   await expect(panel.getByTestId('agente-ia-codigo')).toContainText('TU_CLAVE');
@@ -220,6 +258,11 @@ test('agente de IA: panel al crear lecciones, clave, comandos y un agente crea u
     ].join('\n'),
   );
   await expect(panel.getByText('codex mcp list')).toBeVisible();
+
+  // Grok tiene dos guías del mismo dominio: cada enlace dice adónde va.
+  await panel.getByTestId('agente-ia-tab-grok').click();
+  await expect(panel.getByRole('link', { name: /docs\.x\.ai\/grok-bot/ })).toBeVisible();
+  await expect(panel.getByRole('link', { name: /docs\.x\.ai\/build/ })).toBeVisible();
 
   // ── Con ESA clave, un agente (cliente MCP) crea un curso con lecciones ──
   const init = await mcp(tenant.host, clave, {
@@ -357,6 +400,11 @@ test('agente de IA a 390 px: botón en la página y hoja inferior, sin tapar ni 
   const hoja = page.getByTestId('agente-ia-hoja');
   await expect(hoja).toBeVisible();
   await expect(hoja.getByTestId('agente-ia-ejemplo')).toContainText('«Espresso at Home»');
+  // También en el móvil cada pestaña lleva su logo, y con ellos nada se sale
+  // de la hoja ni de la pantalla.
+  await logosEnLasPestanas(hoja);
+  expect(await hoja.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
   await hoja.getByTestId('agente-ia-tab-hermes').click();
   await expect(hoja.getByTestId('agente-ia-codigo')).toContainText('mcp_servers:');
   await hoja.getByTestId('agente-ia-ocultar').click();

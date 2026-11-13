@@ -54,6 +54,31 @@ export const AGENT_LABELS: Record<AgentId, string> = {
   vscode: 'VS Code',
 };
 
+/**
+ * Logo oficial de cada agente, servido desde `apps/web/public/agents/` (mismo
+ * origen: nada de CDNs, que la CSP no deja). Son los SVG de la marca sin
+ * redibujar: solo se recorta el lienzo al logo y se limpia el fichero.
+ *
+ * - Claude Code: la chispa del logo de code.claude.com (#D97757).
+ * - Codex: el «Blossom» de OpenAI de openai.com/favicon.svg, en negro.
+ * - Hermes: «Nous Girl» de assets/nous-girl-black.svg del repo oficial
+ *   NousResearch/hermes-agent (MIT), el mismo del logo de su documentación.
+ * - Grok: Grok_Logomark_Dark.svg del kit de marca de xAI (x.ai/legal/brand-guidelines).
+ * - Cursor: CUBE_2D_LIGHT.svg del kit de marca de cursor.com/brand.
+ * - VS Code: vscode.svg del kit de code.visualstudio.com/brand.
+ *
+ * El aula no tiene tema oscuro (la superficie del panel siempre es clara), así
+ * que van las versiones para fondo claro.
+ */
+export const AGENT_LOGOS: Record<AgentId, string> = {
+  'claude-code': '/agents/claude-code.svg',
+  codex: '/agents/codex.svg',
+  hermes: '/agents/hermes.svg',
+  grok: '/agents/grok.svg',
+  cursor: '/agents/cursor.svg',
+  vscode: '/agents/vscode.svg',
+};
+
 /** Ruta del servidor MCP en el dominio del aula. */
 export const MCP_PATH = '/api/v1/mcp';
 
@@ -202,6 +227,19 @@ export function agentSnippet(agent: AgentId, { url, key, name }: SnippetInput): 
         docs: ['https://code.visualstudio.com/docs/agents/reference/mcp-configuration'],
       };
   }
+}
+
+/**
+ * Texto del enlace a una guía oficial: su dominio. Si otra guía de la misma
+ * lista comparte dominio (las dos de Grok son de docs.x.ai), se añade el
+ * primer tramo de la ruta para que los dos enlaces no digan lo mismo.
+ */
+export function docsLabel(href: string, docs: readonly string[]): string {
+  const host = (u: string) => new URL(u).hostname.replace(/^www\./, '');
+  const mine = host(href);
+  const shared = docs.filter((d) => host(d) === mine).length > 1;
+  const first = new URL(href).pathname.split('/').find(Boolean);
+  return shared && first ? `${mine}/${first}` : mine;
 }
 
 /** ¿Es una clave de la puerta de agentes? (tiene algún scope `agent:*`). */
