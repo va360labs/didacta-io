@@ -13,40 +13,7 @@ import { LicenseExceptionFilter } from '@didacta/license-sdk';
 import { AppModule } from './app.module';
 import { HttpExceptionNormalizerFilter } from './common/http-exception-normalizer.filter';
 import { registerSecurityHeaders } from './common/security-headers';
-
-/**
- * Cuánto del `X-Forwarded-For` entrante nos creemos.
- *
- * Estaba en `true`, que significa "confía en la cadena entera": cualquiera
- * desde internet podía mandar `X-Forwarded-For: 1.2.3.4` y Fastify resolvía
- * `request.ip` a lo que el cliente dijera. Eso vale para falsear la IP del
- * log de auditoría y, desde que el rate limit anónimo va por IP, para
- * saltarse el límite rotando direcciones inventadas o para tirar a otro
- * gastando su cubo.
- *
- * Configurable porque el número de proxies propios depende del despliegue:
- *
- *   - `TRUSTED_PROXY_HOPS=<n>` — número de proxies TUYOS delante de la API.
- *     Fastify descarta las `n` últimas entradas del XFF y se queda con la
- *     anterior. Es lo que quieres con Traefik/Caddy/nginx delante.
- *   - `TRUSTED_PROXY_IPS=<csv>` — IPs o CIDR de los proxies de confianza,
- *     si prefieres declararlos explícitamente.
- *
- * Default 1: un único proxy de terminación TLS, que es el despliegue estándar
- * de las plantillas de `deploy/`. Si tu cadena es más larga, súbelo; si la API
- * está expuesta directamente sin proxy, pon `TRUSTED_PROXY_HOPS=0`.
- */
-function resolveTrustProxy(): boolean | number | string {
-  const ips = (process.env['TRUSTED_PROXY_IPS'] ?? '').trim();
-  if (ips) return ips;
-
-  const raw = (process.env['TRUSTED_PROXY_HOPS'] ?? '').trim();
-  if (!raw) return 1;
-  const hops = Number.parseInt(raw, 10);
-  if (!Number.isFinite(hops) || hops < 0) return 1;
-  // 0 saltos = no hay proxy propio: no te creas ningún XFF.
-  return hops === 0 ? false : hops;
-}
+import { resolveTrustProxy } from './common/trust-proxy';
 
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.create<NestFastifyApplication>(
