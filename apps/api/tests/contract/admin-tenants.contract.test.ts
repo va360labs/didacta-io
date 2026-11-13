@@ -715,10 +715,7 @@ describe('CONTRATO · admin/tenants (cobros de plataforma) ↔ didacta-cloud', (
   });
 
   it('payouts/volume: `from` y `to` son días YYYY-MM-DD incluidos, máximo 366 días', () => {
-    expect(Object.keys(payoutsVolumeQuerySchema._def.schema._def.schema.shape).sort()).toEqual([
-      'from',
-      'to',
-    ]);
+    expect(Object.keys(payoutsVolumeQuerySchema.shape).sort()).toEqual(['from', 'to']);
     const ok = (from: string, to: string) =>
       payoutsVolumeQuerySchema.safeParse({ from, to }).success;
     expect(ok('2026-11-01', '2026-11-30')).toBe(true);

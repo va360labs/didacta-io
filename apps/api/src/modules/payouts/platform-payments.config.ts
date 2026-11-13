@@ -306,16 +306,16 @@ const secretKeySchema = z.string().transform((key, ctx) => {
 const enabledSchema = z.object({
   secretKey: secretKeySchema,
   webhookSecrets: webhookSecretsSchema,
-  defaultFeeBps: integerFromEnv(0, MAX_FEE_BPS).default(String(DEFAULT_FEE_BPS)),
+  defaultFeeBps: integerFromEnv(0, MAX_FEE_BPS).prefault(String(DEFAULT_FEE_BPS)),
   lossesCollector: z.enum(['stripe', 'application']).default('stripe'),
   supportedCountries: countriesSchema.optional(),
   payoutInterval: z.enum(PAYOUT_INTERVALS).default('weekly'),
   payoutWeeklyDay: z.enum(WEEK_DAYS).default('monday'),
-  payoutDelayDays: integerFromEnv(0, 365).default('7'),
+  payoutDelayDays: integerFromEnv(0, 365).prefault('7'),
   minBalance: minBalanceSchema.optional(),
   accountsApi: z.enum(['v2', 'v1']).default('v2'),
   displayName: z.string().max(80).default('Didacta'),
-  debtAlertMinor: integerFromEnv(0, 2_147_483_647).default('10000'),
+  debtAlertMinor: integerFromEnv(0, 2_147_483_647).prefault('10000'),
   refundPlatformFee: z.enum(['proportional', 'none']).default('proportional'),
   refundCardFeeBearer: z.enum(['creator', 'platform']).default('creator'),
   disputeLossBearer: z.enum(['creator', 'platform']).default('creator'),
@@ -478,8 +478,8 @@ export const DEFAULT_PLATFORM_LOSS_POLICY: PayoutsLossPolicy = DEFAULT_LOSS_POLI
 
 /** Mensaje de un fallo de zod sin el valor recibido. */
 function describeIssue(issue: z.ZodIssue): string {
-  if (issue.code === 'invalid_enum_value') {
-    return `debe ser uno de: ${issue.options.join(', ')}`;
+  if (issue.code === 'invalid_value') {
+    return `debe ser uno de: ${issue.values.map(String).join(', ')}`;
   }
   if (issue.code === 'too_big') return `no puede ser mayor que ${String(issue.maximum)}`;
   if (issue.code === 'too_small') return `no puede ser menor que ${String(issue.minimum)}`;

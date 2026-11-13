@@ -54,7 +54,7 @@ export const reconcileRunSchema = z
       .max(24 * 30)
       .optional(),
   })
-  .default({});
+  .prefault({});
 type ReconcileRunDto = z.infer<typeof reconcileRunSchema>;
 
 /** Importe en unidad mínima de la moneda del cargo; sin él, todo lo que queda. */
