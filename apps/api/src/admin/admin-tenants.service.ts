@@ -42,6 +42,12 @@ interface SystemActor {
 const SLUG_RE = /^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$/;
 const HOSTNAME_RE = /^[a-z0-9.-]{1,253}$/;
 
+/**
+ * Base del enlace del correo de bienvenida: fija, o función del id del aula
+ * recién creada (la que usa la app, para que salga con el dominio del aula).
+ */
+export type WelcomeLinkBase = string | ((tenantId: string) => Promise<string> | string);
+
 export interface TenantListItem {
   id: string;
   slug: string;
@@ -301,6 +307,11 @@ export class AdminTenantsService {
   /**
    * Alta de tenant + primer tenant_admin + dominio primario.
    * El admin recibe email para definir contraseña (no se le da una temporal).
+   *
+   * `webBaseUrl` es la base del enlace de ese correo. Como función recibe el id
+   * del aula ya creada, con su dominio primario dentro de la base: es lo que
+   * pasa el controlador, para que el enlace apunte al aula nueva y no al
+   * dominio desde el que llamó quien la crea.
    */
   async create(
     actor: AdminActor,
@@ -313,7 +324,7 @@ export class AdminTenantsService {
       simpleMode?: boolean;
       locale?: AcademyLocale;
     },
-    webBaseUrl: string,
+    webBaseUrl: WelcomeLinkBase,
     ctx: ClientContext = NO_CTX,
   ): Promise<TenantListItem> {
     // Toda la operación fuera del contexto de tenant, igual que el bootstrap
@@ -337,7 +348,7 @@ export class AdminTenantsService {
       simpleMode?: boolean;
       locale?: AcademyLocale;
     },
-    webBaseUrl: string,
+    webBaseUrl: WelcomeLinkBase,
     ctx: ClientContext,
   ): Promise<TenantListItem> {
     if (!SLUG_RE.test(dto.slug)) {

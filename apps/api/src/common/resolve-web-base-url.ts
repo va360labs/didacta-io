@@ -12,11 +12,13 @@
  * `http://localhost:3000`, inservibles en producción. Esta función pura
  * resuelve la base con una cascada robusta:
  *
- *   1. `process.env.WEB_PUBLIC_URL` si está set y es una URL http/https válida.
- *   2. `tenantPrimaryHostname` si se pasa: el dominio primario **verificado**
+ *   1. `tenantPrimaryHostname` si se pasa: el dominio primario **verificado**
  *      del tenant (`TenantDomain.isPrimary`), resuelto por el caller (ver
- *      `TenantResolverService.resolveTenantWebBaseUrl`). Fuente más confiable
- *      que el Host del request — el admin ya lo declaró en `/admin/domains`.
+ *      `TenantResolverService.resolveTenantWebBaseUrl`). Sale de nuestra base,
+ *      no de la petición. Incluye el subdominio de plataforma
+ *      (`<slug>.didacta.io`) que crea el aprovisionamiento: nace verificado.
+ *   2. `process.env.WEB_PUBLIC_URL` si está set y es una URL http/https válida
+ *      (la dirección del DESPLIEGUE: respaldo cuando el aula no tiene dominio).
  *   3. Derivar del request entrante: `${proto}://${host}` usando los headers
  *      `X-Forwarded-Proto` / `X-Forwarded-Host` que Traefik (el reverse proxy
  *      delante de la API) inyecta — p.ej. `x-forwarded-host=dev.didacta.io`,
@@ -26,8 +28,13 @@
  *
  * Importante: el host derivado del request apunta al dominio del **frontend**
  * solo si la API y el web comparten dominio (caso de Traefik con un único host
- * por tenant, que es el setup de Didacta). Por eso la env var sigue ganando
+ * por tenant, que es el setup de Didacta). Por eso la env var gana al Host
  * cuando está bien configurada — la derivación es la red de seguridad.
+ *
+ * Un enlace que lleva un token (bienvenida, restablecer contraseña, acceso de
+ * soporte, callbacks de SSO) no usa esta función tal cual: o le pasa el
+ * dominio del aula, o usa `resolveWebBaseUrlForAuthRedirect`, que nunca se fía
+ * del Host sin allowlist.
  */
 
 /** Forma mínima del request que la función necesita. Compatible con FastifyRequest. */
@@ -149,26 +156,36 @@ export function resolveWebBaseUrlForBackground(tenantPrimaryHostname?: string | 
  * controle el `Host` del request NO puede desviar `accessToken`/`refreshToken`
  * a un host arbitrario (open-redirect con exfiltración de tokens). Cascada:
  *
- *   1. `WEB_PUBLIC_URL` si es una URL http/https válida (caso normal en prod).
- *   2. `tenantPrimaryHostname`: el dominio primario verificado del tenant —
- *      fuente MÁS confiable que el Host del request (viene de una fila de BD
- *      verificada por DNS, no de un header que el cliente controla), así que
- *      se acepta sin pasar por la allowlist.
+ *   1. `tenantPrimaryHostname`: el dominio primario verificado del aula a la
+ *      que pertenece el token. Sale de una fila de NUESTRA base (el
+ *      aprovisionamiento la crea verificada; un dominio propio pasa antes por
+ *      DNS), no de un header que el cliente controla, así que se acepta sin
+ *      pasar por la allowlist.
+ *   2. `WEB_PUBLIC_URL` si es una URL http/https válida: el respaldo de una
+ *      instalación cuyo tenant no tiene dominio.
  *   3. Derivar del request SOLO si el host está en `WEB_PUBLIC_ALLOWED_HOSTS`.
  *   4. Fallback dev `http://localhost:3000` (constante, no controlable por el atacante).
+ *
+ * El dominio del aula va ANTES que `WEB_PUBLIC_URL` (hasta noviembre de 2026
+ * iba después). En un servidor con varias aulas `WEB_PUBLIC_URL` es la del
+ * despliegue —en Didacta Cloud, `pool.didacta.io`—, y un enlace con el token de
+ * un aula apuntando ahí no sirve: el acceso de soporte y los callbacks de SSO
+ * aterrizaban en un aula que no era la suya. Es el mismo arreglo que
+ * `resolveWebBaseUrl` recibió en agosto, y no relaja nada: el Host de la
+ * petición sigue sin decidir adónde va un token.
  */
 export function resolveWebBaseUrlForAuthRedirect(
   req?: RequestLike,
   tenantPrimaryHostname?: string | null,
 ): string {
-  const fromEnv = process.env.WEB_PUBLIC_URL?.trim();
-  if (fromEnv && isValidHttpUrl(fromEnv)) {
-    return stripTrailingSlash(fromEnv);
-  }
-
   if (tenantPrimaryHostname) {
     const proto = isLocalHostname(tenantPrimaryHostname) ? 'http' : 'https';
     return `${proto}://${tenantPrimaryHostname}`;
+  }
+
+  const fromEnv = process.env.WEB_PUBLIC_URL?.trim();
+  if (fromEnv && isValidHttpUrl(fromEnv)) {
+    return stripTrailingSlash(fromEnv);
   }
 
   if (req) {

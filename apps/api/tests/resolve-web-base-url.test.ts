@@ -156,6 +156,34 @@ describe('resolveWebBaseUrlForAuthRedirect (redirects que portan tokens)', () =>
     expect(resolveWebBaseUrlForAuthRedirect(req)).toBe('https://aula.example.com');
   });
 
+  /**
+   * El orden era el contrario (la env ganaba) y con él el acceso de soporte y
+   * los callbacks de SSO de cualquier aula del pool aterrizaban en
+   * `pool.didacta.io` con el token de otra aula.
+   */
+  it('el dominio del aula gana a WEB_PUBLIC_URL (la del despliegue)', () => {
+    process.env.WEB_PUBLIC_URL = 'https://pool.didacta.io';
+    process.env.WEB_PUBLIC_ALLOWED_HOSTS = 'pool.didacta.io';
+    const req = makeReq({ host: 'pool.didacta.io', 'x-forwarded-proto': 'https' });
+    expect(resolveWebBaseUrlForAuthRedirect(req, 'aula-pruebas.didacta.io')).toBe(
+      'https://aula-pruebas.didacta.io',
+    );
+  });
+
+  it('aula sin dominio → WEB_PUBLIC_URL, nunca el Host (aunque sea de un tercero)', () => {
+    process.env.WEB_PUBLIC_URL = 'https://pool.didacta.io';
+    const req = makeReq({ 'x-forwarded-host': 'atacante.evil', 'x-forwarded-proto': 'https' });
+    expect(resolveWebBaseUrlForAuthRedirect(req, null)).toBe('https://pool.didacta.io');
+  });
+
+  it('SEGURIDAD: con dominio de aula, un Host manipulado no cambia nada', () => {
+    process.env.WEB_PUBLIC_ALLOWED_HOSTS = 'atacante.evil';
+    const req = makeReq({ 'x-forwarded-host': 'atacante.evil', 'x-forwarded-proto': 'https' });
+    expect(resolveWebBaseUrlForAuthRedirect(req, 'aula.academia.com')).toBe(
+      'https://aula.academia.com',
+    );
+  });
+
   it('SEGURIDAD: sin env, un host NO allowlisted se IGNORA → localhost (no se exfiltran tokens)', () => {
     const req = makeReq({ 'x-forwarded-host': 'atacante.evil', 'x-forwarded-proto': 'https' });
     expect(resolveWebBaseUrlForAuthRedirect(req)).toBe('http://localhost:3000');

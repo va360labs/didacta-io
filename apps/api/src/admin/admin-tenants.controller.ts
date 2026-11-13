@@ -23,7 +23,6 @@ import {
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { FastifyRequest } from 'fastify';
 import { z } from 'zod';
-import { resolveWebBaseUrl } from '../common/resolve-web-base-url';
 import { auditActorId, auditActorTrace, type AdminActor } from '../auth/admin-actor';
 import { extractClientContext } from '../auth/client-context';
 import { AllowProvisioning, CurrentUser } from '../auth/decorators';
@@ -282,10 +281,18 @@ export class AdminTenantsController {
     @Body(new ZodValidationPipe(createTenantSchema)) dto: CreateTenantDto,
   ) {
     const actor = requireAdminActor(user, req);
-    // Sin escalón TenantDomain: el tenant que se está creando aún no tiene
-    // fila en esa tabla (se crea DENTRO de service.create). Cascada normal:
-    // env → Host del request → localhost.
-    const webBaseUrl = resolveWebBaseUrl(req);
+    // El correo de bienvenida lleva un token del aula que se está creando, así
+    // que su enlace apunta al dominio de ESA aula. La base se pide cuando el
+    // aula y su dominio primario ya existen (el servicio la resuelve tras la
+    // transacción), y con la variante endurecida: nunca el Host de la petición.
+    //
+    // Antes se calculaba aquí con `resolveWebBaseUrl(req)`, sin aula: ganaba
+    // `WEB_PUBLIC_URL`, que en Didacta Cloud es el dominio del despliegue
+    // (`pool.didacta.io`). Toda aula nueva recibía su bienvenida apuntando a un
+    // aula que no era la suya: la contraseña se definía, pero luego no podía
+    // entrar en ningún sitio.
+    const webBaseUrl = (tenantId: string) =>
+      this.tenantResolver.resolveTenantWebBaseUrlForAuthRedirect(tenantId, req);
     return this.service.create(actor, dto, webBaseUrl, extractClientContext(req));
   }
 
