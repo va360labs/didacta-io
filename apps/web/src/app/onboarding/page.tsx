@@ -8,7 +8,7 @@
 import { useSimpleMode } from '@/lib/simple-mode';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import { AvatarUpload } from '@/components/avatar-upload';
 import { NotificationMatrix, fullMatrix } from '@/components/notification-preferences-form';
 import { Button } from '@/components/ui/button';
@@ -19,7 +19,7 @@ import { Select } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { ApiHttpError } from '@/lib/api-client';
 import { authStorage } from '@/lib/auth-storage';
-import { isDocumentFieldValid } from '@/lib/document-id';
+import { asksSpanishDocument, isDocumentFieldValid } from '@/lib/document-id';
 import { consumeIntendedPath } from '@/lib/post-login-redirect';
 import { apiErrorMessage } from '@/lib/i18n/api-error';
 import { toSupportedLocale } from '@/i18n/config';
@@ -36,6 +36,7 @@ import { communityApi } from '@/modules/community';
 export default function OnboardingPage() {
   const router = useRouter();
   const t = useTranslations('auth');
+  const uiLocale = useLocale();
   // Modo sencillo: la foto es opcional (avatar con iniciales); la API también.
   const simple = useSimpleMode() === true;
   const tSimple = useTranslations('modoSencillo');
@@ -312,29 +313,31 @@ export default function OnboardingPage() {
                   </Select>
                 </div>
               </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="ob-doc">
-                  {t('onboarding.documentLabel')}{' '}
-                  <span className="text-text-subtle text-xs">{t('onboarding.optionalTag')}</span>
-                </Label>
-                <Input
-                  id="ob-doc"
-                  value={documentId}
-                  onChange={(e) => setDocumentId(e.target.value)}
-                  maxLength={20}
-                  autoComplete="off"
-                  spellCheck={false}
-                  aria-invalid={documentInvalid || undefined}
-                  placeholder={t('onboarding.documentPlaceholder')}
-                />
-                {documentInvalid ? (
-                  <p role="alert" className="text-xs text-danger-700">
-                    {t('onboarding.documentInvalid')}
-                  </p>
-                ) : (
-                  <p className="text-xs text-text-subtle">{t('onboarding.documentHint')}</p>
-                )}
-              </div>
+              {asksSpanishDocument(uiLocale) ? (
+                <div className="space-y-1.5">
+                  <Label htmlFor="ob-doc">
+                    {t('onboarding.documentLabel')}{' '}
+                    <span className="text-text-subtle text-xs">{t('onboarding.optionalTag')}</span>
+                  </Label>
+                  <Input
+                    id="ob-doc"
+                    value={documentId}
+                    onChange={(e) => setDocumentId(e.target.value)}
+                    maxLength={20}
+                    autoComplete="off"
+                    spellCheck={false}
+                    aria-invalid={documentInvalid || undefined}
+                    placeholder={t('onboarding.documentPlaceholder')}
+                  />
+                  {documentInvalid ? (
+                    <p role="alert" className="text-xs text-danger-700">
+                      {t('onboarding.documentInvalid')}
+                    </p>
+                  ) : (
+                    <p className="text-xs text-text-subtle">{t('onboarding.documentHint')}</p>
+                  )}
+                </div>
+              ) : null}
             </div>
           ) : null}
 

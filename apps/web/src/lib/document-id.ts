@@ -47,3 +47,12 @@ export function isDocumentFieldValid(raw: string): boolean {
   const trimmed = raw.trim();
   return trimmed === '' || isValidDocumentId(normalizeDocumentId(trimmed));
 }
+
+/**
+ * ¿Se pide el DNI/NIE en el alta? Es un documento ESPAÑOL (solo sirve para
+ * pedir facturas en España): a quien usa la interfaz en otro idioma se le
+ * ahorra un campo que no le aplica. Sigue disponible en /cuenta.
+ */
+export function asksSpanishDocument(uiLocale: string): boolean {
+  return uiLocale.toLowerCase().startsWith('es');
+}
