@@ -15,11 +15,26 @@ export const slugSchema = z
   .max(100)
   .regex(/^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/, 'Slug debe ser kebab-case sin acentos ni espacios');
 
+/**
+ * Imagen de portada: una URL absoluta (S3/CDN) o la ruta que devuelve el
+ * almacenamiento en disco local del aula (`/api/v1/storage/file/<clave>`, la
+ * que da la subida cuando no hay `PUBLIC_BASE_URL`). Antes solo valía la
+ * absoluta y, en un aula con disco local, subir la portada acababa en 400.
+ */
+export const courseImageUrlSchema = z.union([
+  z.string().url().max(2048),
+  z
+    .string()
+    .max(2048)
+    .regex(/^\/api\/v1\/storage\/file\/[A-Za-z0-9._\-/]+$/, 'Ruta de almacenamiento no válida')
+    .refine((p) => !p.includes('..'), 'Ruta de almacenamiento no válida'),
+]);
+
 export const createCourseSchema = z.object({
   slug: slugSchema,
   title: z.string().min(1).max(160),
   description: z.string().max(2000).optional(),
-  thumbnailUrl: z.string().url().optional(),
+  thumbnailUrl: courseImageUrlSchema.optional(),
   featuredVideoUrl: z.string().url().optional(),
   language: z.string().min(2).max(10).default('es-ES'),
   estimatedMinutes: z.number().int().positive().optional(),
@@ -32,7 +47,7 @@ export const updateCourseSchema = z.object({
   title: z.string().min(1).max(160).optional(),
   // null = limpiar el campo. Solo afecta a campos opcionales.
   description: z.string().max(2000).nullable().optional(),
-  thumbnailUrl: z.string().url().nullable().optional(),
+  thumbnailUrl: courseImageUrlSchema.nullable().optional(),
   featuredVideoUrl: z.string().url().nullable().optional(),
   estimatedMinutes: z.number().int().positive().nullable().optional(),
   category: z.string().max(60).nullable().optional(),

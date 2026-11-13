@@ -6,12 +6,13 @@
  */
 
 import Image from 'next/image';
-import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 import { Icon } from '@/components/icon';
 import { authStorage } from '@/lib/auth-storage';
 import { formatCents } from '@/lib/i18n/format';
 import { parseAmount, simpleModeApi, suggestCurrency } from '@/lib/simple-mode';
+import { storageApi } from '@/lib/storage';
 import { useTenantContext } from '@/lib/tenant-context';
 import { cn } from '@/lib/utils';
 
@@ -39,6 +40,24 @@ export function AltaSencilla() {
   const [moneda, setMoneda] = useState('eur');
   const [error, setError] = useState<string | null>(null);
   const [creando, setCreando] = useState(false);
+  // Portada del curso: opcional, no suma pasos ni clics al alta. Se sube al
+  // elegirla y viaja con el alta; se cambia luego desde el editor del curso.
+  const [portada, setPortada] = useState<string | null>(null);
+  const [subiendoPortada, setSubiendoPortada] = useState(false);
+  const portadaRef = useRef<HTMLInputElement>(null);
+
+  async function elegirPortada(file: File) {
+    setSubiendoPortada(true);
+    setError(null);
+    try {
+      const r = await storageApi.uploadImage(file, { optimize: { maxWidth: 1600 } });
+      setPortada(r.url);
+    } catch {
+      setError(t('portadaError'));
+    } finally {
+      setSubiendoPortada(false);
+    }
+  }
 
   // Si el nombre del aula no es el autogenerado (el slug), se propone.
   useEffect(() => {
@@ -81,6 +100,7 @@ export function AltaSencilla() {
         academyName: nombre.trim(),
         offer: oferta,
         title: titulo.trim() || undefined,
+        ...(oferta === 'course' && portada ? { coverUrl: portada } : {}),
         amountCents: cents,
         currency: moneda,
         locale: locale.startsWith('en') ? 'en' : 'es',
@@ -221,6 +241,44 @@ export function AltaSencilla() {
                 maxLength={160}
                 className="mt-1.5 h-12 w-full rounded-xl border border-border bg-surface px-4 text-base text-text outline-none focus:border-brand-600 focus:ring-4 focus:ring-brand-100"
               />
+              {oferta === 'course' ? (
+                <div className="mt-4 flex flex-wrap items-center gap-3">
+                  <input
+                    ref={portadaRef}
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp,image/gif"
+                    className="hidden"
+                    data-testid="alta-portada-fichero"
+                    onChange={(e) => {
+                      const f = e.target.files?.[0];
+                      e.target.value = '';
+                      if (f) void elegirPortada(f);
+                    }}
+                  />
+                  <button
+                    type="button"
+                    disabled={subiendoPortada}
+                    onClick={() => portadaRef.current?.click()}
+                    className="inline-flex items-center gap-2 text-sm font-semibold text-text-muted hover:text-text disabled:opacity-60"
+                  >
+                    <Icon name="image" size={16} />
+                    {subiendoPortada
+                      ? t('portadaSubiendo')
+                      : portada
+                        ? t('portadaCambiar')
+                        : t('portadaAnadir')}
+                  </button>
+                  {portada && !subiendoPortada ? (
+                    <button
+                      type="button"
+                      onClick={() => setPortada(null)}
+                      className="text-sm font-semibold text-text-subtle hover:text-danger-700"
+                    >
+                      {t('portadaQuitar')}
+                    </button>
+                  ) : null}
+                </div>
+              ) : null}
             </>
           ) : (
             <>
@@ -326,7 +384,17 @@ export function AltaSencilla() {
             </div>
             <div className="bg-bg-subtle p-4">
               <div className="overflow-hidden rounded-xl border border-border bg-surface">
-                <div className="h-28 bg-[linear-gradient(135deg,hsl(var(--brand-h)_70%_88%),hsl(174_60%_86%))] lg:h-36" />
+                {oferta === 'course' && portada ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={portada}
+                    alt=""
+                    className="h-28 w-full object-cover lg:h-36"
+                    data-testid="alta-portada-vista"
+                  />
+                ) : (
+                  <div className="h-28 bg-[linear-gradient(135deg,hsl(var(--brand-h)_70%_88%),hsl(174_60%_86%))] lg:h-36" />
+                )}
                 <div className="p-3.5">
                   <strong className="block text-[17px] text-text">
                     {paso >= 2 ? tituloVisible : t('tuCurso')}

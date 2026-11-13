@@ -46,6 +46,12 @@ interface SimpleModeState {
    * ventas): se adoptó tal cual, sin alta en 3 preguntas.
    */
   adoptedAt?: string | null;
+  /**
+   * Idioma en el que la creadora montó el aula (el de la interfaz en el alta
+   * en 3 preguntas). Es «el idioma del aula» para lo que el servidor escribe a
+   * todos: ver `common/academy-defaults.ts`.
+   */
+  locale?: SimpleLocale;
 }
 
 /** Color por defecto del tema (el azul de Didacta): igual = el creador no lo tocó. */
@@ -159,9 +165,10 @@ export class SimpleModeService {
         (await this.courseExists(tenantId, previous.courseId))
           ? previous.courseId
           : await this.createDraftCourse(tenantId, creator.id, offerTitle, input.locale);
-      if (previous?.courseId === courseId) {
+      if (previous?.courseId === courseId || input.coverUrl) {
         await this.registry.getCoursesService().updateCourse(tenantId, creator.id, courseId, {
-          title: offerTitle,
+          ...(previous?.courseId === courseId ? { title: offerTitle } : {}),
+          ...(input.coverUrl ? { thumbnailUrl: input.coverUrl } : {}),
         });
       }
       offer = {
@@ -207,7 +214,10 @@ export class SimpleModeService {
       input.locale,
     );
 
-    await this.writeState(tenantId, creator.id, { quickStartAt: new Date().toISOString() });
+    await this.writeState(tenantId, creator.id, {
+      quickStartAt: new Date().toISOString(),
+      locale: input.locale,
+    });
     await this.completeLegacyWizard(tenantId, creator.id);
     return { offer };
   }

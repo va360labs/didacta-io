@@ -9,6 +9,7 @@ import { manifest } from './manifest.js';
 export { manifest };
 export { CoursesService } from './courses.service.js';
 export {
+  courseImageUrlSchema,
   createCourseSchema,
   updateCourseSchema,
   createModuleSchema,

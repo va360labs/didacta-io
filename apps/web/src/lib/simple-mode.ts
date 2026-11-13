@@ -200,6 +200,8 @@ export interface QuickStartInput {
   amountCents: number;
   currency: string;
   locale: 'es' | 'en';
+  /** Portada del curso, opcional (URL que devuelve la subida de imágenes). */
+  coverUrl?: string;
 }
 
 function bearer(): string {
