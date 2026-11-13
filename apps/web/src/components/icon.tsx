@@ -73,7 +73,9 @@ export type IconName =
   | 'volume-off'
   | 'x'
   | 'maximize'
-  | 'minimize';
+  | 'minimize'
+  | 'copy'
+  | 'ai';
 
 interface Props extends Omit<SVGProps<SVGSVGElement>, 'name'> {
   name: IconName;
@@ -514,6 +516,21 @@ export function Icon({ name, size = 20, strokeWidth = 1.75, className, ...rest }
           <polyline points="20 10 14 10 14 4" />
           <line x1="14" x2="21" y1="10" y2="3" />
           <line x1="3" x2="10" y1="21" y2="14" />
+        </svg>
+      );
+    case 'ai':
+      // Destello de cuatro puntas: el signo habitual de «hazlo con IA».
+      return (
+        <svg {...common}>
+          <path d="M11 3c.6 4.2 2.3 5.9 6.5 6.5-4.2.6-5.9 2.3-6.5 6.5-.6-4.2-2.3-5.9-6.5-6.5C8.7 8.9 10.4 7.2 11 3Z" />
+          <path d="M18.5 14.5c.3 1.9 1.1 2.7 3 3-1.9.3-2.7 1.1-3 3-.3-1.9-1.1-2.7-3-3 1.9-.3 2.7-1.1 3-3Z" />
+        </svg>
+      );
+    case 'copy':
+      return (
+        <svg {...common}>
+          <rect x="9" y="9" width="12" height="12" rx="2" />
+          <path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1" />
         </svg>
       );
   }

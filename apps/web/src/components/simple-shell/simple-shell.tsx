@@ -7,8 +7,14 @@
 
 import Image from 'next/image';
 import Link from 'next/link';
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
+import {
+  AgentPanelDock,
+  AgentPanelMobile,
+  AgentPanelTab,
+  useAgentPanel,
+} from '@/components/agent-panel/agent-panel';
 import type { SidebarGroup } from '@/components/app-sidebar';
 import { CommandPalette } from '@/components/command-palette';
 import { Icon } from '@/components/icon';
@@ -130,6 +136,21 @@ export function SimpleShell({
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
+  // Panel «Hazlo más rápido con tu agente de IA»: solo admins y solo en las
+  // pantallas de creación manual. Su estado vive aquí para que la clave recién
+  // creada sobreviva a plegarlo y a cambiar de pantalla.
+  const agent = useAgentPanel(pathname, isAdmin);
+  // Alto de la cabecera fija (avisos incluidos): el panel se pega justo debajo.
+  const stickyRef = useRef<HTMLDivElement | null>(null);
+  const [headerH, setHeaderH] = useState(108);
+  useLayoutEffect(() => {
+    const el = stickyRef.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(() => setHeaderH(el.getBoundingClientRect().height));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
   const tabLabel = (tab: SimpleTab) => t(`tabs.${tab.labelKey}` as 'tabs.empieza');
   const badge = (tab: SimpleTab) =>
     tab.id === 'empieza' && progress && !progress.sold
@@ -156,7 +177,7 @@ export function SimpleShell({
         onClose={() => setSearchOpen(false)}
         groups={searchGroups}
       />
-      <div className="sticky top-0 z-(--z-sticky)">
+      <div ref={stickyRef} className="sticky top-0 z-(--z-sticky)">
         {banners}
         <header className="border-b border-border bg-surface">
           <div className="mx-auto flex h-[60px] max-w-[1180px] items-center gap-2 px-4 lg:px-6">
@@ -245,7 +266,21 @@ export function SimpleShell({
       </div>
 
       <main className="flex-1 px-4 pt-5 pb-28 lg:px-6 lg:pt-8 lg:pb-16">
-        <div className="mx-auto max-w-[1132px]">{children}</div>
+        {/* Con el panel del agente abierto, el contenido se estrecha y el panel
+            va a su derecha, dentro del mismo ancho que la cabecera: nunca lo tapa. */}
+        <div
+          className={cn(
+            'mx-auto max-w-[1132px]',
+            agent.dockOpen && 'lg:flex lg:items-start lg:gap-6',
+          )}
+        >
+          <div className={cn(agent.dockOpen && 'min-w-0 lg:flex-1')}>
+            <AgentPanelMobile state={agent} tenantSlug={session.user.tenantSlug} />
+            {children}
+          </div>
+          <AgentPanelDock state={agent} tenantSlug={session.user.tenantSlug} top={headerH} />
+        </div>
+        <AgentPanelTab state={agent} top={headerH} />
       </main>
 
       {/* Barra inferior (móvil): 4 pestañas y «Más». */}

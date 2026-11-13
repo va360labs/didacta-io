@@ -1,0 +1,247 @@
+/**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
+/**
+ * Lógica pura del panel «Hazlo más rápido con tu agente de IA»: en qué
+ * pantallas sale y qué comando o configuración se copia para cada agente.
+ * Sin React ni red: ver `agent-connect.test.ts`.
+ *
+ * Cada comando sale de la documentación OFICIAL de su herramienta (la URL va en
+ * `docs`). Solo hay agentes que pueden conectarse a un servidor MCP remoto por
+ * HTTP enviando una cabecera `Authorization` fija: ChatGPT, que solo admite
+ * OAuth o nada, no está.
+ */
+
+/** Pantallas de creación manual del modo sencillo en las que el panel aparece. */
+export type AgentScreen = 'courses' | 'course-new' | 'course-edit' | 'live' | 'community';
+
+export interface AgentScreenMatch {
+  screen: AgentScreen;
+  /** En el editor de un curso, su id (para el ejemplo con el título real). */
+  courseId?: string;
+}
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Las pantallas donde hoy se crea algo a mano y el agente puede hacerlo por
+ * ti. Las que el agente NO puede hacer (invitar alumnos, precios y
+ * publicación) se quedan fuera a propósito: el panel no promete lo que la
+ * puerta de agentes no deja hacer.
+ */
+export function agentScreenFor(pathname: string | null | undefined): AgentScreenMatch | null {
+  const path = (pathname ?? '').split('?')[0]!.replace(/\/+$/, '') || '/';
+  if (path === '/formador/cursos') return { screen: 'courses' };
+  if (path === '/formador/cursos/nuevo') return { screen: 'course-new' };
+  const course = /^\/formador\/cursos\/([^/]+)$/.exec(path);
+  if (course && UUID.test(course[1]!)) return { screen: 'course-edit', courseId: course[1] };
+  if (path === '/formador/aula-virtual') return { screen: 'live' };
+  if (path === '/comunidad' || /^\/espacios\/[^/]+$/.test(path)) return { screen: 'community' };
+  return null;
+}
+
+export const AGENT_IDS = ['claude-code', 'codex', 'hermes', 'grok', 'cursor', 'vscode'] as const;
+export type AgentId = (typeof AGENT_IDS)[number];
+
+export const AGENT_LABELS: Record<AgentId, string> = {
+  'claude-code': 'Claude Code',
+  codex: 'Codex',
+  hermes: 'Hermes',
+  grok: 'Grok',
+  cursor: 'Cursor',
+  vscode: 'VS Code',
+};
+
+/** Ruta del servidor MCP en el dominio del aula. */
+export const MCP_PATH = '/api/v1/mcp';
+
+export function mcpUrlFor(origin: string): string {
+  return `${origin.replace(/\/+$/, '')}${MCP_PATH}`;
+}
+
+/**
+ * Nombre con el que el agente guarda la conexión: el del aula, en minúsculas
+ * y con guiones (vale como clave TOML sin comillas, como nombre de servidor de
+ * Claude Code y como clave YAML). Si no queda nada, `didacta`.
+ */
+export function serverNameFor(tenantSlug: string | null | undefined): string {
+  const name = (tenantSlug ?? '')
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 40)
+    .replace(/-+$/g, '');
+  return name || 'didacta';
+}
+
+export interface SnippetInput {
+  url: string;
+  /** La clave en claro, o el marcador si todavía no se ha creado. */
+  key: string;
+  name: string;
+}
+
+/**
+ * Un bloque que se copia. `step` es la clave de i18n de la instrucción que va
+ * encima (`agenteIa.agentes.<agente>.<step>`).
+ */
+export interface SnippetBlock {
+  step: string;
+  text: string;
+}
+
+export interface AgentSnippet {
+  blocks: SnippetBlock[];
+  /** Comando para comprobar que conectó, si la herramienta tiene uno. */
+  verify: string | null;
+  /** Documentación oficial de donde sale cada bloque. */
+  docs: string[];
+}
+
+export function agentSnippet(agent: AgentId, { url, key, name }: SnippetInput): AgentSnippet {
+  const bearer = `Bearer ${key}`;
+  switch (agent) {
+    case 'claude-code':
+      return {
+        blocks: [
+          {
+            step: 'paso',
+            text: `claude mcp add --transport http --scope user ${name} ${url} --header "Authorization: ${bearer}"`,
+          },
+        ],
+        verify: 'claude mcp list',
+        docs: ['https://code.claude.com/docs/en/mcp'],
+      };
+    case 'codex':
+      return {
+        blocks: [
+          {
+            step: 'paso',
+            text: [
+              `[mcp_servers.${name}]`,
+              `url = "${url}"`,
+              `http_headers = { "Authorization" = "${bearer}" }`,
+            ].join('\n'),
+          },
+        ],
+        verify: 'codex mcp list',
+        docs: [
+          'https://developers.openai.com/codex/mcp',
+          'https://learn.chatgpt.com/docs/config-file/config-reference',
+        ],
+      };
+    case 'hermes':
+      return {
+        blocks: [
+          {
+            step: 'paso',
+            text: [
+              'mcp_servers:',
+              `  ${name}:`,
+              `    url: "${url}"`,
+              '    headers:',
+              `      Authorization: "${bearer}"`,
+            ].join('\n'),
+          },
+        ],
+        verify: `hermes mcp test ${name}`,
+        docs: ['https://hermes-agent.nousresearch.com/docs/user-guide/features/mcp'],
+      };
+    case 'grok':
+      return {
+        blocks: [
+          { step: 'url', text: url },
+          { step: 'cabecera', text: `Authorization: ${bearer}` },
+          {
+            step: 'terminal',
+            text: `grok mcp add --transport http ${name} ${url} --header "Authorization: ${bearer}"`,
+          },
+        ],
+        verify: `grok mcp list`,
+        docs: [
+          'https://docs.x.ai/grok-bot/computer-and-apps',
+          'https://docs.x.ai/build/features/mcp-servers',
+        ],
+      };
+    case 'cursor':
+      return {
+        blocks: [
+          {
+            step: 'paso',
+            text: JSON.stringify(
+              { mcpServers: { [name]: { url, headers: { Authorization: bearer } } } },
+              null,
+              2,
+            ),
+          },
+        ],
+        verify: null,
+        docs: ['https://cursor.com/docs/context/mcp'],
+      };
+    case 'vscode':
+      return {
+        blocks: [
+          {
+            step: 'paso',
+            text: JSON.stringify(
+              {
+                mcpServers: {
+                  [name]: { type: 'http', url, headers: { Authorization: bearer } },
+                },
+              },
+              null,
+              2,
+            ),
+          },
+        ],
+        verify: null,
+        docs: ['https://code.visualstudio.com/docs/agents/reference/mcp-configuration'],
+      };
+  }
+}
+
+/** ¿Es una clave de la puerta de agentes? (tiene algún scope `agent:*`). */
+export function isAgentKey(scopes: readonly string[]): boolean {
+  return scopes.some((s) => s.startsWith('agent:'));
+}
+
+/** Preferencia «panel plegado», que se recuerda en el navegador. */
+export const AGENT_PANEL_COLLAPSED_KEY = 'didacta:agente-ia:plegado';
+export const AGENT_PANEL_TAB_KEY = 'didacta:agente-ia:pestana';
+
+export function readCollapsed(storage: Pick<Storage, 'getItem'> | null): boolean {
+  try {
+    return storage?.getItem(AGENT_PANEL_COLLAPSED_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+export function writeCollapsed(storage: Pick<Storage, 'setItem'> | null, value: boolean): void {
+  try {
+    storage?.setItem(AGENT_PANEL_COLLAPSED_KEY, value ? '1' : '0');
+  } catch {
+    // Sin almacenamiento (modo privado, bloqueado): solo se pierde la preferencia.
+  }
+}
+
+export function readTab(storage: Pick<Storage, 'getItem'> | null): AgentId {
+  try {
+    const v = storage?.getItem(AGENT_PANEL_TAB_KEY);
+    return (AGENT_IDS as readonly string[]).includes(v ?? '') ? (v as AgentId) : 'claude-code';
+  } catch {
+    return 'claude-code';
+  }
+}
+
+export function writeTab(storage: Pick<Storage, 'setItem'> | null, value: AgentId): void {
+  try {
+    storage?.setItem(AGENT_PANEL_TAB_KEY, value);
+  } catch {
+    // Igual que arriba.
+  }
+}
