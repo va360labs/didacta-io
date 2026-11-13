@@ -269,7 +269,7 @@ test.describe('Membresía — trial completo (webhooks Stripe firmados)', () => 
         onboardingCompletedAt: new Date().toISOString(),
       },
     });
-    await page.goto('/account?tab=suscripcion');
+    await page.goto('/account?tab=subscription');
     await expect(page.getByText(`Plan E2E ${stamp}`)).toBeVisible({ timeout: 20_000 });
     await expect(page.getByText('En prueba')).toBeVisible();
     await expect(page.getByRole('button', { name: 'Pagar ahora y activar' })).toBeVisible();

@@ -63,13 +63,13 @@ import {
  */
 /**
  * Destino del cambio de contraseña: la pestaña Seguridad del perfil
- * (`/account?tab=seguridad`). El usuario con contraseña temporal
+ * (`/account?tab=security`). El usuario con contraseña temporal
  * (`mustChangePassword`) es forzado a `/account`; esa ruta queda exenta del
  * redirect para no entrar en bucle. (Antes había una página dedicada
  * `/account/seguridad`; se consolidó en el tab.)
  */
 const ACCOUNT_PATH = '/account';
-const CHANGE_PASSWORD_REDIRECT = '/account?tab=seguridad';
+const CHANGE_PASSWORD_REDIRECT = '/account?tab=security';
 /** Evita repetir la consulta del asistente de academia en cada navegación. */
 const ACADEMIA_LISTA_KEY = 'didacta:academia-lista';
 

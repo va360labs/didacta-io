@@ -25,7 +25,7 @@ function makeT(namespace: Record<string, unknown>): TranslatorLike {
 describe('resolveModuleText', () => {
   it('usa el catálogo cuando la key existe (ES y EN dan textos distintos)', () => {
     const text: ModuleLocalizedText = {
-      key: 'configTabs.aula-virtual',
+      key: 'configTabs.virtual-classroom',
       fallback: 'Aula virtual',
     };
     expect(resolveModuleText(makeT(esAdminMarca), text)).toBe('Aula virtual');
@@ -65,6 +65,21 @@ describe('adminConfigTabs de los módulos del repo', () => {
           `${moduleName}: falta ${text.key} en en/adminMarca.json`,
         ).toBe(true);
       }
+    }
+  });
+});
+
+describe('valor de `?tab=` de las pestañas de los módulos', () => {
+  it('va en inglés y la de antes sigue abriendo la pestaña (zoom-live: aula-virtual)', () => {
+    const tabs = flatAdminConfigTabs();
+    const zoom = tabs.find((x) => x.moduleName === 'mod.zoom-live')?.tab;
+    expect(zoom?.key).toBe('virtual-classroom');
+    expect(zoom?.legacyKeys).toEqual(['aula-virtual']);
+    const claves = new Set(tabs.map((x) => x.tab.key));
+    for (const { moduleName, tab } of tabs) {
+      expect(tab.key, moduleName).toMatch(/^[a-z]+(-[a-z]+)*$/);
+      // Un valor de antes no puede ser el de ahora de otra pestaña: abriría la que no es.
+      for (const old of tab.legacyKeys ?? []) expect(claves.has(old), old).toBe(false);
     }
   });
 });

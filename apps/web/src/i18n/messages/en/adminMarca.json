@@ -111,15 +111,15 @@
   "configTabs": {
     "general": "General",
     "notifications": "Notifications",
-    "registro": "Registration",
-    "pagos": "Payments",
+    "registration": "Registration",
+    "payments": "Payments",
     "modules": "Modules",
     "storage": "Storage",
     "raw": "Advanced",
-    "aula-virtual": "Virtual classroom"
+    "virtual-classroom": "Virtual classroom"
   },
   "configTabsDesc": {
-    "aula-virtual": "Zoom Server-to-Server credentials for live sessions."
+    "virtual-classroom": "Zoom Server-to-Server credentials for live sessions."
   },
   "modulesTab": {
     "loadError": "We could not load the modules.",

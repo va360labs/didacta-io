@@ -115,7 +115,7 @@ test.describe('Panel de administración reordenado', () => {
   test('fase 2 — las cuatro fusiones responden y las rutas viejas redirigen', async ({ page }) => {
     // Métricas → pestaña del panel.
     await page.goto('/admin/metrics');
-    await expect(page).toHaveURL(/\/admin\?tab=negocio/);
+    await expect(page).toHaveURL(/\/admin\?tab=business/);
     await expect(page.getByRole('tab', { name: 'Negocio' })).toHaveAttribute(
       'aria-selected',
       'true',

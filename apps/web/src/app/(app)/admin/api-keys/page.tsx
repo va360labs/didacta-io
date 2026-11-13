@@ -34,23 +34,27 @@ import {
 import { authStorage } from '@/lib/auth-storage';
 import { apiErrorMessage } from '@/lib/i18n/api-error';
 import { formatDateTime } from '@/lib/i18n/format';
+import { modernTab } from '@/lib/legacy-routes';
+import { useModernUrl } from '@/lib/use-modern-url';
 
 function fmtDate(value: string | null): string {
   if (!value) return '—';
   return formatDateTime(value, { dateStyle: 'medium', timeStyle: 'short' });
 }
 
-const TABS = ['claves', 'docs'] as const;
+const TABS = ['keys', 'docs'] as const;
 type TabKey = (typeof TABS)[number];
 
 export default function ApiKeysPage() {
   const t = useTranslations('adminApi');
   const router = useRouter();
   const params = useSearchParams();
-  const requested = params.get('tab');
+  // `?tab=claves` (el de antes) también vale; la URL se cambia por la nueva.
+  const requested = modernTab(params.get('tab'));
+  useModernUrl({ search: params.toString() });
   const tab: TabKey = (TABS as readonly string[]).includes(requested ?? '')
     ? (requested as TabKey)
-    : 'claves';
+    : 'keys';
 
   return (
     <section className="space-y-6">
@@ -66,15 +70,15 @@ export default function ApiKeysPage() {
       <Tabs
         value={tab}
         onValueChange={(next) =>
-          router.replace(next === 'claves' ? '/admin/api-keys' : `/admin/api-keys?tab=${next}`)
+          router.replace(next === 'keys' ? '/admin/api-keys' : `/admin/api-keys?tab=${next}`)
         }
       >
         <TabsList>
-          <TabsTrigger value="claves">{t('keys.tabKeys')}</TabsTrigger>
+          <TabsTrigger value="keys">{t('keys.tabKeys')}</TabsTrigger>
           <TabsTrigger value="docs">{t('keys.tabDocs')}</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="claves" className="mt-5">
+        <TabsContent value="keys" className="mt-5">
           <KeysTab />
         </TabsContent>
         <TabsContent value="docs" className="mt-5">

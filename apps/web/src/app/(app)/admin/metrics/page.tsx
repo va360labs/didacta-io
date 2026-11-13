@@ -6,7 +6,7 @@
  */
 
 /**
- * Redirect de compatibilidad: /admin/metrics → /admin?tab=negocio.
+ * Redirect de compatibilidad: /admin/metrics → /admin?tab=business.
  *
  * Las métricas del negocio son ahora una pestaña del panel: tener dos
  * dashboards con entrada propia obligaba a adivinar cuál abrir. La ruta se
@@ -19,7 +19,7 @@ import { useRouter } from 'next/navigation';
 export default function AdminMetricasRedirect() {
   const router = useRouter();
   useEffect(() => {
-    router.replace('/admin?tab=negocio');
+    router.replace('/admin?tab=business');
   }, [router]);
   return null;
 }

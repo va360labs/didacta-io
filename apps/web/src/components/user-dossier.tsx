@@ -29,6 +29,7 @@ import {
 import { labelOr, type TranslatorLike } from '@/lib/i18n/labels';
 import { learningApi } from '@/lib/learning';
 import { dossierApi, type UserDossier } from '@/lib/dossier';
+import { modernTab } from '@/lib/legacy-routes';
 
 /**
  * Expediente de un usuario, visible solo para admins dentro de `/u/[id]`.
@@ -39,14 +40,15 @@ import { dossierApi, type UserDossier } from '@/lib/dossier';
  * siempre al mismo sitio; lo que cambia es cuánto ve quien mira.
  */
 
+/** El `id` es el valor de `?tab=` en `/u/<id>`; los de antes (`?tab=acceso`) también valen (`modernTab`). */
 const TABS = [
-  { id: 'resumen', labelKey: 'dossier.tabResumen' },
-  { id: 'compras', labelKey: 'dossier.tabCompras' },
-  { id: 'formacion', labelKey: 'dossier.tabFormacion' },
-  { id: 'actividad', labelKey: 'dossier.tabActividad' },
-  { id: 'mensajes', labelKey: 'dossier.tabMensajes' },
-  { id: 'acceso', labelKey: 'dossier.tabAcceso' },
-  { id: 'sanciones', labelKey: 'dossier.tabSanciones' },
+  { id: 'overview', labelKey: 'dossier.tabResumen' },
+  { id: 'purchases', labelKey: 'dossier.tabCompras' },
+  { id: 'training', labelKey: 'dossier.tabFormacion' },
+  { id: 'activity', labelKey: 'dossier.tabActividad' },
+  { id: 'messages', labelKey: 'dossier.tabMensajes' },
+  { id: 'access', labelKey: 'dossier.tabAcceso' },
+  { id: 'sanctions', labelKey: 'dossier.tabSanciones' },
 ] as const;
 
 type TabId = (typeof TABS)[number]['id'];
@@ -93,7 +95,7 @@ export function UserDossierPanel({
   const [data, setData] = useState<UserDossier | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState<TabId>(
-    (TABS.find((t) => t.id === initialTab)?.id ?? 'resumen') as TabId,
+    (TABS.find((t) => t.id === modernTab(initialTab))?.id ?? 'overview') as TabId,
   );
   const [moderating, setModerating] = useState(false);
 
@@ -189,13 +191,13 @@ export function UserDossierPanel({
         ))}
       </div>
 
-      {tab === 'resumen' ? <ResumenTab d={data} /> : null}
-      {tab === 'compras' ? <ComprasTab d={data} /> : null}
-      {tab === 'formacion' ? <FormacionTab d={data} onChanged={load} /> : null}
-      {tab === 'actividad' ? <ActividadTab d={data} /> : null}
-      {tab === 'mensajes' ? <MensajesTab d={data} /> : null}
-      {tab === 'acceso' ? <AccesoTab d={data} onChanged={load} /> : null}
-      {tab === 'sanciones' ? <SancionesTab d={data} /> : null}
+      {tab === 'overview' ? <ResumenTab d={data} /> : null}
+      {tab === 'purchases' ? <ComprasTab d={data} /> : null}
+      {tab === 'training' ? <FormacionTab d={data} onChanged={load} /> : null}
+      {tab === 'activity' ? <ActividadTab d={data} /> : null}
+      {tab === 'messages' ? <MensajesTab d={data} /> : null}
+      {tab === 'access' ? <AccesoTab d={data} onChanged={load} /> : null}
+      {tab === 'sanctions' ? <SancionesTab d={data} /> : null}
 
       {moderating ? (
         <RestrictionDialog

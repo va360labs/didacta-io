@@ -28,7 +28,7 @@ import { assertLocale, setSwitch, shot } from './lib/shot';
 const WALKTHROUGH = 'notificaciones-y-pagos';
 
 /** Abre `/admin/settings` en la pestaña pedida. No hay parámetro de URL. */
-async function openConfigTab(page: Page, tabKey: 'notifications' | 'pagos'): Promise<void> {
+async function openConfigTab(page: Page, tabKey: 'notifications' | 'payments'): Promise<void> {
   if (!page.url().includes('/admin/settings')) {
     await page.goto('/admin/settings');
   }
@@ -100,7 +100,7 @@ test('notificaciones y pagos · 18 capturas', async ({ browser }) => {
   await mail.close();
 
   // ─────────────────────────────────────────────────────── 2 · Pagos ──
-  await openConfigTab(admin, 'pagos');
+  await openConfigTab(admin, 'payments');
   await expect(admin.getByTestId('stripe-banner-none')).toBeVisible({ timeout: 30_000 });
   await shot(admin, WALKTHROUGH, '07-pagos-vacio');
 
@@ -125,7 +125,7 @@ test('notificaciones y pagos · 18 capturas', async ({ browser }) => {
   });
   await shot(admin, WALKTHROUGH, '09-billing-cta-sin-stripe');
 
-  await openConfigTab(admin, 'pagos');
+  await openConfigTab(admin, 'payments');
   await expect(admin.locator('#stripe-secret-key')).toBeVisible({ timeout: 30_000 });
   await admin.locator('#stripe-secret-key').fill(DEMO.stripe.secretKey);
   await admin.locator('#stripe-webhook-secret').fill(DEMO.stripe.webhookSecret);

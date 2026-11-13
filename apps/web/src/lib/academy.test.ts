@@ -169,7 +169,7 @@ describe('los destinos del asistente son rutas que existen', () => {
   it('el comprobador de rutas funciona (resuelve grupos y dinámicos, y rechaza inventadas)', () => {
     expect(existe('/admin/payments')).toBe(true); // vive en (app)
     expect(existe('/studio/courses/abc')).toBe(true); // [id]
-    expect(existe('/admin/settings?tab=pagos')).toBe(true);
+    expect(existe('/admin/settings?tab=payments')).toBe(true);
     expect(existe('/admin/billing-inventado')).toBe(false);
   });
 

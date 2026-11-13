@@ -152,12 +152,12 @@ describe('SubscriptionsStripeSdkAdapter.createPortalSession', () => {
     const { adapter, portals } = capture();
     const result = await adapter.createPortalSession({
       customerId: 'cus_Alumna',
-      returnUrl: 'https://aula.test/account?tab=suscripcion',
+      returnUrl: 'https://aula.test/account?tab=subscription',
     });
     expect(result).toEqual({ url: 'https://billing.stripe.test/p/session/x' });
     expect(portals[0]).toEqual({
       customer: 'cus_Alumna',
-      return_url: 'https://aula.test/account?tab=suscripcion',
+      return_url: 'https://aula.test/account?tab=subscription',
     });
   });
 

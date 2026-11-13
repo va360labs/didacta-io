@@ -34,6 +34,8 @@ import { formatDate } from '@/lib/i18n/format';
 import { labelOr } from '@/lib/i18n/labels';
 import { resolveModuleText, type ModuleLocalizedText } from '@/lib/module-registry';
 import { tenantSettingsApi, type TenantSettingMetadata } from '@/lib/tenant-settings';
+import { modernTab } from '@/lib/legacy-routes';
+import { useModernUrl } from '@/lib/use-modern-url';
 import { flatAdminConfigTabs } from '@/modules';
 
 // Branding tiene su propia pantalla en /admin/branding con preview live.
@@ -73,9 +75,9 @@ const CORE_TABS: ConfigTabSpec[] = [
   // Servidor SMTP saliente para emails transaccionales.
   { key: 'notifications' },
   // Cómo entran los miembros: verificadores exigidos (Telegram/OTP), bot y aprobador.
-  { key: 'registro' },
+  { key: 'registration' },
   // Cuenta de Stripe para vender cursos sueltos y suscripciones/membresía.
-  { key: 'pagos' },
+  { key: 'payments' },
   // Activa o desactiva módulos del producto para tu organización.
   { key: 'modules' },
   // Backend de archivos (S3 o disco local) configurado vía variables de entorno.
@@ -108,6 +110,15 @@ const ALL_TABS: ConfigTabSpec[] = [
 ];
 
 type TabKey = string;
+
+/// Valores de `?tab=` de antes que declaran los módulos para sus pestañas
+/// (`aula-virtual` → `virtual-classroom`): un enlace guardado sigue abriendo
+/// la pestaña. Los del core están en `LEGACY_TAB_VALUES`.
+const MODULE_LEGACY_TABS: Readonly<Record<string, string>> = Object.fromEntries(
+  flatAdminConfigTabs().flatMap(({ tab }) =>
+    (tab.legacyKeys ?? []).map((old) => [old, tab.key] as const),
+  ),
+);
 
 /**
  * En modo sencillo, «Ajustes» (tu academia y el paso al modo completo); la
@@ -142,7 +153,9 @@ function ConfiguracionCompleta() {
   /// justo cuando se le acaba de decir dónde tiene que ir.
   const searchParams = useSearchParams();
   const router = useRouter();
-  const tabPedido = searchParams?.get('tab')?.trim() || null;
+  // `?tab=pagos` (el de antes) también vale; la URL se cambia por la nueva.
+  const tabPedido = modernTab(searchParams?.get('tab'), MODULE_LEGACY_TABS);
+  useModernUrl({ search: searchParams?.toString() ?? null, extra: MODULE_LEGACY_TABS });
   const [tab, setTab] = useState<TabKey>(tabPedido || (isSuperAdmin ? 'general' : 'notifications'));
 
   // Carga la lista de módulos activos del tenant para filtrar tabs cuyo
@@ -186,24 +199,27 @@ function ConfiguracionCompleta() {
   /// visibles.
   /// Modo plataforma (Didacta Cloud): los cobros viven en Administración →
   /// Cobros y aquí no se pegan claves. Una sola puerta: la pestaña desaparece y
-  /// `?tab=pagos` lleva allí. Sin el módulo (Community), nada cambia.
+  /// `?tab=payments` lleva allí. Sin el módulo (Community), nada cambia.
   const platformPayouts = activeModules?.has('mod.payouts') ?? false;
   const visibleTabs = ALL_TABS.filter((spec) => {
     if (spec.key === 'general') return isSuperAdmin;
-    if (spec.key === 'pagos') return !platformPayouts;
+    if (spec.key === 'payments') return !platformPayouts;
     if (!spec.requiresModule) return true;
     if (!activeModules) return false;
     return activeModules.has(spec.requiresModule);
   });
 
   useEffect(() => {
-    if (platformPayouts && tabPedido === 'pagos') router.replace('/admin/payments');
+    if (platformPayouts && tabPedido === 'payments') router.replace('/admin/payments');
   }, [platformPayouts, tabPedido, router]);
 
   // Si la tab seleccionada queda oculta tras el filtro (ej. el admin
   // desactivó mod.zoom-live mientras estaba en el tab "Aula virtual"),
-  // saltamos a la primera visible.
+  // saltamos a la primera visible. Mientras no llega la lista de módulos, las
+  // pestañas de los módulos están ocultas: saltar ya perdía un enlace directo
+  // a una de ellas (`?tab=virtual-classroom` acababa en «General»).
   useEffect(() => {
+    if (!activeModules) return;
     if (!visibleTabs.find((spec) => spec.key === tab) && visibleTabs[0]) {
       setTab(visibleTabs[0].key);
     }
@@ -298,14 +314,14 @@ function ConfiguracionCompleta() {
         </div>
       ) : null}
 
-      {tab === 'registro' ? (
+      {tab === 'registration' ? (
         <div className="flex flex-col gap-6">
           <SignupPolicyCard />
           <MemberRegistrationSettingsCard />
         </div>
       ) : null}
 
-      {tab === 'pagos' ? <StripeSettingsCard /> : null}
+      {tab === 'payments' ? <StripeSettingsCard /> : null}
 
       {tab === 'modules' ? <ModulesTab /> : null}
 
@@ -314,7 +330,7 @@ function ConfiguracionCompleta() {
           coincide con su `key`. Filtrado por activeModules ya aplicado
           en `visibleTabs`. */}
       {(() => {
-        const ext = ALL_TABS.find((spec) => spec.key === tab && spec.Component);
+        const ext = visibleTabs.find((spec) => spec.key === tab && spec.Component);
         if (!ext || !ext.Component) return null;
         const Component = ext.Component;
         return <Component />;

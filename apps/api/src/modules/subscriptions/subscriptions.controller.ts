@@ -216,7 +216,7 @@ export class SubscriptionsController {
       .getSubscriptionsService()
       .createBillingPortalSession(user.tenantId, user.sub, {
         subscriptionId: body?.subscriptionId,
-        returnUrl: `${base}/account?tab=suscripcion`,
+        returnUrl: `${base}/account?tab=subscription`,
       });
   }
 

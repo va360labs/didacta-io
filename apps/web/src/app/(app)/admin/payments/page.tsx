@@ -77,7 +77,7 @@ function CobrosCompleto(): React.JSX.Element {
         : null;
 
   const toLegacyPayments = useCallback(() => {
-    router.replace('/admin/settings?tab=pagos');
+    router.replace('/admin/settings?tab=payments');
   }, [router]);
   const clearQuery = useCallback(() => {
     router.replace('/admin/payments');

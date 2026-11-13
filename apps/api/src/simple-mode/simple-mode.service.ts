@@ -399,7 +399,7 @@ export class SimpleModeService {
       sales,
       students: invited,
       nextLive,
-      paymentsSetupPath: this.payoutsGate ? '/admin/payments' : '/admin/settings?tab=pagos',
+      paymentsSetupPath: this.payoutsGate ? '/admin/payments' : '/admin/settings?tab=payments',
     };
   }
 

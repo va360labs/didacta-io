@@ -5,6 +5,8 @@
 
 import { createHash, randomBytes } from 'node:crypto';
 import { expect, test, type Browser, type Page } from '@playwright/test';
+import { API_URL, E2E_USER_PASSWORD, signupOnboarded, TENANT_SLUG } from '../helpers/api';
+import { injectSession } from '../helpers/auth';
 import { apiAs, freshTenant, sql, type FreshTenant } from '../helpers/simple-tenant';
 
 /**
@@ -38,15 +40,42 @@ const VIEJAS = new Set([
   'verificar', 'catalogo', 'condiciones-referidos', 'unete', 'bienvenida', 'sitio',
 ]); // prettier-ignore
 
-/** Claves de query de antes (los valores de `?tab=` aún no se han traducido). */
+/** Claves de query de antes. */
 const QUERY_VIEJAS = ['anadir', 'completo', 'vuelta', 'renovar', 'grupo', 'vista'];
 
-/** Segmentos fijos de una ruta: los que no son un id ni un slug de contenido. */
+/**
+ * Valores de query de antes: los de `?tab=` de cada pantalla (cuenta, panel,
+ * ajustes y la pestaña del módulo de directos, claves de API, webhooks,
+ * expediente) y el de `?view=`. Copia independiente de la tabla del producto.
+ */
+const VALORES_VIEJOS = new Set([
+  'datos', 'notificaciones', 'suscripcion', 'compras', 'seguridad',
+  'actividad', 'negocio', 'registro', 'pagos', 'aula-virtual', 'claves', 'salientes',
+  'resumen', 'formacion', 'mensajes', 'acceso', 'sanciones', 'eventos',
+]); // prettier-ignore
+
+/** Claves cuyo valor es contenido del aula (una búsqueda, una categoría): pueden ir en español. */
+const QUERY_CONTENIDO = new Set(['q', 'category', 'ref', 'email', 'name', 'member']);
+
+/** Anclas de antes. */
+const ANCLAS_VIEJAS = new Set(['referidos', 'enlace']);
+
+/**
+ * Lo primero en español de una URL: una clave o un valor de query de antes,
+ * un ancla de antes o un segmento fijo de las rutas de antes (no un id ni un
+ * slug de contenido). `null` si va toda en inglés.
+ */
 function segmentoEspanol(url: string): string | null {
-  const { pathname, searchParams } = new URL(url, 'http://x');
+  const { pathname, searchParams, hash } = new URL(url, 'http://x');
   if (pathname.startsWith('/api/')) return null;
   const clave = QUERY_VIEJAS.find((k) => searchParams.has(k));
   if (clave) return `?${clave}=`;
+  for (const [k, v] of searchParams) {
+    if (QUERY_CONTENIDO.has(k) || k.startsWith('utm_')) continue;
+    if (VALORES_VIEJOS.has(v)) return `?${k}=${v}`;
+  }
+  const ancla = decodeURIComponent(hash.slice(1));
+  if (ANCLAS_VIEJAS.has(ancla)) return `#${ancla}`;
   const segs = pathname.split('/').filter(Boolean);
   // `/catalog/<slug>`, `/courses/<slug>`, `/spaces/<slug>`, `/paths/<slug>`…: el
   // segundo segmento es contenido del aula. Solo cuentan los fijos del App
@@ -69,6 +98,19 @@ test('el detector discrimina: marca las rutas de antes y deja pasar las nuevas',
   // El slug de un curso puede ser una palabra española: es contenido.
   expect(segmentoEspanol('/courses/cursos-de-cocina')).toBeNull();
   expect(segmentoEspanol('/api/v1/formador/stats')).toBeNull();
+  // Valores de query y anclas de antes.
+  expect(segmentoEspanol('/account?tab=seguridad')).toBe('?tab=seguridad');
+  expect(segmentoEspanol('/admin?tab=negocio&x=1')).toBe('?tab=negocio');
+  expect(segmentoEspanol('/admin/settings?tab=aula-virtual')).toBe('?tab=aula-virtual');
+  expect(segmentoEspanol('/calendar?view=eventos')).toBe('?view=eventos');
+  expect(segmentoEspanol('/admin/payments#referidos')).toBe('#referidos');
+  expect(segmentoEspanol('/admin/payments?full=1#enlace')).toBe('#enlace');
+  expect(segmentoEspanol('/account?tab=security')).toBeNull();
+  expect(segmentoEspanol('/admin/settings?tab=virtual-classroom')).toBeNull();
+  expect(segmentoEspanol('/calendar?view=events')).toBeNull();
+  expect(segmentoEspanol('/admin/payments#referrals')).toBeNull();
+  // Una búsqueda o una categoría en español es contenido.
+  expect(segmentoEspanol('/courses?q=seguridad&category=pagos')).toBeNull();
 });
 
 interface Recorrido {
@@ -208,6 +250,14 @@ test('modo sencillo: ni la creadora ni la alumna ven una URL en español', async
     ).toBe(true);
   }
   expect(creadora.malas, creadora.malas.join('\n')).toEqual([]);
+
+  // Un enlace guardado con el ancla de antes (y con la ruta de antes): la URL
+  // pasa a la nueva. Va después de la comprobación de arriba porque la primera
+  // navegación es, a propósito, a la URL vieja.
+  await page.goto(`${origin}/admin/cobros#referidos`);
+  await expect(page).toHaveURL(`${origin}/admin/payments#referrals`);
+  await page.goto(`${origin}/admin/payments#enlace`);
+  await expect(page).toHaveURL(`${origin}/admin/payments#sale-link`);
   await ctx.close();
 
   // ── Una alumna del aula ────────────────────────────────────────────────
@@ -272,4 +322,85 @@ test('modo sencillo: ni la creadora ni la alumna ven una URL en español', async
   }
   expect(alumna.malas, alumna.malas.join('\n')).toEqual([]);
   await actx.close();
+});
+
+/**
+ * El modo completo, como administrador: cada pestaña que se pulsa en cuenta,
+ * panel, ajustes (con la que aporta el módulo de directos), claves de API,
+ * webhooks, SSO y el expediente de un miembro deja la URL en inglés, también
+ * su `?tab=`. Y los enlaces que pinta cada pantalla.
+ */
+test('modo completo: ninguna pestaña deja un valor en español en la URL', async ({ page }) => {
+  test.setTimeout(240_000);
+  const res = await fetch(`${API_URL}/api/v1/auth/signin`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      tenantSlug: TENANT_SLUG,
+      email: process.env.E2E_ADMIN_EMAIL,
+      password: process.env.E2E_ADMIN_PASSWORD,
+    }),
+  });
+  expect(res.ok, `signin admin (${res.status})`).toBe(true);
+  const auth = (await res.json()) as {
+    tokens: { accessToken: string; refreshToken: string };
+    user: Parameters<typeof injectSession>[1]['user'];
+  };
+  const miembro = await signupOnboarded({
+    tenantSlug: TENANT_SLUG,
+    email: `urls-pestanas-${Date.now().toString(36)}@e2e.test`,
+    password: E2E_USER_PASSWORD,
+    name: 'Miembro de las pestañas',
+  });
+
+  await page.goto('/signin');
+  await injectSession(page, {
+    accessToken: auth.tokens.accessToken,
+    refreshToken: auth.tokens.refreshToken,
+    user: { ...auth.user, onboardingCompletedAt: new Date().toISOString() },
+  });
+  const origin = new URL(page.url()).origin;
+  const r = vigilar(page, origin);
+
+  const pantallas = [
+    '/account',
+    '/admin',
+    '/admin/settings',
+    '/admin/api-keys',
+    '/admin/webhooks',
+    '/admin/sso',
+    `/u/${miembro.user.id}`,
+    '/events',
+  ];
+  for (const ruta of pantallas) {
+    await page.goto(`${origin}${ruta}`);
+    await asentar(page);
+    await enlaces(page, origin, r, ruta);
+    // Las pestañas: las de `role="tab"` y las del expediente.
+    const pestanas = page.locator('[role="tab"], [data-testid^="dossier-tab-"]');
+    const n = await pestanas.count();
+    for (let i = 0; i < n; i++) {
+      const p = pestanas.nth(i);
+      if (!(await p.isVisible())) continue;
+      await p.click();
+      await page.waitForTimeout(400);
+      await enlaces(page, origin, r, `${ruta} (pestaña ${i + 1})`);
+    }
+  }
+
+  // Control: el recorrido pasó de verdad por las pestañas que escriben la URL
+  // (si no, «ningún valor en español» no probaría nada).
+  for (const esperada of [
+    '/admin?tab=business',
+    '/admin/settings?tab=registration',
+    '/admin/settings?tab=payments',
+    '/admin/settings?tab=virtual-classroom',
+    '/admin/api-keys?tab=docs',
+    '/admin/webhooks?tab=zoom',
+    '/admin/sso?tab=saml',
+    '/calendar?view=events',
+  ]) {
+    expect(r.visitadas, `no pasó por ${esperada}`).toContain(esperada);
+  }
+  expect(r.malas, r.malas.join('\n')).toEqual([]);
 });

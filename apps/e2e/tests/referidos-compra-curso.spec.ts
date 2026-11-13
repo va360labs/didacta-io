@@ -179,7 +179,7 @@ test('referidos: una alumna invita, otra persona compra un curso suelto y la com
   await signinPage(creadora, operador, tenant.password);
   await creadora.waitForURL((u) => !u.pathname.startsWith('/signin'), { timeout: 30_000 });
   await creadora.goto('/admin/membership');
-  const seccion = creadora.locator('section#referidos');
+  const seccion = creadora.locator('section#referrals');
   await expect(seccion).toBeVisible({ timeout: 30_000 });
   // Con el módulo ya activo en el aula el botón es «Encender»; sin él, «Activar los referidos».
   await seccion.getByRole('button', { name: /^(Encender|Activar los referidos)$/ }).click();
@@ -278,7 +278,7 @@ test('referidos: una alumna invita, otra persona compra un curso suelto y la com
 
   // En Ventas de la creadora: la venta traída por referidos, pendiente.
   await creadora.reload();
-  const ventas = creadora.locator('section#referidos');
+  const ventas = creadora.locator('section#referrals');
   await expect(ventas).toContainText(/Pago de 49\s€/, { timeout: 30_000 });
   await expect(ventas).toContainText(/14,70\s€ para quien invitó/);
   await expect(ventas.getByText('Pendiente', { exact: true })).toBeVisible();

@@ -34,6 +34,8 @@ import type { TranslatorLike } from '@/lib/i18n/labels';
 import { learningApi, type MyCompetencies } from '@/lib/learning';
 import { authStorage } from '@/lib/auth-storage';
 import { isDocumentFieldValid } from '@/lib/document-id';
+import { modernTab } from '@/lib/legacy-routes';
+import { useModernUrl } from '@/lib/use-modern-url';
 import { loadProfileStats, type ProfileStats } from '@/lib/profile-stats';
 import { communityApi } from '@/modules/community';
 import { certificatesApi, type Certificate } from '@/modules/certificates';
@@ -87,6 +89,10 @@ function monthYear(iso: string): string {
 
 export default function CuentaPage() {
   const router = useRouter();
+  // `?tab=seguridad`, `?tab=suscripcion`… (los de antes) también valen: la
+  // vuelta del portal de facturación de una sesión abierta antes del cambio
+  // trae el viejo. La URL se cambia por la nueva.
+  useModernUrl();
   const t = useTranslations('alumnoSocial');
   const tErrors = useTranslations('errors');
   /**
@@ -280,12 +286,12 @@ export default function CuentaPage() {
   if (!profile) return null;
 
   const isAdmin = profile.roles.some((r) => r === 'super_admin' || r === 'tenant_admin');
-  // Pestaña inicial desde la URL (?tab=seguridad) — usado por el gate de
-  // contraseña temporal, que redirige a /account?tab=seguridad.
+  // Pestaña inicial desde la URL (?tab=security) — usado por el gate de
+  // contraseña temporal, que redirige a /account?tab=security.
   const initialTab =
-    typeof window !== 'undefined'
-      ? (new URLSearchParams(window.location.search).get('tab') ?? 'datos')
-      : 'datos';
+    (typeof window !== 'undefined'
+      ? modernTab(new URLSearchParams(window.location.search).get('tab'))
+      : null) ?? 'details';
 
   return (
     <div className="flex flex-col gap-6">
@@ -357,17 +363,17 @@ export default function CuentaPage() {
 
       <Tabs defaultValue={initialTab} className="space-y-6">
         <TabsList>
-          <TabsTrigger value="datos">{t('cuenta.tabDatos')}</TabsTrigger>
-          <TabsTrigger value="notificaciones">{t('cuenta.tabNotificaciones')}</TabsTrigger>
-          <TabsTrigger value="suscripcion">{t('cuenta.tabSuscripcion')}</TabsTrigger>
+          <TabsTrigger value="details">{t('cuenta.tabDatos')}</TabsTrigger>
+          <TabsTrigger value="notifications">{t('cuenta.tabNotificaciones')}</TabsTrigger>
+          <TabsTrigger value="subscription">{t('cuenta.tabSuscripcion')}</TabsTrigger>
           {compras.orders.length > 0 && (
-            <TabsTrigger value="compras">{t('cuenta.tabCompras')}</TabsTrigger>
+            <TabsTrigger value="purchases">{t('cuenta.tabCompras')}</TabsTrigger>
           )}
-          <TabsTrigger value="seguridad">{t('cuenta.tabSeguridad')}</TabsTrigger>
+          <TabsTrigger value="security">{t('cuenta.tabSeguridad')}</TabsTrigger>
         </TabsList>
 
         {/* ── Datos ── */}
-        <TabsContent value="datos" className="space-y-6">
+        <TabsContent value="details" className="space-y-6">
           {editing ? (
             <EditProfileForm
               name={name}
@@ -429,7 +435,7 @@ export default function CuentaPage() {
         </TabsContent>
 
         {/* ── Notificaciones ── */}
-        <TabsContent value="notificaciones" className="space-y-6">
+        <TabsContent value="notifications" className="space-y-6">
           <Card>
             <CardHeader>
               <CardTitle>{t('cuenta.notificaciones')}</CardTitle>
@@ -460,19 +466,19 @@ export default function CuentaPage() {
         </TabsContent>
 
         {/* ── Suscripción ── */}
-        <TabsContent value="suscripcion" className="space-y-6">
+        <TabsContent value="subscription" className="space-y-6">
           <SubscriptionTab />
         </TabsContent>
 
         {/* ── Compras ── */}
         {compras.orders.length > 0 && (
-          <TabsContent value="compras" className="space-y-6">
+          <TabsContent value="purchases" className="space-y-6">
             <PurchasesTab state={compras} />
           </TabsContent>
         )}
 
         {/* ── Seguridad ── */}
-        <TabsContent value="seguridad" className="space-y-6">
+        <TabsContent value="security" className="space-y-6">
           <AccountSecurityTab />
         </TabsContent>
       </Tabs>

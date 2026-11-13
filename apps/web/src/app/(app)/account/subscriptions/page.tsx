@@ -6,7 +6,7 @@
  */
 
 /**
- * Redirect de compatibilidad: /account/subscriptions → /account?tab=suscripcion.
+ * Redirect de compatibilidad: /account/subscriptions → /account?tab=subscription.
  *
  * La gestión de suscripciones ahora vive como pestaña en /account (antes esta
  * era una ruta huérfana sin entrada de menú). Se conserva la ruta porque es el
@@ -24,7 +24,7 @@ export default function MisSuscripcionesRedirect() {
   useEffect(() => {
     const status = params.get('status');
     const suffix = status ? `&status=${encodeURIComponent(status)}` : '';
-    router.replace(`/account?tab=suscripcion${suffix}`);
+    router.replace(`/account?tab=subscription${suffix}`);
   }, [router, params]);
 
   return null;

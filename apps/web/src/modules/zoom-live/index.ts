@@ -18,12 +18,14 @@ export const zoomLiveExtension: ModuleWebExtension = {
   name: 'mod.zoom-live',
   adminConfigTabs: [
     {
-      key: 'aula-virtual',
+      key: 'virtual-classroom',
+      // `?tab=aula-virtual`, el de antes: los enlaces guardados siguen abriendo la pestaña.
+      legacyKeys: ['aula-virtual'],
       // Copy en el catálogo del core (`adminMarca.configTabs*`); el `fallback`
       // solo se pinta si un fork borra la key. Ver `ModuleLocalizedText`.
-      label: { key: 'configTabs.aula-virtual', fallback: 'Aula virtual' },
+      label: { key: 'configTabs.virtual-classroom', fallback: 'Aula virtual' },
       description: {
-        key: 'configTabsDesc.aula-virtual',
+        key: 'configTabsDesc.virtual-classroom',
         fallback: 'Credenciales Zoom Server-to-Server para sesiones síncronas.',
       },
       Component: ZoomAdminSurface,

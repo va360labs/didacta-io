@@ -11,13 +11,13 @@ import { cn } from '@/lib/utils';
 /**
  * Tabs minimales accesibles sin Radix. Pensados para casos
  * controlados/uncontrolled tipo shadcn/ui:
- *   <Tabs defaultValue="datos">
+ *   <Tabs defaultValue="details">
  *     <TabsList>
- *       <TabsTrigger value="datos">Datos</TabsTrigger>
- *       <TabsTrigger value="seguridad">Seguridad</TabsTrigger>
+ *       <TabsTrigger value="details">Datos</TabsTrigger>
+ *       <TabsTrigger value="security">Seguridad</TabsTrigger>
  *     </TabsList>
- *     <TabsContent value="datos">…</TabsContent>
- *     <TabsContent value="seguridad">…</TabsContent>
+ *     <TabsContent value="details">…</TabsContent>
+ *     <TabsContent value="security">…</TabsContent>
  *   </Tabs>
  *
  * Implementa el WAI-ARIA tab pattern: roles `tablist` / `tab` / `tabpanel`,

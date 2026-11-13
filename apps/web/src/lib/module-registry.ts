@@ -43,6 +43,9 @@ export interface ModuleAdminConfigTab {
   /// `/admin/settings`. Por convención = slug del módulo sin prefijo
   /// `mod.` (ej. `mod.zoom-live` → `zoom-live`).
   key: string;
+  /// Valores de `?tab=` que tuvo antes esta pestaña (`aula-virtual`): un
+  /// enlace guardado con uno de ellos abre la pestaña y la URL pasa a `key`.
+  legacyKeys?: readonly string[];
   label: ModuleLocalizedText;
   description: ModuleLocalizedText;
   /// Componente React que renderiza el contenido del tab. Se monta solo
