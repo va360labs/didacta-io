@@ -48,6 +48,25 @@ export function writeSimpleModeCache(value: boolean): void {
   }
 }
 
+/**
+ * El modo del aula para una decisión puntual (el gate del primer acceso): la
+ * caché de la pestaña o, sin ella, `/me/modules`. Un fallo cuenta como modo
+ * completo, el de siempre.
+ */
+export async function simpleModeNow(): Promise<boolean> {
+  const cached = readSimpleModeCache();
+  if (cached !== null) return cached;
+  const token = authStorage.getAccessToken();
+  if (!token) return false;
+  try {
+    const v = (await meApi.getMyModules(token)).simpleMode === true;
+    writeSimpleModeCache(v);
+    return v;
+  } catch {
+    return false;
+  }
+}
+
 /** Avisa a toda la app (shell incluido) de que el modo cambió. */
 export const SIMPLE_MODE_CHANGED_EVENT = 'didacta:modo-sencillo';
 

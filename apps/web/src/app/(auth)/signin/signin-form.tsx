@@ -14,7 +14,6 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { ApiHttpError, apiFetch } from '@/lib/api-client';
 import { authStorage } from '@/lib/auth-storage';
-import { meApi } from '@/lib/me';
 import { apiErrorMessage } from '@/lib/i18n/api-error';
 import { consumeIntendedPath } from '@/lib/post-login-redirect';
 import { invalidateCommunitySpacesCache } from '@/modules/community';
@@ -138,19 +137,10 @@ export function SignInForm() {
         // form de verificación MFA al completar el segundo factor.
         router.push(response.user.mfaEnabled ? '/mfa/verify' : '/mfa/setup');
       } else if (response.user.onboardingCompletedAt === null) {
-        // Ídem: el onboarding lo consume al terminar. Modo sencillo: quien
-        // administra empieza por el alta en 3 preguntas (/bienvenida), que
-        // también deja hecho su perfil; la foto no se le pide.
-        const administra = response.user.roles.some(
-          (r) => r === 'tenant_admin' || r === 'super_admin',
-        );
-        const simple = administra
-          ? await meApi
-              .getMyModules(response.tokens.accessToken)
-              .then((m) => m.simpleMode === true)
-              .catch(() => false)
-          : false;
-        router.push(simple ? '/bienvenida' : '/onboarding');
+        // Ídem: el onboarding lo consume al terminar. También quien lleva un
+        // aula en modo sencillo empieza por su perfil (con la foto opcional)
+        // y de ahí sigue al alta en 3 preguntas: ver `lib/first-access.ts`.
+        router.push('/onboarding');
       } else {
         // Deep link guardado antes del redirect a /signin (p. ej. enlace
         // compartido de un post de la comunidad) → volvemos ahí.

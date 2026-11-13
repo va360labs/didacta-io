@@ -238,6 +238,17 @@
     "editar": "Editar"
   },
   "perfil": {
-    "fotoOpcional": "Opcional. Si no subes ninguna, usamos tus iniciales."
+    "fotoOpcional": "Opcional. Si no subes ninguna, usamos tus iniciales.",
+    "creador": {
+      "antes": "Antes de montar tu academia",
+      "titulo": "Preséntate a tus alumnos",
+      "subtitulo": "Tu foto y tu nombre acompañan todo lo que publiques en tu comunidad. Puedes cambiarlos cuando quieras.",
+      "fotoTexto": "Tus alumnos la verán junto a tus publicaciones. Puedes dejarla para luego: mientras no la subas, usamos tus iniciales.",
+      "saltar": "Dejar para luego",
+      "datosTexto": "Así te verán tus alumnos en tu comunidad.",
+      "bioPlaceholder": "Cuéntales a tus alumnos quién eres y qué enseñas (máx. 280 caracteres)",
+      "listoTexto": "Así te verán tus alumnos. Ahora, tu academia.",
+      "seguir": "Seguir con mi academia"
+    }
   }
 }

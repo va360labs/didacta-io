@@ -5,7 +5,7 @@
  * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
  */
 
-import { useSimpleMode } from '@/lib/simple-mode';
+import { readSimpleModeCache, useSimpleMode } from '@/lib/simple-mode';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
@@ -21,6 +21,7 @@ import { initialsOf } from '@/components/user-chip';
 import { ApiHttpError } from '@/lib/api-client';
 import { authStorage } from '@/lib/auth-storage';
 import { asksSpanishDocument, isDocumentFieldValid } from '@/lib/document-id';
+import { afterProfilePath, isCreatorProfile } from '@/lib/first-access';
 import { consumeIntendedPath } from '@/lib/post-login-redirect';
 import { apiErrorMessage } from '@/lib/i18n/api-error';
 import { toSupportedLocale } from '@/i18n/config';
@@ -33,14 +34,26 @@ import { communityApi } from '@/modules/community';
  * mientras `onboardingCompletedAt` sea null. Captura foto (obligatoria), nombre
  * (obligatorio), bio, idioma/zona horaria, DNI/NIE y preferencias de
  * notificación, y al completar marca el onboarding y entra a /inicio.
+ *
+ * En modo sencillo, quien LLEVA la academia pasa por este mismo paso en su
+ * primer acceso, antes del alta en 3 preguntas (ver `lib/first-access.ts`):
+ * mismas pantallas, textos que le hablan de sus alumnos, la foto se puede
+ * dejar para luego y al terminar sigue hacia su academia.
  */
 export default function OnboardingPage() {
   const router = useRouter();
   const t = useTranslations('auth');
   const uiLocale = useLocale();
   // Modo sencillo: la foto es opcional (avatar con iniciales); la API también.
-  const simple = useSimpleMode() === true;
+  const simpleMode = useSimpleMode();
+  const simple = simpleMode === true;
   const tSimple = useTranslations('modoSencillo');
+  const creador = isCreatorProfile(authStorage.getSession()?.user.roles, simpleMode);
+  const tc = useTranslations('modoSencillo.perfil.creador');
+  // Dentro del efecto de carga el modo aún puede no haber llegado: se mira la
+  // caché, y sin ella /inicio (el gate del shell sabe llevar al creador).
+  const creadorAhora = () =>
+    isCreatorProfile(authStorage.getSession()?.user.roles, readSimpleModeCache());
   const tErrors = useTranslations('errors');
   const { tenant } = useTenantContext();
   const [loading, setLoading] = useState(true);
@@ -79,7 +92,7 @@ export default function OnboardingPage() {
             session.user.onboardingCompletedAt = p.onboardingCompletedAt;
             authStorage.saveSession(session);
           }
-          router.replace(consumeIntendedPath() ?? '/inicio');
+          router.replace(consumeIntendedPath() ?? afterProfilePath(creadorAhora()));
           return;
         }
         setEmail(p.email);
@@ -184,8 +197,9 @@ export default function OnboardingPage() {
         session.user.avatarUrl = avatarUrl;
         authStorage.saveSession(session);
       }
-      // Deep link pendiente de antes del login (enlace compartido) → ahí.
-      router.replace(consumeIntendedPath() ?? '/inicio');
+      // Deep link pendiente de antes del login (enlace compartido) → ahí. Si
+      // no, el creador sigue hacia su academia y el resto a /inicio.
+      router.replace(consumeIntendedPath() ?? afterProfilePath(creador));
     } catch (e) {
       setError(
         e instanceof ApiHttpError ? apiErrorMessage(e, tErrors) : t('onboarding.completeError'),
@@ -194,7 +208,9 @@ export default function OnboardingPage() {
     }
   }
 
-  if (loading) {
+  // Se espera también al modo del aula: sin él, quien lleva la academia vería
+  // un instante los textos del alumno antes de los suyos.
+  if (loading || simpleMode === null) {
     return (
       <Card>
         <CardContent className="p-10 text-center text-text-muted">
@@ -207,13 +223,17 @@ export default function OnboardingPage() {
   return (
     <div className="space-y-6">
       <header className="text-center">
+        {/* El creador aún no ha bautizado su academia (lo hace justo después):
+            «Bienvenido/a a <nombre provisional>» no le diría nada. */}
         <p className="label-uppercase text-text-muted">
-          {t('onboarding.welcome', { name: tenant?.name ?? 'Didacta' })}
+          {creador ? tc('antes') : t('onboarding.welcome', { name: tenant?.name ?? 'Didacta' })}
         </p>
         <h1 className="font-display mt-2 text-2xl font-bold tracking-tight">
-          {t('onboarding.title')}
+          {creador ? tc('titulo') : t('onboarding.title')}
         </h1>
-        <p className="mt-1 text-sm text-text-subtle">{t('onboarding.subtitle')}</p>
+        <p className="mt-1 text-sm text-text-subtle">
+          {creador ? tc('subtitulo') : t('onboarding.subtitle')}
+        </p>
       </header>
 
       <ol className="flex items-center justify-center gap-2">
@@ -243,7 +263,11 @@ export default function OnboardingPage() {
               <div>
                 <h2 className="text-lg font-semibold">{t('onboarding.photoTitle')}</h2>
                 <p className="text-sm text-text-muted">
-                  {simple ? tSimple('perfil.fotoOpcional') : t('onboarding.photoDescription')}
+                  {creador
+                    ? tc('fotoTexto')
+                    : simple
+                      ? tSimple('perfil.fotoOpcional')
+                      : t('onboarding.photoDescription')}
                 </p>
               </div>
               <AvatarUpload
@@ -259,7 +283,9 @@ export default function OnboardingPage() {
             <div className="space-y-4">
               <div>
                 <h2 className="text-lg font-semibold">{t('onboarding.dataTitle')}</h2>
-                <p className="text-sm text-text-muted">{t('onboarding.dataDescription')}</p>
+                <p className="text-sm text-text-muted">
+                  {creador ? tc('datosTexto') : t('onboarding.dataDescription')}
+                </p>
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="ob-name">
@@ -284,7 +310,7 @@ export default function OnboardingPage() {
                   onChange={(e) => setBio(e.target.value)}
                   maxLength={280}
                   rows={3}
-                  placeholder={t('onboarding.bioPlaceholder')}
+                  placeholder={creador ? tc('bioPlaceholder') : t('onboarding.bioPlaceholder')}
                 />
                 <p className="text-right text-xs text-text-subtle">{bio.length}/280</p>
               </div>
@@ -358,7 +384,9 @@ export default function OnboardingPage() {
             <div className="space-y-4">
               <div>
                 <h2 className="text-lg font-semibold">{t('onboarding.readyTitle')}</h2>
-                <p className="text-sm text-text-muted">{t('onboarding.readyDescription')}</p>
+                <p className="text-sm text-text-muted">
+                  {creador ? tc('listoTexto') : t('onboarding.readyDescription')}
+                </p>
               </div>
               <div className="flex items-center gap-4 rounded-lg border border-border-soft p-4">
                 <div
@@ -405,11 +433,18 @@ export default function OnboardingPage() {
             </Button>
             {step < steps.length - 1 ? (
               <Button type="button" disabled={!canNext} onClick={() => setStep((s) => s + 1)}>
-                {t('onboarding.continue')}
+                {/* Sin foto, el creador ve que la está dejando para luego. */}
+                {creador && step === 0 && avatarUrl === null
+                  ? tc('saltar')
+                  : t('onboarding.continue')}
               </Button>
             ) : (
               <Button type="button" disabled={submitting} onClick={() => void handleComplete()}>
-                {submitting ? t('onboarding.submitPending') : t('onboarding.submit')}
+                {submitting
+                  ? t('onboarding.submitPending')
+                  : creador
+                    ? tc('seguir')
+                    : t('onboarding.submit')}
               </Button>
             )}
           </div>

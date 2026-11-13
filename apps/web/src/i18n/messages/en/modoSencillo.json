@@ -238,6 +238,17 @@
     "editar": "Edit"
   },
   "perfil": {
-    "fotoOpcional": "Optional. If you do not upload one, we use your initials."
+    "fotoOpcional": "Optional. If you do not upload one, we use your initials.",
+    "creador": {
+      "antes": "Before you set up your academy",
+      "titulo": "Introduce yourself to your students",
+      "subtitulo": "Your photo and your name go with everything you post in your community. You can change them whenever you like.",
+      "fotoTexto": "Your students will see it next to your posts. You can skip it for now: until you upload one, we use your initials.",
+      "saltar": "Skip for now",
+      "datosTexto": "This is how your students will see you in your community.",
+      "bioPlaceholder": "Tell your students who you are and what you teach (max 280 characters)",
+      "listoTexto": "This is how your students will see you. Next up: your academy.",
+      "seguir": "Continue to my academy"
+    }
   }
 }

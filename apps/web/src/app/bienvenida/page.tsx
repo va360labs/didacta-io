@@ -117,8 +117,16 @@ export default function BienvenidaPage() {
  * aula lea el asistente ya terminado.
  */
 function AltaOAdopcion() {
+  const router = useRouter();
   const [estado, setEstado] = useState<'comprobando' | 'alta'>('comprobando');
   useEffect(() => {
+    // Quien lleva la academia se presenta a sus alumnos ANTES del alta (ver
+    // `lib/first-access.ts`). El gate del shell y el login ya mandan al perfil
+    // primero; esto cubre a quien abre /bienvenida directamente.
+    if (!authStorage.getSession()?.user.onboardingCompletedAt) {
+      router.replace('/onboarding');
+      return;
+    }
     let vivo = true;
     simpleModeApi
       .adopt()
@@ -131,7 +139,7 @@ function AltaOAdopcion() {
     return () => {
       vivo = false;
     };
-  }, []);
+  }, [router]);
   return estado === 'alta' ? <AltaSencilla /> : null;
 }
 
