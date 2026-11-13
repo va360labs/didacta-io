@@ -136,7 +136,12 @@
       "justificante": "Download receipt"
     },
     "tipo": {
-      "CREDIT_RETURN": "Unused discount returned when you cancelled"
+      "CREDIT_RETURN": "Unused discount returned when you cancelled",
+      "ADJUSTMENT": "Refund adjustment"
+    },
+    "estadoAjuste": {
+      "APPROVED": "Deducted from what comes next",
+      "PAID": "Deducted"
     }
   }
 }

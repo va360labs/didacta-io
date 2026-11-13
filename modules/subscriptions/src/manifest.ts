@@ -37,6 +37,7 @@ export const manifest: ModuleManifest = parseModuleManifest({
     'subscriptions.invoice.paid',
     'subscriptions.invoice.payment_failed',
     'subscriptions.invoice.refunded',
+    'subscriptions.invoice.partially_refunded',
     // Membresía (página pública /unete): concede/revoca un grupo de acceso.
     'subscriptions.membership.activated',
     'subscriptions.membership.revoked',

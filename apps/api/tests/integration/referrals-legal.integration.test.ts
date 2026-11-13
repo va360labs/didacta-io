@@ -505,4 +505,128 @@ describeWithDb('Referidos — puntos legales, Postgres real como didacta_app', (
       ).toBe(0);
     });
   });
+
+  describe('7. ventas devueltas después de cobrar', () => {
+    it('ajuste negativo que se descuenta de lo siguiente; reembolso parcial en proporción; B no lo ve', async () => {
+      // Una alumna nueva del aula A, con sus condiciones y datos de cobro.
+      const alumna = (
+        await admin.user.create({
+          data: { tenantId: ids.tenantA, email: `ajustes-${stamp}@example.test`, status: 'ACTIVE' },
+        })
+      ).id;
+      await runAsTenant(ids.tenantA, async () => {
+        await referrals.acceptTerms(ids.tenantA, alumna, {
+          version: REFERRAL_TERMS_VERSION,
+          adult: true,
+        });
+        await referrals.savePayee(ids.tenantA, alumna, {
+          fullName: 'Marta Gil Soto',
+          country: 'ES',
+          taxId: 'X1234567L',
+          iban: 'ES91 2100 0418 4502 0005 1332',
+        });
+      });
+      const referral = await admin.modReferralsReferral.create({
+        data: {
+          tenantId: ids.tenantA,
+          referrerUserId: alumna,
+          referredUserId: (
+            await admin.user.create({
+              data: {
+                tenantId: ids.tenantA,
+                email: `comprador-aj-${stamp}@example.test`,
+                status: 'ACTIVE',
+              },
+            })
+          ).id,
+          code: `ajus${stamp}`.slice(0, 12),
+        },
+      });
+      const commission = (
+        ref: string,
+        amountCents: number,
+        status: 'PENDING' | 'APPROVED' | 'PAID',
+      ) =>
+        admin.modReferralsCommission.create({
+          data: {
+            tenantId: ids.tenantA,
+            referralId: referral.id,
+            referrerUserId: alumna,
+            stripeInvoiceId: ref,
+            baseAmountCents: Math.round(amountCents / 0.3),
+            amountCents,
+            currency: 'eur',
+            commissionBps: 3000,
+            status,
+            approveAfter: new Date(),
+            approvedAt: status === 'PENDING' ? null : new Date(),
+          },
+        });
+
+      // a) Reembolso PARCIAL de una venta aún sin cobrar: recorte proporcional.
+      const order = randomUUID();
+      await commission(`order:${order}`, 1470, 'PENDING'); // venta de 49 €
+      const parcial = await runAsTenant(ids.tenantA, () =>
+        referrals.applyRefund(
+          ids.tenantA,
+          `order:${order}`,
+          { refundedCents: 1225, totalCents: 4900 },
+          'Devolución parcial',
+        ),
+      );
+      // Se devuelve una cuarta parte: 36,75 € × 30 % = 11,03 €.
+      expect(parcial).toMatchObject({ action: 'reduced', amountCents: 1103 });
+
+      // b) Venta YA cobrada que se devuelve entera: ajuste negativo.
+      const paidOrder = randomUUID();
+      const paid = await commission(`order:${paidOrder}`, 1470, 'PAID');
+      const total = await runAsTenant(ids.tenantA, () =>
+        referrals.revokeCommissionByInvoice(ids.tenantA, `order:${paidOrder}`, 'Reembolso'),
+      );
+      expect(total).toMatchObject({ revoked: false, reason: 'already_paid' });
+      const adj = await admin.modReferralsCommission.findFirstOrThrow({
+        where: { tenantId: ids.tenantA, adjustsCommissionId: paid.id },
+      });
+      expect(adj).toMatchObject({ kind: 'ADJUSTMENT', amountCents: -1470, status: 'APPROVED' });
+
+      // c) Con 10 € confirmados el ajuste (−14,70 €) no cabe: se cobran los 10 €
+      //    y el ajuste espera. Nunca se le reclama nada.
+      await commission(`legal:${randomUUID()}`, 1000, 'APPROVED');
+      const first = await runAsTenant(ids.tenantA, () =>
+        referrals.requestCashPayout(ids.tenantA, alumna),
+      );
+      expect(first.totalCents).toBe(1000);
+      expect(
+        (await admin.modReferralsCommission.findUniqueOrThrow({ where: { id: adj.id } })).payoutId,
+      ).toBeNull();
+      await runAsTenant(ids.tenantA, () =>
+        referrals.markCashPayoutPaid(ids.tenantA, first.payoutId, {
+          externalReference: 'TRF-AJ-1',
+          actorId: alumna,
+        }),
+      );
+
+      // d) Lo siguiente que gana (30 €) absorbe el ajuste: cobra 15,30 €.
+      await commission(`legal:${randomUUID()}`, 3000, 'APPROVED');
+      const second = await runAsTenant(ids.tenantA, () =>
+        referrals.requestCashPayout(ids.tenantA, alumna),
+      );
+      expect(second.totalCents).toBe(1530);
+      expect(
+        (await admin.modReferralsCommission.findUniqueOrThrow({ where: { id: adj.id } })).payoutId,
+      ).toBe(second.payoutId);
+
+      // «Lo que has ganado» lo muestra como ajuste (negativo).
+      const stats = await runAsTenant(ids.tenantA, () =>
+        referrals.memberStats(ids.tenantA, alumna),
+      );
+      expect(stats.commissions.find((c) => c.kind === 'ADJUSTMENT')?.amountCents).toBe(-1470);
+      // Aislamiento.
+      expect(
+        await runAsTenant(ids.tenantB, async () =>
+          prisma.modReferralsCommission.count({ where: { kind: 'ADJUSTMENT' } }),
+        ),
+      ).toBe(0);
+    });
+  });
 });

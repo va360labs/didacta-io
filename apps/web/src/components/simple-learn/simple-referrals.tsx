@@ -52,16 +52,20 @@ export function referralFigures(
   const y = now.getUTCFullYear();
   const m = now.getUTCMonth();
   const thisMonthCents = stats.commissions
-    .filter((c) => c.status !== 'REVOKED')
+    .filter((c) => c.status !== 'REVOKED' && c.kind !== 'CREDIT_RETURN')
     .filter((c) => {
       const d = new Date(c.createdAt);
       return d.getUTCFullYear() === y && d.getUTCMonth() === m;
     })
     .reduce((sum, c) => sum + c.amountCents, 0);
+  // El saldo devuelto al darse de baja no es ganancia nueva.
   return {
-    earnedCents: stats.totals.approvedCents + stats.totals.paidCents + stats.totals.pendingCents,
+    earnedCents: Math.max(
+      0,
+      stats.totals.approvedCents + stats.totals.paidCents + stats.totals.pendingCents,
+    ),
     pendingCents: stats.totals.pendingCents,
-    thisMonthCents,
+    thisMonthCents: Math.max(0, thisMonthCents),
     people: stats.referrals,
     currency: (stats.commissions[0]?.currency ?? 'eur').toUpperCase(),
   };
@@ -506,9 +510,11 @@ export function SimpleReferrals() {
                       <div className="text-xs text-text-subtle">
                         {c.kind === 'CREDIT_RETURN'
                           ? t('tipo.CREDIT_RETURN')
-                          : t('sobre', {
-                              amount: formatCents(c.baseAmountCents, c.currency.toUpperCase()),
-                            })}
+                          : c.kind === 'ADJUSTMENT'
+                            ? t('tipo.ADJUSTMENT')
+                            : t('sobre', {
+                                amount: formatCents(c.baseAmountCents, c.currency.toUpperCase()),
+                              })}
                       </div>
                     </div>
                     <span
@@ -517,7 +523,9 @@ export function SimpleReferrals() {
                         STATUS_TONE[c.status],
                       )}
                     >
-                      {t(`estado.${c.status}`)}
+                      {c.kind === 'ADJUSTMENT'
+                        ? t(c.status === 'PAID' ? 'estadoAjuste.PAID' : 'estadoAjuste.APPROVED')
+                        : t(`estado.${c.status}`)}
                     </span>
                     <span className="w-20 text-right font-bold text-text tabular-nums">
                       {formatCents(c.amountCents, c.currency.toUpperCase())}

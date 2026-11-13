@@ -915,7 +915,7 @@ describe('BillingService — handleWebhookEvent (idempotente)', () => {
     expect(publisher.events[0]!.payload.courseId).toBe('course-1');
   });
 
-  it('un reembolso PARCIAL no retira el acceso ni marca la orden', async () => {
+  it('un reembolso PARCIAL no retira el acceso ni marca la orden; avisa con lo devuelto acumulado', async () => {
     const orderId = await comprarYCobrar();
 
     await svc.handleWebhookEvent(
@@ -925,7 +925,14 @@ describe('BillingService — handleWebhookEvent (idempotente)', () => {
     );
 
     expect(prisma.orders.get(orderId)!.status).toBe('COMPLETED');
-    expect(publisher.events).toHaveLength(0);
+    // Nada de `billing.order.refunded` (retiraría el acceso): solo el parcial,
+    // para recortar en proporción la comisión de referidos.
+    expect(publisher.events.map((e) => e.name)).toEqual(['billing.order.partially_refunded']);
+    expect(publisher.events[0]!.payload).toMatchObject({
+      orderId,
+      amountRefunded: 500,
+      amountTotal: 1999,
+    });
   });
 
   it('un reembolso de un cobro AJENO (otro módulo) no toca ninguna orden', async () => {

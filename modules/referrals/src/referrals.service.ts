@@ -346,6 +346,37 @@ function creditCap(unitAmount: number): number {
   return Math.floor((unitAmount * CREDIT_MAX_SHARE_BPS) / 10_000);
 }
 
+/** Comisión que queda tras devolver `refunded` de una base, con el % sellado. */
+function refundTarget(base: number, refunded: number, bps: number): number {
+  return Math.round(((base - refunded) * bps) / 10_000);
+}
+
+/**
+ * Qué entra en un cobro: las comisiones positivas que caben en `cap` (las más
+ * antiguas primero) y, a continuación, los ajustes por devolución (negativos)
+ * mientras el neto siga siendo positivo. Un ajuste que no cabe espera al
+ * siguiente cobro: nunca deja un neto exigible.
+ */
+export function netAgainstAdjustments<T extends { amountCents: number }>(
+  rows: readonly T[],
+  cap: number,
+): T[] {
+  const picked: T[] = [];
+  let total = 0;
+  for (const r of rows) {
+    if (r.amountCents <= 0 || total + r.amountCents > cap) continue;
+    picked.push(r);
+    total += r.amountCents;
+  }
+  for (const r of rows) {
+    if (r.amountCents >= 0) continue;
+    if (total + r.amountCents <= 0) continue;
+    picked.push(r);
+    total += r.amountCents;
+  }
+  return total > 0 ? picked : [];
+}
+
 /** Concepto de una línea del justificante. */
 function receiptConcept(
   c: { amountCents: number; baseAmountCents: number; commissionBps: number; currency: string },
@@ -1033,10 +1064,10 @@ export class ReferralsService {
   }
 
   /**
-   * Revocación AUTOMÁTICA por reembolso del cobro origen (evento
-   * `subscriptions.invoice.refunded`). No lanza: el bridge loguea el
-   * resultado. Una comisión ya PAGADA no se toca (clawback = decisión
-   * manual del operador); el caso queda señalado para revisión.
+   * Reembolso TOTAL del cobro origen (`subscriptions.invoice.refunded`,
+   * `billing.order.refunded`). Con la comisión aún sin cobrar, se anula; ya
+   * cobrada (en dinero o como descuento), queda un ajuste negativo que se
+   * descuenta de lo siguiente que gane. No lanza: el bridge loguea.
    */
   async revokeCommissionByInvoice(
     tenantId: string,
@@ -1044,30 +1075,129 @@ export class ReferralsService {
     reason: string,
   ): Promise<
     | { revoked: true; commissionId: string }
-    | { revoked: false; reason: 'not_found' | 'already_revoked' | 'already_paid' }
+    | { revoked: false; reason: 'not_found' | 'already_revoked' }
+    | { revoked: false; reason: 'already_paid'; adjustmentId: string | null }
   > {
-    const commission = await this.prisma.modReferralsCommission.findUnique({
-      where: { stripeInvoiceId },
-    });
-    if (!commission || commission.tenantId !== tenantId) {
-      return { revoked: false, reason: 'not_found' };
-    }
-    if (commission.status === 'REVOKED') return { revoked: false, reason: 'already_revoked' };
-    if (commission.status === 'PAID') return { revoked: false, reason: 'already_paid' };
-
-    // Optimista: solo revoca si sigue PENDING/APPROVED (carrera con payout).
-    const updated = await this.prisma.modReferralsCommission.updateMany({
-      where: { id: commission.id, status: { in: ['PENDING', 'APPROVED'] } },
-      data: { status: 'REVOKED', revokedAt: new Date(), revokeReason: reason },
-    });
-    if (updated.count === 0) return { revoked: false, reason: 'already_paid' };
-
-    await this.publisher.publish(tenantId, null, REFERRALS_EVENT.COMMISSION_REVOKED, {
-      commissionId: commission.id,
-      referrerUserId: commission.referrerUserId,
+    const result = await this.applyRefund(
+      tenantId,
+      stripeInvoiceId,
+      { refundedCents: 1, totalCents: 1 },
       reason,
-    });
-    return { revoked: true, commissionId: commission.id };
+    );
+    if (result.action === 'not_found') return { revoked: false, reason: 'not_found' };
+    if (result.action === 'already_revoked' || result.action === 'no_change') {
+      return { revoked: false, reason: 'already_revoked' };
+    }
+    if (result.action === 'adjusted') {
+      return { revoked: false, reason: 'already_paid', adjustmentId: result.adjustmentId };
+    }
+    if (result.action === 'revoked' || result.action === 'reduced') {
+      return { revoked: true, commissionId: result.commissionId };
+    }
+    return { revoked: false, reason: 'not_found' };
+  }
+
+  /**
+   * Reembolso (total o PARCIAL) del cobro origen: recorta la comisión en la
+   * misma proporción. `refundedCents` es lo devuelto ACUMULADO (como lo da
+   * Stripe) sobre `totalCents`: un evento reentregado no recorta dos veces.
+   *
+   * - Comisión sin cobrar (PENDING, o APPROVED sin liquidar): baja su importe;
+   *   si llega a 0, se anula (REVOKED).
+   * - Ya cobrada o reservada en un cobro: fila ADJUSTMENT negativa, APPROVED y
+   *   sin liquidar, que se descuenta de lo siguiente que gane. Nunca deja un
+   *   saldo exigible al alumno: si no gana más, se queda ahí.
+   */
+  async applyRefund(
+    tenantId: string,
+    stripeInvoiceId: string,
+    refund: { refundedCents: number; totalCents: number },
+    reason: string,
+  ): Promise<
+    | { action: 'not_found' | 'already_revoked' | 'no_change' }
+    | { action: 'reduced' | 'revoked'; commissionId: string; amountCents: number }
+    | { action: 'adjusted'; commissionId: string; adjustmentId: string | null; amountCents: number }
+  > {
+    const c = await this.prisma.modReferralsCommission.findUnique({ where: { stripeInvoiceId } });
+    if (!c || c.tenantId !== tenantId || c.kind !== 'COMMISSION') return { action: 'not_found' };
+    if (c.status === 'REVOKED') return { action: 'already_revoked' };
+    const base = c.baseAmountCents;
+    const refunded =
+      refund.totalCents > 0
+        ? Math.min(base, Math.round((base * refund.refundedCents) / refund.totalCents))
+        : base;
+    if (refunded <= c.refundedBaseCents) return { action: 'no_change' };
+    const target = refundTarget(base, refunded, c.commissionBps);
+    const previous = refundTarget(base, c.refundedBaseCents, c.commissionBps);
+    const cut = previous - target;
+
+    // Sin cobrar: se recorta (o se anula) la propia comisión.
+    if (c.status === 'PENDING' || (c.status === 'APPROVED' && c.payoutId === null)) {
+      const revoke = target <= 0;
+      const updated = await this.prisma.modReferralsCommission.updateMany({
+        where: {
+          id: c.id,
+          tenantId,
+          status: { in: ['PENDING', 'APPROVED'] },
+          payoutId: null,
+          refundedBaseCents: c.refundedBaseCents,
+        },
+        data: {
+          amountCents: Math.max(0, target),
+          refundedBaseCents: refunded,
+          ...(revoke ? { status: 'REVOKED', revokedAt: new Date(), revokeReason: reason } : {}),
+        },
+      });
+      if (updated.count === 1) {
+        if (revoke) {
+          await this.publisher.publish(tenantId, null, REFERRALS_EVENT.COMMISSION_REVOKED, {
+            commissionId: c.id,
+            referrerUserId: c.referrerUserId,
+            reason,
+          });
+        }
+        return { action: revoke ? 'revoked' : 'reduced', commissionId: c.id, amountCents: target };
+      }
+      // Carrera con un cobro o con otro reembolso: se trata como ya cobrada.
+      return this.applyRefund(tenantId, stripeInvoiceId, refund, reason);
+    }
+
+    // Ya cobrada (o reservada en un cobro en dinero): ajuste negativo.
+    const now = new Date();
+    try {
+      const adjustmentId = await this.prisma.$transaction(async (tx) => {
+        const db = tx as unknown as PrismaClient;
+        const moved = await db.modReferralsCommission.updateMany({
+          where: { id: c.id, tenantId, refundedBaseCents: c.refundedBaseCents },
+          data: { refundedBaseCents: refunded },
+        });
+        if (moved.count !== 1) return null;
+        if (cut <= 0) return null;
+        const adj = await db.modReferralsCommission.create({
+          data: {
+            tenantId,
+            referralId: c.referralId,
+            referrerUserId: c.referrerUserId,
+            stripeInvoiceId: `refund-adjust:${c.id}:${refunded}`,
+            baseAmountCents: -(refunded - c.refundedBaseCents),
+            amountCents: -cut,
+            currency: c.currency,
+            commissionBps: c.commissionBps,
+            kind: 'ADJUSTMENT',
+            adjustsCommissionId: c.id,
+            status: 'APPROVED',
+            approveAfter: now,
+            approvedAt: now,
+            revokeReason: reason,
+          },
+        });
+        return adj.id;
+      });
+      return { action: 'adjusted', commissionId: c.id, adjustmentId, amountCents: -cut };
+    } catch (err) {
+      if (isUniqueViolation(err)) return { action: 'no_change' };
+      throw err;
+    }
   }
 
   // ---------------- Liquidación ----------------
@@ -1118,7 +1248,32 @@ export class ReferralsService {
       throw new ReferralsPayoutValidationError('No se pueden mezclar monedas en una liquidación.');
     }
     const currency = commissions[0]!.currency;
-    const totalCents = commissions.reduce((sum, c) => sum + c.amountCents, 0);
+    // Los ajustes por devolución pendientes del referidor se descuentan de
+    // este pago (mientras quede algo que pagar).
+    const adjustments = await this.prisma.modReferralsCommission.findMany({
+      where: {
+        tenantId,
+        referrerUserId: input.referrerUserId,
+        status: 'APPROVED',
+        payoutId: null,
+        currency,
+        amountCents: { lt: 0 },
+        id: { notIn: input.commissionIds },
+      },
+      orderBy: { createdAt: 'asc' },
+      select: { id: true, amountCents: true },
+    });
+    const netted = netAgainstAdjustments(
+      [...commissions.map((c) => ({ id: c.id, amountCents: c.amountCents })), ...adjustments],
+      Number.POSITIVE_INFINITY,
+    );
+    input = { ...input, commissionIds: netted.map((r) => r.id) };
+    const totalCents = netted.reduce((sum, c) => sum + c.amountCents, 0);
+    if (totalCents <= 0) {
+      throw new ReferralsPayoutValidationError(
+        'Con los ajustes por devolución pendientes no queda nada que pagar.',
+      );
+    }
 
     const config = await this.getConfig(tenantId);
     if (config.minPayoutCents > 0 && totalCents < config.minPayoutCents) {
@@ -1416,9 +1571,12 @@ export class ReferralsService {
           orderBy: [{ approvedAt: 'asc' }, { createdAt: 'asc' }],
           select: { id: true, amountCents: true, currency: true },
         });
-        // Una sola divisa por cobro: la de la comisión confirmada más antigua.
-        const currency = rows[0]?.currency;
-        const picked = rows.filter((r) => r.currency === currency);
+        // Una sola divisa por cobro: la de la comisión positiva más antigua.
+        const currency = rows.find((r) => r.amountCents > 0)?.currency;
+        const picked = netAgainstAdjustments(
+          rows.filter((r) => r.currency === currency),
+          Number.POSITIVE_INFINITY,
+        );
         const totalCents = picked.reduce((sum, r) => sum + r.amountCents, 0);
         if (!currency || totalCents <= 0) {
           throw new ReferralsPayoutValidationError('Todavía no tienes nada confirmado que cobrar.');
@@ -2022,14 +2180,11 @@ export class ReferralsService {
       orderBy: [{ approvedAt: 'asc' }, { createdAt: 'asc' }],
       select: { id: true, amountCents: true },
     });
-    const ids: string[] = [];
-    let totalCents = 0;
-    for (const row of rows) {
-      if (row.amountCents <= 0 || totalCents + row.amountCents > capCents) continue;
-      ids.push(row.id);
-      totalCents += row.amountCents;
-    }
-    return { ids, totalCents };
+    const picked = netAgainstAdjustments(rows, capCents);
+    return {
+      ids: picked.map((r) => r.id),
+      totalCents: picked.reduce((sum, r) => sum + r.amountCents, 0),
+    };
   }
 
   /**

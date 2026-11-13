@@ -136,7 +136,12 @@
       "justificante": "Descargar justificante"
     },
     "tipo": {
-      "CREDIT_RETURN": "Descuento sin usar devuelto al darte de baja"
+      "CREDIT_RETURN": "Descuento sin usar devuelto al darte de baja",
+      "ADJUSTMENT": "Ajuste por devolución"
+    },
+    "estadoAjuste": {
+      "APPROVED": "Se descontará de lo próximo",
+      "PAID": "Descontado"
     }
   }
 }

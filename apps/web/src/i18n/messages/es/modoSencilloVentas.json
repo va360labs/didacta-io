@@ -92,7 +92,9 @@
       "iban": "IBAN",
       "error": "No se ha podido guardar. Vuelve a intentarlo.",
       "justificante": "Justificante"
-    }
+    },
+    "ajuste": "Ajuste por devolución",
+    "saldoDevuelto": "Descuento sin usar devuelto al darse de baja"
   },
   "propias": {
     "titulo": "Ventas",

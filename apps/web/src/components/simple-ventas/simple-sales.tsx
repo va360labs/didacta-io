@@ -764,9 +764,13 @@ function ReferralsSection() {
                   >
                     <span className="min-w-0">
                       <span className="block font-semibold text-text">
-                        {t('pago', {
-                          base: formatCents(r.baseAmountCents, r.currency.toUpperCase()),
-                        })}
+                        {r.kind === 'ADJUSTMENT'
+                          ? t('ajuste')
+                          : r.kind === 'CREDIT_RETURN'
+                            ? t('saldoDevuelto')
+                            : t('pago', {
+                                base: formatCents(r.baseAmountCents, r.currency.toUpperCase()),
+                              })}
                       </span>
                       <span className="text-[13px] text-text-subtle">
                         {formatDate(r.createdAt, { dateStyle: 'medium' })} ·{' '}

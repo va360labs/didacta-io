@@ -191,6 +191,7 @@ const EVENT = {
   ORDER_COMPLETED: 'billing.order.completed',
   ORDER_FAILED: 'billing.order.failed',
   ORDER_REFUNDED: 'billing.order.refunded',
+  ORDER_PARTIALLY_REFUNDED: 'billing.order.partially_refunded',
 } as const;
 
 export class BillingService {
@@ -1119,7 +1120,20 @@ export class BillingService {
     const total = charge.amount ?? 0;
     const devuelto = charge.amount_refunded ?? 0;
     const esTotal = devuelto > 0 && devuelto >= total;
-    if (!esTotal) return; // parcial: no tocamos el acceso.
+    if (!esTotal) {
+      // Parcial: no tocamos el acceso ni el estado de la orden. Se avisa con
+      // lo devuelto ACUMULADO (lo da Stripe) para recortar en proporción lo
+      // que dependa del importe (la comisión de referidos).
+      if (devuelto > 0 && order.status === 'COMPLETED') {
+        await this.publisher.publish(order.tenantId, order.userId, EVENT.ORDER_PARTIALLY_REFUNDED, {
+          orderId: order.id,
+          amountRefunded: devuelto,
+          amountTotal: total,
+          currency: charge.currency,
+        });
+      }
+      return;
+    }
 
     await this.prisma.modBillingOrder.update({
       where: { id: order.id },

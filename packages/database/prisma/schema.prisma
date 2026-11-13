@@ -4168,6 +4168,12 @@ model ModReferralsCommission {
   /// sin usar devuelto a la cartera al darse de baja; ADJUSTMENT = ajuste por
   /// devolución (negativo) de una venta reembolsada ya cobrada.
   kind            String                   @default("COMMISSION")
+  /// Parte de la base ya devuelta al comprador (reembolsos parciales
+  /// acumulados): la comisión se recorta en proporción.
+  refundedBaseCents Int                    @default(0) @map("refunded_base_cents")
+  /// En un ADJUSTMENT: la comisión cuya venta se devolvió (sin FK: misma tabla,
+  /// y el ajuste debe sobrevivir aunque se archive la original).
+  adjustsCommissionId String?              @map("adjusts_commission_id") @db.Uuid
   status          ReferralCommissionStatus @default(PENDING)
   /// PENDING → APPROVED cuando vence (createdAt + guaranteeDays). El worker
   /// la aprueba al pasar; el admin puede revocar antes.

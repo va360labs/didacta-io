@@ -43,6 +43,13 @@ export interface BillingOrderRefundedPayload {
   orderId: string;
 }
 
+export interface BillingOrderPartiallyRefundedPayload {
+  orderId: string;
+  /** Lo devuelto ACUMULADO de la compra. */
+  amountRefunded: number;
+  amountTotal: number;
+}
+
 @Injectable()
 export class ReferralsBillingBridge implements OnModuleInit {
   constructor(
@@ -63,6 +70,12 @@ export class ReferralsBillingBridge implements OnModuleInit {
       'billing.order.refunded',
       async (event: DomainEvent<BillingOrderRefundedPayload>) => {
         await this.onOrderRefunded(event);
+      },
+    );
+    eventBus.subscribe<BillingOrderPartiallyRefundedPayload>(
+      'billing.order.partially_refunded',
+      async (event: DomainEvent<BillingOrderPartiallyRefundedPayload>) => {
+        await this.onOrderPartiallyRefunded(event);
       },
     );
     this.logger.log({}, 'ReferralsBillingBridge: subscribed to billing order events');
@@ -125,15 +138,44 @@ export class ReferralsBillingBridge implements OnModuleInit {
           'referrals: comisión anulada por reembolso de la compra',
         );
       } else if (result.reason === 'already_paid') {
-        this.logger.warn(
-          { tenantId, orderId },
-          'referrals: reembolso de una compra cuya comisión YA se pagó (clawback manual)',
+        this.logger.log(
+          { tenantId, orderId, adjustmentId: result.adjustmentId },
+          'referrals: compra reembolsada con la comisión ya cobrada: ajuste por devolución',
         );
       }
     } catch (err) {
       this.logger.error(
         { tenantId, orderId, err: err instanceof Error ? err.message : String(err) },
         'referrals: fallo al anular la comisión de una compra reembolsada',
+      );
+    }
+  }
+
+  /** Devolución de una parte de la compra: la comisión se recorta en proporción. */
+  async onOrderPartiallyRefunded(
+    event: DomainEvent<BillingOrderPartiallyRefundedPayload>,
+  ): Promise<void> {
+    const tenantId = event.metadata.tenantId;
+    const { orderId, amountRefunded, amountTotal } = event.data;
+    try {
+      const result = await this.registry
+        .getReferralsService()
+        .applyRefund(
+          tenantId,
+          purchaseInvoiceRef(orderId),
+          { refundedCents: amountRefunded, totalCents: amountTotal },
+          'Devolución parcial de la compra',
+        );
+      if (result.action !== 'not_found' && result.action !== 'no_change') {
+        this.logger.log(
+          { tenantId, orderId, action: result.action },
+          'referrals: comisión recortada por una devolución parcial',
+        );
+      }
+    } catch (err) {
+      this.logger.error(
+        { tenantId, orderId, err: err instanceof Error ? err.message : String(err) },
+        'referrals: fallo al recortar la comisión de una devolución parcial',
       );
     }
   }

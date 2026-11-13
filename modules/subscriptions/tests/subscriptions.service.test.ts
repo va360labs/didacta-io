@@ -1844,7 +1844,7 @@ describe('SubscriptionsService — reembolsos y barrido de gracia', () => {
     });
   }
 
-  it('un reembolso PARCIAL no revoca la comision del referidor (L9)', async () => {
+  it('un reembolso PARCIAL no revoca la comision del referidor (L9): la recorta en proporcion', async () => {
     const { service, prisma, publisher } = buildSystem();
     subActiva(prisma);
     facturaDe(prisma);
@@ -1864,7 +1864,16 @@ describe('SubscriptionsService — reembolsos y barrido de gracia', () => {
 
     await service.handleWebhookEvent(event, {}, { tenantId: 't' });
 
-    expect(publisher.events.some((e) => e.name.includes('refunded'))).toBe(false);
+    // No se revoca (sin `subscriptions.invoice.refunded`): se avisa del parcial
+    // para recortar la comisión en proporción.
+    expect(publisher.events.map((e) => e.name)).toEqual([
+      'subscriptions.invoice.partially_refunded',
+    ]);
+    expect(publisher.events[0]!.payload).toMatchObject({
+      stripeInvoiceId: 'in_1',
+      amountRefunded: 100,
+      amountTotal: 1999,
+    });
   });
 
   it('un reembolso TOTAL si la revoca', async () => {

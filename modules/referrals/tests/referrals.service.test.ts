@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import {
   REFERRAL_TERMS_VERSION,
+  netAgainstAdjustments,
   ReferralsService,
   creditIdempotencyKey,
   purchaseInvoiceRef,
@@ -241,6 +242,10 @@ class MockPrisma {
         if (w['referralId'] && c['referralId'] !== w['referralId']) return false;
         const idIn = (w['id'] as Row | undefined)?.['in'] as string[] | undefined;
         if (idIn && !idIn.includes(c['id'] as string)) return false;
+        const idNotIn = (w['id'] as Row | undefined)?.['notIn'] as string[] | undefined;
+        if (idNotIn && idNotIn.includes(c['id'] as string)) return false;
+        const lt = (w['amountCents'] as Row | undefined)?.['lt'] as number | undefined;
+        if (lt !== undefined && !((c['amountCents'] as number) < lt)) return false;
         if ('payoutId' in w && w['payoutId'] === null && c['payoutId'] != null) return false;
         if (w['currency'] && c['currency'] !== w['currency']) return false;
         const approveAfter = (w['approveAfter'] as Row | undefined)?.['lte'] as Date | undefined;
@@ -257,7 +262,15 @@ class MockPrisma {
       if (this.commissions.some((c) => c['stripeInvoiceId'] === d['stripeInvoiceId'])) {
         throw uniqueViolation();
       }
-      const row = { id: nextId('com'), createdAt: new Date(), updatedAt: new Date(), ...d };
+      const row = {
+        id: nextId('com'),
+        kind: 'COMMISSION',
+        refundedBaseCents: 0,
+        payoutId: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        ...d,
+      };
       this.commissions.push(row);
       return row;
     },
@@ -275,6 +288,11 @@ class MockPrisma {
         if (!idIn && w['id'] && c['id'] !== w['id']) return false;
         if (w['tenantId'] && c['tenantId'] !== w['tenantId']) return false;
         if ('payoutId' in w && w['payoutId'] === null && c['payoutId'] != null) return false;
+        if (
+          'refundedBaseCents' in w &&
+          ((c['refundedBaseCents'] as number | undefined) ?? 0) !== w['refundedBaseCents']
+        )
+          return false;
         const status = w['status'];
         if (status) {
           const statusIn =
@@ -1184,7 +1202,7 @@ describe('revokeCommissionByInvoice (reembolso)', () => {
     expect(events.some((e) => e.name === 'referrals.commission.revoked')).toBe(true);
   });
 
-  it('revoca también una APPROVED, pero nunca una PAID (clawback manual)', async () => {
+  it('revoca también una APPROVED; una PAID no se toca: queda un ajuste negativo', async () => {
     const { prisma, service } = build();
     const commissionId = await seedPending(prisma, service);
     await service.approveCommissionNow(TENANT, commissionId);
@@ -1204,6 +1222,43 @@ describe('revokeCommissionByInvoice (reembolso)', () => {
     const blocked = await paid.service.revokeCommissionByInvoice(TENANT, 'in_refund', 'refund');
     expect(blocked).toMatchObject({ revoked: false, reason: 'already_paid' });
     expect(paid.prisma.commissions[0]!['status']).toBe('PAID');
+    // 990 × 30 % = 297 ya cobrados: ajuste por devolución de −297, sin liquidar.
+    const adj = paid.prisma.commissions.find((c) => c['kind'] === 'ADJUSTMENT')!;
+    expect(adj).toMatchObject({
+      amountCents: -297,
+      status: 'APPROVED',
+      payoutId: null,
+      adjustsCommissionId: paidId,
+    });
+    // El reembolso reentregado no crea un segundo ajuste.
+    await paid.service.revokeCommissionByInvoice(TENANT, 'in_refund', 'refund');
+    expect(paid.prisma.commissions.filter((c) => c['kind'] === 'ADJUSTMENT')).toHaveLength(1);
+  });
+
+  it('un reembolso PARCIAL recorta la comisión en proporción (y no dos veces)', async () => {
+    const { prisma, service } = build();
+    await seedPending(prisma, service); // base 990, comisión 297
+    // Se devuelven 330 de 990 (un tercio): la comisión queda en 198.
+    const r = await service.applyRefund(
+      TENANT,
+      'in_refund',
+      { refundedCents: 330, totalCents: 990 },
+      'parcial',
+    );
+    expect(r).toMatchObject({ action: 'reduced', amountCents: 198 });
+    expect(prisma.commissions[0]).toMatchObject({
+      status: 'PENDING',
+      amountCents: 198,
+      refundedBaseCents: 330,
+    });
+    // Mismo acumulado reentregado: nada.
+    expect(
+      await service.applyRefund(TENANT, 'in_refund', { refundedCents: 330, totalCents: 990 }, 'x'),
+    ).toEqual({ action: 'no_change' });
+    // El resto: anulada.
+    expect(
+      await service.applyRefund(TENANT, 'in_refund', { refundedCents: 990, totalCents: 990 }, 'x'),
+    ).toMatchObject({ action: 'revoked' });
   });
 
   it('invoice desconocida o de otro tenant → not_found; doble reembolso → already_revoked', async () => {
@@ -1531,5 +1586,38 @@ describe('descuento en la cuota: redeemAsCredit', () => {
 describe('utcDay', () => {
   it('devuelve YYYY-MM-DD en UTC', () => {
     expect(utcDay(new Date('2026-07-24T23:59:59Z'))).toBe('2026-07-24');
+  });
+});
+
+describe('ajustes por devolución: se descuentan de lo siguiente, nunca se reclaman', () => {
+  it('netAgainstAdjustments: positivos dentro del tope y luego ajustes mientras el neto sea > 0', () => {
+    const row = (id: string, amountCents: number) => ({ id, amountCents });
+    expect(
+      netAgainstAdjustments([row('a', 1000), row('aj', -297)], Infinity).map((r) => r.id),
+    ).toEqual(['a', 'aj']);
+    // El ajuste no cabe: espera entero al siguiente cobro.
+    expect(
+      netAgainstAdjustments([row('a', 200), row('aj', -297)], Infinity).map((r) => r.id),
+    ).toEqual(['a']);
+    // Solo ajustes: nada que cobrar (nunca un neto exigible).
+    expect(netAgainstAdjustments([row('aj', -297)], Infinity)).toEqual([]);
+    // Con tope (descuento en cuota).
+    expect(
+      netAgainstAdjustments([row('a', 900), row('b', 300), row('aj', -100)], 1000).map((r) => r.id),
+    ).toEqual(['a', 'aj']);
+  });
+
+  it('el canje como descuento compensa el ajuste pendiente', async () => {
+    const { port, calls } = fakeCreditPort();
+    const { prisma, service } = build({ creditPort: port });
+    seedMember(prisma, [
+      { amountCents: 900, status: 'APPROVED' },
+      { amountCents: -300, status: 'APPROVED' },
+    ]);
+    prisma.commissions[1]!['kind'] = 'ADJUSTMENT';
+    const result = await service.redeemAsCredit(TENANT, 'referrer-1');
+    expect(result.totalCents).toBe(600);
+    expect(calls[0]!.amountCents).toBe(600);
+    expect(prisma.commissions.every((c) => c['status'] === 'PAID')).toBe(true);
   });
 });

@@ -37,9 +37,11 @@ export const manifest: ModuleManifest = parseModuleManifest({
     'subscriptions.invoice.paid',
     'subscriptions.invoice.refunded',
     'subscriptions.subscription.canceled',
+    'subscriptions.invoice.partially_refunded',
     // Compra suelta (curso de pago único) con `attribution.referralCode`.
     'billing.order.completed',
     'billing.order.refunded',
+    'billing.order.partially_refunded',
   ],
   apiNamespace: '/modules/referrals',
 });

@@ -28,6 +28,7 @@ export {
   CREDIT_MAX_SHARE_BPS,
   creditIdempotencyKey,
   uncreditIdempotencyKey,
+  netAgainstAdjustments,
   REFERRAL_TERMS_VERSION,
   REFERRAL_CREDIT_LABEL,
 } from './referrals.service.js';

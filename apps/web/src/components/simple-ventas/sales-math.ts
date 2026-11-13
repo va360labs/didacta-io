@@ -38,9 +38,13 @@ export function referralSales(
     status: ReferralCommissionStatus;
     baseAmountCents: number;
     currency: string;
+    kind?: 'COMMISSION' | 'CREDIT_RETURN' | 'ADJUSTMENT';
   }>,
 ): { count: number; byCurrency: Array<{ currency: string; base: number }> } {
-  const valid = rows.filter((r) => r.status !== 'REVOKED');
+  // Solo las ventas: ni ajustes por devolución ni saldo devuelto al darse de baja.
+  const valid = rows.filter(
+    (r) => r.status !== 'REVOKED' && (r.kind === undefined || r.kind === 'COMMISSION'),
+  );
   const map = new Map<string, number>();
   for (const r of valid) map.set(r.currency, (map.get(r.currency) ?? 0) + r.baseAmountCents);
   return {

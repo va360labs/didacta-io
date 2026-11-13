@@ -114,6 +114,7 @@ const EVENT = {
   INVOICE_PAID: 'subscriptions.invoice.paid',
   INVOICE_FAILED: 'subscriptions.invoice.payment_failed',
   INVOICE_REFUNDED: 'subscriptions.invoice.refunded',
+  INVOICE_PARTIALLY_REFUNDED: 'subscriptions.invoice.partially_refunded',
 } as const;
 
 /**
@@ -995,6 +996,18 @@ export class SubscriptionsService {
     // este modulo gemelo no.
     const total = charge.amount ?? 0;
     const devuelto = charge.amount_refunded ?? 0;
+    if (devuelto > 0 && devuelto < total) {
+      // Parcial: se avisa con lo devuelto ACUMULADO para que la comisión de
+      // referidos se recorte en proporción (no se revoca entera).
+      await this.publisher.publish(invoice.tenantId, null, EVENT.INVOICE_PARTIALLY_REFUNDED, {
+        subscriptionId: invoice.subscriptionId,
+        stripeInvoiceId,
+        amountRefunded: devuelto,
+        amountTotal: total,
+        currency: charge.currency,
+      });
+      return;
+    }
     if (!(devuelto > 0 && devuelto >= total)) return;
 
     await this.publisher.publish(invoice.tenantId, null, EVENT.INVOICE_REFUNDED, {

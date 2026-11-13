@@ -45,6 +45,13 @@ interface SubscriptionCanceledPayload {
   userId: string;
 }
 
+interface InvoicePartiallyRefundedPayload {
+  subscriptionId: string;
+  stripeInvoiceId: string;
+  amountRefunded: number;
+  amountTotal: number;
+}
+
 interface InvoiceRefundedPayload {
   subscriptionId: string;
   stripeInvoiceId: string;
@@ -79,6 +86,27 @@ export class ReferralsSubscriptionsBridge implements OnModuleInit {
       'subscriptions.subscription.canceled',
       async (event: DomainEvent<SubscriptionCanceledPayload>) => {
         await this.onSubscriptionCanceled(event);
+      },
+    );
+    eventBus.subscribe<InvoicePartiallyRefundedPayload>(
+      'subscriptions.invoice.partially_refunded',
+      async (event: DomainEvent<InvoicePartiallyRefundedPayload>) => {
+        const tenantId = event.metadata.tenantId;
+        try {
+          await this.registry
+            .getReferralsService()
+            .applyRefund(
+              tenantId,
+              event.data.stripeInvoiceId,
+              { refundedCents: event.data.amountRefunded, totalCents: event.data.amountTotal },
+              'Devolución parcial del cobro en Stripe',
+            );
+        } catch (err) {
+          this.logger.error(
+            { tenantId, err: err instanceof Error ? err.message : String(err) },
+            'referrals: fallo al recortar la comisión de una devolución parcial',
+          );
+        }
       },
     );
     eventBus.subscribe<InvoiceRefundedPayload>(
@@ -184,10 +212,14 @@ export class ReferralsSubscriptionsBridge implements OnModuleInit {
           'referrals: comisión revocada por reembolso',
         );
       } else if (result.reason === 'already_paid') {
-        // Clawback de una comisión ya liquidada = decisión manual del operador.
-        this.logger.warn(
-          { tenantId, stripeInvoiceId: event.data.stripeInvoiceId },
-          'referrals: reembolso de una invoice cuya comisión ya está PAGADA — revisar clawback manual',
+        // Ya cobrada: queda un ajuste negativo que se descuenta de lo siguiente.
+        this.logger.log(
+          {
+            tenantId,
+            stripeInvoiceId: event.data.stripeInvoiceId,
+            adjustmentId: result.adjustmentId,
+          },
+          'referrals: reembolso con la comisión ya cobrada: ajuste por devolución',
         );
       }
     } catch (err) {

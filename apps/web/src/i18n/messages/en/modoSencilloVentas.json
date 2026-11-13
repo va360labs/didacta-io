@@ -92,7 +92,9 @@
       "iban": "IBAN",
       "error": "It could not be saved. Please try again.",
       "justificante": "Receipt"
-    }
+    },
+    "ajuste": "Refund adjustment",
+    "saldoDevuelto": "Unused discount returned on cancellation"
   },
   "propias": {
     "titulo": "Sales",
