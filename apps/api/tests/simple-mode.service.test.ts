@@ -502,7 +502,7 @@ describe('aulas que ya trabajaban antes del modo sencillo', () => {
     const { db, service } = aulaQueYaVendia({ paymentsReady: false });
     db.products.length = 0;
     db.ordersCompleted = 0;
-    db.courses[0].status = 'DRAFT';
+    db.courses[0]!.status = 'DRAFT';
     const view = await service.startHere(T);
     const done = Object.fromEntries(view.steps.map((s) => [s.id, s.done]));
     expect(done).toMatchObject({ academy: true, course: true, price: false, publish: false });
@@ -513,7 +513,7 @@ describe('aulas que ya trabajaban antes del modo sencillo', () => {
   it('poner precio en un aula adoptada lo guarda sobre SU curso (no crea otro)', async () => {
     const { db, service, courses } = aulaQueYaVendia();
     db.products.length = 0;
-    db.courses[0].status = 'DRAFT';
+    db.courses[0]!.status = 'DRAFT';
     const offer = await service.updatePrice(T, U, { amountCents: 5900, currency: 'eur' });
     expect(offer).toMatchObject({ kind: 'course', courseId: 'c-torno', amountCents: 5900 });
     expect(courses.createCourse).not.toHaveBeenCalled();
