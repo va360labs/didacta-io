@@ -18,10 +18,13 @@ export function SpaceIcon({
   size?: number;
   className?: string;
 }) {
-  if ((COMMUNITY_SPACE_ICONS as readonly string[]).includes(icon)) {
+  // `#` es el icono con el que nacen los espacios «General» (seed.sql y el
+  // alta sencilla): se pinta como el icono de almohadilla, no como texto.
+  const name = icon === '#' ? 'hash' : icon;
+  if ((COMMUNITY_SPACE_ICONS as readonly string[]).includes(name)) {
     return (
       <Icon
-        name={icon as IconName}
+        name={name as IconName}
         size={size}
         className={className}
         style={color ? { color } : undefined}

@@ -9,6 +9,7 @@ import { useTranslations } from 'next-intl';
 import { useEffect, useRef, useState } from 'react';
 import { EmojiPicker } from '@/components/emoji-picker';
 import { MentionTextarea } from '@/components/mention-textarea';
+import { SpaceIcon } from '@/components/space-icon';
 import { authStorage } from '@/lib/auth-storage';
 import { uploadCommunityFile, uploadCommunityImage } from '@/lib/community-upload';
 import { apiErrorMessage } from '@/lib/i18n/api-error';
@@ -320,7 +321,11 @@ export function PostComposerModal({ open, onClose, spaceSlug, onSuccess, editPos
                 onClick={() => setSpaceOpen((v) => !v)}
                 className="flex items-center gap-1.5 rounded-full border border-[#1E5AA8]/30 bg-[#1E5AA8]/8 px-2.5 py-0.5 text-xs font-semibold text-[#1E5AA8] hover:bg-[#1E5AA8]/15 transition-colors"
               >
-                <span className="text-[#1E5AA8]">#</span>
+                <SpaceIcon
+                  icon={spaceMeta?.icon ?? 'hash'}
+                  size={13}
+                  className="shrink-0 text-[#1E5AA8]"
+                />
                 {t('publishingIn', { space: spaceMeta?.title ?? selectedSpace })}
                 <svg
                   width="10"
@@ -346,7 +351,8 @@ export function PostComposerModal({ open, onClose, spaceSlug, onSuccess, editPos
                       }}
                       className={`flex w-full items-center gap-2 px-3 py-2 text-sm text-left transition-colors first:rounded-t-xl last:rounded-b-xl hover:bg-[#F1F5F9] ${selectedSpace === s.slug ? 'font-semibold text-[#1E5AA8]' : 'text-[#374151]'}`}
                     >
-                      <span className="text-[#1E5AA8] font-bold">{s.icon}</span>
+                      {/* El nombre del icono («megaphone», «help») salía como texto. */}
+                      <SpaceIcon icon={s.icon} size={15} className="shrink-0 text-[#1E5AA8]" />
                       {s.title}
                     </button>
                   ))}
