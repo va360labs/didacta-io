@@ -1,0 +1,58 @@
+{
+  "titulo": "Do it faster with your AI agent",
+  "sub": "Ask your agent (Claude, Codex, Grok…) and it will do it in your academy for you.",
+  "pestana": "AI agent",
+  "abrirMovil": "Do it faster with your AI agent",
+  "ocultar": "Hide the panel",
+  "cerrar": "Close",
+  "ejemploTitulo": "Ask it, for example:",
+  "ejemplos": {
+    "courses": "Create a course called “…” with 6 text lessons from these notes: …",
+    "courseNew": "Create a course called “…” with 6 text lessons from these notes: …",
+    "courseEdit": "Create 5 lessons for my course “{curso}” from this outline: …",
+    "courseEditSinTitulo": "Create 5 lessons for this course from this outline: …",
+    "live": "Schedule a live class next Tuesday at 7 pm (my time) called “Q&A” with this Zoom link: …",
+    "community": "Write and post a welcome message for new students in the General space."
+  },
+  "copiar": "Copy",
+  "copiado": "Copied",
+  "paso1": "Create your connection key",
+  "paso1Ayuda": "Your agent uses it to get into your academy. It can only create and edit content.",
+  "crearClave": "Create key",
+  "creando": "Creating…",
+  "claveUnaVez": "Copy it now: it is only shown this once.",
+  "revocar": "Revoke",
+  "revocada": "Key revoked: that agent can no longer get in.",
+  "clavesActivas": "You already have {count, plural, one {# active key} other {# active keys}}. Create another one only if you lost it.",
+  "gestionar": "Manage keys",
+  "errorCrear": "The key could not be created. Please try again.",
+  "paso2": "Connect your agent",
+  "placeholder": "YOUR_KEY",
+  "comprobar": "To check it:",
+  "guia": "Official guide",
+  "agentes": {
+    "claude-code": {
+      "paso": "Paste this in your terminal:"
+    },
+    "codex": {
+      "paso": "Add this at the end of ~/.codex/config.toml:"
+    },
+    "hermes": {
+      "paso": "Add this to ~/.hermes/config.yaml:"
+    },
+    "grok": {
+      "url": "In the Grok app: Connect apps → Add a custom connector → Remote HTTPS. In “Server URL”:",
+      "cabecera": "And in “HTTP headers”:",
+      "terminal": "With Grok Build, in your terminal:"
+    },
+    "cursor": {
+      "paso": "Add this to ~/.cursor/mcp.json and turn it on in Cursor’s MCP settings:"
+    },
+    "vscode": {
+      "paso": "Add this to .mcp.json in your project (GitHub Copilot in agent mode):"
+    }
+  },
+  "puede": "It creates and edits courses and lessons, schedules live classes and posts in the community. What it creates stays as a draft: you publish it.",
+  "noPuede": "It doesn’t set prices, put anything on sale, delete anything or invite anyone.",
+  "chatgpt": "ChatGPT can’t connect with a key yet."
+}

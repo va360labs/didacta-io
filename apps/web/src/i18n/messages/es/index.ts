@@ -63,6 +63,7 @@ import referidosCondiciones from './referidosCondiciones.json';
 import modoSencilloGestion from './modoSencilloGestion.json';
 import modoSencilloAprender from './modoSencilloAprender.json';
 import shell from './shell.json';
+import agenteIa from './agenteIa.json';
 
 export default {
   adminApi,
@@ -117,4 +118,5 @@ export default {
   modoSencilloGestion,
   modoSencilloAprender,
   shell,
+  agenteIa,
 } as const;

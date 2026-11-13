@@ -111,6 +111,15 @@ function KeysTab() {
         return t('keys.scopeOrdersWrite');
       case 'orders:read':
         return t('keys.scopeOrdersRead');
+      // Claves de la puerta de agentes (las crea el panel del agente de IA).
+      case 'agent:courses:read':
+        return t('keys.scopeAgentCoursesRead');
+      case 'agent:courses:write':
+        return t('keys.scopeAgentCoursesWrite');
+      case 'agent:live:write':
+        return t('keys.scopeAgentLiveWrite');
+      case 'agent:community:post':
+        return t('keys.scopeAgentCommunityPost');
       default:
         return scope;
     }
