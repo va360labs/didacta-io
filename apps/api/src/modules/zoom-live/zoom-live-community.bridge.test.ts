@@ -21,6 +21,9 @@ describe('anuncio del directo en la comunidad', () => {
     expect(post.tag).toBe('Live classes');
     expect(post.body).toContain('Live class: **Dialing in espresso**.');
     expect(post.body).toContain('Thursday, November 19');
+    // La hora es la de la clase y lleva su zona: desde Nueva York no se lee
+    // como «las siete de aquí».
+    expect(post.body).toMatch(/07:00 PM GMT\+1/);
     expect(post.body).toContain('Sign up here');
     expect(post.body).toContain('Bring your grinder.');
     expect(post.body).toContain('<!--didacta-clase:s-1-->');
@@ -33,7 +36,7 @@ describe('anuncio del directo en la comunidad', () => {
     expect(post.tag).toBe('Clases en directo');
     expect(post.body).toContain('Clase en directo: **Dialing in espresso**.');
     expect(post.body).toContain('jueves, 19 de noviembre');
-    expect(post.body).toContain('19:00');
+    expect(post.body).toMatch(/19:00 CET/);
     expect(post.body).toContain('Inscríbete desde aquí');
     expect(post.title).toBe('Dialing in espresso');
   });

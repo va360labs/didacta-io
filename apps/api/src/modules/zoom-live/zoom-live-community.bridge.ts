@@ -90,6 +90,9 @@ export function formatWhen(startTime: Date, timezone: string, locale: AcademyLoc
       month: 'long',
       hour: '2-digit',
       minute: '2-digit',
+      // La hora es la de la clase: con su zona, quien lo lee desde otra no la
+      // toma por suya («19:00 CET», «07:00 PM GMT+1»).
+      timeZoneName: 'short',
     });
   } catch {
     // Timezone IANA inválida: no rompemos el anuncio.
