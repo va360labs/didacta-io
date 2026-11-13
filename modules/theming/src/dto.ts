@@ -4,6 +4,13 @@
  */
 
 import { z } from 'zod';
+import {
+  MAX_SOCIAL_LINKS,
+  MAX_SOCIAL_LINK_URL_CHARS,
+  SOCIAL_LINK_KINDS,
+  socialLinkProblem,
+  type SocialLink,
+} from './social-links.js';
 
 /**
  * Whitelist de familias tipográficas soportadas.
@@ -50,6 +57,13 @@ export const MAX_SIGNIN_HEADLINE_CHARS = 160;
 export const MAX_SIGNIN_SUBHEADLINE_CHARS = 240;
 
 /**
+ * Descripción de la academia en su comunidad (tarjeta de /community). Texto
+ * PLANO; el límite es el de una presentación que se lee de un vistazo y
+ * coincide con el VarChar de la columna.
+ */
+export const MAX_ABOUT_CHARS = 280;
+
+/**
  * Cómo se presenta la marca del tenant allí donde aparece (sidebar, panel de
  * acceso, asistente de bienvenida…).
  *
@@ -85,6 +99,23 @@ const safeImageUrl = z
     'La URL debe ser https:// o un endpoint relativo /api/v1/...',
   );
 
+/**
+ * Un enlace social: su red y una URL `https://` de esa red (ver
+ * `social-links.ts`). El mensaje del refine es la razón estable del rechazo.
+ */
+export const socialLinkSchema = z
+  .object({
+    kind: z.enum(SOCIAL_LINK_KINDS),
+    url: z.string().trim().min(1).max(MAX_SOCIAL_LINK_URL_CHARS),
+  })
+  .strict()
+  .superRefine((link, ctx) => {
+    const problem = socialLinkProblem(link.kind, link.url);
+    if (problem) {
+      ctx.addIssue({ code: 'custom', path: ['url'], message: problem });
+    }
+  });
+
 export const updateThemeSchema = z
   .object({
     logoUrl: safeImageUrl.nullable().optional(),
@@ -98,6 +129,8 @@ export const updateThemeSchema = z
     footerHtml: z.string().max(MAX_FOOTER_HTML_BYTES).nullable().optional(),
     signinHeadline: z.string().trim().max(MAX_SIGNIN_HEADLINE_CHARS).nullable().optional(),
     signinSubheadline: z.string().trim().max(MAX_SIGNIN_SUBHEADLINE_CHARS).nullable().optional(),
+    about: z.string().trim().max(MAX_ABOUT_CHARS).nullable().optional(),
+    socialLinks: z.array(socialLinkSchema).max(MAX_SOCIAL_LINKS).optional(),
   })
   .strict();
 
@@ -145,6 +178,26 @@ export const uploadFaviconSchema = z.object({
 
 export type UploadFaviconDto = z.infer<typeof uploadFaviconSchema>;
 
+/**
+ * Portada de la academia: los mismos tipos que el logo y el tope de la portada
+ * de un curso (10 MB, el del upload genérico). Se recomprime a WebP de 1600 px
+ * como el resto de imágenes grandes; un SVG se guarda intacto.
+ */
+export const ALLOWED_COVER_MIME_TYPES = ALLOWED_LOGO_MIME_TYPES;
+
+/** 10 MB, como la portada de un curso. En base64 cabe en el bodyLimit (16 MB). */
+export const MAX_COVER_BYTES = 10 * 1024 * 1024;
+
+export const uploadCoverSchema = z.object({
+  /** Contenido del archivo en base64 (sin el prefijo data:). */
+  data: z.string().min(1),
+  /** Nombre original del archivo, solo para auditoría / extensión. */
+  filename: z.string().min(1).max(256),
+  contentType: z.enum(ALLOWED_COVER_MIME_TYPES),
+});
+
+export type UploadCoverDto = z.infer<typeof uploadCoverSchema>;
+
 export type UpdateThemeDto = z.infer<typeof updateThemeSchema>;
 
 export type DisplayFont = (typeof ALLOWED_DISPLAY_FONTS)[number];
@@ -173,6 +226,14 @@ export interface ThemeSnapshot {
   signinHeadline: string | null;
   /** Línea de apoyo del panel de marca de /signin. null = copy genérico. */
   signinSubheadline: string | null;
+  /** Descripción de la academia en su comunidad. null = cae al titular de acceso. */
+  about: string | null;
+  /** Enlaces sociales (solo los válidos, en orden, máximo 5). */
+  socialLinks: SocialLink[];
+  /** Portada propia de la academia. null = banda de color. */
+  coverUrl: string | null;
+  /** True si la portada actual se subió al storage del tenant. */
+  coverUploaded: boolean;
   updatedAt: string;
 }
 

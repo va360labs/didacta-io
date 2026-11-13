@@ -349,6 +349,11 @@ describe('apiErrorMessage con detalle estructurado', () => {
       ['TEMPLATE_IN_USE', 'No se puede eliminar: DATO-1 curso(s) están usando esta plantilla.'],
       ['TEMPLATE_NAME_TAKEN', 'Ya existe una plantilla con nombre "DATO-1" en este tenant.'],
       [
+        'THEMING_ABOUT_TOO_LONG',
+        'La descripción de la academia no puede pasar de DATO-1 caracteres.',
+      ],
+      ['THEMING_COVER_TOO_LARGE', 'La portada excede el máximo permitido de DATO-1 MB.'],
+      [
         'THEMING_CUSTOM_CSS_TOO_LARGE',
         'El CSS personalizado excede el máximo permitido de DATO-1 bytes.',
       ],
@@ -357,8 +362,13 @@ describe('apiErrorMessage con detalle estructurado', () => {
         'THEMING_FOOTER_HTML_TOO_LARGE',
         'El HTML del footer excede el máximo permitido de DATO-1 bytes.',
       ],
+      [
+        'THEMING_INVALID_SOCIAL_LINK',
+        'El enlace "DATO-1" no es válido: tiene que empezar por https:// y ser de la red elegida.',
+      ],
       ['THEMING_INVALID_URL', 'La URL de "DATO-1" no es válida o no usa https.'],
       ['THEMING_LOGO_TOO_LARGE', 'El logo excede el máximo permitido de DATO-1 MB.'],
+      ['THEMING_TOO_MANY_SOCIAL_LINKS', 'Como mucho DATO-1 enlaces sociales.'],
       ['ZOOM_API_ERROR', 'Error hablando con Zoom: DATO-1'],
       ['ZOOM_COURSE_NOT_IN_TENANT', 'El curso DATO-1 no pertenece a este tenant.'],
       [
@@ -368,7 +378,7 @@ describe('apiErrorMessage con detalle estructurado', () => {
     ];
     // Guarda de cobertura: un code nuevo con {detail} en modules/** que no entre
     // en la tabla no tendría prueba de que el ES no cambia.
-    expect(CASOS.length, 'la tabla dejó de cubrir los codes de modules/**').toBe(75);
+    expect(CASOS.length, 'la tabla dejó de cubrir los codes de modules/**').toBe(79);
     for (const [code, backendMessage] of CASOS) {
       expect(CODES_WITH_DETAIL.has(code), `${code} no está en CODES_WITH_DETAIL`).toBe(true);
       const e = httpError(backendMessage, code, DATO);

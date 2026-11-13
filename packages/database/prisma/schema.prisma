@@ -1863,6 +1863,22 @@ model ModThemingTenantTheme {
   /// Línea de apoyo bajo el titular, en el pie del panel de marca.
   signinSubheadline String? @map("signin_subheadline") @db.VarChar(240)
 
+  /// Presentación de la academia en su comunidad (tarjeta de la barra lateral
+  /// de /community, como el «About» de un grupo de Skool). Texto PLANO del
+  /// tenant. NULL = la tarjeta cae al titular de acceso (`signinHeadline`).
+  about String? @map("about") @db.VarChar(280)
+  /// Enlaces sociales de la academia: `[{ kind, url }]`, máximo 5, solo
+  /// `https://` y del dominio de su red (lo valida el DTO de mod.theming).
+  /// `kind` ∈ whatsapp | telegram | instagram | youtube | tiktok | facebook |
+  /// linkedin | x | web.
+  socialLinks Json @default("[]") @map("social_links")
+  /// Portada propia de la academia (sustituye a la banda de color de la
+  /// tarjeta). Espejo de logo*: URL del endpoint público con cache-buster,
+  /// key del blob en el StorageService y MIME real con el que servirlo.
+  coverUrl        String? @map("cover_url")
+  coverStorageKey String? @map("cover_storage_key")
+  coverMimeType   String? @map("cover_mime_type")
+
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 

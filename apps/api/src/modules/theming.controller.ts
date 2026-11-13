@@ -19,12 +19,15 @@ import {
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import {
+  CoverNotFoundError,
   FaviconNotFoundError,
   LogoNotFoundError,
   updateThemeSchema,
+  uploadCoverSchema,
   uploadFaviconSchema,
   uploadLogoSchema,
   type UpdateThemeDto,
+  type UploadCoverDto,
   type UploadFaviconDto,
   type UploadLogoDto,
 } from '@didacta/mod-theming';
@@ -239,6 +242,72 @@ export class ThemingController {
     } catch (e) {
       if (e instanceof FaviconNotFoundError) {
         void reply.status(404).send({ error: 'favicon_not_found' });
+        return;
+      }
+      throw e;
+    }
+  }
+
+  @Post('me/cover')
+  @HttpCode(200)
+  @ApiOperation({
+    summary:
+      'Sube la portada de la academia (PNG/JPG/SVG/WebP, max 10 MB) — la cabecera de su tarjeta en la comunidad. Solo administradores.',
+  })
+  async uploadCover(
+    @CurrentUser() user: SessionClaims | undefined,
+    @Body(new ZodValidationPipe(uploadCoverSchema)) dto: UploadCoverDto,
+  ) {
+    if (!user) throw new UnauthorizedException();
+    if (!user.roles.some((r) => ADMIN_ROLES.has(r))) {
+      throw new ForbiddenException({
+        message: 'Solo administradores pueden subir la portada.',
+        code: 'THEMING_COVER_UPLOAD_FORBIDDEN',
+      });
+    }
+    return this.registry.getThemingService().uploadCover(user.tenantId, dto);
+  }
+
+  @Delete('me/cover')
+  @HttpCode(200)
+  @ApiOperation({
+    summary:
+      'Quita la portada de la academia (limpia blob + columnas): la tarjeta vuelve a la banda de color. Solo administradores.',
+  })
+  async removeCover(@CurrentUser() user: SessionClaims | undefined) {
+    if (!user) throw new UnauthorizedException();
+    if (!user.roles.some((r) => ADMIN_ROLES.has(r))) {
+      throw new ForbiddenException({
+        message: 'Solo administradores pueden quitar la portada.',
+        code: 'THEMING_COVER_DELETE_FORBIDDEN',
+      });
+    }
+    return this.registry.getThemingService().removeCover(user.tenantId);
+  }
+
+  @Get('tenants/:tenantId/cover')
+  @Public()
+  @ApiOperation({
+    summary:
+      'Sirve la portada subida de la academia. Pública como el logo: un <img> no manda el token.',
+  })
+  async getPublicCover(
+    @Param('tenantId') tenantId: string,
+    @Res({ passthrough: false }) reply: FastifyReply,
+  ) {
+    try {
+      // RLS F2: ruta @Public sin ALS del middleware — el tenant viene en el
+      // path y el blob se lee bajo su contexto.
+      const { buffer, mimeType } = await runAsTenant(tenantId, () =>
+        this.registry.getThemingService().getCoverBlob(tenantId),
+      );
+      void reply
+        .header('Content-Type', mimeType)
+        .header('Cache-Control', 'public, max-age=300, must-revalidate')
+        .send(buffer);
+    } catch (e) {
+      if (e instanceof CoverNotFoundError) {
+        void reply.status(404).send({ error: 'cover_not_found' });
         return;
       }
       throw e;
