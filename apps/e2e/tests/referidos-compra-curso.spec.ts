@@ -198,6 +198,11 @@ test('referidos: una alumna invita, otra persona compra un curso suelto y la com
   );
   await alumna.waitForURL((u) => !u.pathname.startsWith('/signin'), { timeout: 30_000 });
   await alumna.goto('/referidos');
+  // Primera vez: declara ser mayor de 18 y acepta las condiciones del programa.
+  const casilla = alumna.getByTestId('referidos-casilla');
+  await expect(casilla).toBeVisible({ timeout: 30_000 });
+  await casilla.getByRole('checkbox').check();
+  await casilla.getByRole('button', { name: 'Activar mi enlace' }).click();
   const enlace = alumna.getByTestId('referidos-enlace');
   await expect(enlace).toContainText('ref=', { timeout: 30_000 });
   const code = /ref=([a-z0-9]+)/i.exec((await enlace.textContent()) ?? '')?.[1];
