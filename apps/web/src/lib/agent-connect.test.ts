@@ -3,11 +3,15 @@
  * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
  */
 
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   AGENT_IDS,
+  AGENT_LOGOS,
   agentScreenFor,
   agentSnippet,
+  docsLabel,
   isAgentKey,
   mcpUrlFor,
   readCollapsed,
@@ -100,6 +104,27 @@ describe('comandos por agente', () => {
     ]);
   });
 
+  it('los enlaces a las guías de un agente nunca dicen lo mismo dos veces', () => {
+    for (const id of AGENT_IDS) {
+      const { docs } = agentSnippet(id, IN);
+      const labels = docs.map((d) => docsLabel(d, docs));
+      expect(new Set(labels).size).toBe(docs.length);
+    }
+    const grok = agentSnippet('grok', IN).docs;
+    expect(grok.map((d) => docsLabel(d, grok))).toEqual(['docs.x.ai/grok-bot', 'docs.x.ai/build']);
+    // Con dominio propio, solo el dominio (sin «www.»).
+    expect(
+      docsLabel('https://www.cursor.com/docs/context/mcp', [
+        'https://www.cursor.com/docs/context/mcp',
+      ]),
+    ).toBe('cursor.com');
+    const codex = agentSnippet('codex', IN).docs;
+    expect(codex.map((d) => docsLabel(d, codex))).toEqual([
+      'developers.openai.com',
+      'learn.chatgpt.com',
+    ]);
+  });
+
   it('todos llevan la URL del aula, la clave y una guía oficial https', () => {
     for (const id of AGENT_IDS) {
       const s = agentSnippet(id, IN);
@@ -151,5 +176,28 @@ describe('apoyo', () => {
     expect(readTab(roto)).toBe('claude-code');
     expect(readTab({ getItem: () => 'inventado' })).toBe('claude-code');
     expect(readTab({ getItem: () => 'codex' })).toBe('codex');
+  });
+});
+
+describe('logos de los agentes', () => {
+  const PUBLIC = path.resolve(__dirname, '../../public');
+
+  it('cada pestaña tiene su logo, en el propio aula y con su nombre', () => {
+    expect(Object.keys(AGENT_LOGOS).sort()).toEqual([...AGENT_IDS].sort());
+    for (const id of AGENT_IDS) expect(AGENT_LOGOS[id]).toBe(`/agents/${id}.svg`);
+    expect(new Set(Object.values(AGENT_LOGOS)).size).toBe(AGENT_IDS.length);
+  });
+
+  it.each(AGENT_IDS)('%s: SVG autocontenido que escala al tamaño de la pestaña', (id) => {
+    const svg = readFileSync(path.join(PUBLIC, AGENT_LOGOS[id]), 'utf8');
+    const root = /^<svg\s[^>]*>/.exec(svg.trim())?.[0] ?? '';
+    // Escala por el viewBox: sin width/height fijos en la raíz.
+    expect(root).toMatch(/viewBox="[\d.\s-]+"/);
+    expect(root).not.toMatch(/\s(width|height)=/);
+    // Nada que cargue de fuera ni que se ejecute (la CSP y el <img> lo cortarían).
+    expect(svg).not.toMatch(/<script|<image|<foreignObject|href=|url\(\s*['"]?https?:/i);
+    // Pinta algo: al menos un trazado con color.
+    expect(svg).toMatch(/<path\s/);
+    expect(svg).toMatch(/fill="#[0-9a-f]{3,6}"|fill:#[0-9a-f]{3,6}|fill="url\(#/i);
   });
 });

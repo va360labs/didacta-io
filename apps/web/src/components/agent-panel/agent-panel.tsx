@@ -5,6 +5,7 @@
  * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
  */
 
+import Image from 'next/image';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
@@ -12,8 +13,10 @@ import { Icon } from '@/components/icon';
 import {
   AGENT_IDS,
   AGENT_LABELS,
+  AGENT_LOGOS,
   agentScreenFor,
   agentSnippet,
+  docsLabel,
   mcpUrlFor,
   readCollapsed,
   readTab,
@@ -349,7 +352,10 @@ function PanelBody({
 
       <section className="grid gap-2">
         <StepTitle n={2}>{t('paso2')}</StepTitle>
-        <div className="grid grid-cols-3 gap-1.5" role="tablist" aria-label={t('paso2')}>
+        {/* Dos columnas: con el logo, «Claude Code» no cabe en un tercio de la
+            columna de 340 px. El logo es decorativo (alt vacío): el nombre va
+            al lado y es lo que lee el lector de pantalla. */}
+        <div className="grid grid-cols-2 gap-1.5" role="tablist" aria-label={t('paso2')}>
           {AGENT_IDS.map((id) => (
             <button
               key={id}
@@ -358,14 +364,23 @@ function PanelBody({
               aria-selected={tab === id}
               onClick={() => setTab(id)}
               className={cn(
-                'h-8 truncate rounded-lg border px-2 text-[12px] font-semibold',
+                'flex h-9 min-w-0 items-center gap-2 rounded-lg border px-2.5 text-[12px] font-semibold',
                 tab === id
                   ? 'border-brand-600 bg-brand-50 text-brand-700'
                   : 'border-border text-text-muted hover:border-border-strong hover:text-text',
               )}
               data-testid={`agente-ia-tab-${id}`}
             >
-              {AGENT_LABELS[id]}
+              <Image
+                src={AGENT_LOGOS[id]}
+                alt=""
+                width={16}
+                height={16}
+                unoptimized
+                className="h-4 w-4 shrink-0"
+                data-testid={`agente-ia-logo-${id}`}
+              />
+              <span className="truncate">{AGENT_LABELS[id]}</span>
             </button>
           ))}
         </div>
@@ -395,7 +410,7 @@ function PanelBody({
                 rel="noreferrer"
                 className="font-semibold text-brand-600 hover:underline"
               >
-                {t('guia')} · {new URL(href).hostname.replace(/^www\./, '')} ↗
+                {t('guia')} · {docsLabel(href, snippet.docs)} ↗
               </a>
             ))}
           </p>
