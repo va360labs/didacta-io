@@ -4205,10 +4205,18 @@ model ModReferralsPayout {
   stripeCustomerId  String?  @map("stripe_customer_id")
   /// Cobro en dinero: cuándo lo marcó pagado el creador (pedido = `created_at`).
   paidAt            DateTime? @map("paid_at")
+  /// Justificante: número correlativo POR AULA (se asigna al marcarlo pagado).
+  receiptNumber     Int?      @map("receipt_number")
+  /// Datos del receptor tal como estaban al pagar (JSON cifrado): el
+  /// justificante no cambia aunque el alumno cambie luego su IBAN.
+  payeeSnapshotCipher Bytes?  @map("payee_snapshot_cipher")
+  payeeSnapshotIv     Bytes?  @map("payee_snapshot_iv")
+  payeeSnapshotTag    Bytes?  @map("payee_snapshot_tag")
   createdAt         DateTime @default(now()) @map("created_at")
 
   commissions ModReferralsCommission[]
 
+  @@unique([tenantId, receiptNumber])
   @@index([tenantId, referrerUserId])
   @@map("mod_referrals_payout")
 }

@@ -24,6 +24,12 @@ import {
   ReferralsPayoutNotFoundError,
 } from './errors.js';
 import {
+  formatReceiptAmount,
+  receiptLabel,
+  renderReceiptPdf,
+  type ReceiptLine,
+} from './receipt-pdf.js';
+import {
   maskIban,
   maskTaxId,
   normalizePayee,
@@ -314,6 +320,21 @@ function generateCode(): string {
 /** Tope de un canje: el {@link CREDIT_MAX_SHARE_BPS} de la cuota, a la baja. */
 function creditCap(unitAmount: number): number {
   return Math.floor((unitAmount * CREDIT_MAX_SHARE_BPS) / 10_000);
+}
+
+/** Concepto de una línea del justificante. */
+function receiptConcept(
+  c: { amountCents: number; baseAmountCents: number; commissionBps: number; currency: string },
+  bilingual: boolean,
+): string {
+  if (c.amountCents < 0) {
+    return bilingual ? 'Ajuste por devolución / Refund adjustment' : 'Ajuste por devolución';
+  }
+  const pct = String(c.commissionBps / 100).replace('.', ',');
+  const base = formatReceiptAmount(c.baseAmountCents, c.currency);
+  return bilingual
+    ? `Comisión del ${pct} % sobre ${base} / ${pct}% commission on ${base}`
+    : `Comisión del ${pct} % sobre una venta de ${base}`;
 }
 
 function isUniqueViolation(err: unknown): boolean {
@@ -1082,7 +1103,10 @@ export class ReferralsService {
       );
     }
 
-    const payoutId = await this.prisma.$transaction(async (tx) => {
+    // Una liquidación en dinero también lleva su justificante numerado.
+    const snapshot = this.cipher ? await this.payeeSnapshot(tenantId, input.referrerUserId) : {};
+    let payoutId = '';
+    const numbered = async (tx: PrismaClient, receiptNumber: number | null) => {
       const payout = await tx.modReferralsPayout.create({
         data: {
           tenantId,
@@ -1091,6 +1115,9 @@ export class ReferralsService {
           currency,
           externalReference: input.externalReference.trim(),
           createdByUserId: input.createdByUserId,
+          paidAt: new Date(),
+          receiptNumber,
+          ...snapshot,
         },
       });
       const updated = await tx.modReferralsCommission.updateMany({
@@ -1104,8 +1131,13 @@ export class ReferralsService {
           'El lote cambió durante la liquidación; reintenta.',
         );
       }
-      return payout.id;
-    });
+      payoutId = payout.id;
+    };
+    if (this.cipher) {
+      await this.withReceiptNumber(tenantId, (db, n) => numbered(db, n));
+    } else {
+      await this.prisma.$transaction(async (tx) => numbered(tx as unknown as PrismaClient, null));
+    }
 
     await this.publisher.publish(tenantId, input.createdByUserId, REFERRALS_EVENT.PAYOUT_RECORDED, {
       payoutId,
@@ -1231,8 +1263,10 @@ export class ReferralsService {
     });
     const out = [];
     for (const r of rows) {
-      const payee = await this.readPayee(tenantId, r.referrerUserId);
+      const frozen = r.status === 'DONE' ? this.decryptSnapshot(r) : null;
+      const payee = frozen ? { details: frozen } : await this.readPayee(tenantId, r.referrerUserId);
       out.push({
+        receiptNumber: r.receiptNumber,
         id: r.id,
         referrerUserId: r.referrerUserId,
         totalCents: r.totalCents,
@@ -1274,11 +1308,17 @@ export class ReferralsService {
       where: { id: payoutId, tenantId, method: 'CASH', status: 'REQUESTED' },
     });
     if (!payout) throw new ReferralsPayoutNotFoundError();
-    await this.prisma.$transaction(async (tx) => {
-      const db = tx as unknown as PrismaClient;
+    const snapshot = await this.payeeSnapshot(tenantId, payout.referrerUserId);
+    await this.withReceiptNumber(tenantId, async (db, receiptNumber) => {
       const closed = await db.modReferralsPayout.updateMany({
         where: { id: payoutId, tenantId, status: 'REQUESTED' },
-        data: { status: 'DONE', externalReference: reference, paidAt: now },
+        data: {
+          status: 'DONE',
+          externalReference: reference,
+          paidAt: now,
+          receiptNumber,
+          ...snapshot,
+        },
       });
       if (closed.count !== 1) throw new ReferralsPayoutNotFoundError();
       await db.modReferralsCommission.updateMany({
@@ -1295,6 +1335,114 @@ export class ReferralsService {
       method: 'CASH',
     });
     return { payoutId, totalCents: payout.totalCents, currency: payout.currency };
+  }
+
+  /**
+   * Corre `fn` en una transacción con el siguiente número de justificante del
+   * aula. Dos cobros marcados a la vez chocan en el índice único
+   * (tenant, número): se reintenta con el siguiente.
+   */
+  private async withReceiptNumber(
+    tenantId: string,
+    fn: (db: PrismaClient, receiptNumber: number) => Promise<void>,
+  ): Promise<number> {
+    for (let attempt = 0; attempt < 5; attempt++) {
+      try {
+        return await this.prisma.$transaction(async (tx) => {
+          const db = tx as unknown as PrismaClient;
+          const last = await db.modReferralsPayout.aggregate({
+            where: { tenantId },
+            _max: { receiptNumber: true },
+          });
+          const receiptNumber = (last._max.receiptNumber ?? 0) + 1;
+          await fn(db, receiptNumber);
+          return receiptNumber;
+        });
+      } catch (err) {
+        if (!isUniqueViolation(err) || attempt === 4) throw err;
+      }
+    }
+    throw new ReferralsPayoutValidationError('No se pudo numerar el justificante; reintenta.');
+  }
+
+  /** Datos del receptor cifrados para congelarlos en el justificante (vacío si no hay). */
+  private async payeeSnapshot(
+    tenantId: string,
+    userId: string,
+  ): Promise<{
+    payeeSnapshotCipher?: Buffer;
+    payeeSnapshotIv?: Buffer;
+    payeeSnapshotTag?: Buffer;
+  }> {
+    const found = await this.readPayee(tenantId, userId);
+    if (!found || !this.cipher) return {};
+    const enc = this.cipher.encrypt(JSON.stringify(found.details));
+    return { payeeSnapshotCipher: enc.cipher, payeeSnapshotIv: enc.iv, payeeSnapshotTag: enc.tag };
+  }
+
+  private decryptSnapshot(row: {
+    payeeSnapshotCipher: Uint8Array | null;
+    payeeSnapshotIv: Uint8Array | null;
+    payeeSnapshotTag: Uint8Array | null;
+  }): PayeeDetails | null {
+    if (!row.payeeSnapshotCipher || !row.payeeSnapshotIv || !row.payeeSnapshotTag || !this.cipher) {
+      return null;
+    }
+    return JSON.parse(
+      this.cipher.decrypt({
+        cipher: Buffer.from(row.payeeSnapshotCipher),
+        iv: Buffer.from(row.payeeSnapshotIv),
+        tag: Buffer.from(row.payeeSnapshotTag),
+      }),
+    ) as PayeeDetails;
+  }
+
+  /**
+   * Justificante en PDF de un cobro en dinero pagado. `referrerUserId` lo
+   * restringe a los cobros del propio alumno (su vista); sin él, el creador
+   * descarga cualquiera de su aula.
+   */
+  async receiptPdf(
+    tenantId: string,
+    payoutId: string,
+    opts: { referrerUserId?: string } = {},
+  ): Promise<{ filename: string; pdf: Buffer }> {
+    const payout = await this.prisma.modReferralsPayout.findFirst({
+      where: {
+        id: payoutId,
+        tenantId,
+        method: 'CASH',
+        status: 'DONE',
+        receiptNumber: { not: null },
+        ...(opts.referrerUserId ? { referrerUserId: opts.referrerUserId } : {}),
+      },
+    });
+    if (!payout || payout.receiptNumber === null) throw new ReferralsPayoutNotFoundError();
+    const [tenant, commissions] = await Promise.all([
+      this.prisma.tenant.findUnique({ where: { id: tenantId }, select: { name: true } }),
+      this.prisma.modReferralsCommission.findMany({
+        where: { tenantId, payoutId },
+        orderBy: { createdAt: 'asc' },
+      }),
+    ]);
+    const payee = this.decryptSnapshot(payout);
+    const bilingual = payee !== null && payee.country !== 'ES';
+    const lines: ReceiptLine[] = commissions.map((c) => ({
+      date: c.createdAt,
+      concept: receiptConcept(c, bilingual),
+      amountCents: c.amountCents,
+    }));
+    const pdf = await renderReceiptPdf({
+      number: payout.receiptNumber,
+      paidAt: payout.paidAt ?? payout.createdAt,
+      reference: payout.externalReference,
+      currency: payout.currency,
+      totalCents: payout.totalCents,
+      issuerName: tenant?.name ?? '',
+      payee,
+      lines,
+    });
+    return { filename: `justificante-${receiptLabel(payout.receiptNumber)}.pdf`, pdf };
   }
 
   private requireCipher(): ReferralsCipher {
@@ -1409,6 +1557,7 @@ export class ReferralsService {
               ? ('REQUESTED' as const)
               : ('DONE' as const),
         paidAt: p.paidAt,
+        receiptNumber: p.receiptNumber,
         createdAt: p.createdAt,
       })),
       credit,

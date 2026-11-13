@@ -26,11 +26,13 @@
   },
   "dependencies": {
     "@didacta/core-kernel": "workspace:*",
-    "@didacta/database": "workspace:*"
+    "@didacta/database": "workspace:*",
+    "pdfkit": "^0.16.0"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",
     "typescript": "^5.7.2",
-    "vitest": "^3.2.7"
+    "vitest": "^3.2.7",
+    "@types/pdfkit": "^0.13.9"
   }
 }

@@ -837,10 +837,16 @@ importers:
       '@didacta/database':
         specifier: workspace:*
         version: link:../../packages/database
+      pdfkit:
+        specifier: ^0.16.0
+        version: 0.16.0
     devDependencies:
       '@types/node':
         specifier: ^22.10.2
         version: 22.19.17
+      '@types/pdfkit':
+        specifier: ^0.13.9
+        version: 0.13.9
       typescript:
         specifier: ^5.7.2
         version: 5.9.3

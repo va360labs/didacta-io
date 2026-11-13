@@ -298,4 +298,63 @@ describeWithDb('Referidos — puntos legales, Postgres real como didacta_app', (
       ).toBe(2);
     });
   });
+
+  describe('3. justificante en PDF', () => {
+    it('cada cobro pagado lleva número correlativo por aula, receptor congelado y PDF descargable solo por los suyos', async () => {
+      // El cobro del punto 2 ya está pagado: es el nº 1 del aula A.
+      const first = await admin.modReferralsPayout.findFirstOrThrow({
+        where: { tenantId: ids.tenantA, method: 'CASH', status: 'DONE' },
+      });
+      expect(first.receiptNumber).toBe(1);
+      expect(first.payeeSnapshotCipher).not.toBeNull();
+
+      // El alumno cambia luego su IBAN: el justificante ya emitido no cambia.
+      await runAsTenant(ids.tenantA, () =>
+        referrals.savePayee(ids.tenantA, ids.referrerA, {
+          fullName: 'Lucía Pérez Gil',
+          country: 'ES',
+          taxId: '12345678Z',
+          iban: 'DE89 3704 0044 0532 0130 00',
+        }),
+      );
+      const list = await runAsTenant(ids.tenantA, () => referrals.listCashPayouts(ids.tenantA));
+      expect(list.find((r) => r.id === first.id)?.payee?.iban).toBe('ES9121000418450200051332');
+
+      // Segundo cobro: nº 2.
+      await approved(1500);
+      const req = await runAsTenant(ids.tenantA, () =>
+        referrals.requestCashPayout(ids.tenantA, ids.referrerA),
+      );
+      await runAsTenant(ids.tenantA, () =>
+        referrals.markCashPayoutPaid(ids.tenantA, req.payoutId, {
+          externalReference: 'TRF-2026-0002',
+          actorId: ids.referrerA,
+        }),
+      );
+      expect(
+        (await admin.modReferralsPayout.findUniqueOrThrow({ where: { id: req.payoutId } }))
+          .receiptNumber,
+      ).toBe(2);
+
+      // PDF: el alumno descarga el suyo; otro usuario no; el creador sí.
+      const mine = await runAsTenant(ids.tenantA, () =>
+        referrals.receiptPdf(ids.tenantA, first.id, { referrerUserId: ids.referrerA }),
+      );
+      expect(mine.filename).toBe('justificante-0001.pdf');
+      expect(mine.pdf.subarray(0, 5).toString()).toBe('%PDF-');
+      await expect(
+        runAsTenant(ids.tenantA, () =>
+          referrals.receiptPdf(ids.tenantA, first.id, { referrerUserId: ids.buyerA }),
+        ),
+      ).rejects.toBeInstanceOf(ReferralsPayoutNotFoundError);
+      const creator = await runAsTenant(ids.tenantA, () =>
+        referrals.receiptPdf(ids.tenantA, first.id),
+      );
+      expect(creator.pdf.length).toBeGreaterThan(1000);
+      // Aislamiento: desde el aula B no existe.
+      await expect(
+        runAsTenant(ids.tenantB, () => referrals.receiptPdf(ids.tenantB, first.id)),
+      ).rejects.toBeInstanceOf(ReferralsPayoutNotFoundError);
+    });
+  });
 });

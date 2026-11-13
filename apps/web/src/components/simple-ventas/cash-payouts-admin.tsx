@@ -8,7 +8,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { formatCents, formatDate } from '@/lib/i18n/format';
-import { referralsAdminApi, type AdminCashPayout } from '@/lib/referrals';
+import { downloadReferralReceipt, referralsAdminApi, type AdminCashPayout } from '@/lib/referrals';
 
 /** IBAN en grupos de 4, para leerlo al hacer la transferencia. */
 export function groupIban(iban: string): string {
@@ -134,6 +134,20 @@ export function CashPayoutsAdmin() {
                   })}
                 </span>
               </span>
+              {r.receiptNumber ? (
+                <button
+                  type="button"
+                  onClick={() =>
+                    void downloadReferralReceipt(r.id, r.receiptNumber!, true).catch(() =>
+                      setError(r.id),
+                    )
+                  }
+                  className="shrink-0 rounded-lg border border-border bg-surface px-3 py-1.5 text-sm font-semibold text-text hover:border-border-strong"
+                  data-testid="ventas-justificante"
+                >
+                  {t('justificante')} {String(r.receiptNumber).padStart(4, '0')}
+                </button>
+              ) : null}
             </li>
           ))}
         </ul>

@@ -9,7 +9,12 @@ import { useMemo, useState, type FormEvent } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 import { ApiHttpError } from '@/lib/api-client';
 import { formatCents, formatDate, regionNameFormatter } from '@/lib/i18n/format';
-import { referralsApi, type MemberReferralStats, type PayeeInput } from '@/lib/referrals';
+import {
+  downloadReferralReceipt,
+  referralsApi,
+  type MemberReferralStats,
+  type PayeeInput,
+} from '@/lib/referrals';
 import { cn } from '@/lib/utils';
 
 /** Países donde se puede cobrar por IBAN (los del formato que valida la API). */
@@ -295,6 +300,18 @@ export function CashPayoutSection({
                   date: formatDate(p.paidAt ?? p.createdAt, { dateStyle: 'medium' }),
                 })}
               </span>
+              {p.receiptNumber ? (
+                <button
+                  type="button"
+                  onClick={() =>
+                    void downloadReferralReceipt(p.id, p.receiptNumber!).catch(() => setError(true))
+                  }
+                  className="font-semibold text-brand-600 hover:underline"
+                  data-testid="referidos-justificante"
+                >
+                  {t('justificante')}
+                </button>
+              ) : null}
             </li>
           ))}
         </ul>

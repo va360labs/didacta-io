@@ -51,6 +51,8 @@ export interface ReferralPayoutRow {
   status?: 'PENDING' | 'REQUESTED' | 'DONE';
   /** Cobro en dinero: cuándo lo marcó pagado el creador. */
   paidAt?: string | null;
+  /** Justificante correlativo del aula (cobro en dinero pagado). */
+  receiptNumber?: number | null;
   createdAt: string;
 }
 
@@ -77,6 +79,7 @@ export interface AdminCashPayout {
   totalCents: number;
   currency: string;
   status: 'REQUESTED' | 'DONE';
+  receiptNumber: number | null;
   externalReference: string | null;
   requestedAt: string;
   paidAt: string | null;
@@ -255,6 +258,35 @@ export interface ReferralsPublicTerms {
   minPayoutCents: number;
   allowCreditRedemption: boolean;
   creditMaxSharePercent: number;
+}
+
+/**
+ * Descarga el justificante en PDF de un cobro en dinero (con la sesión: no se
+ * puede enlazar a pelo). `admin` = la ruta del creador.
+ */
+export async function downloadReferralReceipt(
+  payoutId: string,
+  receiptNumber: number,
+  admin = false,
+): Promise<void> {
+  const path = admin
+    ? `${BASE}/admin/cash-payouts/${encodeURIComponent(payoutId)}/receipt`
+    : `${BASE}/me/payouts/${encodeURIComponent(payoutId)}/receipt`;
+  const res = await fetch(path, { headers: { Authorization: `Bearer ${withAuth()}` } });
+  if (!res.ok) {
+    throw new ApiHttpError({
+      message: `No se pudo descargar el justificante (${res.status})`,
+      status: res.status,
+    });
+  }
+  const url = URL.createObjectURL(await res.blob());
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `justificante-${String(receiptNumber).padStart(4, '0')}.pdf`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 10_000);
 }
 
 // ── Captura client-side del enlace (?ref=) ───────────────────────────────────

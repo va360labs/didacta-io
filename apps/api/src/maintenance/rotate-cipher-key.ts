@@ -122,6 +122,14 @@ export const ENCRYPTED_TABLES: readonly EncryptedTable[] = [
     tag: 'payee_tag',
     ref: `tenant_id::text || '/' || user_id::text || '/datos-de-cobro'`,
   },
+  {
+    // Receptor congelado en el justificante de un cobro de referidos.
+    table: 'mod_referrals_payout',
+    cipher: 'payee_snapshot_cipher',
+    iv: 'payee_snapshot_iv',
+    tag: 'payee_snapshot_tag',
+    ref: `tenant_id::text || '/justificante/' || coalesce(receipt_number::text, id::text)`,
+  },
 ];
 
 export interface TableReport {

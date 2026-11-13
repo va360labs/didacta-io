@@ -15,11 +15,12 @@ import {
   Put,
   Query,
   Req,
+  Res,
   UnauthorizedException,
   UseGuards,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
-import type { FastifyRequest } from 'fastify';
+import type { FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { REFERRAL_SCOPES } from '@didacta/mod-referrals';
 import { CurrentUser } from '../../auth/decorators';
@@ -180,6 +181,22 @@ export class ReferralsController {
   async requestPayout(@CurrentUser() user: SessionClaims | undefined) {
     const u = this.requireUser(user);
     return this.registry.getReferralsService().requestCashPayout(u.tenantId, u.sub);
+  }
+
+  @Get('me/payouts/:id/receipt')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Justificante en PDF de un cobro en dinero pagado del propio alumno.' })
+  async myReceipt(
+    @CurrentUser() user: SessionClaims | undefined,
+    @Param('id') id: string,
+    @Res() reply: FastifyReply,
+  ) {
+    const u = this.requireUser(user);
+    const { filename, pdf } = await this.registry
+      .getReferralsService()
+      .receiptPdf(u.tenantId, id, { referrerUserId: u.sub });
+    this.sendPdf(reply, filename, pdf);
   }
 
   @Get('me/stats')
@@ -365,6 +382,20 @@ export class ReferralsController {
     });
   }
 
+  @Get('admin/cash-payouts/:id/receipt')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Justificante en PDF de un cobro en dinero pagado del aula.' })
+  async adminReceipt(
+    @CurrentUser() user: SessionClaims | undefined,
+    @Param('id') id: string,
+    @Res() reply: FastifyReply,
+  ) {
+    const u = this.requireAdmin(user);
+    const { filename, pdf } = await this.registry.getReferralsService().receiptPdf(u.tenantId, id);
+    this.sendPdf(reply, filename, pdf);
+  }
+
   @Post('admin/payouts')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
@@ -386,6 +417,15 @@ export class ReferralsController {
   }
 
   // ---------------- Helpers ----------------
+
+  private sendPdf(reply: FastifyReply, filename: string, pdf: Buffer) {
+    void reply
+      .header('Content-Type', 'application/pdf')
+      .header('Content-Disposition', `attachment; filename="${filename}"`)
+      .header('Content-Length', String(pdf.length))
+      .header('Cache-Control', 'private, no-store')
+      .send(pdf);
+  }
 
   private requireUser(user: SessionClaims | undefined): SessionClaims {
     if (!user) throw new UnauthorizedException();
