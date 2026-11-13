@@ -60,7 +60,9 @@ test.describe('mod.assessments — corrección manual end-to-end', () => {
     await expect(page.getByText('Tu progreso')).toBeVisible({ timeout: 15_000 });
 
     await page.getByRole('button', { name: /Quiz lesson SHORT/ }).click();
-    await page.getByRole('button', { name: /Empezar quiz|Reintentar quiz/ }).click();
+    await page
+      .getByRole('button', { name: /Empezar cuestionario|Reintentar cuestionario/ })
+      .click();
     await page
       .getByPlaceholder(/el formador la corregirá manualmente/)
       .fill('Postgres es una base de datos relacional open-source.');

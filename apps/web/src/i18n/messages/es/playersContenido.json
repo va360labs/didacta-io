@@ -55,18 +55,18 @@
       "SHORT_ANSWER": "Respuesta corta · revisión manual",
       "LONG_ANSWER": "Respuesta extensa · revisión manual"
     },
-    "errorLoad": "No pudimos cargar el quiz. Prueba refrescar la página.",
+    "errorLoad": "No pudimos cargar el cuestionario. Prueba refrescar la página.",
     "errorStart": "No pudimos iniciar tu intento.",
     "errorSubmit": "No pudimos enviar tus respuestas.",
-    "emptyNoQuestions": "Esta lección está marcada como Quiz pero el formador aún no vinculó las preguntas.",
+    "emptyNoQuestions": "Esta lección está marcada como Cuestionario pero el formador aún no vinculó las preguntas.",
     "idleMeta": "{count, plural, one {# pregunta} other {# preguntas}} · umbral <b>{threshold}%</b>{timeLimit, plural, =0 {} other { · # min}}{maxAttempts, plural, =0 {} other { · máx. # intentos}}",
     "pendingReviewTitle": "Tu intento está en revisión",
     "pendingReviewBody": "El formador está corrigiendo tus respuestas abiertas. Te avisaremos cuando esté listo.",
     "lastAttempt": "Último intento: {score}% {passed, select, yes {· aprobado} other {· no aprobado}}",
     "reachedLimit": "Alcanzaste el máximo de intentos permitidos.",
     "startPending": "Iniciando…",
-    "retry": "Reintentar quiz",
-    "start": "Empezar quiz",
+    "retry": "Reintentar cuestionario",
+    "start": "Empezar cuestionario",
     "attemptMeta": "Responde todas las preguntas y envía. Umbral de aprobación: <b>{threshold}%</b>.{hasDeadline, select, yes { Tienes tiempo hasta las {deadline}.} other {}}",
     "points": "{points, plural, one {# pt} other {# pts}}",
     "answerPlaceholder": "Escribe tu respuesta…",
@@ -79,16 +79,16 @@
     "resultScore": "<big>{score}%</big><detail>({earned} de {max} puntos · umbral {threshold}%)</detail>",
     "resultPendingReviewHint": "Tu intento contiene respuestas abiertas. Cuando el formador termine de corregir, vas a poder ver el resultado y, si aprobaste, la lección queda completada automáticamente.",
     "resultPassedHint": "La lección queda marcada como completada. Si era la última que te faltaba, tu certificado se está emitiendo en este momento.",
-    "resultFailedHint": "Si el quiz lo permite, puedes reintentar. Repasa las lecciones anteriores y vuelve cuando estés listo.",
-    "backToQuiz": "Volver al quiz"
+    "resultFailedHint": "Si el cuestionario lo permite, puedes reintentar. Repasa las lecciones anteriores y vuelve cuando estés listo.",
+    "backToQuiz": "Volver al cuestionario"
   },
   "lesson": {
     "type": {
-      "VIDEO": "Video",
+      "VIDEO": "Vídeo",
       "HTML": "Lectura",
       "PDF": "Documento PDF",
       "TEXT": "Texto",
-      "QUIZ": "Quiz"
+      "QUIZ": "Cuestionario"
     },
     "durationEstimated": "⏱ {minutes} min estimados",
     "completed": "Completada",
@@ -101,7 +101,7 @@
     "emptyPdf": "Falta el PDF. Pídele al formador que lo suba.",
     "emptyText": "Esta lección de texto está vacía.",
     "previewQuiz": "Vista previa: los cuestionarios se resuelven al matricularse en el curso.",
-    "emptyQuiz": "Esta lección está marcada como Quiz pero el formador aún no vinculó las preguntas.",
+    "emptyQuiz": "Esta lección está marcada como Cuestionario pero el formador aún no vinculó las preguntas.",
     "previewScorm": "Vista previa: el contenido SCORM se ejecuta al matricularse en el curso.",
     "unsupportedType": "Tipo de lección \"{type}\" no soportado todavía.",
     "scormLoadError": "No pudimos cargar el paquete SCORM. Pídele al formador que lo suba."
