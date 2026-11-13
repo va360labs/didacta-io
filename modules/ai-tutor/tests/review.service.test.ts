@@ -489,7 +489,7 @@ describe('listAnswers · los filtros de estado no revientan el panel (H16)', () 
   it('los filtros combinados tampoco desajustan (curso + búsqueda + fechas + estado)', async () => {
     const { prisma } = makePrisma();
     const filtros = listAnswersSchema.parse({
-      courseId: '11111111-1111-1111-1111-111111111111',
+      courseId: '11111111-1111-4111-8111-111111111111',
       q: 'temario',
       desde: '2026-01-01T00:00:00.000Z',
       hasta: '2026-02-01T00:00:00.000Z',

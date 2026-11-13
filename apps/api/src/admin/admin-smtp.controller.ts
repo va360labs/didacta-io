@@ -126,7 +126,7 @@ const TemplateTestSchema = z.object({
   toEmail: z.string().email(),
   templateKey: z.string().trim().min(1).max(120),
   /** Variables de la plantilla. Las que falten se quedan vacías. */
-  variables: z.record(z.string()).optional(),
+  variables: z.record(z.string(), z.string()).optional(),
   /**
    * Idioma a previsualizar (ej. `en-US`). Si se omite, el de referencia del
    * producto. Se resuelve con la MISMA precedencia que usa el hub al enviar,

@@ -52,7 +52,7 @@ describe('moduleManifestSchema — bloque http (alpha.49)', () => {
     });
     expect(result.success).toBe(false);
     if (!result.success) {
-      const messages = result.error.errors.map((e) => e.message).join(' | ');
+      const messages = result.error.issues.map((e) => e.message).join(' | ');
       expect(messages).toMatch(/unrestrictedHosts/);
     }
   });

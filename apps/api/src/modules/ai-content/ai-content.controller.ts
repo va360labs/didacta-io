@@ -33,7 +33,7 @@ const generateSchema = z.object({
 
 const updateContentSchema = z.object({
   type: z.enum(['SUMMARY', 'FLASHCARDS', 'QUIZ']),
-  content: z.record(z.unknown()),
+  content: z.record(z.string(), z.unknown()),
 });
 
 const rejectSchema = z.object({
