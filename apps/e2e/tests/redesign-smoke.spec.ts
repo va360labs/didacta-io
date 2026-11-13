@@ -88,7 +88,7 @@ test.describe('Redesign smoke — páginas principales', () => {
   test('/events redirige a la pestaña Eventos del calendario', async ({ page }) => {
     // Bloque 9 (simplificar navegación): /events se fusionó con /calendar.
     await withSession(page, '/events');
-    await expect(page).toHaveURL(/\/calendar\?vista=eventos/);
+    await expect(page).toHaveURL(/\/calendar\?view=events/);
     await expect(page.getByText('No hay eventos programados')).toBeVisible();
   });
 

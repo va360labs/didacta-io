@@ -348,7 +348,8 @@ describeWithDb('mod.payouts E2 — alta y estado contra Postgres como didacta_ap
         (create!.params['defaults'] as { profile?: { business_url?: string } }).profile,
       ).not.toHaveProperty('business_url');
       const [link] = fake.callsTo('POST', '/v1/account_links');
-      expect(link!.params['return_url']).toMatch(/\/admin\/payments\?vuelta=1$/);
+      expect(link!.params['return_url']).toMatch(/\/admin\/payments\?return=1$/);
+      expect(link!.params['refresh_url']).toMatch(/\/admin\/payments\?refresh=1$/);
 
       const rows = await admin.modPayoutsAccount.findMany({ where: { tenantId: tenants.A.id } });
       expect(rows).toHaveLength(1);

@@ -982,7 +982,7 @@ function InspectorsPanel({ groupId }: { groupId: string }) {
         <h4 className="text-sm font-semibold">{t('inspectors.title', { count: activos })}</h4>
         <div className="flex gap-2">
           <Link
-            href={`/inspection?grupo=${groupId}`}
+            href={`/inspection?group=${groupId}`}
             className="inline-flex items-center gap-1 text-xs text-brand-700 underline"
           >
             <Icon name="eye" size={12} />

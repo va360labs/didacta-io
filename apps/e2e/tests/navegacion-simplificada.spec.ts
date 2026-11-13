@@ -55,7 +55,7 @@ test.describe('Navegación simplificada (bloque 9)', () => {
 
     // /events redirige a la pestaña Eventos del calendario.
     await page.goto('/events');
-    await expect(page).toHaveURL(/\/calendar\?vista=eventos/);
+    await expect(page).toHaveURL(/\/calendar\?view=events/);
     await expect(page.getByText('Agenda · Calendario')).toBeVisible();
     await expect(page.getByText('Sesiones, talleres y mentorías programadas')).toBeVisible();
   });

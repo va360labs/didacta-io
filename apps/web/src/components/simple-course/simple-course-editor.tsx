@@ -16,6 +16,7 @@ import { useVideoQuota, useVideoUpload, type VideoQuotaState } from '@/lib/use-v
 import { cn } from '@/lib/utils';
 import { SimpleVideoField } from './simple-video-field';
 import { toSlug } from './slug';
+import { queryParam } from '@/lib/legacy-routes';
 
 type SimpleKind = 'VIDEO' | 'TEXT' | 'PDF';
 
@@ -65,10 +66,10 @@ export function SimpleCourseEditor({ courseId }: { courseId: string }) {
   const [course, setCourse] = useState<CourseDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [title, setTitle] = useState('');
-  // Desde «Empieza aquí» se llega con ?anadir=1: el selector ya está abierto.
+  // Desde «Empieza aquí» se llega con ?add=1: el selector ya está abierto.
   const search = useSearchParams();
   const [adding, setAdding] = useState<SimpleKind | 'choose' | null>(
-    search?.get('anadir') === '1' ? 'choose' : null,
+    queryParam(search, 'add') === '1' ? 'choose' : null,
   );
   const [editing, setEditing] = useState<string | null>(null);
   // ¿Puede el aula subir vídeos? Se pregunta una vez para el selector y los

@@ -122,7 +122,7 @@ export function CommunityUpcomingCard() {
                   // enlazan al calendario, que es donde se gestionan.
                 >
                   <Link
-                    href={(item.href ?? '/calendar?vista=eventos') as never}
+                    href={(item.href ?? '/calendar?view=events') as never}
                     className="block hover:opacity-80"
                   >
                     {inner}

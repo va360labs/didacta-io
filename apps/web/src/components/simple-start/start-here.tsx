@@ -156,7 +156,7 @@ function Step({
   const courseHref = view.firstCourseId
     ? `/studio/courses/${view.firstCourseId}`
     : '/studio/courses/new';
-  const addLessonHref = view.firstCourseId ? `${courseHref}?anadir=1` : courseHref;
+  const addLessonHref = view.firstCourseId ? `${courseHref}?add=1` : courseHref;
 
   const result: Record<StepId, string> = {
     academy: t('pasos.academy.hecho', { nombre: view.academyName }),

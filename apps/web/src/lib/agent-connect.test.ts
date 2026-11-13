@@ -33,7 +33,7 @@ describe('agentScreenFor: solo las pantallas de gestión con creación manual', 
     ['/studio/courses/', 'courses'],
     ['/studio/courses/new', 'course-new'],
     [`/studio/courses/${ID}`, 'course-edit'],
-    [`/studio/courses/${ID}?anadir=1`, 'course-edit'],
+    [`/studio/courses/${ID}?add=1`, 'course-edit'],
     ['/studio/live', 'live'],
   ])('%s → %s', (path, screen) => {
     expect(agentScreenFor(path)?.screen).toBe(screen);

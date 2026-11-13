@@ -111,7 +111,7 @@ type TabKey = string;
 
 /**
  * En modo sencillo, «Ajustes» (tu academia y el paso al modo completo); la
- * configuración completa sigue aquí mismo con `?completo=1` o un `?tab=`.
+ * configuración completa sigue aquí mismo con `?full=1` o un `?tab=`.
  */
 export default function ConfiguracionPage() {
   const simple = useSimpleMode();

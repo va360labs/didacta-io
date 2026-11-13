@@ -6,7 +6,7 @@
 import { readdirSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { LEGACY_ROUTES, legacyRedirectPath } from './legacy-routes';
+import { LEGACY_ROUTES, legacyRedirectPath, queryParam } from './legacy-routes';
 
 describe('legacyRedirectPath', () => {
   it.each([
@@ -73,6 +73,31 @@ describe('legacyRedirectPath', () => {
   it('el slug de un curso que se llama como una ruta vieja se conserva', () => {
     expect(legacyRedirectPath('/catalogo/comunidad')).toBe('/catalog/comunidad');
     expect(legacyRedirectPath('/cursos/nuevo')).toBe('/courses/nuevo');
+  });
+});
+
+describe('queryParam: el nombre en inglés y, si no viene, el de antes', () => {
+  const q = (s: string) => new URLSearchParams(s);
+  it.each([
+    ['add', 'add=1', '1'],
+    ['add', 'anadir=1', '1'],
+    ['full', 'completo=1', '1'],
+    ['return', 'vuelta=1', '1'],
+    ['refresh', 'renovar=1', '1'],
+    ['group', 'grupo=g-1', 'g-1'],
+    ['view', 'vista=eventos', 'eventos'],
+    ['view', 'view=events', 'events'],
+  ] as const)('%s con ?%s → %s', (key, query, valor) => {
+    expect(queryParam(q(query), key)).toBe(valor);
+  });
+
+  it('gana el nombre nuevo si vienen los dos', () => {
+    expect(queryParam(q('full=0&completo=1'), 'full')).toBe('0');
+  });
+
+  it('sin el parámetro, o sin params, null', () => {
+    expect(queryParam(q('tab=x'), 'full')).toBeNull();
+    expect(queryParam(null, 'full')).toBeNull();
   });
 });
 

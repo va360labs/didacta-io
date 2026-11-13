@@ -47,6 +47,7 @@ import {
   type MembershipAdminPlan,
   type MembershipConfig,
 } from '@/lib/membership';
+import { queryParam } from '@/lib/legacy-routes';
 
 /**
  * Lo que escribe el admin («999», «999,5», «39.900») → unidad mínima de STRIPE
@@ -102,14 +103,14 @@ const EMPTY_DRAFT: PlanDraft = {
 /**
  * Modo sencillo sin cobros de plataforma: la pestaña «Ventas» llega aquí y
  * enseña lo sencillo (enlace, precio y referidos). La configuración completa
- * de la membresía sigue en la misma ruta con `?completo=1`.
+ * de la membresía sigue en la misma ruta con `?full=1`.
  */
 export default function MembresiaAdminPage() {
   const simple = useSimpleMode();
   const searchParams = useSearchParams();
   if (simple === null) return null;
-  if (simple && searchParams?.get('completo') !== '1') {
-    return <SimpleSales mode="own" completeHref="/admin/membership?completo=1" />;
+  if (simple && queryParam(searchParams, 'full') !== '1') {
+    return <SimpleSales mode="own" completeHref="/admin/membership?full=1" />;
   }
   return <MembresiaCompleta />;
 }

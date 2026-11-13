@@ -106,7 +106,7 @@ const ALLOWLIST: Record<string, { kind: AllowKind; reason: string }> = {
   '/events': {
     kind: 'reachable',
     reason:
-      'redirige a /calendar?vista=eventos (bloque 9: fusionado en la pestaña "Eventos" del calendario; la ruta se conserva para enlaces guardados)',
+      'redirige a /calendar?view=events (bloque 9: fusionado en la pestaña "Eventos" del calendario; la ruta se conserva para enlaces guardados)',
   },
   '/account/subscriptions': {
     kind: 'reachable',

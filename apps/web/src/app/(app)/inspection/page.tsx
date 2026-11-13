@@ -21,6 +21,7 @@ import {
   type InspectionView,
   type InspectorGroupRef,
 } from '@/modules/fundae';
+import { queryParam } from '@/lib/legacy-routes';
 
 /**
  * Expediente de seguimiento de una acción bonificada, tal y como lo mira la
@@ -33,7 +34,7 @@ import {
  * así que un enlace guardado deja de abrir en cuanto el acceso se retira o
  * caduca.
  *
- * Un `tenant_admin` también entra, con `?grupo=<id>`, desde el detalle del
+ * Un `tenant_admin` también entra, con `?group=<id>`, desde el detalle del
  * grupo: quien firma la bonificación necesita ver el expediente tal y como lo
  * verá la inspección ANTES de comunicar las claves.
  *
@@ -45,7 +46,7 @@ export default function SeguimientoFundaePage() {
   const t = useTranslations('modFundae');
   const tErrors = useTranslations('errors');
   const params = useSearchParams();
-  const requestedGroupId = params.get('grupo');
+  const requestedGroupId = queryParam(params, 'group');
 
   const [groups, setGroups] = useState<InspectorGroupRef[] | null>(null);
   const [selected, setSelected] = useState<string | null>(requestedGroupId);

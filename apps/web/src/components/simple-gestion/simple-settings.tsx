@@ -28,7 +28,7 @@ const DIDACTA_SAT = 70;
  * «Ajustes» del MODO SENCILLO: tu academia (nombre, logo y color, con vista
  * previa en vivo) y el interruptor para pasar al modo completo. Lo técnico
  * (correo propio, cobros con claves, Zoom, idioma…) sigue en la misma página
- * con `?completo=1`, sin rutas duplicadas.
+ * con `?full=1`, sin rutas duplicadas.
  */
 export function SimpleSettings() {
   const t = useTranslations('modoSencilloGestion.ajustes');
@@ -171,7 +171,7 @@ export function SimpleSettings() {
       </form>
 
       <Link
-        href="/admin/settings?completo=1"
+        href="/admin/settings?full=1"
         className="mt-4 flex items-center gap-3 rounded-2xl border border-border bg-surface p-4 hover:border-border-strong"
       >
         <Icon name="cog" size={20} />

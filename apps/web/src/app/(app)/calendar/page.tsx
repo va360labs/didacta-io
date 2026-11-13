@@ -20,6 +20,7 @@ import {
 } from '@/lib/agenda';
 import { formatDate, formatTime } from '@/lib/i18n/format';
 import { EventosView } from './eventos-view';
+import { queryParam } from '@/lib/legacy-routes';
 
 /** Ventana de la agenda: medio año atrás y un año hacia delante. */
 const AGENDA_MONTHS_BACK = 6;
@@ -61,11 +62,13 @@ export default function CalendarioPage() {
   const today = new Date();
   const [view, setView] = useState<View>('Mes');
 
-  // `/events` redirige aquí con `?vista=eventos` (bloque 9 — navegación). Se
+  // `/events` redirige aquí con `?view=events` (bloque 9 — navegación; un
+  // enlace de antes puede traer `?vista=eventos`). Se
   // aplica tras el montaje (no en el inicializador) para que el primer render
   // del cliente coincida con el HTML del servidor (evita hydration mismatch).
   useEffect(() => {
-    if (new URLSearchParams(window.location.search).get('vista') === 'eventos') {
+    const vista = queryParam(new URLSearchParams(window.location.search), 'view');
+    if (vista === 'events' || vista === 'eventos') {
       setView('Eventos');
     }
   }, []);

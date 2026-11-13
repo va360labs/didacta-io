@@ -46,7 +46,7 @@ const TONE: Record<string, string> = {
  * venta con su precio, las últimas ventas y los referidos («Tus alumnos venden
  * por ti»). Todo con datos reales de cobros (`mod.payouts`), del modo sencillo
  * y del programa de referidos; lo técnico sigue en la vista completa
- * (`?completo=1` en la misma ruta).
+ * (`?full=1` en la misma ruta).
  *
  * `platform`: Didacta Cloud cobra por la plataforma (/admin/payments).
  * `own`: el aula cobra con su propia cuenta (/admin/membership sin cobros de

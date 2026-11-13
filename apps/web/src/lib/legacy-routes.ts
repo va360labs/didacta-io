@@ -117,3 +117,29 @@ export function legacyRedirectPath(pathname: string): string | null {
   }
   return null;
 }
+
+/**
+ * Parámetros de query que antes iban en español. Las páginas leen el nombre
+ * en inglés y, si no viene, el de antes: hay enlaces ya enviados con el viejo
+ * (la vuelta del alta de cobros de Stripe trae `?vuelta=1`, un correo puede
+ * llevar `?vista=eventos`). Los enlaces nuevos se escriben en inglés.
+ */
+export const LEGACY_QUERY_KEYS = {
+  add: 'anadir',
+  full: 'completo',
+  return: 'vuelta',
+  refresh: 'renovar',
+  group: 'grupo',
+  view: 'vista',
+} as const;
+
+export type QueryKey = keyof typeof LEGACY_QUERY_KEYS;
+
+/** Valor del parámetro `key`, o el de su nombre de antes. `null` si no viene ninguno. */
+export function queryParam(
+  params: { get(name: string): string | null } | null | undefined,
+  key: QueryKey,
+): string | null {
+  if (!params) return null;
+  return params.get(key) ?? params.get(LEGACY_QUERY_KEYS[key]);
+}

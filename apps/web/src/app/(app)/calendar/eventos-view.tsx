@@ -104,7 +104,7 @@ function EventCard({ event }: { event: CommunityEvent }) {
  * Pestaña "Eventos" del calendario: lista de eventos de comunidad con
  * inscripción/cancelación. Antes vivía como página propia en `/events`
  * (fusionada aquí por el bloque 9 — simplificar navegación); esa ruta ahora
- * redirige a `/calendar?vista=eventos`.
+ * redirige a `/calendar?view=events`.
  */
 export function EventosView() {
   const t = useTranslations('alumnoAprendizaje');

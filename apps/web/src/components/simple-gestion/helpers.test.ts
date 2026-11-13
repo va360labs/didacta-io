@@ -64,9 +64,12 @@ describe('alumnos y ajustes sencillos', () => {
     expect(onlyStudents(users).map((u) => u.id)).toEqual(['1', '3']);
   });
 
-  it('la vista completa de Ajustes se fuerza con ?completo=1 o con ?tab=', () => {
+  it('la vista completa de Ajustes se fuerza con ?full=1 o con ?tab=', () => {
     const p = (q: string) => new URLSearchParams(q);
+    expect(wantsFullSettings(p('full=1'))).toBe(true);
+    // El nombre de antes, de enlaces ya enviados.
     expect(wantsFullSettings(p('completo=1'))).toBe(true);
+    expect(wantsFullSettings(p('full=0'))).toBe(false);
     expect(wantsFullSettings(p('tab=pagos'))).toBe(true);
     expect(wantsFullSettings(p(''))).toBe(false);
     expect(wantsFullSettings(null)).toBe(false);

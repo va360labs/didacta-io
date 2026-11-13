@@ -15,8 +15,9 @@
  *  - Community (sin modo plataforma): esta ruta no está en el menú y, si se
  *    abre a mano, redirige a Configuración → Pagos, que no cambia nada.
  *
- * Stripe devuelve aquí al terminar el alta (`?vuelta=1`) y cuando el enlace
- * del alta caducó (`?renovar=1`).
+ * Stripe devuelve aquí al terminar el alta (`?return=1`) y cuando el enlace
+ * del alta caducó (`?refresh=1`); también valen `?vuelta=1`/`?renovar=1`, los
+ * de antes (`queryParam`).
  *
  * Debajo, «Tus datos fiscales» (factura y DAC7), «Tus ventas» (cada venta
  * con lo que te llega y cuándo, y el resumen por moneda) y «Tus facturas» (la
@@ -31,10 +32,11 @@ import { PayoutsSalesSection } from '@/components/admin/payouts-sales-section';
 import { PayoutsTaxProfileCard } from '@/components/admin/payouts-tax-profile-card';
 import { SimpleSales } from '@/components/simple-ventas/simple-sales';
 import { useSimpleMode } from '@/lib/simple-mode';
+import { queryParam } from '@/lib/legacy-routes';
 
 /**
  * Modo sencillo: «Ventas» (lo vendido, el enlace, el precio y los referidos).
- * La vista de siempre sigue en la misma ruta con `?completo=1`, y es la única
+ * La vista de siempre sigue en la misma ruta con `?full=1`, y es la única
  * en modo completo.
  */
 export default function CobrosPage(): React.JSX.Element | null {
@@ -45,17 +47,17 @@ export default function CobrosPage(): React.JSX.Element | null {
     router.replace('/admin/payments');
   }, [router]);
   if (simple === null) return null;
-  if (simple && searchParams?.get('completo') !== '1') {
+  if (simple && queryParam(searchParams, 'full') !== '1') {
     const returnAction =
-      searchParams?.get('vuelta') === '1'
+      queryParam(searchParams, 'return') === '1'
         ? 'sync'
-        : searchParams?.get('renovar') === '1'
+        : queryParam(searchParams, 'refresh') === '1'
           ? 'renew'
           : null;
     return (
       <SimpleSales
         mode="platform"
-        completeHref="/admin/payments?completo=1"
+        completeHref="/admin/payments?full=1"
         returnAction={returnAction}
         onReturnHandled={clearQuery}
       />
@@ -68,9 +70,9 @@ function CobrosCompleto(): React.JSX.Element {
   const router = useRouter();
   const searchParams = useSearchParams();
   const returnAction =
-    searchParams?.get('vuelta') === '1'
+    queryParam(searchParams, 'return') === '1'
       ? 'sync'
-      : searchParams?.get('renovar') === '1'
+      : queryParam(searchParams, 'refresh') === '1'
         ? 'renew'
         : null;
 

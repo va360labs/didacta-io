@@ -38,10 +38,15 @@ const VIEJAS = new Set([
   'verificar', 'catalogo', 'condiciones-referidos', 'unete', 'bienvenida', 'sitio',
 ]); // prettier-ignore
 
+/** Claves de query de antes (los valores de `?tab=` aún no se han traducido). */
+const QUERY_VIEJAS = ['anadir', 'completo', 'vuelta', 'renovar', 'grupo', 'vista'];
+
 /** Segmentos fijos de una ruta: los que no son un id ni un slug de contenido. */
 function segmentoEspanol(url: string): string | null {
-  const { pathname } = new URL(url, 'http://x');
+  const { pathname, searchParams } = new URL(url, 'http://x');
   if (pathname.startsWith('/api/')) return null;
+  const clave = QUERY_VIEJAS.find((k) => searchParams.has(k));
+  if (clave) return `?${clave}=`;
   const segs = pathname.split('/').filter(Boolean);
   // `/catalog/<slug>`, `/courses/<slug>`, `/spaces/<slug>`, `/paths/<slug>`…: el
   // segundo segmento es contenido del aula. Solo cuentan los fijos del App
@@ -56,6 +61,9 @@ test('el detector discrimina: marca las rutas de antes y deja pasar las nuevas',
   expect(segmentoEspanol('/formador/cursos/x')).toBe('formador');
   expect(segmentoEspanol('/studio/courses/x/alumnos')).toBe('alumnos');
   expect(segmentoEspanol('/admin/configuracion?tab=x')).toBe('configuracion');
+  expect(segmentoEspanol('/studio/courses/x?anadir=1')).toBe('?anadir=');
+  expect(segmentoEspanol('/admin/payments?completo=1')).toBe('?completo=');
+  expect(segmentoEspanol('/studio/courses/x?add=1')).toBeNull();
   expect(segmentoEspanol('/community/abc')).toBeNull();
   expect(segmentoEspanol('/catalog/curso-de-acuarela')).toBeNull();
   // El slug de un curso puede ser una palabra española: es contenido.

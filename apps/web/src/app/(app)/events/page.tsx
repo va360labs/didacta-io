@@ -11,5 +11,5 @@ import { redirect } from 'next/navigation';
  * se conserva como redirect para enlaces guardados y marcadores.
  */
 export default function EventosPage() {
-  redirect('/calendar?vista=eventos');
+  redirect('/calendar?view=events');
 }
