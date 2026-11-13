@@ -111,7 +111,7 @@ export default function LeaderboardPage() {
             onClick={() => setRange(value)}
             className={`rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors ${
               range === value
-                ? 'border-(--didacta-trust) bg-(--didacta-trust)/10 text-(--didacta-trust)'
+                ? 'border-brand-600 bg-brand-50 text-brand-700'
                 : 'border-border text-text-muted hover:text-text'
             }`}
           >
