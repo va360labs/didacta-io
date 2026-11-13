@@ -15,7 +15,10 @@
  * - Idioma: el que eligió la creadora al montar el aula (alta en 3 preguntas del
  *   modo sencillo, `tenant_setting simple-mode/state.locale`); si no lo hay, el
  *   del perfil de la primera persona que la administra; si tampoco, español
- *   (`HUB_DEFAULT_LOCALE`, el idioma por defecto de todo lo demás).
+ *   (`HUB_DEFAULT_LOCALE`, el idioma por defecto de todo lo demás). La misma
+ *   regla está en SQL en `packages/database/prisma/seed.sql` (espacios de
+ *   sistema): si cambia aquí, cambia allí; lo vigila
+ *   `seed-system-spaces.integration.test.ts`.
  * - Zona horaria: la del perfil de la primera persona que la administra si no
  *   es UTC (UTC es el valor por defecto de la columna, no una elección); si no,
  *   la del último directo programado (esa sí la elige el formulario); si
