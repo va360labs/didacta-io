@@ -90,8 +90,8 @@ export function CommunityUpcomingCard() {
                     style={{
                       background: clase
                         ? 'color-mix(in srgb, var(--didacta-growth) 12%, transparent)'
-                        : 'color-mix(in srgb, var(--didacta-trust) 12%, transparent)',
-                      color: clase ? 'var(--didacta-growth)' : 'var(--didacta-trust)',
+                        : 'var(--color-brand-50)',
+                      color: clase ? 'var(--didacta-growth)' : 'var(--color-brand-600)',
                     }}
                   >
                     <Icon name={clase ? 'video' : 'calendar'} size={15} />

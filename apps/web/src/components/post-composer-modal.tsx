@@ -488,7 +488,7 @@ export function PostComposerModal({ open, onClose, spaceSlug, onSuccess, editPos
                 onKeyDown={handleTagKey}
                 onBlur={() => tagInput && addTag(tagInput)}
                 placeholder={t('addTagPlaceholder')}
-                className="border border-dashed border-[#CBD5E1] rounded-full px-3 py-1 text-xs text-[#94A3B8] placeholder:text-[#CBD5E1] focus:outline-none focus:border-[#1E5AA8] focus:text-[#374151] bg-transparent w-28 transition-colors"
+                className="border border-dashed border-[#CBD5E1] rounded-full px-3 py-1 text-xs text-[#94A3B8] placeholder:text-[#CBD5E1] focus:outline-none focus:border-brand-500 focus:text-[#374151] bg-transparent w-28 transition-colors"
               />
             )}
           </div>
@@ -672,7 +672,7 @@ export function PostComposerModal({ open, onClose, spaceSlug, onSuccess, editPos
                   type="checkbox"
                   checked={notifyAll}
                   onChange={(e) => setNotifyAll(e.target.checked)}
-                  className="h-3.5 w-3.5 accent-[#1E5AA8]"
+                  className="h-3.5 w-3.5 accent-brand-600"
                 />
                 {t('notifyAllLabel')}
               </label>

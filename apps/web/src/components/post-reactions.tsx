@@ -89,7 +89,7 @@ export function PostReactions({
               'inline-flex items-center gap-1 rounded-full border text-sm transition-colors',
               variant === 'compact' ? 'px-2 py-0.5 text-xs' : 'px-3 py-1',
               mine
-                ? 'border-[rgba(46,125,206,0.32)] bg-[var(--didacta-info-bg)] text-[var(--didacta-info-fg)]'
+                ? 'border-brand-200 bg-brand-50 text-brand-700'
                 : 'border-border bg-surface text-text-muted',
               interactive && 'hover:border-border-strong hover:text-text',
             )}

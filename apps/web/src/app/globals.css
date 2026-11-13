@@ -199,6 +199,9 @@
      flotante). El #18b5a8 puro sobre #0d1b2a queda corto de contraste. */
   --didacta-growth-on-dark: #7fd8d0;
   --didacta-coral: #ff6f61;
+  /* Oro del primer puesto del ranking (medalla). Lo usaba ya la página del
+     ranking sin estar definido: el 1.º salía sin color. */
+  --didacta-gold: #a16207;
   --didacta-surface: #f1f3f5;
 
   --didacta-success-bg: #e6f7f5;

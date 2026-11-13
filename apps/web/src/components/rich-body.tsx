@@ -220,11 +220,7 @@ function InlineNodes({ nodes }: { nodes: RichNode[] }) {
             );
           case 'mention':
             return (
-              <span
-                key={i}
-                className="rounded px-0.5 font-semibold"
-                style={{ background: 'var(--didacta-info-bg)', color: 'var(--didacta-info-fg)' }}
-              >
+              <span key={i} className="rounded bg-brand-50 px-0.5 font-semibold text-brand-700">
                 @{n.handle}
               </span>
             );

@@ -239,7 +239,7 @@ export function CommunityGalleryModal({
                     type="button"
                     title={tip}
                     onClick={() => openImage(a)}
-                    className="relative h-20 w-20 overflow-hidden rounded-lg border border-[#E2E8F0] bg-[#F8FAFC] focus:outline-none focus:ring-2 focus:ring-[#1E5AA8]"
+                    className="relative h-20 w-20 overflow-hidden rounded-lg border border-[#E2E8F0] bg-[#F8FAFC] focus:outline-none focus:ring-2 focus:ring-brand-500"
                   >
                     <img
                       src={a.url}

@@ -7,7 +7,11 @@ import type { DidactaModule, ModuleContext } from '@didacta/core-kernel';
 import { manifest } from './manifest.js';
 
 export { manifest };
-export { CommunityService, type BroadcastRecipient } from './community.service.js';
+export {
+  CommunityService,
+  type BroadcastRecipient,
+  type RecentComment,
+} from './community.service.js';
 export {
   parseBodyAttachments,
   flattenPostAttachments,

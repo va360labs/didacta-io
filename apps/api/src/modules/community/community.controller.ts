@@ -54,6 +54,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import type { SessionClaims } from '../../auth/token.service';
 import { CommunityDigestWorker } from './community-digest.worker';
 import { CommunityBroadcastWorker } from './community-broadcast.worker';
+import { CommunitySidebarService, type CommunitySidebarData } from './community-sidebar.service';
 import { ModuleRegistryService } from '../module-registry.service';
 
 const listAttachmentsQuerySchema = z.object({
@@ -70,6 +71,7 @@ export class CommunityController {
     private readonly prisma: PrismaService,
     private readonly digest: CommunityDigestWorker,
     private readonly broadcast: CommunityBroadcastWorker,
+    private readonly sidebar: CommunitySidebarService,
   ) {}
 
   private async authorOf(user: SessionClaims): Promise<{ id: string; displayName: string | null }> {
@@ -379,6 +381,22 @@ export class CommunityController {
       }),
     ]);
     return { members, activeCourses, activeGroups: 0 };
+  }
+
+  // ── Barra lateral del feed ────────────────────────────────────────────────
+
+  @Get('sidebar')
+  @ApiOperation({
+    summary:
+      'Barra lateral del feed en una llamada: tarjeta del aula (marca, miembros, presencia), ranking del mes y últimos comentarios. Cada bloque viene null o vacío sin datos.',
+  })
+  async getSidebar(
+    @CurrentUser() user: SessionClaims | undefined,
+  ): Promise<CommunitySidebarData & { canManage: boolean }> {
+    if (!user) throw new UnauthorizedException();
+    const data = await this.sidebar.get(user.tenantId, user.sub);
+    // Lo único que depende de quien mira: el botón «Ajustes» del aula.
+    return { ...data, canManage: canModerate(user) };
   }
 
   // ── Espacios ───────────────────────────────────────────────────────────────

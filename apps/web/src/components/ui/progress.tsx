@@ -9,7 +9,7 @@ interface Props {
   /** Valor 0..100. Se clampea automáticamente. */
   value: number;
   /** Color del fill. Default: success (Verde crecimiento). */
-  tone?: 'success' | 'info' | 'warn';
+  tone?: 'success' | 'info' | 'warn' | 'brand';
   /** Altura en pixels. Default 8 (UI kit). */
   height?: number;
   className?: string;
@@ -21,6 +21,8 @@ const TONE_CLASS: Record<NonNullable<Props['tone']>, string> = {
   success: 'bg-[var(--didacta-growth)]',
   info: 'bg-[var(--didacta-trust)]',
   warn: 'bg-[var(--didacta-coral)]',
+  /** Color del aula: progreso de algo suyo (un curso), no un estado. */
+  brand: 'bg-brand-500',
 };
 
 /**

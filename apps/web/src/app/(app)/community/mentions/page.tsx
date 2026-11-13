@@ -93,8 +93,8 @@ export default function MisMencionesPage() {
               aria-hidden="true"
               className="grid h-20 w-20 place-items-center rounded-2xl"
               style={{
-                background: 'var(--didacta-info-bg)',
-                color: 'var(--didacta-info-fg)',
+                background: 'var(--color-brand-50)',
+                color: 'var(--color-brand-700)',
               }}
             >
               <Icon name="message" size={40} />
@@ -127,8 +127,8 @@ export default function MisMencionesPage() {
                         <span
                           className="rounded px-1 font-mono font-semibold"
                           style={{
-                            background: 'var(--didacta-info-bg)',
-                            color: 'var(--didacta-info-fg)',
+                            background: 'var(--color-brand-50)',
+                            color: 'var(--color-brand-700)',
                           }}
                         >
                           {chunks}

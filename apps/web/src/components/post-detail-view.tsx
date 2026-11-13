@@ -422,7 +422,7 @@ export function PostDetailView({
               className={cn(
                 'inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-sm transition-colors',
                 mine
-                  ? 'border-[rgba(46,125,206,0.32)] bg-(--didacta-info-bg) text-(--didacta-info-fg)'
+                  ? 'border-brand-200 bg-brand-50 text-brand-700'
                   : 'border-[#E2E8F0] bg-[#F8FAFC] text-[#64748B] hover:border-[#CBD5E1] hover:text-[#374151]',
               )}
             >
@@ -511,7 +511,7 @@ export function PostDetailView({
             onChange={(e) => setCommentBody(e.target.value)}
             placeholder={t('commentPlaceholder')}
             required
-            className="border-[#E2E8F0] bg-[#F8FAFC] text-[15px] focus:border-[#1E5AA8] focus:bg-white transition-colors"
+            className="border-[#E2E8F0] bg-[#F8FAFC] text-[15px] focus:border-brand-500 focus:bg-white transition-colors"
           />
           <div className="flex items-center gap-2">
             {/* Emoji picker trigger */}
@@ -621,7 +621,7 @@ function ImageGallery({ images }: { images: AttachmentImage[] }) {
             type="button"
             onClick={() => setLightboxIdx(i)}
             title={img.name}
-            className="relative h-20 w-20 overflow-hidden rounded-lg border border-[#E2E8F0] bg-[#F8FAFC] focus:outline-none focus:ring-2 focus:ring-[#1E5AA8]"
+            className="relative h-20 w-20 overflow-hidden rounded-lg border border-[#E2E8F0] bg-[#F8FAFC] focus:outline-none focus:ring-2 focus:ring-brand-500"
           >
             <img
               src={img.url}
@@ -910,7 +910,7 @@ function CommentBody({
                 className={cn(
                   'inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs transition-colors',
                   m
-                    ? 'border-[rgba(46,125,206,0.32)] bg-(--didacta-info-bg) text-(--didacta-info-fg)'
+                    ? 'border-brand-200 bg-brand-50 text-brand-700'
                     : 'border-[#E2E8F0] bg-[#F8FAFC] text-[#94A3B8] hover:border-[#CBD5E1] hover:text-[#64748B]',
                 )}
               >
@@ -924,7 +924,7 @@ function CommentBody({
               type="button"
               onClick={onReply}
               disabled={pending}
-              className="text-xs font-semibold text-[#1E5AA8] hover:underline"
+              className="text-xs font-semibold text-brand-700 hover:underline"
             >
               {t('reply')}
             </button>

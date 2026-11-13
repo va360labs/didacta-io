@@ -38,6 +38,8 @@ export {
   type CommunityTagIcon,
   type CommunitySpaceIcon,
   type CommunityAttachment,
+  type CommunitySidebar,
+  type SidebarPerson,
 } from './client';
 
 export { useCommunityTags, invalidateCommunityTagsCache } from './tags-client';
