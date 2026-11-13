@@ -8,6 +8,7 @@ import { BillingWebhookController } from '../src/modules/billing/billing-webhook
 import { SubscriptionsErrorFilter } from '../src/modules/subscriptions/subscriptions-error.filter';
 import { SubscriptionsWebhookController } from '../src/modules/subscriptions/subscriptions-webhook.controller';
 import { TenantStripeResolverService } from '../src/modules/tenant-stripe-resolver.service';
+import { TenantResolverService } from '../src/tenancy/tenant-resolver.service';
 
 /**
  * Aislamiento entre aulas de los webhooks de Stripe.
@@ -169,18 +170,34 @@ function build(opts: { globalFallbackAllowed?: boolean } = {}) {
     async () => opts.globalFallbackAllowed ?? true,
   );
 
+  const domainResolver = new TenantResolverService({
+    tenantDomain: {
+      findFirst: async (args: { where: { tenantId?: string } }) => {
+        const hostname = Object.keys(HOST).find((h) => HOST[h] === args.where.tenantId);
+        return hostname ? { hostname } : null;
+      },
+    },
+  } as never);
   const tenantResolver = {
     resolveByHost: async (host: string | undefined) => {
       const id = host ? HOST[host] : undefined;
       return id ? { id, slug: host, name: host, matchedBy: 'hostname', hostname: host } : null;
     },
-    resolveTenantWebBaseUrl: async () => 'https://aula.test',
+    // Resolvedor REAL sobre los dominios de arriba: el «define tu contraseña»
+    // del comprador sale con el dominio del aula del EVENTO, no con el de la
+    // petición (el endpoint de Stripe puede estar en el dominio de otra aula, o
+    // en el del despliegue).
+    resolveTenantWebBaseUrl: (tenantId: string | null, req?: never) =>
+      domainResolver.resolveTenantWebBaseUrl(tenantId, req),
   };
 
   // Los dos provisioners (comprador de curso y comprador de membresía).
   const provisioned: Array<{ tenantId: string; email: string }> = [];
-  const provision = async (args: { tenantId: string; email: string }) => {
+  /** Base del enlace «define tu contraseña» que recibió cada alta. */
+  const provisionedBases: Array<{ tenantId: string; webBaseUrl: string }> = [];
+  const provision = async (args: { tenantId: string; email: string; webBaseUrl: string }) => {
     provisioned.push({ tenantId: args.tenantId, email: args.email });
+    provisionedBases.push({ tenantId: args.tenantId, webBaseUrl: args.webBaseUrl });
     return { userId: `user-${args.tenantId.slice(0, 1)}-${args.email}`, created: true };
   };
   const provisioning = { provision };
@@ -211,7 +228,16 @@ function build(opts: { globalFallbackAllowed?: boolean } = {}) {
     auditLog as never,
   );
 
-  return { db, published, provisioned, audited, logger, billingController, subsController };
+  return {
+    db,
+    published,
+    provisioned,
+    provisionedBases,
+    audited,
+    logger,
+    billingController,
+    subsController,
+  };
 }
 
 let eventSeq = 0;
@@ -717,6 +743,7 @@ describe('webhooks de Stripe · control: lo legítimo se sigue procesando', () =
     expect(t.db.subs).toHaveLength(1);
     expect(t.db.subs[0]).toMatchObject({ tenantId: B, planId: 'plan-b', status: 'ACTIVE' });
     expect(t.provisioned).toEqual([{ tenantId: B, email: 'comprador@example.com' }]);
+    expect(t.provisionedBases).toEqual([{ tenantId: B, webBaseUrl: 'https://aula-b.test' }]);
     expect(t.published.map((e) => [e.tenantId, e.name])).toEqual([
       [B, 'subscriptions.membership.activated'],
     ]);
@@ -956,7 +983,37 @@ describe('webhooks de Stripe · varias aulas sobre la MISMA cuenta de Stripe', (
     expect(t.db.subs).toHaveLength(1);
     expect(t.db.subs[0]).toMatchObject({ tenantId: D, status: 'ACTIVE' });
     expect(t.provisioned).toEqual([{ tenantId: D, email: 'comprador@example.com' }]);
+    // El enlace del comprador va al aula de la compra (D), no a la del
+    // dominio por el que llegó el webhook (C).
+    expect(t.provisionedBases).toEqual([{ tenantId: D, webBaseUrl: 'https://aula-d.test' }]);
     expect(t.audited).toEqual([]);
+  });
+
+  it('compra de CURSO sin cuenta en D, webhook por el dominio de C y WEB_PUBLIC_URL del despliegue → enlace al dominio de D', async () => {
+    const previous = process.env['WEB_PUBLIC_URL'];
+    process.env['WEB_PUBLIC_URL'] = 'https://pool.didacta.io';
+    try {
+      const t = build({ globalFallbackAllowed: true });
+      seedOrder(t.db, D, 'orden-d', { userId: null });
+
+      const status = await statusOf(() =>
+        t.billingController.handle(
+          signedRequest({
+            host: 'aula-c.test',
+            secret: GLOBAL.webhookSecret,
+            type: 'checkout.session.completed',
+            object: courseSession(D, 'orden-d'),
+          }),
+        ),
+      );
+
+      expect(status).toBe(200);
+      expect(t.provisioned).toEqual([{ tenantId: D, email: 'comprador@example.com' }]);
+      expect(t.provisionedBases).toEqual([{ tenantId: D, webBaseUrl: 'https://aula-d.test' }]);
+    } finally {
+      if (previous === undefined) delete process.env['WEB_PUBLIC_URL'];
+      else process.env['WEB_PUBLIC_URL'] = previous;
+    }
   });
 
   it('cuenta de instancia: un evento suyo NO puede nombrar a un aula con Stripe propio → 403', async () => {
