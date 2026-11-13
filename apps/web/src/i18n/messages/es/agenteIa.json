@@ -52,7 +52,7 @@
       "paso": "Añade esto a .mcp.json en tu proyecto (GitHub Copilot en modo agente):"
     }
   },
-  "puede": "Crea y edita cursos y lecciones, programa directos y publica en la comunidad. Lo que crea queda en borrador: lo publicas tú.",
+  "puede": "Crea y edita cursos y lecciones, programa directos y publica en la comunidad. Los cursos nuevos quedan en borrador hasta que los publicas tú; los directos, las publicaciones de la comunidad y las lecciones de un curso ya publicado se ven al momento.",
   "noPuede": "No pone precios, no publica a la venta, no borra nada ni invita a nadie.",
   "chatgpt": "ChatGPT todavía no permite conectarse con una clave."
 }

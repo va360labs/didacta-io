@@ -19,8 +19,9 @@
  *     publicado SIN precio queda gratis para todo el aula
  *     (`LearningService.isFreeCourse`): las dos cosas tocan dinero;
  *   - avisar por correo a todo el aula (notifyAll de la comunidad).
- * Lo que crea un agente queda en borrador y lo publica la persona desde
- * «Empieza aquí».
+ * Los cursos nuevos que crea un agente quedan en borrador y los publica la
+ * persona desde «Empieza aquí». Los directos, las publicaciones de la comunidad
+ * y las lecciones de un curso ya publicado se ven al momento.
  */
 export const AGENT_SCOPES = [
   'agent:courses:read',

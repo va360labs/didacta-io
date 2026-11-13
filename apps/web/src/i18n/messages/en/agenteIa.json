@@ -52,7 +52,7 @@
       "paso": "Add this to .mcp.json in your project (GitHub Copilot in agent mode):"
     }
   },
-  "puede": "It creates and edits courses and lessons, schedules live classes and posts in the community. What it creates stays as a draft: you publish it.",
+  "puede": "It creates and edits courses and lessons, schedules live classes and posts in the community. New courses stay as drafts until you publish them; live classes, community posts and lessons added to a published course are visible right away.",
   "noPuede": "It doesn’t set prices, put anything on sale, delete anything or invite anyone.",
   "chatgpt": "ChatGPT can’t connect with a key yet."
 }
