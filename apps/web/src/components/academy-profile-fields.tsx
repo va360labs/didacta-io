@@ -127,8 +127,9 @@ export function CoverField({
         }}
       />
       {coverUrl ? (
-        <div className="overflow-hidden rounded-xl border border-border bg-surface-2">
-          {/* La misma proporción que en la tarjeta de la comunidad. */}
+        // Al tamaño de la tarjeta de la comunidad (y en su proporción): a todo
+        // el ancho del formulario la foto se comía la pantalla.
+        <div className="max-w-sm overflow-hidden rounded-xl border border-border bg-surface-2">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={coverUrl}
