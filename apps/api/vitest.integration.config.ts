@@ -37,10 +37,11 @@ export default defineConfig({
     testTimeout: 30_000,
     hookTimeout: 60_000,
     pool: 'forks',
-    poolOptions: {
-      forks: {
-        singleFork: true,
-      },
-    },
+    // Un fichero detrás de otro. Vitest 4 quitó `poolOptions.forks.singleFork`
+    // (lo ignora con un aviso) y con él los ficheros corrían en paralelo sobre
+    // la MISMA base: `rls.sql` aplicado a la vez por varios psql y el
+    // `process.env` de un test pisando el de otro. `maxWorkers: 1` es su
+    // sustituto.
+    maxWorkers: 1,
   },
 });
