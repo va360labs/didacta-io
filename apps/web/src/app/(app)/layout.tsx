@@ -22,6 +22,7 @@ import { NotificationsToaster } from '@/components/notifications-toaster';
 import { FloatingChat, MessagingProvider } from '@/modules/messaging';
 import { hayPaseDeBienvenida, onboardingApi } from '@/lib/academy';
 import { authStorage, type StoredSession } from '@/lib/auth-storage';
+import { administra, firstAccessDoor, type FirstAccessDoor } from '@/lib/first-access';
 import { clearIntendedPath, rememberIntendedPath } from '@/lib/post-login-redirect';
 import { meApi } from '@/lib/me';
 import { labelOr } from '@/lib/i18n/labels';
@@ -49,6 +50,7 @@ import { SimpleShell } from '@/components/simple-shell/simple-shell';
 import {
   readSimpleModeCache,
   SIMPLE_MODE_CHANGED_EVENT,
+  simpleModeNow,
   writeSimpleModeCache,
 } from '@/lib/simple-mode';
 
@@ -103,37 +105,33 @@ export default function AppLayout({ children }: { children: ReactNode }) {
     // backfill), de modo que también se gatea a quienes NO entran por primera
     // vez. Solo se libera al completar el onboarding (timestamp truthy).
     /**
-     * Dos asistentes, y el ORDEN importa.
+     * Dos asistentes, y el ORDEN importa: lo decide `firstAccessDoor`
+     * (`lib/first-access.ts`), con sus tests.
      *
-     * El de perfil (`/onboarding`) pide foto —obligatoria—, nombre e idioma. El
-     * de academia (`/bienvenida`) le pone nombre y marca al negocio recién
-     * comprado. Puestos al revés, a quien acaba de pagar se le exige una foto
-     * suya antes de dejarle tocar su academia, que es un primer contacto
-     * pésimo: lo que ha comprado es la academia, no un perfil.
-     *
-     * Así que para quien la administra va primero la academia. Al terminar,
-     * `/bienvenida` manda a `/inicio` y este mismo gate se encarga entonces del
-     * perfil. Para un alumno no cambia nada: su puerta sigue siendo la de
-     * perfil, porque ponerle nombre a la academia no le corresponde.
+     * El de perfil (`/onboarding`) pide foto, nombre e idioma. El de academia
+     * (`/bienvenida`) le pone nombre y marca al negocio recién comprado. En el
+     * modo completo la foto es obligatoria y exigirla antes de dejarle tocar
+     * su academia a quien acaba de pagar era un primer contacto pésimo: ahí va
+     * primero la academia. En el modo sencillo la foto se puede dejar para
+     * luego, y quien lleva la academia empieza por presentarse a sus alumnos
+     * (su foto y su nombre acompañan cada post de su comunidad). Para un
+     * alumno solo existe la de perfil.
      *
      * La consulta es asíncrona (el estado vive en el servidor), así que este
      * bloque hace `return` y resuelve dentro del `then`: si cayera al gate de
-     * perfil mientras espera, se iría a `/onboarding` igualmente y el orden
-     * volvería a invertirse. Solo se pregunta una vez por pestaña.
+     * perfil mientras espera, el orden dependería de quién responde antes.
+     * Solo se pregunta una vez por pestaña.
      */
-    const irAPerfilSiHaceFalta = () => {
-      if (!current.user.onboardingCompletedAt) {
-        // El asistente consume este destino al terminar. Cubre también el login
-        // SSO/WP-SSO, cuya sesión no trae el flag.
-        rememberIntendedPath(window.location.pathname + window.location.search);
-        router.replace('/onboarding');
-        return true;
-      }
-      return false;
+    const ir = (puerta: FirstAccessDoor) => {
+      // El asistente consume este destino al terminar. Cubre también el login
+      // SSO/WP-SSO, cuya sesión no trae el flag.
+      rememberIntendedPath(window.location.pathname + window.location.search);
+      router.replace(puerta);
     };
+    const perfilHecho = Boolean(current.user.onboardingCompletedAt);
 
-    const administra = current.user.roles.some((r) => ['super_admin', 'tenant_admin'].includes(r));
-    if (administra && window.sessionStorage.getItem(ACADEMIA_LISTA_KEY) !== '1') {
+    const esAdmin = administra(current.user.roles);
+    if (esAdmin && window.sessionStorage.getItem(ACADEMIA_LISTA_KEY) !== '1') {
       /**
        * El PASE del asistente. Sus enlaces («Abrir la configuración de
        * cobros», el editor del curso, los pendientes del resumen) abren
@@ -147,19 +145,34 @@ export default function AppLayout({ children }: { children: ReactNode }) {
         setSession(current);
         return;
       }
-      void onboardingApi.read().then((prog) => {
-        if (!prog.completedAt) {
-          rememberIntendedPath(window.location.pathname + window.location.search);
-          router.replace('/bienvenida');
-          return;
-        }
-        window.sessionStorage.setItem(ACADEMIA_LISTA_KEY, '1');
-        if (!irAPerfilSiHaceFalta()) setSession(current);
+      void Promise.all([
+        onboardingApi.read(),
+        // El modo solo cambia el orden si el perfil está pendiente.
+        perfilHecho ? Promise.resolve(false) : simpleModeNow(),
+      ]).then(([prog, sencillo]) => {
+        if (prog.completedAt) window.sessionStorage.setItem(ACADEMIA_LISTA_KEY, '1');
+        const puerta = firstAccessDoor({
+          administra: true,
+          sencillo,
+          perfilHecho,
+          academiaHecha: Boolean(prog.completedAt),
+        });
+        if (puerta) ir(puerta);
+        else setSession(current);
       });
       return;
     }
 
-    if (irAPerfilSiHaceFalta()) return;
+    const puerta = firstAccessDoor({
+      administra: esAdmin,
+      sencillo: false,
+      perfilHecho,
+      academiaHecha: true,
+    });
+    if (puerta) {
+      ir(puerta);
+      return;
+    }
     setSession(current);
   }, [router, pathname]);
 
