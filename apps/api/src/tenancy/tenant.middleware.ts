@@ -13,7 +13,8 @@ import { TenantContextService } from './tenant-context.service';
 /**
  * Resuelve el tenantId del request:
  * 1. Si hay header Authorization Bearer válido → tenantId del JWT.
- * 2. Si hay header Authorization `ApiKey <token>` válido → tenantId de la key.
+ * 2. Si hay header Authorization `ApiKey <token>` (o `Bearer lmsk_…`) válido
+ *    → tenantId de la key.
  * 3. Si la ruta es pública (probes, docs) → no setea contexto.
  *
  * Cualquier query Prisma ejecutada dentro del scope del request
@@ -41,6 +42,14 @@ export class TenantMiddleware implements NestMiddleware {
       return;
     }
 
+    // Una clave de API también puede llegar como `Bearer lmsk_…`: es lo que
+    // mandan los clientes MCP (Claude Code, Codex, Cursor…) con su opción de
+    // «token». Se resuelve como clave —el aula sale de la fila de la clave—;
+    // un JWT nunca empieza por `lmsk_`, así que no hay ambigüedad.
+    if (authHeader.startsWith('Bearer lmsk_')) {
+      return this.useApiKey(authHeader.slice('Bearer '.length).trim(), traceId, next);
+    }
+
     if (authHeader.startsWith('Bearer ')) {
       const token = authHeader.slice('Bearer '.length).trim();
       try {
@@ -56,22 +65,24 @@ export class TenantMiddleware implements NestMiddleware {
     }
 
     if (authHeader.startsWith('ApiKey ')) {
-      const token = authHeader.slice('ApiKey '.length).trim();
-      try {
-        const key = await this.apiKeys.resolveContext(token);
-        if (key) {
-          this.tenantContext.run({ tenantId: key.tenantId, userId: key.userId, traceId }, () => {
-            next();
-          });
-          return;
-        }
-      } catch {
-        // Cae a next() sin contexto: el guard rechazará la API key inválida.
-      }
-      next();
-      return;
+      return this.useApiKey(authHeader.slice('ApiKey '.length).trim(), traceId, next);
     }
 
+    next();
+  }
+
+  private async useApiKey(token: string, traceId: string, next: () => void): Promise<void> {
+    try {
+      const key = await this.apiKeys.resolveContext(token);
+      if (key) {
+        this.tenantContext.run({ tenantId: key.tenantId, userId: key.userId, traceId }, () => {
+          next();
+        });
+        return;
+      }
+    } catch {
+      // Cae a next() sin contexto: el guard rechazará la API key inválida.
+    }
     next();
   }
 }

@@ -9,7 +9,8 @@
  * Vista de /unete — estructura del mockup de referencia del operador:
  *   - Sidebar de pago STICKY: cabecera oscura con logo del tenant, selector de
  *     planes (tachado + badge "Mejor valor"), Total hoy, ahorro, primer cargo,
- *     cupón, CTA y caja de cuenta.
+ *     cupón (no si el aula cobra por la plataforma: ahí el pago no los admite),
+ *     CTA y caja de cuenta.
  *   - Catálogo: cabecera con contador real, tiles con DATOS REALES (alumnos
  *     activos, cursos, horas), chips de filtrado por categoría real, parrilla
  *     de tarjetas con DETALLE EXPANDIBLE (módulos, profesor, precio suelto),
@@ -36,6 +37,12 @@ import {
   type MembershipCourse,
   type MembershipPage,
 } from '@/lib/membership';
+import { couponsAtCheckout, showLocalCurrencyNote } from '@/lib/checkout-hints';
+import {
+  WithdrawalWaiverCheckbox,
+  useWithdrawalWaiver,
+} from '@/components/withdrawal-waiver-checkbox';
+import { apiErrorMessage } from '@/lib/i18n/api-error';
 import { getStoredReferralCode, referralsApi, storeReferralCode } from '@/lib/referrals';
 import { richHtmlToPlainText } from '@/lib/sanitize-html';
 
@@ -90,6 +97,9 @@ export function UneteView() {
   const [filter, setFilter] = useState<string>('Todos');
   const [paying, setPaying] = useState(false);
   const [payError, setPayError] = useState<string | null>(null);
+  const tErrors = useTranslations('errors');
+  // Renuncia al desistimiento: sin marcarla no se puede pagar.
+  const waiver = useWithdrawalWaiver('membership');
 
   const session = useMemo(() => authStorage.getSession(), []);
 
@@ -130,7 +140,7 @@ export function UneteView() {
   const selected = page?.plans.find((p) => p.id === selectedId) ?? null;
 
   const checkout = useCallback(async () => {
-    if (!selected) return;
+    if (!selected || !waiver.acceptance) return;
     setPaying(true);
     setPayError(null);
     try {
@@ -138,13 +148,19 @@ export function UneteView() {
         selected.id,
         session?.user.email,
         getStoredReferralCode() ?? undefined,
+        waiver.acceptance,
       );
       window.location.assign(url);
-    } catch {
-      setPayError(t('unete.payError'));
+    } catch (err) {
+      if (err instanceof ApiHttpError && err.code?.startsWith('CHECKOUT_WITHDRAWAL_WAIVER')) {
+        setPayError(apiErrorMessage(err, tErrors));
+        waiver.reload();
+      } else {
+        setPayError(t('unete.payError'));
+      }
       setPaying(false);
     }
-  }, [selected, session, t]);
+  }, [selected, session, t, tErrors, waiver]);
 
   // ── Estados de retorno del checkout ────────────────────────────────────────
   if (status === 'success') {
@@ -227,6 +243,8 @@ export function UneteView() {
     filter === 'Todos' ? page.courses : page.courses.filter((c) => c.category === filter);
 
   const totalHours = Math.round(page.stats.totalMinutes / 60);
+  // Cobro por la plataforma: el pago no admite cupones, así que no se prometen.
+  const coupons = couponsAtCheckout(page);
 
   return (
     <div className="grid items-start gap-9 lg:grid-cols-[minmax(300px,26rem)_minmax(0,1fr)]">
@@ -354,6 +372,14 @@ export function UneteView() {
                       : formatCents(selected.amountCents, selected.currency, { locale })}
                   </span>
                 </div>
+                {showLocalCurrencyNote(selected) ? (
+                  <p
+                    className="mt-1 text-right text-[13px] text-text-muted"
+                    data-testid="local-currency-note"
+                  >
+                    {t('localCurrencyNote')}
+                  </p>
+                ) : null}
                 {savings ? (
                   <div className="mt-2 flex justify-between text-sm">
                     <span className="text-text-muted">{t('unete.savingsLabel')}</span>
@@ -383,9 +409,20 @@ export function UneteView() {
                     {t('unete.trialLessonLimit', { count: page.trialLessonLimit })}
                   </p>
                 ) : null}
-                <p className="mt-1.5 text-[13px] text-text-muted">{t('unete.couponHint')}</p>
+                {coupons ? (
+                  <p className="mt-1.5 text-[13px] text-text-muted">{t('unete.couponHint')}</p>
+                ) : null}
               </>
             ) : null}
+
+            <WithdrawalWaiverCheckbox
+              className="mt-4"
+              waiver={waiver.waiver}
+              failed={waiver.failed}
+              checked={waiver.checked}
+              onCheckedChange={waiver.setChecked}
+              onRetry={waiver.reload}
+            />
 
             {payError && (
               <p className="mt-3 rounded-lg border border-danger-500/40 bg-danger-50 px-3 py-2 text-sm text-danger-700">
@@ -396,7 +433,8 @@ export function UneteView() {
             <Button
               size="lg"
               className="mt-4 w-full"
-              disabled={!selected || paying}
+              disabled={!selected || paying || !waiver.acceptance}
+              title={!waiver.acceptance ? t('withdrawalWaiver.mustTick') : undefined}
               onClick={() => void checkout()}
             >
               <Icon name="lock" className="mr-2 h-4 w-4" />
@@ -547,7 +585,10 @@ export function UneteView() {
                 { q: t('unete.faq1Q'), a: t('unete.faq1A') },
                 { q: t('unete.faq2Q'), a: t('unete.faq2A') },
                 { q: t('unete.faq3Q'), a: t('unete.faq3A') },
-                { q: t('unete.faq4Q'), a: t('unete.faq4A') },
+                {
+                  q: t('unete.faq4Q'),
+                  a: coupons ? t('unete.faq4A') : t('unete.faq4ANoCoupon'),
+                },
               ] as const
             ).map((faq) => (
               <div key={faq.q} className="rounded-xl border border-border bg-surface px-5 py-4">

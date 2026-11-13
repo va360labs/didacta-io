@@ -1,0 +1,147 @@
+{
+  "seccion": "Learning",
+  "certificado": {
+    "titulo": "You have finished the course. Your certificate is ready.",
+    "texto": "It carries your name and can be checked with a link. Add it to your LinkedIn profile or share it with anyone.",
+    "descargar": "Download PDF",
+    "descargando": "Downloading…",
+    "linkedin": "Add to LinkedIn",
+    "vistaPrevia": "Certificate preview",
+    "etiqueta": "CERTIFICATE OF COMPLETION",
+    "haCompletado": "has completed the course"
+  },
+  "progreso": {
+    "certificados": "My certificates",
+    "certificadosTexto": "Certificates for the courses you have finished."
+  },
+  "referidos": {
+    "titulo": "Invite and earn",
+    "migaPerfil": "Your profile",
+    "migasAria": "You are in",
+    "heroTitulo": "Earn {percent}% of what each person who joins through your link pays",
+    "heroTexto": "Share {academia} with someone who would find it useful. When they pay, part of it is yours.",
+    "inactivoTitulo": "There is no invite and earn programme right now",
+    "inactivoTexto": "Your academy has not switched it on. If it does, you will see your link and earnings here.",
+    "membresiaRequerida": "You need an active membership in the academy to get your link.",
+    "errorEnlace": "Could not prepare your link. Try again later.",
+    "errorCarga": "Could not load. Try again.",
+    "nadaALaVenta": "The academy has nothing on sale right now. When it does, your link will show up here.",
+    "porProductoTitulo": "Or share the link to a specific product",
+    "membresia": "The membership",
+    "copiar": "Copy link",
+    "copiado": "Copied",
+    "correo": "Email",
+    "mas": "More",
+    "mensajeCompartir": "I recommend {academia}. Join through my link:",
+    "cifrasAria": "Your results",
+    "ganadoTotal": "earned in total",
+    "pendiente": "Of which {amount} still to be confirmed",
+    "pagandoAhora": "paying now",
+    "esteMes": "this month",
+    "invitadosTitulo": "Your invitees",
+    "invitadosTexto": "You only see their initials and how much they have brought you. Their name and email stay private.",
+    "invitadosVacio": "Nobody has joined through your link yet. When someone does, they will show up here.",
+    "invitadosError": "We could not load your invitees. Please try again later.",
+    "entro": "Joined on {date}",
+    "invitadoEstado": {
+      "trial": "On trial",
+      "paying": "Paying",
+      "bought_course": "Bought a course",
+      "cancelled": "Cancelled",
+      "joined": "No purchases now"
+    },
+    "listaTitulo": "What you have earned",
+    "listaTexto": "Each sale you brought in, with its status. No personal details are shown.",
+    "listaVacia": "Nothing yet. When someone pays after joining through your link, it will show up here.",
+    "sobre": "On a sale of {amount}",
+    "estado": {
+      "PENDING": "Waiting to be confirmed",
+      "APPROVED": "Confirmed",
+      "PAID": "Paid",
+      "REVOKED": "Cancelled"
+    },
+    "comoTitulo": "How it works",
+    "pasos": {
+      "compartes": "You share your link",
+      "compartesTexto": "On WhatsApp, social media or in person.",
+      "entra": "Someone joins through it",
+      "entraTexto": "They stay linked to you for {days} days after opening it.",
+      "ganas": "You earn your share",
+      "ganaPrimerPago": {
+        "courses": "{percent}% of their first purchase.",
+        "membership": "{percent}% of their first fee.",
+        "both": "{percent}% of their first payment, whether a purchase or a fee."
+      },
+      "ganaCadaPago": {
+        "courses": "{percent}% of each purchase they make.",
+        "membership": "{percent}% of each fee they pay, for as long as they stay.",
+        "both": "{percent}% of each purchase and each fee they pay, for as long as they stay."
+      },
+      "ganaMeses": {
+        "courses": "{percent}% of each purchase they make during their first {months} months.",
+        "membership": "{percent}% of each fee they pay during their first {months} months.",
+        "both": "{percent}% of each purchase and each fee they pay during their first {months} months."
+      }
+    },
+    "cobro": "What you earn is confirmed once the refund period is over and {academia} pays it to you.",
+    "cobroMinimo": "What you earn is confirmed once the refund period is over and {academia} pays it to you when you reach {min}.",
+    "cobroODescuento": "What you earn is confirmed once the refund period is over. Then you can use it as a discount on your next fee or ask {academia} to pay it to you.",
+    "cobroODescuentoMinimo": "What you earn is confirmed once the refund period is over. Then you can use it as a discount on your next fee or, once you reach {min}, ask {academia} to pay it to you.",
+    "dudasTitulo": "Questions",
+    "dudas": {
+      "cuando": "When does it start counting?",
+      "cuandoTexto": "When someone opens your link. If they pay within the next {days} days, the sale is yours.",
+      "devolucion": "What if they ask for a refund?",
+      "devolucionTexto": "If they get their money back, your share of that sale is cancelled.",
+      "limite": "Is there a limit?",
+      "limitePrimerPago": "Only their first payment counts.",
+      "limiteMeses": "You earn during their first {months} months.",
+      "limiteSin": "No. As long as they keep paying, you keep earning."
+    },
+    "descuento": {
+      "titulo": "Use it as a discount",
+      "texto": "What is already confirmed can come off your next fee instead of being paid out. Up to {max} per fee.",
+      "boton": "Use as a discount on my next fee ({amount})",
+      "terminar": "Finish applying the discount",
+      "aplicando": "Applying…",
+      "hecho": "Done. We will take {amount} off your next fee.",
+      "vacio": "You have nothing confirmed to take off yet. It will show here once the refund period is over.",
+      "nada": "Right now you have nothing to take off your next fee.",
+      "error": "We could not apply the discount. Try again: it will not be applied twice."
+    },
+    "cobroDinero": {
+      "titulo": "Get paid in money",
+      "texto": "{academia} pays what is confirmed by bank transfer. We need your full name, your tax ID and your account. Didacta withholds nothing.",
+      "confirmado": "You have {amount} confirmed to be paid.",
+      "nadaConfirmado": "You have nothing confirmed to be paid yet.",
+      "minimo": "You can request payment once you reach {min}.",
+      "pedir": "Request payment of {amount}",
+      "pidiendo": "Requesting…",
+      "pedido": "You requested {amount} on {date}. {academia} will pay it by bank transfer.",
+      "datosTitulo": "Your payment details",
+      "datosResumen": "{name} · {iban} · {taxId}",
+      "cambiar": "Change",
+      "nombre": "Full name",
+      "pais": "Country",
+      "nif": "NIF or NIE",
+      "idFiscal": "Tax ID",
+      "iban": "Account (IBAN)",
+      "guardarYPedir": "Save and request payment",
+      "guardar": "Save",
+      "cancelar": "Cancel",
+      "privacidad": "They are stored encrypted. {academia} only sees them to pay you.",
+      "campoMal": "Check this field.",
+      "error": "It could not be sent. Please try again.",
+      "pagado": "Paid on {date}",
+      "justificante": "Download receipt"
+    },
+    "tipo": {
+      "CREDIT_RETURN": "Unused discount returned when you cancelled",
+      "ADJUSTMENT": "Refund adjustment"
+    },
+    "estadoAjuste": {
+      "APPROVED": "Deducted from what comes next",
+      "PAID": "Deducted"
+    }
+  }
+}

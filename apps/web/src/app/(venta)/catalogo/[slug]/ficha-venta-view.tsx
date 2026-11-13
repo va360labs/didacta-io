@@ -21,11 +21,20 @@ import { useParams } from 'next/navigation';
 import { useLocale, useTranslations } from 'next-intl';
 import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/icon';
+import {
+  WithdrawalWaiverCheckbox,
+  useWithdrawalWaiver,
+} from '@/components/withdrawal-waiver-checkbox';
+import { ApiHttpError } from '@/lib/api-client';
+import { apiErrorMessage } from '@/lib/i18n/api-error';
 import { authStorage } from '@/lib/auth-storage';
 import { formatDuration } from '@/lib/i18n/format';
 import { useTenantContext } from '@/lib/tenant-context';
 import { formatCents } from '@/lib/membership';
+import { showLocalCurrencyNote } from '@/lib/checkout-hints';
 import { sanitizeRichHtml } from '@/lib/sanitize-html';
+import { getStoredReferralCode } from '@/lib/referrals';
+import { captureReferralFromLocation } from '@/lib/referral-links';
 import {
   featuredOption,
   getPublicCatalog,
@@ -36,6 +45,9 @@ import {
 export function FichaVentaView() {
   const t = useTranslations('publicSite');
   const tCommon = useTranslations('common');
+  const tErrors = useTranslations('errors');
+  // Renuncia al desistimiento: sin marcarla no se puede pagar.
+  const waiver = useWithdrawalWaiver('course');
   // Área pública: se pinta en SSR, donde el singleton de `user-prefs` está
   // vacío. Sin `locale` explícito el importe del servidor y el del cliente no
   // coinciden → mismatch de hidratación.
@@ -51,6 +63,12 @@ export function FichaVentaView() {
   // Si hay sesión (alguien logueado llegó a la página pública), su email
   // precarga el checkout; el provisioning lo reconocerá y no duplicará cuenta.
   const session = useMemo(() => authStorage.getSession(), []);
+
+  // Enlace de referido (?ref=): vale en cualquier página de venta, no solo en
+  // /unete. Se guarda y viaja en el checkout de este curso.
+  useEffect(() => {
+    captureReferralFromLocation(window.location.search);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -72,20 +90,27 @@ export function FichaVentaView() {
   const selected = course?.options.find((o) => o.id === selectedId) ?? null;
 
   const comprar = useCallback(async () => {
-    if (!course || !selected) return;
+    if (!course || !selected || !waiver.acceptance) return;
     setPaying(true);
     setPayError(null);
     try {
       const { url } = await startPublicCheckout(course.id, {
         optionId: selected.id,
         email: session?.user.email,
+        withdrawalWaiver: waiver.acceptance,
+        referralCode: getStoredReferralCode() ?? undefined,
       });
       window.location.assign(url);
-    } catch {
-      setPayError(t('ficha.payError'));
+    } catch (err) {
+      if (err instanceof ApiHttpError && err.code?.startsWith('CHECKOUT_WITHDRAWAL_WAIVER')) {
+        setPayError(apiErrorMessage(err, tErrors));
+        waiver.reload();
+      } else {
+        setPayError(t('ficha.payError'));
+      }
       setPaying(false);
     }
-  }, [course, selected, session, t]);
+  }, [course, selected, session, t, tErrors, waiver]);
 
   if (course === undefined) {
     return (
@@ -263,13 +288,37 @@ export function FichaVentaView() {
               </div>
             ) : null}
 
+            {/* Solo si el servidor lo afirma: cobro por la plataforma y precio en
+                la moneda del creador, que el pago convierte a la del alumno. */}
+            {showLocalCurrencyNote(selected) ? (
+              <p
+                className="-mt-2 text-center text-[13px] text-text-muted"
+                data-testid="local-currency-note"
+              >
+                {t('localCurrencyNote')}
+              </p>
+            ) : null}
+
+            <WithdrawalWaiverCheckbox
+              waiver={waiver.waiver}
+              failed={waiver.failed}
+              checked={waiver.checked}
+              onCheckedChange={waiver.setChecked}
+              onRetry={waiver.reload}
+            />
+
             {payError ? (
               <p className="rounded-xl border border-danger/40 bg-danger/5 px-4 py-3 text-sm text-danger">
                 {payError}
               </p>
             ) : null}
 
-            <Button size="lg" onClick={comprar} disabled={!selected || paying}>
+            <Button
+              size="lg"
+              onClick={comprar}
+              disabled={!selected || paying || !waiver.acceptance}
+              title={!waiver.acceptance ? t('withdrawalWaiver.mustTick') : undefined}
+            >
               {paying ? t('ficha.openingPayment') : t('ficha.buyNow')}
             </Button>
             <p className="text-center text-xs text-text-subtle">{t('ficha.securePayment')}</p>

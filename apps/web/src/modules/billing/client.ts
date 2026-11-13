@@ -29,9 +29,10 @@
  * El módulo es CE — sin `<EeGate>`.
  */
 
+import type { WithdrawalWaiverAcceptance } from '@/lib/purchase-consent';
 import { apiFetch } from '@/lib/api-client';
 import { authStorage } from '@/lib/auth-storage';
-import { formatCurrency } from '@/lib/i18n/format';
+import { formatCentsExact } from '@/lib/i18n/format';
 
 /**
  * Forma exacta del retorno del backend `BillingService.startCheckout`:
@@ -57,9 +58,27 @@ export interface BillingProduct {
   stripePriceId: string;
   unitAmount: number;
   currency: string;
+  /** Precios fijos extra por mercado: moneda → importe en su unidad mínima. */
+  currencyOptions?: Record<string, number> | null;
+  /** Precio «antes» tachado, en la unidad mínima. */
+  compareAtAmount?: number | null;
+  /** Nombre de la opción de compra ("" = precio único del curso). */
+  name?: string;
   active: boolean;
   createdAt: string;
   updatedAt: string;
+}
+
+/**
+ * Precio escrito como importe: Didacta crea el Product y el Price en Stripe.
+ * `amountCents` en la unidad mínima de STRIPE para esa moneda (ver
+ * `@/lib/stripe-currencies`): 4900 = 49 €, 500 = 500 JPY.
+ */
+export interface BillingPriceInput {
+  amountCents: number;
+  currency: string;
+  currencyOptions?: Record<string, number> | null;
+  compareAtCents?: number | null;
 }
 
 export interface BillingProductsListResponse {
@@ -92,12 +111,21 @@ export const billingApi = {
     accessToken: string,
     /** Opción de compra elegida. Sin ella el backend usa la destacada. */
     optionId?: string,
+    /** La casilla de la renuncia al desistimiento (la API la exige). */
+    withdrawalWaiver?: WithdrawalWaiverAcceptance,
+    /** Código del enlace de referido con el que llegó (`?ref=`), si lo hay. */
+    referralCode?: string,
   ): Promise<StartCheckoutResult> {
+    const body = {
+      ...(optionId ? { optionId } : {}),
+      ...(withdrawalWaiver ? { withdrawalWaiver } : {}),
+      ...(referralCode ? { referralCode } : {}),
+    };
     return apiFetch<StartCheckoutResult>(
       `${BASE}/checkout/${encodeURIComponent(courseId)}`,
       {
         method: 'POST',
-        ...(optionId ? { body: JSON.stringify({ optionId }) } : {}),
+        ...(Object.keys(body).length > 0 ? { body: JSON.stringify(body) } : {}),
       },
       accessToken,
     );
@@ -109,22 +137,42 @@ export const billingApi = {
     return apiFetch<BillingProductsListResponse>(PRODUCTS, { method: 'GET' }, bearer);
   },
 
+  /**
+   * Pone el curso a la venta. Con un `price_…` ya creado en Stripe (claves
+   * propias) o con el importe (`BillingPriceInput`): en ese caso Didacta crea
+   * el precio, que es lo único posible con cobros de plataforma.
+   */
   async createProduct(
     bearer: string,
     courseId: string,
-    stripePriceId: string,
+    price: string | BillingPriceInput,
   ): Promise<BillingProductResponse> {
+    const body =
+      typeof price === 'string'
+        ? { courseId, stripePriceId: price }
+        : {
+            courseId,
+            amountCents: price.amountCents,
+            currency: price.currency,
+            ...(price.currencyOptions ? { currencyOptions: price.currencyOptions } : {}),
+            ...(price.compareAtCents ? { compareAtCents: price.compareAtCents } : {}),
+          };
     return apiFetch<BillingProductResponse>(
       PRODUCTS,
-      { method: 'POST', body: JSON.stringify({ courseId, stripePriceId }) },
+      { method: 'POST', body: JSON.stringify(body) },
       bearer,
     );
   },
 
+  /**
+   * Cambia una opción ya a la venta. Con importe/moneda/precios por mercado,
+   * el servidor crea un Price nuevo sobre el MISMO Product de Stripe (los
+   * Price no se pueden editar); las compras ya hechas no cambian.
+   */
   async updateProduct(
     bearer: string,
     id: string,
-    patch: { active?: boolean; stripePriceId?: string },
+    patch: { active?: boolean; stripePriceId?: string } | Partial<BillingPriceInput>,
   ): Promise<BillingProductResponse> {
     return apiFetch<BillingProductResponse>(
       `${PRODUCTS}/${id}`,
@@ -145,14 +193,12 @@ export const billingApi = {
  * A diferencia de `formatCents`, conserva SIEMPRE los dos decimales (es la
  * vista de administración de precios de Stripe: ahí "99 €" y "99,00 €" no son
  * lo mismo de un vistazo). El locale sale de las preferencias del usuario
- * vía `formatCurrency`; el catch cubre un `currency` que Intl no reconozca.
+ * vía `formatCentsExact`, que también cubre un `currency` que Intl no reconozca.
  */
 export function formatPrice(unitAmount: number, currency: string): string {
-  try {
-    return formatCurrency(unitAmount / 100, currency.toUpperCase());
-  } catch {
-    return `${(unitAmount / 100).toFixed(2)} ${currency.toUpperCase()}`;
-  }
+  // Decimales según Stripe (`stripe-currencies.ts`), no `Intl`: 500 JPY son
+  // 500 yenes y 3990000 HUF son 39.900,00 forintos.
+  return formatCentsExact(unitAmount, currency.toUpperCase());
 }
 
 /** Una opción de compra del curso ("Curso", "Curso Intermedio", "Curso Avanzado"). */

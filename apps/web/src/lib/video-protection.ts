@@ -38,7 +38,7 @@ export interface PlayUrlResponse {
   watermark: boolean;
 }
 
-export type PlayUrlErrorKind = 'forbidden' | 'rate_limited' | 'unknown';
+export type PlayUrlErrorKind = 'forbidden' | 'rate_limited' | 'watch_quota' | 'unknown';
 
 export class PlayUrlError extends Error {
   constructor(readonly kind: PlayUrlErrorKind) {
@@ -58,6 +58,8 @@ export function toPlayUrlError(error: unknown): PlayUrlError {
   if (error instanceof ApiHttpError) {
     if (error.code === 'VIDEO_FORBIDDEN') return new PlayUrlError('forbidden');
     if (error.code === 'VIDEO_RATE_LIMITED') return new PlayUrlError('rate_limited');
+    // Vídeo subido a la academia: se ha llegado al tope de horas vistas del mes.
+    if (error.code === 'VIDEO_WATCH_QUOTA') return new PlayUrlError('watch_quota');
   }
   return new PlayUrlError('unknown');
 }

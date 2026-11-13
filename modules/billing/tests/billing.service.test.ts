@@ -253,7 +253,12 @@ class MockStripe implements StripeAdapter {
     metadata: Record<string, string>;
     customerEmail?: string;
   } | null = null;
-  lastOneOffPrice: { name: string; unitAmount: number; currency: string } | null = null;
+  lastOneOffPrice: {
+    name: string;
+    unitAmount: number;
+    currency: string;
+    currencyOptions?: Readonly<Record<string, number>> | null;
+  } | null = null;
 
   async createCheckoutSession(params: {
     metadata: Record<string, string>;
@@ -279,12 +284,14 @@ class MockStripe implements StripeAdapter {
     productId?: string;
     unitAmount: number;
     currency: string;
+    currencyOptions?: Readonly<Record<string, number>> | null;
     metadata: Record<string, string>;
   }) {
     this.lastOneOffPrice = {
       name: params.name,
       unitAmount: params.unitAmount,
       currency: params.currency,
+      currencyOptions: params.currencyOptions ?? null,
     };
     this.sessionCounter += 1;
     const created = {
@@ -545,6 +552,92 @@ describe('BillingService — alta de producto por importe y URLs por petición',
     expect(tercera.product.stripeProductId).toBe(productStripe);
   });
 
+  it('precios por mercado: se guardan, viajan a Stripe y cambiarlos crea un Price nuevo en el MISMO Product', async () => {
+    const primera = await svc.upsertCoursePrice({
+      tenantId: 't1',
+      courseId: 'course-1',
+      unitAmount: 4900,
+      currency: 'eur',
+      currencyOptions: { MXN: 99_900 },
+      name: 'Curso multidivisa',
+    });
+    expect(primera.accion).toBe('creado');
+    expect(primera.product.currencyOptions).toEqual({ mxn: 99_900 });
+    expect(stripe.lastOneOffPrice?.currencyOptions).toEqual({ mxn: 99_900 });
+    const price1 = String(primera.product.stripePriceId);
+    const product1 = String(primera.product.stripeProductId);
+
+    // Mismo mapa con otro orden y mayúsculas: no se toca Stripe.
+    const igual = await svc.upsertCoursePrice({
+      tenantId: 't1',
+      courseId: 'course-1',
+      unitAmount: 4900,
+      currency: 'eur',
+      currencyOptions: { mxn: 99_900 },
+      name: 'Curso multidivisa',
+    });
+    expect(igual.accion).toBe('sin-cambios');
+
+    // Sin decir nada de los precios por mercado: se quedan.
+    const sinTocar = await svc.upsertCoursePrice({
+      tenantId: 't1',
+      courseId: 'course-1',
+      unitAmount: 4900,
+      currency: 'eur',
+      name: 'Curso multidivisa',
+    });
+    expect(sinTocar.accion).toBe('sin-cambios');
+
+    // Mismo importe, otro precio en MXN: Stripe no deja editarlo → Price nuevo.
+    const cambio = await svc.upsertCoursePrice({
+      tenantId: 't1',
+      courseId: 'course-1',
+      unitAmount: 4900,
+      currency: 'eur',
+      currencyOptions: { mxn: 89_900, cop: 22_900_000 },
+      name: 'Curso multidivisa',
+    });
+    expect(cambio.accion).toBe('actualizado');
+    expect(cambio.product.stripePriceId).not.toBe(price1);
+    expect(cambio.product.stripeProductId).toBe(product1);
+    expect(cambio.product.currencyOptions).toEqual({ cop: 22_900_000, mxn: 89_900 });
+
+    // Quitarlos todos también es un Price nuevo, sin currency_options.
+    const quitar = await svc.upsertCoursePrice({
+      tenantId: 't1',
+      courseId: 'course-1',
+      unitAmount: 4900,
+      currency: 'eur',
+      currencyOptions: null,
+      name: 'Curso multidivisa',
+    });
+    expect(quitar.accion).toBe('actualizado');
+    expect(stripe.lastOneOffPrice?.currencyOptions).toBeNull();
+  });
+
+  it('cambiar de moneda (EUR → CHF) rota el Price y mantiene el Product', async () => {
+    const eur = await svc.upsertCoursePrice({
+      tenantId: 't1',
+      courseId: 'course-1',
+      unitAmount: 4900,
+      currency: 'eur',
+      name: 'Curso',
+    });
+    const product = String(eur.product.stripeProductId);
+    const price = String(eur.product.stripePriceId);
+    const chf = await svc.upsertCoursePrice({
+      tenantId: 't1',
+      courseId: 'course-1',
+      unitAmount: 10_000,
+      currency: 'CHF',
+      name: 'Curso',
+    });
+    expect(chf.accion).toBe('actualizado');
+    expect([chf.product.unitAmount, chf.product.currency]).toEqual([10_000, 'chf']);
+    expect(chf.product.stripeProductId).toBe(product);
+    expect(chf.product.stripePriceId).not.toBe(price);
+  });
+
   it('un curso puede tener VARIAS opciones de compra y el checkout cobra la elegida', async () => {
     const basico = await svc.upsertCoursePrice({
       tenantId: 't1',
@@ -729,6 +822,52 @@ describe('BillingService — handleWebhookEvent (idempotente)', () => {
     expect(publisher.events[0]!.payload.amountPaid).toBe(1999);
   });
 
+  it('el código de referido viaja opaco en la metadata y vuelve como attribution', async () => {
+    stripe.setPrice('price_a');
+    await svc.createProduct({ tenantId: 't1', courseId: 'course-1', stripePriceId: 'price_a' });
+    const checkout = await svc.startCheckout({
+      tenantId: 't1',
+      userId: 'u1',
+      userEmail: 'u@test',
+      courseId: 'course-1',
+      referralCode: 'abc23xyz',
+    });
+    expect(stripe.lastCheckout?.metadata['referralCode']).toBe('abc23xyz');
+    publisher.events = [];
+
+    const event = buildSessionCompletedEvent(checkout.orderId);
+    const session = event.data.object as Stripe.Checkout.Session;
+    session.metadata = { ...session.metadata, referralCode: 'abc23xyz' };
+    await svc.handleWebhookEvent(event, {}, { tenantId: 't1' });
+    expect(publisher.events[0]!.payload.attribution).toEqual({ referralCode: 'abc23xyz' });
+
+    // Reentrega con la orden ya COMPLETED: el evento re-publicado conserva la
+    // atribución (si no, una caída entre el update y el publish la perdería).
+    // (Otro id de evento: el mismo id lo descarta antes la idempotencia.)
+    publisher.events = [];
+    await svc.handleWebhookEvent({ ...event, id: 'evt_reentrega' }, {}, { tenantId: 't1' });
+    expect(publisher.events[0]!.payload.attribution).toEqual({ referralCode: 'abc23xyz' });
+  });
+
+  it('sin enlace de referido el evento lleva attribution null y la metadata no lo menciona', async () => {
+    stripe.setPrice('price_a');
+    await svc.createProduct({ tenantId: 't1', courseId: 'course-1', stripePriceId: 'price_a' });
+    const checkout = await svc.startCheckout({
+      tenantId: 't1',
+      userId: 'u1',
+      userEmail: 'u@test',
+      courseId: 'course-1',
+    });
+    expect(stripe.lastCheckout?.metadata).not.toHaveProperty('referralCode');
+    publisher.events = [];
+    await svc.handleWebhookEvent(
+      buildSessionCompletedEvent(checkout.orderId),
+      {},
+      { tenantId: 't1' },
+    );
+    expect(publisher.events[0]!.payload.attribution).toBeNull();
+  });
+
   async function comprarYCobrar() {
     stripe.setPrice('price_a');
     await svc.createProduct({ tenantId: 't1', courseId: 'course-1', stripePriceId: 'price_a' });
@@ -776,7 +915,7 @@ describe('BillingService — handleWebhookEvent (idempotente)', () => {
     expect(publisher.events[0]!.payload.courseId).toBe('course-1');
   });
 
-  it('un reembolso PARCIAL no retira el acceso ni marca la orden', async () => {
+  it('un reembolso PARCIAL no retira el acceso ni marca la orden; avisa con lo devuelto acumulado', async () => {
     const orderId = await comprarYCobrar();
 
     await svc.handleWebhookEvent(
@@ -786,7 +925,14 @@ describe('BillingService — handleWebhookEvent (idempotente)', () => {
     );
 
     expect(prisma.orders.get(orderId)!.status).toBe('COMPLETED');
-    expect(publisher.events).toHaveLength(0);
+    // Nada de `billing.order.refunded` (retiraría el acceso): solo el parcial,
+    // para recortar en proporción la comisión de referidos.
+    expect(publisher.events.map((e) => e.name)).toEqual(['billing.order.partially_refunded']);
+    expect(publisher.events[0]!.payload).toMatchObject({
+      orderId,
+      amountRefunded: 500,
+      amountTotal: 1999,
+    });
   });
 
   it('un reembolso de un cobro AJENO (otro módulo) no toca ninguna orden', async () => {
@@ -1751,5 +1897,118 @@ describe('BillingService — el evento ya lo archivó OTRA aula (fila que existe
         { tenantId: 't1' },
       ),
     ).rejects.toThrow(/row-level security/);
+  });
+});
+
+describe('BillingService — resyncStripeCatalog (el tenant cambia de cuenta de Stripe)', () => {
+  let prisma: MockPrisma;
+  let stripe: MockStripe;
+  let svc: BillingService;
+
+  function seed(id: string, extra: Partial<ProductRow> = {}) {
+    prisma.products.set(id, {
+      id,
+      tenantId: 'tenant-1',
+      courseId: 'course-1',
+      stripeProductId: `prod_viejo_${id}`,
+      stripePriceId: `price_viejo_${id}`,
+      unitAmount: 4900,
+      currency: 'eur',
+      compareAtAmount: null,
+      name: '',
+      perks: [],
+      sortOrder: 0,
+      isFeatured: false,
+      externalRef: null,
+      active: true,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      ...extra,
+    });
+  }
+
+  beforeEach(() => {
+    prisma = new MockPrisma();
+    stripe = new MockStripe();
+    svc = new BillingService(
+      prisma as unknown as never,
+      async () => stripe,
+      new MockPublisher(),
+      urls,
+    );
+  });
+
+  it('recrea Product y Price en la cuenta actual con el mismo importe y apunta la fila al nuevo', async () => {
+    seed('p1');
+    expect(await svc.resyncStripeCatalog('tenant-1')).toEqual({ resynced: 1, skipped: 0 });
+    const fila = prisma.products.get('p1')!;
+    expect(fila.stripePriceId).toMatch(/^price_auto_/);
+    expect(fila.stripeProductId).toMatch(/^prod_auto_/);
+    // El nombre del Product sale del viejo: es lo que veía el comprador.
+    expect(stripe.lastOneOffPrice).toEqual({
+      name: 'Test product',
+      unitAmount: 4900,
+      currency: 'eur',
+      // Sin precios por mercado guardados, el Price nuevo tampoco los lleva.
+      currencyOptions: null,
+    });
+    expect(fila.unitAmount).toBe(4900);
+    expect(fila.currency).toBe('eur');
+  });
+
+  it('no toca los precios que ya están en la cuenta actual (isCurrent) y una segunda pasada no hace nada', async () => {
+    seed('p1');
+    seed('p2', { courseId: 'course-2' });
+    const actuales = new Set<string>();
+    const isCurrent = async (id: string) => actuales.has(id);
+
+    expect(await svc.resyncStripeCatalog('tenant-1', { isCurrent })).toEqual({
+      resynced: 2,
+      skipped: 0,
+    });
+    for (const p of prisma.products.values()) actuales.add(p.stripePriceId);
+    expect(await svc.resyncStripeCatalog('tenant-1', { isCurrent })).toEqual({
+      resynced: 0,
+      skipped: 2,
+    });
+  });
+
+  it('acota por curso e ignora las opciones inactivas y las de otros tenants', async () => {
+    seed('p1');
+    seed('p2', { courseId: 'course-2' });
+    seed('p3', { active: false });
+    seed('p4', { tenantId: 'tenant-2' });
+    expect(await svc.resyncStripeCatalog('tenant-1', { courseId: 'course-1' })).toEqual({
+      resynced: 1,
+      skipped: 0,
+    });
+    expect(prisma.products.get('p1')!.stripePriceId).toMatch(/^price_auto_/);
+    expect(prisma.products.get('p2')!.stripePriceId).toBe('price_viejo_p2');
+    expect(prisma.products.get('p3')!.stripePriceId).toBe('price_viejo_p3');
+    expect(prisma.products.get('p4')!.stripePriceId).toBe('price_viejo_p4');
+  });
+
+  it('si el Product viejo no se puede leer, usa el nombre de la opción', async () => {
+    seed('p1', { name: 'Curso Avanzado' });
+    stripe.retrieveProduct = async () => {
+      throw new StripeApiError('No such product');
+    };
+    await svc.resyncStripeCatalog('tenant-1');
+    expect(stripe.lastOneOffPrice?.name).toBe('Curso Avanzado');
+  });
+
+  it('sin opciones activas no pide el adaptador de Stripe', async () => {
+    const sinStripe = new BillingService(
+      prisma as unknown as never,
+      async () => {
+        throw new Error('no debería resolver Stripe');
+      },
+      new MockPublisher(),
+      urls,
+    );
+    await expect(sinStripe.resyncStripeCatalog('tenant-1')).resolves.toEqual({
+      resynced: 0,
+      skipped: 0,
+    });
   });
 });

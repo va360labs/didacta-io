@@ -133,3 +133,34 @@ describe('isChecklistComplete', () => {
     expect(isChecklistComplete(items)).toBe(true);
   });
 });
+
+describe('primeros pasos con cobros de plataforma (Didacta Cloud)', () => {
+  const base: ChecklistInputs = {
+    academy: null,
+    theme: null,
+    smtpStatus: 'none',
+    stripeConfigured: false,
+    progress: { ...PROGRESO_TODO_HECHO, done: ['curso', 'alumnos'], skipped: ['cobros'] },
+  };
+
+  it('cobros = conectar cobros (/admin/cobros) y el correo no se reclama', () => {
+    const items = deriveChecklist({ ...base, platformPayoutsReady: false });
+    expect(items.find((i) => i.key === 'cobros')).toEqual({
+      key: 'cobros',
+      done: false,
+      href: '/admin/cobros',
+    });
+    expect(items.some((i) => i.key === 'correo')).toBe(false);
+  });
+
+  it('cuenta lista → cobros hecho', () => {
+    const items = deriveChecklist({ ...base, platformPayoutsReady: true });
+    expect(items.find((i) => i.key === 'cobros')?.done).toBe(true);
+  });
+
+  it('sin cobros de plataforma: el correo y las claves de siempre', () => {
+    const items = deriveChecklist({ ...base, platformPayoutsReady: null });
+    expect(items.find((i) => i.key === 'cobros')?.href).not.toBe('/admin/cobros');
+    expect(items.find((i) => i.key === 'correo')?.done).toBe(false);
+  });
+});

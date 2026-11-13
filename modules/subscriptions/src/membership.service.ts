@@ -27,7 +27,7 @@
  * MISMA tabla `mod_subscriptions_subscription` (courseId NULL + planId).
  */
 
-import type { PrismaClient } from '@didacta/database';
+import { Prisma, type PrismaClient } from '@didacta/database';
 import type Stripe from 'stripe';
 import {
   MembershipAlreadySubscribedError,
@@ -98,6 +98,11 @@ export interface PlanInput {
   intervalMonths: number;
   amountCents: number;
   currency?: string;
+  /**
+   * Precios fijos extra por mercado (`currency_options`): moneda → importe en
+   * su unidad mínima. `null`/`{}` = ninguno. Cambiarlos rota el Price.
+   */
+  currencyOptions?: Readonly<Record<string, number>> | null;
   compareAtCents?: number | null;
   trialDays?: number;
   active?: boolean;
@@ -211,6 +216,9 @@ export class MembershipService {
         intervalMonths: input.intervalMonths,
         amountCents: input.amountCents,
         currency: input.currency ?? PLAN_DEFAULT_CURRENCY,
+        ...(normalizeCurrencyOptions(input.currencyOptions)
+          ? { currencyOptions: normalizeCurrencyOptions(input.currencyOptions)! }
+          : {}),
         compareAtCents: input.compareAtCents ?? null,
         trialDays: input.trialDays ?? 0,
         active: input.active ?? true,
@@ -229,7 +237,16 @@ export class MembershipService {
 
     // Si cambia el importe, la moneda o la periodicidad, el price de Stripe
     // deja de valer (inmutable) → se limpia y se re-crea en el próximo checkout.
+    const optionsBefore = normalizeCurrencyOptions(
+      plan.currencyOptions as Record<string, number> | null,
+    );
+    const optionsAfter =
+      input.currencyOptions === undefined
+        ? optionsBefore
+        : normalizeCurrencyOptions(input.currencyOptions);
+    const optionsChanged = JSON.stringify(optionsBefore) !== JSON.stringify(optionsAfter);
     const priceChanged =
+      optionsChanged ||
       (input.amountCents !== undefined && input.amountCents !== plan.amountCents) ||
       (input.currency !== undefined && input.currency !== plan.currency) ||
       (input.intervalMonths !== undefined && input.intervalMonths !== plan.intervalMonths);
@@ -242,6 +259,7 @@ export class MembershipService {
         ...(input.intervalMonths !== undefined ? { intervalMonths: input.intervalMonths } : {}),
         ...(input.amountCents !== undefined ? { amountCents: input.amountCents } : {}),
         ...(input.currency !== undefined ? { currency: input.currency } : {}),
+        ...(optionsChanged ? { currencyOptions: optionsAfter ?? Prisma.DbNull } : {}),
         ...(input.compareAtCents !== undefined ? { compareAtCents: input.compareAtCents } : {}),
         ...(input.trialDays !== undefined ? { trialDays: input.trialDays } : {}),
         ...(input.active !== undefined ? { active: input.active } : {}),
@@ -543,8 +561,68 @@ export class MembershipService {
     stripe: SubscriptionsStripeAdapter,
   ): Promise<string> {
     if (plan.stripePriceId) return plan.stripePriceId;
+    return this.createStripeCatalog(plan, stripe, plan.stripeProductId);
+  }
 
-    let productId = plan.stripeProductId;
+  /**
+   * Vuelve a crear en la cuenta de Stripe ACTUAL del tenant el Product y el
+   * Price de cada plan activo que ya tenía precio, y apunta el plan a los
+   * nuevos.
+   *
+   * Para qué: cuando un tenant cambia de cuenta de Stripe (p. ej. deja de
+   * cobrar con sus claves y pasa a cobrar a través del operador de la
+   * instalación), sus `price_…` siguen en la cuenta vieja y un checkout con
+   * ellos fallaría con «No such price». Las suscripciones ya vendidas no se
+   * tocan: siguen en la cuenta donde nacieron, con su precio de entonces.
+   *
+   * El módulo no sabe en qué cuenta vive cada precio. Lo dice quien llama con
+   * `isCurrent(priceId)`: `true` = ya está en la cuenta actual, no se toca. Sin
+   * `isCurrent`, se recrean todos. Un plan que nunca se vendió (sin Product ni
+   * Price) no se toca: el primer checkout lo crea en la cuenta actual.
+   */
+  async resyncStripeCatalog(
+    tenantId: string,
+    opts: {
+      /** Limita la pasada a un plan. */
+      planId?: string;
+      isCurrent?: (stripePriceId: string) => Promise<boolean>;
+    } = {},
+  ): Promise<{ resynced: number; skipped: number }> {
+    const plans = await this.prisma.modSubscriptionsPlan.findMany({
+      where: { tenantId, active: true, ...(opts.planId ? { id: opts.planId } : {}) },
+      orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
+    });
+    let resynced = 0;
+    let skipped = 0;
+    let stripe: SubscriptionsStripeAdapter | null = null;
+    for (const plan of plans) {
+      // El precio, o si se limpió al cambiar el importe, el Product que el
+      // próximo checkout reutilizaría: los dos tienen que estar en esta cuenta.
+      const stripeRef = plan.stripePriceId ?? plan.stripeProductId;
+      if (!stripeRef) {
+        skipped += 1;
+        continue;
+      }
+      if (opts.isCurrent && (await opts.isCurrent(stripeRef))) {
+        skipped += 1;
+        continue;
+      }
+      stripe ??= await this.stripeFor(tenantId);
+      // Product nuevo: el viejo vive en la otra cuenta y no sirve para un
+      // precio de esta.
+      await this.createStripeCatalog(plan, stripe, null);
+      resynced += 1;
+    }
+    return { resynced, skipped };
+  }
+
+  /** Crea (si hace falta) el Product y el Price del plan y los apunta en el plan. */
+  private async createStripeCatalog(
+    plan: PlanRow,
+    stripe: SubscriptionsStripeAdapter,
+    existingProductId: string | null,
+  ): Promise<string> {
+    let productId = existingProductId;
     if (!productId) {
       // Un Product de Stripe POR PLAN, nombrado con el nombre del plan: así el
       // checkout muestra "Plan Anual" (el nombre que ve el comprador es el
@@ -561,6 +639,9 @@ export class MembershipService {
       productId,
       amountCents: plan.amountCents,
       currency: plan.currency,
+      currencyOptions: normalizeCurrencyOptions(
+        plan.currencyOptions as Record<string, number> | null,
+      ),
       intervalMonths: plan.intervalMonths,
       nickname: plan.name,
       metadata: { tenantId: plan.tenantId, planId: plan.id },
@@ -953,4 +1034,18 @@ function parseCoursePrices(value: unknown): Array<{ courseId: string; amountCent
       typeof (x as Record<string, unknown>)['courseId'] === 'string' &&
       typeof (x as Record<string, unknown>)['amountCents'] === 'number',
   );
+}
+
+/**
+ * Precios extra por mercado normalizados (moneda en minúsculas, ordenadas) o
+ * `null` si no hay ninguno: dos mapas iguales dan el mismo JSON, y así se sabe
+ * si hace falta un Price nuevo.
+ */
+export function normalizeCurrencyOptions(
+  options: Readonly<Record<string, number>> | null | undefined,
+): Record<string, number> | null {
+  const entries = Object.entries(options ?? {})
+    .map(([code, amount]) => [code.toLowerCase(), amount] as const)
+    .sort(([a], [b]) => a.localeCompare(b));
+  return entries.length ? Object.fromEntries(entries) : null;
 }

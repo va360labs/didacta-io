@@ -263,7 +263,7 @@ export class MeController {
     return {
       completed: dbUser.onboardingCompletedAt !== null,
       completedAt: dbUser.onboardingCompletedAt?.toISOString() ?? null,
-      missing: this.missingOnboardingFields(dbUser),
+      missing: this.missingOnboardingFields(dbUser, await this.avatarOptional(user.tenantId)),
     };
   }
 
@@ -290,7 +290,7 @@ export class MeController {
       };
     }
 
-    const missing = this.missingOnboardingFields(dbUser);
+    const missing = this.missingOnboardingFields(dbUser, await this.avatarOptional(user.tenantId));
     if (missing.length > 0) {
       throw new UnprocessableEntityException({
         message: 'Faltan datos obligatorios para completar el onboarding.',
@@ -317,14 +317,30 @@ export class MeController {
     return { ok: true, onboardingCompletedAt: updated.onboardingCompletedAt!.toISOString() };
   }
 
-  private missingOnboardingFields(dbUser: {
-    name: string | null;
-    avatarUrl: string | null;
-  }): string[] {
+  private missingOnboardingFields(
+    dbUser: {
+      name: string | null;
+      avatarUrl: string | null;
+    },
+    avatarOptional = false,
+  ): string[] {
     const missing: string[] = [];
     if (!dbUser.name || dbUser.name.trim() === '') missing.push('name');
-    if (!dbUser.avatarUrl) missing.push('avatar');
+    if (!dbUser.avatarUrl && !avatarOptional) missing.push('avatar');
     return missing;
+  }
+
+  /**
+   * En un aula en modo sencillo la foto de perfil es opcional: sin ella se
+   * pinta un avatar con las iniciales. Exigirla era la primera barrera de
+   * quien acaba de entrar. En modo completo sigue siendo obligatoria.
+   */
+  private async avatarOptional(tenantId: string): Promise<boolean> {
+    const tenant = await this.prisma.tenant.findUnique({
+      where: { id: tenantId },
+      select: { simpleMode: true },
+    });
+    return tenant?.simpleMode === true;
   }
 
   // ──────────────────────────────────────────────────────────────────────────

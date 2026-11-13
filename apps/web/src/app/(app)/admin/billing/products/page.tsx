@@ -23,7 +23,7 @@
 
 import Link from 'next/link';
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import { Icon } from '@/components/icon';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -33,20 +33,26 @@ import { Label } from '@/components/ui/label';
 import { ApiHttpError } from '@/lib/api-client';
 import { authStorage } from '@/lib/auth-storage';
 import { apiErrorMessage } from '@/lib/i18n/api-error';
-import { formatCurrency, formatDateTime } from '@/lib/i18n/format';
+import { formatCentsExact, formatDateTime } from '@/lib/i18n/format';
 import type { TranslatorLike } from '@/lib/i18n/labels';
 import { billingApi, type BillingProduct } from '@/modules/billing';
+import { PriceFields } from '@/components/admin/price-fields';
+import {
+  buildPrice,
+  usePricePolicy,
+  type CurrencyOptionDraft,
+  type PriceDraftError,
+  type PricePolicy,
+} from '@/lib/pricing';
+import { OWN_KEYS_PRICE_CURRENCIES, minorToInput } from '@/lib/stripe-currencies';
 import { coursesApi, type Course } from '@/lib/courses';
 
 const PRICE_ID_PATTERN = /^price_[A-Za-z0-9]+$/;
 
 /** unitAmount en céntimos + currency ISO-4217 → moneda formateada según el locale activo. */
 function fmtPrice(unitAmount: number, currency: string): string {
-  try {
-    return formatCurrency(unitAmount / 100, currency.toUpperCase());
-  } catch {
-    return `${(unitAmount / 100).toFixed(2)} ${currency.toUpperCase()}`;
-  }
+  // Decimales según Stripe (`stripe-currencies.ts`), no `Intl`.
+  return formatCentsExact(unitAmount, currency.toUpperCase());
 }
 
 /** Error de acción, con marca aparte para el caso "Stripe sin configurar" (CTA a Administración → Pagos). */
@@ -85,25 +91,33 @@ function ActionErrorMessage({ error }: { error: ActionError }) {
 
 export default function AdminBillingProductsPage() {
   const t = useTranslations('adminPagos');
+  // Cobros de plataforma: el precio se escribe como importe (sin `price_…`).
+  // Claves propias o Community: la pantalla de siempre.
+  const policy = usePricePolicy(OWN_KEYS_PRICE_CURRENCIES);
   return (
     <div className="flex flex-col gap-6">
       <header className="flex flex-col gap-1">
-        <h1 className="font-display text-2xl font-bold tracking-tight">{t('billing.title')}</h1>
+        <h1 className="font-display text-2xl font-bold tracking-tight">
+          {policy?.platform ? t('billing.platformTitle') : t('billing.title')}
+        </h1>
         <p className="text-text-muted">
-          {t.rich('billing.subtitle', {
-            code: (chunks) => <code className="font-mono">{chunks}</code>,
-          })}
+          {policy?.platform
+            ? t('billing.platformSubtitle')
+            : t.rich('billing.subtitle', {
+                code: (chunks) => <code className="font-mono">{chunks}</code>,
+              })}
         </p>
       </header>
 
-      <BillingProductsPanel />
+      {policy ? <BillingProductsPanel policy={policy} /> : <div className="skeleton h-32 w-full" />}
     </div>
   );
 }
 
-function BillingProductsPanel() {
+function BillingProductsPanel({ policy }: { policy: PricePolicy }) {
   const t = useTranslations('adminPagos');
   const tErrors = useTranslations('errors');
+  const locale = useLocale();
   const [products, setProducts] = useState<BillingProduct[] | null>(null);
   const [courses, setCourses] = useState<Course[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -113,6 +127,11 @@ function BillingProductsPanel() {
   const [courseId, setCourseId] = useState('');
   const [stripePriceId, setStripePriceId] = useState('');
   const [creating, setCreating] = useState(false);
+  // Alta por importe (cobros de plataforma).
+  const [amount, setAmount] = useState('');
+  const [currency, setCurrency] = useState(policy.defaultCurrency);
+  const [options, setOptions] = useState<CurrencyOptionDraft[]>([]);
+  const [priceErrors, setPriceErrors] = useState<PriceDraftError[]>([]);
 
   useEffect(() => {
     const token = authStorage.getAccessToken();
@@ -141,6 +160,62 @@ function BillingProductsPanel() {
     } catch {
       // Silencioso: el último error ya se muestra al usuario.
     }
+  }
+
+  async function handleCreateByAmount(e: FormEvent) {
+    e.preventDefault();
+    const token = authStorage.getAccessToken();
+    if (!token || !courseId) return;
+    const built = buildPrice({ amount, currency, options }, locale);
+    setPriceErrors(built.errors);
+    if (built.errors.length || built.amountCents === null) return;
+    setCreating(true);
+    setActionError(null);
+    setActionInfo(null);
+    try {
+      const { product } = await billingApi.createProduct(token, courseId, {
+        amountCents: built.amountCents,
+        currency,
+        currencyOptions: built.currencyOptions,
+      });
+      setProducts((prev) => (prev ? [product, ...prev] : [product]));
+      setCourseId('');
+      setAmount('');
+      setOptions([]);
+      setActionInfo(t('billing.createdInfo', { title: courseTitle(courses, product.courseId, t) }));
+    } catch (err) {
+      setActionError(toActionError(err, t('billing.createError'), tErrors));
+    } finally {
+      setCreating(false);
+    }
+  }
+
+  async function handleSavePrice(
+    p: BillingProduct,
+    draft: { amount: string; currency: string; options: CurrencyOptionDraft[] },
+  ): Promise<PriceDraftError[]> {
+    const token = authStorage.getAccessToken();
+    if (!token) return [];
+    const built = buildPrice(draft, locale);
+    if (built.errors.length || built.amountCents === null) return built.errors;
+    setActionError(null);
+    setActionInfo(null);
+    try {
+      const { product } = await billingApi.updateProduct(token, p.id, {
+        amountCents: built.amountCents,
+        currency: draft.currency,
+        currencyOptions: built.currencyOptions,
+      });
+      setProducts((prev) =>
+        prev ? prev.map((it) => (it.id === product.id ? product : it)) : prev,
+      );
+      setActionInfo(
+        t('billing.priceUpdatedInfo', { price: fmtPrice(product.unitAmount, product.currency) }),
+      );
+    } catch (err) {
+      setActionError(toActionError(err, t('billing.changePriceError'), tErrors));
+    }
+    return [];
   }
 
   async function handleCreate(e: FormEvent) {
@@ -269,64 +344,109 @@ function BillingProductsPanel() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Icon name="plus" size={18} />
-            {t('billing.formTitle')}
+            {policy.platform ? t('billing.platformFormTitle') : t('billing.formTitle')}
           </CardTitle>
           <CardDescription>
-            {t.rich('billing.formHelp', {
-              strong: (chunks) => <strong>{chunks}</strong>,
-              code: (chunks) => <code>{chunks}</code>,
-              link: (chunks) => (
-                <a
-                  href="https://dashboard.stripe.com/products"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-brand-700 underline"
-                >
-                  {chunks}
-                </a>
-              ),
-            })}
+            {policy.platform
+              ? t('billing.platformFormHelp')
+              : t.rich('billing.formHelp', {
+                  strong: (chunks) => <strong>{chunks}</strong>,
+                  code: (chunks) => <code>{chunks}</code>,
+                  link: (chunks) => (
+                    <a
+                      href="https://dashboard.stripe.com/products"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-brand-700 underline"
+                    >
+                      {chunks}
+                    </a>
+                  ),
+                })}
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleCreate} className="flex flex-col gap-3 md:flex-row md:items-end">
-            <div className="flex flex-1 flex-col gap-1.5">
-              <Label htmlFor="courseId">{t('billing.courseLabel')}</Label>
-              <select
-                id="courseId"
-                value={courseId}
-                onChange={(e) => setCourseId(e.target.value)}
-                disabled={creating || availableCourses.length === 0}
-                className="border-border bg-surface-1 focus:border-brand-500 focus:ring-brand-500/20 h-10 rounded-md border px-3 text-sm focus:outline-none focus:ring-2"
-              >
-                <option value="">
-                  {availableCourses.length === 0
-                    ? t('billing.allCoursesLinked')
-                    : t('billing.selectCoursePh')}
-                </option>
-                {availableCourses.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.title}
+          {policy.platform ? (
+            <form onSubmit={handleCreateByAmount} className="flex flex-col gap-4">
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="courseIdAmount">{t('billing.courseLabel')}</Label>
+                <select
+                  id="courseIdAmount"
+                  value={courseId}
+                  onChange={(e) => setCourseId(e.target.value)}
+                  disabled={creating || availableCourses.length === 0}
+                  className="border-border bg-surface-1 focus:border-brand-500 focus:ring-brand-500/20 h-10 rounded-md border px-3 text-sm focus:outline-none focus:ring-2"
+                >
+                  <option value="">
+                    {availableCourses.length === 0
+                      ? t('billing.allCoursesLinked')
+                      : t('billing.selectCoursePh')}
                   </option>
-                ))}
-              </select>
-            </div>
-            <div className="flex flex-1 flex-col gap-1.5">
-              <Label htmlFor="stripePriceId">{t('billing.priceIdLabel')}</Label>
-              <Input
-                id="stripePriceId"
-                placeholder={t('billing.priceIdPh')}
-                value={stripePriceId}
-                onChange={(e) => setStripePriceId(e.target.value)}
-                autoComplete="off"
-                spellCheck={false}
+                  {availableCourses.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.title}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <PriceFields
+                idPrefix="new-product"
+                policy={policy}
+                amount={amount}
+                currency={currency}
+                options={options}
+                errors={priceErrors}
                 disabled={creating}
+                onAmount={setAmount}
+                onCurrency={setCurrency}
+                onOptions={setOptions}
               />
-            </div>
-            <Button type="submit" disabled={creating || !courseId || !stripePriceId.trim()}>
-              {creating ? t('billing.creatingCta') : t('billing.linkCta')}
-            </Button>
-          </form>
+              <div>
+                <Button type="submit" disabled={creating || !courseId || !amount.trim()}>
+                  {creating ? t('billing.creatingCta') : t('billing.platformCreateCta')}
+                </Button>
+              </div>
+            </form>
+          ) : (
+            <form onSubmit={handleCreate} className="flex flex-col gap-3 md:flex-row md:items-end">
+              <div className="flex flex-1 flex-col gap-1.5">
+                <Label htmlFor="courseId">{t('billing.courseLabel')}</Label>
+                <select
+                  id="courseId"
+                  value={courseId}
+                  onChange={(e) => setCourseId(e.target.value)}
+                  disabled={creating || availableCourses.length === 0}
+                  className="border-border bg-surface-1 focus:border-brand-500 focus:ring-brand-500/20 h-10 rounded-md border px-3 text-sm focus:outline-none focus:ring-2"
+                >
+                  <option value="">
+                    {availableCourses.length === 0
+                      ? t('billing.allCoursesLinked')
+                      : t('billing.selectCoursePh')}
+                  </option>
+                  {availableCourses.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.title}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex flex-1 flex-col gap-1.5">
+                <Label htmlFor="stripePriceId">{t('billing.priceIdLabel')}</Label>
+                <Input
+                  id="stripePriceId"
+                  placeholder={t('billing.priceIdPh')}
+                  value={stripePriceId}
+                  onChange={(e) => setStripePriceId(e.target.value)}
+                  autoComplete="off"
+                  spellCheck={false}
+                  disabled={creating}
+                />
+              </div>
+              <Button type="submit" disabled={creating || !courseId || !stripePriceId.trim()}>
+                {creating ? t('billing.creatingCta') : t('billing.linkCta')}
+              </Button>
+            </form>
+          )}
           {actionError ? <ActionErrorMessage error={actionError} /> : null}
           {actionInfo ? <p className="mt-3 text-sm text-success-700">{actionInfo}</p> : null}
         </CardContent>
@@ -345,6 +465,8 @@ function BillingProductsPanel() {
             <ProductRow
               key={p.id}
               product={p}
+              policy={policy}
+              onSavePrice={(draft) => handleSavePrice(p, draft)}
               courseTitle={courseTitle(courses, p.courseId, t)}
               onToggleActive={() => handleToggleActive(p)}
               onChangePrice={() => handleChangePrice(p)}
@@ -359,18 +481,53 @@ function BillingProductsPanel() {
 
 function ProductRow({
   product,
+  policy,
+  onSavePrice,
   courseTitle,
   onToggleActive,
   onChangePrice,
   onDelete,
 }: {
   product: BillingProduct;
+  policy: PricePolicy;
+  onSavePrice: (draft: {
+    amount: string;
+    currency: string;
+    options: CurrencyOptionDraft[];
+  }) => Promise<PriceDraftError[]>;
   courseTitle: string;
   onToggleActive: () => void;
   onChangePrice: () => void;
   onDelete: () => void;
 }) {
   const t = useTranslations('adminPagos');
+  const locale = useLocale();
+  // Edición del precio por importe (cobros de plataforma).
+  const [editing, setEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [amount, setAmount] = useState('');
+  const [currency, setCurrency] = useState(product.currency);
+  const [options, setOptions] = useState<CurrencyOptionDraft[]>([]);
+  const [errors, setErrors] = useState<PriceDraftError[]>([]);
+  function startEditing() {
+    setAmount(minorToInput(product.unitAmount, product.currency, locale));
+    setCurrency(product.currency);
+    setOptions(
+      Object.entries(product.currencyOptions ?? {}).map(([code, minor]) => ({
+        currency: code,
+        amount: minorToInput(minor, code, locale),
+      })),
+    );
+    setErrors([]);
+    setEditing(true);
+  }
+  async function save() {
+    setSaving(true);
+    const found = await onSavePrice({ amount, currency, options });
+    setSaving(false);
+    setErrors(found);
+    if (found.length === 0) setEditing(false);
+  }
   return (
     <Card>
       <CardHeader>
@@ -398,15 +555,56 @@ function ProductRow({
               {fmtPrice(product.unitAmount, product.currency)}
             </dd>
           </div>
-          <div className="md:col-span-2">
-            <dt className="text-text-muted">{t('billing.priceIdLabel')}</dt>
-            <dd className="break-all font-mono text-xs">{product.stripePriceId}</dd>
-          </div>
+          {policy.platform ? (
+            Object.keys(product.currencyOptions ?? {}).length ? (
+              <div className="md:col-span-2">
+                <dt className="text-text-muted">{t('billing.platformMarketPrices')}</dt>
+                <dd className="font-mono text-xs">
+                  {Object.entries(product.currencyOptions ?? {})
+                    .map(([code, minor]) => fmtPrice(minor, code))
+                    .join(' · ')}
+                </dd>
+              </div>
+            ) : null
+          ) : (
+            <div className="md:col-span-2">
+              <dt className="text-text-muted">{t('billing.priceIdLabel')}</dt>
+              <dd className="break-all font-mono text-xs">{product.stripePriceId}</dd>
+            </div>
+          )}
         </dl>
+        {policy.platform && editing ? (
+          <div className="flex flex-col gap-3 rounded-lg border border-border p-4">
+            <PriceFields
+              idPrefix={`product-${product.id}`}
+              policy={policy}
+              amount={amount}
+              currency={currency}
+              options={options}
+              errors={errors}
+              disabled={saving}
+              onAmount={setAmount}
+              onCurrency={setCurrency}
+              onOptions={setOptions}
+            />
+            <div className="flex flex-wrap gap-2">
+              <Button type="button" onClick={() => void save()} disabled={saving}>
+                {t('billing.platformSaveCta')}
+              </Button>
+              <Button type="button" variant="ghost" onClick={() => setEditing(false)}>
+                {t('billing.platformCancelCta')}
+              </Button>
+            </div>
+          </div>
+        ) : null}
         <div className="flex flex-wrap gap-2">
-          <Button type="button" variant="secondary" onClick={onChangePrice}>
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={policy.platform ? startEditing : onChangePrice}
+          >
             <Icon name="edit" size={16} />
-            {t('billing.changePriceCta')}
+            {policy.platform ? t('billing.platformChangePriceCta') : t('billing.changePriceCta')}
           </Button>
           <Button type="button" variant="secondary" onClick={onToggleActive}>
             {product.active ? t('billing.deactivateCta') : t('billing.reactivateCta')}

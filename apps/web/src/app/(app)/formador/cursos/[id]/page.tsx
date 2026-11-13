@@ -5,11 +5,14 @@
  * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
  */
 
+import { SimpleCourseEditor } from '@/components/simple-course/simple-course-editor';
+import { useSimpleMode } from '@/lib/simple-mode';
 import dynamic from 'next/dynamic';
 import { useParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { InvitationsPanel } from './invitations-panel';
 import { DripPanel } from './drip-panel';
+import { PricePanel } from './price-panel';
 
 // El editor de curso arrastra librerías pesadas (tiptap ~200KB + dnd-kit ~100KB).
 // Lo cargamos bajo demanda (chunk aparte) para que la página pinte el esqueleto
@@ -26,7 +29,16 @@ import { ApiHttpError } from '@/lib/api-client';
 import { apiErrorMessage } from '@/lib/i18n/api-error';
 import { coursesApi, type CourseDetail } from '@/lib/courses';
 
+/** En modo sencillo, el editor sencillo (título y lecciones); si no, el de siempre. */
 export default function CourseEditorPage() {
+  const simple = useSimpleMode();
+  const params = useParams<{ id: string }>();
+  if (simple === null) return null;
+  if (simple && params?.id) return <SimpleCourseEditor courseId={params.id} />;
+  return <CourseEditorCompleto />;
+}
+
+function CourseEditorCompleto() {
   const t = useTranslations('formadorCursos');
   const tErrors = useTranslations('errors');
   const params = useParams<{ id: string }>();
@@ -77,6 +89,7 @@ export default function CourseEditorPage() {
         </Button>
       </div>
       <CourseEditor initial={course} onChange={reload} />
+      <PricePanel courseId={course.id} published={course.status === 'PUBLISHED'} />
       <DripPanel courseId={course.id} />
       <InvitationsPanel courseId={course.id} />
     </div>

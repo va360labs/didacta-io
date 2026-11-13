@@ -8,8 +8,11 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
+import { Icon } from '@/components/icon';
+import { InviteAndEarnCard } from '@/components/invite-and-earn-card';
 import { coursesApi, type Course } from '@/lib/courses';
 import { learningApi, type Enrollment } from '@/lib/learning';
+import { useSimpleMode } from '@/lib/simple-mode';
 
 interface EnrollmentWithCourse extends Enrollment {
   courseTitle: string;
@@ -17,6 +20,8 @@ interface EnrollmentWithCourse extends Enrollment {
 
 export default function MiPanelPage() {
   const t = useTranslations('alumnoSocial');
+  const tA = useTranslations('modoSencilloAprender');
+  const simple = useSimpleMode() === true;
   const [loading, setLoading] = useState(true);
   const [enrollments, setEnrollments] = useState<EnrollmentWithCourse[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -167,6 +172,32 @@ export default function MiPanelPage() {
           </div>
         </div>
       </div>
+
+      {/* Modo sencillo: certificados e «Invita y gana» viven en el progreso. */}
+      {simple ? (
+        <div className="grid gap-4 lg:grid-cols-2">
+          <Link
+            href="/mis-certificados"
+            className="flex items-center gap-3 rounded-2xl border border-border bg-surface p-4 hover:border-border-strong"
+          >
+            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-brand-50 text-brand-700">
+              <Icon name="award" size={20} />
+            </span>
+            <span className="min-w-0">
+              <span className="block text-[15px] font-bold text-text">
+                {tA('progreso.certificados')}
+              </span>
+              <span className="block text-sm text-text-muted">
+                {tA('progreso.certificadosTexto')}
+              </span>
+            </span>
+            <span className="ml-auto text-text-subtle">
+              <Icon name="chevron-right" size={18} />
+            </span>
+          </Link>
+          <InviteAndEarnCard context="progress" />
+        </div>
+      ) : null}
     </div>
   );
 }

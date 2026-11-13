@@ -8,6 +8,7 @@ import { LoggerModule } from 'nestjs-pino';
 import { PrometheusModule } from '@willsoto/nestjs-prometheus';
 import { LicenseModule } from '@didacta/license-sdk';
 import { AdminModule } from './admin/admin.module';
+import { AgentModule } from './agent/agent.module';
 import { ModerationModule } from './moderation/moderation.module';
 import { AiModule } from './ai/ai.module';
 import { AuthModule } from './auth/auth.module';
@@ -30,11 +31,13 @@ import { RegistryModule } from './registry/registry.module';
 import { ScimModule } from './scim/scim.module';
 import { PublicModule } from './public/public.module';
 import { SetupModule } from './setup/setup.module';
+import { SimpleModeModule } from './simple-mode/simple-mode.module';
 import { SystemModule } from './system/system.module';
 import { SsoOidcModule } from './sso/oidc/oidc.module';
 import { SsoSamlModule } from './sso/saml/saml.module';
 import { SsoWpModule } from './sso/wp/wp-sso.module';
 import { TenancyModule } from './tenancy/tenancy.module';
+import { VideoCloudModule } from './video/cloud/video-cloud.module';
 import { VideoModule } from './video/video.module';
 import { WebhooksModule } from './webhooks/webhooks.module';
 
@@ -103,6 +106,12 @@ import { WebhooksModule } from './webhooks/webhooks.module';
     // Bootstrap del primer arranque. Endpoints públicos /setup/status + /setup/init.
     // Va después de AuthModule porque reusa PasswordService + TokenService.
     SetupModule,
+    // Modo sencillo del aula (Didacta Cloud): alta en 3 preguntas y «Empieza aquí».
+    SimpleModeModule,
+    // Puerta de agentes: servidor MCP del aula (`/api/v1/mcp`) y la clave del
+    // panel «Hazlo más rápido con tu agente de IA». Orquesta los servicios
+    // públicos de los módulos, como SimpleModeModule.
+    AgentModule,
     PublicModule,
     // Endpoints transversales (proxy a Docker Hub para "versión nueva", etc.).
     SystemModule,
@@ -132,6 +141,8 @@ import { WebhooksModule } from './webhooks/webhooks.module';
     // autorización por vídeo, tope de vídeos distintos por cuenta y marca de
     // agua, por tenant. Infra CORE del host; reusa AuthModule y ModulesModule.
     VideoModule,
+    // Subida de vídeo a Bunny Stream (Didacta Cloud). Vacío sin BUNNY_STREAM_API_KEY.
+    VideoCloudModule.register(),
     // Quinto piloto License SDK — gate feat:reports.advanced_signed end-to-end.
     // Vivimos en módulo separado para acoplar `adm-zip` solo donde se usa.
     AuditExportModule,

@@ -22,11 +22,22 @@
 /// - **No se puede descartar.** No es una novedad que se anuncia, como el
 ///   aviso de versión nueva: es una avería. Desaparece solo en cuanto haya
 ///   una salida de correo, y mientras no la haya el aviso sigue siendo cierto.
+///
+/// Un aula de Cloud sin servidor propio cuyo correo sale por el de la
+/// plataforma (el SMTP compartido del despliegue) está en `fallback`: no ve el
+/// aviso, porque no hay nada que arreglar. Solo lo ve el aula que tiene que
+/// conectar su propio servicio, y en lenguaje llano (sin «SMTP»).
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { usePathname, useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import { adminSmtpApi, deriveSmtpStatus, shouldShowSmtpBanner } from '@/lib/admin-smtp';
+import {
+  adminSmtpApi,
+  deriveSmtpStatus,
+  isViewingSmtpSettings,
+  shouldShowSmtpBanner,
+} from '@/lib/admin-smtp';
 
 /// Ruta al tab de notificaciones del panel, enlazable desde fuera.
 const RUTA_AJUSTES = '/admin/configuracion?tab=notifications';
@@ -34,6 +45,14 @@ const RUTA_AJUSTES = '/admin/configuracion?tab=notifications';
 export function NotificationsSetupBanner({ roles }: { roles: readonly string[] }) {
   const t = useTranslations('shell');
   const [visible, setVisible] = useState(false);
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  // En Configuración → Notificaciones la tarjeta del correo ya lo explica: un solo aviso.
+  const enAjustesDeCorreo = isViewingSmtpSettings(
+    pathname,
+    searchParams?.get('tab') ?? null,
+    roles,
+  );
 
   // Pregunta solo si el rol puede arreglarlo; con cualquier otro, el endpoint
   // respondería 403 en cada carga de página sin que sirviera de nada.
@@ -59,14 +78,14 @@ export function NotificationsSetupBanner({ roles }: { roles: readonly string[] }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [puedeArreglarlo]);
 
-  if (!visible) return null;
+  if (!visible || enAjustesDeCorreo) return null;
 
   return (
     /* Los tokens `warning` del sistema, no los de la barra lateral: aquí el
        fondo es claro y el amber-100 del aviso de versión —pensado para el
        rail oscuro— dejaba el texto prácticamente ilegible. */
     /* Una sola línea a propósito: esto roba alto en TODAS las pantallas de la
-       plataforma hasta que alguien configure el SMTP. Sin `flex-wrap`, con el
+       plataforma hasta que alguien conecte el correo. Sin `flex-wrap`, con el
        texto recortado en puntos suspensivos cuando no quepa —de ahí el
        `min-w-0`, que es lo que permite encogerse a un hijo flex— y el botón
        en `shrink-0` para que nunca sea él quien salte de línea. */

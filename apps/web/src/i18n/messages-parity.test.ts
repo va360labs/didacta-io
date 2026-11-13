@@ -473,4 +473,16 @@ describe('catálogo i18n · integridad', () => {
     }
     expect(colisiones, `codes duplicados:\n  ${colisiones.join('\n  ')}`).toEqual([]);
   });
+
+  it('el catálogo inglés no usa comillas españolas («»)', () => {
+    // En inglés se cita con comillas inglesas: «Start here» delataba una
+    // traducción calcada del español en pantallas que ven creadores anglófonos.
+    const conAngulares: string[] = [];
+    for (const ns of NAMESPACES) {
+      for (const [k, v] of entriesOf('en', ns)) {
+        if (typeof v === 'string' && /[«»]/.test(v)) conAngulares.push(`en/${ns}.${k} = ${v}`);
+      }
+    }
+    expect(conAngulares, `usa “…” en inglés:\n  ${conAngulares.join('\n  ')}`).toEqual([]);
+  });
 });

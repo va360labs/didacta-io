@@ -58,9 +58,9 @@
     "fallbackLabel": "Dialog"
   },
   "smtpBanner": {
-    "title": "Configura las notificaciones:",
-    "body": "sin servidor SMTP tus usuarios no reciben ningún correo.",
-    "cta": "Configurar"
+    "title": "Los correos de tu academia aún no se pueden enviar:",
+    "body": "falta conectar tu servicio de correo.",
+    "cta": "Conectar el correo"
   },
   "gettingStarted": {
     "title": "Primeros pasos",

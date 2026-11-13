@@ -7,10 +7,12 @@
 
 import { useTranslations } from 'next-intl';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { CommunityAvatar } from '@/components/community-avatar';
 import { CommunityGalleryModal } from '@/components/community-gallery-modal';
 import { CommunityTagChip } from '@/components/community-tag-chip';
 import { ThreadCard, TAG_COLORS } from '@/components/community-thread-card';
 import { CommunityUpcomingCard } from '@/components/community-upcoming-card';
+import { InviteAndEarnCard } from '@/components/invite-and-earn-card';
 import { usePublicUsers } from '@/lib/public-users';
 import { Icon } from '@/components/icon';
 import { PostComposerModal } from '@/components/post-composer-modal';
@@ -24,6 +26,7 @@ import { usePostModalRoute } from '@/lib/use-post-modal-route';
 import { cn } from '@/lib/utils';
 import {
   communityApi,
+  useCommunitySpaces,
   useCommunityTags,
   type CommunityTag,
   type Post,
@@ -49,11 +52,21 @@ const ALL_TAGS = 'Todo';
 export function CommunityFeed({
   initialPostId,
   focusCommentId,
+  simple = false,
 }: {
   initialPostId?: string;
   focusCommentId?: string;
+  /**
+   * Modo sencillo (aulas de Didacta Cloud): «Escribe algo…» es la acción
+   * principal y los espacios son los filtros (los foros dejan de ser un
+   * grupo del menú). En modo completo no cambia nada.
+   */
+  simple?: boolean;
 }) {
   const t = useTranslations('comunidadComponentes');
+  const tSimple = useTranslations('modoSencillo');
+  const spaces = useCommunitySpaces();
+  const viewer = authStorage.getSession()?.user ?? null;
   const tErrors = useTranslations('errors');
   const [posts, setPosts] = useState<Post[] | null>(null);
   // Avatares de los autores (resueltos por authorId; no vienen en el post).
@@ -130,7 +143,7 @@ export function CommunityFeed({
       <PostComposerModal
         open={composerOpen}
         onClose={() => setComposerOpen(false)}
-        spaceSlug="general"
+        spaceSlug={simple && activeTag !== ALL_TAGS ? activeTag : 'general'}
         onSuccess={() => void reload({ sort, tag: activeTag })}
       />
 
@@ -140,89 +153,144 @@ export function CommunityFeed({
         title={t('galleryTitle')}
       />
 
-      <header className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1
-            className="font-display text-2xl font-bold tracking-tight text-text"
-            style={{ letterSpacing: '-0.02em' }}
+      {simple ? (
+        <div className="flex flex-col gap-3">
+          <button
+            type="button"
+            onClick={() => setComposerOpen(true)}
+            aria-label={tSimple('comunidad.escribeAlgoAria')}
+            className="flex w-full items-center gap-3 rounded-2xl border border-border bg-surface p-3 text-left shadow-sm transition-colors hover:border-border-strong"
+            data-testid="escribe-algo"
           >
-            {t('feedTitle')}
-          </h1>
-          <p className="mt-1.5 text-text-muted">{t('feedSubtitle')}</p>
+            <CommunityAvatar
+              name={viewer?.name ?? viewer?.email ?? ''}
+              avatarUrl={viewer?.avatarUrl ?? null}
+              size={40}
+              linkToProfile={false}
+            />
+            <span className="flex h-11 flex-1 items-center rounded-xl bg-bg-subtle px-4 text-[15px] text-text-subtle">
+              {tSimple('comunidad.escribeAlgo')}
+            </span>
+          </button>
+          <div
+            role="tablist"
+            aria-label={tSimple('comunidad.espaciosAria')}
+            className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1"
+          >
+            {[{ slug: ALL_TAGS, title: tSimple('comunidad.todo') }, ...spaces].map((sp) => {
+              const on = activeTag === sp.slug;
+              return (
+                <button
+                  key={sp.slug}
+                  type="button"
+                  role="tab"
+                  aria-selected={on}
+                  onClick={() => setActiveTag(sp.slug)}
+                  className={cn(
+                    'h-9 shrink-0 rounded-full border px-4 text-sm font-semibold transition-colors',
+                    on
+                      ? 'border-text bg-text text-surface'
+                      : 'border-border bg-surface text-text-muted hover:text-text',
+                  )}
+                >
+                  {sp.title}
+                </button>
+              );
+            })}
+          </div>
         </div>
-        <div className="flex items-center gap-2">
-          <Button onClick={() => setComposerOpen(true)}>
-            <Icon name="plus" size={16} />
-            {t('newConversation')}
-          </Button>
-          <Button variant="secondary" onClick={() => setGalleryOpen(true)}>
-            <Icon name="image" size={16} />
-            {t('gallery')}
-          </Button>
-        </div>
-      </header>
+      ) : (
+        <header className="flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <h1
+              className="font-display text-2xl font-bold tracking-tight text-text"
+              style={{ letterSpacing: '-0.02em' }}
+            >
+              {t('feedTitle')}
+            </h1>
+            <p className="mt-1.5 text-text-muted">{t('feedSubtitle')}</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button onClick={() => setComposerOpen(true)}>
+              <Icon name="plus" size={16} />
+              {t('newConversation')}
+            </Button>
+            <Button variant="secondary" onClick={() => setGalleryOpen(true)}>
+              <Icon name="image" size={16} />
+              {t('gallery')}
+            </Button>
+          </div>
+        </header>
+      )}
 
-      <div className="grid gap-6 lg:grid-cols-[1fr_280px]">
+      <div
+        className={cn(
+          'grid gap-6',
+          simple ? 'lg:grid-cols-[1fr_320px]' : 'lg:grid-cols-[1fr_280px]',
+        )}
+      >
         {/* Feed */}
         <div className="flex min-w-0 flex-col gap-4">
-          <Card>
-            <CardContent className="flex flex-wrap items-center gap-2 p-3">
-              {allTags.map((tag) => {
-                const isActive = activeTag === tag;
-                const curated = tag === ALL_TAGS ? undefined : tagsByName.get(tag);
-                if (curated) {
+          {simple ? null : (
+            <Card>
+              <CardContent className="flex flex-wrap items-center gap-2 p-3">
+                {allTags.map((tag) => {
+                  const isActive = activeTag === tag;
+                  const curated = tag === ALL_TAGS ? undefined : tagsByName.get(tag);
+                  if (curated) {
+                    return (
+                      <button
+                        key={tag}
+                        type="button"
+                        onClick={() => setActiveTag(tag)}
+                        aria-pressed={isActive}
+                        className={cn(
+                          'rounded-full transition-shadow',
+                          isActive && 'ring-2 ring-offset-2 ring-offset-bg',
+                        )}
+                        style={
+                          isActive
+                            ? ({ '--tw-ring-color': curated.color } as React.CSSProperties)
+                            : undefined
+                        }
+                      >
+                        <CommunityTagChip name={tag} tag={curated} />
+                      </button>
+                    );
+                  }
                   return (
                     <button
                       key={tag}
                       type="button"
                       onClick={() => setActiveTag(tag)}
-                      aria-pressed={isActive}
                       className={cn(
-                        'rounded-full transition-shadow',
-                        isActive && 'ring-2 ring-offset-2 ring-offset-bg',
-                      )}
-                      style={
+                        'rounded-full px-3 py-1.5 text-[13px] font-medium transition-colors',
                         isActive
-                          ? ({ '--tw-ring-color': curated.color } as React.CSSProperties)
-                          : undefined
-                      }
+                          ? 'bg-[var(--didacta-night)] text-white'
+                          : 'bg-[var(--didacta-surface)] text-text-muted hover:text-text',
+                      )}
                     >
-                      <CommunityTagChip name={tag} tag={curated} />
+                      {tag === ALL_TAGS ? t('filterAll') : tag}
                     </button>
                   );
-                }
-                return (
-                  <button
-                    key={tag}
-                    type="button"
-                    onClick={() => setActiveTag(tag)}
-                    className={cn(
-                      'rounded-full px-3 py-1.5 text-[13px] font-medium transition-colors',
-                      isActive
-                        ? 'bg-[var(--didacta-night)] text-white'
-                        : 'bg-[var(--didacta-surface)] text-text-muted hover:text-text',
-                    )}
+                })}
+                <label className="ml-auto flex items-center gap-2 text-xs text-text-subtle">
+                  {t('sortLabel')}
+                  <select
+                    value={sort}
+                    onChange={(e) => setSort(e.target.value as PostSort)}
+                    className="rounded-md border border-border bg-surface px-2 py-1 text-xs font-medium text-text focus:outline-none focus:ring-2 focus:ring-brand-500"
                   >
-                    {tag === ALL_TAGS ? t('filterAll') : tag}
-                  </button>
-                );
-              })}
-              <label className="ml-auto flex items-center gap-2 text-xs text-text-subtle">
-                {t('sortLabel')}
-                <select
-                  value={sort}
-                  onChange={(e) => setSort(e.target.value as PostSort)}
-                  className="rounded-md border border-border bg-surface px-2 py-1 text-xs font-medium text-text focus:outline-none focus:ring-2 focus:ring-brand-500"
-                >
-                  {SORT_OPTIONS.map((k) => (
-                    <option key={k} value={k}>
-                      {t(`sort.${k}`)}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </CardContent>
-          </Card>
+                    {SORT_OPTIONS.map((k) => (
+                      <option key={k} value={k}>
+                        {t(`sort.${k}`)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </CardContent>
+            </Card>
+          )}
 
           {error ? (
             <div
@@ -275,6 +343,9 @@ export function CommunityFeed({
                 onOpen={() => openPost(p.id)}
                 onTagClick={(tag) => setActiveTag(tag)}
                 onReactionToggle={(emoji) => void handleReactPost(p.id, emoji)}
+                tagLabel={
+                  simple ? (tag) => spaces.find((sp) => sp.slug === tag)?.title ?? tag : undefined
+                }
               />
             ))
           )}
@@ -282,59 +353,69 @@ export function CommunityFeed({
 
         {/* Sidebar derecha */}
         <aside className="flex min-w-0 flex-col gap-4">
+          {/* Modo sencillo: invitar está donde se habla con la comunidad. */}
+          {simple ? <InviteAndEarnCard /> : null}
           {/* Lo primero: al abrir la comunidad se ve qué hay por delante sin
               tener que ir hasta /calendario. */}
           <CommunityUpcomingCard />
 
-          <Card>
-            <CardContent className="p-5">
-              <h4 className="font-display text-base font-semibold text-text">{t('activity')}</h4>
-              <div className="mt-3 divide-y divide-border-soft text-sm">
-                {/* Solo datos reales: nº de publicaciones del feed actual. Las
+          {simple ? null : (
+            <>
+              <Card>
+                <CardContent className="p-5">
+                  <h4 className="font-display text-base font-semibold text-text">
+                    {t('activity')}
+                  </h4>
+                  <div className="mt-3 divide-y divide-border-soft text-sm">
+                    {/* Solo datos reales: nº de publicaciones del feed actual. Las
                     métricas "Respuestas útiles"/"Reconocimientos" se quitaron por
                     no tener endpoint que las respalde (regla: cero datos de cartón). */}
-                <ActivityRow label={t('postsInFeed')} value={posts?.length ?? 0} />
-              </div>
-            </CardContent>
-          </Card>
+                    <ActivityRow label={t('postsInFeed')} value={posts?.length ?? 0} />
+                  </div>
+                </CardContent>
+              </Card>
 
-          <Card>
-            <CardContent className="p-5">
-              <h4 className="font-display text-base font-semibold text-text">{t('activeTags')}</h4>
-              <div className="mt-3 space-y-2">
-                {allTags
-                  .filter((tag) => tag !== ALL_TAGS)
-                  .map((tag, i) => {
-                    const curated = tagsByName.get(tag);
-                    const swatchColor = curated?.color ?? TAG_COLORS[i % TAG_COLORS.length]!;
-                    return (
-                      <div
-                        key={tag}
-                        className={cn(
-                          'flex items-center gap-2.5 py-1.5',
-                          i > 0 ? 'border-t border-border-soft pt-3' : '',
-                        )}
-                      >
-                        <span
-                          aria-hidden="true"
-                          className="block h-7 w-7 rounded-lg"
-                          style={{ background: swatchColor, opacity: 0.18 }}
-                        />
-                        <span className="min-w-0 flex-1 wrap-break-word text-sm font-medium text-text">
-                          {tag}
-                        </span>
-                        <span className="text-xs text-text-subtle tabular-nums">
-                          {posts?.filter((p) => p.tags.includes(tag)).length ?? 0}
-                        </span>
-                      </div>
-                    );
-                  })}
-                {allTags.length <= 1 ? (
-                  <p className="text-xs text-text-subtle">{t('noTags')}</p>
-                ) : null}
-              </div>
-            </CardContent>
-          </Card>
+              <Card>
+                <CardContent className="p-5">
+                  <h4 className="font-display text-base font-semibold text-text">
+                    {t('activeTags')}
+                  </h4>
+                  <div className="mt-3 space-y-2">
+                    {allTags
+                      .filter((tag) => tag !== ALL_TAGS)
+                      .map((tag, i) => {
+                        const curated = tagsByName.get(tag);
+                        const swatchColor = curated?.color ?? TAG_COLORS[i % TAG_COLORS.length]!;
+                        return (
+                          <div
+                            key={tag}
+                            className={cn(
+                              'flex items-center gap-2.5 py-1.5',
+                              i > 0 ? 'border-t border-border-soft pt-3' : '',
+                            )}
+                          >
+                            <span
+                              aria-hidden="true"
+                              className="block h-7 w-7 rounded-lg"
+                              style={{ background: swatchColor, opacity: 0.18 }}
+                            />
+                            <span className="min-w-0 flex-1 wrap-break-word text-sm font-medium text-text">
+                              {tag}
+                            </span>
+                            <span className="text-xs text-text-subtle tabular-nums">
+                              {posts?.filter((p) => p.tags.includes(tag)).length ?? 0}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    {allTags.length <= 1 ? (
+                      <p className="text-xs text-text-subtle">{t('noTags')}</p>
+                    ) : null}
+                  </div>
+                </CardContent>
+              </Card>
+            </>
+          )}
         </aside>
       </div>
 

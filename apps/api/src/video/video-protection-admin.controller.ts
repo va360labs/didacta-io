@@ -103,6 +103,16 @@ export class VideoProtectionAdminController {
     private readonly runSignatureCheck: typeof checkBunnySignature = checkBunnySignature,
   ) {}
 
+  /** La biblioteca de Didacta Cloud la firma el servidor: no admite clave del aula. */
+  private rejectPlatformLibrary(libraryId: string): void {
+    if (this.config.isPlatformLibrary(libraryId)) {
+      throw new BadRequestException({
+        message: 'Los vídeos subidos a la academia ya van protegidos: no hace falta ninguna clave.',
+        code: 'ADMIN_VIDEO_PROTECTION_PLATFORM_LIBRARY',
+      });
+    }
+  }
+
   private requireAdmin(user: SessionClaims | undefined): SessionClaims {
     if (!user) throw new UnauthorizedException();
     if (!user.roles.some((r) => ADMIN_ROLES.has(r))) {
@@ -165,6 +175,7 @@ export class VideoProtectionAdminController {
     @Body(new ZodValidationPipe(tokenKeySchema)) dto: z.infer<typeof tokenKeySchema>,
   ): Promise<VideoProtectionStatus> {
     const u = this.requireAdmin(user);
+    this.rejectPlatformLibrary(dto.libraryId);
     await this.config.setTokenKey(u.tenantId, u.sub, dto.libraryId, dto.tokenKey);
     await this.auditLog.record({
       tenantId: u.tenantId,
@@ -189,6 +200,7 @@ export class VideoProtectionAdminController {
     @Req() req: FastifyRequest,
   ): Promise<VideoSignatureCheckResponse> {
     const u = this.requireAdmin(user);
+    this.rejectPlatformLibrary(dto.libraryId);
     const checkedAt = new Date().toISOString();
     const skipped = (outcome: 'no_key' | 'no_video'): VideoSignatureCheckResponse => ({
       libraryId: dto.libraryId,

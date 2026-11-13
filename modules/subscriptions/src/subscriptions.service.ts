@@ -114,6 +114,7 @@ const EVENT = {
   INVOICE_PAID: 'subscriptions.invoice.paid',
   INVOICE_FAILED: 'subscriptions.invoice.payment_failed',
   INVOICE_REFUNDED: 'subscriptions.invoice.refunded',
+  INVOICE_PARTIALLY_REFUNDED: 'subscriptions.invoice.partially_refunded',
 } as const;
 
 /**
@@ -335,6 +336,56 @@ export class SubscriptionsService {
     }
 
     return updated;
+  }
+
+  // ---------------- Portal de cliente (alumno) ----------------
+
+  /**
+   * Abre el portal de cliente de Stripe para que el alumno cambie su tarjeta,
+   * vea sus facturas y se dé de baja él solo.
+   *
+   * Qué suscripción: la indicada (tiene que ser suya), o si no la membresía viva
+   * más reciente, o si no su suscripción más reciente con cliente de Stripe. El
+   * portal es del CLIENTE (`cus_…`): muestra las suscripciones de ese cliente.
+   *
+   * La cuenta y la configuración del portal las decide el adaptador que monta el
+   * host (en una cuenta compartida, con el nombre del creador). Una suscripción
+   * ajena o sin cliente de Stripe responde «no encontrada» (404), sin decir cuál
+   * de las dos cosas es.
+   */
+  async createBillingPortalSession(
+    tenantId: string,
+    userId: string,
+    opts: { subscriptionId?: string; returnUrl: string },
+  ): Promise<{ url: string; subscriptionId: string }> {
+    const withCustomer = { stripeCustomerId: { not: '' } };
+    const sub = opts.subscriptionId
+      ? await this.prisma.modSubscriptionsSubscription.findFirst({
+          where: { id: opts.subscriptionId, tenantId, userId, ...withCustomer },
+        })
+      : ((await this.prisma.modSubscriptionsSubscription.findFirst({
+          where: {
+            tenantId,
+            userId,
+            planId: { not: null },
+            status: { in: ['TRIALING', 'ACTIVE', 'PAST_DUE'] },
+            ...withCustomer,
+          },
+          orderBy: { createdAt: 'desc' },
+        })) ??
+        (await this.prisma.modSubscriptionsSubscription.findFirst({
+          where: { tenantId, userId, ...withCustomer },
+          orderBy: { createdAt: 'desc' },
+        })));
+    if (!sub || !sub.stripeCustomerId) {
+      throw new SubscriptionNotFoundError(opts.subscriptionId ?? 'portal');
+    }
+    const stripe = await this.stripeFor(tenantId);
+    const session = await stripe.createPortalSession({
+      customerId: sub.stripeCustomerId,
+      returnUrl: opts.returnUrl,
+    });
+    return { url: session.url, subscriptionId: sub.id };
   }
 
   // ---------------- Listado alumno ----------------
@@ -945,6 +996,18 @@ export class SubscriptionsService {
     // este modulo gemelo no.
     const total = charge.amount ?? 0;
     const devuelto = charge.amount_refunded ?? 0;
+    if (devuelto > 0 && devuelto < total) {
+      // Parcial: se avisa con lo devuelto ACUMULADO para que la comisión de
+      // referidos se recorte en proporción (no se revoca entera).
+      await this.publisher.publish(invoice.tenantId, null, EVENT.INVOICE_PARTIALLY_REFUNDED, {
+        subscriptionId: invoice.subscriptionId,
+        stripeInvoiceId,
+        amountRefunded: devuelto,
+        amountTotal: total,
+        currency: charge.currency,
+      });
+      return;
+    }
     if (!(devuelto > 0 && devuelto >= total)) return;
 
     await this.publisher.publish(invoice.tenantId, null, EVENT.INVOICE_REFUNDED, {
@@ -1043,6 +1106,9 @@ export class SubscriptionsService {
       stripeInvoiceId: invoice.id,
       status,
       amount: status === 'PAID' ? invoice.amount_paid : invoice.amount_due,
+      // La cuota entera y, aparte, el saldo de referidos que Stripe gastó.
+      totalCents: typeof invoice.total === 'number' ? invoice.total : null,
+      creditAppliedCents: invoiceCreditApplied(invoice),
       currency: invoice.currency,
       hostedInvoiceUrl: invoice.hosted_invoice_url ?? null,
       paidAt: status === 'PAID' ? new Date() : null,
@@ -1109,4 +1175,22 @@ function mapStripeStatus(
 function isUniqueViolation(err: unknown): boolean {
   if ((err as { code?: string } | null)?.code === 'P2002') return true;
   return ((err as Error | null)?.message ?? '').includes('Unique constraint');
+}
+
+/**
+ * Saldo a favor del cliente que Stripe gastó en una factura (el descuento por
+ * referidos): `ending_balance − starting_balance` si el saldo de partida era a
+ * favor (negativo), nunca más de lo que había. Misma regla que
+ * `creditAppliedInPresentment` de mod.payouts, que lo usa para que la comisión
+ * de la plataforma se calcule sobre la cuota entera.
+ */
+export function invoiceCreditApplied(
+  invoice: Pick<Stripe.Invoice, 'starting_balance' | 'ending_balance'>,
+): number {
+  const starting = invoice.starting_balance;
+  const ending = invoice.ending_balance;
+  if (!Number.isInteger(starting) || starting >= 0) return 0;
+  if (!Number.isInteger(ending)) return 0;
+  const applied = Math.min(-starting, (ending as number) - starting);
+  return applied > 0 ? applied : 0;
 }

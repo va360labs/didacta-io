@@ -19,7 +19,19 @@ import { manifest } from './manifest.js';
 import { ReferralsService } from './referrals.service.js';
 
 export { manifest };
-export { ReferralsService, REFERRALS_EVENT, REFERRAL_SCOPES, utcDay } from './referrals.service.js';
+export {
+  ReferralsService,
+  REFERRALS_EVENT,
+  REFERRAL_SCOPES,
+  purchaseInvoiceRef,
+  utcDay,
+  CREDIT_MAX_SHARE_BPS,
+  creditIdempotencyKey,
+  uncreditIdempotencyKey,
+  netAgainstAdjustments,
+  REFERRAL_TERMS_VERSION,
+  REFERRAL_CREDIT_LABEL,
+} from './referrals.service.js';
 export type {
   ReferralsEventPublisher,
   UserEmailLookup,
@@ -30,7 +42,15 @@ export type {
   AttributeResult,
   AccrueInput,
   AccrueResult,
+  PurchaseInput,
+  PurchaseResult,
+  ReferralsCreditPort,
+  MemberCreditView,
+  ReferralsPublicTerms,
+  ReferralsCipher,
 } from './referrals.service.js';
+export { deriveInviteeState, initialsOf } from './invitees.js';
+export type { InviteeState, InviteeFacts } from './invitees.js';
 export {
   ReferralsError,
   ReferralsProgramInactiveError,
@@ -39,7 +59,29 @@ export {
   ReferralsCommissionStateError,
   ReferralsPayoutValidationError,
   ReferralsConfigValidationError,
+  ReferralsCreditDisabledError,
+  ReferralsCreditNothingError,
+  ReferralsCreditUnavailableError,
+  ReferralsCreditFailedError,
+  ReferralsTermsRequiredError,
+  ReferralsPayeeInvalidError,
+  ReferralsPayeeRequiredError,
+  ReferralsPayoutAlreadyRequestedError,
+  ReferralsPayoutNotFoundError,
+  ReferralsPayeeUnavailableError,
 } from './errors.js';
+export {
+  normalizePayee,
+  isValidIban,
+  isValidSpanishTaxId,
+  maskIban,
+  maskTaxId,
+  formatIban,
+  PayeeValidationError,
+} from './payee.js';
+export type { PayeeDetails, PayeeField } from './payee.js';
+export { renderReceiptPdf, receiptLabel, formatReceiptAmount } from './receipt-pdf.js';
+export type { ReceiptPdfInput, ReceiptLine } from './receipt-pdf.js';
 
 export function buildReferralsModule(_service: ReferralsService): DidactaModule {
   return {

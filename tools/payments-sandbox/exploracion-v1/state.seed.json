@@ -1,0 +1,194 @@
+{
+  "std": "acct_1Uat8EK2tqCUabsl",
+  "a_oneoff": "pi_3Uat8QK2tqCUabsl0rVz0FZs",
+  "a_oneoff_v": "pi_3Uat8sK2tqCUabsl1C6IPGWr",
+  "a_cs": [null, null],
+  "a_prices": {
+    "one": "price_1Uat8tK2tqCUabslMMkwJm5B",
+    "rec": "price_1Uat8tK2tqCUabslJlz5LJXN"
+  },
+  "a_sub": "sub_1Uat8yK2tqCUabslqvxgrs4y",
+  "a_cus": "cus_Vc7NCYJF3vMjhu",
+  "a_sub_pi": "pi_3Uat8zK2tqCUabsl1jqk2kkK",
+  "a_fx": {
+    "usd": {
+      "pi": "pi_3UatAMK2tqCUabsl1WGEbF8C",
+      "status": "succeeded",
+      "charge": "ch_3UatAMK2tqCUabsl1Czko3Pz",
+      "cobrado": "10000 usd",
+      "fee_id": "fee_1UatAPK2tqCUabslCm4FMG1Z",
+      "fee": "1000 usd",
+      "conectada_bt": {
+        "id": "txn_3UatAMK2tqCUabsl17YJp9B5",
+        "type": "charge",
+        "amount": 9021,
+        "fee": 1391,
+        "net": 7630,
+        "currency": "eur",
+        "exchange_rate": 0.902103,
+        "fee_details": [
+          {
+            "type": "stripe_fee",
+            "amount": 180,
+            "currency": "eur"
+          },
+          {
+            "type": "application_fee",
+            "amount": 902,
+            "currency": "eur"
+          },
+          {
+            "type": "stripe_fee",
+            "amount": 309,
+            "currency": "eur"
+          }
+        ]
+      },
+      "plataforma_bt": {
+        "id": "txn_1UatARGVFsqqzpBiLYIMisze",
+        "type": "application_fee",
+        "amount": 902,
+        "fee": 0,
+        "net": 902,
+        "currency": "eur",
+        "exchange_rate": 0.902103,
+        "fee_details": []
+      }
+    },
+    "mxn": {
+      "pi": "pi_3UatASK2tqCUabsl0mvxiHDN",
+      "status": "succeeded",
+      "charge": "ch_3UatASK2tqCUabsl0A7H1QaW",
+      "cobrado": "200000 mxn",
+      "fee_id": "fee_1UatAVK2tqCUabslcXfJrKK7",
+      "fee": "20000 mxn",
+      "conectada_bt": {
+        "id": "txn_3UatASK2tqCUabsl0avd1oQ8",
+        "type": "charge",
+        "amount": 9692,
+        "fee": 1493,
+        "net": 8199,
+        "currency": "eur",
+        "exchange_rate": 0.0484595,
+        "fee_details": [
+          {
+            "type": "stripe_fee",
+            "amount": 194,
+            "currency": "eur"
+          },
+          {
+            "type": "stripe_fee",
+            "amount": 330,
+            "currency": "eur"
+          },
+          {
+            "type": "application_fee",
+            "amount": 969,
+            "currency": "eur"
+          }
+        ]
+      },
+      "plataforma_bt": {
+        "id": "txn_1UatAXGVFsqqzpBih8KXxyxz",
+        "type": "application_fee",
+        "amount": 969,
+        "fee": 0,
+        "net": 969,
+        "currency": "eur",
+        "exchange_rate": 0.0484595,
+        "fee_details": []
+      }
+    },
+    "brl": {
+      "pi": "pi_3UatAYK2tqCUabsl0v4iZSjj",
+      "status": "succeeded",
+      "charge": "ch_3UatAYK2tqCUabsl0OJGvyk2",
+      "cobrado": "50000 brl",
+      "fee_id": "fee_1UatAbK2tqCUabslxPk6AGmS",
+      "fee": "5000 brl",
+      "conectada_bt": {
+        "id": "txn_3UatAYK2tqCUabsl0qtTGAp9",
+        "type": "charge",
+        "amount": 8071,
+        "fee": 1247,
+        "net": 6824,
+        "currency": "eur",
+        "exchange_rate": 0.161413,
+        "fee_details": [
+          {
+            "type": "stripe_fee",
+            "amount": 279,
+            "currency": "eur"
+          },
+          {
+            "type": "stripe_fee",
+            "amount": 161,
+            "currency": "eur"
+          },
+          {
+            "type": "application_fee",
+            "amount": 807,
+            "currency": "eur"
+          }
+        ]
+      },
+      "plataforma_bt": {
+        "id": "txn_1UatAcGVFsqqzpBi83S2G6Os",
+        "type": "application_fee",
+        "amount": 807,
+        "fee": 0,
+        "net": 807,
+        "currency": "eur",
+        "exchange_rate": 0.161413,
+        "fee_details": []
+      }
+    }
+  },
+  "a_dispute_pi": "pi_3UatA3K2tqCUabsl097FE52R",
+  "dest_stripe_riesgo_sin_panel": "acct_1UatB1Gr7BdUYQtb",
+  "b_oneoff": "pi_3UatBjGVFsqqzpBi2gJIw6jq",
+  "b_obo": "pi_3UatBoGVFsqqzpBi362f24Fa",
+  "b_dispute_pi": "pi_3UatCPGVFsqqzpBi0lkurcVx",
+  "b_usd": "pi_3UatCYGVFsqqzpBi1La8pw0K",
+  "c_paga": {
+    "customer": "cus_Vc7Rh71EpjnowF",
+    "invoice": "in_1UatCtGVFsqqzpBiOV43OmOE",
+    "pay_error": null,
+    "invoice_status": "paid",
+    "amount_due": 10000,
+    "amount_paid": 10000,
+    "attempt_count": 1,
+    "cobro": {
+      "pi": "pi_3UatCuGVFsqqzpBi13Yc4owC",
+      "status": "succeeded",
+      "charge": "ch_3UatCuGVFsqqzpBi1yUYHLr3",
+      "bt": {
+        "id": "txn_3UatCuGVFsqqzpBi1U78dUVV",
+        "type": "charge",
+        "amount": 10000,
+        "fee": 340,
+        "net": 9660,
+        "currency": "eur"
+      }
+    }
+  },
+  "c_falla": {
+    "customer": "cus_Vc7RLObYd9UdRI",
+    "invoice": "in_1UatD1GVFsqqzpBidZUqJC0p",
+    "pay_error": {
+      "code": "card_declined",
+      "decline": "generic_decline"
+    },
+    "invoice_status": "open",
+    "amount_due": 10000,
+    "amount_paid": 0,
+    "attempt_count": 1,
+    "cobro": {
+      "pi": "pi_3UatD2GVFsqqzpBi2C5JI0X7",
+      "status": "requires_payment_method",
+      "charge": "ch_3UatD2GVFsqqzpBi2iHovdjI",
+      "bt": null
+    }
+  },
+  "wh_connect": "we_1UatDRGVFsqqzpBitv92N2uH"
+}

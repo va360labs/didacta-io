@@ -4,6 +4,7 @@
  */
 
 import { z } from 'zod';
+import { withdrawalWaiverSchema } from '../purchase-consent/withdrawal-waiver';
 
 /**
  * DTOs zod de la membresía (página pública /unete + admin).
@@ -28,6 +29,11 @@ export const membershipCheckoutSchema = z.object({
     .trim()
     .regex(/^[a-z0-9]{3,32}$/i)
     .optional(),
+  /**
+   * La casilla marcada antes de pagar: pide acceso inmediato y reconoce que
+   * pierde el desistimiento de 14 días. Obligatoria (422 si falta).
+   */
+  withdrawalWaiver: withdrawalWaiverSchema.optional(),
 });
 export type MembershipCheckoutDto = z.infer<typeof membershipCheckoutSchema>;
 
@@ -44,6 +50,20 @@ const planShape = {
     .trim()
     .toLowerCase()
     .regex(/^[a-z]{3}$/)
+    .optional(),
+  /**
+   * Precios fijos extra por mercado (`currency_options`): moneda ISO → importe
+   * en su unidad mínima. Opción avanzada; `null` = ninguno.
+   */
+  currencyOptions: z
+    .record(
+      z
+        .string()
+        .regex(/^[a-zA-Z]{3}$/)
+        .transform((c) => c.toLowerCase()),
+      z.number().int().positive().max(100_000_000_00),
+    )
+    .nullable()
     .optional(),
   compareAtCents: z.number().int().min(1).max(100_000_000).nullable().optional(),
   trialDays: z.number().int().min(0).max(365).optional(),

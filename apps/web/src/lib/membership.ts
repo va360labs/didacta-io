@@ -11,6 +11,7 @@
  * Importes SIEMPRE en céntimos.
  */
 
+import type { WithdrawalWaiverAcceptance } from '@/lib/purchase-consent';
 import { apiFetch } from './api-client';
 import { formatCents as formatCentsI18n, type FmtOverrides } from './i18n/format';
 
@@ -29,12 +30,19 @@ export interface MembershipPlan {
   compareAtCents: number | null;
   trialDays: number;
   isFeatured: boolean;
+  /**
+   * Solo en `GET /membership/page` y si el aula cobra por la plataforma: `true`
+   * cuando el pago enseñará el precio en la moneda del alumno.
+   */
+  localCurrencyAtCheckout?: boolean;
 }
 
 export interface MembershipAdminPlan extends MembershipPlan {
   active: boolean;
   sortOrder: number;
   stripePriceId: string | null;
+  /** Precios fijos por mercado: moneda → importe en su unidad mínima. */
+  currencyOptions?: Record<string, number> | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -69,6 +77,11 @@ export interface MembershipPage {
   testimonial: { quote: string; author: string; role: string | null } | null;
   /** Lecciones visibles por curso durante la prueba (0 = acceso completo). */
   trialLessonLimit: number;
+  /**
+   * Solo si la instalación cobra por la plataforma: `false` cuando el pago no
+   * admite cupones (el aula cobra por la plataforma). Sin el campo, sí admite.
+   */
+  couponsAtCheckout?: boolean;
 }
 
 export interface MembershipConfig {
@@ -110,6 +123,8 @@ export interface PlanInput {
   active?: boolean;
   isFeatured?: boolean;
   sortOrder?: number;
+  /** Precios fijos por mercado (solo cobros de plataforma). `null` = ninguno. */
+  currencyOptions?: Record<string, number> | null;
 }
 
 // ── Público ──────────────────────────────────────────────────────────────────
@@ -122,6 +137,8 @@ export async function startMembershipCheckout(
   planId: string,
   email?: string,
   referralCode?: string,
+  /** La casilla de la renuncia al desistimiento (la API la exige). */
+  withdrawalWaiver?: WithdrawalWaiverAcceptance,
 ): Promise<{ url: string }> {
   return apiFetch<{ url: string }>(`${PUBLIC_BASE}/checkout`, {
     method: 'POST',
@@ -129,6 +146,7 @@ export async function startMembershipCheckout(
       planId,
       ...(email ? { email } : {}),
       ...(referralCode ? { referralCode } : {}),
+      ...(withdrawalWaiver ? { withdrawalWaiver } : {}),
     }),
   });
 }

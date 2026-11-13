@@ -1,0 +1,1318 @@
+{
+  "_origen": "Respuestas REALES del sandbox de la plataforma (acct_1UaXvnGVFsqqzpBi), 2026-11-12, saneadas: sin URLs ni client_secret. Factura 1 de una suscripcion de 29 EUR/mes con on_behalf_of=acct_1Uatj9GgKZOTeRsE (creador ES), tarjeta ES. Grabadas con tools/payments-sandbox/20-grabar-facturas.mjs.",
+  "formaA_invoice_acacia": {
+    "id": "in_1UatoiGVFsqqzpBiAvOm3OUe",
+    "object": "invoice",
+    "account_country": "ES",
+    "account_name": "Academia Prueba ES",
+    "account_tax_ids": null,
+    "amount_due": 2900,
+    "amount_overpaid": 0,
+    "amount_paid": 2900,
+    "amount_remaining": 0,
+    "amount_shipping": 0,
+    "application": null,
+    "application_fee_amount": null,
+    "attempt_count": 1,
+    "attempted": true,
+    "auto_advance": false,
+    "automatic_tax": {
+      "disabled_reason": null,
+      "enabled": false,
+      "liability": null,
+      "provider": null,
+      "status": null
+    },
+    "automatically_finalizes_at": null,
+    "billing_reason": "subscription_create",
+    "charge": "ch_3UatojGVFsqqzpBi1wnKzuX2",
+    "collection_method": "charge_automatically",
+    "created": 1794473832,
+    "currency": "eur",
+    "custom_fields": null,
+    "customer": "cus_Vc843250NchQV1",
+    "customer_account": null,
+    "customer_address": null,
+    "customer_email": "alumno-con_obo@example.com",
+    "customer_name": "Alumno de prueba",
+    "customer_phone": null,
+    "customer_shipping": null,
+    "customer_tax_exempt": "none",
+    "customer_tax_ids": [],
+    "default_payment_method": null,
+    "default_source": null,
+    "default_tax_rates": [],
+    "description": null,
+    "discount": null,
+    "discounts": [],
+    "due_date": null,
+    "effective_at": 1794473832,
+    "ending_balance": 0,
+    "footer": null,
+    "from_invoice": null,
+    "hosted_invoice_url": "<url>",
+    "invoice_pdf": "<url>",
+    "issuer": {
+      "account": "acct_1Uatj9GgKZOTeRsE",
+      "type": "account"
+    },
+    "last_finalization_error": null,
+    "latest_revision": null,
+    "lines": {
+      "object": "list",
+      "data": [
+        {
+          "id": "il_1UatoiGVFsqqzpBi9SQcX8Vb",
+          "object": "line_item",
+          "amount": 2900,
+          "amount_excluding_tax": 2900,
+          "currency": "eur",
+          "description": "1 × Membresía Academia Prueba (creador ES) (at €29.00 / month)",
+          "discount_amounts": [],
+          "discountable": true,
+          "discounts": [],
+          "invoice": "in_1UatoiGVFsqqzpBiAvOm3OUe",
+          "livemode": false,
+          "metadata": {
+            "creador": "acct_1Uatj9GgKZOTeRsE"
+          },
+          "parent": {
+            "invoice_item_details": null,
+            "license_fee_subscription_details": null,
+            "subscription_item_details": {
+              "invoice_item": null,
+              "proration": false,
+              "proration_details": {
+                "credited_items": null
+              },
+              "subscription": "sub_1UatoiGVFsqqzpBio5vcWfRW",
+              "subscription_item": "si_Vc84B4LU8HXNru"
+            },
+            "type": "subscription_item_details"
+          },
+          "period": {
+            "end": 1797065832,
+            "start": 1794473832
+          },
+          "plan": {
+            "id": "price_1UatoDGVFsqqzpBiW8rUTOxc",
+            "object": "plan",
+            "active": true,
+            "aggregate_usage": null,
+            "amount": 2900,
+            "amount_decimal": "2900",
+            "billing_scheme": "per_unit",
+            "created": 1794473801,
+            "currency": "eur",
+            "interval": "month",
+            "interval_count": 1,
+            "livemode": false,
+            "metadata": {
+              "creador": "acct_1Uatj9GgKZOTeRsE"
+            },
+            "meter": null,
+            "nickname": null,
+            "product": "prod_Vc84wez10Dm2BP",
+            "tiers_mode": null,
+            "transform_usage": null,
+            "trial_period_days": null,
+            "usage_type": "licensed"
+          },
+          "pretax_credit_amounts": [],
+          "price": {
+            "id": "price_1UatoDGVFsqqzpBiW8rUTOxc",
+            "object": "price",
+            "active": true,
+            "billing_scheme": "per_unit",
+            "created": 1794473801,
+            "currency": "eur",
+            "custom_unit_amount": null,
+            "livemode": false,
+            "lookup_key": null,
+            "metadata": {
+              "creador": "acct_1Uatj9GgKZOTeRsE"
+            },
+            "nickname": null,
+            "product": "prod_Vc84wez10Dm2BP",
+            "recurring": {
+              "aggregate_usage": null,
+              "interval": "month",
+              "interval_count": 1,
+              "meter": null,
+              "trial_period_days": null,
+              "usage_type": "licensed"
+            },
+            "tax_behavior": "unspecified",
+            "tiers_mode": null,
+            "transform_quantity": null,
+            "type": "recurring",
+            "unit_amount": 2900,
+            "unit_amount_decimal": "2900"
+          },
+          "pricing": {
+            "price_details": {
+              "price": "price_1UatoDGVFsqqzpBiW8rUTOxc",
+              "product": "prod_Vc84wez10Dm2BP"
+            },
+            "type": "price_details",
+            "unit_amount_decimal": "2900"
+          },
+          "proration": false,
+          "proration_details": {
+            "credited_items": null
+          },
+          "quantity": 1,
+          "quantity_decimal": "1",
+          "subscription": "sub_1UatoiGVFsqqzpBio5vcWfRW",
+          "subscription_item": "si_Vc84B4LU8HXNru",
+          "subtotal": 2900,
+          "tax_amounts": [],
+          "tax_rates": [],
+          "taxes": [],
+          "type": "subscription",
+          "unit_amount_excluding_tax": "2900"
+        }
+      ],
+      "has_more": false,
+      "total_count": 1,
+      "url": "/v1/invoices/in_1UatoiGVFsqqzpBiAvOm3OUe/lines"
+    },
+    "livemode": false,
+    "metadata": {},
+    "next_payment_attempt": null,
+    "number": "C8YSJV1F-0001",
+    "on_behalf_of": "acct_1Uatj9GgKZOTeRsE",
+    "paid": true,
+    "paid_out_of_band": false,
+    "parent": {
+      "quote_details": null,
+      "subscription_details": {
+        "metadata": {
+          "creador": "acct_1Uatj9GgKZOTeRsE"
+        },
+        "subscription": "sub_1UatoiGVFsqqzpBio5vcWfRW"
+      },
+      "type": "subscription_details"
+    },
+    "payment_intent": "pi_3UatojGVFsqqzpBi1aY1ywxE",
+    "payment_settings": {
+      "default_mandate": null,
+      "payment_method_options": null,
+      "payment_method_types": null
+    },
+    "period_end": 1794473832,
+    "period_start": 1794473832,
+    "post_payment_credit_notes_amount": 0,
+    "pre_payment_credit_notes_amount": 0,
+    "quote": null,
+    "receipt_number": null,
+    "rendering": null,
+    "shipping_cost": null,
+    "shipping_details": null,
+    "starting_balance": 0,
+    "statement_descriptor": null,
+    "status": "paid",
+    "status_transitions": {
+      "finalized_at": 1794473832,
+      "marked_uncollectible_at": null,
+      "paid_at": 1794473832,
+      "voided_at": null
+    },
+    "subscription": "sub_1UatoiGVFsqqzpBio5vcWfRW",
+    "subscription_details": {
+      "metadata": {
+        "creador": "acct_1Uatj9GgKZOTeRsE"
+      }
+    },
+    "subtotal": 2900,
+    "subtotal_excluding_tax": 2900,
+    "tax": null,
+    "test_clock": "clock_1UatohGVFsqqzpBi6gbgw4WQ",
+    "total": 2900,
+    "total_discount_amounts": [],
+    "total_excluding_tax": 2900,
+    "total_pretax_credit_amounts": [],
+    "total_tax_amounts": [],
+    "total_taxes": [],
+    "transfer_data": null,
+    "webhooks_delivered_at": 1794473832
+  },
+  "formaB_invoice_endive_expand_payments": {
+    "id": "in_1UatoiGVFsqqzpBiAvOm3OUe",
+    "object": "invoice",
+    "account_country": "ES",
+    "account_name": "Academia Prueba ES",
+    "account_tax_ids": null,
+    "amount_due": 2900,
+    "amount_overpaid": 0,
+    "amount_paid": 2900,
+    "amount_remaining": 0,
+    "amount_shipping": 0,
+    "application": null,
+    "attempt_count": 1,
+    "attempted": true,
+    "auto_advance": false,
+    "automatic_tax": {
+      "disabled_reason": null,
+      "enabled": false,
+      "liability": null,
+      "provider": null,
+      "status": null
+    },
+    "automatically_finalizes_at": null,
+    "billing_reason": "subscription_create",
+    "collection_method": "charge_automatically",
+    "created": 1794473832,
+    "currency": "eur",
+    "custom_fields": null,
+    "customer": "cus_Vc843250NchQV1",
+    "customer_account": null,
+    "customer_address": null,
+    "customer_email": "alumno-con_obo@example.com",
+    "customer_name": "Alumno de prueba",
+    "customer_phone": null,
+    "customer_shipping": null,
+    "customer_tax_exempt": "none",
+    "customer_tax_ids": [],
+    "default_payment_method": null,
+    "default_source": null,
+    "default_tax_rates": [],
+    "description": null,
+    "discounts": [],
+    "due_date": null,
+    "effective_at": 1794473832,
+    "ending_balance": 0,
+    "footer": null,
+    "from_invoice": null,
+    "hosted_invoice_url": "<url>",
+    "invoice_pdf": "<url>",
+    "issuer": {
+      "account": "acct_1Uatj9GgKZOTeRsE",
+      "type": "account"
+    },
+    "last_finalization_error": null,
+    "latest_revision": null,
+    "lines": {
+      "object": "list",
+      "data": [
+        {
+          "id": "il_1UatoiGVFsqqzpBi9SQcX8Vb",
+          "object": "line_item",
+          "amount": 2900,
+          "currency": "eur",
+          "description": "1 × Membresía Academia Prueba (creador ES) (at €29.00 / month)",
+          "discount_amounts": [],
+          "discountable": true,
+          "discounts": [],
+          "invoice": "in_1UatoiGVFsqqzpBiAvOm3OUe",
+          "livemode": false,
+          "metadata": {
+            "creador": "acct_1Uatj9GgKZOTeRsE"
+          },
+          "parent": {
+            "invoice_item_details": null,
+            "subscription_item_details": {
+              "invoice_item": null,
+              "proration": false,
+              "proration_details": {
+                "credited_items": null
+              },
+              "subscription": "sub_1UatoiGVFsqqzpBio5vcWfRW",
+              "subscription_item": "si_Vc84B4LU8HXNru"
+            },
+            "type": "subscription_item_details"
+          },
+          "period": {
+            "end": 1797065832,
+            "start": 1794473832
+          },
+          "pretax_credit_amounts": [],
+          "pricing": {
+            "price_details": {
+              "price": "price_1UatoDGVFsqqzpBiW8rUTOxc",
+              "product": "prod_Vc84wez10Dm2BP"
+            },
+            "type": "price_details",
+            "unit_amount_decimal": "2900"
+          },
+          "quantity": 1,
+          "quantity_decimal": "1",
+          "subtotal": 2900,
+          "taxes": []
+        }
+      ],
+      "has_more": false,
+      "total_count": 1,
+      "url": "/v1/invoices/in_1UatoiGVFsqqzpBiAvOm3OUe/lines"
+    },
+    "livemode": false,
+    "metadata": {},
+    "next_payment_attempt": null,
+    "number": "C8YSJV1F-0001",
+    "on_behalf_of": "acct_1Uatj9GgKZOTeRsE",
+    "parent": {
+      "quote_details": null,
+      "subscription_details": {
+        "metadata": {
+          "creador": "acct_1Uatj9GgKZOTeRsE"
+        },
+        "subscription": "sub_1UatoiGVFsqqzpBio5vcWfRW"
+      },
+      "type": "subscription_details"
+    },
+    "payment_settings": {
+      "default_mandate": null,
+      "payment_method_options": null,
+      "payment_method_types": null
+    },
+    "payments": {
+      "object": "list",
+      "data": [
+        {
+          "id": "inpay_1UatokGVFsqqzpBinMTKGDVF",
+          "object": "invoice_payment",
+          "amount_paid": 2900,
+          "amount_requested": 2900,
+          "created": 1794473832,
+          "currency": "eur",
+          "invoice": "in_1UatoiGVFsqqzpBiAvOm3OUe",
+          "is_default": true,
+          "livemode": false,
+          "payment": {
+            "payment_intent": "pi_3UatojGVFsqqzpBi1aY1ywxE",
+            "type": "payment_intent"
+          },
+          "status": "paid",
+          "status_transitions": {
+            "canceled_at": null,
+            "paid_at": 1797238632
+          }
+        }
+      ],
+      "has_more": false,
+      "url": "/v1/invoices/payments"
+    },
+    "period_end": 1794473832,
+    "period_start": 1794473832,
+    "post_payment_credit_notes_amount": 0,
+    "pre_payment_credit_notes_amount": 0,
+    "receipt_number": null,
+    "rendering": null,
+    "shipping_cost": null,
+    "shipping_details": null,
+    "starting_balance": 0,
+    "statement_descriptor": null,
+    "status": "paid",
+    "status_transitions": {
+      "finalized_at": 1794473832,
+      "marked_uncollectible_at": null,
+      "paid_at": 1794473832,
+      "voided_at": null
+    },
+    "subtotal": 2900,
+    "subtotal_excluding_tax": 2900,
+    "test_clock": "clock_1UatohGVFsqqzpBi6gbgw4WQ",
+    "total": 2900,
+    "total_discount_amounts": [],
+    "total_excluding_tax": 2900,
+    "total_pretax_credit_amounts": [],
+    "total_taxes": [],
+    "webhooks_delivered_at": 1794473832
+  },
+  "formaC_invoice_endive_sin_payments": {
+    "id": "in_1UatoiGVFsqqzpBiAvOm3OUe",
+    "object": "invoice",
+    "account_country": "ES",
+    "account_name": "Academia Prueba ES",
+    "account_tax_ids": null,
+    "amount_due": 2900,
+    "amount_overpaid": 0,
+    "amount_paid": 2900,
+    "amount_remaining": 0,
+    "amount_shipping": 0,
+    "application": null,
+    "attempt_count": 1,
+    "attempted": true,
+    "auto_advance": false,
+    "automatic_tax": {
+      "disabled_reason": null,
+      "enabled": false,
+      "liability": null,
+      "provider": null,
+      "status": null
+    },
+    "automatically_finalizes_at": null,
+    "billing_reason": "subscription_create",
+    "collection_method": "charge_automatically",
+    "created": 1794473832,
+    "currency": "eur",
+    "custom_fields": null,
+    "customer": "cus_Vc843250NchQV1",
+    "customer_account": null,
+    "customer_address": null,
+    "customer_email": "alumno-con_obo@example.com",
+    "customer_name": "Alumno de prueba",
+    "customer_phone": null,
+    "customer_shipping": null,
+    "customer_tax_exempt": "none",
+    "customer_tax_ids": [],
+    "default_payment_method": null,
+    "default_source": null,
+    "default_tax_rates": [],
+    "description": null,
+    "discounts": [],
+    "due_date": null,
+    "effective_at": 1794473832,
+    "ending_balance": 0,
+    "footer": null,
+    "from_invoice": null,
+    "hosted_invoice_url": "<url>",
+    "invoice_pdf": "<url>",
+    "issuer": {
+      "account": "acct_1Uatj9GgKZOTeRsE",
+      "type": "account"
+    },
+    "last_finalization_error": null,
+    "latest_revision": null,
+    "lines": {
+      "object": "list",
+      "data": [
+        {
+          "id": "il_1UatoiGVFsqqzpBi9SQcX8Vb",
+          "object": "line_item",
+          "amount": 2900,
+          "currency": "eur",
+          "description": "1 × Membresía Academia Prueba (creador ES) (at €29.00 / month)",
+          "discount_amounts": [],
+          "discountable": true,
+          "discounts": [],
+          "invoice": "in_1UatoiGVFsqqzpBiAvOm3OUe",
+          "livemode": false,
+          "metadata": {
+            "creador": "acct_1Uatj9GgKZOTeRsE"
+          },
+          "parent": {
+            "invoice_item_details": null,
+            "subscription_item_details": {
+              "invoice_item": null,
+              "proration": false,
+              "proration_details": {
+                "credited_items": null
+              },
+              "subscription": "sub_1UatoiGVFsqqzpBio5vcWfRW",
+              "subscription_item": "si_Vc84B4LU8HXNru"
+            },
+            "type": "subscription_item_details"
+          },
+          "period": {
+            "end": 1797065832,
+            "start": 1794473832
+          },
+          "pretax_credit_amounts": [],
+          "pricing": {
+            "price_details": {
+              "price": "price_1UatoDGVFsqqzpBiW8rUTOxc",
+              "product": "prod_Vc84wez10Dm2BP"
+            },
+            "type": "price_details",
+            "unit_amount_decimal": "2900"
+          },
+          "quantity": 1,
+          "quantity_decimal": "1",
+          "subtotal": 2900,
+          "taxes": []
+        }
+      ],
+      "has_more": false,
+      "total_count": 1,
+      "url": "/v1/invoices/in_1UatoiGVFsqqzpBiAvOm3OUe/lines"
+    },
+    "livemode": false,
+    "metadata": {},
+    "next_payment_attempt": null,
+    "number": "C8YSJV1F-0001",
+    "on_behalf_of": "acct_1Uatj9GgKZOTeRsE",
+    "parent": {
+      "quote_details": null,
+      "subscription_details": {
+        "metadata": {
+          "creador": "acct_1Uatj9GgKZOTeRsE"
+        },
+        "subscription": "sub_1UatoiGVFsqqzpBio5vcWfRW"
+      },
+      "type": "subscription_details"
+    },
+    "payment_settings": {
+      "default_mandate": null,
+      "payment_method_options": null,
+      "payment_method_types": null
+    },
+    "period_end": 1794473832,
+    "period_start": 1794473832,
+    "post_payment_credit_notes_amount": 0,
+    "pre_payment_credit_notes_amount": 0,
+    "receipt_number": null,
+    "rendering": null,
+    "shipping_cost": null,
+    "shipping_details": null,
+    "starting_balance": 0,
+    "statement_descriptor": null,
+    "status": "paid",
+    "status_transitions": {
+      "finalized_at": 1794473832,
+      "marked_uncollectible_at": null,
+      "paid_at": 1794473832,
+      "voided_at": null
+    },
+    "subtotal": 2900,
+    "subtotal_excluding_tax": 2900,
+    "test_clock": "clock_1UatohGVFsqqzpBi6gbgw4WQ",
+    "total": 2900,
+    "total_discount_amounts": [],
+    "total_excluding_tax": 2900,
+    "total_pretax_credit_amounts": [],
+    "total_taxes": [],
+    "webhooks_delivered_at": 1794473832
+  },
+  "invoice_payments_por_factura": {
+    "object": "list",
+    "data": [
+      {
+        "id": "inpay_1UatokGVFsqqzpBinMTKGDVF",
+        "object": "invoice_payment",
+        "amount_paid": 2900,
+        "amount_requested": 2900,
+        "created": 1794473832,
+        "currency": "eur",
+        "invoice": "in_1UatoiGVFsqqzpBiAvOm3OUe",
+        "is_default": true,
+        "livemode": false,
+        "payment": {
+          "payment_intent": "pi_3UatojGVFsqqzpBi1aY1ywxE",
+          "type": "payment_intent"
+        },
+        "status": "paid",
+        "status_transitions": {
+          "canceled_at": null,
+          "paid_at": 1797238632
+        }
+      }
+    ],
+    "has_more": false,
+    "url": "/v1/invoice_payments"
+  },
+  "invoice_payments_por_payment_intent": {
+    "object": "list",
+    "data": [
+      {
+        "id": "inpay_1UatokGVFsqqzpBinMTKGDVF",
+        "object": "invoice_payment",
+        "amount_paid": 2900,
+        "amount_requested": 2900,
+        "created": 1794473832,
+        "currency": "eur",
+        "invoice": "in_1UatoiGVFsqqzpBiAvOm3OUe",
+        "is_default": true,
+        "livemode": false,
+        "payment": {
+          "payment_intent": "pi_3UatojGVFsqqzpBi1aY1ywxE",
+          "type": "payment_intent"
+        },
+        "status": "paid",
+        "status_transitions": {
+          "canceled_at": null,
+          "paid_at": 1794473832
+        }
+      }
+    ],
+    "has_more": false,
+    "url": "/v1/invoice_payments"
+  },
+  "payment_intent_de_la_factura": {
+    "id": "pi_3UatojGVFsqqzpBi1aY1ywxE",
+    "object": "payment_intent",
+    "allowed_payment_method_types": [
+      "amazon_pay",
+      "blik",
+      "card",
+      "kakao_pay",
+      "klarna",
+      "link",
+      "naver_pay",
+      "revolut_pay",
+      "samsung_pay"
+    ],
+    "amount": 2900,
+    "amount_capturable": 0,
+    "amount_details": {
+      "tip": {}
+    },
+    "amount_received": 2900,
+    "application": null,
+    "application_fee_amount": null,
+    "automatic_payment_methods": null,
+    "canceled_at": null,
+    "cancellation_reason": null,
+    "capture_method": "automatic",
+    "confirmation_method": "automatic",
+    "created": 1794473833,
+    "currency": "eur",
+    "customer": "cus_Vc843250NchQV1",
+    "customer_account": null,
+    "description": "Subscription creation",
+    "excluded_payment_method_types": null,
+    "last_payment_error": null,
+    "latest_charge": {
+      "id": "ch_3UatojGVFsqqzpBi1wnKzuX2",
+      "object": "charge",
+      "amount": 2900,
+      "amount_captured": 2900,
+      "amount_refunded": 0,
+      "application": null,
+      "application_fee": null,
+      "application_fee_amount": null,
+      "balance_transaction": {
+        "id": "txn_3UatojGVFsqqzpBi19cQJEf9",
+        "object": "balance_transaction",
+        "amount": 2900,
+        "available_on": 1795046400,
+        "balance_type": "payments",
+        "created": 1794473833,
+        "currency": "eur",
+        "description": "Subscription creation",
+        "exchange_rate": null,
+        "fee": 69,
+        "fee_details": [
+          {
+            "amount": 69,
+            "application": null,
+            "currency": "eur",
+            "description": "Stripe processing fees",
+            "type": "stripe_fee"
+          }
+        ],
+        "net": 2831,
+        "reporting_category": "charge",
+        "source": "ch_3UatojGVFsqqzpBi1wnKzuX2",
+        "status": "pending",
+        "type": "charge"
+      },
+      "billing_details": {
+        "address": {
+          "city": null,
+          "country": null,
+          "line1": null,
+          "line2": null,
+          "postal_code": null,
+          "state": null
+        },
+        "email": null,
+        "name": null,
+        "phone": null,
+        "tax_id": null
+      },
+      "calculated_statement_descriptor": "ACADEMIA PRUEBA ES",
+      "captured": true,
+      "created": 1794473833,
+      "currency": "eur",
+      "customer": "cus_Vc843250NchQV1",
+      "description": "Subscription creation",
+      "destination": null,
+      "dispute": null,
+      "disputed": false,
+      "failure_balance_transaction": null,
+      "failure_code": null,
+      "failure_message": null,
+      "fraud_details": {},
+      "livemode": false,
+      "metadata": {},
+      "on_behalf_of": "acct_1Uatj9GgKZOTeRsE",
+      "order": null,
+      "outcome": {
+        "advice_code": null,
+        "network_advice_code": null,
+        "network_decline_code": null,
+        "network_status": "approved_by_network",
+        "reason": null,
+        "risk_level": "normal",
+        "risk_score": 48,
+        "seller_message": "Payment complete.",
+        "type": "authorized"
+      },
+      "paid": true,
+      "payment_intent": "pi_3UatojGVFsqqzpBi1aY1ywxE",
+      "payment_method": "pm_1UatohGVFsqqzpBilsn6cujZ",
+      "payment_method_details": {
+        "card": {
+          "amount_authorized": 2900,
+          "authorization_code": "567695",
+          "brand": "visa",
+          "checks": {
+            "address_line1_check": null,
+            "address_postal_code_check": null,
+            "cvc_check": "pass"
+          },
+          "country": "ES",
+          "electronic_commerce_indicator": "07",
+          "exp_month": 11,
+          "exp_year": 2027,
+          "extended_authorization": {
+            "status": "disabled"
+          },
+          "fingerprint": "hqiGkPzyvydu6MIZ",
+          "funding": "credit",
+          "incremental_authorization": {
+            "status": "unavailable"
+          },
+          "installments": null,
+          "last4": "0007",
+          "mandate": null,
+          "multicapture": {
+            "status": "unavailable"
+          },
+          "network": "visa",
+          "network_token": {
+            "used": false
+          },
+          "network_transaction_id": "104113105711078",
+          "overcapture": {
+            "maximum_amount_capturable": 2900,
+            "status": "unavailable"
+          },
+          "regulated_status": "unregulated",
+          "three_d_secure": null,
+          "transaction_link_id": null,
+          "wallet": null
+        },
+        "type": "card"
+      },
+      "radar_options": {},
+      "receipt_email": null,
+      "receipt_number": null,
+      "receipt_url": "<url>",
+      "refunded": false,
+      "review": null,
+      "shipping": null,
+      "source": null,
+      "source_transfer": null,
+      "statement_descriptor": null,
+      "statement_descriptor_suffix": null,
+      "status": "succeeded",
+      "transfer_data": null,
+      "transfer_group": "sub_sub_1UatoiGVFsqqzpBio5vcWfRW"
+    },
+    "livemode": false,
+    "managed_payments": {
+      "enabled": false
+    },
+    "metadata": {},
+    "next_action": null,
+    "on_behalf_of": "acct_1Uatj9GgKZOTeRsE",
+    "payment_details": {
+      "customer_reference": null,
+      "order_reference": "in_1UatoiGVFsqqzpBiAvOm3OUe"
+    },
+    "payment_method": "pm_1UatohGVFsqqzpBilsn6cujZ",
+    "payment_method_configuration_details": null,
+    "payment_method_options": {
+      "amazon_pay": {
+        "express_checkout_element_session_id": null
+      },
+      "blik": {},
+      "card": {
+        "installments": null,
+        "mandate_options": null,
+        "network": null,
+        "request_three_d_secure": "automatic"
+      },
+      "kakao_pay": {},
+      "klarna": {
+        "preferred_locale": null
+      },
+      "link": {
+        "persistent_token": null
+      },
+      "naver_pay": {},
+      "revolut_pay": {},
+      "samsung_pay": {}
+    },
+    "payment_method_types": ["amazon_pay", "card", "klarna", "link", "revolut_pay"],
+    "payment_record": null,
+    "processing": null,
+    "receipt_email": null,
+    "review": null,
+    "setup_future_usage": "off_session",
+    "shared_payment_granted_token": null,
+    "shipping": null,
+    "source": null,
+    "statement_descriptor": null,
+    "statement_descriptor_suffix": null,
+    "status": "succeeded",
+    "transfer_data": null,
+    "transfer_group": null
+  },
+  "checkout_session_de_suscripcion": {
+    "id": "cs_test_a0jfoMeCR5Q63Arztzy6dLhODMkc0jOgbc8xg13NjxXZQs0oUiE4FQ71Ct",
+    "object": "checkout.session",
+    "adaptive_pricing": {
+      "enabled": true
+    },
+    "after_expiration": null,
+    "allow_promotion_codes": null,
+    "allowed_payment_method_types": null,
+    "amount_subtotal": 2900,
+    "amount_total": 2900,
+    "automatic_tax": {
+      "address_collection_precision": null,
+      "enabled": false,
+      "liability": null,
+      "provider": null,
+      "status": null
+    },
+    "billing_address_collection": null,
+    "branding_settings": {
+      "background_color": "#ffffff",
+      "border_style": "rounded",
+      "button_color": "#0074d4",
+      "display_name": "Academia Prueba ES",
+      "font_family": "default",
+      "icon": null,
+      "logo": null
+    },
+    "cancel_url": "<url>",
+    "client_reference_id": null,
+    "collected_information": {
+      "business_name": null,
+      "individual_name": null,
+      "shipping_details": null
+    },
+    "consent": null,
+    "consent_collection": null,
+    "created": 1794474229,
+    "currency": "eur",
+    "currency_conversion": null,
+    "custom_fields": [],
+    "custom_text": {
+      "after_submit": null,
+      "shipping_address": null,
+      "submit": null,
+      "terms_of_service_acceptance": null
+    },
+    "customer": "cus_Vc8CJbNWcSJ1GW",
+    "customer_account": "acct_1Uatw9GVFsnWaBrw",
+    "customer_creation": "always",
+    "customer_details": {
+      "address": {
+        "city": null,
+        "country": "ES",
+        "line1": null,
+        "line2": null,
+        "postal_code": null,
+        "state": null
+      },
+      "business_name": null,
+      "email": "alumna-checkout@example.com",
+      "individual_name": null,
+      "name": "Alumna De Prueba",
+      "phone": null,
+      "tax_exempt": "none",
+      "tax_ids": []
+    },
+    "customer_email": "alumna-checkout@example.com",
+    "discounts": [],
+    "expires_at": 1794560629,
+    "integration_identifier": null,
+    "invoice": "in_1UatwAGVFsqqzpBiddjFaSs5",
+    "invoice_creation": null,
+    "livemode": false,
+    "locale": null,
+    "managed_payments": {
+      "enabled": false
+    },
+    "marketing_attributions": null,
+    "metadata": {},
+    "mode": "subscription",
+    "origin_context": null,
+    "payment_intent": null,
+    "payment_link": null,
+    "payment_method_collection": "always",
+    "payment_method_configuration_details": {
+      "id": "pmc_1UatjhGgKZOTeRsEQWArPLzf",
+      "parent": "pmc_1Uad6wGVFsqqzpBiWwC7NxFY"
+    },
+    "payment_method_options": {
+      "card": {
+        "request_three_d_secure": "automatic"
+      }
+    },
+    "payment_method_types": ["card", "klarna", "link", "revolut_pay", "amazon_pay"],
+    "payment_status": "paid",
+    "permissions": null,
+    "phone_number_collection": {
+      "enabled": false
+    },
+    "recovered_from": null,
+    "saved_payment_method_options": {
+      "allow_redisplay_filters": ["always"],
+      "payment_method_remove": "disabled",
+      "payment_method_save": null
+    },
+    "setup_intent": null,
+    "shipping_address_collection": null,
+    "shipping_cost": null,
+    "shipping_options": [],
+    "status": "complete",
+    "submit_type": null,
+    "subscription": "sub_1UatwBGVFsqqzpBifXzRKm9Y",
+    "success_url": "<url>",
+    "total_details": {
+      "amount_discount": 0,
+      "amount_shipping": 0,
+      "amount_tax": 0
+    },
+    "ui_mode": "hosted_page",
+    "url": null,
+    "wallet_options": null
+  },
+  "prueba_7_dias_factura_alta_0": {
+    "id": "in_1UatpBGVFsqqzpBiTXJRKrmH",
+    "object": "invoice",
+    "account_country": "ES",
+    "account_name": "Entorno de prueba de Didacta Cloud",
+    "account_tax_ids": null,
+    "amount_due": 0,
+    "amount_overpaid": 0,
+    "amount_paid": 0,
+    "amount_remaining": 0,
+    "amount_shipping": 0,
+    "application": null,
+    "attempt_count": 0,
+    "attempted": true,
+    "auto_advance": false,
+    "automatic_tax": {
+      "disabled_reason": null,
+      "enabled": false,
+      "liability": null,
+      "provider": null,
+      "status": null
+    },
+    "automatically_finalizes_at": null,
+    "billing_reason": "subscription_create",
+    "collection_method": "charge_automatically",
+    "created": 1794473860,
+    "currency": "eur",
+    "custom_fields": null,
+    "customer": "cus_Vc85VokjltcwQm",
+    "customer_account": null,
+    "customer_address": null,
+    "customer_email": "alumno-trial@example.com",
+    "customer_name": "Alumno de prueba",
+    "customer_phone": null,
+    "customer_shipping": null,
+    "customer_tax_exempt": "none",
+    "customer_tax_ids": [],
+    "default_payment_method": null,
+    "default_source": null,
+    "default_tax_rates": [],
+    "description": null,
+    "discounts": [],
+    "due_date": null,
+    "effective_at": 1794473860,
+    "ending_balance": 0,
+    "footer": null,
+    "from_invoice": null,
+    "hosted_invoice_url": "<url>",
+    "invoice_pdf": "<url>",
+    "issuer": {
+      "type": "self"
+    },
+    "last_finalization_error": null,
+    "latest_revision": null,
+    "lines": {
+      "object": "list",
+      "data": [
+        {
+          "id": "il_1UatpAGVFsqqzpBisQPL1a6b",
+          "object": "line_item",
+          "amount": 0,
+          "currency": "eur",
+          "description": "Free trial for 1 × Membresía Academia Prueba (creador ES)",
+          "discount_amounts": [],
+          "discountable": true,
+          "discounts": [],
+          "invoice": "in_1UatpBGVFsqqzpBiTXJRKrmH",
+          "livemode": false,
+          "metadata": {
+            "creador": "acct_1Uatj9GgKZOTeRsE"
+          },
+          "parent": {
+            "invoice_item_details": null,
+            "subscription_item_details": {
+              "invoice_item": null,
+              "proration": false,
+              "proration_details": {
+                "credited_items": null
+              },
+              "subscription": "sub_1UatpAGVFsqqzpBiKSXREUJZ",
+              "subscription_item": "si_Vc85JoybbAW3MT"
+            },
+            "type": "subscription_item_details"
+          },
+          "period": {
+            "end": 1795078660,
+            "start": 1794473860
+          },
+          "pretax_credit_amounts": [],
+          "pricing": {
+            "price_details": {
+              "price": "price_1UatoDGVFsqqzpBiW8rUTOxc",
+              "product": "prod_Vc84wez10Dm2BP"
+            },
+            "type": "price_details",
+            "unit_amount_decimal": "0"
+          },
+          "quantity": 1,
+          "quantity_decimal": "1",
+          "subtotal": 0,
+          "taxes": []
+        }
+      ],
+      "has_more": false,
+      "total_count": 1,
+      "url": "/v1/invoices/in_1UatpBGVFsqqzpBiTXJRKrmH/lines"
+    },
+    "livemode": false,
+    "metadata": {},
+    "next_payment_attempt": null,
+    "number": "EHRPVHWO-0025",
+    "on_behalf_of": null,
+    "parent": {
+      "quote_details": null,
+      "subscription_details": {
+        "metadata": {
+          "creador": "acct_1Uatj9GgKZOTeRsE"
+        },
+        "subscription": "sub_1UatpAGVFsqqzpBiKSXREUJZ"
+      },
+      "type": "subscription_details"
+    },
+    "payment_settings": {
+      "default_mandate": null,
+      "payment_method_options": null,
+      "payment_method_types": null
+    },
+    "payments": {
+      "object": "list",
+      "data": [],
+      "has_more": false,
+      "url": "/v1/invoices/payments"
+    },
+    "period_end": 1794473860,
+    "period_start": 1794473860,
+    "post_payment_credit_notes_amount": 0,
+    "pre_payment_credit_notes_amount": 0,
+    "receipt_number": null,
+    "rendering": null,
+    "shipping_cost": null,
+    "shipping_details": null,
+    "starting_balance": 0,
+    "statement_descriptor": null,
+    "status": "paid",
+    "status_transitions": {
+      "finalized_at": 1794473860,
+      "marked_uncollectible_at": null,
+      "paid_at": 1794473860,
+      "voided_at": null
+    },
+    "subtotal": 0,
+    "subtotal_excluding_tax": 0,
+    "test_clock": "clock_1Uatp9GVFsqqzpBivnVAhlP3",
+    "total": 0,
+    "total_discount_amounts": [],
+    "total_excluding_tax": 0,
+    "total_pretax_credit_amounts": [],
+    "total_taxes": [],
+    "webhooks_delivered_at": 1794473860
+  },
+  "prueba_7_dias_primera_factura_cobrada": {
+    "id": "in_1UatpFGVFsqqzpBiY9elhTKo",
+    "object": "invoice",
+    "account_country": "ES",
+    "account_name": "Entorno de prueba de Didacta Cloud",
+    "account_tax_ids": null,
+    "amount_due": 2900,
+    "amount_overpaid": 0,
+    "amount_paid": 2900,
+    "amount_remaining": 0,
+    "amount_shipping": 0,
+    "application": null,
+    "attempt_count": 1,
+    "attempted": true,
+    "auto_advance": false,
+    "automatic_tax": {
+      "disabled_reason": null,
+      "enabled": false,
+      "liability": null,
+      "provider": null,
+      "status": null
+    },
+    "automatically_finalizes_at": null,
+    "billing_reason": "subscription_cycle",
+    "collection_method": "charge_automatically",
+    "created": 1795078660,
+    "currency": "eur",
+    "custom_fields": null,
+    "customer": "cus_Vc85VokjltcwQm",
+    "customer_account": null,
+    "customer_address": null,
+    "customer_email": "alumno-trial@example.com",
+    "customer_name": "Alumno de prueba",
+    "customer_phone": null,
+    "customer_shipping": null,
+    "customer_tax_exempt": "none",
+    "customer_tax_ids": [],
+    "default_payment_method": null,
+    "default_source": null,
+    "default_tax_rates": [],
+    "description": null,
+    "discounts": [],
+    "due_date": null,
+    "effective_at": 1795082260,
+    "ending_balance": 0,
+    "footer": null,
+    "from_invoice": null,
+    "hosted_invoice_url": "<url>",
+    "invoice_pdf": "<url>",
+    "issuer": {
+      "type": "self"
+    },
+    "last_finalization_error": null,
+    "latest_revision": null,
+    "lines": {
+      "object": "list",
+      "data": [
+        {
+          "id": "il_1UdRA0GVFsqqzpBiNw88Fmay",
+          "object": "line_item",
+          "amount": 2900,
+          "currency": "eur",
+          "description": "1 × Membresía Academia Prueba (creador ES) (at €29.00 / month)",
+          "discount_amounts": [],
+          "discountable": true,
+          "discounts": [],
+          "invoice": "in_1UatpFGVFsqqzpBiY9elhTKo",
+          "livemode": false,
+          "metadata": {
+            "creador": "acct_1Uatj9GgKZOTeRsE"
+          },
+          "parent": {
+            "invoice_item_details": null,
+            "subscription_item_details": {
+              "invoice_item": null,
+              "proration": false,
+              "proration_details": {
+                "credited_items": null
+              },
+              "subscription": "sub_1UatpAGVFsqqzpBiKSXREUJZ",
+              "subscription_item": "si_Vc85JoybbAW3MT"
+            },
+            "type": "subscription_item_details"
+          },
+          "period": {
+            "end": 1797670660,
+            "start": 1795078660
+          },
+          "pretax_credit_amounts": [],
+          "pricing": {
+            "price_details": {
+              "price": "price_1UatoDGVFsqqzpBiW8rUTOxc",
+              "product": "prod_Vc84wez10Dm2BP"
+            },
+            "type": "price_details",
+            "unit_amount_decimal": "2900"
+          },
+          "quantity": 1,
+          "quantity_decimal": "1",
+          "subtotal": 2900,
+          "taxes": []
+        }
+      ],
+      "has_more": false,
+      "total_count": 1,
+      "url": "/v1/invoices/in_1UatpFGVFsqqzpBiY9elhTKo/lines"
+    },
+    "livemode": false,
+    "metadata": {},
+    "next_payment_attempt": null,
+    "number": "EHRPVHWO-0026",
+    "on_behalf_of": null,
+    "parent": {
+      "quote_details": null,
+      "subscription_details": {
+        "metadata": {
+          "creador": "acct_1Uatj9GgKZOTeRsE"
+        },
+        "subscription": "sub_1UatpAGVFsqqzpBiKSXREUJZ"
+      },
+      "type": "subscription_details"
+    },
+    "payment_settings": {
+      "default_mandate": null,
+      "payment_method_options": null,
+      "payment_method_types": null
+    },
+    "payments": {
+      "object": "list",
+      "data": [
+        {
+          "id": "inpay_1UatpLGVFsqqzpBiN7oslrNG",
+          "object": "invoice_payment",
+          "amount_paid": 2900,
+          "amount_requested": 2900,
+          "created": 1795082260,
+          "currency": "eur",
+          "invoice": "in_1UatpFGVFsqqzpBiY9elhTKo",
+          "is_default": true,
+          "livemode": false,
+          "payment": {
+            "payment_intent": "pi_3UatpKGVFsqqzpBi2UBJPR3V",
+            "type": "payment_intent"
+          },
+          "status": "paid",
+          "status_transitions": {
+            "canceled_at": null,
+            "paid_at": 1795165060
+          }
+        }
+      ],
+      "has_more": false,
+      "url": "/v1/invoices/payments"
+    },
+    "period_end": 1795078660,
+    "period_start": 1794473860,
+    "post_payment_credit_notes_amount": 0,
+    "pre_payment_credit_notes_amount": 0,
+    "receipt_number": null,
+    "rendering": null,
+    "shipping_cost": null,
+    "shipping_details": null,
+    "starting_balance": 0,
+    "statement_descriptor": null,
+    "status": "paid",
+    "status_transitions": {
+      "finalized_at": 1795082260,
+      "marked_uncollectible_at": null,
+      "paid_at": 1795082260,
+      "voided_at": null
+    },
+    "subtotal": 2900,
+    "subtotal_excluding_tax": 2900,
+    "test_clock": "clock_1Uatp9GVFsqqzpBivnVAhlP3",
+    "total": 2900,
+    "total_discount_amounts": [],
+    "total_excluding_tax": 2900,
+    "total_pretax_credit_amounts": [],
+    "total_taxes": [],
+    "webhooks_delivered_at": 1795078660
+  }
+}

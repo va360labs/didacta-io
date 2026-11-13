@@ -181,7 +181,8 @@
     "noInvoices": "Sin facturas todavía.",
     "downloadPdf": "Ver / descargar PDF ↗",
     "unavailableTitle": "No hemos podido consultar tus suscripciones",
-    "unavailableDesc": "Vuelve a cargar la página en unos minutos. Esto no afecta a tus pagos ni a tu acceso."
+    "unavailableDesc": "Vuelve a cargar la página en unos minutos. Esto no afecta a tus pagos ni a tu acceso.",
+    "saldoReferidos": "Pago con saldo de referidos: {amount} · cobrado {paid}"
   },
   "security": {
     "sessionsLoadError": "No pudimos cargar tus sesiones.",

@@ -53,6 +53,7 @@ export interface GlobalFallbackDecision {
     | 'env' // lo dice STRIPE_ALLOW_GLOBAL_FALLBACK
     | 'single-tenant' // por defecto: una sola aula
     | 'multiple-tenants' // por defecto: varias aulas
+    | 'platform-payments' // modo plataforma encendido: nunca se hereda
     | 'unknown'; // lector antiguo que solo devuelve un booleano
   /** Aulas no archivadas, cuando la decisión salió del recuento. */
   tenants?: number;
@@ -72,6 +73,13 @@ export interface GlobalFallbackPolicyStore {
 
 /** Variable de entorno que fija la política sin tocar la base. */
 export const STRIPE_ALLOW_GLOBAL_FALLBACK_ENV = 'STRIPE_ALLOW_GLOBAL_FALLBACK';
+
+/**
+ * La clave que enciende el modo plataforma (ver
+ * `payouts/platform-payments.config.ts`). Repetida aquí y no importada: este
+ * fichero no puede depender de la configuración de cobros de plataforma.
+ */
+const PLATFORM_PAYMENTS_SECRET_KEY_ENV = 'PAYMENTS_PLATFORM_STRIPE_SECRET_KEY';
 
 /**
  * Política del fallback global de Stripe. Por orden:
@@ -94,12 +102,20 @@ export const STRIPE_ALLOW_GLOBAL_FALLBACK_ENV = 'STRIPE_ALLOW_GLOBAL_FALLBACK';
  * Quien tenga varias aulas PROPIAS cobrando a propósito con las `STRIPE_*` de
  * instancia lo declara con `STRIPE_ALLOW_GLOBAL_FALLBACK=true` (o el setting) y
  * sigue exactamente como estaba.
+ *
+ * Por encima de todo: con el modo plataforma encendido
+ * (`PAYMENTS_PLATFORM_STRIPE_SECRET_KEY`) NUNCA se hereda. En un pool, heredar
+ * las `STRIPE_*` de instancia metería el dinero de un aula en una cuenta sin
+ * pasar por el reparto; las aulas cobran con sus claves o por la plataforma.
  */
 export function buildGlobalFallbackFlagReader(
   store: GlobalFallbackPolicyStore,
   env: NodeJS.ProcessEnv = process.env,
 ): GlobalFallbackFlagReader {
   return async (): Promise<GlobalFallbackDecision> => {
+    if (env[PLATFORM_PAYMENTS_SECRET_KEY_ENV]?.trim()) {
+      return { allowed: false, reason: 'platform-payments' };
+    }
     const row = await store.instanceSetting.findUnique({
       where: { scope_key: { scope: 'billing', key: 'allowGlobalStripeFallback' } },
     });
@@ -253,6 +269,16 @@ export class TenantStripeResolverService {
     }
     // Sin cuenta de instancia no hay nada que heredar ni que cortar.
     if (!state.instanceCredentials) return;
+
+    if (state.reason === 'platform-payments') {
+      if (when === 'startup') {
+        this.logger.warn(
+          `[stripe-resolver] Modo plataforma encendido: la cuenta de Stripe de instancia (STRIPE_SECRET_KEY) ` +
+            `no se usa para cobrar a ningún aula. Cada aula cobra con sus claves o a través de la plataforma.`,
+        );
+      }
+      return;
+    }
 
     if (!state.allowed && state.reason === 'multiple-tenants') {
       this.logger.error(

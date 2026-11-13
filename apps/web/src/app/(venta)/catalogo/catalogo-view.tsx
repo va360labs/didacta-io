@@ -23,7 +23,9 @@ import { formatDuration } from '@/lib/i18n/format';
 import { useTenantContext } from '@/lib/tenant-context';
 import { formatCents } from '@/lib/membership';
 import { featuredOption, getPublicCatalog, type CatalogCourse } from '@/lib/catalog';
+import { showLocalCurrencyNote } from '@/lib/checkout-hints';
 import { richHtmlToPlainText } from '@/lib/sanitize-html';
+import { captureReferralFromLocation } from '@/lib/referral-links';
 
 export function CatalogoView() {
   const t = useTranslations('publicSite');
@@ -36,6 +38,12 @@ export function CatalogoView() {
   const [courses, setCourses] = useState<CatalogCourse[] | null>(null);
   const [loadError, setLoadError] = useState(false);
   const [filter, setFilter] = useState('Todos');
+
+  // Enlace de referido (?ref=) del catálogo: se guarda y viaja al checkout
+  // del curso que acabe comprando.
+  useEffect(() => {
+    captureReferralFromLocation(window.location.search);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -183,18 +191,28 @@ export function CatalogoView() {
                     ) : null}
                     <div className="mt-auto flex items-end justify-between pt-3">
                       {option ? (
-                        <div className="flex items-baseline gap-2">
-                          <span className="text-lg font-bold text-text">
-                            {formatCents(option.unitAmount, option.currency, { locale })}
-                          </span>
-                          {option.compareAtAmount ? (
-                            <span className="text-sm text-text-subtle line-through">
-                              {formatCents(option.compareAtAmount, option.currency, { locale })}
+                        <div className="flex flex-col gap-0.5">
+                          <div className="flex items-baseline gap-2">
+                            <span className="text-lg font-bold text-text">
+                              {formatCents(option.unitAmount, option.currency, { locale })}
                             </span>
-                          ) : null}
-                          {option.discountPercent ? (
-                            <span className="rounded-full bg-success-100 px-2 py-0.5 text-xs font-semibold text-success-700">
-                              {t('discountBadge', { percent: option.discountPercent })}
+                            {option.compareAtAmount ? (
+                              <span className="text-sm text-text-subtle line-through">
+                                {formatCents(option.compareAtAmount, option.currency, { locale })}
+                              </span>
+                            ) : null}
+                            {option.discountPercent ? (
+                              <span className="rounded-full bg-success-100 px-2 py-0.5 text-xs font-semibold text-success-700">
+                                {t('discountBadge', { percent: option.discountPercent })}
+                              </span>
+                            ) : null}
+                          </div>
+                          {showLocalCurrencyNote(option) ? (
+                            <span
+                              className="text-xs text-text-muted"
+                              data-testid="local-currency-note"
+                            >
+                              {t('localCurrencyNote')}
                             </span>
                           ) : null}
                         </div>

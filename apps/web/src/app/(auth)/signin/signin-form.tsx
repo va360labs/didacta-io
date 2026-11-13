@@ -137,7 +137,9 @@ export function SignInForm() {
         // form de verificación MFA al completar el segundo factor.
         router.push(response.user.mfaEnabled ? '/mfa/verify' : '/mfa/setup');
       } else if (response.user.onboardingCompletedAt === null) {
-        // Ídem: el onboarding lo consume al terminar.
+        // Ídem: el onboarding lo consume al terminar. También quien lleva un
+        // aula en modo sencillo empieza por su perfil (con la foto opcional)
+        // y de ahí sigue al alta en 3 preguntas: ver `lib/first-access.ts`.
         router.push('/onboarding');
       } else {
         // Deep link guardado antes del redirect a /signin (p. ej. enlace

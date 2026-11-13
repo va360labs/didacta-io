@@ -34,8 +34,14 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { ApiHttpError } from '@/lib/api-client';
 import { authStorage } from '@/lib/auth-storage';
+import { getStoredReferralCode } from '@/lib/referrals';
 import type { TranslatorLike } from '@/lib/i18n/labels';
 import { billingApi } from '@/modules/billing';
+import {
+  WithdrawalWaiverCheckbox,
+  useWithdrawalWaiver,
+} from '@/components/withdrawal-waiver-checkbox';
+import { apiErrorMessage } from '@/lib/i18n/api-error';
 
 interface BuyCourseButtonProps {
   courseId: string;
@@ -60,10 +66,15 @@ export function BuyCourseButton({
   className,
 }: BuyCourseButtonProps) {
   const t = useTranslations('playersContenido');
+  const tSite = useTranslations('publicSite');
+  const tErrors = useTranslations('errors');
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Renuncia al desistimiento: sin marcarla no se puede pagar.
+  const waiver = useWithdrawalWaiver('course');
 
   async function handleClick() {
+    if (!waiver.acceptance) return;
     setPending(true);
     setError(null);
     try {
@@ -73,26 +84,47 @@ export function BuyCourseButton({
         setPending(false);
         return;
       }
-      const { url } = await billingApi.startCheckout(courseId, token, optionId);
+      const { url } = await billingApi.startCheckout(
+        courseId,
+        token,
+        optionId,
+        waiver.acceptance,
+        // Enlace de referido con el que llegó a cualquier página de venta.
+        getStoredReferralCode() ?? undefined,
+      );
       // Redirigimos a la URL hosted de Stripe. NO usamos router.push() porque
       // es un dominio externo — sólo `window.location.href` cambia de origin.
       window.location.href = url;
       // No reseteamos `pending` adrede: la página se está descargando.
     } catch (e) {
-      setError(translateBillingError(e, t));
+      if (e instanceof ApiHttpError && e.code?.startsWith('CHECKOUT_WITHDRAWAL_WAIVER')) {
+        setError(apiErrorMessage(e, tErrors));
+        waiver.reload();
+      } else {
+        setError(translateBillingError(e, t));
+      }
       setPending(false);
     }
   }
 
   return (
     <div className={className}>
+      <WithdrawalWaiverCheckbox
+        className="mb-3"
+        waiver={waiver.waiver}
+        failed={waiver.failed}
+        checked={waiver.checked}
+        onCheckedChange={waiver.setChecked}
+        onRetry={waiver.reload}
+      />
       <Button
         type="button"
         variant={variant}
         size={size}
         onClick={handleClick}
-        disabled={pending}
+        disabled={pending || !waiver.acceptance}
         aria-busy={pending}
+        title={!waiver.acceptance ? tSite('withdrawalWaiver.mustTick') : undefined}
       >
         {pending ? t('buyCourse.pending') : (label ?? t('buyCourse.label'))}
       </Button>

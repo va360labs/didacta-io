@@ -391,6 +391,28 @@ describe('TenantStripeResolverService', () => {
       ).toEqual({ allowed: false, reason: 'instance-setting' });
     });
 
+    it('modo plataforma encendido → NUNCA se hereda, diga lo que diga el operador (y sin leer la base)', async () => {
+      const permitido = store({ setting: true, aulas: 1 });
+      expect(
+        await buildGlobalFallbackFlagReader(permitido.s, {
+          PAYMENTS_PLATFORM_STRIPE_SECRET_KEY: 'sk_test_operador',
+          STRIPE_ALLOW_GLOBAL_FALLBACK: 'true',
+        })(),
+      ).toEqual({ allowed: false, reason: 'platform-payments' });
+      expect(permitido.calls.count).toBe(0);
+      // Control: la misma instancia sin el modo plataforma hace caso al setting.
+      expect(await buildGlobalFallbackFlagReader(permitido.s, {})()).toEqual({
+        allowed: true,
+        reason: 'instance-setting',
+      });
+      // Una variable vacía (plantilla del .env) no enciende nada.
+      expect(
+        await buildGlobalFallbackFlagReader(permitido.s, {
+          PAYMENTS_PLATFORM_STRIPE_SECRET_KEY: '  ',
+        })(),
+      ).toEqual({ allowed: true, reason: 'instance-setting' });
+    });
+
     it('un setting que no es booleano o una variable ilegible no deciden nada: se cae al recuento', async () => {
       const { s } = store({ setting: 'sí', aulas: 3 });
       const env = { STRIPE_ALLOW_GLOBAL_FALLBACK: 'quizá' };

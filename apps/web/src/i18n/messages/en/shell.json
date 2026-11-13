@@ -58,9 +58,9 @@
     "fallbackLabel": "Dialog"
   },
   "smtpBanner": {
-    "title": "Set up notifications:",
-    "body": "without an SMTP server your users get no email at all.",
-    "cta": "Set up"
+    "title": "Your academy's emails can't be sent yet:",
+    "body": "your email service still needs to be connected.",
+    "cta": "Connect email"
   },
   "gettingStarted": {
     "title": "First steps",

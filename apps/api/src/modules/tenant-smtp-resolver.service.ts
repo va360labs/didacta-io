@@ -158,6 +158,16 @@ export class TenantSmtpResolverService {
     return this.readTenantConfig(tenantId);
   }
 
+  /**
+   * Solo la config global del despliegue (la del operador). Para correos que
+   * no son de ningún aula: p. ej. las alertas de dinero de los cobros de
+   * plataforma (`payouts-notifier.ts`).
+   */
+  resolveGlobal(): ResolvedSmtp | null {
+    const globalConfig = this.readGlobalConfig();
+    return globalConfig ? { config: globalConfig, source: 'global', verified: false } : null;
+  }
+
   /** True si el tenant tiene configurado SMTP propio (verificado o no). */
   async hasTenantConfig(tenantId: string): Promise<boolean> {
     const tenant = await this.readTenantConfig(tenantId);

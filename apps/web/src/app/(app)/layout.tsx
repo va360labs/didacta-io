@@ -6,7 +6,7 @@
  */
 
 import { usePathname, useRouter } from 'next/navigation';
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { Suspense, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
 import { AppSidebar, type SidebarGroup } from '@/components/app-sidebar';
 import { CommandPalette } from '@/components/command-palette';
@@ -22,6 +22,7 @@ import { NotificationsToaster } from '@/components/notifications-toaster';
 import { FloatingChat, MessagingProvider } from '@/modules/messaging';
 import { hayPaseDeBienvenida, onboardingApi } from '@/lib/academy';
 import { authStorage, type StoredSession } from '@/lib/auth-storage';
+import { administra, firstAccessDoor, type FirstAccessDoor } from '@/lib/first-access';
 import { clearIntendedPath, rememberIntendedPath } from '@/lib/post-login-redirect';
 import { meApi } from '@/lib/me';
 import { labelOr } from '@/lib/i18n/labels';
@@ -45,6 +46,13 @@ import type { IconName } from '@/components/icon';
 import { CreateSpaceModal } from '@/components/create-space-modal';
 import { MobileNavDrawer } from '@/components/mobile-nav-drawer';
 import { MobileTabBar } from '@/components/mobile-tab-bar';
+import { SimpleShell } from '@/components/simple-shell/simple-shell';
+import {
+  readSimpleModeCache,
+  SIMPLE_MODE_CHANGED_EVENT,
+  simpleModeNow,
+  writeSimpleModeCache,
+} from '@/lib/simple-mode';
 
 /**
  * Shell de la app autenticada — sidebar persistente Didacta + main canvas.
@@ -97,37 +105,33 @@ export default function AppLayout({ children }: { children: ReactNode }) {
     // backfill), de modo que también se gatea a quienes NO entran por primera
     // vez. Solo se libera al completar el onboarding (timestamp truthy).
     /**
-     * Dos asistentes, y el ORDEN importa.
+     * Dos asistentes, y el ORDEN importa: lo decide `firstAccessDoor`
+     * (`lib/first-access.ts`), con sus tests.
      *
-     * El de perfil (`/onboarding`) pide foto —obligatoria—, nombre e idioma. El
-     * de academia (`/bienvenida`) le pone nombre y marca al negocio recién
-     * comprado. Puestos al revés, a quien acaba de pagar se le exige una foto
-     * suya antes de dejarle tocar su academia, que es un primer contacto
-     * pésimo: lo que ha comprado es la academia, no un perfil.
-     *
-     * Así que para quien la administra va primero la academia. Al terminar,
-     * `/bienvenida` manda a `/inicio` y este mismo gate se encarga entonces del
-     * perfil. Para un alumno no cambia nada: su puerta sigue siendo la de
-     * perfil, porque ponerle nombre a la academia no le corresponde.
+     * El de perfil (`/onboarding`) pide foto, nombre e idioma. El de academia
+     * (`/bienvenida`) le pone nombre y marca al negocio recién comprado. En el
+     * modo completo la foto es obligatoria y exigirla antes de dejarle tocar
+     * su academia a quien acaba de pagar era un primer contacto pésimo: ahí va
+     * primero la academia. En el modo sencillo la foto se puede dejar para
+     * luego, y quien lleva la academia empieza por presentarse a sus alumnos
+     * (su foto y su nombre acompañan cada post de su comunidad). Para un
+     * alumno solo existe la de perfil.
      *
      * La consulta es asíncrona (el estado vive en el servidor), así que este
      * bloque hace `return` y resuelve dentro del `then`: si cayera al gate de
-     * perfil mientras espera, se iría a `/onboarding` igualmente y el orden
-     * volvería a invertirse. Solo se pregunta una vez por pestaña.
+     * perfil mientras espera, el orden dependería de quién responde antes.
+     * Solo se pregunta una vez por pestaña.
      */
-    const irAPerfilSiHaceFalta = () => {
-      if (!current.user.onboardingCompletedAt) {
-        // El asistente consume este destino al terminar. Cubre también el login
-        // SSO/WP-SSO, cuya sesión no trae el flag.
-        rememberIntendedPath(window.location.pathname + window.location.search);
-        router.replace('/onboarding');
-        return true;
-      }
-      return false;
+    const ir = (puerta: FirstAccessDoor) => {
+      // El asistente consume este destino al terminar. Cubre también el login
+      // SSO/WP-SSO, cuya sesión no trae el flag.
+      rememberIntendedPath(window.location.pathname + window.location.search);
+      router.replace(puerta);
     };
+    const perfilHecho = Boolean(current.user.onboardingCompletedAt);
 
-    const administra = current.user.roles.some((r) => ['super_admin', 'tenant_admin'].includes(r));
-    if (administra && window.sessionStorage.getItem(ACADEMIA_LISTA_KEY) !== '1') {
+    const esAdmin = administra(current.user.roles);
+    if (esAdmin && window.sessionStorage.getItem(ACADEMIA_LISTA_KEY) !== '1') {
       /**
        * El PASE del asistente. Sus enlaces («Abrir la configuración de
        * cobros», el editor del curso, los pendientes del resumen) abren
@@ -141,19 +145,34 @@ export default function AppLayout({ children }: { children: ReactNode }) {
         setSession(current);
         return;
       }
-      void onboardingApi.read().then((prog) => {
-        if (!prog.completedAt) {
-          rememberIntendedPath(window.location.pathname + window.location.search);
-          router.replace('/bienvenida');
-          return;
-        }
-        window.sessionStorage.setItem(ACADEMIA_LISTA_KEY, '1');
-        if (!irAPerfilSiHaceFalta()) setSession(current);
+      void Promise.all([
+        onboardingApi.read(),
+        // El modo solo cambia el orden si el perfil está pendiente.
+        perfilHecho ? Promise.resolve(false) : simpleModeNow(),
+      ]).then(([prog, sencillo]) => {
+        if (prog.completedAt) window.sessionStorage.setItem(ACADEMIA_LISTA_KEY, '1');
+        const puerta = firstAccessDoor({
+          administra: true,
+          sencillo,
+          perfilHecho,
+          academiaHecha: Boolean(prog.completedAt),
+        });
+        if (puerta) ir(puerta);
+        else setSession(current);
       });
       return;
     }
 
-    if (irAPerfilSiHaceFalta()) return;
+    const puerta = firstAccessDoor({
+      administra: esAdmin,
+      sencillo: false,
+      perfilHecho,
+      academiaHecha: true,
+    });
+    if (puerta) {
+      ir(puerta);
+      return;
+    }
     setSession(current);
   }, [router, pathname]);
 
@@ -242,6 +261,9 @@ function Shell({
   // módulo y se refleja sin recargar" ya lo cubre el listener de
   // `didacta:modules-changed` de abajo, que se dispara desde el toggle.
   const [activeModules, setActiveModules] = useState<Set<string> | null>(null);
+  // Modo sencillo del aula (Didacta Cloud). `null` = aún no se sabe: con la
+  // caché de la pestaña el primer pintado ya acierta el armazón.
+  const [simpleMode, setSimpleMode] = useState<boolean | null>(() => readSimpleModeCache());
   useEffect(() => {
     const token = authStorage.getAccessToken();
     if (!token) return;
@@ -249,18 +271,39 @@ function Shell({
     meApi
       .getMyModules(token)
       .then((res) => {
-        if (!cancelled) setActiveModules(new Set(res.activeModules));
+        if (cancelled) return;
+        setActiveModules(new Set(res.activeModules));
+        const simple = res.simpleMode === true;
+        writeSimpleModeCache(simple);
+        setSimpleMode(simple);
       })
       .catch(() => {
         // Si falla (red, 401 expirado, módulo registry indisponible), dejamos
         // null para no romper el sidebar — el usuario verá items que tal vez
         // no tengan módulo activo y el backend devolverá 403 al click.
-        if (!cancelled) setActiveModules(null);
+        if (!cancelled) {
+          setActiveModules(null);
+          setSimpleMode((prev) => prev ?? false);
+        }
       });
     return () => {
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    function onChange(e: Event) {
+      setSimpleMode((e as CustomEvent<boolean>).detail === true);
+    }
+    window.addEventListener(SIMPLE_MODE_CHANGED_EVENT, onChange);
+    return () => window.removeEventListener(SIMPLE_MODE_CHANGED_EVENT, onChange);
+  }, []);
+
+  // La tipografía del modo sencillo va en <html> para alcanzar los portales.
+  useEffect(() => {
+    document.documentElement.classList.toggle('modo-sencillo', simpleMode === true);
+    return () => document.documentElement.classList.remove('modo-sencillo');
+  }, [simpleMode]);
 
   // Listener para actualización en caliente desde la misma página: cuando
   // /admin/configuracion termina un toggle, dispatchea
@@ -406,6 +449,56 @@ function Shell({
     document.title = parts.join(' | ');
   }, [sectionLabel, tenantName]);
 
+  // Banners fijos de arriba: los mismos en los dos armazones.
+  const banners = (
+    <>
+      {/* Va el PRIMERO y en rojo: mientras haya un acceso de soporte
+          abierto, hay alguien de fuera dentro del aula de un cliente. */}
+      <SupportAccessBanner />
+      <Suspense fallback={null}>
+        <NotificationsSetupBanner roles={session.user.roles} />
+      </Suspense>
+      <SubscriptionTrialBanner roles={session.user.roles} />
+    </>
+  );
+
+  // Aún no se sabe qué armazón toca (sin caché, primera respuesta en vuelo):
+  // fondo vacío un instante en vez de pintar un menú y cambiarlo después.
+  if (simpleMode === null) return <div className="min-h-dvh bg-bg-subtle" />;
+
+  if (simpleMode) {
+    // Modo sencillo: el árbol COMPLETO (principal + administración) alimenta
+    // «Más», para que nada se pierda; las pestañas las decide `simple-nav`.
+    const fullBase = [
+      ...buildGroups({ isAdminOrFormador, isAdmin, isSuperAdmin, espacios: espaciosGroup }),
+      ...(isAdmin ? buildAdminGroups({ isSuperAdmin }) : []),
+    ];
+    const fullGroups = filterByActiveModules(
+      mergeExtensionSidebarItems(fullBase, moduleExtensions, userRoles),
+      activeModules,
+    );
+    return (
+      <NotificationsProvider>
+        <MessagingProvider>
+          <CreateSpaceModal open={createSpaceOpen} onClose={() => setCreateSpaceOpen(false)} />
+          <SimpleShell
+            session={session}
+            pathname={pathname ?? ''}
+            fullGroups={fullGroups}
+            activeModules={activeModules}
+            isAdmin={isAdmin}
+            onLogout={onLogout}
+            banners={banners}
+          >
+            {children}
+          </SimpleShell>
+          <FloatingChat launcher={false} />
+          <NotificationsToaster />
+        </MessagingProvider>
+      </NotificationsProvider>
+    );
+  }
+
   return (
     <NotificationsProvider>
       <MessagingProvider>
@@ -448,7 +541,9 @@ function Shell({
               {/* Solo aparece si no hay ninguna salida de correo: sin SMTP el
                   producto parece ir bien mientras pierde en silencio las altas
                   y los restablecimientos de contraseña. */}
-              <NotificationsSetupBanner roles={session.user.roles} />
+              <Suspense fallback={null}>
+                <NotificationsSetupBanner roles={session.user.roles} />
+              </Suspense>
               {/* Prueba gratis de Didacta Cloud: solo para quien administra
                   la academia, y solo mientras dura. */}
               <SubscriptionTrialBanner roles={session.user.roles} />

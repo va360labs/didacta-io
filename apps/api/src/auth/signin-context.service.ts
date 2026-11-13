@@ -26,7 +26,11 @@ import { PrismaService } from '../prisma/prisma.service';
  * emails de reset.
  */
 export interface SigninBrandingStats {
-  /** Usuarios ACTIVE no borrados del tenant. */
+  /**
+   * Alumnos: usuarios ACTIVE no borrados del tenant SIN rol de equipo. El
+   * panel dice «alumnos activos»: contar al creador o a los formadores hacía
+   * que un aula recién creada presumiera de «1 alumno activo» sin tener ninguno.
+   */
   activeMembers: number;
   /** Cursos PUBLISHED no borrados del tenant. */
   publishedCourses: number;
@@ -60,6 +64,9 @@ export interface SigninBrandingContext {
 /** Defaults Didacta (los mismos de `DEFAULT_THEME` en mod.theming). */
 const DEFAULT_BRAND_HUE = 213;
 const DEFAULT_BRAND_SATURATION = 70;
+
+/** Roles de equipo: no son alumnos y no cuentan en «alumnos activos». */
+const STAFF_ROLES = ['super_admin', 'tenant_admin', 'formador'];
 
 const EMPTY: SigninBrandingContext = {
   headline: null,
@@ -95,7 +102,14 @@ export class SigninContextService {
             logoDisplayMode: true,
           },
         }),
-        this.prisma.user.count({ where: { tenantId, status: 'ACTIVE', deletedAt: null } }),
+        this.prisma.user.count({
+          where: {
+            tenantId,
+            status: 'ACTIVE',
+            deletedAt: null,
+            NOT: { roles: { some: { role: { name: { in: STAFF_ROLES } } } } },
+          },
+        }),
         this.prisma.modCoursesCourse.count({
           where: { tenantId, status: 'PUBLISHED', deletedAt: null },
         }),

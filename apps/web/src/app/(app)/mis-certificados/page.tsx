@@ -15,6 +15,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { ApiHttpError } from '@/lib/api-client';
 import { apiErrorMessage } from '@/lib/i18n/api-error';
 import { formatDate } from '@/lib/i18n/format';
+import { openLinkedIn } from '@/lib/certificate-linkedin';
 import { useTenantDisplayName } from '@/lib/tenant-context';
 import { certificatesApi, type Certificate } from '@/modules/certificates';
 
@@ -24,33 +25,6 @@ function formatIssuedAt(iso: string): string {
   } catch {
     return iso;
   }
-}
-
-/**
- * Abre el flujo "Add to Profile" de LinkedIn pre-rellenado con los datos del
- * certificado. `certUrl` apunta a la página pública de verificación
- * (`/verificar/<id>`), así la credencial en LinkedIn es verificable.
- * `organizationName` es el nombre del tenant emisor (resuelto por host).
- * `courseName` viene ya resuelto por el caller (con su fallback traducido).
- */
-function openLinkedIn(cert: Certificate, organizationName: string, courseName: string) {
-  const issued = new Date(cert.snapshot?.issuedAt ?? cert.issuedAt);
-  const params = new URLSearchParams({
-    startTask: 'CERTIFICATION_NAME',
-    name: courseName,
-    organizationName,
-    certId: cert.number,
-    certUrl: `${window.location.origin}/verificar/${cert.id}`,
-  });
-  if (!Number.isNaN(issued.getTime())) {
-    params.set('issueYear', String(issued.getFullYear()));
-    params.set('issueMonth', String(issued.getMonth() + 1));
-  }
-  window.open(
-    `https://www.linkedin.com/profile/add?${params.toString()}`,
-    '_blank',
-    'noopener,noreferrer',
-  );
 }
 
 export default function MisCertificadosPage() {

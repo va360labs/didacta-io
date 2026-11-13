@@ -1,0 +1,81 @@
+{
+  "metaTitle": "Condiciones de «Invita y gana»",
+  "titulo": "Condiciones del programa «Invita y gana»",
+  "version": "Versión {version}",
+  "intro": "Estas condiciones regulan el programa de referidos de {academia}: tú invitas a otras personas con tu enlace y {academia} te da una parte de lo que paguen.",
+  "cerrado": "{academia} no tiene el programa abierto ahora mismo. Estas son las condiciones que se aplican cuando lo abre.",
+  "error": "No se han podido cargar las condiciones. Prueba de nuevo en un momento.",
+  "cargando": "Cargando las condiciones…",
+  "resumenTitulo": "Resumen en 7 puntos",
+  "resumenNota": "El resumen te ayuda a leer, pero lo que vale es el texto completo.",
+  "resumen": {
+    "r1": "Quien te paga es {academia}, no Didacta. Didacta solo pone la herramienta.",
+    "r2": "Tienes que ser mayor de 18 años y aceptar estas condiciones antes de tener tu enlace.",
+    "r3": "Una persona queda unida a ti durante {dias} días desde que abre tu enlace. Tu propio enlace no cuenta para ti.",
+    "r4": "Lo que ganas queda pendiente {garantia} días. Si la venta se devuelve entera, se anula; si se devuelve una parte, se recorta en proporción.",
+    "r5": "Lo cobras como descuento en tu cuota (hasta el {tope} % de una cuota) o en dinero, dando tu nombre, tu NIF y tu cuenta. Didacta no retiene nada.",
+    "r6": "Si te das de baja con descuento sin usar, ese saldo vuelve a tu cartera para cobrarlo en dinero.",
+    "r7": "Si se devuelve una venta cuya comisión ya cobraste, se descuenta de lo siguiente que ganes. Nunca te reclamaremos dinero."
+  },
+  "secciones": {
+    "s1": {
+      "titulo": "1. Quién ofrece el programa y quién paga",
+      "p1": "El programa lo ofrece {academia}. Es {academia} quien decide si está abierto, qué porcentaje paga y cuánto dura cada plazo, y es {academia} quien te paga lo que ganes.",
+      "p2": "Didacta Cloud es un servicio de VA360 LABS, S.L. que {academia} usa para su programa. Didacta no es parte de este acuerdo, no te debe ninguna comisión y no interviene en el pago."
+    },
+    "s2": {
+      "titulo": "2. Quién puede participar",
+      "p1": "Puedes participar si tienes cuenta en {academia} y eres mayor de 18 años. La primera vez que abres «Invita y gana» marcas la casilla «Declaro que soy mayor de 18 años y acepto las condiciones del programa». Guardamos la fecha y la versión de las condiciones que aceptaste.",
+      "p2": "Hasta que no aceptes no tendrás enlace, y las personas que lleguen por enlaces antiguos tuyos no generarán comisiones. Si estas condiciones cambian, te pediremos que aceptes la versión nueva para seguir compartiendo tu enlace."
+    },
+    "s3": {
+      "titulo": "3. Cómo se gana",
+      "p1": "Tienes un enlace personal. Vale en cualquier página de venta de {academia}: la membresía y cada curso.",
+      "p2": "Una persona queda unida a ti durante {dias} días desde que abre tu enlace. Cuenta el primer enlace válido que abre: si después abre el de otra persona, sigue unida a ti.",
+      "p3": "Ganas el {porcentaje} % de lo que esa persona pague de verdad: {alcance, select, primero {solo su primer pago, sea una compra o una cuota} meses {cada compra y cada cuota durante sus primeros {meses} meses} other {cada compra de un curso y cada cuota de la membresía}}.",
+      "p4": "Tu propio enlace no cuenta para ti: ni con tu cuenta ni con otra cuenta con tu mismo correo. Los periodos de prueba gratuitos y los pagos de 0 € no generan comisión."
+    },
+    "s4": {
+      "titulo": "4. Plazo de garantía y devoluciones",
+      "p1": "Cada comisión queda pendiente {garantia} días desde el pago. Pasado ese plazo queda confirmada.",
+      "p2": "Si {academia} devuelve el pago entero antes de que cobres, la comisión se anula. Si devuelve una parte, la comisión se recorta en la misma proporción."
+    },
+    "s5": {
+      "titulo": "5. Cómo cobras",
+      "p1": "Como descuento en tu cuota: si {academia} tiene esta opción encendida y tú tienes una membresía activa, puedes usar lo confirmado como descuento en tu próxima cuota. Cada vez se descuenta como mucho el {tope} % de una cuota, contando el saldo que ya tengas a favor. Para el descuento no te pedimos ningún dato.",
+      "p2": "En dinero: {hayMinimo, select, si {cuando lo confirmado llegue a {minimo} puedes pedir el cobro} other {puedes pedir el cobro de lo confirmado cuando quieras}}. Te pedimos tu nombre completo, tu NIF o NIE (o el identificador fiscal de tu país) y tu cuenta bancaria (IBAN).",
+      "p3": "{academia} te paga por transferencia. Cuando lo marca como pagado, se genera un justificante en PDF con un número correlativo, que podéis descargar tú y {academia}. Didacta no practica ninguna retención sobre lo que cobras."
+    },
+    "s6": {
+      "titulo": "6. La factura de tu cuota cuando usas el descuento",
+      "p1": "Tu cuota se factura entera y el descuento figura como una línea aparte, «Pago con saldo de referidos». Lo que te cobra la tarjeta es la cuota menos ese saldo."
+    },
+    "s7": {
+      "titulo": "7. Si te das de baja",
+      "p1": "Si cancelas tu membresía y te queda saldo de referidos a favor sin usar, ese saldo se retira de tu cuenta de pago y vuelve a tu cartera como comisión confirmada, para que puedas cobrarlo en dinero. El movimiento queda registrado en «Lo que has ganado»."
+    },
+    "s8": {
+      "titulo": "8. Ventas devueltas después de cobrar",
+      "p1": "Si {academia} devuelve una venta cuya comisión ya cobraste (en dinero o como descuento), se crea un ajuste por devolución con el importe que corresponda. Ese ajuste se descuenta de lo siguiente que ganes.",
+      "p2": "Nunca te reclamaremos dinero. Si no vuelves a ganar nada, el ajuste se queda ahí. Lo verás en «Lo que has ganado» como «Ajuste por devolución»."
+    },
+    "s9": {
+      "titulo": "9. Tus datos",
+      "p1": "{academia} es la responsable de los datos del programa. Didacta los trata por encargo de {academia}.",
+      "p2": "Tus datos de cobro (nombre, NIF/NIE e IBAN) se guardan cifrados. {academia} solo ve lo necesario para pagarte y para emitir el justificante. No aparecen en los registros técnicos del servicio. De las personas que invitas solo ves sus iniciales, la fecha en que entraron y lo que te han generado."
+    },
+    "s10": {
+      "titulo": "10. Cambios y fin del programa",
+      "p1": "{academia} puede cambiar el porcentaje, los plazos o cerrar el programa. Los cambios no afectan a lo que ya has ganado: cada comisión conserva el porcentaje con el que nació.",
+      "p2": "Si cambian estas condiciones, publicaremos una versión nueva y te pediremos que la aceptes para seguir compartiendo tu enlace. Para cualquier duda sobre el programa o sobre un pago, escribe a {academia}."
+    }
+  },
+  "casilla": {
+    "aviso": "Antes de tener tu enlace, lee las condiciones del programa. Quien te paga es la academia, no Didacta.",
+    "texto": "Declaro que soy mayor de 18 años y acepto las condiciones del programa.",
+    "verCondiciones": "Leer las condiciones",
+    "activar": "Activar mi enlace",
+    "activando": "Activando…",
+    "error": "No se ha podido guardar. Vuelve a intentarlo."
+  }
+}

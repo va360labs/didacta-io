@@ -83,6 +83,8 @@ export interface MyModulesResponse {
   enabledCapabilities: string[];
   /** Ausente en una API anterior a la puerta: se trata como abierta. */
   subscriptionGate?: MySubscriptionGate;
+  /** Modo sencillo del aula. Ausente en una API anterior: modo completo. */
+  simpleMode?: boolean;
 }
 
 export interface ActiveSession {

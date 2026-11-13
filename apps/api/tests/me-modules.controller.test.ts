@@ -39,10 +39,13 @@ function makeTenantModules(items: Array<{ name: string; enabled: boolean }>) {
   };
 }
 
-function makePrisma(installedNames: string[] = []) {
+function makePrisma(installedNames: string[] = [], simpleMode?: boolean) {
   return {
     installedModule: {
       findMany: vi.fn().mockResolvedValue(installedNames.map((name) => ({ name }))),
+    },
+    tenant: {
+      findUnique: vi.fn().mockResolvedValue(simpleMode === undefined ? null : { simpleMode }),
     },
   };
 }
@@ -194,6 +197,31 @@ describe('MeModulesController · GET /me/modules', () => {
         ...([makeTenantModules([]), license, makePrisma()] as unknown as ServiceCtor),
       );
       expect((await ctrl.list(makeUser())).subscriptionGate.state).toBe('OPEN');
+    });
+  });
+
+  describe('modo sencillo', () => {
+    it('devuelve el modo del aula del token', async () => {
+      await license.load({ key: null });
+      const prisma = makePrisma([], true);
+      const ctrl = new MeModulesController(
+        ...([makeTenantModules([]), license, prisma] as unknown as ServiceCtor),
+      );
+      expect((await ctrl.list(makeUser())).simpleMode).toBe(true);
+      expect(prisma.tenant.findUnique).toHaveBeenCalledWith({
+        where: { id: 'tenant-1' },
+        select: { simpleMode: true },
+      });
+    });
+
+    it('un aula sin la marca (o sin fila) sigue en modo completo', async () => {
+      await license.load({ key: null });
+      for (const prisma of [makePrisma([], false), makePrisma()]) {
+        const ctrl = new MeModulesController(
+          ...([makeTenantModules([]), license, prisma] as unknown as ServiceCtor),
+        );
+        expect((await ctrl.list(makeUser())).simpleMode).toBe(false);
+      }
     });
   });
 });

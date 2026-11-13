@@ -19,7 +19,7 @@
  */
 
 import { apiFetch } from '@/lib/api-client';
-import { formatCurrency } from '@/lib/i18n/format';
+import { formatCentsExact } from '@/lib/i18n/format';
 import type { TranslatorLike } from '@/lib/i18n/labels';
 
 export type PaymentConnectionStatus = 'PENDING' | 'VERIFIED' | 'ERROR' | 'DISCONNECTED';
@@ -332,13 +332,8 @@ export const paymentConnectionsApi = {
  */
 export function formatAmount(unitAmount: number | null, currency: string | null): string {
   if (unitAmount === null) return '—';
-  const value = unitAmount / 100;
-  const cur = (currency ?? 'eur').toUpperCase();
-  try {
-    return formatCurrency(value, cur);
-  } catch {
-    return `${value.toFixed(2)} ${cur}`;
-  }
+  // Decimales según Stripe (`stripe-currencies.ts`), no `Intl`.
+  return formatCentsExact(unitAmount, (currency ?? 'eur').toUpperCase());
 }
 
 /** Deep-link a la suscripción en el dashboard de Stripe (test o live). */

@@ -10,6 +10,7 @@ export { manifest };
 export { ZoomLiveService } from './zoom-live.service.js';
 export {
   createSessionSchema,
+  externalJoinUrlSchema,
   listWebhookEventsQuerySchema,
   sessionStatusSchema,
   setManualAttendanceSchema,
@@ -43,6 +44,7 @@ export {
   SessionNotOpenForRegistrationError,
   ZoomApiError,
   ZoomLiveError,
+  ZoomNotConfiguredError,
 } from './errors.js';
 export {
   buildUrlValidationResponse,
@@ -61,6 +63,8 @@ export {
 export {
   buildZoomApiClient,
   encodeZoomMeetingId,
+  hasZoomCredentials,
+  zoomStubAllowed,
   RealZoomApiClient,
   StubZoomApiClient,
   type ZoomApiClient,

@@ -18,6 +18,7 @@
  */
 
 import { DEFAULT_LOCALE } from '@/i18n/config';
+import { minorPerMajor, stripeDecimals } from '@/lib/stripe-currencies';
 import { getBrowserTimeZone, getUserFormatPrefs } from './user-prefs';
 import type { TranslatorLike } from './labels';
 
@@ -176,10 +177,13 @@ export function formatCents(
   currency = 'EUR',
   opts?: Intl.NumberFormatOptions & FmtOverrides,
 ): string {
-  const whole = cents % 100 === 0;
-  return formatCurrency(cents / 100, currency, {
-    minimumFractionDigits: whole ? 0 : 2,
-    maximumFractionDigits: 2,
+  // Unidad mínima y decimales según STRIPE (`stripe-currencies.ts`), no `Intl`:
+  // 500 JPY son 500 yenes, y 3990000 HUF son 39.900 forintos.
+  const decimals = stripeDecimals(currency);
+  const whole = decimals === 0 || cents % 100 === 0;
+  return formatCurrency(cents / minorPerMajor(currency), currency, {
+    minimumFractionDigits: whole ? 0 : decimals,
+    maximumFractionDigits: decimals,
     ...opts,
   });
 }
@@ -193,27 +197,41 @@ export function formatCents(
  * y ahí "19 €" y "19,00 €" no se leen igual de un vistazo. No la unifiques con
  * `formatCents`.
  *
- * OJO: hoy no le queda ningún call-site. El único que tenía —el `amountLabel`
- * de `/admin/referidos`— pasó al `formatCents` canónico por decisión de
- * producto: las comisiones son copy de pantalla, no un cuadre contra un
- * sistema externo, y la otra cara del mismo programa (`/referidos`, la del
- * prescriptor) ya escribía "19 €". La regla que codifica esta función SIGUE
- * VIVA, pero escrita a mano en los cuatro formateadores que sí cuadran contra
- * fuera: `payment-connections.ts` y `modules/subscriptions/client.ts`
- * (formatAmount), `modules/billing/client.ts` (formatPrice) y
- * `modules/fundae/companies-client.ts` (formatCents). Es el sitio al que
- * unificarlos el día que se toquen; por eso no se borra.
+ * La usan los formateadores que cuadran contra Stripe: `payment-connections.ts`
+ * y `modules/subscriptions/client.ts` (formatAmount), `modules/billing/client.ts`
+ * (formatPrice) y la lista de precios de `/admin/billing/products`.
  *
- * No fuerza `minimumFractionDigits`: deja que Intl aplique los dígitos propios
- * de la divisa, que es lo que hacían los wrappers que sustituye (idéntico byte
- * a byte para EUR/USD/GBP y correcto para una divisa cero-decimal como JPY).
+ * Los decimales son los de STRIPE (`stripe-currencies.ts`), no los de `Intl`:
+ * idéntico para EUR/USD/GBP; en JPY 500 son 500 yenes; en HUF y COP Stripe
+ * cobra con dos decimales aunque `Intl` diga cero.
  */
 export function formatCentsExact(
   cents: number,
   currency = 'EUR',
   opts?: Intl.NumberFormatOptions & FmtOverrides,
 ): string {
-  return formatCurrency(cents / 100, currency, opts);
+  const decimals = stripeDecimals(currency);
+  return formatCurrency(cents / minorPerMajor(currency), currency, {
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+    ...opts,
+  });
+}
+
+/**
+ * Importe de Stripe (unidad mínima) + moneda → texto, con los decimales que
+ * marca STRIPE. Por defecto, la regla de `formatCents` (sin decimales si es
+ * redondo: «49 €», «49,90 €»); con `exact: true`, la de `formatCentsExact`
+ * («49,00 €»), para cifras que se cuadran contra el panel de Stripe.
+ */
+export function formatStripeMinor(
+  amount: number,
+  currency: string,
+  opts?: { exact?: boolean } & FmtOverrides,
+): string {
+  const code = currency.trim().toUpperCase();
+  const { exact, ...rest } = opts ?? {};
+  return exact ? formatCentsExact(amount, code, rest) : formatCents(amount, code, rest);
 }
 
 /**
@@ -237,4 +255,24 @@ export function formatDuration(
   if (total < 60) return t('durationMinutes', { minutes: mins });
   if (mins === 0) return t('durationHours', { hours });
   return t('durationHoursMinutes', { hours, minutes: mins });
+}
+
+/**
+ * Traductor de códigos de país ISO 3166-1 (`ES` → «España» / "Spain") en el
+ * idioma dado. Si el entorno no tiene `Intl.DisplayNames`, devuelve el código.
+ */
+export function regionNameFormatter(locale: string): (code: string) => string {
+  let names: Intl.DisplayNames | null = null;
+  try {
+    names = new Intl.DisplayNames([locale], { type: 'region' });
+  } catch {
+    names = null;
+  }
+  return (code: string) => {
+    try {
+      return names?.of(code.toUpperCase()) ?? code;
+    } catch {
+      return code;
+    }
+  };
 }

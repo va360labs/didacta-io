@@ -83,6 +83,7 @@
 
   "cobrosTitulo": "¿Vas a cobrar por tus cursos?",
   "cobrosCuerpo": "Puedes vender tus cursos con pago por tarjeta a través de Stripe. El dinero va directo a tu cuenta: nosotros no lo tocamos.",
+  "cobrosCuerpoConectar": "Conecta tus cobros y tus alumnos podrán pagarte con tarjeta. Son unos minutos y no tienes que pegar ninguna clave.",
   "cobrosNo": "No vendo cursos",
 
   "correoTitulo": "Los correos, con tu nombre",

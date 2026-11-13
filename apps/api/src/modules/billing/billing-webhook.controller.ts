@@ -8,6 +8,7 @@ import {
   Controller,
   HttpCode,
   NotFoundException,
+  Optional,
   Post,
   RawBodyRequest,
   Req,
@@ -18,14 +19,13 @@ import { Logger as PinoLogger } from 'nestjs-pino';
 import { StripeSdkAdapter, WebhookSignatureInvalidError } from '@didacta/mod-billing';
 import type { FastifyRequest } from 'fastify';
 import { extractClientContext } from '../../auth/client-context';
-import {
-  runAsTenant,
-  runGlobalWithoutTenant,
-  runSanctionedGlobalAccess,
-} from '../../tenancy/tenant-context.storage';
+import { runAsTenant, runSanctionedGlobalAccess } from '../../tenancy/tenant-context.storage';
 import { TenantResolverService } from '../../tenancy/tenant-resolver.service';
 import { ModuleRegistryService } from '../module-registry.service';
+import { PlatformObjectGuard } from '../payouts/platform-object-guard';
 import { PrismaAuditLogService } from '../prisma-audit-log.service';
+import { collectStripeEventClaims, dispatchStripeEventToBilling } from '../stripe-event-dispatch';
+import { PurchaseConsentService } from '../purchase-consent/purchase-consent.service';
 import { resolveStripeEventTenant } from '../stripe-webhook-tenant';
 import { TenantStripeResolverService } from '../tenant-stripe-resolver.service';
 import { BillingProvisioningService } from './billing-provisioning.service';
@@ -63,6 +63,17 @@ export class BillingWebhookController {
     private readonly stripeResolver: TenantStripeResolverService,
     private readonly auditLog: PrismaAuditLogService,
     private readonly logger: PinoLogger,
+    /**
+     * Solo existe con el modo plataforma encendido (lo provee `PayoutsModule`,
+     * global en ese modo). Sin él, este endpoint es el de siempre.
+     */
+    @Optional() private readonly platformObjects?: PlatformObjectGuard,
+    /**
+     * Confirmación por correo de la compra con la casilla aceptada (renuncia al
+     * desistimiento). Opcional solo para los tests que montan el controlador
+     * a mano; en la aplicación siempre está (módulo global).
+     */
+    @Optional() private readonly consents?: PurchaseConsentService,
   ) {}
 
   @Post('webhook')
@@ -144,7 +155,8 @@ export class BillingWebhookController {
     const ctx = extractClientContext(req);
     // 1) LOOKUP (sancionado, fuera de cualquier contexto de tenant): a qué
     //    tenants nombra o toca el evento. Solo lee.
-    const claims = await runGlobalWithoutTenant(() => billing.resolveWebhookTenantClaims(event));
+    const claims = await collectStripeEventClaims(event, { billing });
+    const platformObjects = this.platformObjects;
     // 2) DECISIÓN: el evento se procesa para el tenant cuyo secreto verificó la
     //    firma. Si nombra a otro, 403 + rastro, y aquí se acaba — antes de
     //    archivar el evento siquiera.
@@ -160,6 +172,10 @@ export class BillingWebhookController {
       logger: this.logger,
       host: hostStr,
       client: ctx,
+      namesPlatformObject: platformObjects
+        ? () => platformObjects.namesPlatformObject(event)
+        : undefined,
+      platformObjectErrorCode: 'BILLING_WEBHOOK_PLATFORM_OBJECT',
     });
     // El Host de este request es el de la API (Stripe), no el del frontend
     // del tenant — con el tenant ya resuelto, preferimos su dominio primario.
@@ -167,27 +183,17 @@ export class BillingWebhookController {
     // 3) PROCESADO: siempre bajo el contexto de ESE tenant (nunca sancionado:
     //    un evento sin dueño reconocible se archiva en el del dominio) y
     //    diciéndole al módulo cuál es, para que compruebe cada fila que toque.
-    await runAsTenant(
+    await dispatchStripeEventToBilling({
+      event,
+      parsedBody,
       tenantId,
-      () =>
-        billing.handleWebhookEvent(event, parsedBody, {
-          tenantId,
-          provisionUser: ({ email, name, locale }) =>
-            this.provisioning.provision({
-              // El tenant verificado, no el que devuelva el módulo.
-              tenantId,
-              email,
-              name,
-              // Idioma con el que compró, capturado al iniciar el checkout y
-              // transportado en la metadata de la session. El service lo valida
-              // y solo lo escribe si CREA la fila.
-              locale,
-              webBaseUrl,
-              ctx,
-            }),
-        }),
-      { traceLabel: 'billing-webhook' },
-    );
+      webBaseUrl,
+      ctx,
+      billing,
+      provisionBuyer: (args) => this.provisioning.provision(args),
+    });
+    // Pago confirmado: correo con el texto que aceptó el comprador. Nunca lanza.
+    await this.consents?.confirmCheckout(tenantId, event);
     return { received: true, type: event.type, id: event.id };
   }
 }

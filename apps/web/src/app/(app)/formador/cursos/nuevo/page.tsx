@@ -5,6 +5,8 @@
  * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
  */
 
+import { SimpleNewCourse } from '@/components/simple-course/simple-course-editor';
+import { useSimpleMode } from '@/lib/simple-mode';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
@@ -19,7 +21,14 @@ import type { Course } from '@/lib/courses';
  * (compartible, bookmarkable). El flujo principal desde /formador/cursos
  * usa un Dialog modal con el mismo `<NewCourseForm>`.
  */
+/** En modo sencillo, solo el título; si no, el formulario de siempre. */
 export default function NuevoCursoPage() {
+  const simple = useSimpleMode();
+  if (simple === null) return null;
+  return simple ? <SimpleNewCourse /> : <NuevoCursoCompleto />;
+}
+
+function NuevoCursoCompleto() {
   const t = useTranslations('formadorCursos');
   const router = useRouter();
 

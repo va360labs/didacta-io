@@ -30,5 +30,19 @@
   "VIDEO_BAD_REQUEST": "Vídeo no válido.",
   "VIDEO_FORBIDDEN": "No tienes acceso a este vídeo.",
   "VIDEO_RATE_LIMITED": "Has abierto demasiados vídeos distintos en poco tiempo. Vuelve a intentarlo más tarde.",
-  "SUBSCRIPTION_LOCKED": "El acceso a esta academia está en pausa."
+  "SUBSCRIPTION_LOCKED": "El acceso a esta academia está en pausa.",
+  "VIDEO_WATCH_QUOTA": "Esta academia ha llegado a su límite de horas de vídeo de este mes. Avisa a quien la gestiona.",
+  "VIDEO_UPLOAD_FORBIDDEN": "Solo quien gestiona los cursos puede subir vídeos.",
+  "VIDEO_UPLOAD_LESSON_NOT_FOUND": "No encontramos esa lección.",
+  "VIDEO_UPLOAD_LESSON_NOT_VIDEO": "Solo se puede subir un vídeo a una lección de tipo vídeo.",
+  "VIDEO_UPLOAD_NOT_FOUND": "No encontramos ese vídeo.",
+  "VIDEO_UPLOAD_NOT_RESUMABLE": "Esta subida ya terminó o se canceló.",
+  "VIDEO_UPLOAD_IN_USE": "Este vídeo está en una lección. Quítalo de la lección y guarda antes de borrarlo.",
+  "VIDEO_UPLOAD_BUSY": "Estamos preparando el espacio de vídeo de tu academia. Vuelve a intentarlo en unos segundos.",
+  "VIDEO_UPLOAD_PROVIDER_ERROR": "No se ha podido preparar la subida. Inténtalo de nuevo en un momento.",
+  "VIDEO_FILE_TOO_BIG": "Este vídeo pesa más de lo permitido (4 GB).",
+  "VIDEO_FILE_TOO_LONG": "Este vídeo dura más de lo permitido (2 h).",
+  "VIDEO_STORAGE_QUOTA": "Este vídeo no cabe en tu espacio de vídeo.",
+  "VIDEO_NOT_A_VIDEO": "Esto no parece un vídeo.",
+  "ADMIN_VIDEO_PROTECTION_PLATFORM_LIBRARY": "Los vídeos subidos a la academia ya van protegidos: no hace falta ninguna clave."
 }

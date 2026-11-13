@@ -1,0 +1,294 @@
+{
+  "description": "Importes verificados en el sandbox de Stripe de la plataforma el 2026-11-12 (cobro y transferencia separados, comisión del operador del 5 %). Todo en unidad mínima y en la divisa de liquidación del cargo. Los ids son de modo de prueba. Los casos de tarjeta se reproducen con tools/payments-sandbox/10-venta-unica.mjs.",
+  "capturedOn": "2026-11-12",
+  "livemode": false,
+  "platform": {
+    "country": "ES",
+    "defaultCurrency": "eur",
+    "apiVersion": "2026-10-28.endive",
+    "v2ApiVersion": "2026-10-28.preview"
+  },
+  "sales": [
+    {
+      "case": "t_eur100_obo_ES",
+      "presentmentAmount": 10000,
+      "presentmentCurrency": "eur",
+      "cardCountry": "ES",
+      "onBehalfOf": true,
+      "creatorCountry": "ES",
+      "gross": 10000,
+      "stripeFee": 175,
+      "feeBps": 500,
+      "platformFee": 500,
+      "creatorNet": 9325,
+      "currency": "eur",
+      "stripe": {
+        "paymentIntent": "pi_3UattpGVFsqqzpBi0RLVzYip",
+        "charge": "ch_3UattpGVFsqqzpBi0hGE6tTL",
+        "balanceTransaction": "txn_3UattpGVFsqqzpBi0538YvBR",
+        "transfer": "tr_3UattpGVFsqqzpBi0EbSWwpd"
+      }
+    },
+    {
+      "case": "t_eur100_obo_ES_tarjetaUS",
+      "presentmentAmount": 10000,
+      "presentmentCurrency": "eur",
+      "cardCountry": "US",
+      "onBehalfOf": true,
+      "creatorCountry": "ES",
+      "gross": 10000,
+      "stripeFee": 340,
+      "feeBps": 500,
+      "platformFee": 500,
+      "creatorNet": 9160,
+      "currency": "eur",
+      "stripe": {
+        "paymentIntent": "pi_3UattuGVFsqqzpBi1kY7UL2b",
+        "charge": "ch_3UattuGVFsqqzpBi1Mu1La2v",
+        "balanceTransaction": "txn_3UattuGVFsqqzpBi1xriq8gY",
+        "transfer": "tr_3UattuGVFsqqzpBi1AXaimln"
+      }
+    },
+    {
+      "case": "t_unica30_tarjeta_ES",
+      "presentmentAmount": 3000,
+      "presentmentCurrency": "eur",
+      "cardCountry": "ES",
+      "onBehalfOf": false,
+      "creatorCountry": "ES",
+      "gross": 3000,
+      "stripeFee": 70,
+      "feeBps": 500,
+      "platformFee": 150,
+      "creatorNet": 2780,
+      "currency": "eur",
+      "stripe": {
+        "paymentIntent": "pi_3UatnaGVFsqqzpBi2bfuyBYO",
+        "charge": "ch_3UatnaGVFsqqzpBi2OX1rB5N",
+        "balanceTransaction": "txn_3UatnaGVFsqqzpBi2LAjy0eB",
+        "transfer": "tr_3UatnaGVFsqqzpBi2WVWwr3U"
+      }
+    },
+    {
+      "case": "t_unica100_tarjeta_GB",
+      "presentmentAmount": 10000,
+      "presentmentCurrency": "eur",
+      "cardCountry": "GB",
+      "onBehalfOf": false,
+      "creatorCountry": "ES",
+      "gross": 10000,
+      "stripeFee": 275,
+      "feeBps": 500,
+      "platformFee": 500,
+      "creatorNet": 9225,
+      "currency": "eur",
+      "stripe": {
+        "paymentIntent": "pi_3UatnfGVFsqqzpBi0DgvpqIJ",
+        "charge": "ch_3UatnfGVFsqqzpBi0LhRQKhu",
+        "balanceTransaction": "txn_3UatnfGVFsqqzpBi07HhNhee",
+        "transfer": "tr_3UatnfGVFsqqzpBi0WKLorwx"
+      }
+    },
+    {
+      "case": "t_usd100_obo_US",
+      "presentmentAmount": 10000,
+      "presentmentCurrency": "usd",
+      "cardCountry": "US",
+      "onBehalfOf": true,
+      "creatorCountry": "US",
+      "gross": 10000,
+      "stripeFee": 320,
+      "feeBps": 500,
+      "platformFee": 500,
+      "creatorNet": 9180,
+      "currency": "usd",
+      "stripe": {
+        "paymentIntent": "pi_3UattzGVFsqqzpBi1ZKXnKDv",
+        "charge": "ch_3UattzGVFsqqzpBi1Nz7zHhh",
+        "balanceTransaction": "txn_3UattzGVFsqqzpBi1P5ndTpE",
+        "transfer": "tr_3UattzGVFsqqzpBi1n4v1AbR"
+      }
+    },
+    {
+      "case": "t_gbp100_obo_GB",
+      "presentmentAmount": 10000,
+      "presentmentCurrency": "gbp",
+      "cardCountry": "GB",
+      "onBehalfOf": true,
+      "creatorCountry": "GB",
+      "gross": 10000,
+      "stripeFee": 170,
+      "feeBps": 500,
+      "platformFee": 500,
+      "creatorNet": 9330,
+      "currency": "gbp",
+      "stripe": {
+        "paymentIntent": "pi_3Uatu9GVFsqqzpBi1n9TffdR",
+        "charge": "ch_3Uatu9GVFsqqzpBi1U6CrplJ",
+        "balanceTransaction": "txn_3Uatu9GVFsqqzpBi1gm5mMls",
+        "transfer": "tr_3Uatu9GVFsqqzpBi1gsuOwCN"
+      }
+    },
+    {
+      "case": "t_eur100_obo_US",
+      "presentmentAmount": 10000,
+      "presentmentCurrency": "eur",
+      "cardCountry": "ES",
+      "onBehalfOf": true,
+      "creatorCountry": "US",
+      "gross": 11085,
+      "stripeFee": 629,
+      "feeBps": 500,
+      "platformFee": 554,
+      "creatorNet": 9902,
+      "currency": "usd",
+      "stripe": {
+        "paymentIntent": "pi_3UatuEGVFsqqzpBi0UPys3IW",
+        "charge": "ch_3UatuEGVFsqqzpBi0sbcJL6K",
+        "balanceTransaction": "txn_3UatuEGVFsqqzpBi0lZl61d6",
+        "transfer": "tr_3UatuEGVFsqqzpBi0J4mYKYn"
+      }
+    },
+    {
+      "case": "t_usd100_creador_ES",
+      "presentmentAmount": 10000,
+      "presentmentCurrency": "usd",
+      "cardCountry": "US",
+      "onBehalfOf": false,
+      "creatorCountry": "ES",
+      "gross": 9021,
+      "stripeFee": 489,
+      "feeBps": 500,
+      "platformFee": 451,
+      "creatorNet": 8081,
+      "currency": "eur",
+      "stripe": {
+        "paymentIntent": "pi_3UatsmGVFsqqzpBi2PHUuICt",
+        "charge": "ch_3UatsmGVFsqqzpBi2L3lWo2F",
+        "balanceTransaction": "txn_3UatsmGVFsqqzpBi2sRLEnkK",
+        "transfer": "tr_3UatsmGVFsqqzpBi2W0eoKY7"
+      }
+    },
+    {
+      "case": "t_gbp100_creador_ES",
+      "presentmentAmount": 10000,
+      "presentmentCurrency": "gbp",
+      "cardCountry": "GB",
+      "onBehalfOf": false,
+      "creatorCountry": "ES",
+      "gross": 11971,
+      "stripeFee": 563,
+      "feeBps": 500,
+      "platformFee": 599,
+      "creatorNet": 10809,
+      "currency": "eur",
+      "stripe": {
+        "paymentIntent": "pi_3Uatt1GVFsqqzpBi2SS3ffyR",
+        "charge": "ch_3Uatt1GVFsqqzpBi2780QH1M",
+        "balanceTransaction": "txn_3Uatt1GVFsqqzpBi2akUUyvi",
+        "transfer": "tr_3Uatt1GVFsqqzpBi2GIwHA3v"
+      }
+    },
+    {
+      "case": "t_mxn2000_creador_ES",
+      "presentmentAmount": 200000,
+      "presentmentCurrency": "mxn",
+      "cardCountry": "MX",
+      "onBehalfOf": false,
+      "creatorCountry": "ES",
+      "gross": 9692,
+      "stripeFee": 524,
+      "feeBps": 500,
+      "platformFee": 485,
+      "creatorNet": 8683,
+      "currency": "eur",
+      "stripe": {
+        "paymentIntent": "pi_3UatsrGVFsqqzpBi2FhSPxa3",
+        "charge": "ch_3UatsrGVFsqqzpBi2rxlDfMI",
+        "balanceTransaction": "txn_3UatsrGVFsqqzpBi21GMX6Ui",
+        "transfer": "tr_3UatsrGVFsqqzpBi2UGa9HQ3"
+      }
+    },
+    {
+      "case": "t_brl500_creador_ES",
+      "presentmentAmount": 50000,
+      "presentmentCurrency": "brl",
+      "cardCountry": "BR",
+      "onBehalfOf": false,
+      "creatorCountry": "ES",
+      "gross": 8071,
+      "stripeFee": 440,
+      "feeBps": 500,
+      "platformFee": 404,
+      "creatorNet": 7227,
+      "currency": "eur",
+      "stripe": {
+        "paymentIntent": "pi_3UatswGVFsqqzpBi3Oc3P5U6",
+        "charge": "ch_3UatswGVFsqqzpBi3PO7Efuj",
+        "balanceTransaction": "txn_3UatswGVFsqqzpBi3UslPJNf",
+        "transfer": "tr_3UatswGVFsqqzpBi3UhTxzP3"
+      }
+    }
+  ],
+  "subscriptionInvoice": {
+    "case": "factura_membresia_29",
+    "presentmentAmount": 2900,
+    "presentmentCurrency": "eur",
+    "cardCountry": "ES",
+    "onBehalfOf": true,
+    "creatorCountry": "ES",
+    "gross": 2900,
+    "stripeFee": 69,
+    "feeBps": 500,
+    "platformFee": 145,
+    "creatorNet": 2686,
+    "currency": "eur",
+    "stripe": {
+      "invoice": "in_1UatoiGVFsqqzpBiAvOm3OUe",
+      "charge": "ch_3UatojGVFsqqzpBi1wnKzuX2",
+      "balanceTransaction": "txn_3UatojGVFsqqzpBi19cQJEf9",
+      "transfer": "tr_3UatojGVFsqqzpBi1pkmgyWi"
+    }
+  },
+  "proportionalReversal": {
+    "case": "t_reemb_parcial",
+    "gross": 10000,
+    "transferAmount": 9325,
+    "refundAmount": 4000,
+    "reversal": 3730,
+    "currency": "eur"
+  },
+  "dispute": {
+    "case": "t_disputa",
+    "gross": 10000,
+    "stripeFee": 340,
+    "transferAmount": 9160,
+    "disputeFee": 2000,
+    "reversal": 9160,
+    "platformLossIfNotRecovered": 2340,
+    "currency": "eur"
+  },
+  "countryErrors": {
+    "v1_recipient_mx": "The recipient ToS agreement is not supported for platforms in ES creating accounts in MX. See https://stripe.com/docs/connect/cross-border-payouts for more details.",
+    "v2_br": "Connected accounts in BR cannot be created by platforms in ES. Please contact us via https://support.stripe.com/contact if you need further assistance.",
+    "v1_br": "Connected accounts in BR cannot be created by platforms in ES. Please contact us via https://support.stripe.com/contact if you need further assistance.",
+    "v1_recipient_br": "The recipient ToS agreement is not supported for platforms in ES creating accounts in BR. See https://stripe.com/docs/connect/cross-border-payouts for more details.",
+    "v1_recipient_us": "The recipient ToS agreement is not supported for platforms in ES creating accounts in US. See https://stripe.com/docs/connect/cross-border-payouts for more details.",
+    "v1_recipient_gb": "The recipient ToS agreement is not supported for platforms in ES creating accounts in GB. See https://stripe.com/docs/connect/cross-border-payouts for more details.",
+    "v1_recipient_ch": "The recipient ToS agreement is not supported for platforms in ES creating accounts in CH. See https://stripe.com/docs/connect/cross-border-payouts for more details.",
+    "v1_recipient_ca": "The recipient ToS agreement is not supported for platforms in ES creating accounts in CA. See https://stripe.com/docs/connect/cross-border-payouts for more details.",
+    "v1_recipient_fr": "The recipient ToS agreement is not supported for platforms in ES creating accounts in FR. See https://stripe.com/docs/connect/cross-border-payouts for more details.",
+    "v2_ar": "Capability stripe_balance.stripe_transfers is not available in country AR.",
+    "v1_ar": "AR is not currently supported by Stripe.",
+    "v1_recipient_ar": "The recipient ToS agreement is not supported for platforms in ES creating accounts in AR. See https://stripe.com/docs/connect/cross-border-payouts for more details.",
+    "v2_co": "Capability stripe_balance.stripe_transfers is not available in country CO.",
+    "v1_co": "CO is not currently supported by Stripe.",
+    "v1_recipient_co": "The recipient ToS agreement is not supported for platforms in ES creating accounts in CO. See https://stripe.com/docs/connect/cross-border-payouts for more details.",
+    "v2_cl": "Capability stripe_balance.stripe_transfers is not available in country CL.",
+    "v1_cl": "CL is not currently supported by Stripe.",
+    "v1_recipient_cl": "The recipient ToS agreement is not supported for platforms in ES creating accounts in CL. See https://stripe.com/docs/connect/cross-border-payouts for more details.",
+    "v2_pe": "Capability stripe_balance.stripe_transfers is not available in country PE.",
+    "v1_pe": "PE is not currently supported by Stripe.",
+    "v1_recipient_pe": "PE is not currently supported by Stripe."
+  }
+}

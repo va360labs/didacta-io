@@ -134,7 +134,12 @@ export function SubscriptionTab() {
       setSubs((prev) =>
         prev.map((s) =>
           s.id === subId
-            ? { ...res.subscription, planName: s.planName, courseTitle: s.courseTitle }
+            ? {
+                ...res.subscription,
+                planName: s.planName,
+                courseTitle: s.courseTitle,
+                billingPortal: s.billingPortal,
+              }
             : s,
         ),
       );
@@ -165,7 +170,12 @@ export function SubscriptionTab() {
       setSubs((prev) =>
         prev.map((s) =>
           s.id === res.subscription.id
-            ? { ...res.subscription, planName: s.planName, courseTitle: s.courseTitle }
+            ? {
+                ...res.subscription,
+                planName: s.planName,
+                courseTitle: s.courseTitle,
+                billingPortal: s.billingPortal,
+              }
             : s,
         ),
       );
@@ -180,6 +190,24 @@ export function SubscriptionTab() {
       );
     } finally {
       setBusyId(null);
+    }
+  }
+
+  /** Portal de Stripe de una suscripción propia (tarjeta, facturas, baja). */
+  async function openSubscriptionPortal(subId: string) {
+    const token = authStorage.getAccessToken();
+    if (!token) return;
+    setPortalBusy(subId);
+    setActionError(null);
+    try {
+      const res = await subscriptionsApi.billingPortal(token, subId);
+      window.location.href = res.url;
+      // No reseteamos portalBusy: navegamos fuera de la app.
+    } catch (e) {
+      setActionError(
+        e instanceof ApiHttpError ? apiErrorMessage(e, tErrors) : t('subscription.portalError'),
+      );
+      setPortalBusy(null);
     }
   }
 
@@ -345,6 +373,16 @@ export function SubscriptionTab() {
             </CardHeader>
             <CardContent className="space-y-3">
               <div className="flex flex-wrap gap-2">
+                {sub.billingPortal && sub.status !== 'CANCELED' ? (
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={() => void openSubscriptionPortal(sub.id)}
+                    disabled={portalBusy === sub.id}
+                  >
+                    {portalBusy === sub.id ? t('subscription.opening') : t('subscription.manage')}
+                  </Button>
+                ) : null}
                 {isMembership && sub.status === 'TRIALING' && !sub.cancelAtPeriodEnd ? (
                   <Button
                     type="button"
@@ -481,7 +519,20 @@ function InvoicesList({ invoices }: { invoices: InvoiceRow[] }) {
         {invoices.map((inv) => (
           <li key={inv.id} className="flex flex-wrap items-center gap-3 p-3 text-sm">
             <span className="font-mono text-xs">{inv.stripeInvoiceId}</span>
-            <span>{formatCents(inv.amount, inv.currency.toUpperCase())}</span>
+            <span>
+              {formatCents(inv.totalCents ?? inv.amount, inv.currency.toUpperCase())}
+              {inv.creditAppliedCents ? (
+                <span
+                  className="block text-xs text-text-subtle"
+                  data-testid="factura-saldo-referidos"
+                >
+                  {t('subscription.saldoReferidos', {
+                    amount: formatCents(-inv.creditAppliedCents, inv.currency.toUpperCase()),
+                    paid: formatCents(inv.amount, inv.currency.toUpperCase()),
+                  })}
+                </span>
+              ) : null}
+            </span>
             <InvoiceStatusBadge status={inv.status} />
             <span className="text-text-muted">
               {formatDate(inv.periodStart)} – {formatDate(inv.periodEnd)}

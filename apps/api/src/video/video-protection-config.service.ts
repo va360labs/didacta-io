@@ -3,10 +3,11 @@
  * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
  */
 
-import { Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { PrismaTenantConfigService } from '../modules/prisma-tenant-config.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { BUNNY_GUID_RE, BUNNY_LIBRARY_ID_RE, BUNNY_LIBRARY_IN_URL_PATTERN } from './bunny-embed';
+import { VIDEO_CLOUD_LIBRARY, type CloudVideoLibrary } from './cloud/video-cloud.tokens';
 
 /** Scope del `tenant_setting`: la protección de vídeo es infra del host, no de un módulo. */
 export const VIDEO_PROTECTION_SCOPE = 'video-protection';
@@ -170,7 +171,18 @@ export class VideoProtectionConfigService {
   constructor(
     private readonly config: PrismaTenantConfigService,
     private readonly prisma: PrismaService,
+    /** Solo con la subida de vídeo de Didacta Cloud encendida. */
+    @Optional() @Inject(VIDEO_CLOUD_LIBRARY) private readonly cloud?: CloudVideoLibrary,
   ) {}
+
+  /**
+   * ¿Es la biblioteca de Didacta Cloud? Esa la firma el servidor con la clave
+   * del operador: no es del aula, no sale en su panel y el aula no puede
+   * guardarle una clave.
+   */
+  isPlatformLibrary(libraryId: string): boolean {
+    return Boolean(this.cloud && this.cloud.libraryId === libraryId);
+  }
 
   /** Qué protección toca aplicar a un vídeo de esta librería del tenant. */
   async resolveLibrary(tenantId: string, libraryId: string): Promise<LibraryProtection> {
@@ -267,6 +279,7 @@ export class VideoProtectionConfigService {
       this.librariesInUse(tenantId),
     ]);
     const ids = new Set<string>([...Object.keys(keys), ...inUse]);
+    for (const id of [...ids]) if (this.isPlatformLibrary(id)) ids.delete(id);
     const libraries = [...ids]
       .sort((a, b) => Number(a) - Number(b))
       .map((libraryId) => ({

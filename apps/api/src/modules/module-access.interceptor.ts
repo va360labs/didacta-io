@@ -117,7 +117,12 @@ export class ModuleAccessInterceptor implements NestInterceptor {
     return map;
   }
 
-  private async isEnabled(tenantId: string, moduleName: string): Promise<boolean> {
+  /**
+   * ¿Está activo `moduleName` en el aula? Público para quien expone
+   * capacidades de módulos por otro camino que `/modules/<slug>/…` (el
+   * servidor MCP de la puerta de agentes): mismo criterio y misma caché.
+   */
+  async isEnabled(tenantId: string, moduleName: string): Promise<boolean> {
     const cacheKey = this.key(tenantId, moduleName);
     const cached = this.cache.get(cacheKey);
     const now = Date.now();

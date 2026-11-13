@@ -15,11 +15,12 @@ import {
   Put,
   Query,
   Req,
+  Res,
   UnauthorizedException,
   UseGuards,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
-import type { FastifyRequest } from 'fastify';
+import type { FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { REFERRAL_SCOPES } from '@didacta/mod-referrals';
 import { CurrentUser } from '../../auth/decorators';
@@ -62,8 +63,28 @@ const configSchema = z
     minPayoutCents: z.number().int().min(0).max(100_000_000),
     requireActiveMembership: z.boolean(),
     memberCopy: z.string().trim().max(2000).nullable(),
+    allowCreditRedemption: z.boolean(),
   })
   .partial();
+
+const acceptTermsSchema = z.object({
+  /** Versión que el alumno tenía delante al marcar la casilla. */
+  version: z.string().trim().min(1).max(40),
+  /** «Declaro que soy mayor de 18 años y acepto las condiciones del programa». */
+  adult: z.literal(true),
+});
+
+/** Datos para cobrar en dinero. El formato fino lo valida el dominio (`normalizePayee`). */
+const payeeSchema = z.object({
+  fullName: z.string().max(200),
+  country: z.string().max(4),
+  taxId: z.string().max(40),
+  iban: z.string().max(64),
+});
+
+const markPaidSchema = z.object({
+  externalReference: z.string().trim().min(3).max(200),
+});
 
 const listCommissionsSchema = z.object({
   status: z.enum(['PENDING', 'APPROVED', 'PAID', 'REVOKED']).optional(),
@@ -104,6 +125,80 @@ export class ReferralsController {
     return { code, url: `${base}/unete?ref=${encodeURIComponent(code)}` };
   }
 
+  @Post('me/terms')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @HttpCode(200)
+  @ApiOperation({
+    summary:
+      'El alumno declara ser mayor de 18 años y acepta la versión vigente de las condiciones del programa. Se guardan la versión y la fecha. Sin esto no hay enlace ni se atribuyen comisiones. 403 REFERRALS_TERMS_REQUIRED si la versión no es la vigente.',
+  })
+  async acceptTerms(
+    @CurrentUser() user: SessionClaims | undefined,
+    @Body(new ZodValidationPipe(acceptTermsSchema)) dto: z.infer<typeof acceptTermsSchema>,
+  ) {
+    const u = this.requireUser(user);
+    return this.registry
+      .getReferralsService()
+      .acceptTerms(u.tenantId, u.sub, { version: dto.version, adult: dto.adult });
+  }
+
+  @Get('me/payee')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary:
+      'Datos del alumno para cobrar en dinero, ENMASCARADOS (NIF e IBAN con solo los 4 últimos). null si no los ha dado.',
+  })
+  async myPayee(@CurrentUser() user: SessionClaims | undefined) {
+    const u = this.requireUser(user);
+    return { payee: await this.registry.getReferralsService().payeeMasked(u.tenantId, u.sub) };
+  }
+
+  @Put('me/payee')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary:
+      'Guarda los datos para cobrar en dinero (nombre completo, país, NIF/NIE o identificador fiscal, IBAN), cifrados. 422 REFERRALS_PAYEE_INVALID con los campos que fallan (nunca sus valores).',
+  })
+  async savePayee(
+    @CurrentUser() user: SessionClaims | undefined,
+    @Body(new ZodValidationPipe(payeeSchema)) dto: z.infer<typeof payeeSchema>,
+  ) {
+    const u = this.requireUser(user);
+    return { payee: await this.registry.getReferralsService().savePayee(u.tenantId, u.sub, dto) };
+  }
+
+  @Post('me/payouts')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @HttpCode(200)
+  @ApiOperation({
+    summary:
+      'El alumno pide el cobro en dinero de lo confirmado. Necesita datos de cobro y llegar al mínimo del aula. 409 si ya hay uno pedido o faltan los datos.',
+  })
+  async requestPayout(@CurrentUser() user: SessionClaims | undefined) {
+    const u = this.requireUser(user);
+    return this.registry.getReferralsService().requestCashPayout(u.tenantId, u.sub);
+  }
+
+  @Get('me/payouts/:id/receipt')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Justificante en PDF de un cobro en dinero pagado del propio alumno.' })
+  async myReceipt(
+    @CurrentUser() user: SessionClaims | undefined,
+    @Param('id') id: string,
+    @Res() reply: FastifyReply,
+  ) {
+    const u = this.requireUser(user);
+    const { filename, pdf } = await this.registry
+      .getReferralsService()
+      .receiptPdf(u.tenantId, id, { referrerUserId: u.sub });
+    this.sendPdf(reply, filename, pdf);
+  }
+
   @Get('me/stats')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
@@ -114,6 +209,31 @@ export class ReferralsController {
   async myStats(@CurrentUser() user: SessionClaims | undefined) {
     const u = this.requireUser(user);
     return this.registry.getReferralsService().memberStats(u.tenantId, u.sub);
+  }
+
+  @Get('me/invitees')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary:
+      'Invitados del miembro (solo los suyos, de su aula): iniciales, fecha de entrada, estado (trial|paying|bought_course|cancelled|joined) y comisión generada no anulada. Nunca devuelve nombre ni correo.',
+  })
+  async myInvitees(@CurrentUser() user: SessionClaims | undefined) {
+    const u = this.requireUser(user);
+    return this.registry.getReferralsService().memberInvitees(u.tenantId, u.sub);
+  }
+
+  @Post('me/redeem-credit')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @HttpCode(200)
+  @ApiOperation({
+    summary:
+      'Canjea lo ganado (comisiones aprobadas sin cobrar) como descuento en la próxima cuota de la membresía: abono en el saldo de cliente de Stripe. Idempotente: un canje a medias se termina con la misma clave. 403 sin membresía activa o con la opción apagada; 409 si no hay nada que canjear.',
+  })
+  async redeemCredit(@CurrentUser() user: SessionClaims | undefined) {
+    const u = this.requireUser(user);
+    return this.registry.getReferralsService().redeemAsCredit(u.tenantId, u.sub);
   }
 
   // ---------------- Público (clics) ----------------
@@ -144,6 +264,16 @@ export class ReferralsController {
       const { attributionWindowDays } = await service.getConfig(tenantId);
       return { registered, attributionWindowDays };
     });
+  }
+
+  @Get('public/terms')
+  @ApiOperation({
+    summary:
+      'Condiciones públicas del programa de referidos del aula (tenant por Host): versión vigente y cifras reales (porcentaje, días de atribución y de garantía, mínimo de cobro, tope del descuento). Sin sesión.',
+  })
+  async publicTerms(@Req() req: FastifyRequest) {
+    const tenantId = await this.resolveTenantId(req);
+    return runAsTenant(tenantId, () => this.registry.getReferralsService().publicTerms(tenantId));
   }
 
   // ---------------- Admin ----------------
@@ -220,6 +350,52 @@ export class ReferralsController {
     return { ok: true };
   }
 
+  @Get('admin/cash-payouts')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary:
+      'Cobros en dinero del aula (pedidos y pagados) con lo necesario para pagar: nombre, identificador fiscal e IBAN.',
+  })
+  async listCashPayouts(@CurrentUser() user: SessionClaims | undefined) {
+    const u = this.requireAdmin(user);
+    return { payouts: await this.registry.getReferralsService().listCashPayouts(u.tenantId) };
+  }
+
+  @Post('admin/cash-payouts/:id/paid')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @HttpCode(200)
+  @ApiOperation({
+    summary:
+      'El creador marca pagado un cobro pedido, con la referencia de la transferencia: la liquidación pasa a DONE y sus comisiones a PAID.',
+  })
+  async markPaid(
+    @CurrentUser() user: SessionClaims | undefined,
+    @Param('id') id: string,
+    @Body(new ZodValidationPipe(markPaidSchema)) dto: z.infer<typeof markPaidSchema>,
+  ) {
+    const u = this.requireAdmin(user);
+    return this.registry.getReferralsService().markCashPayoutPaid(u.tenantId, id, {
+      externalReference: dto.externalReference,
+      actorId: u.sub,
+    });
+  }
+
+  @Get('admin/cash-payouts/:id/receipt')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Justificante en PDF de un cobro en dinero pagado del aula.' })
+  async adminReceipt(
+    @CurrentUser() user: SessionClaims | undefined,
+    @Param('id') id: string,
+    @Res() reply: FastifyReply,
+  ) {
+    const u = this.requireAdmin(user);
+    const { filename, pdf } = await this.registry.getReferralsService().receiptPdf(u.tenantId, id);
+    this.sendPdf(reply, filename, pdf);
+  }
+
   @Post('admin/payouts')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
@@ -241,6 +417,15 @@ export class ReferralsController {
   }
 
   // ---------------- Helpers ----------------
+
+  private sendPdf(reply: FastifyReply, filename: string, pdf: Buffer) {
+    void reply
+      .header('Content-Type', 'application/pdf')
+      .header('Content-Disposition', `attachment; filename="${filename}"`)
+      .header('Content-Length', String(pdf.length))
+      .header('Cache-Control', 'private, no-store')
+      .send(pdf);
+  }
 
   private requireUser(user: SessionClaims | undefined): SessionClaims {
     if (!user) throw new UnauthorizedException();

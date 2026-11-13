@@ -15,6 +15,7 @@ import { LICENSE_CAPABILITIES, LicenseService } from '@didacta/license-sdk';
 import { type AdminActor, auditActorId, auditActorTrace } from '../auth/admin-actor';
 import type { ClientContext } from '../auth/client-context';
 import { PasswordResetService } from '../auth/password-reset.service';
+import { PayoutsRuntime } from '../modules/payouts/payouts-runtime.service';
 import { TenantStripeResolverService } from '../modules/tenant-stripe-resolver.service';
 import { PrismaAuditLogService } from '../modules/prisma-audit-log.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -23,6 +24,14 @@ import { SubscriptionGateService } from '../tenancy/subscription-gate.service';
 import { runGlobalWithoutTenant } from '../tenancy/tenant-context.storage';
 
 const NO_CTX: ClientContext = { ip: null, userAgent: null };
+
+/** Una regla automática del servidor (no una persona ni el plano de control). */
+interface SystemActor {
+  kind: 'system';
+  /** Qué regla actúa (`video-inactivity`). */
+  job: string;
+  metadata: Record<string, unknown>;
+}
 
 const SLUG_RE = /^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$/;
 const HOSTNAME_RE = /^[a-z0-9.-]{1,253}$/;
@@ -126,6 +135,9 @@ export class AdminTenantsService {
     // Para avisar de que la cuenta de Stripe de instancia deja de heredarse al
     // pasar de una aula a varias. Opcional por lo mismo que el anterior.
     @Optional() private readonly stripeResolver?: TenantStripeResolverService,
+    // Cobros de plataforma (solo existe con el modo encendido): al archivar un
+    // aula se desconectan sus cobros (E6).
+    @Optional() private readonly payouts?: PayoutsRuntime,
   ) {}
 
   /**
@@ -292,6 +304,7 @@ export class AdminTenantsService {
       adminEmail: string;
       adminName?: string;
       primaryHostname: string;
+      simpleMode?: boolean;
     },
     webBaseUrl: string,
     ctx: ClientContext = NO_CTX,
@@ -314,6 +327,7 @@ export class AdminTenantsService {
       adminEmail: string;
       adminName?: string;
       primaryHostname: string;
+      simpleMode?: boolean;
     },
     webBaseUrl: string,
     ctx: ClientContext,
@@ -375,6 +389,7 @@ export class AdminTenantsService {
           slug: dto.slug,
           name: dto.name,
           status: 'ACTIVE',
+          simpleMode: resolveSimpleMode(actor, dto.simpleMode),
         },
       });
       await tx.tenantDomain.create({
@@ -503,8 +518,25 @@ export class AdminTenantsService {
     return runGlobalWithoutTenant(() => this.setStatusGlobal(actor, id, status, ctx));
   }
 
+  /**
+   * Archiva un aula por una regla automática del servidor (sin persona ni
+   * credencial detrás): hoy, la política de inactividad del vídeo de Didacta
+   * Cloud. Hace EXACTAMENTE lo mismo que archivar desde el panel (cierra las
+   * sesiones, desconecta los cobros, audita); en el audit log el actor queda
+   * vacío y `metadata` dice qué regla fue (`actorKind: 'system'`, `job`).
+   */
+  async archiveBySystem(
+    id: string,
+    job: string,
+    metadata: Record<string, unknown> = {},
+  ): Promise<TenantListItem> {
+    return runGlobalWithoutTenant(() =>
+      this.setStatusGlobal({ kind: 'system', job, metadata }, id, 'ARCHIVED', NO_CTX),
+    );
+  }
+
   private async setStatusGlobal(
-    actor: AdminActor,
+    actor: AdminActor | SystemActor,
     id: string,
     status: 'ACTIVE' | 'SUSPENDED' | 'ARCHIVED',
     ctx: ClientContext,
@@ -528,13 +560,44 @@ export class AdminTenantsService {
       }
     });
 
+    // Baja del creador (E6): sin ventas nuevas y sus suscripciones a fin de
+    // periodo. La cuenta de Stripe no se cierra (disputas: 120 días) y lo
+    // pendiente se le sigue pagando. Un fallo aquí no deshace el archivado:
+    // queda en el log y se puede repetir desde el panel del aula.
+    let payoutsOffboarding: Record<string, unknown> | null = null;
+    if (status === 'ARCHIVED' && t.status !== 'ARCHIVED' && this.payouts) {
+      try {
+        const result = await this.payouts.offboarding.disconnect(id, {
+          reason: 'tenant_archived',
+        });
+        payoutsOffboarding = {
+          changed: result.changed,
+          subscriptionsScheduled: result.subscriptionsScheduled,
+          subscriptionsFailed: result.subscriptionsFailed,
+        };
+      } catch (err) {
+        payoutsOffboarding = { error: err instanceof Error ? err.message.slice(0, 200) : 'error' };
+        this.logger.error(
+          { err, tenantId: id },
+          'payouts.offboarding_failed: no se pudieron desconectar los cobros del aula archivada',
+        );
+      }
+    }
+
     await this.auditLog.record({
       tenantId: id,
-      actorId: auditActorId(actor),
+      actorId: actor.kind === 'system' ? null : auditActorId(actor),
       action: `admin.tenant.status_changed.${status.toLowerCase()}`,
       resourceType: 'tenant',
       resourceId: id,
-      metadata: { previousStatus: t.status, newStatus: status, ...auditActorTrace(actor) },
+      metadata: {
+        previousStatus: t.status,
+        newStatus: status,
+        ...(payoutsOffboarding ? { payoutsOffboarding } : {}),
+        ...(actor.kind === 'system'
+          ? { actorKind: 'system', job: actor.job, ...actor.metadata }
+          : auditActorTrace(actor)),
+      },
       ip: ctx.ip ?? undefined,
       userAgent: ctx.userAgent ?? undefined,
     });
@@ -763,4 +826,17 @@ export class AdminTenantsService {
     });
     return this.getDetail(tenantId);
   }
+}
+
+/**
+ * ¿Nace el aula en modo sencillo?
+ *
+ * Lo pedido explícitamente manda. Sin pedirlo: las aulas que crea el plano de
+ * control del SaaS (Didacta Cloud, credencial de provisioning) nacen en modo
+ * sencillo, y las que crea un super_admin de una instalación propia, en modo
+ * completo, que es lo que tenían todas antes de existir el ajuste.
+ */
+export function resolveSimpleMode(actor: AdminActor, requested: boolean | undefined): boolean {
+  if (requested !== undefined) return requested;
+  return actor.kind === 'provisioning';
 }

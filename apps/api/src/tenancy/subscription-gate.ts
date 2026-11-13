@@ -134,6 +134,7 @@ export const SUBSCRIPTION_GATE_EXEMPT: readonly ExemptRule[] = [
   { method: 'POST', path: '/modules/subscriptions/webhook' },
   { method: 'POST', path: '/modules/payment-connections/woo-webhook' },
   { method: 'POST', path: '/webhooks/zoom' },
+  { method: 'POST', path: '/video/bunny/webhook' },
 ];
 
 const API_PREFIX = '/api/v1';

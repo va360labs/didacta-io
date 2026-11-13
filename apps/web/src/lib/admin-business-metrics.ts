@@ -13,6 +13,19 @@ export interface WeeklyPoint {
   value: number;
 }
 
+/**
+ * Ventas de UNA moneda. El API nunca suma monedas distintas: un aula que cobra
+ * en EUR y CHF recibe dos entradas. Importes en la unidad mínima de la moneda
+ * según Stripe (céntimos en EUR; yenes en JPY). Orden: la moneda con más
+ * cobros primero y, a igualdad, alfabético.
+ */
+export interface CurrencyRevenue {
+  /** ISO 4217 en minúsculas (`eur`, `chf`…). */
+  currency: string;
+  totalMinor30d: number;
+  weekly: WeeklyPoint[];
+}
+
 export interface BusinessMetrics {
   generatedAt: string;
   nps: {
@@ -22,7 +35,8 @@ export interface BusinessMetrics {
     passives: number;
     detractors: number;
   };
-  revenue: { totalCents30d: number; currency: string; weekly: WeeklyPoint[] };
+  /** `byCurrency` vacío si no hubo cobros en las últimas 12 semanas. */
+  revenue: { byCurrency: CurrencyRevenue[] };
   arrears: { subscriptions: number; external: number; total: number };
   members: { newMembers30d: number; cancellations30d: number; weeklySignups: WeeklyPoint[] };
   connections: { active7d: number; active30d: number; totalActive: number };

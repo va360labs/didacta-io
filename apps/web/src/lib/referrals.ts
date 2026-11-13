@@ -26,10 +26,17 @@ export interface ReferralsConfig {
   minPayoutCents: number;
   requireActiveMembership: boolean;
   memberCopy: string | null;
+  /** El alumno con membresía puede cobrar lo ganado como descuento en su cuota. */
+  allowCreditRedemption: boolean;
 }
 
 export interface ReferralCommissionRow {
   id: string;
+  /**
+   * COMMISSION = por una venta; CREDIT_RETURN = descuento sin usar devuelto
+   * al darse de baja; ADJUSTMENT = ajuste por devolución (negativo).
+   */
+  kind?: 'COMMISSION' | 'CREDIT_RETURN' | 'ADJUSTMENT';
   amountCents: number;
   baseAmountCents: number;
   currency: string;
@@ -43,7 +50,73 @@ export interface ReferralPayoutRow {
   totalCents: number;
   currency: string;
   externalReference: string;
+  /**
+   * CASH = pago aparte; CREDIT = descuento en la cuota; CREDIT_REVERSAL =
+   * descuento sin usar retirado al darse de baja (importe negativo).
+   */
+  method?: 'CASH' | 'CREDIT' | 'CREDIT_REVERSAL';
+  /** REQUESTED = cobro en dinero pedido, aún sin pagar. */
+  status?: 'PENDING' | 'REQUESTED' | 'DONE';
+  /** Cobro en dinero: cuándo lo marcó pagado el creador. */
+  paidAt?: string | null;
+  /** Justificante correlativo del aula (cobro en dinero pagado). */
+  receiptNumber?: number | null;
   createdAt: string;
+}
+
+/** Datos de cobro del alumno, ENMASCARADOS (lo que ve él). */
+export interface PayeeMasked {
+  fullName: string;
+  country: string;
+  taxIdMasked: string;
+  ibanMasked: string;
+  updatedAt: string | null;
+}
+
+export interface PayeeInput {
+  fullName: string;
+  country: string;
+  taxId: string;
+  iban: string;
+}
+
+/** Un cobro en dinero, para el creador: con lo necesario para pagar. */
+export interface AdminCashPayout {
+  id: string;
+  referrerUserId: string;
+  totalCents: number;
+  currency: string;
+  status: 'REQUESTED' | 'DONE';
+  receiptNumber: number | null;
+  externalReference: string | null;
+  requestedAt: string;
+  paidAt: string | null;
+  payee: { fullName: string; country: string; taxId: string; iban: string } | null;
+}
+
+/** Lo que el alumno puede usar como descuento en su próxima cuota. */
+export interface MemberCreditView {
+  enabled: boolean;
+  availableCents: number;
+  currency: string | null;
+  maxCents: number;
+  pending: boolean;
+}
+
+export interface RedeemCreditResult {
+  payoutId: string;
+  totalCents: number;
+  currency: string;
+  count: number;
+  stripeBalanceTransactionId: string;
+}
+
+export interface ReferralTermsStatus {
+  /** Aceptó la versión vigente. */
+  accepted: boolean;
+  acceptedVersion: string | null;
+  acceptedAt: string | null;
+  currentVersion: string;
 }
 
 export interface MemberReferralStats {
@@ -55,11 +128,45 @@ export interface MemberReferralStats {
   minPayoutCents: number;
   attributionWindowDays: number;
   code: string | null;
+  /** Casilla «mayor de 18 y acepto las condiciones»: sin ella no hay enlace. */
+  terms?: ReferralTermsStatus;
+  /** Lo que puede cobrar ya: confirmado y sin liquidar (neto de ajustes). */
+  availableCents?: number;
+  /** Datos para cobrar en dinero, enmascarados (null si no los ha dado). */
+  payee?: PayeeMasked | null;
+  /** La instancia puede guardar datos de cobro (cobro en dinero disponible). */
+  cashPayoutAvailable?: boolean;
   clicks: number;
   referrals: number;
   totals: { pendingCents: number; approvedCents: number; paidCents: number };
   commissions: ReferralCommissionRow[];
   payouts: ReferralPayoutRow[];
+  credit?: MemberCreditView;
+}
+
+/**
+ * Estado de un invitado (lo deriva el servidor):
+ * trial = en prueba; paying = suscripción viva (ACTIVE/PAST_DUE);
+ * bought_course = compra suelta sin suscripción viva; cancelled = tuvo
+ * suscripción y ya no; joined = nada de lo anterior.
+ */
+export type InviteeState = 'trial' | 'paying' | 'bought_course' | 'cancelled' | 'joined';
+
+/** Un invitado: solo iniciales, nunca nombre ni correo. */
+export interface MemberInvitee {
+  id: string;
+  initials: string;
+  joinedAt: string;
+  state: InviteeState;
+  /** Comisiones no anuladas que ha generado, en céntimos. */
+  generatedCents: number;
+  currency: string;
+}
+
+export interface MemberInvitees {
+  /** Invitados con la suscripción viva ahora mismo. */
+  payingNow: number;
+  invitees: MemberInvitee[];
 }
 
 export interface AdminCommissionRow extends ReferralCommissionRow {
@@ -100,6 +207,44 @@ export const referralsApi = {
     return apiFetch<MemberReferralStats>(`${BASE}/me/stats`, { method: 'GET' }, withAuth());
   },
 
+  /** Usa lo ganado como descuento en la próxima cuota (saldo de cliente de Stripe). */
+  /** «Declaro que soy mayor de 18 años y acepto las condiciones del programa». */
+  async acceptTerms(version: string): Promise<{ version: string; acceptedAt: string }> {
+    return apiFetch(
+      `${BASE}/me/terms`,
+      { method: 'POST', body: JSON.stringify({ version, adult: true }) },
+      withAuth(),
+    );
+  },
+
+  /** Guarda los datos para cobrar en dinero (se guardan cifrados). */
+  async savePayee(input: PayeeInput): Promise<{ payee: PayeeMasked }> {
+    return apiFetch(`${BASE}/me/payee`, { method: 'PUT', body: JSON.stringify(input) }, withAuth());
+  },
+
+  /** Pide el cobro en dinero de lo confirmado. */
+  async requestPayout(): Promise<{ payoutId: string; totalCents: number; currency: string }> {
+    return apiFetch(`${BASE}/me/payouts`, { method: 'POST', body: '{}' }, withAuth());
+  },
+
+  async redeemCredit(): Promise<RedeemCreditResult> {
+    return apiFetch<RedeemCreditResult>(
+      `${BASE}/me/redeem-credit`,
+      { method: 'POST', body: JSON.stringify({}) },
+      withAuth(),
+    );
+  },
+
+  /** Tus invitados: iniciales, fecha, estado y lo que han generado. */
+  async myInvitees(): Promise<MemberInvitees> {
+    return apiFetch<MemberInvitees>(`${BASE}/me/invitees`, { method: 'GET' }, withAuth());
+  },
+
+  /** Condiciones públicas del programa del aula (sin sesión, tenant por dominio). */
+  async publicTerms(): Promise<ReferralsPublicTerms> {
+    return apiFetch<ReferralsPublicTerms>(`${BASE}/public/terms`, { method: 'GET' });
+  },
+
   /** Registro público de clic (best-effort, sin sesión). */
   async track(code: string): Promise<{ registered: boolean; attributionWindowDays: number }> {
     return apiFetch<{ registered: boolean; attributionWindowDays: number }>(`${BASE}/track`, {
@@ -108,6 +253,51 @@ export const referralsApi = {
     });
   },
 };
+
+/** Página pública con las condiciones del programa (es/en según el idioma). */
+export const REFERRAL_TERMS_PATH = '/condiciones-referidos';
+
+export interface ReferralsPublicTerms {
+  version: string;
+  active: boolean;
+  commissionBps: number;
+  scope: 'FIRST_PAYMENT' | 'RECURRING';
+  recurringMonths: number | null;
+  attributionWindowDays: number;
+  guaranteeDays: number;
+  minPayoutCents: number;
+  allowCreditRedemption: boolean;
+  creditMaxSharePercent: number;
+}
+
+/**
+ * Descarga el justificante en PDF de un cobro en dinero (con la sesión: no se
+ * puede enlazar a pelo). `admin` = la ruta del creador.
+ */
+export async function downloadReferralReceipt(
+  payoutId: string,
+  receiptNumber: number,
+  admin = false,
+): Promise<void> {
+  const path = admin
+    ? `${BASE}/admin/cash-payouts/${encodeURIComponent(payoutId)}/receipt`
+    : `${BASE}/me/payouts/${encodeURIComponent(payoutId)}/receipt`;
+  const res = await fetch(path, { headers: { Authorization: `Bearer ${withAuth()}` } });
+  if (!res.ok) {
+    throw new ApiHttpError({
+      message: `No se pudo descargar el justificante (${res.status})`,
+      status: res.status,
+    });
+  }
+  const url = URL.createObjectURL(await res.blob());
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `justificante-${String(receiptNumber).padStart(4, '0')}.pdf`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 10_000);
+}
 
 // ── Captura client-side del enlace (?ref=) ───────────────────────────────────
 
@@ -155,6 +345,20 @@ export function getStoredReferralCode(): string | null {
 // ── Admin ────────────────────────────────────────────────────────────────────
 
 export const referralsAdminApi = {
+  /** Cobros en dinero (pedidos y pagados) con lo necesario para pagar. */
+  async listCashPayouts(): Promise<{ payouts: AdminCashPayout[] }> {
+    return apiFetch(`${BASE}/admin/cash-payouts`, { method: 'GET' }, withAuth());
+  },
+
+  /** Marca pagado un cobro pedido, con la referencia de la transferencia. */
+  async markCashPayoutPaid(id: string, externalReference: string): Promise<void> {
+    await apiFetch(
+      `${BASE}/admin/cash-payouts/${encodeURIComponent(id)}/paid`,
+      { method: 'POST', body: JSON.stringify({ externalReference }) },
+      withAuth(),
+    );
+  },
+
   async getConfig(): Promise<ReferralsConfig> {
     return apiFetch<ReferralsConfig>(`${BASE}/admin/config`, { method: 'GET' }, withAuth());
   },

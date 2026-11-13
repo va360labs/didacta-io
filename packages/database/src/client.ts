@@ -37,3 +37,14 @@ export type {
 export type { TenantDomainSurface } from '@prisma/client';
 /// Puerta de suscripcion del tenant. Lo consume `apps/api/src/tenancy`.
 export type { SubscriptionGateState } from '@prisma/client';
+/// Enumerados de mod.payouts (cobros de plataforma). Los consumen el modulo
+/// `modules/payouts` y el resolver de modo de cobro de `apps/api`.
+export type {
+  PayoutsAccountStatus,
+  PayoutsSaleStatus,
+  PayoutsSaleSourceKind,
+  PayoutsLedgerEntryType,
+  PayoutsDebtReason,
+  PayoutsDebtStatus,
+  PayoutsRefundReversalStatus,
+} from '@prisma/client';

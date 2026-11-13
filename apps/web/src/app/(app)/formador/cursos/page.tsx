@@ -5,6 +5,8 @@
  * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
  */
 
+import { SimpleCoursesList } from '@/components/simple-gestion/simple-courses-list';
+import { useSimpleMode } from '@/lib/simple-mode';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
@@ -21,7 +23,14 @@ import { formatDate } from '@/lib/i18n/format';
 import { coursesApi, type Course } from '@/lib/courses';
 import { richHtmlToPlainText } from '@/lib/sanitize-html';
 
+/** En modo sencillo, la variante sencilla; en modo completo, la de siempre. */
 export default function FormadorCoursesPage() {
+  const simple = useSimpleMode();
+  if (simple === null) return null;
+  return simple ? <SimpleCoursesList /> : <FormadorCoursesCompleta />;
+}
+
+function FormadorCoursesCompleta() {
   const t = useTranslations('formadorCursos');
   const tErrors = useTranslations('errors');
   const router = useRouter();

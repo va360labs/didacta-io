@@ -24,7 +24,7 @@ export { ConversationBadge } from './conversation-badge';
 export { ConversationGroup } from './conversation-list';
 export { MessageTimeline, MessageBubble } from './message-timeline';
 export { MessageComposer } from './message-composer';
-export { FloatingChat } from './floating-chat';
+export { FloatingChat, CHAT_TOGGLE_EVENT } from './floating-chat';
 export {
   derivePillState,
   PILL_MAX_AVATARS,

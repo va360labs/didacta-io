@@ -2,7 +2,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ConflictException, NotFoundException } from '@nestjs/common';
 import { StripeConfigMissingError } from '@didacta/mod-billing';
 import { BillingPublicController } from '../src/modules/billing/billing-public.controller';
+import { PlatformCheckoutGate } from '../src/modules/payouts/platform-checkout-gate';
 import { resolveWebBaseUrl, type RequestLike } from '../src/common/resolve-web-base-url';
+import { fakeConsents } from './helpers/fake-purchase-consent';
 
 /**
  * Tests unit del controller PÚBLICO de mod.billing (viaje 2): tenant por Host,
@@ -21,6 +23,7 @@ function makeController(opts?: {
   courseFirst?: Record<string, unknown> | null;
   tenant?: { id: string } | null;
   signupsFrozenAt?: Date | null;
+  gate?: PlatformCheckoutGate;
 }) {
   const billing = opts?.billing ?? {
     getCatalog: vi.fn().mockResolvedValue([]),
@@ -60,7 +63,13 @@ function makeController(opts?: {
     },
   } as never;
   return {
-    controller: new BillingPublicController(registry, tenantResolver, prisma),
+    controller: new BillingPublicController(
+      registry,
+      tenantResolver,
+      prisma,
+      fakeConsents() as never,
+      opts?.gate,
+    ),
     billing,
     prisma,
   };
@@ -194,5 +203,92 @@ describe('BillingPublicController — checkout anónimo', () => {
     expect(args.optionId).toBe('33333333-3333-4333-8333-333333333333');
     expect(args.successUrl).toContain('/catalogo/checkout/success?session_id=');
     expect(args.cancelUrl).toContain('/catalogo/checkout/cancel');
+  });
+});
+
+/**
+ * Cobros de plataforma: cada opción dice si el alumno la verá en su moneda al
+ * pagar (Adaptive Pricing solo convierte la moneda de liquidación del creador).
+ * Sin el modo plataforma (Community) no aparece el campo.
+ */
+describe('BillingPublicController — «lo verás en tu moneda» (localCurrencyAtCheckout)', () => {
+  const EUR = { id: 'opt-eur', name: '', unitAmount: 9900, currency: 'eur' };
+  const USD = { id: 'opt-usd', name: 'Pro', unitAmount: 19900, currency: 'usd' };
+  const CURSO = {
+    id: COURSE,
+    slug: 'curso-uno',
+    title: 'Curso Uno',
+    description: null,
+    thumbnailUrl: null,
+    category: null,
+    estimatedMinutes: 90,
+  };
+
+  function gate(mode: 'ready' | 'own' | 'not_ready') {
+    return new PlatformCheckoutGate({
+      mode: {
+        resolve: async () =>
+          mode === 'own'
+            ? { mode: 'own', credentials: {} }
+            : mode === 'ready'
+              ? { mode: 'platform', ready: true, stripeAccountId: 'acct_1', country: 'ES' }
+              : { mode: 'platform', ready: false, reason: 'onboarding_incomplete' },
+      },
+      accounts: { getAccount: async () => ({ country: 'ES', defaultCurrency: 'eur' }) },
+    } as never);
+  }
+  const billing = () => ({
+    getCatalog: vi.fn().mockResolvedValue([{ courseId: COURSE, options: [EUR, USD] }]),
+    getCourseOffer: vi.fn().mockResolvedValue({ forSale: true, options: [EUR, USD] }),
+  });
+
+  it('modo plataforma: solo el precio en la moneda de liquidación lo verá en su moneda', async () => {
+    const { controller } = makeController({
+      billing: billing(),
+      courses: [CURSO],
+      courseFirst: { id: COURSE },
+      gate: gate('ready'),
+    });
+    const expected = [
+      { ...EUR, localCurrencyAtCheckout: true },
+      { ...USD, localCurrencyAtCheckout: false },
+    ];
+    expect((await controller.catalog(req())).courses[0]!.options).toEqual(expected);
+    expect(await controller.offer(req(), COURSE)).toEqual({ forSale: true, options: expected });
+  });
+
+  it('claves propias con el modo encendido: el campo va siempre a false', async () => {
+    const { controller } = makeController({
+      billing: billing(),
+      courses: [CURSO],
+      courseFirst: { id: COURSE },
+      gate: gate('own'),
+    });
+    const options = (await controller.catalog(req())).courses[0]!.options;
+    expect(options.map((o) => o.localCurrencyAtCheckout)).toEqual([false, false]);
+  });
+
+  it('cuenta aún no lista: nada a la venta (como antes)', async () => {
+    const { controller } = makeController({
+      billing: billing(),
+      courses: [CURSO],
+      courseFirst: { id: COURSE },
+      gate: gate('not_ready'),
+    });
+    expect(await controller.catalog(req())).toEqual({ courses: [] });
+    expect(await controller.offer(req(), COURSE)).toMatchObject({ forSale: false, options: [] });
+  });
+
+  it('sin modo plataforma (Community): opciones idénticas, sin el campo nuevo', async () => {
+    const b = billing();
+    const { controller } = makeController({
+      billing: b,
+      courses: [CURSO],
+      courseFirst: { id: COURSE },
+    });
+    const options = (await controller.catalog(req())).courses[0]!.options;
+    expect(options).toEqual([EUR, USD]);
+    expect(options[0]).not.toHaveProperty('localCurrencyAtCheckout');
+    expect(await controller.offer(req(), COURSE)).toEqual({ forSale: true, options: [EUR, USD] });
   });
 });

@@ -23,6 +23,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import type Stripe from 'stripe';
 import {
+  invoiceCreditApplied,
   SubscriptionsService,
   type SubscriptionsEventPublisher,
   type CheckoutUrlBuilder,
@@ -341,6 +342,22 @@ class StripeStub implements SubscriptionsStripeAdapter {
   }
 
   async createRecurringPrice(): Promise<string> {
+    throw new Error('not used in unit tests');
+  }
+
+  async createPortalSession(): Promise<{ url: string }> {
+    throw new Error('not used in unit tests');
+  }
+
+  async retrieveCustomerBalance(): Promise<{ balanceCents: number; currency: string | null }> {
+    throw new Error('not used in unit tests');
+  }
+
+  async creditCustomerBalance(): Promise<{ id: string }> {
+    throw new Error('not used in unit tests');
+  }
+
+  async debitCustomerBalance(): Promise<{ id: string }> {
     throw new Error('not used in unit tests');
   }
 
@@ -925,6 +942,36 @@ describe('SubscriptionsService.handleWebhookEvent', () => {
     expect(ev).toBeTruthy();
     // Desde PENDING es la PRIMERA activación, no una recuperación de impago.
     expect(ev!.payload['recovery']).toBe(false);
+  });
+
+  it('cuota pagada en parte con saldo de referidos: se factura ENTERA y el saldo va aparte', async () => {
+    const { service, prisma, publisher } = buildSystem();
+    seedPendiente(prisma);
+
+    await service.handleWebhookEvent(
+      {
+        id: 'evt_saldo_referidos',
+        type: 'invoice.paid',
+        // Cuota de 30 €, 6 € de saldo a favor: Stripe cobra 24 € a la tarjeta.
+        data: {
+          object: makeStripeInvoice({
+            total: 3000,
+            amount_due: 2400,
+            amount_paid: 2400,
+            starting_balance: -600,
+            ending_balance: 0,
+          }),
+        },
+      } as unknown as Stripe.Event,
+      {},
+      { tenantId: 't' },
+    );
+
+    const inv = [...prisma.invoices.values()][0]!;
+    expect(inv).toMatchObject({ totalCents: 3000, creditAppliedCents: 600, amount: 2400 });
+    // La comisión de referidos sigue saliendo de lo cobrado de verdad.
+    const paid = publisher.events.find((e) => e.name === 'subscriptions.invoice.paid');
+    expect(paid!.payload['amount']).toBe(2400);
   });
 
   it('customer.subscription.updated de incomplete a active sobre PENDING → emite activated', async () => {
@@ -1797,7 +1844,7 @@ describe('SubscriptionsService — reembolsos y barrido de gracia', () => {
     });
   }
 
-  it('un reembolso PARCIAL no revoca la comision del referidor (L9)', async () => {
+  it('un reembolso PARCIAL no revoca la comision del referidor (L9): la recorta en proporcion', async () => {
     const { service, prisma, publisher } = buildSystem();
     subActiva(prisma);
     facturaDe(prisma);
@@ -1817,7 +1864,16 @@ describe('SubscriptionsService — reembolsos y barrido de gracia', () => {
 
     await service.handleWebhookEvent(event, {}, { tenantId: 't' });
 
-    expect(publisher.events.some((e) => e.name.includes('refunded'))).toBe(false);
+    // No se revoca (sin `subscriptions.invoice.refunded`): se avisa del parcial
+    // para recortar la comisión en proporción.
+    expect(publisher.events.map((e) => e.name)).toEqual([
+      'subscriptions.invoice.partially_refunded',
+    ]);
+    expect(publisher.events[0]!.payload).toMatchObject({
+      stripeInvoiceId: 'in_1',
+      amountRefunded: 100,
+      amountTotal: 1999,
+    });
   });
 
   it('un reembolso TOTAL si la revoca', async () => {
@@ -2173,5 +2229,39 @@ describe('SubscriptionsService — el evento ya lo archivó OTRA aula (fila que 
         { tenantId: 't' },
       ),
     ).rejects.toThrow(/row-level security/);
+  });
+});
+
+describe('invoiceCreditApplied (la línea «Pago con saldo de referidos»)', () => {
+  it('factura real de Stripe con saldo aplicado: total = cuota entera, el saldo aparte y lo cobrado es la diferencia', () => {
+    // Forma de una factura de Stripe cuando el cliente tenía 6 € a favor
+    // (customer balance): `subtotal` y `total` son la cuota; el saldo no es un
+    // descuento (`total_discount_amounts` vacío) sino `starting_balance`, y
+    // `amount_due` es lo que se cobra a la tarjeta.
+    const stripeInvoice = {
+      subtotal: 3000,
+      total: 3000,
+      total_discount_amounts: [],
+      starting_balance: -600,
+      ending_balance: 0,
+      amount_due: 2400,
+      amount_paid: 2400,
+    };
+    const credit = invoiceCreditApplied(stripeInvoice);
+    expect(stripeInvoice.total).toBe(stripeInvoice.subtotal);
+    expect(stripeInvoice.total_discount_amounts).toEqual([]);
+    expect(credit).toBe(600);
+    expect(stripeInvoice.amount_paid + credit).toBe(stripeInvoice.total);
+  });
+
+  it('solo cuenta el saldo A FAVOR que Stripe gastó, nunca más del que había', () => {
+    expect(invoiceCreditApplied({ starting_balance: -600, ending_balance: 0 })).toBe(600);
+    // Había 10 € a favor; la factura gastó 6 € y quedan 4 €.
+    expect(invoiceCreditApplied({ starting_balance: -1000, ending_balance: -400 })).toBe(600);
+    // Sin saldo a favor, o con deuda (positivo): nada.
+    expect(invoiceCreditApplied({ starting_balance: 0, ending_balance: 0 })).toBe(0);
+    expect(invoiceCreditApplied({ starting_balance: 500, ending_balance: 0 })).toBe(0);
+    // Factura aún sin cerrar (ending null): nada todavía.
+    expect(invoiceCreditApplied({ starting_balance: -600, ending_balance: null } as never)).toBe(0);
   });
 });

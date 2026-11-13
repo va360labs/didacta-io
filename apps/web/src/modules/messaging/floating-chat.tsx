@@ -40,7 +40,10 @@ import { useConversationThread } from './use-conversation-thread';
  * pantalla (regla #5). Todo lo que pinta sale de la API — si no hay dato, lo
  * dice; no se inventa nada (regla #3).
  */
-export function FloatingChat() {
+/** Evento con el que la cabecera del modo sencillo abre o cierra el chat. */
+export const CHAT_TOGGLE_EVENT = 'didacta:chat-toggle';
+
+export function FloatingChat({ launcher = true }: { launcher?: boolean } = {}) {
   const t = useTranslations('modMessaging');
   const session = useMemo(() => authStorage.getSession(), []);
   const isStaff = useMemo(
@@ -75,6 +78,24 @@ export function FloatingChat() {
     } catch {
       /* idem */
     }
+  }, []);
+
+  // Modo sencillo: el chat se abre desde el icono de Mensajes de la cabecera
+  // (no hay píldora flotante que tape botones).
+  useEffect(() => {
+    function onToggle() {
+      setOpen((prev) => {
+        const next = !prev;
+        try {
+          window.localStorage.setItem(FLOATING_CHAT_OPEN_KEY, next ? '1' : '0');
+        } catch {
+          /* idem */
+        }
+        return next;
+      });
+    }
+    window.addEventListener(CHAT_TOGGLE_EVENT, onToggle);
+    return () => window.removeEventListener(CHAT_TOGGLE_EVENT, onToggle);
   }, []);
 
   // La presencia solo se consulta con el panel abierto (ADR-019).
@@ -275,13 +296,15 @@ export function FloatingChat() {
         </div>
       ) : null}
 
-      <ChatPill
-        ref={pillRef}
-        pill={pill}
-        avatars={pillAvatars}
-        open={open}
-        onToggle={() => setOpenPersisted(!open)}
-      />
+      {launcher ? (
+        <ChatPill
+          ref={pillRef}
+          pill={pill}
+          avatars={pillAvatars}
+          open={open}
+          onToggle={() => setOpenPersisted(!open)}
+        />
+      ) : null}
     </div>
   );
 }

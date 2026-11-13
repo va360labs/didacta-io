@@ -17,7 +17,7 @@
  */
 
 import { apiFetch } from '@/lib/api-client';
-import { formatCurrency } from '@/lib/i18n/format';
+import { formatCentsExact } from '@/lib/i18n/format';
 
 export type SubscriptionStatus =
   | 'PENDING'
@@ -54,6 +54,12 @@ export interface SubscriptionRow {
   canceledReason: string | null;
   /** Fin del periodo de prueba (solo status TRIALING). */
   trialEndsAt: string | null;
+  /**
+   * Hay portal de cliente para esta suscripción (tarjeta, facturas y baja con
+   * el nombre de la academia). Lo decide el backend: hoy, las cobradas a
+   * través de la plataforma.
+   */
+  billingPortal?: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -64,7 +70,12 @@ export interface InvoiceRow {
   subscriptionId: string;
   stripeInvoiceId: string;
   status: InvoiceStatus;
+  /** Lo cobrado (cuota − saldo de referidos). */
   amount: number;
+  /** La cuota entera facturada (null en facturas anteriores al cambio). */
+  totalCents?: number | null;
+  /** «Pago con saldo de referidos»: el saldo que Stripe gastó. */
+  creditAppliedCents?: number;
   currency: string;
   hostedInvoiceUrl: string | null;
   paidAt: string | null;
@@ -123,6 +134,18 @@ export const subscriptionsApi = {
     );
   },
 
+  /** Abre el portal de cliente de Stripe de una suscripción propia: devuelve su URL. */
+  async billingPortal(
+    bearer: string,
+    subscriptionId: string,
+  ): Promise<{ url: string; subscriptionId: string }> {
+    return apiFetch<{ url: string; subscriptionId: string }>(
+      `${BASE}/me/portal`,
+      { method: 'POST', body: JSON.stringify({ subscriptionId }) },
+      bearer,
+    );
+  },
+
   /**
    * Termina el periodo de prueba de la MEMBRESÍA ya: Stripe cobra el primer
    * periodo y (si el cargo entra) se desbloquea todo el contenido.
@@ -145,12 +168,8 @@ export const subscriptionsApi = {
  * código de moneda inválido, que haría reventar a `Intl`.
  */
 export function formatAmount(unitAmount: number, currency: string): string {
-  const value = unitAmount / 100;
-  try {
-    return formatCurrency(value, currency.toUpperCase());
-  } catch {
-    return `${value.toFixed(2)} ${currency.toUpperCase()}`;
-  }
+  // Decimales según Stripe (`stripe-currencies.ts`), no `Intl`.
+  return formatCentsExact(unitAmount, currency.toUpperCase());
 }
 
 export function formatInterval(interval: string): string {

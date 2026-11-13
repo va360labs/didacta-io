@@ -44,6 +44,8 @@ interface PlanRow {
   amountCents: number;
   currency: string;
   compareAtCents: number | null;
+  /** Precios fijos por mercado (`currency_options`). */
+  currencyOptions?: Record<string, number> | null;
   trialDays: number;
   active: boolean;
   isFeatured: boolean;
@@ -306,6 +308,18 @@ function stubStripe() {
     updateProduct,
     createRecurringPrice,
     endTrialNow,
+    createPortalSession: async () => {
+      throw new Error('no usado');
+    },
+    retrieveCustomerBalance: async () => {
+      throw new Error('no usado');
+    },
+    debitCustomerBalance: async () => {
+      throw new Error('no se usa en este test');
+    },
+    creditCustomerBalance: async () => {
+      throw new Error('no usado');
+    },
   };
   return {
     adapter,
@@ -441,6 +455,46 @@ describe('MembershipService · planes', () => {
 
     const repriced = await ctx.service.updatePlan(TENANT, plan.id, { amountCents: 89_900 });
     expect(repriced.stripePriceId).toBeNull();
+  });
+
+  it('precios por mercado: viajan al Price de Stripe y cambiarlos rota el stripePriceId', async () => {
+    await ctx.service.updateConfig(TENANT, { active: true });
+    const plan = await ctx.service.createPlan(TENANT, {
+      name: 'Mensual MX',
+      intervalMonths: 1,
+      amountCents: 2_900,
+      currency: 'eur',
+      currencyOptions: { MXN: 59_900 },
+    });
+    expect(ctx.prisma.plans.get(plan.id)!.currencyOptions).toEqual({ mxn: 59_900 });
+    await ctx.service.startMembershipCheckout({
+      tenantId: TENANT,
+      planId: plan.id,
+      successUrl: 'https://x/s',
+      cancelUrl: 'https://x/c',
+    });
+    expect(ctx.stripe.createRecurringPrice).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        amountCents: 2_900,
+        currency: 'eur',
+        currencyOptions: { mxn: 59_900 },
+      }),
+    );
+    const priced = ctx.prisma.plans.get(plan.id)!.stripePriceId;
+    expect(priced).toMatch(/^price_/);
+
+    // El mismo mapa (otro orden de claves y mayúsculas) no toca el Price.
+    const same = await ctx.service.updatePlan(TENANT, plan.id, {
+      currencyOptions: { mxn: 59_900 },
+    });
+    expect(same.stripePriceId).toBe(priced);
+
+    // Otro importe en MXN: Stripe no deja editarlo → el Price se re-crea.
+    const changed = await ctx.service.updatePlan(TENANT, plan.id, {
+      currencyOptions: { mxn: 49_900 },
+    });
+    expect(changed.stripePriceId).toBeNull();
+    expect(changed.currencyOptions).toEqual({ mxn: 49_900 });
   });
 
   it('borrar un plan CON ventas lo desactiva (historial); sin ventas lo borra', async () => {
@@ -1270,5 +1324,100 @@ describe('MembershipService · el fulfillment solo crea en el tenant verificado'
       data: { object: membershipSession({ metadata: { orderId: 'o1' } as never }) },
     } as unknown as Stripe.Event);
     expect(claims).toEqual([]);
+  });
+});
+
+describe('MembershipService · resyncStripeCatalog (el tenant cambia de cuenta de Stripe)', () => {
+  let ctx: ReturnType<typeof build>;
+  beforeEach(async () => {
+    ctx = build();
+    await ctx.service.updateConfig(TENANT, { active: true });
+  });
+
+  async function planVendido(name: string, opts: { priceId: string | null; productId: string }) {
+    const plan = await ctx.service.createPlan(TENANT, {
+      name,
+      intervalMonths: 1,
+      amountCents: 2900,
+    });
+    const row = ctx.prisma.plans.get(plan.id)!;
+    row.stripeProductId = opts.productId;
+    row.stripePriceId = opts.priceId;
+    return plan;
+  }
+
+  it('recrea Product y Price en la cuenta actual de los planes cuyo precio vive en otra', async () => {
+    const viejo = await planVendido('Mensual', {
+      priceId: 'price_cuenta_propia',
+      productId: 'prod_cuenta_propia',
+    });
+    const yaAqui = await planVendido('Anual', {
+      priceId: 'price_de_plataforma',
+      productId: 'prod_de_plataforma',
+    });
+    const sinVender = await ctx.service.createPlan(TENANT, {
+      name: 'Trimestral',
+      intervalMonths: 3,
+      amountCents: 7900,
+    });
+
+    const result = await ctx.service.resyncStripeCatalog(TENANT, {
+      isCurrent: async (id) => id.includes('plataforma'),
+    });
+
+    expect(result).toEqual({ resynced: 1, skipped: 2 });
+    // Product NUEVO (el viejo es de la otra cuenta) con el nombre del plan.
+    expect(ctx.stripe.createProduct).toHaveBeenCalledTimes(1);
+    expect(ctx.stripe.createProduct).toHaveBeenCalledWith('Mensual', {
+      tenantId: TENANT,
+      planId: viejo.id,
+      didacta: 'membership',
+    });
+    expect(ctx.stripe.createRecurringPrice).toHaveBeenCalledWith(
+      expect.objectContaining({ productId: 'prod_1', amountCents: 2900, intervalMonths: 1 }),
+    );
+    expect(ctx.prisma.plans.get(viejo.id)).toMatchObject({
+      stripeProductId: 'prod_1',
+      stripePriceId: 'price_1',
+    });
+    expect(ctx.prisma.plans.get(yaAqui.id)?.stripePriceId).toBe('price_de_plataforma');
+    // El que nunca se vendió lo crea el primer checkout, ya en la cuenta actual.
+    expect(ctx.prisma.plans.get(sinVender.id)?.stripePriceId).toBeNull();
+
+    // Segunda pasada: nada que hacer.
+    const otra = await ctx.service.resyncStripeCatalog(TENANT, {
+      isCurrent: async (id) => id.includes('plataforma') || id === 'price_1',
+    });
+    expect(otra).toEqual({ resynced: 0, skipped: 3 });
+  });
+
+  it('precio limpiado al cambiar el importe y Product de la otra cuenta → también se recrea', async () => {
+    const plan = await planVendido('Mensual', { priceId: null, productId: 'prod_cuenta_propia' });
+    const result = await ctx.service.resyncStripeCatalog(TENANT, {
+      planId: plan.id,
+      isCurrent: async () => false,
+    });
+    expect(result).toEqual({ resynced: 1, skipped: 0 });
+    expect(ctx.prisma.plans.get(plan.id)).toMatchObject({
+      stripeProductId: 'prod_1',
+      stripePriceId: 'price_1',
+    });
+  });
+
+  it('con planId solo toca ese plan, y sin Stripe que hacer no pide el adaptador', async () => {
+    const a = await planVendido('A', { priceId: 'price_a', productId: 'prod_a' });
+    await planVendido('B', { priceId: 'price_b', productId: 'prod_b' });
+    const result = await ctx.service.resyncStripeCatalog(TENANT, {
+      planId: a.id,
+      isCurrent: async () => false,
+    });
+    expect(result).toEqual({ resynced: 1, skipped: 0 });
+    expect(ctx.stripe.createProduct).toHaveBeenCalledTimes(1);
+
+    const sinStripe = build(false);
+    const nada = await sinStripe.service.resyncStripeCatalog(TENANT, {
+      isCurrent: async () => true,
+    });
+    expect(nada).toEqual({ resynced: 0, skipped: 0 });
   });
 });

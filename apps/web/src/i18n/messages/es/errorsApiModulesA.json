@@ -110,5 +110,6 @@
   "ZOOM_NOT_REGISTERED": "Tienes que inscribirte antes de entrar a la clase.",
   "ZOOM_SESSION_ALREADY_ENDED": "La sesión ya finalizó; no se puede modificar.",
   "ZOOM_SESSION_NOT_OPEN_FOR_REGISTRATION": "La sesión ya no admite inscripciones.",
-  "ZOOM_WEBHOOK_FOREIGN_TENANT": "Este webhook solo acepta avisos del aula a la que pertenece este dominio."
+  "ZOOM_WEBHOOK_FOREIGN_TENANT": "Este webhook solo acepta avisos del aula a la que pertenece este dominio.",
+  "ZOOM_NOT_CONFIGURED": "Pega el enlace de tu videollamada (Zoom, Google Meet o Teams) o conecta tu cuenta de Zoom en Ajustes."
 }

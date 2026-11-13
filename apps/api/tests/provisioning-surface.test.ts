@@ -16,8 +16,12 @@ import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
 import { METHOD_METADATA, PATH_METADATA } from '@nestjs/common/constants';
 import { describe, expect, it } from 'vitest';
-import { AdminTenantsController } from '../src/admin/admin-tenants.controller';
+import {
+  AdminTenantsController,
+  AdminTenantsPayoutsController,
+} from '../src/admin/admin-tenants.controller';
 import { AdminSystemController } from '../src/modules/admin-system.controller';
+import { AdminTenantsVideoController } from '../src/video/cloud/video-cloud.controllers';
 import { ALLOW_PROVISIONING_KEY } from '../src/auth/jwt-or-provisioning.guard';
 
 /**
@@ -134,6 +138,28 @@ describe('UC-C103 AC2 · superficie de la credencial de provisioning', () => {
     }
   });
 
+  it('abre exactamente las 3 rutas de cobros de plataforma en AdminTenantsPayoutsController, y no hay más', () => {
+    // Solo existen con el modo plataforma (las registra PayoutsModule). Fijar
+    // la comisión de un aula, leer su estado de cobro y el volumen cobrado de
+    // todas las aulas (E4): el contrato con Cloud.
+    const todas = routeHandlersOf(AdminTenantsPayoutsController).sort();
+    expect(todas).toEqual(['getPayouts', 'getPayoutsVolume', 'setPayoutsSettings']);
+    for (const handler of todas) {
+      expect(isAllowed(AdminTenantsPayoutsController, handler)).toBe(true);
+    }
+  });
+
+  it('abre exactamente las 2 rutas de vídeo de Cloud en AdminTenantsVideoController, y no hay más', () => {
+    // Solo existen con la subida de vídeo encendida (las registra
+    // VideoCloudModule). Leer el estado del vídeo de un aula y suprimir sus
+    // copias en Drive cuando el plano de control tramita una petición RGPD.
+    const todas = routeHandlersOf(AdminTenantsVideoController).sort();
+    expect(todas).toEqual(['purgeBackups', 'status']);
+    for (const handler of todas) {
+      expect(isAllowed(AdminTenantsVideoController, handler)).toBe(true);
+    }
+  });
+
   it('abre exactamente una ruta, y de solo lectura, en AdminSystemController', () => {
     const abiertas = routeHandlersOf(AdminSystemController).filter((h) =>
       isAllowed(AdminSystemController, h),
@@ -147,21 +173,23 @@ describe('UC-C103 AC2 · superficie de la credencial de provisioning', () => {
     }
   });
 
-  it('los dos ÚNICOS ficheros con @AllowProvisioning() son los declarados aquí', () => {
+  it('los tres ÚNICOS ficheros con @AllowProvisioning() son los declarados aquí', () => {
     // Línea entera, no `includes`: si no, los doc-comments que lo citan en
     // prosa (el guard, el service) darían falsos positivos.
     const conMarca = filesMatching(/^\s*@AllowProvisioning\(\)\s*$/m);
     expect(conMarca).toEqual([
       'admin/admin-tenants.controller.ts',
       'modules/admin-system.controller.ts',
+      'video/cloud/video-cloud.controllers.ts',
     ]);
   });
 
-  it('el guard que acepta la credencial solo protege esos dos controllers', () => {
+  it('el guard que acepta la credencial solo protege esos tres controllers', () => {
     const conGuard = filesMatching(/^\s*@UseGuards\(JwtOrProvisioningGuard\)\s*$/m);
     expect(conGuard).toEqual([
       'admin/admin-tenants.controller.ts',
       'modules/admin-system.controller.ts',
+      'video/cloud/video-cloud.controllers.ts',
     ]);
   });
 

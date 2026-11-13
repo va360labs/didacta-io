@@ -5,8 +5,11 @@
  * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
  */
 
+import { SimpleSettings } from '@/components/simple-gestion/simple-settings';
+import { wantsFullSettings } from '@/components/simple-gestion/helpers';
+import { useSimpleMode } from '@/lib/simple-mode';
 import { useEffect, useState, type FormEvent } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -106,7 +109,18 @@ const ALL_TABS: ConfigTabSpec[] = [
 
 type TabKey = string;
 
+/**
+ * En modo sencillo, «Ajustes» (tu academia y el paso al modo completo); la
+ * configuración completa sigue aquí mismo con `?completo=1` o un `?tab=`.
+ */
 export default function ConfiguracionPage() {
+  const simple = useSimpleMode();
+  const params = useSearchParams();
+  if (simple === null) return null;
+  return simple && !wantsFullSettings(params) ? <SimpleSettings /> : <ConfiguracionCompleta />;
+}
+
+function ConfiguracionCompleta() {
   const t = useTranslations('adminMarca');
   const tErrors = useTranslations('errors');
   const [items, setItems] = useState<TenantSettingMetadata[] | null>(null);
@@ -127,6 +141,7 @@ export default function ConfiguracionPage() {
   /// sin configurar del shell, que si no dejaba al super_admin en "general"
   /// justo cuando se le acaba de decir dónde tiene que ir.
   const searchParams = useSearchParams();
+  const router = useRouter();
   const tabPedido = searchParams?.get('tab')?.trim() || null;
   const [tab, setTab] = useState<TabKey>(tabPedido || (isSuperAdmin ? 'general' : 'notifications'));
 
@@ -169,12 +184,21 @@ export default function ConfiguracionPage() {
   /// mostraba durante el flash) y el operador veía el tab incluso con el
   /// módulo desactivado. Tabs del core (sin `requiresModule`) siempre
   /// visibles.
+  /// Modo plataforma (Didacta Cloud): los cobros viven en Administración →
+  /// Cobros y aquí no se pegan claves. Una sola puerta: la pestaña desaparece y
+  /// `?tab=pagos` lleva allí. Sin el módulo (Community), nada cambia.
+  const platformPayouts = activeModules?.has('mod.payouts') ?? false;
   const visibleTabs = ALL_TABS.filter((spec) => {
     if (spec.key === 'general') return isSuperAdmin;
+    if (spec.key === 'pagos') return !platformPayouts;
     if (!spec.requiresModule) return true;
     if (!activeModules) return false;
     return activeModules.has(spec.requiresModule);
   });
+
+  useEffect(() => {
+    if (platformPayouts && tabPedido === 'pagos') router.replace('/admin/cobros');
+  }, [platformPayouts, tabPedido, router]);
 
   // Si la tab seleccionada queda oculta tras el filtro (ej. el admin
   // desactivó mod.zoom-live mientras estaba en el tab "Aula virtual"),
@@ -239,7 +263,12 @@ export default function ConfiguracionPage() {
               type="button"
               role="tab"
               aria-selected={isActive}
-              onClick={() => setTab(spec.key)}
+              onClick={() => {
+                setTab(spec.key);
+                // La pestaña en la URL: se puede enlazar y el aviso de correo
+                // de la cabecera sabe si ya se está viendo la tarjeta del correo.
+                router.replace(`/admin/configuracion?tab=${spec.key}` as never, { scroll: false });
+              }}
               className={
                 isActive
                   ? 'relative px-4 py-2.5 text-sm font-semibold text-brand-700 transition-colors'

@@ -1,0 +1,105 @@
+{
+  "seccion": "Ventas",
+  "titulo": "Ventas",
+  "sub": "Lo que has vendido y lo que llega a tu banco.",
+  "cargando": "Cargando…",
+  "error": "No se ha podido cargar. Inténtalo de nuevo.",
+  "cobros": {
+    "conectarTitulo": "Conecta tus cobros para empezar a vender",
+    "conectarTexto": "Sin cobros conectados nadie puede pagarte. Te pediremos tus datos y tu número de cuenta.",
+    "listos": "Cobros conectados: el dinero de cada venta llega a tu banco.",
+    "propios": "Cobras con tu propia cuenta de pagos.",
+    "detalles": "Ver detalles"
+  },
+  "resumen": {
+    "vendido": "Vendido",
+    "ventas": "{n, plural, one {# venta} other {# ventas}}",
+    "enBanco": "Ya en tu banco",
+    "enCamino": "En camino",
+    "enCaminoNota": "Llega en los próximos días"
+  },
+  "vacio": {
+    "titulo": "Aquí verás tus ventas",
+    "texto": "Cada vez que alguien compre, aparecerá aquí con lo que te llega a tu banco y cuándo.",
+    "botonPublicar": "Ir a Empieza aquí",
+    "botonCompartir": "Comparte tu enlace para conseguir la primera"
+  },
+  "lista": {
+    "titulo": "Últimas ventas",
+    "verTodas": "Ver todas",
+    "sinDescripcion": "Venta"
+  },
+  "enlace": {
+    "titulo": "Tu enlace de venta",
+    "sinPublicar": "Sin publicar",
+    "aLaVenta": "A la venta",
+    "copiar": "Copiar enlace",
+    "copiado": "Copiado",
+    "verAlumno": "Ver como alumno",
+    "notaAntes": "Se enciende al publicar desde Empieza aquí.",
+    "precio": "Precio",
+    "pagoUnico": "pago único",
+    "alMes": "al mes",
+    "cambiar": "Cambiar",
+    "guardar": "Guardar precio",
+    "cancelar": "Cancelar",
+    "precioInvalido": "Escribe un precio mayor que cero.",
+    "precioError": "No se ha podido cambiar el precio. Inténtalo de nuevo.",
+    "comision": "Didacta se queda el {percent} % de cada venta. Lo ves desglosado en cada cobro.",
+    "noComprable": "Aún no se puede comprar",
+    "notaNoComprable": "Conecta tus cobros para que se pueda comprar. Hasta entonces el enlace no sirve para vender."
+  },
+  "referidos": {
+    "titulo": "Tus alumnos venden por ti",
+    "texto": "Cada alumno tiene su enlace. Cuando alguien entra con él y paga, quien lo invitó se lleva un % de lo que pague.",
+    "nadaALaVenta": "Funciona con todo lo que vendes: cuando tengas un curso o una membresía a la venta, cada alumno tendrá su enlace y ganará un % de lo que paguen las personas que traiga.",
+    "activar": "Activar los referidos",
+    "activando": "Activando…",
+    "activo": "Programa activo",
+    "inactivo": "Programa apagado",
+    "encender": "Encender",
+    "apagar": "Apagar",
+    "porcentaje": "Lo que se lleva quien invita (%)",
+    "guardar": "Guardar",
+    "guardado": "Guardado",
+    "porcentajeInvalido": "Escribe un % entre 0 y 100.",
+    "error": "No se ha podido guardar. Inténtalo de nuevo.",
+    "ventasTitulo": "Ventas que vinieron de referidos",
+    "ventasVacio": "Todavía ninguna. Cuando alguien pague con el enlace de un alumno, lo verás aquí.",
+    "ventasResumen": "{n, plural, one {# pago traído} other {# pagos traídos}} por tus alumnos",
+    "pago": "Pago de {base}",
+    "comisionDe": "{amount} para quien invitó",
+    "estado": {
+      "PENDING": "Pendiente",
+      "APPROVED": "Aprobada",
+      "PAID": "Pagada",
+      "REVOKED": "Anulada"
+    },
+    "verDetalle": "Ver el detalle de los referidos",
+    "descuentoTitulo": "Dejar que lo usen como descuento en su cuota",
+    "descuentoTexto": "Quien tenga membresía puede restar lo que ha ganado de su próxima cuota en vez de cobrarlo aparte. Lo pagas tú: esa cuota te llega con ese descuento.",
+    "cobros": {
+      "titulo": "Cobros pedidos",
+      "texto": "Tus alumnos piden aquí cobrar lo que han ganado. Hazles la transferencia y márcalo como pagado: se genera un justificante.",
+      "vacio": "Nadie ha pedido cobrar todavía.",
+      "pedidoEl": "Pedido el {date}",
+      "referencia": "Referencia de la transferencia",
+      "marcar": "Marcar como pagado",
+      "marcando": "Guardando…",
+      "pagadoEl": "Pagado el {date} · {ref}",
+      "sinDatos": "Sin datos de cobro",
+      "nif": "NIF",
+      "iban": "IBAN",
+      "error": "No se ha podido guardar. Vuelve a intentarlo.",
+      "justificante": "Justificante"
+    },
+    "ajuste": "Ajuste por devolución",
+    "saldoDevuelto": "Descuento sin usar devuelto al darse de baja"
+  },
+  "propias": {
+    "titulo": "Ventas",
+    "texto": "Pagos de tu curso o tu membresía cobrados con tu cuenta de pagos.",
+    "vacio": "Aquí verás cuántas ventas llevas. Comparte tu enlace de venta para conseguir la primera.",
+    "detalle": "Ver el detalle de ingresos"
+  }
+}

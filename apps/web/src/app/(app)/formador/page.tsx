@@ -10,6 +10,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
 import { StatCard } from '@/components/stat-card';
 import { Card, CardContent } from '@/components/ui/card';
+import { VideoQuotaCard } from '@/components/video-quota';
 import { ApiHttpError } from '@/lib/api-client';
 import { apiErrorMessage } from '@/lib/i18n/api-error';
 import { formadorStatsApi, type FormadorStats } from '@/lib/formador-stats';
@@ -97,6 +98,9 @@ export default function FormadorDashboardPage() {
           highlight={stats.pendingGradings > 0}
         />
       </div>
+
+      {/* Espacio de vídeo subido (solo con Didacta Cloud; si no, no pinta nada). */}
+      <VideoQuotaCard />
 
       <Card>
         <CardContent className="p-6">

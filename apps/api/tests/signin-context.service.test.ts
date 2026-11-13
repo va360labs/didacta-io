@@ -82,9 +82,18 @@ describe('SigninContextService', () => {
     expect(ctx.stats).toEqual({ activeMembers: 112, publishedCourses: 11 });
     expect(ctx.membershipPageActive).toBe(true);
 
-    // Las dos cifras se cuentan SIEMPRE acotadas al tenant (y sin borrados).
+    // Las dos cifras se cuentan SIEMPRE acotadas al tenant (y sin borrados), y
+    // «alumnos activos» deja fuera al equipo: un aula recién creada, con solo
+    // su creador, no presume de «1 alumno activo».
     expect(userCount).toHaveBeenCalledWith({
-      where: { tenantId: TENANT, status: 'ACTIVE', deletedAt: null },
+      where: {
+        tenantId: TENANT,
+        status: 'ACTIVE',
+        deletedAt: null,
+        NOT: {
+          roles: { some: { role: { name: { in: ['super_admin', 'tenant_admin', 'formador'] } } } },
+        },
+      },
     });
     expect(courseCount).toHaveBeenCalledWith({
       where: { tenantId: TENANT, status: 'PUBLISHED', deletedAt: null },

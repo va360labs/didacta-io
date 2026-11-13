@@ -30,6 +30,8 @@ const APP_DIR = join(WEB_SRC, 'app', '(app)');
 const LAYOUT = join(APP_DIR, 'layout.tsx');
 /** El árbol de navegación se extrajo del layout a `lib/sidebar-nav.ts`. */
 const SIDEBAR_NAV = join(WEB_SRC, 'lib', 'sidebar-nav.ts');
+/** Navegación del modo sencillo (pestañas): también es menú. */
+const SIMPLE_NAV = join(WEB_SRC, 'lib', 'simple-nav.ts');
 const MODULES_DIR = join(WEB_SRC, 'modules');
 
 /**
@@ -147,9 +149,9 @@ function collectRoutes(): string[] {
   return [...new Set(routes)].sort();
 }
 
-/** hrefs literales (comilla simple) de sidebar-nav.ts + layout.tsx + modules/<m>/index.ts. */
+/** hrefs literales (comilla simple) de sidebar-nav.ts + simple-nav.ts + layout.tsx + modules/<m>/index.ts. */
 function collectNavHrefs(): Set<string> {
-  const files = [SIDEBAR_NAV, LAYOUT];
+  const files = [SIDEBAR_NAV, SIMPLE_NAV, LAYOUT];
   for (const m of readdirSync(MODULES_DIR, { withFileTypes: true })) {
     if (m.isDirectory()) {
       const idx = join(MODULES_DIR, m.name, 'index.ts');

@@ -21,12 +21,22 @@ import { useTranslations } from 'next-intl';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { StatCard } from '@/components/stat-card';
 import { apiErrorMessage } from '@/lib/i18n/api-error';
-import { formatCents, formatDate } from '@/lib/i18n/format';
+import { formatCents, formatDate, formatNumber } from '@/lib/i18n/format';
 import {
   adminBusinessMetricsApi,
   type BusinessMetrics,
   type WeeklyPoint,
 } from '@/lib/admin-business-metrics';
+
+/**
+ * Importe en la unidad mínima de su moneda → texto.
+ *
+ * `formatCents` toma los decimales de la tabla de Stripe
+ * (`stripe-currencies.ts`), no de `Intl`: 500 JPY son 500 yenes.
+ */
+function formatMoney(amountMinor: number, currency: string): string {
+  return formatCents(amountMinor, currency.toUpperCase());
+}
 
 function formatWeek(iso: string): string {
   // timeZone UTC deliberada: `weekStart` es una fecha-calendario (lunes) sin
@@ -83,6 +93,9 @@ export function BusinessMetricsPanel() {
   }
 
   const { nps, revenue, arrears, members, connections, aiTutor, community } = metrics;
+  // Una línea por moneda: nunca se suman importes de monedas distintas.
+  const currencies = revenue.byCurrency;
+  const multiCurrency = currencies.length > 1;
 
   return (
     <div className="space-y-5">
@@ -114,7 +127,15 @@ export function BusinessMetricsPanel() {
         />
         <StatCard
           label={t('revenueLabel')}
-          value={formatCents(revenue.totalCents30d)}
+          value={
+            currencies.length === 0
+              ? formatNumber(0)
+              : currencies.map((r) => (
+                  <span key={r.currency} className="block">
+                    {formatMoney(r.totalMinor30d, r.currency)}
+                  </span>
+                ))
+          }
           hint={t('revenueHint')}
           icon="chart"
           tone="info"
@@ -160,12 +181,29 @@ export function BusinessMetricsPanel() {
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <WeeklyBars
-          title={t('weeklyRevenueTitle')}
-          description={t('weeklyRevenueDescription')}
-          points={revenue.weekly}
-          format={(v) => formatCents(v)}
-        />
+        {currencies.length === 0 ? (
+          // Sin cobros: la misma gráfica vacía de siempre (mismas 12 semanas).
+          <WeeklyBars
+            title={t('weeklyRevenueTitle')}
+            description={t('weeklyRevenueDescription')}
+            points={members.weeklySignups.map((p) => ({ weekStart: p.weekStart, value: 0 }))}
+            format={(v) => formatNumber(v)}
+          />
+        ) : (
+          currencies.map((r) => (
+            <WeeklyBars
+              key={r.currency}
+              title={
+                multiCurrency
+                  ? t('weeklyRevenueTitleCurrency', { currency: r.currency.toUpperCase() })
+                  : t('weeklyRevenueTitle')
+              }
+              description={t('weeklyRevenueDescription')}
+              points={r.weekly}
+              format={(v) => formatMoney(v, r.currency)}
+            />
+          ))
+        )}
         <WeeklyBars
           title={t('weeklySignupsTitle')}
           description={t('weeklySignupsDescription')}

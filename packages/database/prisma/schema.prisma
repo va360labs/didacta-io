@@ -65,6 +65,16 @@ model Tenant {
   subscriptionActionUrl     String?               @map("subscription_action_url")
   subscriptionGateUpdatedAt DateTime?             @map("subscription_gate_updated_at")
 
+  /// Modo sencillo del aula: menú corto en lenguaje llano, alta en 3 preguntas
+  /// y «Empieza aquí» como inicio del creador. Lo avanzado no se borra: se
+  /// pliega en «Más opciones».
+  ///
+  /// `false` es el estado de cualquier instalación propia y de toda aula que
+  /// existiera antes: nada cambia para ellas. Solo nace encendido en las aulas
+  /// que aprovisiona el plano de control del SaaS (credencial de provisioning)
+  /// o cuando alguien lo enciende a mano.
+  simpleMode Boolean @default(false) @map("simple_mode")
+
   users              User[]
   sessions           Session[]
   apiKeys            ApiKey[]
@@ -111,21 +121,21 @@ enum TenantDomainSurface {
 }
 
 model TenantDomain {
-  id         String   @id @default(uuid()) @db.Uuid
-  tenantId   String   @map("tenant_id") @db.Uuid
+  id         String              @id @default(uuid()) @db.Uuid
+  tenantId   String              @map("tenant_id") @db.Uuid
   /// Host completo en lowercase, sin puerto ni path.
   /// Ejemplos: "aula.academia.com", "didacta.local", "localhost".
-  hostname   String   @unique @db.VarChar(253)
+  hostname   String              @unique @db.VarChar(253)
   /// El primary identifica el dominio canónico para emails y enlaces.
   /// Solo uno por tenant tiene `isPrimary=true`.
-  isPrimary  Boolean  @default(false) @map("is_primary")
+  isPrimary  Boolean             @default(false) @map("is_primary")
   /// Para custom domains de clientes: requiere validación DNS antes de activar.
   /// `localhost` y dominios default del seed nacen verified=true.
-  isVerified Boolean  @default(false) @map("is_verified")
+  isVerified Boolean             @default(false) @map("is_verified")
   /// Qué superficie sirve este dominio. Ver `TenantDomainSurface`.
   surface    TenantDomainSurface @default(APP)
-  createdAt  DateTime @default(now()) @map("created_at")
-  updatedAt  DateTime @updatedAt @map("updated_at")
+  createdAt  DateTime            @default(now()) @map("created_at")
+  updatedAt  DateTime            @updatedAt @map("updated_at")
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
@@ -484,7 +494,7 @@ model SupportAccessGrant {
 
   /// Nunca mas de 15 minutos por delante de `created_at`. Lo impone el codigo
   /// (`support-access.ts`), no un default de columna.
-  expiresAt DateTime  @map("expires_at")
+  expiresAt  DateTime  @map("expires_at")
   /// Se sella al canjear. Un solo uso: con esto puesto, el token ya no vale.
   redeemedAt DateTime? @map("redeemed_at")
   /// Sesion que abrio el canje, para poder cortarla al revocar.
@@ -574,6 +584,60 @@ model AuditLog {
   @@index([actorId])
   @@index([resourceType, resourceId])
   @@map("audit_log")
+}
+
+// ============================================================================
+// CONSENTIMIENTOS DE COMPRA (consumidores)
+// ----------------------------------------------------------------------------
+// Prueba del consentimiento que da el comprador ANTES de pagar contenido
+// digital: pide empezar ya y reconoce que pierde el derecho de desistimiento
+// de 14 días (art. 103.m TRLGDCU; art. 16.m Directiva 2011/83/UE). Lo recogen
+// los controladores de compra del host (curso suelto, membresía, suscripción a
+// un curso) en cualquier modo de cobro, y el webhook marca el pago y manda la
+// confirmación por correo (art. 98.7 TRLGDCU) con el texto aceptado.
+//
+// Sin FK: los ids de orden, curso o plan son lógicos (viven en módulos). Un
+// trigger de `rls.sql` congela la prueba (texto, versión, fecha, IP…): solo
+// se pueden rellenar después la sesión de Stripe, el pago y el envío.
+// ============================================================================
+
+model PurchaseConsent {
+  id                      String    @id @default(uuid()) @db.Uuid
+  tenantId                String    @map("tenant_id") @db.Uuid
+  /// `withdrawal_waiver`: renuncia al desistimiento por empezar ya.
+  kind                    String
+  /// `course` | `membership` | `course_subscription`.
+  purchaseKind            String    @map("purchase_kind")
+  /// Curso o plan comprado (id lógico).
+  itemRef                 String    @map("item_ref")
+  itemName                String?   @map("item_name")
+  /// Orden de mod.billing (curso suelto). Lógico, sin FK.
+  orderId                 String?   @map("order_id") @db.Uuid
+  stripeCheckoutSessionId String?   @unique @map("stripe_checkout_session_id")
+  /// Comprador con sesión iniciada, si la tenía. Lógico, sin FK.
+  userId                  String?   @map("user_id") @db.Uuid
+  /// Correo del comprador: el que escribió o, tras pagar, el confirmado en Stripe.
+  buyerEmail              String?   @map("buyer_email")
+  /// Vendedor tal como se le mostró al comprador (el nombre del aula).
+  sellerName              String    @map("seller_name")
+  /// `platform` (cobra el operador en nombre del creador) | `own` (claves del aula).
+  paymentMode             String    @map("payment_mode")
+  /// Versión del texto (`withdrawal-waiver.ts`).
+  version                 String
+  locale                  String    @db.VarChar(16)
+  /// Texto EXACTO que se mostró junto a la casilla.
+  text                    String
+  ip                      String?
+  userAgent               String?   @map("user_agent")
+  acceptedAt              DateTime  @map("accepted_at")
+  /// Cuándo confirmó Stripe el pago (o el alta, en una prueba gratis).
+  paidAt                  DateTime? @map("paid_at")
+  confirmationSentAt      DateTime? @map("confirmation_sent_at")
+  createdAt               DateTime  @default(now()) @map("created_at")
+
+  @@index([tenantId, acceptedAt])
+  @@index([orderId])
+  @@map("purchase_consent")
 }
 
 // ============================================================================
@@ -796,7 +860,7 @@ model ExternalOrder {
   invoiceIssuedAt DateTime? @map("invoice_issued_at")
   /// URL absoluta al PDF. **Didacta no guarda el documento**, solo por dónde se
   /// pide; quien lo sirve es quien lo emitió.
-  invoiceUrl String? @map("invoice_url")
+  invoiceUrl      String?   @map("invoice_url")
 
   /// El pedido en la tienda, para el botón "verlo allí".
   orderUrl String? @map("order_url")
@@ -1342,23 +1406,23 @@ enum LessonCompletionSource {
 }
 
 model ModLearningProgress {
-  id                String    @id @default(uuid()) @db.Uuid
-  tenantId          String    @map("tenant_id") @db.Uuid
-  enrollmentId      String    @map("enrollment_id") @db.Uuid
+  id                String                  @id @default(uuid()) @db.Uuid
+  tenantId          String                  @map("tenant_id") @db.Uuid
+  enrollmentId      String                  @map("enrollment_id") @db.Uuid
   /// ID lógico de la lección (sin FK cross-module)
-  lessonId          String    @map("lesson_id") @db.Uuid
+  lessonId          String                  @map("lesson_id") @db.Uuid
   /// Tiempo total visto/leído en segundos
-  watchedSeconds    Int       @default(0) @map("watched_seconds")
+  watchedSeconds    Int                     @default(0) @map("watched_seconds")
   /// Posición exacta para reanudación (segundo dentro del vídeo, scroll en HTML, etc.)
-  resumePositionSec Int       @default(0) @map("resume_position_sec")
-  completed         Boolean   @default(false)
+  resumePositionSec Int                     @default(0) @map("resume_position_sec")
+  completed         Boolean                 @default(false)
   /// Qué respalda el `completed`. NULL en las filas anteriores a LMS-121: no
   /// sabemos cómo se cerraron, y decir SELF sería inventarse una evidencia que
   /// nadie registró. El exportador Fundae las trata como no verificadas.
   completionSource  LessonCompletionSource? @map("completion_source")
-  firstAccessedAt   DateTime  @default(now()) @map("first_accessed_at")
-  lastAccessedAt    DateTime  @updatedAt @map("last_accessed_at")
-  completedAt       DateTime? @map("completed_at")
+  firstAccessedAt   DateTime                @default(now()) @map("first_accessed_at")
+  lastAccessedAt    DateTime                @updatedAt @map("last_accessed_at")
+  completedAt       DateTime?               @map("completed_at")
 
   enrollment ModLearningEnrollment @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
 
@@ -1751,19 +1815,19 @@ model ModThemingTenantTheme {
   /// URL pública del logo principal del tenant. Usado en header y emails.
   /// Si `logoStorageKey` está set, esto apunta al endpoint público de
   /// branding del backend; si no, puede ser una URL externa pegada por el admin.
-  logoUrl        String? @map("logo_url")
+  logoUrl           String? @map("logo_url")
   /// Key del blob en el StorageService (S3 o disco) cuando el logo se subió
   /// vía el uploader del panel de branding. NULL si el admin pegó una URL
   /// externa directamente.
-  logoStorageKey String? @map("logo_storage_key")
+  logoStorageKey    String? @map("logo_storage_key")
   /// MIME type del logo subido (image/png, image/svg+xml, etc.). Necesario
   /// para servir el blob con el Content-Type correcto desde el endpoint público.
-  logoMimeType   String? @map("logo_mime_type")
+  logoMimeType      String? @map("logo_mime_type")
   /// Cómo se presenta la marca donde aparece (sidebar, /signin, bienvenida):
   /// 'logo_only' = el logo sustituye al nombre a su ancho natural (logos
   /// horizontales con wordmark); 'logo_and_name' = logo compacto + nombre en
   /// texto (isotipos cuadrados). Default = el comportamiento previo del shell.
-  logoDisplayMode String @default("logo_only") @map("logo_display_mode")
+  logoDisplayMode   String  @default("logo_only") @map("logo_display_mode")
   /// URL del favicon (suele ser cuadrado, 32x32 o 512x512 para PWA).
   /// Si `faviconStorageKey` está set, apunta al endpoint público del backend;
   /// si no, puede ser una URL externa pegada por el admin.
@@ -2008,23 +2072,23 @@ enum FundaeCriterioFinalizacion {
 }
 
 model ModFundaeAction {
-  id             String   @id @default(uuid()) @db.Uuid
-  tenantId       String   @map("tenant_id") @db.Uuid
-  courseId       String?  @map("course_id") @db.Uuid
-  codigoAccion   String   @map("codigo_accion")
-  nombre         String
-  modalidad      String /// PRESENCIAL | TELEFORMACION | MIXTA
-  horasFormacion Float    @map("horas_formacion")
-  fechaInicio    String   @map("fecha_inicio") /// YYYY-MM-DD
-  fechaFin       String   @map("fecha_fin") /// YYYY-MM-DD
-  lugar          String?
-  cifCentro      String?  @map("cif_centro")
-  notas          String?
-  status         String   @default("DRAFT") /// DRAFT | ACTIVE | CLOSED | ARCHIVED
+  id                   String                     @id @default(uuid()) @db.Uuid
+  tenantId             String                     @map("tenant_id") @db.Uuid
+  courseId             String?                    @map("course_id") @db.Uuid
+  codigoAccion         String                     @map("codigo_accion")
+  nombre               String
+  modalidad            String /// PRESENCIAL | TELEFORMACION | MIXTA
+  horasFormacion       Float                      @map("horas_formacion")
+  fechaInicio          String                     @map("fecha_inicio") /// YYYY-MM-DD
+  fechaFin             String                     @map("fecha_fin") /// YYYY-MM-DD
+  lugar                String?
+  cifCentro            String?                    @map("cif_centro")
+  notas                String?
+  status               String                     @default("DRAFT") /// DRAFT | ACTIVE | CLOSED | ARCHIVED
   /// Regla de finalización de esta acción. Ver el enum.
   criterioFinalizacion FundaeCriterioFinalizacion @default(UMBRAL_PROGRESO) @map("criterio_finalizacion")
-  createdAt      DateTime @default(now()) @map("created_at")
-  updatedAt      DateTime @updatedAt @map("updated_at")
+  createdAt            DateTime                   @default(now()) @map("created_at")
+  updatedAt            DateTime                   @updatedAt @map("updated_at")
 
   @@unique([tenantId, codigoAccion], map: "mod_fundae_action_codigo_per_tenant_idx")
   @@index([tenantId, fechaInicio(sort: Desc)], map: "mod_fundae_action_tenant_inicio_idx")
@@ -2827,6 +2891,11 @@ model ModBillingProduct {
   /// Null = sin oferta: la ficha no pinta ni el tachado ni el porcentaje. Mismo
   /// patrón que `ModSubscriptionsPlan.compareAtCents`.
   compareAtAmount Int?     @map("compare_at_amount")
+  /// Precios fijos extra por mercado (`currency_options` de Stripe), en la
+  /// unidad mínima de cada moneda: { "mxn": 99900 }. NULL = sin ninguno (lo
+  /// normal: Adaptive Pricing ya enseña el precio en la moneda del alumno).
+  /// Inmutables en Stripe: cambiarlos crea un Price nuevo.
+  currencyOptions Json?    @map("currency_options")
   /// Nombre de la OPCIÓN de compra ("Curso", "Curso Intermedio", "Curso
   /// Avanzado"…). Un curso puede tener varias, igual que la membresía tiene
   /// varios planes; cadena vacía = la única opción (cursos con precio único).
@@ -3036,6 +3105,11 @@ model ModSubscriptionsPlan {
   currency        String   @default("eur")
   /// Precio "antes" tachado en céntimos (marketing). NULL = sin tachado.
   compareAtCents  Int?     @map("compare_at_cents")
+  /// Precios fijos extra por mercado (`currency_options` de Stripe), en la
+  /// unidad mínima de cada moneda: { "mxn": 99900 }. NULL = sin ninguno (lo
+  /// normal: Adaptive Pricing ya enseña el precio en la moneda del alumno).
+  /// Inmutables en Stripe: cambiarlos crea un Price nuevo.
+  currencyOptions Json?    @map("currency_options")
   /// Días de prueba gratis del checkout (0 = sin trial).
   trialDays       Int      @default(0) @map("trial_days")
   active          Boolean  @default(true)
@@ -3112,6 +3186,12 @@ model ModSubscriptionsInvoice {
   amount           Int
   currency         String                    @default("eur")
   /// URL hosted de Stripe a la factura — el alumno la ve si quiere descargar PDF.
+  /// Factura por la cuota ENTERA (`total` de Stripe). `amount` es lo cobrado:
+  /// con descuento por referidos, la cuota menos el saldo aplicado.
+  totalCents       Int?                      @map("total_cents")
+  /// Saldo a favor del cliente que Stripe gastó en la factura: la línea
+  /// «Pago con saldo de referidos».
+  creditAppliedCents Int                     @default(0) @map("credit_applied_cents")
   hostedInvoiceUrl String?                   @map("hosted_invoice_url")
   /// Cuándo Stripe la cobró exitosamente (NULL si OPEN/UNCOLLECTIBLE/VOID).
   paidAt           DateTime?                 @map("paid_at")
@@ -3965,6 +4045,9 @@ model ModReferralsConfig {
   /// Copy editable del área del miembro (/referidos). Sin datos inventados:
   /// lo escribe el operador; vacío = solo la UI funcional.
   memberCopy              String?  @map("member_copy")
+  /// El alumno con membresía puede cobrar lo ganado como descuento en su
+  /// próxima cuota (saldo de cliente de Stripe). El creador lo apaga en Ventas.
+  allowCreditRedemption   Boolean  @default(true) @map("allow_credit_redemption")
   createdAt               DateTime @default(now()) @map("created_at")
   updatedAt               DateTime @updatedAt @map("updated_at")
 
@@ -3972,6 +4055,29 @@ model ModReferralsConfig {
 }
 
 /// Código de referido de un usuario (1 por usuario y tenant, creado on-demand).
+/// Alumno del programa: aceptación de las condiciones (mayor de 18 y versión
+/// aceptada). Sin aceptación no hay enlace ni se atribuyen comisiones.
+model ModReferralsMember {
+  /// Identificador de fila (lo usa la rotación de la clave de cifrado).
+  id              String    @unique @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId        String    @map("tenant_id") @db.Uuid
+  userId          String    @map("user_id") @db.Uuid
+  /// Versión de las condiciones aceptada (`REFERRAL_TERMS_VERSION`).
+  termsVersion    String?   @map("terms_version")
+  termsAcceptedAt DateTime? @map("terms_accepted_at")
+  /// Datos para cobrar en dinero (nombre, identificador fiscal, IBAN) en JSON
+  /// cifrado con AES-256-GCM (la clave maestra; la rota `rotate-cipher-key`).
+  payeeCipher     Bytes?    @map("payee_cipher")
+  payeeIv         Bytes?    @map("payee_iv")
+  payeeTag        Bytes?    @map("payee_tag")
+  payeeUpdatedAt  DateTime? @map("payee_updated_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  @@id([tenantId, userId])
+  @@map("mod_referrals_member")
+}
+
 model ModReferralsCode {
   id        String   @id @default(uuid()) @db.Uuid
   tenantId  String   @map("tenant_id") @db.Uuid
@@ -4020,10 +4126,15 @@ model ModReferralsReferral {
   /// Código usado (se conserva aunque el código se regenere).
   code                 String
   /// Suscripción de Stripe que materializó la atribución (idempotencia).
-  stripeSubscriptionId String   @unique @map("stripe_subscription_id")
+  /// Null cuando el referido nació de una compra suelta (ver `orderId`).
+  stripeSubscriptionId String?  @unique @map("stripe_subscription_id")
   /// ID lógico de la suscripción local de mod.subscriptions (sin FK
   /// cross-module — lectura permitida por ADR-016, escritura nunca).
-  subscriptionId       String   @map("subscription_id") @db.Uuid
+  /// Null cuando el referido nació de una compra suelta.
+  subscriptionId       String?  @map("subscription_id") @db.Uuid
+  /// Orden de mod.billing que materializó la atribución (compra de un curso
+  /// suelto). ID lógico sin FK. Null en los referidos de membresía.
+  orderId              String?  @map("order_id") @db.Uuid
   /// Plan comprado (ID lógico, para métricas).
   planId               String?  @map("plan_id") @db.Uuid
   /// Momento de la atribución — ancla del ámbito recurringMonths.
@@ -4053,6 +4164,16 @@ model ModReferralsCommission {
   currency        String                   @default("eur")
   /// Bps aplicados en el momento del devengo (la config puede cambiar luego).
   commissionBps   Int                      @map("commission_bps")
+  /// COMMISSION = ganada por una venta; CREDIT_RETURN = saldo de descuento
+  /// sin usar devuelto a la cartera al darse de baja; ADJUSTMENT = ajuste por
+  /// devolución (negativo) de una venta reembolsada ya cobrada.
+  kind            String                   @default("COMMISSION")
+  /// Parte de la base ya devuelta al comprador (reembolsos parciales
+  /// acumulados): la comisión se recorta en proporción.
+  refundedBaseCents Int                    @default(0) @map("refunded_base_cents")
+  /// En un ADJUSTMENT: la comisión cuya venta se devolvió (sin FK: misma tabla,
+  /// y el ajuste debe sobrevivir aunque se archive la original).
+  adjustsCommissionId String?              @map("adjusts_commission_id") @db.Uuid
   status          ReferralCommissionStatus @default(PENDING)
   /// PENDING → APPROVED cuando vence (createdAt + guaranteeDays). El worker
   /// la aprueba al pasar; el admin puede revocar antes.
@@ -4086,12 +4207,32 @@ model ModReferralsPayout {
   currency          String   @default("eur")
   /// Referencia externa obligatoria del pago real.
   externalReference String   @map("external_reference")
-  /// Admin que registró la liquidación (ID lógico).
+  /// Admin que registró la liquidación (ID lógico). En un canje como
+  /// descuento, el propio alumno.
   createdByUserId   String   @map("created_by_user_id") @db.Uuid
+  /// CASH = pago fuera (lo registra el admin); CREDIT = descuento en la
+  /// próxima cuota (saldo de cliente de Stripe).
+  method            String   @default("CASH")
+  /// CREDIT: PENDING mientras Stripe no confirma el abono; DONE con el id de
+  /// la transacción de saldo (`cbtxn_…`) en `externalReference`.
+  status            String   @default("DONE")
+  /// CREDIT: cliente de Stripe (`cus_…`) al que se abona. Un reintento usa el
+  /// mismo cliente y la misma clave de idempotencia (el id de esta fila).
+  stripeCustomerId  String?  @map("stripe_customer_id")
+  /// Cobro en dinero: cuándo lo marcó pagado el creador (pedido = `created_at`).
+  paidAt            DateTime? @map("paid_at")
+  /// Justificante: número correlativo POR AULA (se asigna al marcarlo pagado).
+  receiptNumber     Int?      @map("receipt_number")
+  /// Datos del receptor tal como estaban al pagar (JSON cifrado): el
+  /// justificante no cambia aunque el alumno cambie luego su IBAN.
+  payeeSnapshotCipher Bytes?  @map("payee_snapshot_cipher")
+  payeeSnapshotIv     Bytes?  @map("payee_snapshot_iv")
+  payeeSnapshotTag    Bytes?  @map("payee_snapshot_tag")
   createdAt         DateTime @default(now()) @map("created_at")
 
   commissions ModReferralsCommission[]
 
+  @@unique([tenantId, receiptNumber])
   @@index([tenantId, referrerUserId])
   @@map("mod_referrals_payout")
 }
@@ -4601,4 +4742,710 @@ model ModGamificationSubmission {
   @@index([tenantId, status, createdAt(sort: Desc)])
   @@index([tenantId, userId])
   @@map("mod_gamification_submission")
+}
+
+// ============================================================================
+// mod.payouts — Cobros de plataforma (ADR-049..052)
+// ----------------------------------------------------------------------------
+// En las instalaciones que definen `PAYMENTS_PLATFORM_STRIPE_SECRET_KEY` el
+// alumno paga en la cuenta de Stripe del OPERADOR (con `on_behalf_of` de la
+// cuenta conectada del creador) y, cuando el cargo ya tiene su comisión real,
+// se transfiere al creador `bruto − comisión de Stripe − comisión del operador`.
+//
+// Sin esa variable estas tablas quedan vacías y nadie las lee: Community sigue
+// con «pega tu clave de Stripe» y sin comisión.
+//
+// Reglas comunes:
+//  - Importes `Int` en la unidad mínima de la divisa + `currency` ISO 4217 en
+//    minúsculas. Las SUMAS se llevan en `bigint`: Postgres suma un INTEGER
+//    en BIGINT y el módulo convierte el total a `BigInt` (un total no cabe en
+//    una columna `Int` en cuanto pasa de 21 millones de euros).
+//  - Todas llevan `tenant_id`, así que `prisma/rls.sql` les aplica sola la
+//    política de aislamiento por tenant.
+//  - Sin FK hacia tablas de otros módulos ni del core (contrato modular): los
+//    ids ajenos (orden, factura, usuario) son lógicos.
+//  - Las relaciones internas son `Restrict`: un registro de dinero no se borra
+//    en cascada.
+// ============================================================================
+
+/// Estado de la cuenta conectada del creador, derivado SIEMPRE de consultar la
+/// cuenta en Stripe (nunca del contenido de un evento).
+enum PayoutsAccountStatus {
+  /// Fila creada pero aún sin cuenta en Stripe.
+  NOT_CONNECTED
+  /// Cuenta creada; faltan requisitos por enviar en el alta alojada.
+  ONBOARDING
+  /// Datos enviados; Stripe aún no ha activado las capacidades.
+  PENDING_REVIEW
+  /// `card_payments` y `stripe_transfers` activos y sin requisitos vencidos.
+  READY
+  /// Requisitos vencidos o capacidad desactivada: se cortan las ventas nuevas.
+  RESTRICTED
+  /// Stripe rechazó la cuenta (`disabled_reason` de rechazo).
+  REJECTED
+  /// El creador (o la baja del tenant) desconectó los cobros. La cuenta de
+  /// Stripe NO se cierra: hacen falta 120 días para poder revertir disputas.
+  DISCONNECTED
+}
+
+/// Ciclo de vida de la liquidación de una venta.
+enum PayoutsSaleStatus {
+  /// Cobrada; el cargo aún no tiene `balance_transaction` (comisión real).
+  AWAITING_FEE
+  /// Reparto calculado; pendiente de crear la transferencia.
+  READY
+  /// Transferencia creada en Stripe.
+  TRANSFERRED
+  /// La deuda abierta del creador absorbió todo el neto: no hubo transferencia.
+  SETTLED_NETTED
+  /// La transferencia falló o la cuenta está restringida; se reintenta.
+  HELD
+  /// Fallo definitivo: requiere intervención.
+  FAILED
+}
+
+/// De dónde sale la venta.
+enum PayoutsSaleSourceKind {
+  /// Pago único de un curso (`mod_billing_order`).
+  ORDER
+  /// Factura pagada de una suscripción / membresía.
+  SUBSCRIPTION_INVOICE
+}
+
+/// Tipo de asiento del libro. `amount` lleva signo: es el efecto sobre lo que
+/// le corresponde al creador.
+enum PayoutsLedgerEntryType {
+  SALE_GROSS
+  STRIPE_FEE
+  PLATFORM_FEE
+  TRANSFER
+  REFUND
+  PLATFORM_FEE_REFUND
+  TRANSFER_REVERSAL
+  DISPUTE_WITHDRAWN
+  DISPUTE_FEE
+  DISPUTE_REINSTATED
+  DEBT_CREATED
+  DEBT_RECOVERED
+  ADJUSTMENT
+}
+
+/// Por qué el creador debe dinero al operador.
+enum PayoutsDebtReason {
+  /// Comisión de Stripe que Stripe no devuelve al reembolsar.
+  REFUND_FEE
+  /// Importe de una disputa que no se pudo recuperar revirtiendo.
+  DISPUTE
+  /// Tasa de la disputa.
+  DISPUTE_FEE
+  /// La reversión de una transferencia falló por saldo insuficiente.
+  REVERSAL_FAILED
+  /// Ajuste hecho a mano por el operador.
+  MANUAL
+}
+
+enum PayoutsDebtStatus {
+  OPEN
+  RECOVERED
+  WRITTEN_OFF
+}
+
+/// Resultado de revertir la transferencia al reembolsar.
+enum PayoutsRefundReversalStatus {
+  /// Se revirtió todo el objetivo.
+  DONE
+  /// Se revirtió lo que permitía el saldo; el resto es deuda.
+  PARTIAL
+  /// No se pudo revertir nada: todo el objetivo es deuda.
+  FAILED_TO_DEBT
+}
+
+/// Ajustes de cobro del tenant (1 fila por tenant). La comisión la empuja el
+/// plano de control (Didacta Cloud); el creador no la edita.
+model ModPayoutsSettings {
+  tenantId  String   @id @map("tenant_id") @db.Uuid
+  /// Comisión del operador en puntos básicos: 500 = 5 %. Rango 0..3000,
+  /// validado en el módulo (`assertFeeBps`).
+  feeBps    Int      @default(500) @map("fee_bps")
+  /// Quién la cambió por última vez: id de usuario o la credencial de
+  /// aprovisionamiento. Texto libre, sin FK.
+  updatedBy String?  @map("updated_by")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("mod_payouts_settings")
+}
+
+/// Cuenta conectada de Stripe del creador. Espejo de lo que dice Stripe: se
+/// reescribe en cada `syncAccount`.
+model ModPayoutsAccount {
+  id                       String               @id @default(uuid()) @db.Uuid
+  tenantId                 String               @map("tenant_id") @db.Uuid
+  /// `acct_…`. Null mientras la fila existe pero Stripe aún no creó la cuenta.
+  stripeAccountId          String?              @unique @map("stripe_account_id")
+  /// ISO 3166-1 alfa-2 en mayúsculas.
+  country                  String               @db.VarChar(2)
+  /// `individual` | `company`.
+  entityType               String               @map("entity_type")
+  status                   PayoutsAccountStatus @default(NOT_CONNECTED)
+  /// Estado literal de la capacidad en Stripe (`active`, `pending`…).
+  cardPaymentsStatus       String?              @map("card_payments_status")
+  transfersStatus          String?              @map("transfers_status")
+  payoutsEnabled           Boolean              @default(false) @map("payouts_enabled")
+  requirementsCurrentlyDue Json                 @default("[]") @map("requirements_currently_due")
+  requirementsPastDue      Json                 @default("[]") @map("requirements_past_due")
+  requirementsDeadline     DateTime?            @map("requirements_deadline")
+  disabledReason           String?              @map("disabled_reason")
+  defaultCurrency          String?              @map("default_currency") @db.VarChar(3)
+  /// `application` | `stripe` — quién cobra las comisiones / asume las pérdidas.
+  feesCollector            String?              @map("fees_collector")
+  lossesCollector          String?              @map("losses_collector")
+  /// Calendario de pagos al banco aplicado por la plataforma.
+  payoutSchedule           Json?                @map("payout_schedule")
+  /// Configuración del portal de cliente propia del creador (`bpc_…`).
+  portalConfigurationId    String?              @map("portal_configuration_id")
+  livemode                 Boolean              @default(false)
+  /// Primera vez que la cuenta llegó a READY. Null = nunca ha operado.
+  readyAt                  DateTime?            @map("ready_at")
+  lastSyncedAt             DateTime?            @map("last_synced_at")
+  closedAt                 DateTime?            @map("closed_at")
+  createdAt                DateTime             @default(now()) @map("created_at")
+  updatedAt                DateTime             @updatedAt @map("updated_at")
+
+  sales         ModPayoutsSale[]
+  ledgerEntries ModPayoutsLedgerEntry[]
+  debts         ModPayoutsDebt[]
+
+  @@index([tenantId, status])
+  @@map("mod_payouts_account")
+}
+
+/// Registro `objeto de Stripe → tenant`. Es la ÚNICA fuente de la que el
+/// webhook de plataforma saca el tenant de un evento: lo escribe nuestro
+/// servidor al crear el objeto, nunca sale de la metadata del evento.
+model ModPayoutsObjectRef {
+  /// Id del objeto en Stripe (`cs_…`, `pi_…`, `ch_…`, `sub_…`, `acct_…`…).
+  /// PK global: un objeto pertenece a un único tenant.
+  stripeObjectId String   @id @map("stripe_object_id")
+  tenantId       String   @map("tenant_id") @db.Uuid
+  /// Clase de objeto (`checkout_session`, `payment_intent`, `charge`…).
+  kind           String
+  /// Módulo que lo creó: `billing` | `membership` | `subscriptions` | `payouts`.
+  source         String
+  /// Id local al que apunta (orden, plan, suscripción…). Lógico, sin FK.
+  localRef       String?  @map("local_ref")
+  /// Objeto de Stripe del que cuelga (el `pi_…` de un `ch_…`, la sesión de un
+  /// `sub_…`): permite heredar el tenant de un hijo aún sin registrar.
+  parentObjectId String?  @map("parent_object_id")
+  livemode       Boolean  @default(false)
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  @@index([tenantId, kind])
+  @@index([parentObjectId])
+  /// Los webhooks heredados buscan la sesión de checkout de plataforma por su
+  /// orden local (`metadata.orderId`) para rechazar el evento.
+  @@index([kind, localRef])
+  @@map("mod_payouts_object_ref")
+}
+
+/// Una venta cobrada en la cuenta de la plataforma y su reparto. Hace de cola
+/// de liquidación (el barrido la recorre por `status` + `next_attempt_at`).
+///
+/// Invariante: `gross − stripe_fee − platform_fee = creator_net =
+/// transfer_amount + debt_netted`, todo en la divisa de liquidación del cargo.
+model ModPayoutsSale {
+  id                         String                @id @default(uuid()) @db.Uuid
+  tenantId                   String                @map("tenant_id") @db.Uuid
+  accountId                  String                @map("account_id") @db.Uuid
+  sourceKind                 PayoutsSaleSourceKind @map("source_kind")
+  /// Id de la orden de mod.billing o de la factura de Stripe. Lógico, sin FK.
+  sourceRef                  String                @map("source_ref")
+  description                String?
+  buyerEmail                 String?               @map("buyer_email")
+  stripeChargeId             String                @unique @map("stripe_charge_id")
+  stripePaymentIntentId      String?               @map("stripe_payment_intent_id")
+  stripeInvoiceId            String?               @map("stripe_invoice_id")
+  stripeBalanceTransactionId String?               @map("stripe_balance_transaction_id")
+  /// Lo que pagó el alumno, en SU divisa.
+  presentmentAmount          Int                   @map("presentment_amount")
+  presentmentCurrency        String                @map("presentment_currency") @db.VarChar(3)
+  /// Saldo a favor del cliente que Stripe aplicó a la factura (descuento por
+  /// referidos), en la divisa del alumno. El alumno pagó eso de menos.
+  customerCreditApplied      Int                   @default(0) @map("customer_credit_applied")
+  /// Todo lo de abajo va en la divisa de liquidación (`currency`) y es null
+  /// hasta que el cargo tiene `balance_transaction`.
+  gross                      Int?
+  stripeFee                  Int?                  @map("stripe_fee")
+  /// Comisión aplicada, sellada al calcular el reparto (la del tenant puede
+  /// cambiar después).
+  feeBpsApplied              Int?                  @map("fee_bps_applied")
+  /// Base de la comisión del operador: el bruto MÁS el saldo a favor aplicado
+  /// (pasado a la divisa de liquidación). Null = el bruto. El descuento lo
+  /// paga el creador, nunca el operador.
+  feeBase                    Int?                  @map("fee_base")
+  platformFee                Int?                  @map("platform_fee")
+  creatorNet                 Int?                  @map("creator_net")
+  /// Parte del neto que se quedó la plataforma para compensar deuda abierta.
+  debtNetted                 Int                   @default(0) @map("debt_netted")
+  transferAmount             Int?                  @map("transfer_amount")
+  currency                   String?               @db.VarChar(3)
+  stripeTransferId           String?               @unique @map("stripe_transfer_id")
+  status                     PayoutsSaleStatus     @default(AWAITING_FEE)
+  refundedAmount             Int                   @default(0) @map("refunded_amount")
+  reversedAmount             Int                   @default(0) @map("reversed_amount")
+  /// Cuándo quedan disponibles los fondos del cargo (`available_on`).
+  availableOn                DateTime?             @map("available_on")
+  attempts                   Int                   @default(0)
+  lastError                  String?               @map("last_error")
+  nextAttemptAt              DateTime?             @map("next_attempt_at")
+  chargedAt                  DateTime?             @map("charged_at")
+  transferredAt              DateTime?             @map("transferred_at")
+  createdAt                  DateTime              @default(now()) @map("created_at")
+  updatedAt                  DateTime              @updatedAt @map("updated_at")
+
+  account       ModPayoutsAccount       @relation(fields: [accountId], references: [id], onDelete: Restrict)
+  ledgerEntries ModPayoutsLedgerEntry[]
+  debts         ModPayoutsDebt[]
+  refunds       ModPayoutsRefund[]
+  disputes      ModPayoutsDispute[]
+
+  @@index([tenantId, status])
+  @@index([tenantId, chargedAt(sort: Desc)])
+  @@index([tenantId, sourceKind, sourceRef])
+  @@index([status, nextAttemptAt])
+  @@index([accountId])
+  @@index([stripePaymentIntentId])
+  @@index([stripeInvoiceId])
+  @@map("mod_payouts_sale")
+}
+
+/// Libro mayor de SOLO INSERCIÓN (un trigger de `rls.sql` bloquea UPDATE y
+/// DELETE, igual que en `audit_log`). Una corrección es un asiento nuevo.
+model ModPayoutsLedgerEntry {
+  id                         String                 @id @default(uuid()) @db.Uuid
+  tenantId                   String                 @map("tenant_id") @db.Uuid
+  accountId                  String                 @map("account_id") @db.Uuid
+  saleId                     String?                @map("sale_id") @db.Uuid
+  type                       PayoutsLedgerEntryType
+  /// Con signo: efecto sobre lo que corresponde al creador.
+  amount                     Int
+  currency                   String                 @db.VarChar(3)
+  stripeObjectId             String?                @map("stripe_object_id")
+  stripeBalanceTransactionId String?                @map("stripe_balance_transaction_id")
+  /// Misma clave que la cabecera `Idempotency-Key` enviada a Stripe
+  /// (`payouts:transfer:<saleId>`…). Única: reintentar no duplica el asiento.
+  idempotencyKey             String                 @unique @map("idempotency_key")
+  occurredAt                 DateTime               @map("occurred_at")
+  metadata                   Json                   @default("{}")
+  createdAt                  DateTime               @default(now()) @map("created_at")
+
+  account ModPayoutsAccount @relation(fields: [accountId], references: [id], onDelete: Restrict)
+  sale    ModPayoutsSale?   @relation(fields: [saleId], references: [id], onDelete: Restrict)
+
+  @@index([tenantId, accountId, currency])
+  @@index([tenantId, occurredAt])
+  @@index([saleId])
+  @@map("mod_payouts_ledger_entry")
+}
+
+/// Lo que el creador debe al operador y no se pudo recuperar en el momento.
+/// Se compensa en liquidaciones futuras de la MISMA divisa.
+model ModPayoutsDebt {
+  id                String            @id @default(uuid()) @db.Uuid
+  tenantId          String            @map("tenant_id") @db.Uuid
+  accountId         String            @map("account_id") @db.Uuid
+  reason            PayoutsDebtReason
+  originSaleId      String?           @map("origin_sale_id") @db.Uuid
+  amountOriginal    Int               @map("amount_original")
+  amountOutstanding Int               @map("amount_outstanding")
+  currency          String            @db.VarChar(3)
+  status            PayoutsDebtStatus @default(OPEN)
+  createdAt         DateTime          @default(now()) @map("created_at")
+  updatedAt         DateTime          @updatedAt @map("updated_at")
+
+  account    ModPayoutsAccount @relation(fields: [accountId], references: [id], onDelete: Restrict)
+  originSale ModPayoutsSale?   @relation(fields: [originSaleId], references: [id], onDelete: Restrict)
+
+  @@index([tenantId, accountId, status, currency])
+  @@index([originSaleId])
+  @@map("mod_payouts_debt")
+}
+
+/// Reembolso iniciado desde el panel (o detectado si se hizo a mano en Stripe).
+/// La fila nace ANTES de llamar a Stripe: por eso `stripe_refund_id` es nulo.
+model ModPayoutsRefund {
+  id               String                       @id @default(uuid()) @db.Uuid
+  tenantId         String                       @map("tenant_id") @db.Uuid
+  saleId           String                       @map("sale_id") @db.Uuid
+  stripeRefundId   String?                      @unique @map("stripe_refund_id")
+  amount           Int
+  currency         String                       @db.VarChar(3)
+  /// Cuánto hay que revertir de la transferencia (proporcional al reembolso).
+  reversalTarget   Int?                         @map("reversal_target")
+  stripeReversalId String?                      @map("stripe_reversal_id")
+  reversalStatus   PayoutsRefundReversalStatus? @map("reversal_status")
+  /// Id del usuario que lo pidió, o el origen si no fue desde el panel.
+  initiatedBy      String?                      @map("initiated_by")
+  reason           String?
+  /// Estado literal del reembolso en Stripe (`pending`, `succeeded`…).
+  status           String                       @default("pending")
+  createdAt        DateTime                     @default(now()) @map("created_at")
+  updatedAt        DateTime                     @updatedAt @map("updated_at")
+
+  sale ModPayoutsSale @relation(fields: [saleId], references: [id], onDelete: Restrict)
+
+  @@index([tenantId, saleId])
+  @@index([saleId])
+  @@map("mod_payouts_refund")
+}
+
+/// Disputa (contracargo) sobre una venta.
+model ModPayoutsDispute {
+  id               String    @id @default(uuid()) @db.Uuid
+  tenantId         String    @map("tenant_id") @db.Uuid
+  saleId           String    @map("sale_id") @db.Uuid
+  stripeDisputeId  String    @unique @map("stripe_dispute_id")
+  /// Estado literal de la disputa en Stripe.
+  status           String
+  amount           Int
+  currency         String    @db.VarChar(3)
+  /// Tasa de la disputa, leída de `dispute.balance_transactions`.
+  fee              Int       @default(0)
+  reason           String?
+  evidenceDueBy    DateTime? @map("evidence_due_by")
+  stripeReversalId String?   @map("stripe_reversal_id")
+  /// `won` | `lost` al cerrarse.
+  outcome          String?
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+
+  sale ModPayoutsSale @relation(fields: [saleId], references: [id], onDelete: Restrict)
+
+  @@index([tenantId, status])
+  @@index([saleId])
+  @@map("mod_payouts_dispute")
+}
+
+/// Evento recibido en el webhook único de plataforma. Idempotencia (PK =
+/// `evt_…`) y cola de reproceso del conciliador. `tenant_id` es null cuando el
+/// evento no se pudo atribuir a ningún tenant («sin atribuir»).
+model ModPayoutsWebhookEvent {
+  stripeEventId String    @id @map("stripe_event_id")
+  tenantId      String?   @map("tenant_id") @db.Uuid
+  type          String
+  /// Id del objeto principal del evento.
+  objectId      String?   @map("object_id")
+  livemode      Boolean   @default(false)
+  payload       Json      @default("{}")
+  receivedAt    DateTime  @default(now()) @map("received_at")
+  processedAt   DateTime? @map("processed_at")
+  errorMessage  String?   @map("error_message")
+  attempts      Int       @default(0)
+
+  @@index([tenantId, receivedAt])
+  @@index([type])
+  @@index([processedAt, receivedAt])
+  @@map("mod_payouts_webhook_event")
+}
+
+/// Datos fiscales del creador: los que necesita la factura de la comisión
+/// (RD 1619/2012) y los que pide DAC7 (Ley 13/2023, RD 117/2024). Lo
+/// identificativo va CIFRADO (`SecretCipherService`, AES-256-GCM) en un solo
+/// bloque: NIF, NIF-IVA, dirección y fecha de nacimiento. En claro solo lo que
+/// hace falta para decidir sin descifrar (tipo, nombre, país, estado VIES).
+model ModPayoutsTaxProfile {
+  id              String    @id @default(uuid()) @db.Uuid
+  tenantId        String    @unique @map("tenant_id") @db.Uuid
+  /// `individual` (particular o autónomo) | `company`.
+  entityType      String    @map("entity_type")
+  /// Nombre y apellidos, o razón social.
+  legalName       String    @map("legal_name")
+  /// ISO 3166-1 alfa-2 de la residencia fiscal.
+  country         String    @db.VarChar(2)
+  /// JSON cifrado: `{ taxId, vatId, address, birthDate }`.
+  sensitiveCipher Bytes     @map("sensitive_cipher")
+  sensitiveIv     Bytes     @map("sensitive_iv")
+  sensitiveTag    Bytes     @map("sensitive_tag")
+  /// Últimos caracteres del NIF, para enseñarlo enmascarado.
+  taxIdHint       String?   @map("tax_id_hint")
+  hasVatId        Boolean   @default(false) @map("has_vat_id")
+  /// VIES: `valid` | `invalid` | `pending` (no se pudo comprobar) | `not_applicable`.
+  vatStatus       String    @default("not_applicable") @map("vat_status")
+  vatCheckedAt    DateTime? @map("vat_checked_at")
+  /// sha256 del NIF-IVA comprobado: la caché solo vale para ESE número.
+  vatCheckedHash  String?   @map("vat_checked_hash")
+  /// Número de consulta de VIES (prueba de la comprobación), si lo dio.
+  vatConsultation String?   @map("vat_consultation")
+  /// Está todo lo que exigen la factura y DAC7.
+  complete        Boolean   @default(false)
+  /// Usuario que confirmó los datos por última vez. Lógico, sin FK.
+  confirmedBy     String?   @map("confirmed_by")
+  confirmedAt     DateTime? @map("confirmed_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  @@map("mod_payouts_tax_profile")
+}
+
+/// Ordinaria o rectificativa (RD 1619/2012, art. 15: serie propia).
+enum PayoutsInvoiceKind {
+  ORDINARY
+  RECTIFYING
+}
+
+/// Cómo tributa la comisión según dónde está el creador.
+enum PayoutsVatRegime {
+  /// Creador en España (península y Baleares): IVA del 21 % incluido en el 5 %.
+  ES_VAT
+  /// Creador en otro país de la UE con NIF-IVA válido en VIES: sin IVA,
+  /// inversión del sujeto pasivo (art. 196 Directiva 2006/112/CE).
+  EU_REVERSE_CHARGE
+  /// Creador en otro país de la UE sin NIF-IVA válido: IVA español del 21 %
+  /// incluido (criterio prudente; ver `vat.ts`).
+  ES_VAT_EU_NO_VAT_ID
+  /// Creador fuera de la UE: no sujeta al IVA español (art. 69.Uno.1.º LIVA).
+  NOT_SUBJECT_OUTSIDE_EU
+  /// Creador en Canarias, Ceuta o Melilla: fuera del territorio de aplicación
+  /// del IVA (art. 3 y 69 LIVA).
+  NOT_SUBJECT_ES_SPECIAL_TERRITORY
+}
+
+/// Factura de la comisión del operador al creador, una por mes, creador y
+/// moneda (más rectificativas). INMUTABLE una vez emitida: un trigger de
+/// `rls.sql` congela número, fechas, importes y datos, y prohíbe borrarla. Lo
+/// identificativo del destinatario y el PDF emitido van cifrados en un bloque.
+model ModPayoutsInvoice {
+  id                  String             @id @default(uuid()) @db.Uuid
+  tenantId            String             @map("tenant_id") @db.Uuid
+  accountId           String             @map("account_id") @db.Uuid
+  kind                PayoutsInvoiceKind
+  /// Serie con el año: `DC-2026`, `DCR-2026` (rectificativas).
+  series              String
+  number              Int
+  /// `DC-2026-000001`.
+  fullNumber          String             @unique @map("full_number")
+  /// Hueco que ocupa (idempotencia del proceso mensual): `ord:2026-11:eur`,
+  /// `ref:2026-11:eur`, `sub:<id de la factura sustituida>`.
+  slot                String
+  issueDate           DateTime           @map("issue_date") @db.Date
+  periodStart         DateTime           @map("period_start") @db.Date
+  periodEnd           DateTime           @map("period_end") @db.Date
+  currency            String             @db.VarChar(3)
+  regime              PayoutsVatRegime
+  /// 2100 = 21 %; 0 sin IVA.
+  vatRateBps          Int                @map("vat_rate_bps")
+  /// Con signo (negativo en una rectificativa por devoluciones). IVA incluido.
+  total               Int
+  taxBase             Int                @map("tax_base")
+  vatAmount           Int                @map("vat_amount")
+  /// Emisor tal como salió en la factura.
+  issuer              Json
+  recipientLegalName  String             @map("recipient_legal_name")
+  recipientCountry    String             @map("recipient_country") @db.VarChar(2)
+  recipientEntityType String             @map("recipient_entity_type")
+  /// `false`: se emitió con los datos que había y queda por completar
+  /// (cuando se completen, la sustituye una rectificativa).
+  recipientComplete   Boolean            @map("recipient_complete")
+  /// Facturas que rectifica: `[{ id, fullNumber, issueDate }]`.
+  rectifies           Json               @default("[]")
+  rectificationReason String?            @map("rectification_reason")
+  /// Rectificativa que la sustituye entera (datos completados).
+  replacedById        String?            @map("replaced_by_id") @db.Uuid
+  /// JSON cifrado: `{ recipient: { taxId, vatId, address }, pdf: base64 }`.
+  documentCipher      Bytes              @map("document_cipher")
+  documentIv          Bytes              @map("document_iv")
+  documentTag         Bytes              @map("document_tag")
+  livemode            Boolean            @default(false)
+  emailedAt           DateTime?          @map("emailed_at")
+  emailAttempts       Int                @default(0) @map("email_attempts")
+  createdAt           DateTime           @default(now()) @map("created_at")
+
+  items ModPayoutsInvoiceItem[]
+
+  @@unique([series, number])
+  @@unique([tenantId, slot])
+  @@index([tenantId, issueDate(sort: Desc)])
+  @@index([emailedAt])
+  @@map("mod_payouts_invoice")
+}
+
+/// Línea de una factura: un asiento de comisión (`PLATFORM_FEE`) o de
+/// devolución de comisión (`PLATFORM_FEE_REFUND`) del libro. Solo inserción.
+model ModPayoutsInvoiceItem {
+  id                    String   @id @default(uuid()) @db.Uuid
+  tenantId              String   @map("tenant_id") @db.Uuid
+  invoiceId             String   @map("invoice_id") @db.Uuid
+  saleId                String?  @map("sale_id") @db.Uuid
+  /// Asiento del libro al que corresponde la línea.
+  ledgerEntryId         String   @map("ledger_entry_id") @db.Uuid
+  /// El asiento que esta línea FACTURA por primera vez. Único: un asiento se
+  /// factura una sola vez aunque dos procesos corran a la vez. Nulo en las
+  /// copias de una rectificativa por sustitución.
+  consumesLedgerEntryId String?  @unique @map("consumes_ledger_entry_id") @db.Uuid
+  /// `COMMISSION` | `COMMISSION_REFUND`.
+  type                  String
+  occurredAt            DateTime @map("occurred_at")
+  description           String?
+  /// Importe de la venta (lo que pagó el alumno, en la moneda de la factura).
+  saleGross             Int?     @map("sale_gross")
+  /// Con signo, IVA incluido.
+  amount                Int
+  /// Factura que cobró la comisión que aquí se devuelve.
+  originalInvoiceId     String?  @map("original_invoice_id") @db.Uuid
+  createdAt             DateTime @default(now()) @map("created_at")
+
+  invoice ModPayoutsInvoice @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
+
+  @@index([tenantId, invoiceId])
+  @@index([saleId])
+  @@map("mod_payouts_invoice_item")
+}
+
+/// Contador de cada serie de facturas del operador. GLOBAL (sin `tenant_id`):
+/// la numeración es del emisor, correlativa para todas las aulas. Se avanza en
+/// la MISMA transacción que inserta la factura, así que un fallo no deja hueco.
+model ModPayoutsInvoiceCounter {
+  series     String   @id
+  lastNumber Int      @map("last_number")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  @@map("mod_payouts_invoice_counter")
+}
+
+// ============================================================================
+// VÍDEO SUBIDO A BUNNY STREAM (Didacta Cloud)
+// ----------------------------------------------------------------------------
+// Infra del host (como la protección de vídeo), no un módulo: el creador sube
+// el vídeo de una lección directamente desde su navegador a la biblioteca de
+// Bunny Stream del operador, en una colección por aula (`DC_<slug>`).
+//
+// Solo se usa si el operador define `BUNNY_STREAM_*` (Didacta Cloud). Sin esas
+// variables las tres tablas se quedan vacías y la lección sigue admitiendo
+// solo enlaces, como siempre.
+//
+//  - Las tres llevan `tenant_id`: `rls.sql` les aplica sola la política de
+//    aislamiento por tenant.
+//  - Sin FK a otras tablas: la lección (`lesson_id`) y el usuario
+//    (`created_by_id`) son ids lógicos (contrato modular).
+//  - El original NUNCA se guarda: Bunny lo descarta al codificar.
+// ============================================================================
+
+/// Estado de un vídeo subido, derivado SIEMPRE de consultar el vídeo en Bunny
+/// (el webhook solo avisa de que hay que mirar).
+enum VideoAssetStatus {
+  /// Firmada la subida; el navegador aún está enviando los bytes.
+  UPLOADING
+  /// Bunny ya tiene los bytes y está codificando.
+  PROCESSING
+  /// Codificado y reproducible.
+  READY
+  /// Bunny no pudo codificarlo, la subida falló o se rechazó al comprobarlo
+  /// (más largo de lo permitido, cuota superada). `failure_reason` dice cuál.
+  FAILED
+  /// Borrado en Bunny (sustituido, quitado de la lección, aula inactiva…).
+  DELETED
+}
+
+model VideoAsset {
+  id                   String           @id @default(uuid()) @db.Uuid
+  tenantId             String           @map("tenant_id") @db.Uuid
+  /// Lección para la que se subió. Id lógico de mod.courses, sin FK.
+  lessonId             String?          @map("lesson_id") @db.Uuid
+  /// Biblioteca de Bunny Stream (la de Didacta Cloud).
+  libraryId            String           @map("library_id") @db.VarChar(20)
+  /// GUID del vídeo en Bunny, en minúsculas. Único: un vídeo es de una sola aula.
+  bunnyGuid            String           @unique @map("bunny_guid") @db.VarChar(36)
+  /// Colección `DC_<slug>` en la que se creó.
+  collectionId         String?          @map("collection_id") @db.VarChar(36)
+  title                String           @db.VarChar(200)
+  status               VideoAssetStatus @default(UPLOADING)
+  /// `too_long` | `quota` | `encoding_failed` | `upload_failed` | `abandoned`.
+  failureReason        String?          @map("failure_reason") @db.VarChar(40)
+  /// Lo que dijo el navegador antes de firmar (se vuelve a comprobar con lo
+  /// que mide Bunny al terminar de codificar).
+  declaredBytes        BigInt           @map("declared_bytes")
+  declaredSeconds      Int              @map("declared_seconds")
+  /// Duración real medida por Bunny (segundos). Null hasta que la conoce.
+  durationSeconds      Int?             @map("duration_seconds")
+  /// Bytes que ocupan las versiones codificadas en Bunny.
+  storageBytes         BigInt?          @map("storage_bytes")
+  /// Resolución máxima permitida al subirlo: `720p` | `1080p`.
+  maxResolution        String           @map("max_resolution") @db.VarChar(8)
+  /// Resoluciones que Bunny tiene de verdad (`240p,360p,720p`).
+  availableResolutions String?          @map("available_resolutions") @db.VarChar(120)
+  /// Ya se borraron las resoluciones por encima del máximo permitido.
+  resolutionsCapped    Boolean          @default(false) @map("resolutions_capped")
+  /// Último `totalWatchTime` (segundos) que dio Bunny: lo que se suma al mes
+  /// es la diferencia con la lectura anterior.
+  watchSecondsTotal    BigInt           @default(0) @map("watch_seconds_total")
+  lastPlayedAt         DateTime?        @map("last_played_at")
+  /// Primera vez que se vio sin ninguna lección del aula que lo use. Se borra
+  /// en Bunny si sigue así pasado el margen (el creador puede estar aún en el
+  /// editor sin haber guardado).
+  unreferencedSince    DateTime?        @map("unreferenced_since")
+  lastSyncedAt         DateTime?        @map("last_synced_at")
+  createdById          String?          @map("created_by_id") @db.Uuid
+  createdAt            DateTime         @default(now()) @map("created_at")
+  updatedAt            DateTime         @updatedAt @map("updated_at")
+  deletedAt            DateTime?        @map("deleted_at")
+  /// `replaced` | `removed` | `inactivity` | `quota` | `too_long` | `abandoned` | `bunny`.
+  deleteReason         String?          @map("delete_reason") @db.VarChar(40)
+
+  // Copia en Google Drive antes del borrado por inactividad (se guarda 90 días).
+  backupDriveFileId String?   @map("backup_drive_file_id") @db.VarChar(200)
+  backupBytes       BigInt?   @map("backup_bytes")
+  backupAt          DateTime? @map("backup_at")
+  backupExpiresAt   DateTime? @map("backup_expires_at")
+  /// La copia ya no existe (caducó o se pidió su supresión).
+  backupDeletedAt   DateTime? @map("backup_deleted_at")
+  backupError       String?   @map("backup_error") @db.VarChar(300)
+
+  @@index([tenantId, status])
+  @@index([tenantId, lessonId])
+  @@index([status, updatedAt])
+  @@index([backupExpiresAt])
+  @@map("video_asset")
+}
+
+/// Horas vistas por aula y mes natural (UTC), acumuladas a partir del
+/// `totalWatchTime` de cada vídeo en Bunny.
+model VideoUsageMonth {
+  tenantId       String   @map("tenant_id") @db.Uuid
+  /// `YYYY-MM` en UTC.
+  month          String   @db.VarChar(7)
+  watchedSeconds BigInt   @default(0) @map("watched_seconds")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  @@id([tenantId, month])
+  @@map("video_usage_month")
+}
+
+/// Vídeo de Didacta Cloud por aula: su colección en Bunny y la política de
+/// inactividad (avisos a los 10 y 20 días; copia, borrado y archivado a los 30).
+model VideoTenantState {
+  tenantId            String    @id @map("tenant_id") @db.Uuid
+  /// Colección `DC_<slug>` en Bunny y el nombre con el que se creó.
+  collectionId        String?   @map("collection_id") @db.VarChar(36)
+  collectionName      String?   @map("collection_name") @db.VarChar(120)
+  /// Reserva para crear la colección una sola vez aunque lleguen dos subidas a la vez.
+  collectionClaimedAt DateTime? @map("collection_claimed_at")
+  /// Última actividad calculada por el barrido diario, y de qué fuente salió.
+  lastActivityAt      DateTime? @map("last_activity_at")
+  lastActivitySource  String?   @map("last_activity_source") @db.VarChar(40)
+  /// Avisos de inactividad ENVIADOS (salió al menos un correo). Se vacían en
+  /// cuanto vuelve a haber actividad.
+  warned10At          DateTime? @map("warned_10_at")
+  warned20At          DateTime? @map("warned_20_at")
+  /// Copia a Drive, borrado en Bunny y archivado del aula.
+  purgeStartedAt      DateTime? @map("purge_started_at")
+  purgedAt            DateTime? @map("purged_at")
+  archivedAt          DateTime? @map("archived_at")
+  /// Último motivo por el que el borrado no se ejecutó (sin copia, error…).
+  purgeBlockedReason  String?   @map("purge_blocked_reason") @db.VarChar(300)
+  /// Mes (`YYYY-MM`) del último aviso al operador por coste de vídeo.
+  costAlertMonth      String?   @map("cost_alert_month") @db.VarChar(7)
+  createdAt           DateTime  @default(now()) @map("created_at")
+  updatedAt           DateTime  @updatedAt @map("updated_at")
+
+  @@map("video_tenant_state")
 }

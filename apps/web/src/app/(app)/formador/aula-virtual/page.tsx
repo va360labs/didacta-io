@@ -5,6 +5,8 @@
  * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
  */
 
+import { SimpleLive } from '@/components/simple-gestion/simple-live';
+import { useSimpleMode } from '@/lib/simple-mode';
 import Link from 'next/link';
 import { useEffect, useState, type FormEvent } from 'react';
 import { useTranslations } from 'next-intl';
@@ -54,7 +56,14 @@ function formatStart(iso: string, tz: string): string {
   }
 }
 
+/** En modo sencillo, la variante sencilla; en modo completo, la de siempre. */
 export default function AulaVirtualPage() {
+  const simple = useSimpleMode();
+  if (simple === null) return null;
+  return simple ? <SimpleLive /> : <AulaVirtualCompleta />;
+}
+
+function AulaVirtualCompleta() {
   const t = useTranslations('formadorAula');
   const tErrors = useTranslations('errors');
   const [sessions, setSessions] = useState<ZoomSession[] | null>(null);

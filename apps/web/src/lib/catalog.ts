@@ -12,6 +12,7 @@
  * cuenta del comprador se crea tras el pago con el email confirmado en Stripe.
  */
 
+import type { WithdrawalWaiverAcceptance } from '@/lib/purchase-consent';
 import { apiFetch } from './api-client';
 
 const PUBLIC_BASE = '/api/v1/modules/billing/public';
@@ -29,6 +30,11 @@ export interface CatalogOption {
   currency: string;
   discountPercent: number | null;
   isFeatured: boolean;
+  /**
+   * Solo si el aula cobra por la plataforma: `true` cuando el pago enseñará el
+   * precio en la moneda del alumno. Sin el campo, como siempre.
+   */
+  localCurrencyAtCheckout?: boolean;
 }
 
 export interface CatalogCourse {
@@ -50,7 +56,13 @@ export async function getPublicCatalog(): Promise<{ courses: CatalogCourse[] }> 
 
 export async function startPublicCheckout(
   courseId: string,
-  opts?: { optionId?: string; email?: string },
+  opts?: {
+    optionId?: string;
+    email?: string;
+    withdrawalWaiver?: WithdrawalWaiverAcceptance;
+    /** Código del enlace de referido con el que llegó (`?ref=`), si lo hay. */
+    referralCode?: string;
+  },
 ): Promise<{ url: string; sessionId: string }> {
   return apiFetch<{ url: string; sessionId: string }>(
     `${PUBLIC_BASE}/checkout/${encodeURIComponent(courseId)}`,
@@ -59,6 +71,8 @@ export async function startPublicCheckout(
       body: JSON.stringify({
         ...(opts?.optionId ? { optionId: opts.optionId } : {}),
         ...(opts?.email ? { email: opts.email } : {}),
+        ...(opts?.withdrawalWaiver ? { withdrawalWaiver: opts.withdrawalWaiver } : {}),
+        ...(opts?.referralCode ? { referralCode: opts.referralCode } : {}),
       }),
     },
   );

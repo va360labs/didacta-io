@@ -1,0 +1,555 @@
+{
+  "description": "Respuestas REALES del sandbox de Stripe de la plataforma (2026-11-12), saneadas: de cada cuenta solo quedan los campos que usa deriveStatus (sin nombres, correos, direcciones ni cuentas bancarias). Ids de modo de prueba. GET /v1/accounts/{id} con Stripe-Version 2026-10-28.endive.",
+  "capturedOn": "2026-11-12",
+  "livemode": false,
+  "accounts": {
+    "es_lista": {
+      "expectedStatus": "READY",
+      "note": "Cuenta v2 ES con alta completada (creador_ES2).",
+      "account": {
+        "id": "acct_1UatqsGVFsn6IQLd",
+        "object": "account",
+        "type": "none",
+        "country": "ES",
+        "default_currency": "eur",
+        "business_type": "individual",
+        "capabilities": {
+          "card_payments": "active",
+          "transfers": "active"
+        },
+        "charges_enabled": true,
+        "payouts_enabled": true,
+        "details_submitted": true,
+        "requirements": {
+          "alternatives": [],
+          "current_deadline": null,
+          "currently_due": [],
+          "disabled_reason": null,
+          "errors": [],
+          "eventually_due": [],
+          "past_due": [],
+          "pending_verification": []
+        },
+        "future_requirements": {
+          "alternatives": [],
+          "current_deadline": null,
+          "currently_due": [],
+          "disabled_reason": null,
+          "errors": [],
+          "eventually_due": [],
+          "past_due": [],
+          "pending_verification": []
+        },
+        "controller": {
+          "fees": {
+            "payer": "application"
+          },
+          "is_controller": true,
+          "losses": {
+            "payments": "stripe"
+          },
+          "requirement_collection": "stripe",
+          "stripe_dashboard": {
+            "type": "express"
+          },
+          "type": "application"
+        },
+        "settings": {
+          "payouts": {
+            "debit_negative_balances": true,
+            "schedule": {
+              "delay_days": 7,
+              "interval": "weekly",
+              "weekly_anchor": "monday",
+              "weekly_payout_days": ["monday"]
+            },
+            "statement_descriptor": null
+          }
+        }
+      }
+    },
+    "es_con_requisitos": {
+      "expectedStatus": "ONBOARDING",
+      "note": "Cuenta v2 ES recien creada: todos los requisitos past_due y capacidades inactive, details_submitted false.",
+      "account": {
+        "id": "acct_1Uath8GVFs5dcmlF",
+        "object": "account",
+        "type": "none",
+        "country": "ES",
+        "default_currency": "eur",
+        "business_type": "individual",
+        "capabilities": {
+          "card_payments": "inactive",
+          "transfers": "inactive"
+        },
+        "charges_enabled": false,
+        "payouts_enabled": false,
+        "details_submitted": false,
+        "requirements": {
+          "alternatives": [],
+          "current_deadline": null,
+          "currently_due": [
+            "business_profile.mcc",
+            "business_profile.product_description",
+            "business_profile.support_phone",
+            "business_profile.url",
+            "external_account",
+            "individual.address.city",
+            "individual.address.line1",
+            "individual.address.postal_code",
+            "individual.dob.day",
+            "individual.dob.month",
+            "individual.dob.year",
+            "individual.email",
+            "individual.first_name",
+            "individual.last_name",
+            "individual.nationality",
+            "individual.phone",
+            "tos_acceptance.date",
+            "tos_acceptance.ip"
+          ],
+          "disabled_reason": "requirements.past_due",
+          "errors": [],
+          "eventually_due": [
+            "business_profile.mcc",
+            "business_profile.product_description",
+            "business_profile.support_phone",
+            "business_profile.url",
+            "external_account",
+            "individual.address.city",
+            "individual.address.line1",
+            "individual.address.postal_code",
+            "individual.dob.day",
+            "individual.dob.month",
+            "individual.dob.year",
+            "individual.email",
+            "individual.first_name",
+            "individual.last_name",
+            "individual.nationality",
+            "individual.phone",
+            "tos_acceptance.date",
+            "tos_acceptance.ip"
+          ],
+          "past_due": [
+            "business_profile.mcc",
+            "business_profile.product_description",
+            "business_profile.support_phone",
+            "business_profile.url",
+            "external_account",
+            "individual.address.city",
+            "individual.address.line1",
+            "individual.address.postal_code",
+            "individual.dob.day",
+            "individual.dob.month",
+            "individual.dob.year",
+            "individual.email",
+            "individual.first_name",
+            "individual.last_name",
+            "individual.nationality",
+            "individual.phone",
+            "tos_acceptance.date",
+            "tos_acceptance.ip"
+          ],
+          "pending_verification": []
+        },
+        "future_requirements": {
+          "alternatives": [],
+          "current_deadline": null,
+          "currently_due": [],
+          "disabled_reason": null,
+          "errors": [],
+          "eventually_due": [],
+          "past_due": [],
+          "pending_verification": []
+        },
+        "controller": {
+          "fees": {
+            "payer": "application"
+          },
+          "is_controller": true,
+          "losses": {
+            "payments": "stripe"
+          },
+          "requirement_collection": "stripe",
+          "stripe_dashboard": {
+            "type": "express"
+          },
+          "type": "application"
+        },
+        "settings": {
+          "payouts": {
+            "debit_negative_balances": true,
+            "schedule": {
+              "delay_days": 7,
+              "interval": "daily"
+            },
+            "statement_descriptor": null
+          }
+        }
+      }
+    },
+    "mx_transferencias_inactivas": {
+      "expectedStatus": "RESTRICTED",
+      "note": "Cuenta v2 MX sin alta: transfers inactive. MX no esta en la lista por defecto (Funds can't be sent to accounts located in MX).",
+      "account": {
+        "id": "acct_1UathTGVFsaIXSys",
+        "object": "account",
+        "type": "none",
+        "country": "MX",
+        "default_currency": "mxn",
+        "business_type": "individual",
+        "capabilities": {
+          "card_payments": "inactive",
+          "transfers": "inactive"
+        },
+        "charges_enabled": false,
+        "payouts_enabled": false,
+        "details_submitted": false,
+        "requirements": {
+          "alternatives": [],
+          "current_deadline": null,
+          "currently_due": [
+            "business_profile.mcc",
+            "business_profile.product_description",
+            "business_profile.support_phone",
+            "business_profile.url",
+            "external_account",
+            "individual.address.city",
+            "individual.address.line1",
+            "individual.address.line2",
+            "individual.address.line3",
+            "individual.address.postal_code",
+            "individual.address.state",
+            "individual.address.town",
+            "individual.dob.day",
+            "individual.dob.month",
+            "individual.dob.year",
+            "individual.email",
+            "individual.first_name",
+            "individual.id_number",
+            "individual.last_name",
+            "individual.phone",
+            "tos_acceptance.date",
+            "tos_acceptance.ip"
+          ],
+          "disabled_reason": "requirements.past_due",
+          "errors": [],
+          "eventually_due": [
+            "business_profile.mcc",
+            "business_profile.product_description",
+            "business_profile.support_phone",
+            "business_profile.url",
+            "external_account",
+            "individual.address.city",
+            "individual.address.line1",
+            "individual.address.line2",
+            "individual.address.line3",
+            "individual.address.postal_code",
+            "individual.address.state",
+            "individual.address.town",
+            "individual.dob.day",
+            "individual.dob.month",
+            "individual.dob.year",
+            "individual.email",
+            "individual.first_name",
+            "individual.id_number",
+            "individual.last_name",
+            "individual.phone",
+            "tos_acceptance.date",
+            "tos_acceptance.ip"
+          ],
+          "past_due": [
+            "business_profile.mcc",
+            "business_profile.product_description",
+            "business_profile.support_phone",
+            "business_profile.url",
+            "external_account",
+            "individual.address.city",
+            "individual.address.line1",
+            "individual.address.line2",
+            "individual.address.line3",
+            "individual.address.postal_code",
+            "individual.address.state",
+            "individual.address.town",
+            "individual.dob.day",
+            "individual.dob.month",
+            "individual.dob.year",
+            "individual.email",
+            "individual.first_name",
+            "individual.id_number",
+            "individual.last_name",
+            "individual.phone",
+            "tos_acceptance.date",
+            "tos_acceptance.ip"
+          ],
+          "pending_verification": []
+        },
+        "future_requirements": {
+          "alternatives": [],
+          "current_deadline": null,
+          "currently_due": [],
+          "disabled_reason": null,
+          "errors": [],
+          "eventually_due": [],
+          "past_due": [],
+          "pending_verification": []
+        },
+        "controller": {
+          "fees": {
+            "payer": "application"
+          },
+          "is_controller": true,
+          "losses": {
+            "payments": "stripe"
+          },
+          "requirement_collection": "stripe",
+          "stripe_dashboard": {
+            "type": "express"
+          },
+          "type": "application"
+        },
+        "settings": {
+          "payouts": {
+            "debit_negative_balances": true,
+            "schedule": {
+              "delay_days": 7,
+              "interval": "daily"
+            },
+            "statement_descriptor": null
+          }
+        }
+      }
+    },
+    "mx_activa_pais_no_admitido": {
+      "expectedStatus": "RESTRICTED",
+      "note": "Cuenta MX que Stripe tiene activa: aun asi no se le puede transferir; fuera de la lista = RESTRICTED.",
+      "account": {
+        "id": "acct_1UatjOGV72RzfwY2",
+        "object": "account",
+        "type": "none",
+        "country": "MX",
+        "default_currency": "mxn",
+        "business_type": "individual",
+        "capabilities": {
+          "card_payments": "active",
+          "transfers": "active"
+        },
+        "charges_enabled": true,
+        "payouts_enabled": true,
+        "details_submitted": true,
+        "requirements": {
+          "alternatives": [],
+          "current_deadline": null,
+          "currently_due": [],
+          "disabled_reason": null,
+          "errors": [],
+          "eventually_due": [],
+          "past_due": [],
+          "pending_verification": []
+        },
+        "future_requirements": {
+          "alternatives": [],
+          "current_deadline": null,
+          "currently_due": [],
+          "disabled_reason": null,
+          "errors": [],
+          "eventually_due": [],
+          "past_due": [],
+          "pending_verification": []
+        },
+        "controller": {
+          "fees": {
+            "payer": "application"
+          },
+          "is_controller": true,
+          "losses": {
+            "payments": "stripe"
+          },
+          "requirement_collection": "stripe",
+          "stripe_dashboard": {
+            "type": "express"
+          },
+          "type": "application"
+        },
+        "settings": {
+          "payouts": {
+            "debit_negative_balances": true,
+            "schedule": {
+              "delay_days": 7,
+              "interval": "daily"
+            },
+            "statement_descriptor": null
+          }
+        }
+      }
+    },
+    "es_recien_creada_v1": {
+      "expectedStatus": "ONBOARDING",
+      "note": "Respuesta de POST /v1/accounts con controller (alternativa v1), Stripe-Version 2026-10-28.preview.",
+      "account": {
+        "id": "acct_1UavP6K2VM8IwKTP",
+        "object": "account",
+        "type": "none",
+        "country": "ES",
+        "default_currency": "eur",
+        "business_type": "individual",
+        "capabilities": {
+          "card_payments": "inactive",
+          "transfers": "inactive"
+        },
+        "charges_enabled": false,
+        "payouts_enabled": false,
+        "details_submitted": false,
+        "requirements": {
+          "alternatives": [],
+          "current_deadline": null,
+          "currently_due": [
+            "business_profile.support_phone",
+            "external_account",
+            "individual.address.city",
+            "individual.address.line1",
+            "individual.address.postal_code",
+            "individual.dob.day",
+            "individual.dob.month",
+            "individual.dob.year",
+            "individual.email",
+            "individual.first_name",
+            "individual.last_name",
+            "individual.nationality",
+            "individual.phone",
+            "tos_acceptance.date",
+            "tos_acceptance.ip"
+          ],
+          "disabled_reason": "requirements.past_due",
+          "errors": [],
+          "eventually_due": [
+            "business_profile.support_phone",
+            "external_account",
+            "individual.address.city",
+            "individual.address.line1",
+            "individual.address.postal_code",
+            "individual.dob.day",
+            "individual.dob.month",
+            "individual.dob.year",
+            "individual.email",
+            "individual.first_name",
+            "individual.last_name",
+            "individual.nationality",
+            "individual.phone",
+            "tos_acceptance.date",
+            "tos_acceptance.ip"
+          ],
+          "past_due": [
+            "business_profile.support_phone",
+            "external_account",
+            "individual.address.city",
+            "individual.address.line1",
+            "individual.address.postal_code",
+            "individual.dob.day",
+            "individual.dob.month",
+            "individual.dob.year",
+            "individual.email",
+            "individual.first_name",
+            "individual.last_name",
+            "individual.nationality",
+            "individual.phone",
+            "tos_acceptance.date",
+            "tos_acceptance.ip"
+          ],
+          "pending_verification": []
+        },
+        "future_requirements": {
+          "alternatives": [],
+          "current_deadline": null,
+          "currently_due": [],
+          "disabled_reason": null,
+          "errors": [],
+          "eventually_due": [],
+          "past_due": [],
+          "pending_verification": []
+        },
+        "controller": {
+          "fees": {
+            "payer": "application"
+          },
+          "is_controller": true,
+          "losses": {
+            "payments": "stripe"
+          },
+          "requirement_collection": "stripe",
+          "stripe_dashboard": {
+            "type": "express"
+          },
+          "type": "application"
+        },
+        "settings": {
+          "payouts": {
+            "debit_negative_balances": true,
+            "schedule": {
+              "delay_days": 7,
+              "interval": "daily"
+            },
+            "statement_descriptor": null
+          }
+        }
+      }
+    }
+  },
+  "balanceSettings": {
+    "aplicado": {
+      "note": "POST /v1/balance_settings {weekly, monday, minimum eur 5000} con Stripe-Account",
+      "body": {
+        "object": "balance_settings",
+        "payments": {
+          "debit_negative_balances": true,
+          "payouts": {
+            "automatic_transfer_rules_by_currency": null,
+            "minimum_balance_by_currency": {
+              "eur": 5000
+            },
+            "schedule": {
+              "interval": "weekly",
+              "weekly_payout_days": ["monday"]
+            },
+            "statement_descriptor": null,
+            "status": "disabled"
+          },
+          "settlement_timing": {
+            "delay_days": 7,
+            "start_of_day": {
+              "hour": 0,
+              "minutes": 0,
+              "timezone": "Etc/UTC"
+            }
+          }
+        }
+      }
+    },
+    "delayDaysRechazado": {
+      "note": "POST /v1/balance_settings con settlement_timing.delay_days_override",
+      "status": 400,
+      "message": "You cannot change `payments[settlement_timing][delay_days]` via API once an account has been activated. Please contact us via https://support.stripe.com/contact if you need to change the information associated with this account.",
+      "param": "payments[settlement_timing][delay_days]"
+    }
+  },
+  "links": {
+    "accountLink": {
+      "note": "POST /v1/account_links (url omitida: da acceso)",
+      "keys": ["object", "created", "expires_at", "url"]
+    },
+    "loginLinkSinAlta": {
+      "status": 400,
+      "message": "Cannot create a login link for an account that has not completed onboarding."
+    },
+    "createV2UrlInvalida": {
+      "status": 400,
+      "code": "url_invalid",
+      "param": "defaults.profile.business_url",
+      "message": "Invalid URL."
+    },
+    "createV1ExpressPerdidasStripeConVersionEstable": {
+      "status": 400,
+      "message": "With a dashboard type of `express`, the Connect application must control losses."
+    }
+  }
+}

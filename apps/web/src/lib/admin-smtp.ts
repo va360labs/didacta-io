@@ -230,3 +230,21 @@ export function shouldShowSmtpBanner(roles: readonly string[], status: AdminSmtp
   const puedeArreglarlo = roles.some((r) => r === 'super_admin' || r === 'tenant_admin');
   return puedeArreglarlo && status === 'none';
 }
+
+/**
+ * ¿Se está viendo la tarjeta del correo (Configuración → Notificaciones)? Ahí
+ * el aviso superior no se pinta: la tarjeta ya lo explica junto al formulario,
+ * y dos avisos iguales en la misma pantalla sobran. En las demás pestañas sí.
+ *
+ * La pestaña va en `?tab=`; sin ella, la que abre Configuración por defecto:
+ * «General» para super_admin y «Notificaciones» para el resto.
+ */
+export function isViewingSmtpSettings(
+  pathname: string | null,
+  tab: string | null,
+  roles: readonly string[],
+): boolean {
+  if (pathname !== '/admin/configuracion') return false;
+  const shown = tab || (roles.includes('super_admin') ? 'general' : 'notifications');
+  return shown === 'notifications';
+}

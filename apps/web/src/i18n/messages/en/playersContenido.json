@@ -115,11 +115,12 @@
     "loadError": "The video could not be loaded. Reload the page to try again.",
     "fullscreen": "Full screen",
     "exitFullscreen": "Exit full screen",
-    "embeddedTitle": "Lesson video"
+    "embeddedTitle": "Lesson video",
+    "watchQuota": "This academy has reached its video hours limit for this month. Let the person who runs it know."
   },
   "aiTutor": {
     "title": "AI tutor",
-    "introWithLesson": "Ask about «{lessonTitle}» or about any other part of the course. It answers with what is explained in class and tells you where to find it.",
+    "introWithLesson": "Ask about “{lessonTitle}” or about any other part of the course. It answers with what is explained in class and tells you where to find it.",
     "intro": "Ask anything about the course. Answers are based on the published content and include citations to the lessons.",
     "quota": "You have <b>{remaining}</b> of {limit} questions left today.",
     "newThread": "New thread",

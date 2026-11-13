@@ -11,19 +11,29 @@ import {
   Get,
   HttpCode,
   NotFoundException,
+  Optional,
   Param,
   Post,
+  Req,
   UnauthorizedException,
   UseGuards,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import type { FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { CurrentUser } from '../../auth/decorators';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import type { SessionClaims } from '../../auth/token.service';
 import { ZodValidationPipe } from '../../auth/zod-validation.pipe';
 import { PrismaService } from '../../prisma/prisma.service';
+import { TenantResolverService } from '../../tenancy/tenant-resolver.service';
 import { ModuleRegistryService } from '../module-registry.service';
+import { PlatformCheckoutGate } from '../payouts/platform-checkout-gate';
+import { PurchaseConsentService } from '../purchase-consent/purchase-consent.service';
+import {
+  withdrawalWaiverSchema,
+  type WithdrawalWaiverDto,
+} from '../purchase-consent/withdrawal-waiver';
 import { SubscriptionsGraceExpirationWorker } from './subscriptions-grace-expiration.worker';
 
 /**
@@ -32,6 +42,7 @@ import { SubscriptionsGraceExpirationWorker } from './subscriptions-grace-expira
  *   GET  /modules/subscriptions/me                  → lista propias
  *   GET  /modules/subscriptions/me/:id/invoices     → historial de facturas
  *   POST /modules/subscriptions/me/:id/cancel       → cancelar
+ *   POST /modules/subscriptions/me/portal           → portal de cliente de Stripe
  *
  * El admin endpoint de gestión de productos lo dejamos para una iteración
  * posterior — en MVP el admin configura el priceId desde mod.billing-admin
@@ -47,8 +58,17 @@ const startCheckoutSchema = z
       .min(1)
       .max(255)
       .regex(/^price_[A-Za-z0-9]+$/, 'stripePriceId debe ser un Stripe Price ID válido'),
+    /** Renuncia al desistimiento (obligatoria: 422 si falta). */
+    withdrawalWaiver: withdrawalWaiverSchema.optional(),
   })
   .strict();
+
+const portalSchema = z
+  .object({
+    subscriptionId: z.string().uuid().optional(),
+  })
+  .strict()
+  .optional();
 
 const cancelSchema = z
   .object({
@@ -65,6 +85,14 @@ export class SubscriptionsController {
     private readonly registry: ModuleRegistryService,
     private readonly prisma: PrismaService,
     private readonly graceExpiration: SubscriptionsGraceExpirationWorker,
+    private readonly tenantResolver: TenantResolverService,
+    /** Renuncia al desistimiento: prueba antes de pagar y confirmación después. */
+    private readonly consents: PurchaseConsentService,
+    /**
+     * Solo con el modo plataforma encendido (E5): dice qué clientes de Stripe
+     * son de la cuenta del operador, cuyo portal lleva el nombre del creador.
+     */
+    @Optional() private readonly payoutsGate?: PlatformCheckoutGate,
   ) {}
 
   @Post('checkout/:courseId')
@@ -76,20 +104,42 @@ export class SubscriptionsController {
   async startCheckout(
     @Param('courseId') courseId: string,
     @CurrentUser() user: SessionClaims | undefined,
-    @Body(new ZodValidationPipe(startCheckoutSchema)) body: { stripePriceId: string },
+    @Req() req: FastifyRequest,
+    @Body(new ZodValidationPipe(startCheckoutSchema))
+    body: { stripePriceId: string; withdrawalWaiver?: WithdrawalWaiverDto },
   ) {
     if (!user) throw new UnauthorizedException();
     const account = await this.prisma.user.findUnique({
       where: { id: user.sub },
       select: { email: true },
     });
-    return this.registry.getSubscriptionsService().startSubscription({
+    const course = await this.prisma.modCoursesCourse.findFirst({
+      where: { id: courseId, tenantId: user.tenantId, deletedAt: null },
+      select: { title: true },
+    });
+    // La casilla de la renuncia al desistimiento (422 sin ella, 409 si el
+    // texto cambió), guardada antes de crear la sesión de pago.
+    const consentId = await this.consents.accept({
+      req,
+      tenantId: user.tenantId,
+      purchaseKind: 'course_subscription',
+      itemRef: courseId,
+      itemName: course?.title ?? null,
+      userId: user.sub,
+      buyerEmail: account?.email ?? null,
+      waiver: body.withdrawalWaiver,
+    });
+    const result = await this.registry.getSubscriptionsService().startSubscription({
       tenantId: user.tenantId,
       userId: user.sub,
       userEmail: account?.email ?? '',
       courseId,
       stripePriceId: body.stripePriceId,
     });
+    if (result.sessionId) {
+      await this.consents.attachSession(user.tenantId, consentId, { sessionId: result.sessionId });
+    }
+    return result;
   }
 
   @Get('me')
@@ -124,13 +174,50 @@ export class SubscriptionsController {
     ]);
     const planName = new Map(plans.map((p) => [p.id, p.name]));
     const courseTitle = new Map(courses.map((c) => [c.id, c.title]));
+    // Portal de cliente: solo se ofrece donde sabemos que está configurado —
+    // los clientes cobrados por la plataforma, cuyo portal crea Didacta con el
+    // nombre del creador—. Con claves propias depende de que el aula lo haya
+    // configurado en su Stripe: ahí la pestaña sigue como siempre.
+    const platformCustomers = this.payoutsGate
+      ? await this.payoutsGate.platformObjects(subs.map((s) => s.stripeCustomerId))
+      : new Set<string>();
     return {
       subscriptions: subs.map((s) => ({
         ...s,
         planName: s.planId ? (planName.get(s.planId) ?? null) : null,
         courseTitle: s.courseId ? (courseTitle.get(s.courseId) ?? null) : null,
+        billingPortal: platformCustomers.has(s.stripeCustomerId),
       })),
     };
+  }
+
+  @Post('me/portal')
+  @ApiOperation({
+    summary:
+      'Abre el portal de cliente de Stripe del alumno (cambiar la tarjeta, ver sus facturas, ' +
+      'darse de baja). Sin subscriptionId, el de su membresía viva más reciente. Devuelve la URL.',
+  })
+  async portal(
+    @CurrentUser() user: SessionClaims | undefined,
+    @Req() req: FastifyRequest,
+    @Body(new ZodValidationPipe(portalSchema)) body: { subscriptionId?: string } | undefined,
+  ): Promise<{ url: string; subscriptionId: string }> {
+    if (!user) throw new UnauthorizedException();
+    // Solo existe con cobros de plataforma, que crean el portal con el nombre
+    // del creador. En Community (claves propias) el portal depende de que el
+    // aula lo haya configurado en su Stripe y la interfaz no lo ofrece: la
+    // ruta responde como si no existiera, igual que antes de los cobros de
+    // plataforma.
+    if (!this.payoutsGate) {
+      throw new NotFoundException({ message: 'Not Found', code: 'SUBS_PORTAL_UNAVAILABLE' });
+    }
+    const base = await this.tenantResolver.resolveTenantWebBaseUrl(user.tenantId, req);
+    return this.registry
+      .getSubscriptionsService()
+      .createBillingPortalSession(user.tenantId, user.sub, {
+        subscriptionId: body?.subscriptionId,
+        returnUrl: `${base}/cuenta?tab=suscripcion`,
+      });
   }
 
   @Post('me/membership/pay-now')

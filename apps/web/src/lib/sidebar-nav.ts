@@ -245,6 +245,16 @@ export function buildAdminGroups({ isSuperAdmin }: { isSuperAdmin: boolean }): S
     icon: 'briefcase',
     items: [
       { href: '/admin/membresia', label: 'Membresía', icon: 'sparkles' },
+      // Cobros de plataforma (Didacta Cloud): solo si `mod.payouts` está en el
+      // registro, que solo pasa con PAYMENTS_PLATFORM_STRIPE_SECRET_KEY. En
+      // Community no aparece y los pagos siguen en Configuración → Pagos.
+      {
+        href: '/admin/cobros',
+        label: 'Cobros',
+        icon: 'briefcase',
+        requiresModule: 'mod.payouts',
+        strictModule: true,
+      },
       { href: '/admin/impagos', label: 'Impagos', icon: 'alert' },
       { href: '/admin/referidos', label: 'Referidos', icon: 'trending' },
     ],

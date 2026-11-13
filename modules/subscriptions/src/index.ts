@@ -20,7 +20,11 @@ import { manifest } from './manifest.js';
 import { SubscriptionsService } from './subscriptions.service.js';
 
 export { manifest };
-export { SubscriptionsService, DEFAULT_GRACE_PERIOD_DAYS } from './subscriptions.service.js';
+export {
+  SubscriptionsService,
+  DEFAULT_GRACE_PERIOD_DAYS,
+  invoiceCreditApplied,
+} from './subscriptions.service.js';
 export type {
   SubscriptionsEventPublisher,
   CheckoutUrlBuilder,
@@ -48,11 +52,17 @@ export type {
 export { SubscriptionsStripeSdkAdapter } from './stripe-subscriptions.client.js';
 export type {
   SubscriptionsStripeAdapter,
+  SubscriptionsStripeAdapterOptions,
+  CreatePortalSessionParams,
+  CreditCustomerBalanceParams,
+  CustomerBalanceView,
+  StripePortalSessionResult,
   CreateSubscriptionCheckoutParams,
   CreateRecurringPriceParams,
   StripeSubscriptionCheckoutResult,
   StripePriceResult,
   StripeSubscriptionView,
+  EndTrialNowResult,
 } from './stripe-subscriptions.client.js';
 export {
   SubscriptionsError,

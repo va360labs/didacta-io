@@ -13,6 +13,7 @@
  *   - createSubscriptionCheckoutSession (mode='subscription' en Stripe).
  *   - retrievePrice + validar que es recurring.
  *   - cancelSubscription (al final del periodo o inmediato).
+ *   - createPortalSession (portal de cliente: tarjeta, facturas y baja).
  *   - constructWebhookEvent (verifica firma HMAC).
  */
 
@@ -49,12 +50,97 @@ export interface SubscriptionsStripeAdapter {
    * inmutables: para cambiar el importe se crea uno nuevo.
    */
   createRecurringPrice(params: CreateRecurringPriceParams): Promise<string>;
+  /**
+   * Sesión del portal de cliente de Stripe: el alumno cambia su tarjeta, ve sus
+   * facturas y se da de baja. Devuelve la URL a la que redirigir.
+   */
+  createPortalSession(params: CreatePortalSessionParams): Promise<StripePortalSessionResult>;
+  /**
+   * Saldo del cliente (`customer.balance`): negativo = a su favor, se gasta en
+   * sus próximas facturas. Lo usa el descuento por referidos para no apilar
+   * abonos más allá de lo que cubre una cuota.
+   */
+  retrieveCustomerBalance(customerId: string): Promise<CustomerBalanceView>;
+  /**
+   * Abona `amountCents` a favor del cliente (transacción de saldo con importe
+   * NEGATIVO): la próxima factura de su suscripción lo descuenta. Idempotente
+   * por `idempotencyKey` (Stripe guarda la clave 24 h).
+   */
+  creditCustomerBalance(params: CreditCustomerBalanceParams): Promise<{ id: string }>;
+  /**
+   * Retira `amountCents` del saldo a favor del cliente (transacción de saldo
+   * con importe POSITIVO): lo que se le había abonado y no ha gastado.
+   * Idempotente por `idempotencyKey`.
+   */
+  debitCustomerBalance(params: CreditCustomerBalanceParams): Promise<{ id: string }>;
+}
+
+export interface CustomerBalanceView {
+  /** En céntimos; negativo = a favor del cliente. */
+  balanceCents: number;
+  /** Divisa del saldo, o null si el cliente aún no tiene ninguna. */
+  currency: string | null;
+}
+
+export interface CreditCustomerBalanceParams {
+  customerId: string;
+  /** > 0: lo que se le descuenta en sus próximas facturas. */
+  amountCents: number;
+  currency: string;
+  description: string;
+  metadata: Record<string, string>;
+  idempotencyKey: string;
+}
+
+export interface CreatePortalSessionParams {
+  /** Cliente de Stripe (`cus_…`) dueño de la suscripción. */
+  customerId: string;
+  /** A dónde vuelve el alumno al salir del portal. */
+  returnUrl: string;
+  /**
+   * Configuración del portal (`bpc_…`). Sin ella, Stripe usa la configuración
+   * por defecto de la cuenta.
+   */
+  configurationId?: string;
+}
+
+export interface StripePortalSessionResult {
+  url: string;
+}
+
+/**
+ * Opciones con las que el HOST monta el adaptador. Este módulo no sabe de
+ * quién es la cuenta de Stripe ni por qué: solo aplica lo que le dicen.
+ *
+ * Sin opciones (lo de siempre: el tenant cobra en SU cuenta), los parámetros
+ * de la sesión de checkout son exactamente los de antes — hay un test de
+ * instantánea que lo vigila.
+ */
+export interface SubscriptionsStripeAdapterOptions {
+  /**
+   * Cobro en una cuenta COMPARTIDA en nombre de otra. Con esto la sesión añade
+   * `subscription_data.on_behalf_of` (la suscripción, sus facturas y sus cargos
+   * son en nombre de esa cuenta: es el comercio que ve el comprador) y el
+   * portal de cliente se abre con `on_behalf_of` (lleva su nombre).
+   */
+  readonly connect?: { readonly onBehalfOf: string };
+  /**
+   * `'deny'` ignora `allowPromotionCodes`. En una cuenta compartida un código
+   * promocional creado para una academia valdría en todas las demás.
+   * Por defecto `'allow'`: manda lo que pida el servicio.
+   */
+  readonly promotionCodes?: 'allow' | 'deny';
 }
 
 export interface CreateRecurringPriceParams {
   productId: string;
   amountCents: number;
   currency: string;
+  /**
+   * Precios fijos extra por mercado (`currency_options`): moneda → importe en
+   * su unidad mínima. Inmutables en Stripe: cambiarlos exige un Price nuevo.
+   */
+  currencyOptions?: Readonly<Record<string, number>> | null;
   intervalMonths: number;
   /** Etiqueta interna del price (nombre del plan). Solo visible en el dashboard. */
   nickname?: string;
@@ -116,6 +202,7 @@ export class SubscriptionsStripeSdkAdapter implements SubscriptionsStripeAdapter
     private readonly secretKey: string,
     private readonly webhookSecret: string,
     StripeCtor: new (key: string, opts?: Stripe.StripeConfig) => Stripe,
+    private readonly options: SubscriptionsStripeAdapterOptions = {},
   ) {
     if (!secretKey) throw new StripeConfigMissingError('secretKey');
     if (!webhookSecret) throw new StripeConfigMissingError('webhookSecret');
@@ -147,11 +234,14 @@ export class SubscriptionsStripeSdkAdapter implements SubscriptionsStripeAdapter
         cancel_url: p.cancelUrl,
         customer_email: p.customerEmail,
         client_reference_id: p.clientReferenceId ?? p.metadata['subscriptionLocalId'],
-        ...(p.allowPromotionCodes ? { allow_promotion_codes: true } : {}),
+        ...(p.allowPromotionCodes && this.options.promotionCodes !== 'deny'
+          ? { allow_promotion_codes: true }
+          : {}),
         metadata: { ...p.metadata },
         subscription_data: {
           metadata: { ...p.metadata },
           ...(trialDays ? { trial_period_days: trialDays } : {}),
+          ...(this.options.connect ? { on_behalf_of: this.options.connect.onBehalfOf } : {}),
         },
       });
       if (!session.url) {
@@ -209,10 +299,18 @@ export class SubscriptionsStripeSdkAdapter implements SubscriptionsStripeAdapter
       // en el dashboard que month × 12).
       const interval = p.intervalMonths === 12 ? 'year' : 'month';
       const intervalCount = p.intervalMonths === 12 ? 1 : p.intervalMonths;
+      const currencyOptions = Object.entries(p.currencyOptions ?? {});
       const price = await this.client.prices.create({
         product: p.productId,
         unit_amount: p.amountCents,
         currency: p.currency,
+        ...(currencyOptions.length
+          ? {
+              currency_options: Object.fromEntries(
+                currencyOptions.map(([code, amount]) => [code, { unit_amount: amount }]),
+              ),
+            }
+          : {}),
         recurring: { interval, interval_count: intervalCount },
         ...(p.nickname ? { nickname: p.nickname } : {}),
         metadata: p.metadata,
@@ -257,6 +355,78 @@ export class SubscriptionsStripeSdkAdapter implements SubscriptionsStripeAdapter
         currentPeriodEnd: currentPeriodEndFromSubscription(sub),
         canceledAt: sub.canceled_at ?? null,
       };
+    } catch (err) {
+      throw new StripeApiError((err as Error).message);
+    }
+  }
+
+  async createPortalSession(p: CreatePortalSessionParams): Promise<StripePortalSessionResult> {
+    try {
+      const session = await this.client.billingPortal.sessions.create({
+        customer: p.customerId,
+        return_url: p.returnUrl,
+        ...(p.configurationId ? { configuration: p.configurationId } : {}),
+        // En la cuenta compartida, el portal lleva el nombre y la marca de la
+        // cuenta del creador, no los del operador.
+        ...(this.options.connect ? { on_behalf_of: this.options.connect.onBehalfOf } : {}),
+      });
+      return { url: session.url };
+    } catch (err) {
+      throw new StripeApiError((err as Error).message);
+    }
+  }
+
+  async retrieveCustomerBalance(customerId: string): Promise<CustomerBalanceView> {
+    try {
+      const customer = await this.client.customers.retrieve(customerId);
+      if ((customer as { deleted?: boolean }).deleted) {
+        throw new StripeApiError(`el cliente ${customerId} está borrado en Stripe`);
+      }
+      const c = customer as Stripe.Customer;
+      return { balanceCents: c.balance ?? 0, currency: c.currency ?? null };
+    } catch (err) {
+      if (err instanceof StripeApiError) throw err;
+      throw new StripeApiError((err as Error).message);
+    }
+  }
+
+  async debitCustomerBalance(p: CreditCustomerBalanceParams): Promise<{ id: string }> {
+    if (!Number.isInteger(p.amountCents) || p.amountCents <= 0) {
+      throw new StripeApiError(`retirada no válida: ${p.amountCents}`);
+    }
+    try {
+      const tx = await this.client.customers.createBalanceTransaction(
+        p.customerId,
+        {
+          amount: p.amountCents,
+          currency: p.currency.toLowerCase(),
+          description: p.description,
+          metadata: p.metadata,
+        },
+        { idempotencyKey: p.idempotencyKey },
+      );
+      return { id: tx.id };
+    } catch (err) {
+      throw new StripeApiError((err as Error).message);
+    }
+  }
+
+  async creditCustomerBalance(p: CreditCustomerBalanceParams): Promise<{ id: string }> {
+    if (!Number.isInteger(p.amountCents) || p.amountCents <= 0) {
+      throw new StripeApiError(`abono no válido: ${p.amountCents}`);
+    }
+    try {
+      const tx = await this.client.customers.createBalanceTransaction(
+        p.customerId,
+        {
+          amount: -p.amountCents,
+          currency: p.currency.toLowerCase(),
+          description: p.description,
+          metadata: p.metadata,
+        },
+        { idempotencyKey: p.idempotencyKey },
+      );
+      return { id: tx.id };
     } catch (err) {
       throw new StripeApiError((err as Error).message);
     }

@@ -34,6 +34,8 @@ export const manifest: ModuleManifest = parseModuleManifest({
     'billing.order.completed',
     'billing.order.failed',
     'billing.order.refunded',
+    // Devolución de una parte: no toca el acceso; recorta la comisión de referidos.
+    'billing.order.partially_refunded',
   ],
   eventsConsumed: [],
   apiNamespace: '/modules/billing',

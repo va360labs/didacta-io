@@ -29,7 +29,7 @@
  *  - Validación de input: lo hace el controller con zod.
  */
 
-import type { PrismaClient } from '@didacta/database';
+import { Prisma, type PrismaClient } from '@didacta/database';
 import type Stripe from 'stripe';
 import {
   OrderNotFoundError,
@@ -77,6 +77,12 @@ export interface CreateProductInput {
    */
   unitAmount?: number;
   currency?: string;
+  /**
+   * Precios fijos extra por mercado (`currency_options`, solo con `unitAmount`):
+   * moneda → importe en su unidad mínima. Sin esto, Adaptive Pricing ya enseña
+   * el precio convertido a la moneda del alumno.
+   */
+  currencyOptions?: Readonly<Record<string, number>> | null;
   /** Nombre visible en la pantalla de pago de Stripe (título del curso). */
   name?: string;
   /** Precio anterior (tachado) para la ficha de venta. Debe ser mayor que el real. */
@@ -126,6 +132,13 @@ export interface StartCheckoutInput {
    * módulo NO lo interpreta ni lo valida — lo hace el host.
    */
   locale?: string;
+  /**
+   * Código de atribución OPCIONAL (programa de referidos, `?ref=` de la página
+   * de venta). Opaco para este módulo, igual que en la membresía: viaja en la
+   * metadata de la session y vuelve en `billing.order.completed` como
+   * `attribution.referralCode`, que interpreta mod.referrals.
+   */
+  referralCode?: string;
 }
 
 /** Una opción de compra del curso, tal y como la ve el alumno. */
@@ -178,6 +191,7 @@ const EVENT = {
   ORDER_COMPLETED: 'billing.order.completed',
   ORDER_FAILED: 'billing.order.failed',
   ORDER_REFUNDED: 'billing.order.refunded',
+  ORDER_PARTIALLY_REFUNDED: 'billing.order.partially_refunded',
 } as const;
 
 export class BillingService {
@@ -299,6 +313,7 @@ export class BillingService {
         name: input.name?.trim() || 'Curso',
         unitAmount: input.unitAmount,
         currency: (input.currency ?? 'eur').toLowerCase(),
+        currencyOptions: normalizeCurrencyOptions(input.currencyOptions),
         metadata: {
           tenantId: input.tenantId,
           courseId: input.courseId,
@@ -314,6 +329,10 @@ export class BillingService {
         stripePriceId: price.id,
         unitAmount: price.unitAmount,
         currency: price.currency,
+        // Solo con importe nuestro: un `price_…` pegado trae los suyos de Stripe.
+        ...(!input.stripePriceId && normalizeCurrencyOptions(input.currencyOptions)
+          ? { currencyOptions: normalizeCurrencyOptions(input.currencyOptions)! }
+          : {}),
         // Solo tiene sentido si es MAYOR que el precio real: un "antes" más
         // barato que el "ahora" sería publicidad engañosa.
         compareAtAmount:
@@ -343,6 +362,11 @@ export class BillingService {
     courseId: string;
     unitAmount: number;
     currency?: string;
+    /**
+     * Precios fijos extra por mercado. `undefined` = se quedan los que hubiera;
+     * `null` o `{}` = sin ninguno. Cambiarlos crea un Price nuevo (inmutables).
+     */
+    currencyOptions?: Readonly<Record<string, number>> | null;
     compareAtAmount?: number | null;
     /** Titulo del curso: es lo que ve el comprador en la pantalla de pago. */
     name?: string;
@@ -376,6 +400,7 @@ export class BillingService {
         courseId: input.courseId,
         unitAmount: input.unitAmount,
         currency,
+        currencyOptions: input.currencyOptions,
         name: input.name,
         compareAtAmount: input.compareAtAmount ?? undefined,
         optionName,
@@ -390,8 +415,19 @@ export class BillingService {
       input.compareAtAmount && input.compareAtAmount > input.unitAmount
         ? input.compareAtAmount
         : null;
+    const opcionesAntes = normalizeCurrencyOptions(
+      existente.currencyOptions as Record<string, number> | null,
+    );
+    const opciones =
+      input.currencyOptions === undefined
+        ? opcionesAntes
+        : normalizeCurrencyOptions(input.currencyOptions);
+    // Los `currency_options` de un Price de Stripe no se pueden editar: si
+    // cambian, hace falta un Price nuevo igual que si cambia el importe.
     const mismoImporte =
-      existente.unitAmount === input.unitAmount && existente.currency === currency;
+      existente.unitAmount === input.unitAmount &&
+      existente.currency === currency &&
+      JSON.stringify(opcionesAntes) === JSON.stringify(opciones);
     const mismaPresentacion =
       existente.name === optionName &&
       existente.sortOrder === (input.sortOrder ?? existente.sortOrder) &&
@@ -416,6 +452,7 @@ export class BillingService {
         productId: existente.stripeProductId,
         unitAmount: input.unitAmount,
         currency,
+        currencyOptions: opciones,
         metadata: {
           tenantId: input.tenantId,
           courseId: input.courseId,
@@ -433,6 +470,7 @@ export class BillingService {
         stripeProductId,
         unitAmount: input.unitAmount,
         currency,
+        currencyOptions: opciones ?? Prisma.DbNull,
         compareAtAmount: compareAt,
         name: optionName,
         sortOrder: input.sortOrder ?? existente.sortOrder,
@@ -450,7 +488,7 @@ export class BillingService {
     });
     if (!product) throw new ProductNotFoundError(input.productId);
 
-    const data: Partial<BillingProductRow> = {};
+    const data: Prisma.ModBillingProductUncheckedUpdateInput = {};
     if (typeof input.patch.active === 'boolean') {
       data.active = input.patch.active;
     }
@@ -464,11 +502,83 @@ export class BillingService {
       data.stripeProductId = price.productId;
       data.unitAmount = price.unitAmount;
       data.currency = price.currency;
+      // Un `price_…` pegado trae sus propios precios por mercado (o ninguno).
+      data.currencyOptions = Prisma.DbNull;
     }
     return this.prisma.modBillingProduct.update({
       where: { id: product.id },
       data,
     });
+  }
+
+  /**
+   * Vuelve a crear en la cuenta de Stripe ACTUAL del tenant el Product y el
+   * Price de cada opción de compra activa, y apunta la fila local a los nuevos.
+   *
+   * Para qué: cuando un tenant cambia de cuenta de Stripe (p. ej. deja de cobrar
+   * con sus claves y pasa a cobrar a través del operador de la instalación),
+   * sus `price_…` siguen en la cuenta vieja y un checkout con ellos fallaría con
+   * «No such price». `stripePriceId` es obligatorio: no se puede dejar vacío.
+   *
+   * El módulo no sabe en qué cuenta vive cada precio. Lo dice quien llama con
+   * `isCurrent(priceId)`: `true` = ya está en la cuenta actual, no se toca. Sin
+   * `isCurrent`, se recrean todas.
+   *
+   * El nombre del Product nuevo se lee del viejo (`retrieveProduct`, que el
+   * adaptador del host enruta a la cuenta donde vive); si no se puede leer, se
+   * usa el nombre de la opción. Idempotente en la práctica: una segunda pasada
+   * con el mismo `isCurrent` no encuentra nada que recrear.
+   */
+  async resyncStripeCatalog(
+    tenantId: string,
+    opts: {
+      /** Limita la pasada a las opciones de un curso. */
+      courseId?: string;
+      isCurrent?: (stripePriceId: string) => Promise<boolean>;
+    } = {},
+  ): Promise<{ resynced: number; skipped: number }> {
+    const productos = await this.prisma.modBillingProduct.findMany({
+      where: { tenantId, active: true, ...(opts.courseId ? { courseId: opts.courseId } : {}) },
+      orderBy: [{ courseId: 'asc' }, { sortOrder: 'asc' }],
+    });
+    let resynced = 0;
+    let skipped = 0;
+    if (productos.length === 0) return { resynced, skipped };
+
+    const stripe = await this.stripeFor(tenantId);
+    for (const producto of productos) {
+      if (opts.isCurrent && (await opts.isCurrent(producto.stripePriceId))) {
+        skipped += 1;
+        continue;
+      }
+      let name = producto.name.trim() || 'Curso';
+      try {
+        const viejo = await stripe.retrieveProduct(producto.stripeProductId);
+        if (viejo.name.trim()) name = viejo.name.trim();
+      } catch {
+        // El Product viejo no se puede leer (otra cuenta sin claves, borrado…):
+        // el nombre de la opción vale para la pantalla de pago.
+      }
+      const price = await stripe.createOneOffPrice({
+        name,
+        unitAmount: producto.unitAmount,
+        currency: producto.currency,
+        currencyOptions: normalizeCurrencyOptions(
+          producto.currencyOptions as Record<string, number> | null,
+        ),
+        metadata: {
+          tenantId,
+          courseId: producto.courseId,
+          didacta: 'course',
+        },
+      });
+      await this.prisma.modBillingProduct.update({
+        where: { id: producto.id },
+        data: { stripePriceId: price.id, stripeProductId: price.productId },
+      });
+      resynced += 1;
+    }
+    return { resynced, skipped };
   }
 
   async deleteProduct(tenantId: string, productId: string): Promise<void> {
@@ -542,6 +652,7 @@ export class BillingService {
           // metadata) es la fuente de verdad del comprador en el fulfillment.
           ...(input.userId ? { userId: input.userId } : {}),
           ...(input.locale ? { locale: input.locale } : {}),
+          ...(input.referralCode ? { referralCode: input.referralCode } : {}),
         },
       });
     } catch (err) {
@@ -803,6 +914,11 @@ export class BillingService {
     // `idempotencyKey` = `billing.order.completed:<orderId>`: si el evento SÍ
     // llegó a salir, este publish es un no-op; si no llegó, esta es la única
     // forma de que salga.
+    // Atribución opaca (referidos): la escribió `startCheckout` en la metadata
+    // y solo la interpreta quien la consuma (mod.referrals, vía el host).
+    const referralCode = metadata['referralCode']?.trim();
+    const attribution = referralCode ? { referralCode } : null;
+
     if (order.status === 'COMPLETED') {
       await this.publisher.publish(tenantId, order.userId, EVENT.ORDER_COMPLETED, {
         orderId: order.id,
@@ -813,6 +929,7 @@ export class BillingService {
         amountPaid: order.amountPaid,
         currency: order.currency,
         customerEmail: order.customerEmail,
+        attribution,
       });
       return;
     }
@@ -905,6 +1022,7 @@ export class BillingService {
       amountPaid: updated.amountPaid,
       currency: updated.currency,
       customerEmail: updated.customerEmail,
+      attribution,
     });
   }
 
@@ -1002,7 +1120,20 @@ export class BillingService {
     const total = charge.amount ?? 0;
     const devuelto = charge.amount_refunded ?? 0;
     const esTotal = devuelto > 0 && devuelto >= total;
-    if (!esTotal) return; // parcial: no tocamos el acceso.
+    if (!esTotal) {
+      // Parcial: no tocamos el acceso ni el estado de la orden. Se avisa con
+      // lo devuelto ACUMULADO (lo da Stripe) para recortar en proporción lo
+      // que dependa del importe (la comisión de referidos).
+      if (devuelto > 0 && order.status === 'COMPLETED') {
+        await this.publisher.publish(order.tenantId, order.userId, EVENT.ORDER_PARTIALLY_REFUNDED, {
+          orderId: order.id,
+          amountRefunded: devuelto,
+          amountTotal: total,
+          currency: charge.currency,
+        });
+      }
+      return;
+    }
 
     await this.prisma.modBillingOrder.update({
       where: { id: order.id },
@@ -1072,4 +1203,18 @@ function cryptoRandomId(): string {
 function isUniqueViolation(err: unknown): boolean {
   if ((err as { code?: string } | null)?.code === 'P2002') return true;
   return ((err as Error | null)?.message ?? '').includes('Unique constraint');
+}
+
+/**
+ * Precios extra por mercado normalizados (moneda en minúsculas, ordenadas) o
+ * `null` si no hay ninguno: dos mapas iguales dan el mismo JSON, y así se sabe
+ * si hace falta un Price nuevo.
+ */
+export function normalizeCurrencyOptions(
+  options: Readonly<Record<string, number>> | null | undefined,
+): Record<string, number> | null {
+  const entries = Object.entries(options ?? {})
+    .map(([code, amount]) => [code.toLowerCase(), amount] as const)
+    .sort(([a], [b]) => a.localeCompare(b));
+  return entries.length ? Object.fromEntries(entries) : null;
 }

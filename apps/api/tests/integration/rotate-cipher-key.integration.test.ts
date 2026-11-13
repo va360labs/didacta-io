@@ -39,6 +39,11 @@ describeWithDb('rotateCipherKey — Postgres real, RLS aplicada', () => {
     smtpB: JSON.stringify({ host: 'smtp.b.test', pass: 'contraseña-ñ-€' }),
     instance: JSON.stringify({ license: 'clave-de-licencia' }),
     module: 'app-password del migrador',
+    payee: JSON.stringify({
+      fullName: 'Lucía Pérez',
+      taxId: '12345678Z',
+      iban: 'ES9121000418450200051332',
+    }),
   };
   const ids = {
     stripeA: randomUUID(),
@@ -46,19 +51,25 @@ describeWithDb('rotateCipherKey — Postgres real, RLS aplicada', () => {
     plainA: randomUUID(),
     instance: randomUUID(),
     module: randomUUID(),
+    payee: randomUUID(),
+    payeeUser: randomUUID(),
   };
+
+  type SeededTable =
+    | 'tenant_setting'
+    | 'core_instance_setting'
+    | 'mod_secret'
+    | 'mod_referrals_member';
 
   const enc = (key: string, plaintext: string) => new SecretCipherService(key).encrypt(plaintext);
 
-  async function readSecret(
-    table: 'tenant_setting' | 'core_instance_setting' | 'mod_secret',
-    id: string,
-    key: string,
-  ): Promise<string | null> {
+  async function readSecret(table: SeededTable, id: string, key: string): Promise<string | null> {
     const cols =
       table === 'mod_secret'
         ? 'ciphertext AS c, iv, tag'
-        : 'value_cipher AS c, value_iv AS iv, value_tag AS tag';
+        : table === 'mod_referrals_member'
+          ? 'payee_cipher AS c, payee_iv AS iv, payee_tag AS tag'
+          : 'value_cipher AS c, value_iv AS iv, value_tag AS tag';
     const rows = await admin.$queryRawUnsafe<
       Array<{ c: Uint8Array; iv: Uint8Array; tag: Uint8Array }>
     >(`SELECT ${cols} FROM "${table}" WHERE id = $1::uuid`, id);
@@ -76,13 +87,14 @@ describeWithDb('rotateCipherKey — Postgres real, RLS aplicada', () => {
   }
 
   /** Lo que tiene que descifrar cada fila sembrada. */
-  const SEEDED: Array<['tenant_setting' | 'core_instance_setting' | 'mod_secret', string, string]> =
-    [
-      ['tenant_setting', ids.stripeA, SECRETS.stripeA],
-      ['tenant_setting', ids.smtpB, SECRETS.smtpB],
-      ['core_instance_setting', ids.instance, SECRETS.instance],
-      ['mod_secret', ids.module, SECRETS.module],
-    ];
+  const SEEDED: Array<[SeededTable, string, string]> = [
+    ['tenant_setting', ids.stripeA, SECRETS.stripeA],
+    ['tenant_setting', ids.smtpB, SECRETS.smtpB],
+    ['core_instance_setting', ids.instance, SECRETS.instance],
+    ['mod_secret', ids.module, SECRETS.module],
+    // Datos de cobro de un alumno de referidos (nombre, NIF, IBAN).
+    ['mod_referrals_member', ids.payee, SECRETS.payee],
+  ];
 
   async function expectAllDecryptWith(key: string, other: string) {
     for (const [table, id, plaintext] of SEEDED) {
@@ -168,9 +180,21 @@ describeWithDb('rotateCipherKey — Postgres real, RLS aplicada', () => {
         approxValueBytes: SECRETS.module.length,
       },
     });
+    const p = enc(OLD_KEY, SECRETS.payee);
+    await admin.modReferralsMember.create({
+      data: {
+        id: ids.payee,
+        tenantId: tenantA,
+        userId: ids.payeeUser,
+        payeeCipher: p.cipher,
+        payeeIv: p.iv,
+        payeeTag: p.tag,
+      },
+    });
   }, 60_000);
 
   afterAll(async () => {
+    await admin?.modReferralsMember.deleteMany({ where: { id: ids.payee } });
     await admin?.modSecret.deleteMany({ where: { id: ids.module } });
     await admin?.instanceSetting.deleteMany({ where: { id: ids.instance } });
     await admin?.tenantSetting.deleteMany({ where: { tenantId: { in: [tenantA, tenantB] } } });

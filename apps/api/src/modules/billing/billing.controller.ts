@@ -9,6 +9,7 @@ import {
   Controller,
   Get,
   NotFoundException,
+  Optional,
   Param,
   Post,
   Req,
@@ -25,6 +26,15 @@ import { ZodValidationPipe } from '../../auth/zod-validation.pipe';
 import { PrismaService } from '../../prisma/prisma.service';
 import { TenantResolverService } from '../../tenancy/tenant-resolver.service';
 import { ModuleRegistryService } from '../module-registry.service';
+import { PurchaseConsentService } from '../purchase-consent/purchase-consent.service';
+import {
+  withdrawalWaiverSchema,
+  type WithdrawalWaiverDto,
+} from '../purchase-consent/withdrawal-waiver';
+import {
+  PAYOUTS_NOT_READY_OFFER_REASON,
+  PlatformCheckoutGate,
+} from '../payouts/platform-checkout-gate';
 
 /**
  * Endpoint de checkout para el ALUMNO (rol student/alumno o cualquier user
@@ -38,7 +48,21 @@ import { ModuleRegistryService } from '../module-registry.service';
 // análisis de flujo de la regla no cuenta como «sentencia posterior».
 // eslint-disable-next-line no-useless-assignment
 const checkoutBodySchema = z
-  .object({ optionId: z.string().uuid().optional() })
+  .object({
+    optionId: z.string().uuid().optional(),
+    /** Renuncia al desistimiento (obligatoria: 422 si falta). */
+    withdrawalWaiver: withdrawalWaiverSchema.optional(),
+    /**
+     * Código del enlace de referido (`?ref=` de la página de venta). OPCIONAL y
+     * opaco para la venta: viaja en la metadata de Stripe y lo interpreta
+     * mod.referrals al completarse el pago. Mismo formato que en la membresía.
+     */
+    referralCode: z
+      .string()
+      .trim()
+      .regex(/^[a-z0-9]{3,32}$/i)
+      .optional(),
+  })
   .strict()
   .optional()
   .transform((v) => v ?? {});
@@ -52,6 +76,13 @@ export class BillingController {
     private readonly registry: ModuleRegistryService,
     private readonly prisma: PrismaService,
     private readonly tenantResolver: TenantResolverService,
+    /** Renuncia al desistimiento: prueba antes de pagar y confirmación después. */
+    private readonly consents: PurchaseConsentService,
+    /**
+     * Solo con el modo plataforma encendido: si el aula cobra por la plataforma
+     * y su cuenta aún no puede vender, el curso no está a la venta.
+     */
+    @Optional() private readonly payoutsGate?: PlatformCheckoutGate,
   ) {}
 
   @Get('offer/:courseId')
@@ -67,6 +98,10 @@ export class BillingController {
     if (!user) throw new UnauthorizedException();
     // Si mod.billing no está configurado, la ficha debe seguir renderizando:
     // simplemente no se ofrece la compra.
+    // El aula cobra por la plataforma y su cuenta aún no puede vender.
+    if (await this.payoutsGate?.saleBlockedReason(user.tenantId)) {
+      return { forSale: false, options: [], reason: PAYOUTS_NOT_READY_OFFER_REASON };
+    }
     try {
       return await this.registry.getBillingService().getCourseOffer(user.tenantId, courseId);
     } catch {
@@ -89,7 +124,8 @@ export class BillingController {
     @Param('courseId') courseId: string,
     @CurrentUser() user: SessionClaims | undefined,
     @Req() req: FastifyRequest,
-    @Body(new ZodValidationPipe(checkoutBodySchema)) body: { optionId?: string },
+    @Body(new ZodValidationPipe(checkoutBodySchema))
+    body: { optionId?: string; withdrawalWaiver?: WithdrawalWaiverDto; referralCode?: string },
   ) {
     if (!user) throw new UnauthorizedException();
 
@@ -98,7 +134,7 @@ export class BillingController {
     // cobrar dos veces al mismo alumno desde dos pestañas.
     const course = await this.prisma.modCoursesCourse.findFirst({
       where: { id: courseId, tenantId: user.tenantId, deletedAt: null },
-      select: { status: true },
+      select: { status: true, title: true },
     });
     if (!course)
       throw new NotFoundException({
@@ -143,14 +179,35 @@ export class BillingController {
     const webBaseUrl = (
       await this.tenantResolver.resolveTenantWebBaseUrl(user.tenantId, req)
     ).replace(/\/$/, '');
-    const result = await this.registry.getBillingService().startCheckout({
+    // Modo plataforma: 409 PAYOUTS_NOT_READY si la cuenta no puede vender
+    // (antes de crear la orden), y precios del curso en la cuenta del operador.
+    const billing = this.registry.getBillingService();
+    await this.payoutsGate?.prepareCheckout(user.tenantId, courseId, billing);
+    // La casilla de la renuncia al desistimiento (422 sin ella, 409 si el
+    // texto cambió): la prueba se guarda ANTES de crear la orden.
+    const consentId = await this.consents.accept({
+      req,
+      tenantId: user.tenantId,
+      purchaseKind: 'course',
+      itemRef: courseId,
+      itemName: course.title,
+      userId: user.sub,
+      buyerEmail: account?.email ?? null,
+      waiver: body?.withdrawalWaiver,
+    });
+    const result = await billing.startCheckout({
       tenantId: user.tenantId,
       userId: user.sub,
       userEmail: account?.email ?? '',
       courseId,
       optionId: body?.optionId,
+      ...(body?.referralCode ? { referralCode: body.referralCode.toLowerCase() } : {}),
       successUrl: `${webBaseUrl}/cursos/checkout/success?session_id={CHECKOUT_SESSION_ID}`,
       cancelUrl: `${webBaseUrl}/cursos/checkout/cancel`,
+    });
+    await this.consents.attachSession(user.tenantId, consentId, {
+      sessionId: result.sessionId,
+      orderId: result.orderId,
     });
     return result;
   }

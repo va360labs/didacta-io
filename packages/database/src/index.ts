@@ -11,5 +11,12 @@ export type {
   InstalledModuleVendor,
   TenantDomainSurface,
   SubscriptionGateState,
+  PayoutsAccountStatus,
+  PayoutsSaleStatus,
+  PayoutsSaleSourceKind,
+  PayoutsLedgerEntryType,
+  PayoutsDebtReason,
+  PayoutsDebtStatus,
+  PayoutsRefundReversalStatus,
 } from './client.js';
 export { withTenantContext } from './tenant-context.js';

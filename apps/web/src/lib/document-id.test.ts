@@ -5,7 +5,12 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { isDocumentFieldValid, isValidDocumentId, normalizeDocumentId } from './document-id';
+import {
+  asksSpanishDocument,
+  isDocumentFieldValid,
+  isValidDocumentId,
+  normalizeDocumentId,
+} from './document-id';
 
 describe('normalizeDocumentId', () => {
   it('quita espacios, puntos y guiones, y pasa a mayúsculas', () => {
@@ -58,5 +63,16 @@ describe('isDocumentFieldValid (campo opcional de formulario)', () => {
   it('rechaza texto arbitrario y letras de control incorrectas', () => {
     expect(isDocumentFieldValid('asdfaekjr')).toBe(false);
     expect(isDocumentFieldValid('12345678A')).toBe(false);
+  });
+});
+
+describe('asksSpanishDocument', () => {
+  it('se pide con la interfaz en español (España o Argentina)', () => {
+    expect(asksSpanishDocument('es-ES')).toBe(true);
+    expect(asksSpanishDocument('es-AR')).toBe(true);
+  });
+
+  it('no se pide con la interfaz en inglés', () => {
+    expect(asksSpanishDocument('en-US')).toBe(false);
   });
 });
