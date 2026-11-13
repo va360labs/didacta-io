@@ -7,6 +7,7 @@
 
 import { useParams, useSearchParams } from 'next/navigation';
 import { CommunityFeed } from '@/components/community-feed';
+import { useSimpleMode } from '@/lib/simple-mode';
 
 /**
  * URL canónica y compartible de un post: renderiza el feed de la comunidad con
@@ -20,8 +21,14 @@ import { CommunityFeed } from '@/components/community-feed';
 export default function PostDetailPage() {
   const params = useParams<{ id: string }>();
   const focusCommentId = useSearchParams().get('comment') ?? undefined;
+  // El enlace de un post (avisos, «Copiar enlace») abre el MISMO feed que
+  // /community: en un aula en modo sencillo, el sencillo. Sin esto salía el
+  // feed completo (título, galería, tags) debajo del modal.
+  const simple = useSimpleMode() === true;
 
   if (!params?.id) return null;
 
-  return <CommunityFeed initialPostId={params.id} focusCommentId={focusCommentId} />;
+  return (
+    <CommunityFeed initialPostId={params.id} focusCommentId={focusCommentId} simple={simple} />
+  );
 }
