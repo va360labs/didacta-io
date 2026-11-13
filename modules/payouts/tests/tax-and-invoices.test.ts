@@ -206,13 +206,24 @@ describe('régimen de IVA y desglose con el IVA incluido', () => {
   });
 
   it('base + IVA es SIEMPRE el total, y la base es la más cercana a total ÷ 1,21 (de 0 a 200.000)', () => {
+    // Un `expect` por importe eran 800.000 aserciones: ~48 s en el runner de
+    // CI, por encima del límite del test. Se recorre lo mismo y se afirma una
+    // vez con la lista de importes que fallan (vacía si todo cuadra).
+    const fallos: number[] = [];
     for (let total = 0; total <= 200_000; total += 1) {
       const { taxBase, vatAmount } = splitVatIncluded(total, 2100);
-      expect(taxBase + vatAmount).toBe(total);
-      expect(Math.abs(taxBase - total / 1.21)).toBeLessThanOrEqual(0.5 + 1e-9);
       const negative = splitVatIncluded(-total, 2100);
-      expect(negative).toEqual({ taxBase: -taxBase || 0, vatAmount: -vatAmount || 0 });
+      if (
+        taxBase + vatAmount !== total ||
+        Math.abs(taxBase - total / 1.21) > 0.5 + 1e-9 ||
+        // Object.is, como el `toEqual` de antes: -0 no vale por 0.
+        !Object.is(negative.taxBase, -taxBase || 0) ||
+        !Object.is(negative.vatAmount, -vatAmount || 0)
+      ) {
+        fallos.push(total);
+      }
     }
+    expect(fallos.slice(0, 10)).toEqual([]);
   });
 
   it('sin IVA, la base es el total', () => {
