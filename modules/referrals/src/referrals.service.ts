@@ -93,6 +93,21 @@ export interface ReferralsCreditPort {
       idempotencyKey: string;
     },
   ): Promise<{ id: string }>;
+  /**
+   * Retira saldo a favor (transacción POSITIVA): el descuento de referidos que
+   * el alumno no gastó antes de darse de baja. Idempotente por clave.
+   */
+  debit?(
+    tenantId: string,
+    params: {
+      customerId: string;
+      amountCents: number;
+      currency: string;
+      description: string;
+      metadata: Record<string, string>;
+      idempotencyKey: string;
+    },
+  ): Promise<{ id: string }>;
 }
 
 /**
@@ -146,6 +161,11 @@ export interface ReferralsPublicTerms {
 /** Cómo figura el descuento en la factura de la cuota (línea aparte). */
 export const REFERRAL_CREDIT_LABEL = 'Pago con saldo de referidos';
 
+/** Clave de idempotencia de la retirada del saldo al darse de baja. */
+export function uncreditIdempotencyKey(payoutId: string): string {
+  return `referrals-uncredit:${payoutId}`;
+}
+
 /** Clave de idempotencia del abono en Stripe: la fila de la liquidación. */
 export function creditIdempotencyKey(payoutId: string): string {
   return `referrals-credit:${payoutId}`;
@@ -169,6 +189,7 @@ export const REFERRALS_EVENT = {
   COMMISSION_APPROVED: 'referrals.commission.approved',
   COMMISSION_REVOKED: 'referrals.commission.revoked',
   PAYOUT_RECORDED: 'referrals.payout.recorded',
+  CREDIT_RETURNED: 'referrals.credit.returned',
 } as const;
 
 export const REFERRAL_SCOPES = ['FIRST_PAYMENT', 'RECURRING'] as const;
@@ -1153,6 +1174,190 @@ export class ReferralsService {
     return { payoutId, totalCents, currency, count: input.commissionIds.length };
   }
 
+  // ---------------- Baja con descuento sin usar ----------------
+
+  /**
+   * El alumno canceló su membresía: el saldo de referidos que siga a favor
+   * en su cliente de Stripe se retira y vuelve a su cartera como comisión
+   * confirmada (`kind = CREDIT_RETURN`), para cobrarla en dinero.
+   *
+   * - Solo lo que vino de referidos: como mucho lo abonado por canjes
+   *   (`CREDIT`) menos lo ya devuelto, y como mucho el saldo a favor actual.
+   * - Si el mismo cliente sigue con otra membresía viva, no se toca nada.
+   * - Idempotente: la liquidación `CREDIT_REVERSAL` nace PENDING (una por
+   *   cliente), la retirada usa `referrals-uncredit:<id>` y el cierre crea la
+   *   fila de cartera con referencia única. Un reintento termina el mismo.
+   *
+   * No lanza: el bridge loguea el motivo (la baja jamás falla por esto).
+   */
+  async returnUnusedCredit(
+    tenantId: string,
+    input: { userId: string; subscriptionId: string },
+  ): Promise<
+    | { returned: true; payoutId: string; amountCents: number; currency: string }
+    | {
+        returned: false;
+        reason: 'no_port' | 'no_customer' | 'still_member' | 'nothing_to_return';
+      }
+  > {
+    const port = this.creditPort;
+    if (!port?.debit) return { returned: false, reason: 'no_port' };
+    const sub = await this.prisma.modSubscriptionsSubscription.findFirst({
+      where: { id: input.subscriptionId, tenantId, userId: input.userId },
+      select: { stripeCustomerId: true, currency: true },
+    });
+    const customerId = sub?.stripeCustomerId;
+    if (!customerId?.startsWith('cus_')) return { returned: false, reason: 'no_customer' };
+    const alive = await this.prisma.modSubscriptionsSubscription.findFirst({
+      where: {
+        tenantId,
+        stripeCustomerId: customerId,
+        planId: { not: null },
+        status: { in: ['ACTIVE', 'TRIALING', 'PAST_DUE'] },
+      },
+      select: { id: true },
+    });
+    if (alive) return { returned: false, reason: 'still_member' };
+
+    // Una retirada a medias se termina antes de abrir otra.
+    const pending = await this.prisma.modReferralsPayout.findFirst({
+      where: {
+        tenantId,
+        stripeCustomerId: customerId,
+        method: 'CREDIT_REVERSAL',
+        status: 'PENDING',
+      },
+    });
+    let payout = pending;
+    if (!payout) {
+      const [credited, reversed] = await Promise.all([
+        this.prisma.modReferralsPayout.aggregate({
+          where: {
+            tenantId,
+            referrerUserId: input.userId,
+            stripeCustomerId: customerId,
+            method: 'CREDIT',
+            status: 'DONE',
+          },
+          _sum: { totalCents: true },
+        }),
+        this.prisma.modReferralsPayout.aggregate({
+          where: {
+            tenantId,
+            referrerUserId: input.userId,
+            stripeCustomerId: customerId,
+            method: 'CREDIT_REVERSAL',
+            status: 'DONE',
+          },
+          _sum: { totalCents: true },
+        }),
+      ]);
+      // Las retiradas se guardan en negativo.
+      const fromReferrals = (credited._sum.totalCents ?? 0) + (reversed._sum.totalCents ?? 0);
+      if (fromReferrals <= 0) return { returned: false, reason: 'nothing_to_return' };
+      let balance: { balanceCents: number; currency: string | null };
+      try {
+        balance = await port.retrieveBalance(tenantId, customerId);
+      } catch {
+        throw new ReferralsCreditFailedError();
+      }
+      const available = Math.max(0, -balance.balanceCents);
+      const amount = Math.min(available, fromReferrals);
+      if (amount <= 0) return { returned: false, reason: 'nothing_to_return' };
+      const currency = (balance.currency ?? sub?.currency ?? 'eur').toLowerCase();
+      try {
+        payout = await this.prisma.modReferralsPayout.create({
+          data: {
+            tenantId,
+            referrerUserId: input.userId,
+            totalCents: -amount,
+            currency,
+            externalReference: 'pendiente',
+            createdByUserId: input.userId,
+            method: 'CREDIT_REVERSAL',
+            status: 'PENDING',
+            stripeCustomerId: customerId,
+          },
+        });
+      } catch (err) {
+        // Otra baja procesando el mismo cliente a la vez: termina la suya.
+        if (!isUniqueViolation(err)) throw err;
+        payout = await this.prisma.modReferralsPayout.findFirst({
+          where: {
+            tenantId,
+            stripeCustomerId: customerId,
+            method: 'CREDIT_REVERSAL',
+            status: 'PENDING',
+          },
+        });
+        if (!payout) throw err;
+      }
+    }
+
+    const amountCents = -payout.totalCents;
+    let tx: { id: string };
+    try {
+      tx = await port.debit(tenantId, {
+        customerId,
+        amountCents,
+        currency: payout.currency,
+        description: `${REFERRAL_CREDIT_LABEL}: saldo sin usar devuelto al darse de baja`,
+        metadata: {
+          didacta_kind: 'referral_credit_return',
+          didacta_tenant_id: tenantId,
+          didacta_referral_payout_id: payout.id,
+        },
+        idempotencyKey: uncreditIdempotencyKey(payout.id),
+      });
+    } catch {
+      // La fila sigue PENDING: el siguiente intento repite la MISMA llamada.
+      throw new ReferralsCreditFailedError();
+    }
+
+    const referral = await this.prisma.modReferralsReferral.findFirst({
+      where: { tenantId, referrerUserId: input.userId },
+      orderBy: { attributedAt: 'asc' },
+      select: { id: true },
+    });
+    const payoutId = payout.id;
+    const now = new Date();
+    const closed = await this.prisma.$transaction(async (t) => {
+      const db = t as unknown as PrismaClient;
+      const done = await db.modReferralsPayout.updateMany({
+        where: { id: payoutId, tenantId, status: 'PENDING' },
+        data: { status: 'DONE', externalReference: tx.id },
+      });
+      if (done.count !== 1 || !referral) return false;
+      await db.modReferralsCommission.create({
+        data: {
+          tenantId,
+          referralId: referral.id,
+          referrerUserId: input.userId,
+          stripeInvoiceId: `credit-return:${payoutId}`,
+          baseAmountCents: 0,
+          amountCents,
+          currency: payout!.currency,
+          commissionBps: 0,
+          kind: 'CREDIT_RETURN',
+          status: 'APPROVED',
+          approveAfter: now,
+          approvedAt: now,
+        },
+      });
+      return true;
+    });
+    if (closed) {
+      await this.publisher.publish(tenantId, input.userId, REFERRALS_EVENT.CREDIT_RETURNED, {
+        payoutId,
+        referrerUserId: input.userId,
+        amountCents,
+        currency: payout.currency,
+        stripeBalanceTransactionId: tx.id,
+      });
+    }
+    return { returned: true, payoutId, amountCents, currency: payout.currency };
+  }
+
   // ---------------- Cobro en dinero (datos y petición) ----------------
 
   /**
@@ -1497,9 +1702,17 @@ export class ReferralsService {
     const referrals = await this.prisma.modReferralsReferral.count({
       where: { tenantId, referrerUserId: userId },
     });
+    // «Ganado» no incluye el saldo devuelto al darse de baja (ya contó al
+    // ganarse); sí los ajustes por devolución, que lo restan.
     const sums = await this.prisma.modReferralsCommission.groupBy({
       by: ['status'],
-      where: { tenantId, referrerUserId: userId },
+      where: { tenantId, referrerUserId: userId, kind: { not: 'CREDIT_RETURN' } },
+      _sum: { amountCents: true },
+    });
+    // Lo que puede cobrar YA (en dinero o como descuento): confirmado y sin
+    // liquidar, de cualquier tipo.
+    const available = await this.prisma.modReferralsCommission.aggregate({
+      where: { tenantId, referrerUserId: userId, status: 'APPROVED', payoutId: null },
       _sum: { amountCents: true },
     });
     const totals = { PENDING: 0, APPROVED: 0, PAID: 0, REVOKED: 0 } as Record<string, number>;
@@ -1533,6 +1746,7 @@ export class ReferralsService {
       code: codeRow?.code ?? null,
       clicks,
       referrals,
+      availableCents: Math.max(0, available._sum.amountCents ?? 0),
       totals: {
         pendingCents: totals['PENDING'] ?? 0,
         approvedCents: totals['APPROVED'] ?? 0,
@@ -1540,6 +1754,7 @@ export class ReferralsService {
       },
       commissions: commissions.map((c) => ({
         id: c.id,
+        kind: c.kind as 'COMMISSION' | 'CREDIT_RETURN' | 'ADJUSTMENT',
         amountCents: c.amountCents,
         baseAmountCents: c.baseAmountCents,
         currency: c.currency,
@@ -1552,7 +1767,12 @@ export class ReferralsService {
         totalCents: p.totalCents,
         currency: p.currency,
         externalReference: p.externalReference,
-        method: p.method === 'CREDIT' ? ('CREDIT' as const) : ('CASH' as const),
+        method:
+          p.method === 'CREDIT'
+            ? ('CREDIT' as const)
+            : p.method === 'CREDIT_REVERSAL'
+              ? ('CREDIT_REVERSAL' as const)
+              : ('CASH' as const),
         status:
           p.status === 'PENDING'
             ? ('PENDING' as const)

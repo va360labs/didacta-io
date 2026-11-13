@@ -504,9 +504,11 @@ export function SimpleReferrals() {
                         {formatDate(c.createdAt, { dateStyle: 'medium' })}
                       </div>
                       <div className="text-xs text-text-subtle">
-                        {t('sobre', {
-                          amount: formatCents(c.baseAmountCents, c.currency.toUpperCase()),
-                        })}
+                        {c.kind === 'CREDIT_RETURN'
+                          ? t('tipo.CREDIT_RETURN')
+                          : t('sobre', {
+                              amount: formatCents(c.baseAmountCents, c.currency.toUpperCase()),
+                            })}
                       </div>
                     </div>
                     <span

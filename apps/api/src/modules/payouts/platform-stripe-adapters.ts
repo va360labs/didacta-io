@@ -372,6 +372,10 @@ export class PlatformSubscriptionsStripeAdapter implements SubscriptionsStripeAd
     return (await this.route(params.customerId)).creditCustomerBalance(params);
   }
 
+  async debitCustomerBalance(params: CreditCustomerBalanceParams): Promise<{ id: string }> {
+    return (await this.route(params.customerId)).debitCustomerBalance(params);
+  }
+
   constructWebhookEvent(rawBody: string | Buffer, signatureHeader: string): Stripe.Event {
     // Nadie lo usa en modo plataforma: los heredados construyen su propio
     // adaptador y el de plataforma verifica con los secretos del operador.

@@ -67,6 +67,12 @@ export interface SubscriptionsStripeAdapter {
    * por `idempotencyKey` (Stripe guarda la clave 24 h).
    */
   creditCustomerBalance(params: CreditCustomerBalanceParams): Promise<{ id: string }>;
+  /**
+   * Retira `amountCents` del saldo a favor del cliente (transacción de saldo
+   * con importe POSITIVO): lo que se le había abonado y no ha gastado.
+   * Idempotente por `idempotencyKey`.
+   */
+  debitCustomerBalance(params: CreditCustomerBalanceParams): Promise<{ id: string }>;
 }
 
 export interface CustomerBalanceView {
@@ -380,6 +386,27 @@ export class SubscriptionsStripeSdkAdapter implements SubscriptionsStripeAdapter
       return { balanceCents: c.balance ?? 0, currency: c.currency ?? null };
     } catch (err) {
       if (err instanceof StripeApiError) throw err;
+      throw new StripeApiError((err as Error).message);
+    }
+  }
+
+  async debitCustomerBalance(p: CreditCustomerBalanceParams): Promise<{ id: string }> {
+    if (!Number.isInteger(p.amountCents) || p.amountCents <= 0) {
+      throw new StripeApiError(`retirada no válida: ${p.amountCents}`);
+    }
+    try {
+      const tx = await this.client.customers.createBalanceTransaction(
+        p.customerId,
+        {
+          amount: p.amountCents,
+          currency: p.currency.toLowerCase(),
+          description: p.description,
+          metadata: p.metadata,
+        },
+        { idempotencyKey: p.idempotencyKey },
+      );
+      return { id: tx.id };
+    } catch (err) {
       throw new StripeApiError((err as Error).message);
     }
   }

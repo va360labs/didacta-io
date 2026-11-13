@@ -576,6 +576,9 @@ export class ModuleRegistryService implements OnModuleInit {
           ),
         credit: async (tenantId, params) =>
           (await this.resolveSubscriptionsStripeAdapter(tenantId)).creditCustomerBalance(params),
+        // Baja con descuento sin usar: se retira del saldo del cliente.
+        debit: async (tenantId, params) =>
+          (await this.resolveSubscriptionsStripeAdapter(tenantId)).debitCustomerBalance(params),
       },
       // Datos de cobro en dinero (nombre, NIF, IBAN): cifrados con la clave
       // maestra de siempre, la que rota `maintenance/rotate-cipher-key`.

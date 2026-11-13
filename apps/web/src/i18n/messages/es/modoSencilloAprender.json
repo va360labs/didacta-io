@@ -134,6 +134,9 @@
       "error": "No se ha podido enviar. Vuelve a intentarlo.",
       "pagado": "Pagado el {date}",
       "justificante": "Descargar justificante"
+    },
+    "tipo": {
+      "CREDIT_RETURN": "Descuento sin usar devuelto al darte de baja"
     }
   }
 }

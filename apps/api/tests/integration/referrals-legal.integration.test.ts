@@ -19,6 +19,9 @@ import {
   ReferralsPayoutValidationError,
   ReferralsService,
   ReferralsTermsRequiredError,
+  ReferralsCreditFailedError,
+  uncreditIdempotencyKey,
+  type ReferralsCreditPort,
 } from '@didacta/mod-referrals';
 import { SecretCipherService } from '../../src/modules/secret-cipher.service';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -100,6 +103,7 @@ describeWithDb('Referidos — puntos legales, Postgres real como didacta_app', (
     for (const tenantId of [ids.tenantA, ids.tenantB]) {
       await admin.modReferralsCommission.deleteMany({ where: { tenantId } });
       await admin.modReferralsPayout.deleteMany({ where: { tenantId } });
+      await admin.modSubscriptionsSubscription.deleteMany({ where: { tenantId } });
       await admin.modReferralsReferral.deleteMany({ where: { tenantId } });
       await admin.modReferralsCode.deleteMany({ where: { tenantId } });
       await admin.modReferralsMember.deleteMany({ where: { tenantId } });
@@ -355,6 +359,150 @@ describeWithDb('Referidos — puntos legales, Postgres real como didacta_app', (
       await expect(
         runAsTenant(ids.tenantB, () => referrals.receiptPdf(ids.tenantB, first.id)),
       ).rejects.toBeInstanceOf(ReferralsPayoutNotFoundError);
+    });
+  });
+
+  describe('6. baja con saldo de referidos sin usar', () => {
+    /** Saldo de cliente de Stripe en memoria, idempotente por clave como Stripe. */
+    function stripeBalances() {
+      const balances = new Map<string, number>();
+      const byKey = new Map<string, string>();
+      const debits: Array<{ customerId: string; amountCents: number; key: string }> = [];
+      let failNext = 0;
+      let seq = 0;
+      const apply = (customerId: string, delta: number, key: string) => {
+        const done = byKey.get(key);
+        if (done) return { id: done };
+        seq += 1;
+        const id = `cbtxn_baja_${seq}`;
+        byKey.set(key, id);
+        balances.set(customerId, (balances.get(customerId) ?? 0) + delta);
+        return { id };
+      };
+      const port: ReferralsCreditPort = {
+        retrieveBalance: async (_t, customerId) => ({
+          balanceCents: balances.get(customerId) ?? 0,
+          currency: 'eur',
+        }),
+        credit: async (_t, p) => apply(p.customerId, -p.amountCents, p.idempotencyKey),
+        debit: async (_t, p) => {
+          debits.push({
+            customerId: p.customerId,
+            amountCents: p.amountCents,
+            key: p.idempotencyKey,
+          });
+          if (failNext > 0) {
+            failNext -= 1;
+            throw new Error('Stripe 503');
+          }
+          return apply(p.customerId, p.amountCents, p.idempotencyKey);
+        },
+      };
+      return { port, balances, debits, failOnce: () => (failNext = 1) };
+    }
+
+    it('al cancelar, el saldo sin usar se retira de Stripe una sola vez y vuelve a la cartera; B no lo ve', async () => {
+      const stripe = stripeBalances();
+      const withPort = new ReferralsService(
+        prisma as never,
+        { publish: async () => undefined },
+        async () => null,
+        stripe.port,
+      );
+      const customer = `cus_baja_${stamp}`;
+      const sub = await admin.modSubscriptionsSubscription.create({
+        data: {
+          tenantId: ids.tenantA,
+          userId: ids.referrerA,
+          planId: randomUUID(),
+          stripeCustomerId: customer,
+          stripePriceId: 'price_baja',
+          status: 'ACTIVE',
+          unitAmount: 3000,
+          currency: 'eur',
+          interval: 'month',
+        },
+      });
+      await approved(600, 400);
+      const redeemed = await runAsTenant(ids.tenantA, () =>
+        withPort.redeemAsCredit(ids.tenantA, ids.referrerA),
+      );
+      expect(redeemed.totalCents).toBe(1000);
+      // La siguiente cuota gastó 3 € del saldo: quedan 7 € a favor.
+      stripe.balances.set(customer, -700);
+      // Se da de baja.
+      await admin.modSubscriptionsSubscription.update({
+        where: { id: sub.id },
+        data: { status: 'CANCELED', canceledAt: new Date() },
+      });
+
+      // Aislamiento: desde el aula B, la suscripción de A no existe.
+      expect(
+        await runAsTenant(ids.tenantB, () =>
+          withPort.returnUnusedCredit(ids.tenantB, {
+            userId: ids.referrerA,
+            subscriptionId: sub.id,
+          }),
+        ),
+      ).toEqual({ returned: false, reason: 'no_customer' });
+
+      // Stripe falla la primera vez: la retirada queda PENDING.
+      stripe.failOnce();
+      await expect(
+        runAsTenant(ids.tenantA, () =>
+          withPort.returnUnusedCredit(ids.tenantA, {
+            userId: ids.referrerA,
+            subscriptionId: sub.id,
+          }),
+        ),
+      ).rejects.toBeInstanceOf(ReferralsCreditFailedError);
+      const pending = await admin.modReferralsPayout.findFirstOrThrow({
+        where: { tenantId: ids.tenantA, method: 'CREDIT_REVERSAL' },
+      });
+      expect(pending).toMatchObject({ status: 'PENDING', totalCents: -700 });
+
+      // El reintento repite la MISMA llamada y termina.
+      const done = await runAsTenant(ids.tenantA, () =>
+        withPort.returnUnusedCredit(ids.tenantA, { userId: ids.referrerA, subscriptionId: sub.id }),
+      );
+      expect(done).toMatchObject({ returned: true, amountCents: 700, payoutId: pending.id });
+      expect(stripe.debits.map((d) => d.key)).toEqual([
+        uncreditIdempotencyKey(pending.id),
+        uncreditIdempotencyKey(pending.id),
+      ]);
+      expect(stripe.balances.get(customer)).toBe(0);
+
+      // Rastro en el ledger de referidos: la retirada DONE y la fila de cartera.
+      expect(
+        await admin.modReferralsPayout.findUniqueOrThrow({ where: { id: pending.id } }),
+      ).toMatchObject({ status: 'DONE', externalReference: 'cbtxn_baja_2' });
+      const back = await admin.modReferralsCommission.findFirstOrThrow({
+        where: { tenantId: ids.tenantA, kind: 'CREDIT_RETURN' },
+      });
+      expect(back).toMatchObject({ status: 'APPROVED', amountCents: 700, payoutId: null });
+
+      // Otra vez: nada que devolver (el saldo ya está a cero).
+      expect(
+        await runAsTenant(ids.tenantA, () =>
+          withPort.returnUnusedCredit(ids.tenantA, {
+            userId: ids.referrerA,
+            subscriptionId: sub.id,
+          }),
+        ),
+      ).toEqual({ returned: false, reason: 'nothing_to_return' });
+
+      // Lo devuelto se puede cobrar en dinero, pero no cuenta como «ganado» otra vez.
+      const stats = await runAsTenant(ids.tenantA, () =>
+        withPort.memberStats(ids.tenantA, ids.referrerA),
+      );
+      expect(stats.availableCents).toBeGreaterThanOrEqual(700);
+      expect(stats.commissions.find((c) => c.kind === 'CREDIT_RETURN')?.amountCents).toBe(700);
+      // B no ve nada de esto.
+      expect(
+        await runAsTenant(ids.tenantB, async () =>
+          prisma.modReferralsCommission.count({ where: { kind: 'CREDIT_RETURN' } }),
+        ),
+      ).toBe(0);
     });
   });
 });

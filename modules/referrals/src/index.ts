@@ -27,6 +27,7 @@ export {
   utcDay,
   CREDIT_MAX_SHARE_BPS,
   creditIdempotencyKey,
+  uncreditIdempotencyKey,
   REFERRAL_TERMS_VERSION,
   REFERRAL_CREDIT_LABEL,
 } from './referrals.service.js';

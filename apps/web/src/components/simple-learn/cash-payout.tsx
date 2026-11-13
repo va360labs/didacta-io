@@ -68,7 +68,8 @@ export function payoutState(stats: MemberReferralStats): {
 } {
   const requested =
     stats.payouts.find((p) => p.method === 'CASH' && p.status === 'REQUESTED') ?? null;
-  const confirmedCents = stats.totals.approvedCents;
+  // Lo que se puede cobrar ya (incluye el descuento devuelto al darse de baja).
+  const confirmedCents = stats.availableCents ?? stats.totals.approvedCents;
   const currency = (stats.commissions[0]?.currency ?? 'eur').toUpperCase();
   return {
     requested: requested

@@ -32,6 +32,11 @@ export interface ReferralsConfig {
 
 export interface ReferralCommissionRow {
   id: string;
+  /**
+   * COMMISSION = por una venta; CREDIT_RETURN = descuento sin usar devuelto
+   * al darse de baja; ADJUSTMENT = ajuste por devolución (negativo).
+   */
+  kind?: 'COMMISSION' | 'CREDIT_RETURN' | 'ADJUSTMENT';
   amountCents: number;
   baseAmountCents: number;
   currency: string;
@@ -45,8 +50,11 @@ export interface ReferralPayoutRow {
   totalCents: number;
   currency: string;
   externalReference: string;
-  /** CASH = pago aparte; CREDIT = descuento en la cuota. */
-  method?: 'CASH' | 'CREDIT';
+  /**
+   * CASH = pago aparte; CREDIT = descuento en la cuota; CREDIT_REVERSAL =
+   * descuento sin usar retirado al darse de baja (importe negativo).
+   */
+  method?: 'CASH' | 'CREDIT' | 'CREDIT_REVERSAL';
   /** REQUESTED = cobro en dinero pedido, aún sin pagar. */
   status?: 'PENDING' | 'REQUESTED' | 'DONE';
   /** Cobro en dinero: cuándo lo marcó pagado el creador. */
@@ -122,6 +130,8 @@ export interface MemberReferralStats {
   code: string | null;
   /** Casilla «mayor de 18 y acepto las condiciones»: sin ella no hay enlace. */
   terms?: ReferralTermsStatus;
+  /** Lo que puede cobrar ya: confirmado y sin liquidar (neto de ajustes). */
+  availableCents?: number;
   /** Datos para cobrar en dinero, enmascarados (null si no los ha dado). */
   payee?: PayeeMasked | null;
   /** La instancia puede guardar datos de cobro (cobro en dinero disponible). */

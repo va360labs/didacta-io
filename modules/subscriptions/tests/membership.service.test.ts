@@ -314,6 +314,9 @@ function stubStripe() {
     retrieveCustomerBalance: async () => {
       throw new Error('no usado');
     },
+    debitCustomerBalance: async () => {
+      throw new Error('no se usa en este test');
+    },
     creditCustomerBalance: async () => {
       throw new Error('no usado');
     },

@@ -126,6 +126,10 @@ function fakeSubscriptions(
       log.push([tag, 'retrieveCustomerBalance', id]);
       return { balanceCents: 0, currency: 'eur' };
     },
+    debitCustomerBalance: async (p) => {
+      log.push([tag, 'debitCustomerBalance', `${p.customerId}:${p.amountCents}`]);
+      return { id: 'cbtxn_retirada' };
+    },
     creditCustomerBalance: async (p) => {
       log.push([tag, 'creditCustomerBalance', `${p.customerId}:${p.amountCents}`]);
       return { id: `cbtxn_${label}` };

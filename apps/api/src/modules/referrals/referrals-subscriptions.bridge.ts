@@ -8,6 +8,7 @@ import type { DomainEvent } from '@didacta/core-kernel';
 import { Logger as PinoLogger } from 'nestjs-pino';
 import { ModuleContextFactory } from '../module-context.factory';
 import { ModuleRegistryService } from '../module-registry.service';
+import { ReferralsCreditFailedError } from '@didacta/mod-referrals';
 
 /**
  * Puente mod.subscriptions → mod.referrals (composición en el host: el emisor
@@ -38,6 +39,12 @@ interface InvoicePaidPayload {
   currency: string;
 }
 
+interface SubscriptionCanceledPayload {
+  subscriptionId: string;
+  planId?: string | null;
+  userId: string;
+}
+
 interface InvoiceRefundedPayload {
   subscriptionId: string;
   stripeInvoiceId: string;
@@ -66,6 +73,12 @@ export class ReferralsSubscriptionsBridge implements OnModuleInit {
       'subscriptions.invoice.paid',
       async (event: DomainEvent<InvoicePaidPayload>) => {
         await this.onInvoicePaid(event);
+      },
+    );
+    eventBus.subscribe<SubscriptionCanceledPayload>(
+      'subscriptions.subscription.canceled',
+      async (event: DomainEvent<SubscriptionCanceledPayload>) => {
+        await this.onSubscriptionCanceled(event);
       },
     );
     eventBus.subscribe<InvoiceRefundedPayload>(
@@ -117,6 +130,37 @@ export class ReferralsSubscriptionsBridge implements OnModuleInit {
         { tenantId, err: err instanceof Error ? err.message : String(err) },
         'referrals: fallo al atribuir (la membresía NO se ve afectada)',
       );
+    }
+  }
+
+  /**
+   * Baja de la membresía: el descuento de referidos sin usar vuelve a la
+   * cartera del alumno. Best-effort: la baja jamás falla por esto.
+   */
+  private async onSubscriptionCanceled(
+    event: DomainEvent<SubscriptionCanceledPayload>,
+  ): Promise<void> {
+    if (!event.data.planId) return; // suscripción a un curso, no la membresía
+    const tenantId = event.metadata.tenantId;
+    try {
+      const result = await this.registry.getReferralsService().returnUnusedCredit(tenantId, {
+        userId: event.data.userId,
+        subscriptionId: event.data.subscriptionId,
+      });
+      if (result.returned) {
+        this.logger.log(
+          { tenantId, payoutId: result.payoutId, amountCents: result.amountCents },
+          'referrals: saldo de descuento sin usar devuelto a la cartera',
+        );
+      }
+    } catch (err) {
+      this.logger.error(
+        { tenantId, err: err instanceof Error ? err.message : String(err) },
+        'referrals: fallo al devolver el saldo sin usar',
+      );
+      // Stripe no confirmó la retirada: la liquidación queda PENDING y el
+      // reintento del evento repite la MISMA llamada (misma clave).
+      if (err instanceof ReferralsCreditFailedError) throw err;
     }
   }
 

@@ -134,6 +134,9 @@
       "error": "It could not be sent. Please try again.",
       "pagado": "Paid on {date}",
       "justificante": "Download receipt"
+    },
+    "tipo": {
+      "CREDIT_RETURN": "Unused discount returned when you cancelled"
     }
   }
 }

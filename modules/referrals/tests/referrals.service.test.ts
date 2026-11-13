@@ -287,12 +287,27 @@ class MockPrisma {
       for (const t of targets) Object.assign(t, data as Row);
       return { count: targets.length };
     },
+    aggregate: async ({ where }: never) => {
+      const w = (where ?? {}) as Row;
+      const rows = this.commissions.filter(
+        (c) =>
+          (!w['tenantId'] || c['tenantId'] === w['tenantId']) &&
+          (!w['referrerUserId'] || c['referrerUserId'] === w['referrerUserId']) &&
+          (!w['status'] || c['status'] === w['status']) &&
+          (!('payoutId' in w) || (c['payoutId'] ?? null) === w['payoutId']),
+      );
+      return {
+        _sum: { amountCents: rows.reduce((sum, r) => sum + (r['amountCents'] as number), 0) },
+      };
+    },
     groupBy: async ({ by, where }: never) => {
       const w = (where ?? {}) as Row;
       const fields = by as string[];
+      const kindNot = (w['kind'] as Row | undefined)?.['not'];
       const rows = this.commissions.filter((c) => {
         if (w['tenantId'] && c['tenantId'] !== w['tenantId']) return false;
         if (w['referrerUserId'] && c['referrerUserId'] !== w['referrerUserId']) return false;
+        if (kindNot && (c['kind'] ?? 'COMMISSION') === kindNot) return false;
         return true;
       });
       const grouped = new Map<string, { rows: Row[]; keys: Row }>();

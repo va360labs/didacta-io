@@ -29,11 +29,14 @@ export const manifest: ModuleManifest = parseModuleManifest({
     'referrals.commission.approved',
     'referrals.commission.revoked',
     'referrals.payout.recorded',
+    // Baja con descuento sin usar: el saldo vuelve a la cartera del alumno.
+    'referrals.credit.returned',
   ],
   eventsConsumed: [
     'subscriptions.membership.activated',
     'subscriptions.invoice.paid',
     'subscriptions.invoice.refunded',
+    'subscriptions.subscription.canceled',
     // Compra suelta (curso de pago único) con `attribution.referralCode`.
     'billing.order.completed',
     'billing.order.refunded',

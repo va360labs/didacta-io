@@ -4164,6 +4164,10 @@ model ModReferralsCommission {
   currency        String                   @default("eur")
   /// Bps aplicados en el momento del devengo (la config puede cambiar luego).
   commissionBps   Int                      @map("commission_bps")
+  /// COMMISSION = ganada por una venta; CREDIT_RETURN = saldo de descuento
+  /// sin usar devuelto a la cartera al darse de baja; ADJUSTMENT = ajuste por
+  /// devolución (negativo) de una venta reembolsada ya cobrada.
+  kind            String                   @default("COMMISSION")
   status          ReferralCommissionStatus @default(PENDING)
   /// PENDING → APPROVED cuando vence (createdAt + guaranteeDays). El worker
   /// la aprueba al pasar; el admin puede revocar antes.
