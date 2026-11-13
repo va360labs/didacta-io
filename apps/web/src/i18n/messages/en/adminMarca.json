@@ -1,4 +1,37 @@
 {
+  "academyProfile": {
+    "title": "Your academy in the community",
+    "description": "What your members see on the academy card next to the community feed: cover, description and links.",
+    "coverLabel": "Cover",
+    "coverUpload": "Upload a cover",
+    "coverFormats": "JPG, PNG, WebP or SVG, up to 10 MB",
+    "coverHelp": "A landscape image (for example, 1600 × 800). It replaces the color band on the card.",
+    "coverChange": "Change",
+    "coverRemove": "Remove",
+    "coverUploading": "Uploading…",
+    "coverRemoving": "Removing…",
+    "coverAlt": "Academy cover",
+    "coverErrorType": "That file won’t work: use JPG, PNG, WebP or SVG.",
+    "coverErrorSize": "It weighs {mb} MB and the limit is 10 MB.",
+    "coverError": "The cover couldn’t be saved. Please try again.",
+    "aboutLabel": "Description",
+    "aboutPlaceholder": "What your academy is and who it’s for, in one or two sentences.",
+    "aboutHelp": "If you leave it empty, your sign-in page headline is used.",
+    "linksLabel": "Links",
+    "linksHelp": "WhatsApp, Telegram, Instagram, YouTube, TikTok, Facebook, LinkedIn, X or your website. Paste the link and its icon appears.",
+    "linkAdd": "Add a link",
+    "linkAria": "Link {n}",
+    "linkRemove": "Remove link {n}",
+    "linkWeb": "Website",
+    "linksMax": "{max} links at most.",
+    "linksInvalid": "Check the highlighted links before saving.",
+    "linkError": {
+      "https": "It must start with https://",
+      "credentials": "Remove the username and password from the link.",
+      "host": "That doesn’t look like a full address.",
+      "length": "That link is too long."
+    }
+  },
   "branding": {
     "title": "Branding",
     "headerDescription": "Customize your organization's visual identity. Changes are saved when you click <strong>Save</strong>; you can see a preview while you edit.",

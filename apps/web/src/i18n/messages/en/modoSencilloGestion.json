@@ -71,6 +71,8 @@
     "cargaError": "Could not load the list."
   },
   "ajustes": {
+    "comunidad": "How it looks in the community",
+    "comunidadAyuda": "Your academy’s card next to the community feed, like a Skool group’s.",
     "titulo": "Settings",
     "sub": "How your academy looks.",
     "academia": "Your academy",

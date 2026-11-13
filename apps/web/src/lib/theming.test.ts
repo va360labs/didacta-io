@@ -17,6 +17,10 @@ function makeTheme(overrides: Partial<TenantTheme> = {}): TenantTheme {
     footerHtml: null,
     signinHeadline: null,
     signinSubheadline: null,
+    about: null,
+    socialLinks: [],
+    coverUrl: null,
+    coverUploaded: false,
     updatedAt: new Date().toISOString(),
     ...overrides,
   };

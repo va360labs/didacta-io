@@ -9,6 +9,14 @@ import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { useTranslations } from 'next-intl';
 import { EeGate, LICENSE_CAPABILITIES } from '@didacta/license-sdk/react';
 import { Icon } from '@/components/icon';
+import {
+  AboutField,
+  CoverField,
+  SocialLinksField,
+  draftsFromLinks,
+  linksFromDrafts,
+  type LinkDraft,
+} from '@/components/academy-profile-fields';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -72,6 +80,10 @@ interface FormState {
   footerHtml: string;
   signinHeadline: string;
   signinSubheadline: string;
+  /** Descripción de la academia en su comunidad. */
+  about: string;
+  /** Enlaces sociales tal cual se están escribiendo. */
+  links: LinkDraft[];
 }
 
 function themeToForm(t: TenantTheme): FormState {
@@ -87,6 +99,8 @@ function themeToForm(t: TenantTheme): FormState {
     footerHtml: t.footerHtml ?? '',
     signinHeadline: t.signinHeadline ?? '',
     signinSubheadline: t.signinSubheadline ?? '',
+    about: t.about ?? '',
+    links: draftsFromLinks(t.socialLinks ?? []),
   };
 }
 
@@ -103,6 +117,8 @@ export default function BrandingPage() {
   // respeta tal cual hasta que un slider vuelva a mandar. Sin useEffect: los
   // dos caminos de escritura actualizan el borrador explícitamente.
   const [hexDraft, setHexDraft] = useState<string | null>(null);
+  // Tras un intento de guardar con enlaces malos se marcan todos, no solo los tocados.
+  const [linksChecked, setLinksChecked] = useState(false);
 
   useEffect(() => {
     const token = authStorage.getAccessToken();
@@ -139,6 +155,13 @@ export default function BrandingPage() {
     if (!form || !theme) return;
     const token = authStorage.getAccessToken();
     if (!token) return;
+    const enlaces = linksFromDrafts(form.links);
+    if (enlaces.invalid) {
+      setLinksChecked(true);
+      setStatus('error');
+      setError(t('academyProfile.linksInvalid'));
+      return;
+    }
     setStatus('saving');
     setError(null);
     try {
@@ -154,10 +177,13 @@ export default function BrandingPage() {
         footerHtml: form.footerHtml.trim() || null,
         signinHeadline: form.signinHeadline.trim() || null,
         signinSubheadline: form.signinSubheadline.trim() || null,
+        about: form.about.trim() || null,
+        socialLinks: enlaces.links,
       });
       setTheme(updated);
       setForm(themeToForm(updated));
       setHexDraft(null);
+      setLinksChecked(false);
       publishThemeUpdate(updated);
       setStatus('saved');
       setTimeout(() => setStatus('idle'), 2000);
@@ -557,6 +583,30 @@ export default function BrandingPage() {
                 />
                 <p className="mt-1 text-xs text-text-subtle">{t('branding.subheadlineHint')}</p>
               </div>
+            </CardContent>
+          </Card>
+
+          {/*
+           * Cómo se presenta la academia en su comunidad (tarjeta de
+           * /community, como la de un grupo de Skool). La portada se sube al
+           * momento, como el logo; descripción y enlaces van con «Guardar».
+           */}
+          <Card data-testid="branding-academy-profile">
+            <CardHeader>
+              <CardTitle>{t('academyProfile.title')}</CardTitle>
+              <CardDescription>{t('academyProfile.description')}</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <CoverField theme={theme} onTheme={setTheme} />
+              <AboutField
+                value={form.about}
+                onChange={(about) => setForm((f) => f && { ...f, about })}
+              />
+              <SocialLinksField
+                drafts={form.links}
+                onChange={(links) => setForm((f) => f && { ...f, links })}
+                showErrors={linksChecked}
+              />
             </CardContent>
           </Card>
 

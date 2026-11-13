@@ -17,6 +17,7 @@
  */
 
 import { apiFetch } from './api-client';
+import type { SocialLink } from './social-links';
 
 const CACHE_KEY = 'didacta.theme.v1';
 
@@ -45,6 +46,13 @@ export interface TenantTheme {
   /** Copy del panel de marca de /signin. null = texto genérico de Didacta. */
   signinHeadline: string | null;
   signinSubheadline: string | null;
+  /** Descripción de la academia en su comunidad. null = cae al titular de acceso. */
+  about: string | null;
+  /** Enlaces sociales de la academia (máximo 5, solo https de su red). */
+  socialLinks: SocialLink[];
+  /** Portada de la academia (tarjeta de la comunidad). null = banda de color. */
+  coverUrl: string | null;
+  coverUploaded: boolean;
   updatedAt: string;
 }
 
@@ -60,6 +68,8 @@ export interface UpdateThemeInput {
   footerHtml?: string | null;
   signinHeadline?: string | null;
   signinSubheadline?: string | null;
+  about?: string | null;
+  socialLinks?: SocialLink[];
 }
 
 export const themingApi = {
@@ -105,6 +115,19 @@ export const themingApi = {
       { method: 'DELETE' },
       bearer,
     );
+  },
+  async uploadCover(
+    bearer: string,
+    input: { data: string; filename: string; contentType: string },
+  ): Promise<TenantTheme> {
+    return apiFetch<TenantTheme>(
+      '/api/v1/modules/theming/me/cover',
+      { method: 'POST', body: JSON.stringify(input) },
+      bearer,
+    );
+  },
+  async removeCover(bearer: string): Promise<TenantTheme> {
+    return apiFetch<TenantTheme>('/api/v1/modules/theming/me/cover', { method: 'DELETE' }, bearer);
   },
 };
 

@@ -9,6 +9,14 @@ import Link from 'next/link';
 import { useEffect, useState, type FormEvent } from 'react';
 import { useTranslations } from 'next-intl';
 import { PasoMarca } from '@/app/welcome/paso-marca';
+import {
+  AboutField,
+  CoverField,
+  SocialLinksField,
+  draftsFromLinks,
+  linksFromDrafts,
+  type LinkDraft,
+} from '@/components/academy-profile-fields';
 import { Icon } from '@/components/icon';
 import { academyApi, type Academy } from '@/lib/academy';
 import { authStorage } from '@/lib/auth-storage';
@@ -26,7 +34,8 @@ const DIDACTA_SAT = 70;
 
 /**
  * «Ajustes» del MODO SENCILLO: tu academia (nombre, logo y color, con vista
- * previa en vivo) y el interruptor para pasar al modo completo. Lo técnico
+ * previa en vivo; y cómo se presenta en la comunidad: portada, descripción y
+ * enlaces) y el interruptor para pasar al modo completo. Lo técnico
  * (correo propio, cobros con claves, Zoom, idioma…) sigue en la misma página
  * con `?full=1`, sin rutas duplicadas.
  */
@@ -38,6 +47,10 @@ export function SimpleSettings() {
   const [hue, setHue] = useState(DIDACTA_HUE);
   const [sat, setSat] = useState(DIDACTA_SAT);
   const [modo, setModo] = useState<LogoDisplayMode>('logo_only');
+  const [about, setAbout] = useState('');
+  const [links, setLinks] = useState<LinkDraft[]>([]);
+  const [linksChecked, setLinksChecked] = useState(false);
+  const tMarca = useTranslations('adminMarca');
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -56,6 +69,8 @@ export function SimpleSettings() {
         setHue(th.brandHue);
         setSat(th.brandSaturation);
         setModo(th.logoDisplayMode ?? 'logo_only');
+        setAbout(th.about ?? '');
+        setLinks(draftsFromLinks(th.socialLinks ?? []));
       }
     });
   }, []);
@@ -65,6 +80,11 @@ export function SimpleSettings() {
     const token = authStorage.getAccessToken();
     if (!token) return;
     if (!nombre.trim()) return setError(t('faltaNombre'));
+    const enlaces = linksFromDrafts(links);
+    if (enlaces.invalid) {
+      setLinksChecked(true);
+      return setError(tMarca('academyProfile.linksInvalid'));
+    }
     setSaving(true);
     setError(null);
     setSaved(false);
@@ -75,8 +95,13 @@ export function SimpleSettings() {
         brandHue: hue,
         brandSaturation: sat,
         logoDisplayMode: modo,
+        about: about.trim() || null,
+        socialLinks: enlaces.links,
       });
       setTheme(actualizado);
+      setAbout(actualizado.about ?? '');
+      setLinks(draftsFromLinks(actualizado.socialLinks));
+      setLinksChecked(false);
       publishThemeUpdate(actualizado);
       await simpleModeApi.confirmAcademy();
       window.dispatchEvent(new Event('didacta:empieza-cambio'));
@@ -146,6 +171,16 @@ export function SimpleSettings() {
               publishThemeUpdate(th);
             }}
           />
+        </div>
+
+        {/* La tarjeta de la academia en /community, como la de un grupo de
+            Skool. La portada se sube al momento, como el logo. */}
+        <h3 className="mt-8 text-[15px] font-bold text-text">{t('comunidad')}</h3>
+        <p className="mt-1 text-sm text-text-muted">{t('comunidadAyuda')}</p>
+        <div className="mt-4 space-y-6" data-testid="ajustes-comunidad">
+          <CoverField theme={theme} onTheme={setTheme} />
+          <AboutField value={about} onChange={setAbout} />
+          <SocialLinksField drafts={links} onChange={setLinks} showErrors={linksChecked} />
         </div>
 
         {error ? (
