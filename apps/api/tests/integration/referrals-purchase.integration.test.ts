@@ -17,7 +17,7 @@ import type Stripe from 'stripe';
 import { PrismaClient } from '@didacta/database';
 import type { DomainEvent } from '@didacta/core-kernel';
 import { BillingService } from '@didacta/mod-billing';
-import { ReferralsService } from '@didacta/mod-referrals';
+import { REFERRAL_TERMS_VERSION, ReferralsService } from '@didacta/mod-referrals';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { PrismaModule } from '../../src/prisma/prisma.module';
 import { PrismaService } from '../../src/prisma/prisma.service';
@@ -162,6 +162,7 @@ describeWithDb('Referidos en compras sueltas — Postgres real como didacta_app'
       await admin.modReferralsCommission.deleteMany({ where: { tenantId } });
       await admin.modReferralsReferral.deleteMany({ where: { tenantId } });
       await admin.modReferralsCode.deleteMany({ where: { tenantId } });
+      await admin.modReferralsMember.deleteMany({ where: { tenantId } });
       await admin.modReferralsConfig.deleteMany({ where: { tenantId } });
       await admin.modBillingWebhookEvent.deleteMany({ where: { tenantId } }).catch(() => undefined);
       await admin.modBillingOrder.deleteMany({ where: { tenantId } });
@@ -228,7 +229,9 @@ describeWithDb('Referidos en compras sueltas — Postgres real como didacta_app'
 
   it('compra de un curso suelto con enlace → comisión PENDING del referidor sobre lo cobrado', async () => {
     const { code } = await runAsTenant(ids.tenantA, () =>
-      referrals.getOrCreateCode(ids.tenantA, ids.referrerA),
+      referrals
+        .acceptTerms(ids.tenantA, ids.referrerA, { version: REFERRAL_TERMS_VERSION, adult: true })
+        .then(() => referrals.getOrCreateCode(ids.tenantA, ids.referrerA)),
     );
     const { orderId, completed } = await buy(ids.tenantA, ids.buyerA, ids.courseA, code);
 
@@ -277,7 +280,9 @@ describeWithDb('Referidos en compras sueltas — Postgres real como didacta_app'
 
   it('autorreferido: comprar con tu propio enlace no genera comisión', async () => {
     const { code } = await runAsTenant(ids.tenantB, () =>
-      referrals.getOrCreateCode(ids.tenantB, ids.referrerB),
+      referrals
+        .acceptTerms(ids.tenantB, ids.referrerB, { version: REFERRAL_TERMS_VERSION, adult: true })
+        .then(() => referrals.getOrCreateCode(ids.tenantB, ids.referrerB)),
     );
     const { orderId } = await buy(ids.tenantB, ids.referrerB, ids.courseB, code);
     expect(

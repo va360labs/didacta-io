@@ -44,6 +44,7 @@ export function InviteAndEarnCard({
   const [url, setUrl] = useState<string | null>(null);
   const [products, setProducts] = useState<ReferralProductLink[]>([]);
   const [copied, setCopied] = useState<string | null>(null);
+  const [needsTerms, setNeedsTerms] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -52,6 +53,10 @@ export function InviteAndEarnCard({
         .then((r) => {
           if (cancelled || !r) return;
           setPercent(percentFromBps(r.commissionBps));
+          if (r.needsTerms) {
+            setNeedsTerms(true);
+            return;
+          }
           setUrl(r.links.general);
           setProducts(r.links.products);
         })
@@ -64,6 +69,37 @@ export function InviteAndEarnCard({
     };
   }, []);
 
+  if (percent && needsTerms) {
+    return (
+      <section
+        data-testid="invite-and-earn"
+        className={cn(
+          'rounded-2xl border border-border bg-surface p-4',
+          variant === 'inline' && 'border-brand-100 bg-brand-50/60',
+          className,
+        )}
+      >
+        <div className="flex items-start gap-3">
+          <span
+            className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-brand-600 text-white"
+            aria-hidden
+          >
+            <Icon name="sparkles" size={18} />
+          </span>
+          <div className="min-w-0">
+            <h3 className="text-[15px] font-bold text-text">{t('referidos.titulo')}</h3>
+            <p className="mt-0.5 text-sm text-text-muted">{t('referidos.gana', { percent })}</p>
+          </div>
+        </div>
+        <Link
+          href="/referidos"
+          className="mt-3 inline-flex h-9 items-center rounded-lg bg-brand-600 px-3 text-sm font-semibold text-white hover:bg-brand-700"
+        >
+          {t('referidos.activarEnlace')}
+        </Link>
+      </section>
+    );
+  }
   if (!percent || !url) return null;
 
   async function copy(link: string) {

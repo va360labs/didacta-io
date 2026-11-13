@@ -128,3 +128,14 @@ export class ReferralsCreditFailedError extends ReferralsError {
     this.name = 'ReferralsCreditFailedError';
   }
 }
+
+/** Falta aceptar las condiciones (mayor de 18 y versión vigente) para tener enlace. */
+export class ReferralsTermsRequiredError extends ReferralsError {
+  constructor() {
+    super(
+      'Para tener tu enlace, declara que eres mayor de 18 años y acepta las condiciones del programa.',
+      'REFERRALS_TERMS_REQUIRED',
+    );
+    this.name = 'ReferralsTermsRequiredError';
+  }
+}

@@ -59,6 +59,7 @@ import playersContenido from './playersContenido.json';
 import publicSite from './publicSite.json';
 import modoSencillo from './modoSencillo.json';
 import modoSencilloVentas from './modoSencilloVentas.json';
+import referidosCondiciones from './referidosCondiciones.json';
 import modoSencilloGestion from './modoSencilloGestion.json';
 import modoSencilloAprender from './modoSencilloAprender.json';
 import shell from './shell.json';
@@ -112,6 +113,7 @@ export default {
   publicSite,
   modoSencillo,
   modoSencilloVentas,
+  referidosCondiciones,
   modoSencilloGestion,
   modoSencilloAprender,
   shell,

@@ -4049,6 +4049,21 @@ model ModReferralsConfig {
 }
 
 /// Código de referido de un usuario (1 por usuario y tenant, creado on-demand).
+/// Alumno del programa: aceptación de las condiciones (mayor de 18 y versión
+/// aceptada). Sin aceptación no hay enlace ni se atribuyen comisiones.
+model ModReferralsMember {
+  tenantId        String    @map("tenant_id") @db.Uuid
+  userId          String    @map("user_id") @db.Uuid
+  /// Versión de las condiciones aceptada (`REFERRAL_TERMS_VERSION`).
+  termsVersion    String?   @map("terms_version")
+  termsAcceptedAt DateTime? @map("terms_accepted_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  @@id([tenantId, userId])
+  @@map("mod_referrals_member")
+}
+
 model ModReferralsCode {
   id        String   @id @default(uuid()) @db.Uuid
   tenantId  String   @map("tenant_id") @db.Uuid

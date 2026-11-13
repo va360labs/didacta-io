@@ -27,6 +27,7 @@ export {
   utcDay,
   CREDIT_MAX_SHARE_BPS,
   creditIdempotencyKey,
+  REFERRAL_TERMS_VERSION,
 } from './referrals.service.js';
 export type {
   ReferralsEventPublisher,
@@ -42,6 +43,7 @@ export type {
   PurchaseResult,
   ReferralsCreditPort,
   MemberCreditView,
+  ReferralsPublicTerms,
 } from './referrals.service.js';
 export { deriveInviteeState, initialsOf } from './invitees.js';
 export type { InviteeState, InviteeFacts } from './invitees.js';
@@ -57,6 +59,7 @@ export {
   ReferralsCreditNothingError,
   ReferralsCreditUnavailableError,
   ReferralsCreditFailedError,
+  ReferralsTermsRequiredError,
 } from './errors.js';
 
 export function buildReferralsModule(_service: ReferralsService): DidactaModule {

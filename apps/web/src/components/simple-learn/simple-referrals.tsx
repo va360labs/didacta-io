@@ -10,6 +10,7 @@ import { useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { Icon } from '@/components/icon';
 import { percentFromBps } from '@/components/invite-and-earn-card';
+import { ReferralTermsGate } from '@/components/referral-terms-gate';
 import { ApiHttpError } from '@/lib/api-client';
 import { formatCents, formatDate, formatNumber } from '@/lib/i18n/format';
 import {
@@ -126,6 +127,8 @@ export function SimpleReferrals() {
   const [redeemed, setRedeemed] = useState<{ cents: number; currency: string } | null>(null);
   const [redeemError, setRedeemError] = useState<string | null>(null);
 
+  const [termsTick, setTermsTick] = useState(0);
+
   useEffect(() => {
     setCanShare(typeof navigator !== 'undefined' && typeof navigator.share === 'function');
     let cancelled = false;
@@ -139,6 +142,8 @@ export function SimpleReferrals() {
         if (cancelled) return;
         setStats(s);
         if (!s.programActive) return;
+        // Sin la casilla (mayor de 18 + condiciones) no se pide el enlace.
+        if (s.terms && !s.terms.accepted) return;
         // Enlace general + uno por producto: vale para todo lo que vende el aula.
         referralsApi
           .me()
@@ -166,7 +171,7 @@ export function SimpleReferrals() {
     return () => {
       cancelled = true;
     };
-  }, [t]);
+  }, [t, termsTick]);
 
   if (error) return <p className="text-text-muted">{t('errorCarga')}</p>;
   if (!stats) return <div className="skeleton h-80 w-full max-w-3xl" />;
@@ -239,7 +244,12 @@ export function SimpleReferrals() {
                 : t('inactivoTexto')}
             </p>
 
-            {stats.programActive ? (
+            {stats.programActive && stats.terms && !stats.terms.accepted ? (
+              <ReferralTermsGate
+                version={stats.terms.currentVersion}
+                onAccepted={() => setTermsTick((n) => n + 1)}
+              />
+            ) : stats.programActive ? (
               linkError ? (
                 <p className="mt-5 rounded-xl bg-bg-subtle p-4 text-sm text-text-muted">
                   {linkError}

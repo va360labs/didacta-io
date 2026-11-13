@@ -1,0 +1,81 @@
+{
+  "metaTitle": "“Invite and earn” terms",
+  "titulo": "“Invite and earn” programme terms",
+  "version": "Version {version}",
+  "intro": "These terms govern the referral programme of {academia}: you invite other people with your link and {academia} gives you a share of what they pay.",
+  "cerrado": "{academia} does not have the programme open right now. These are the terms that apply when it opens.",
+  "error": "The terms could not be loaded. Please try again in a moment.",
+  "cargando": "Loading the terms…",
+  "resumenTitulo": "Summary in 7 points",
+  "resumenNota": "The summary helps you read, but the full text is what counts.",
+  "resumen": {
+    "r1": "You are paid by {academia}, not by Didacta. Didacta only provides the tool.",
+    "r2": "You must be over 18 and accept these terms before you get your link.",
+    "r3": "A person stays linked to you for {dias} days after opening your link. Your own link does not count for you.",
+    "r4": "What you earn stays pending for {garantia} days. If the sale is fully refunded it is cancelled; if part of it is refunded, it is reduced in proportion.",
+    "r5": "You get paid as a discount on your fee (up to {tope}% of one fee) or in money, by giving your name, your tax ID and your account. Didacta withholds nothing.",
+    "r6": "If you cancel with unused discount, that balance goes back to your wallet so you can be paid in money.",
+    "r7": "If a sale whose commission you already received is refunded, it is deducted from what you earn next. We will never ask you to pay money back."
+  },
+  "secciones": {
+    "s1": {
+      "titulo": "1. Who offers the programme and who pays",
+      "p1": "The programme is offered by {academia}. {academia} decides whether it is open, what percentage it pays and how long each period lasts, and {academia} is who pays you what you earn.",
+      "p2": "Didacta Cloud is a service of VA360 LABS, S.L. that {academia} uses for its programme. Didacta is not a party to this agreement, owes you no commission and is not involved in the payment."
+    },
+    "s2": {
+      "titulo": "2. Who can take part",
+      "p1": "You can take part if you have an account at {academia} and are over 18. The first time you open “Invite and earn” you tick the box “I declare that I am over 18 and accept the programme terms”. We store the date and the version of the terms you accepted.",
+      "p2": "Until you accept you will not have a link, and people arriving through old links of yours will not generate commissions. If these terms change, we will ask you to accept the new version to keep sharing your link."
+    },
+    "s3": {
+      "titulo": "3. How you earn",
+      "p1": "You have a personal link. It works on any sales page of {academia}: the membership and each course.",
+      "p2": "A person stays linked to you for {dias} days after opening your link. The first valid link they open counts: if they later open someone else's, they stay linked to you.",
+      "p3": "You earn {porcentaje}% of what that person actually pays: {alcance, select, primero {only their first payment, whether a purchase or a fee} meses {each purchase and each fee during their first {meses} months} other {each course purchase and each membership fee}}.",
+      "p4": "Your own link does not count for you: neither with your account nor with another account using your same email. Free trial periods and €0 payments do not generate a commission."
+    },
+    "s4": {
+      "titulo": "4. Guarantee period and refunds",
+      "p1": "Each commission stays pending for {garantia} days after the payment. After that period it is confirmed.",
+      "p2": "If {academia} refunds the whole payment before you are paid, the commission is cancelled. If it refunds part of it, the commission is reduced in the same proportion."
+    },
+    "s5": {
+      "titulo": "5. How you get paid",
+      "p1": "As a discount on your fee: if {academia} has this option switched on and you have an active membership, you can use what is confirmed as a discount on your next fee. Each time, at most {tope}% of one fee is deducted, counting any balance you already have in your favour. We ask for no details for the discount.",
+      "p2": "In money: {hayMinimo, select, si {once what is confirmed reaches {minimo} you can request payment} other {you can request payment of what is confirmed whenever you like}}. We ask for your full name, your tax ID (NIF/NIE or your country's tax identifier) and your bank account (IBAN).",
+      "p3": "{academia} pays you by bank transfer. When it marks the payment as made, a PDF receipt with a sequential number is generated, which both you and {academia} can download. Didacta withholds nothing from what you are paid."
+    },
+    "s6": {
+      "titulo": "6. Your fee's invoice when you use the discount",
+      "p1": "Your fee is invoiced in full and the discount appears as a separate line, “Paid with referral balance”. Your card is charged the fee minus that balance."
+    },
+    "s7": {
+      "titulo": "7. If you cancel",
+      "p1": "If you cancel your membership and have unused referral balance in your favour, that balance is removed from your payment account and goes back to your wallet as a confirmed commission, so you can be paid in money. The movement is recorded in “What you have earned”."
+    },
+    "s8": {
+      "titulo": "8. Sales refunded after you were paid",
+      "p1": "If {academia} refunds a sale whose commission you were already paid (in money or as a discount), a refund adjustment is created for the corresponding amount. That adjustment is deducted from what you earn next.",
+      "p2": "We will never ask you to pay money back. If you never earn anything else, the adjustment simply stays there. You will see it in “What you have earned” as “Refund adjustment”."
+    },
+    "s9": {
+      "titulo": "9. Your data",
+      "p1": "{academia} is the controller of the programme's data. Didacta processes it on behalf of {academia}.",
+      "p2": "Your payment details (name, tax ID and IBAN) are stored encrypted. {academia} only sees what it needs to pay you and to issue the receipt. They never appear in the service's technical logs. Of the people you invite you only see their initials, the date they joined and what they have generated for you."
+    },
+    "s10": {
+      "titulo": "10. Changes and end of the programme",
+      "p1": "{academia} may change the percentage or the periods, or close the programme. Changes do not affect what you have already earned: each commission keeps the percentage it was created with.",
+      "p2": "If these terms change, we will publish a new version and ask you to accept it to keep sharing your link. For any question about the programme or a payment, write to {academia}."
+    }
+  },
+  "casilla": {
+    "aviso": "Before you get your link, read the programme terms. You are paid by the academy, not by Didacta.",
+    "texto": "I declare that I am over 18 and accept the programme terms.",
+    "verCondiciones": "Read the terms",
+    "activar": "Activate my link",
+    "activando": "Activating…",
+    "error": "It could not be saved. Please try again."
+  }
+}

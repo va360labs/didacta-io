@@ -27,6 +27,8 @@ const STATUS_BY_CODE: Record<string, number> = {
   REFERRALS_CREDIT_NOTHING: HttpStatus.CONFLICT,
   REFERRALS_CREDIT_UNAVAILABLE: HttpStatus.SERVICE_UNAVAILABLE,
   REFERRALS_CREDIT_FAILED: HttpStatus.BAD_GATEWAY,
+  // La UI pide la casilla (mayor de 18 + condiciones) y vuelve a intentarlo.
+  REFERRALS_TERMS_REQUIRED: HttpStatus.FORBIDDEN,
 };
 
 @Catch(ReferralsError)

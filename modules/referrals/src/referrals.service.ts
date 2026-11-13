@@ -16,6 +16,7 @@ import {
   ReferralsMembershipRequiredError,
   ReferralsPayoutValidationError,
   ReferralsProgramInactiveError,
+  ReferralsTermsRequiredError,
 } from './errors.js';
 import { deriveInviteeState, initialsOf, type InviteeState } from './invitees.js';
 
@@ -83,6 +84,28 @@ export interface ReferralsCreditPort {
  * cargo) y un cargo minúsculo deja al creador con neto negativo.
  */
 export const CREDIT_MAX_SHARE_BPS = 8000;
+
+/**
+ * Versión vigente de las condiciones del programa («Invita y gana»). Se guarda
+ * con cada aceptación; si cambia, el alumno vuelve a aceptar para seguir
+ * generando enlace.
+ */
+export const REFERRAL_TERMS_VERSION = '2026-11-13';
+
+/** Lo que la página pública de condiciones necesita del programa de un aula. */
+export interface ReferralsPublicTerms {
+  version: string;
+  active: boolean;
+  commissionBps: number;
+  scope: ReferralScope;
+  recurringMonths: number | null;
+  attributionWindowDays: number;
+  guaranteeDays: number;
+  minPayoutCents: number;
+  allowCreditRedemption: boolean;
+  /** Tope del descuento en cuota, en % de una cuota. */
+  creditMaxSharePercent: number;
+}
 
 /** Clave de idempotencia del abono en Stripe: la fila de la liquidación. */
 export function creditIdempotencyKey(payoutId: string): string {
@@ -169,7 +192,12 @@ export type AttributeResult =
   | { attributed: true; referralId: string; referrerUserId: string; alreadyExisted: boolean }
   | {
       attributed: false;
-      reason: 'program_inactive' | 'code_not_found' | 'self_referral' | 'already_attributed';
+      reason:
+        | 'program_inactive'
+        | 'code_not_found'
+        | 'self_referral'
+        | 'already_attributed'
+        | 'terms_not_accepted';
     };
 
 export interface AccrueInput {
@@ -227,6 +255,7 @@ export type PurchaseResult =
         | 'program_inactive'
         | 'code_not_found'
         | 'self_referral'
+        | 'terms_not_accepted'
         | Extract<AccrueResult, { accrued: false }>['reason'];
     };
 
@@ -349,6 +378,89 @@ export class ReferralsService {
     return next;
   }
 
+  /** Condiciones públicas del programa con las cifras REALES del aula. */
+  async publicTerms(tenantId: string): Promise<ReferralsPublicTerms> {
+    const c = await this.getConfig(tenantId);
+    return {
+      version: REFERRAL_TERMS_VERSION,
+      active: c.active,
+      commissionBps: c.commissionBps,
+      scope: c.scope,
+      recurringMonths: c.recurringMonths,
+      attributionWindowDays: c.attributionWindowDays,
+      guaranteeDays: c.guaranteeDays,
+      minPayoutCents: c.minPayoutCents,
+      allowCreditRedemption: c.allowCreditRedemption,
+      creditMaxSharePercent: CREDIT_MAX_SHARE_BPS / 100,
+    };
+  }
+
+  // ---------------- Condiciones (mayor de 18) ----------------
+
+  /** Qué aceptó el alumno y si es la versión vigente. */
+  async termsStatus(
+    tenantId: string,
+    userId: string,
+  ): Promise<{
+    accepted: boolean;
+    acceptedVersion: string | null;
+    acceptedAt: Date | null;
+    currentVersion: string;
+  }> {
+    const row = await this.prisma.modReferralsMember.findUnique({
+      where: { tenantId_userId: { tenantId, userId } },
+      select: { termsVersion: true, termsAcceptedAt: true },
+    });
+    return {
+      accepted: row?.termsVersion === REFERRAL_TERMS_VERSION && row.termsAcceptedAt !== null,
+      acceptedVersion: row?.termsVersion ?? null,
+      acceptedAt: row?.termsAcceptedAt ?? null,
+      currentVersion: REFERRAL_TERMS_VERSION,
+    };
+  }
+
+  /**
+   * El alumno marca «Declaro que soy mayor de 18 años y acepto las condiciones
+   * del programa». Se guardan la versión y la fecha. Solo vale la versión
+   * vigente: aceptar una vieja no da enlace. Idempotente: repetir la misma
+   * versión no cambia la fecha de la primera aceptación.
+   */
+  async acceptTerms(
+    tenantId: string,
+    userId: string,
+    input: { version: string; adult: boolean },
+    now: Date = new Date(),
+  ): Promise<{ version: string; acceptedAt: Date }> {
+    if (!input.adult || input.version !== REFERRAL_TERMS_VERSION) {
+      throw new ReferralsTermsRequiredError();
+    }
+    const where = { tenantId_userId: { tenantId, userId } };
+    const row = await this.prisma.modReferralsMember.findUnique({ where });
+    if (row?.termsVersion === REFERRAL_TERMS_VERSION && row.termsAcceptedAt) {
+      return { version: row.termsVersion, acceptedAt: row.termsAcceptedAt };
+    }
+    await this.prisma.modReferralsMember.upsert({
+      where,
+      create: { tenantId, userId, termsVersion: REFERRAL_TERMS_VERSION, termsAcceptedAt: now },
+      update: { termsVersion: REFERRAL_TERMS_VERSION, termsAcceptedAt: now },
+    });
+    return { version: REFERRAL_TERMS_VERSION, acceptedAt: now };
+  }
+
+  /**
+   * ¿Puede el dueño de un código generar comisiones? Basta con haber aceptado
+   * ALGUNA versión: un cambio de condiciones pide aceptar de nuevo para
+   * seguir compartiendo el enlace, pero no le quita lo que traigan los
+   * enlaces ya compartidos con la versión anterior.
+   */
+  private async hasAcceptedAnyTerms(tenantId: string, userId: string): Promise<boolean> {
+    const row = await this.prisma.modReferralsMember.findUnique({
+      where: { tenantId_userId: { tenantId, userId } },
+      select: { termsAcceptedAt: true },
+    });
+    return Boolean(row?.termsAcceptedAt);
+  }
+
   // ---------------- Código y clics ----------------
 
   /**
@@ -361,6 +473,10 @@ export class ReferralsService {
     if (!config.active) throw new ReferralsProgramInactiveError();
     if (config.requireActiveMembership && !(await this.hasActiveMembership(tenantId, userId))) {
       throw new ReferralsMembershipRequiredError();
+    }
+    // Mayor de 18 y condiciones vigentes aceptadas: sin eso no hay enlace.
+    if (!(await this.termsStatus(tenantId, userId)).accepted) {
+      throw new ReferralsTermsRequiredError();
     }
 
     const existing = await this.prisma.modReferralsCode.findUnique({
@@ -449,6 +565,10 @@ export class ReferralsService {
     // Anti-fraude: mismo usuario o mismo email normalizado.
     if (await this.isSelfReferral(input.tenantId, codeRow.userId, input.referredUserId)) {
       return { attributed: false, reason: 'self_referral' };
+    }
+    // Sin condiciones aceptadas el dueño del código no atribuye (enlaces viejos).
+    if (!(await this.hasAcceptedAnyTerms(input.tenantId, codeRow.userId))) {
+      return { attributed: false, reason: 'terms_not_accepted' };
     }
 
     // First-touch: un usuario referido solo se atribuye una vez por tenant.
@@ -556,6 +676,9 @@ export class ReferralsService {
     if (!codeRow) return { accrued: false, reason: 'code_not_found' };
     if (await this.isSelfReferral(input.tenantId, codeRow.userId, input.buyerUserId)) {
       return { accrued: false, reason: 'self_referral' };
+    }
+    if (!(await this.hasAcceptedAnyTerms(input.tenantId, codeRow.userId))) {
+      return { accrued: false, reason: 'terms_not_accepted' };
     }
 
     const referral = await this.findOrCreatePurchaseReferral(input, codeRow.userId);
@@ -996,9 +1119,13 @@ export class ReferralsService {
       orderBy: { createdAt: 'desc' },
       take: 20,
     });
-    const credit = await this.memberCredit(tenantId, userId, config);
+    const [credit, terms] = await Promise.all([
+      this.memberCredit(tenantId, userId, config),
+      this.termsStatus(tenantId, userId),
+    ]);
     return {
       programActive: config.active,
+      terms,
       memberCopy: config.memberCopy,
       commissionBps: config.commissionBps,
       scope: config.scope,

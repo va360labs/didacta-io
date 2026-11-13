@@ -79,13 +79,23 @@ export function buildReferralLinks(input: {
  * null si el programa está apagado, el alumno no puede tener enlace o el aula
  * no vende nada (un enlace a una página vacía no daría nada).
  */
-export async function loadMyReferralLinks(): Promise<{
-  commissionBps: number;
-  code: string;
-  links: ReferralLinks;
-} | null> {
+export async function loadMyReferralLinks(): Promise<
+  | {
+      commissionBps: number;
+      code: string;
+      links: ReferralLinks;
+      needsTerms?: false;
+    }
+  | { commissionBps: number; needsTerms: true }
+  | null
+> {
   const stats = await referralsApi.myStats();
   if (!stats.programActive) return null;
+  // Sin la casilla (mayor de 18 + condiciones) no hay enlace: la tarjeta lleva
+  // a «Invita y gana», donde se acepta.
+  if (stats.terms && !stats.terms.accepted) {
+    return { commissionBps: stats.commissionBps, needsTerms: true };
+  }
   const me = await referralsApi.me();
   const links = await loadReferralLinks(me);
   if (!links.general) return null;

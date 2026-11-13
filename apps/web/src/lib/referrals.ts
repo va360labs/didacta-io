@@ -68,6 +68,14 @@ export interface RedeemCreditResult {
   stripeBalanceTransactionId: string;
 }
 
+export interface ReferralTermsStatus {
+  /** Aceptó la versión vigente. */
+  accepted: boolean;
+  acceptedVersion: string | null;
+  acceptedAt: string | null;
+  currentVersion: string;
+}
+
 export interface MemberReferralStats {
   programActive: boolean;
   memberCopy: string | null;
@@ -77,6 +85,8 @@ export interface MemberReferralStats {
   minPayoutCents: number;
   attributionWindowDays: number;
   code: string | null;
+  /** Casilla «mayor de 18 y acepto las condiciones»: sin ella no hay enlace. */
+  terms?: ReferralTermsStatus;
   clicks: number;
   referrals: number;
   totals: { pendingCents: number; approvedCents: number; paidCents: number };
@@ -149,6 +159,15 @@ export const referralsApi = {
   },
 
   /** Usa lo ganado como descuento en la próxima cuota (saldo de cliente de Stripe). */
+  /** «Declaro que soy mayor de 18 años y acepto las condiciones del programa». */
+  async acceptTerms(version: string): Promise<{ version: string; acceptedAt: string }> {
+    return apiFetch(
+      `${BASE}/me/terms`,
+      { method: 'POST', body: JSON.stringify({ version, adult: true }) },
+      withAuth(),
+    );
+  },
+
   async redeemCredit(): Promise<RedeemCreditResult> {
     return apiFetch<RedeemCreditResult>(
       `${BASE}/me/redeem-credit`,
@@ -162,6 +181,11 @@ export const referralsApi = {
     return apiFetch<MemberInvitees>(`${BASE}/me/invitees`, { method: 'GET' }, withAuth());
   },
 
+  /** Condiciones públicas del programa del aula (sin sesión, tenant por dominio). */
+  async publicTerms(): Promise<ReferralsPublicTerms> {
+    return apiFetch<ReferralsPublicTerms>(`${BASE}/public/terms`, { method: 'GET' });
+  },
+
   /** Registro público de clic (best-effort, sin sesión). */
   async track(code: string): Promise<{ registered: boolean; attributionWindowDays: number }> {
     return apiFetch<{ registered: boolean; attributionWindowDays: number }>(`${BASE}/track`, {
@@ -170,6 +194,22 @@ export const referralsApi = {
     });
   },
 };
+
+/** Página pública con las condiciones del programa (es/en según el idioma). */
+export const REFERRAL_TERMS_PATH = '/condiciones-referidos';
+
+export interface ReferralsPublicTerms {
+  version: string;
+  active: boolean;
+  commissionBps: number;
+  scope: 'FIRST_PAYMENT' | 'RECURRING';
+  recurringMonths: number | null;
+  attributionWindowDays: number;
+  guaranteeDays: number;
+  minPayoutCents: number;
+  allowCreditRedemption: boolean;
+  creditMaxSharePercent: number;
+}
 
 // ── Captura client-side del enlace (?ref=) ───────────────────────────────────
 

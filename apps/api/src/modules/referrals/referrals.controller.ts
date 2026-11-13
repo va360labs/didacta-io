@@ -66,6 +66,13 @@ const configSchema = z
   })
   .partial();
 
+const acceptTermsSchema = z.object({
+  /** Versión que el alumno tenía delante al marcar la casilla. */
+  version: z.string().trim().min(1).max(40),
+  /** «Declaro que soy mayor de 18 años y acepto las condiciones del programa». */
+  adult: z.literal(true),
+});
+
 const listCommissionsSchema = z.object({
   status: z.enum(['PENDING', 'APPROVED', 'PAID', 'REVOKED']).optional(),
   referrerUserId: z.string().uuid().optional(),
@@ -103,6 +110,24 @@ export class ReferralsController {
     const { code } = await this.registry.getReferralsService().getOrCreateCode(u.tenantId, u.sub);
     const base = await this.tenantResolver.resolveTenantWebBaseUrl(u.tenantId, req);
     return { code, url: `${base}/unete?ref=${encodeURIComponent(code)}` };
+  }
+
+  @Post('me/terms')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @HttpCode(200)
+  @ApiOperation({
+    summary:
+      'El alumno declara ser mayor de 18 años y acepta la versión vigente de las condiciones del programa. Se guardan la versión y la fecha. Sin esto no hay enlace ni se atribuyen comisiones. 403 REFERRALS_TERMS_REQUIRED si la versión no es la vigente.',
+  })
+  async acceptTerms(
+    @CurrentUser() user: SessionClaims | undefined,
+    @Body(new ZodValidationPipe(acceptTermsSchema)) dto: z.infer<typeof acceptTermsSchema>,
+  ) {
+    const u = this.requireUser(user);
+    return this.registry
+      .getReferralsService()
+      .acceptTerms(u.tenantId, u.sub, { version: dto.version, adult: dto.adult });
   }
 
   @Get('me/stats')
@@ -170,6 +195,16 @@ export class ReferralsController {
       const { attributionWindowDays } = await service.getConfig(tenantId);
       return { registered, attributionWindowDays };
     });
+  }
+
+  @Get('public/terms')
+  @ApiOperation({
+    summary:
+      'Condiciones públicas del programa de referidos del aula (tenant por Host): versión vigente y cifras reales (porcentaje, días de atribución y de garantía, mínimo de cobro, tope del descuento). Sin sesión.',
+  })
+  async publicTerms(@Req() req: FastifyRequest) {
+    const tenantId = await this.resolveTenantId(req);
+    return runAsTenant(tenantId, () => this.registry.getReferralsService().publicTerms(tenantId));
   }
 
   // ---------------- Admin ----------------

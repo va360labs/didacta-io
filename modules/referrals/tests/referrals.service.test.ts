@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import {
+  REFERRAL_TERMS_VERSION,
   ReferralsService,
   creditIdempotencyKey,
   purchaseInvoiceRef,
@@ -16,6 +17,7 @@ import {
   ReferralsMembershipRequiredError,
   ReferralsPayoutValidationError,
   ReferralsProgramInactiveError,
+  ReferralsTermsRequiredError,
 } from '../src/errors.js';
 
 // ============================================================================
@@ -50,6 +52,35 @@ class MockPrisma {
   commissions: Row[] = [];
   payouts: Row[] = [];
   subscriptions: Row[] = [];
+  members: Row[] = [];
+  /**
+   * Arnés: los alumnos de estos tests ya aceptaron las condiciones (mayor de
+   * 18) salvo que el test lo apague para probar la casilla.
+   */
+  autoAcceptTerms = true;
+
+  modReferralsMember = {
+    findUnique: async ({ where }: never) => {
+      const key = (where as Row)['tenantId_userId'] as Row;
+      const row = this.members.find(
+        (m) => m['tenantId'] === key['tenantId'] && m['userId'] === key['userId'],
+      );
+      if (row) return row;
+      return this.autoAcceptTerms
+        ? { termsVersion: REFERRAL_TERMS_VERSION, termsAcceptedAt: new Date('2026-11-13') }
+        : null;
+    },
+    upsert: async ({ where, create, update }: never) => {
+      const key = (where as Row)['tenantId_userId'] as Row;
+      const row = this.members.find(
+        (m) => m['tenantId'] === key['tenantId'] && m['userId'] === key['userId'],
+      );
+      if (row) return Object.assign(row, update as Row);
+      const created = { ...(create as Row) };
+      this.members.push(created);
+      return created;
+    },
+  };
 
   modReferralsConfig = {
     findUnique: async ({ where }: never) =>
@@ -465,6 +496,65 @@ describe('getOrCreateCode', () => {
   });
 });
 
+describe('condiciones del programa (mayor de 18)', () => {
+  it('sin aceptar no hay enlace; con la casilla y la versión vigente, sí', async () => {
+    const { prisma, service } = build();
+    prisma.autoAcceptTerms = false;
+    await expect(service.getOrCreateCode(TENANT, 'referrer-1')).rejects.toBeInstanceOf(
+      ReferralsTermsRequiredError,
+    );
+    const now = new Date('2026-11-13T10:00:00.000Z');
+    const accepted = await service.acceptTerms(
+      TENANT,
+      'referrer-1',
+      { version: REFERRAL_TERMS_VERSION, adult: true },
+      now,
+    );
+    expect(accepted).toEqual({ version: REFERRAL_TERMS_VERSION, acceptedAt: now });
+    expect(prisma.members[0]).toMatchObject({
+      tenantId: TENANT,
+      userId: 'referrer-1',
+      termsVersion: REFERRAL_TERMS_VERSION,
+      termsAcceptedAt: now,
+    });
+    await expect(service.getOrCreateCode(TENANT, 'referrer-1')).resolves.toHaveProperty('code');
+    // Idempotente: aceptar otra vez no mueve la fecha de la primera aceptación.
+    const again = await service.acceptTerms(TENANT, 'referrer-1', {
+      version: REFERRAL_TERMS_VERSION,
+      adult: true,
+    });
+    expect(again.acceptedAt).toEqual(now);
+  });
+
+  it('sin declarar la mayoría de edad, o con una versión que no es la vigente, no acepta', async () => {
+    const { prisma, service } = build();
+    prisma.autoAcceptTerms = false;
+    await expect(
+      service.acceptTerms(TENANT, 'referrer-1', { version: REFERRAL_TERMS_VERSION, adult: false }),
+    ).rejects.toBeInstanceOf(ReferralsTermsRequiredError);
+    await expect(
+      service.acceptTerms(TENANT, 'referrer-1', { version: '2020-01-01', adult: true }),
+    ).rejects.toBeInstanceOf(ReferralsTermsRequiredError);
+    expect(prisma.members).toHaveLength(0);
+  });
+
+  it('una versión vieja aceptada no da enlace nuevo pero sí sigue atribuyendo', async () => {
+    const { prisma, service } = build();
+    prisma.autoAcceptTerms = false;
+    prisma.members.push({
+      tenantId: TENANT,
+      userId: 'referrer-1',
+      termsVersion: '2026-01-01',
+      termsAcceptedAt: new Date('2026-01-01'),
+    });
+    const status = await service.termsStatus(TENANT, 'referrer-1');
+    expect(status).toMatchObject({ accepted: false, acceptedVersion: '2026-01-01' });
+    await expect(service.getOrCreateCode(TENANT, 'referrer-1')).rejects.toBeInstanceOf(
+      ReferralsTermsRequiredError,
+    );
+  });
+});
+
 describe('registerClick', () => {
   it('registra un clic y dedupea (código, día, ipHash)', async () => {
     const { service } = build();
@@ -721,6 +811,19 @@ describe('recordPurchase (compra suelta con enlace)', () => {
       currency: 'eur',
     });
   }
+
+  it('el enlace de quien no aceptó las condiciones no atribuye ni devenga', async () => {
+    const { prisma, service } = build();
+    const { code } = await service.getOrCreateCode(TENANT, 'referrer-1');
+    // Enlace viejo de alguien que nunca marcó la casilla.
+    prisma.autoAcceptTerms = false;
+    expect(await purchase(service, code)).toEqual({
+      accrued: false,
+      reason: 'terms_not_accepted',
+    });
+    expect(prisma.commissions).toHaveLength(0);
+    expect(prisma.referrals).toHaveLength(0);
+  });
 
   it('crea el referido de la orden y devenga PENDING con el mismo % y garantía', async () => {
     const { prisma, service, events } = build();

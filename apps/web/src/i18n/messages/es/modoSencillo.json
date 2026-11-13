@@ -64,7 +64,8 @@
     "copiado": "Copiado",
     "verGanado": "Ver lo que llevas ganado",
     "porProducto": "O comparte el enlace de un producto concreto",
-    "membresia": "La membresía"
+    "membresia": "La membresía",
+    "activarEnlace": "Activar mi enlace"
   },
   "alta": {
     "pregunta": "Pregunta {n} de 3",

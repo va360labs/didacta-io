@@ -25,6 +25,7 @@ import { labelOr, type TranslatorLike } from '@/lib/i18n/labels';
 import { referralsApi, type MemberReferralStats } from '@/lib/referrals';
 import { useSimpleMode } from '@/lib/simple-mode';
 import { SimpleReferrals } from '@/components/simple-learn/simple-referrals';
+import { ReferralTermsGate } from '@/components/referral-terms-gate';
 
 /** Estado de comisión → key del catálogo. Viene de la API: desconocido → crudo. */
 const STATUS_LABEL: Record<string, string> = {
@@ -65,6 +66,7 @@ function ReferidosCompleta() {
   const [linkError, setLinkError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [termsTick, setTermsTick] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -74,6 +76,7 @@ function ReferidosCompleta() {
         if (cancelled) return;
         setStats(s);
         if (!s.programActive) return;
+        if (s.terms && !s.terms.accepted) return;
         // Enlace bajo demanda: lo crea si no existe. 403 = requiere membresía.
         referralsApi
           .me()
@@ -99,7 +102,7 @@ function ReferidosCompleta() {
     return () => {
       cancelled = true;
     };
-  }, [t, tErrors]);
+  }, [t, tErrors, termsTick]);
 
   async function copyLink() {
     if (!link) return;
@@ -163,7 +166,12 @@ function ReferidosCompleta() {
             {stats.memberCopy ? <CardDescription>{stats.memberCopy}</CardDescription> : null}
           </CardHeader>
           <CardContent>
-            {linkError ? (
+            {stats.terms && !stats.terms.accepted ? (
+              <ReferralTermsGate
+                version={stats.terms.currentVersion}
+                onAccepted={() => setTermsTick((n) => n + 1)}
+              />
+            ) : linkError ? (
               <p className="text-sm text-warning-700">{linkError}</p>
             ) : !link ? (
               <div className="skeleton h-10 w-full" />
