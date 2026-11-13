@@ -27,7 +27,11 @@ import {
   type TemplateOverridePrisma,
 } from '../notifications/email-template-catalog';
 import { sanitizeCheckoutLocale } from '../../common/checkout-locale';
-import { newUserTimeZone, type AcademyDefaultsPrisma } from '../../common/academy-defaults';
+import {
+  newUserLocale,
+  newUserTimeZone,
+  type AcademyDefaultsPrisma,
+} from '../../common/academy-defaults';
 import { PrismaAuditLogService } from '../prisma-audit-log.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { SmtpAdapterService } from '../smtp-adapter.service';
@@ -90,7 +94,13 @@ export class BillingProvisioningService {
     // Comprador que YA existía: ni siquiera se mira `args.locale`. Su idioma es
     // el de su perfil y una compra no es una señal para cambiarlo.
     if (existing) return { userId: existing.id, created: false };
-    const locale = sanitizeCheckoutLocale(args.locale);
+    // Idioma con el que nace: el que capturó el checkout (selector o cookie) y,
+    // si no hay ninguno que la API persista, el del aula. Es el de la bienvenida.
+    const locale = await newUserLocale(
+      this.prisma as unknown as AcademyDefaultsPrisma,
+      tenantId,
+      sanitizeCheckoutLocale(args.locale),
+    );
 
     const passwordHash = await this.passwords.hash(randomBytes(16).toString('base64url'));
     const role = await this.prisma.role.findUnique({ where: { name: DEFAULT_ALUMNO_ROLE } });
@@ -113,11 +123,10 @@ export class BillingProvisioningService {
           // El comprador define su contraseña con el enlace mágico; forzar
           // además el cambio le obligaría a un segundo login.
           mustChangePassword: false,
-          // CAMINO DEGRADADO NOMBRADO: sin locale capturado (visitante que
-          // nunca tocó el selector, o cookie con un tag que la API no
-          // persiste) se OMITE el campo y la columna toma su default de BD,
-          // que es `HUB_DEFAULT_LOCALE`.
-          ...(locale ? { locale } : {}),
+          // Sin locale capturado (visitante que nunca tocó el selector, o
+          // cookie con un tag que la API no persiste), el idioma del aula: antes
+          // era el default de la columna (español) aunque el aula fuera inglesa.
+          locale,
         },
         // `locale` del comprador: es quien lee la bienvenida.
         select: { id: true, locale: true },

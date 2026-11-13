@@ -14,6 +14,7 @@ import { SmtpAdapterService } from '../modules/smtp-adapter.service';
 import { TenantSmtpResolverService } from '../modules/tenant-smtp-resolver.service';
 import { ModuleRegistryService } from '../modules/module-registry.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { newUserLocale, type AcademyDefaultsPrisma } from '../common/academy-defaults';
 import {
   renderBrandedEmail,
   resolveEmailBranding,
@@ -362,6 +363,12 @@ export class InscribeService {
 
     const passwordHash = await this.passwords.hash(this.generateTempPassword());
     const role = await this.prisma.role.findUnique({ where: { name: DEFAULT_ALUMNO_ROLE } });
+    // El idioma que mande la academia (si es uno de los del perfil) o el del aula.
+    const locale = await newUserLocale(
+      this.prisma as unknown as AcademyDefaultsPrisma,
+      tenantId,
+      dto.locale,
+    );
 
     let user;
     try {
@@ -374,7 +381,7 @@ export class InscribeService {
             status: 'ACTIVE',
             passwordHash,
             mustChangePassword: false,
-            ...(dto.locale ? { locale: dto.locale } : {}),
+            locale,
           },
         });
         if (role) {

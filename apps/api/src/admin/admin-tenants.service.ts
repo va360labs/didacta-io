@@ -22,6 +22,12 @@ import { PrismaService } from '../prisma/prisma.service';
 import type { GateState } from '../tenancy/subscription-gate';
 import { SubscriptionGateService } from '../tenancy/subscription-gate.service';
 import { runGlobalWithoutTenant } from '../tenancy/tenant-context.storage';
+import {
+  academyDateLocale,
+  writeAcademyLocale,
+  type AcademyLocale,
+  type AcademyLocaleWriter,
+} from '../common/academy-defaults';
 
 const NO_CTX: ClientContext = { ip: null, userAgent: null };
 
@@ -305,6 +311,7 @@ export class AdminTenantsService {
       adminName?: string;
       primaryHostname: string;
       simpleMode?: boolean;
+      locale?: AcademyLocale;
     },
     webBaseUrl: string,
     ctx: ClientContext = NO_CTX,
@@ -328,6 +335,7 @@ export class AdminTenantsService {
       adminName?: string;
       primaryHostname: string;
       simpleMode?: boolean;
+      locale?: AcademyLocale;
     },
     webBaseUrl: string,
     ctx: ClientContext,
@@ -409,11 +417,22 @@ export class AdminTenantsService {
           email: dto.adminEmail,
           name: dto.adminName ?? null,
           status: 'ACTIVE',
+          // Con idioma del aula, la administradora nace en ese idioma: el correo
+          // de bienvenida y su interfaz salen así desde el primer momento.
+          ...(dto.locale ? { locale: academyDateLocale(dto.locale) } : {}),
         },
       });
       await tx.userRole.create({
         data: { userId: admin.id, roleId: tenantAdminRole.id },
       });
+      if (dto.locale) {
+        await writeAcademyLocale(
+          tx as unknown as AcademyLocaleWriter,
+          tenant.id,
+          dto.locale,
+          admin.id,
+        );
+      }
       return { tenant, admin };
     });
 
@@ -427,6 +446,7 @@ export class AdminTenantsService {
         slug: dto.slug,
         primaryHostname: hostname,
         adminEmail: dto.adminEmail,
+        ...(dto.locale ? { locale: dto.locale } : {}),
         ...auditActorTrace(actor),
       },
       ip: ctx.ip ?? undefined,

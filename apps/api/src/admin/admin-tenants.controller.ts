@@ -35,6 +35,7 @@ import { PayoutsRuntime } from '../modules/payouts/payouts-runtime.service';
 import { SUBSCRIPTION_GATE_STATES } from '../tenancy/subscription-gate';
 import { runAsTenant, runGlobalWithoutTenant } from '../tenancy/tenant-context.storage';
 import { TenantResolverService } from '../tenancy/tenant-resolver.service';
+import { ACADEMY_LOCALES, toAcademyLocale, type AcademyLocale } from '../common/academy-defaults';
 import { AdminTenantsService, type TenantUsageItem } from './admin-tenants.service';
 import { SupportAccessService } from './support-access.service';
 
@@ -54,6 +55,24 @@ export const createTenantSchema = z.object({
    * provisioning) y apagado cuando es un super_admin de una instalación propia.
    */
   simpleMode: z.boolean().optional(),
+  /**
+   * Idioma del aula («Idioma de la academia»). Opcional y retrocompatible: si no
+   * llega, el aula no tiene ajuste y su idioma se deduce como siempre (alta en
+   * 3 preguntas o perfil de quien la administra). Admite el código corto
+   * (`en`, `es`) o un tag de idioma (`en-US`, `es-AR`…), que se guarda
+   * reducido al código; un idioma sin catálogo en el aula (`pt-BR` hoy) es un
+   * 400, no un aula en otro idioma. También fija el idioma de la primera
+   * administradora: el correo de bienvenida le llega en ese idioma.
+   */
+  locale: z
+    .string()
+    .trim()
+    .max(35)
+    .refine((v) => toAcademyLocale(v) !== null, {
+      message: `Idioma sin catálogo en el aula. Valores: ${ACADEMY_LOCALES.join(', ')}.`,
+    })
+    .transform((v) => toAcademyLocale(v) as AcademyLocale)
+    .optional(),
 });
 type CreateTenantDto = z.infer<typeof createTenantSchema>;
 

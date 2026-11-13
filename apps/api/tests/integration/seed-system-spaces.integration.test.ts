@@ -44,7 +44,14 @@ describeWithDb('seed.sql — espacios de sistema en el idioma del aula', () => {
   let adminRoleId: string;
   const tenants: string[] = [];
   const t = {} as Record<
-    'enSencilla' | 'enPerfil' | 'es' | 'enConEspanol' | 'enManual' | 'sinNada',
+    | 'enSencilla'
+    | 'enPerfil'
+    | 'es'
+    | 'enConEspanol'
+    | 'enManual'
+    | 'sinNada'
+    | 'ajusteEn'
+    | 'ajusteEs',
     string
   >;
   let antesEs: SpaceRow[] = [];
@@ -150,6 +157,25 @@ describeWithDb('seed.sql — espacios de sistema en el idioma del aula', () => {
     // Aula sin ajuste ni administradora: español, como siempre.
     t.sinNada = await aula('seed-sin-nada');
 
+    // El ajuste del aula manda sobre la deducción: alta sencilla y perfil en
+    // español, pero el aula está en inglés (y al revés).
+    t.ajusteEn = await aula('seed-ajuste-en', 'es-ES');
+    await admin.tenantSetting.createMany({
+      data: [
+        { tenantId: t.ajusteEn, moduleName: 'academy', key: 'locale', valueJson: 'en' },
+        {
+          tenantId: t.ajusteEn,
+          moduleName: 'simple-mode',
+          key: 'state',
+          valueJson: { locale: 'es' },
+        },
+      ],
+    });
+    t.ajusteEs = await aula('seed-ajuste-es', 'en-US');
+    await admin.tenantSetting.create({
+      data: { tenantId: t.ajusteEs, moduleName: 'academy', key: 'locale', valueJson: 'es' },
+    });
+
     // Tres reinicios: dos con RLS forzada y uno como superusuario.
     applySqlFileViaPsql(SEED, { user: 'didacta_app' });
     applySqlFileViaPsql(SEED, { user: 'didacta_app' });
@@ -230,11 +256,28 @@ describeWithDb('seed.sql — espacios de sistema en el idioma del aula', () => {
     ]);
   });
 
+  it('el ajuste del aula manda sobre la deducción, en los dos sentidos', async () => {
+    expect((await spaces(t.ajusteEn)).map((r) => r.title)).toEqual([
+      'Announcements',
+      'General',
+      'Questions',
+      'Shared resources',
+    ]);
+    expect((await spaces(t.ajusteEs)).map((r) => r.title)).toEqual([
+      'Anuncios',
+      'General',
+      'Preguntas y dudas',
+      'Recursos compartidos',
+    ]);
+  });
+
   it('el seed deduce el mismo idioma que academyLocale() para cada aula', async () => {
     const esperado: Array<[string, 'es' | 'en', string]> = [
       [t.enSencilla, 'en', 'Shared resources'],
       [t.enPerfil, 'en', 'Shared resources'],
       [t.sinNada, 'es', 'Recursos compartidos'],
+      [t.ajusteEn, 'en', 'Shared resources'],
+      [t.ajusteEs, 'es', 'Recursos compartidos'],
     ];
     for (const [tenantId, idioma, titulo] of esperado) {
       expect(await academyLocale(admin as never, tenantId)).toBe(idioma);

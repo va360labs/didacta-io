@@ -26,6 +26,11 @@ import {
 } from './notifications/email-template-catalog';
 import { resolveNotificationVariables } from './notifications/hub-values';
 import { resolveWebBaseUrlForBackground } from '../common/resolve-web-base-url';
+import {
+  academyDateLocale,
+  academyLocale,
+  type AcademyDefaultsPrisma,
+} from '../common/academy-defaults';
 
 /**
  * Lo único que el hub necesita del `TenantResolverService`. Interfaz mínima
@@ -407,10 +412,12 @@ export class PrismaNotificationHubService implements NotificationHubService {
    * Idioma del destinatario para renderizar la notificación. `to` es siempre
    * un userId, así que el idioma sale de `user.locale`.
    *
-   * Los TRES caminos degradados terminan en `HUB_DEFAULT_LOCALE` de forma
-   * DELIBERADA — no por caída a un default implícito. Cada uno se loguea para
-   * que un self-hoster pueda verlos en vez de descubrirlos por el idioma del
-   * correo:
+   * Los dos primeros caminos degradados (sin fila, o fila sin idioma) usan el
+   * IDIOMA DEL AULA (`academyLocale`: el ajuste del aula o, sin él, el deducido)
+   * y, si ni eso se puede leer, `HUB_DEFAULT_LOCALE`. Antes iban siempre a
+   * `HUB_DEFAULT_LOCALE`, y en un aula en inglés el aviso salía en español.
+   * Cada uno se loguea para que un self-hoster pueda verlos en vez de
+   * descubrirlos por el idioma del correo:
    *
    *  (a) El lookup falla o no hay fila (usuario borrado entre el evento y el
    *      envío, o userId de otro tenant): no hay a quién preguntarle el idioma.
@@ -431,33 +438,47 @@ export class PrismaNotificationHubService implements NotificationHubService {
       });
     } catch (err) {
       // (a) el lookup falló — nunca rompe el envío.
+      const fallback = await this.academyFallbackLocale(tenantId);
       this.logger.warn(
         { userId, tenantId, err: (err as Error).message },
-        `NotificationHub: no se pudo leer el idioma del destinatario, se usa ${HUB_DEFAULT_LOCALE}`,
+        `NotificationHub: no se pudo leer el idioma del destinatario, se usa el del aula (${fallback})`,
       );
-      return HUB_DEFAULT_LOCALE;
+      return fallback;
     }
 
     // (a) sin fila o de otro tenant.
     if (!user || user.tenantId !== tenantId) {
+      const fallback = await this.academyFallbackLocale(tenantId);
       this.logger.warn(
         { userId, tenantId },
-        `NotificationHub: destinatario desconocido en el tenant, se usa ${HUB_DEFAULT_LOCALE}`,
+        `NotificationHub: destinatario desconocido en el tenant, se usa el del aula (${fallback})`,
       );
-      return HUB_DEFAULT_LOCALE;
+      return fallback;
     }
 
     // (b) fila con locale vacío.
     const stored = typeof user.locale === 'string' ? user.locale.trim() : '';
     if (!stored) {
+      const fallback = await this.academyFallbackLocale(tenantId);
       this.logger.log(
         { userId, tenantId },
-        `NotificationHub: el destinatario no tiene idioma, se usa ${HUB_DEFAULT_LOCALE}`,
+        `NotificationHub: el destinatario no tiene idioma, se usa el del aula (${fallback})`,
       );
-      return HUB_DEFAULT_LOCALE;
+      return fallback;
     }
 
     return stored;
+  }
+
+  /** Idioma del aula como tag de fechas; `HUB_DEFAULT_LOCALE` si no se puede leer. */
+  private async academyFallbackLocale(tenantId: string): Promise<string> {
+    try {
+      return academyDateLocale(
+        await academyLocale(this.prisma as unknown as AcademyDefaultsPrisma, tenantId),
+      );
+    } catch {
+      return HUB_DEFAULT_LOCALE;
+    }
   }
 
   private async resolveUserEmail(tenantId: string, userId: string): Promise<string | null> {

@@ -11,6 +11,7 @@ import { PrismaAuditLogService } from '../prisma-audit-log.service';
 import { SmtpAdapterService } from '../smtp-adapter.service';
 import { TenantSmtpResolverService } from '../tenant-smtp-resolver.service';
 import { PrismaService } from '../../prisma/prisma.service';
+import { newUserLocale, type AcademyDefaultsPrisma } from '../../common/academy-defaults';
 import { membershipToBoolean, type TelegramMembership } from '@didacta/mod-member-registration';
 import { buildDecisionEmail } from './email-templates';
 import { resolveEmailBranding, type BrandingPrisma } from '../../common/branded-email';
@@ -204,6 +205,8 @@ export class MemberRegistrationService {
     // 2) Rol por defecto + hash de la contraseña.
     const role = await this.prisma.role.findUnique({ where: { name: DEFAULT_ALUMNO_ROLE } });
     const passwordHash = await this.passwords.hash(input.password);
+    // Sin idioma propio todavía: el del aula (en él le llegan los avisos).
+    const locale = await newUserLocale(this.prisma as unknown as AcademyDefaultsPrisma, tenantId);
 
     // 3) Crear User PENDING + rol en una transacción. Si dos requests carreran y
     //    chocan en el índice único (tenant, email) -> P2002: tratamos como
@@ -218,6 +221,7 @@ export class MemberRegistrationService {
             name: input.name,
             status: 'PENDING',
             passwordHash,
+            locale,
             bio: input.bio ?? null,
             telegramId: input.telegramId,
             telegramInGroup: membershipToBoolean(input.inGroup),

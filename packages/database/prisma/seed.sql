@@ -25,13 +25,15 @@
 --
 -- ── En el idioma del aula ───────────────────────────────────────────────────
 -- Los espacios se crean en el idioma del aula (es/en) con la MISMA regla que
--- `academyLocale()` (apps/api/src/common/academy-defaults.ts): el idioma que
--- eligió la creadora en el alta de 3 preguntas (`tenant_setting
--- simple-mode/state.locale`); si no lo hay, el del perfil de la primera persona
--- activa que administra el aula (`tenant_admin`, por antigüedad); si tampoco,
--- español. Antes se sembraban siempre en español y un aula en inglés recibía
--- «Recursos compartidos» en cada reinicio. Si cambias la regla en un sitio,
--- cámbiala en el otro: `seed-system-spaces.integration.test.ts` compara los dos.
+-- `academyLocale()` (apps/api/src/common/academy-defaults.ts): el ajuste del
+-- aula (`tenant_setting academy/locale`); si no lo tiene, la deducción de
+-- respaldo: el idioma que eligió la creadora en el alta de 3 preguntas
+-- (`tenant_setting simple-mode/state.locale`); si no lo hay, el del perfil de
+-- la primera persona activa que administra el aula (`tenant_admin`, por
+-- antigüedad); si tampoco, español. Antes se sembraban siempre en español y un
+-- aula en inglés recibía «Recursos compartidos» en cada reinicio. Si cambias la
+-- regla en un sitio, cámbiala en el otro: `seed-system-spaces.integration.test.ts`
+-- compara los dos.
 --
 -- La lectura del idioma es de mejor esfuerzo, como en el código: si falla (un
 -- cambio de esquema), avisa con un WARNING y sigue en español. Un arranque
@@ -63,17 +65,31 @@ BEGIN
 
     idioma := NULL;
     BEGIN
-      -- 1) El idioma elegido en el alta sencilla.
-      SELECT CASE split_part(translate(lower(btrim(s.value_json ->> 'locale')), '_', '-'), '-', 1)
+      -- 0) El ajuste del aula (Ajustes, alta sencilla o aprovisionamiento).
+      SELECT CASE split_part(translate(lower(btrim(s.value_json #>> '{}')), '_', '-'), '-', 1)
                WHEN 'en' THEN 'en'
                WHEN 'es' THEN 'es'
              END
         INTO idioma
         FROM "tenant_setting" s
        WHERE s.tenant_id = t.id
-         AND s.module_name = 'simple-mode'
-         AND s.key = 'state'
-         AND jsonb_typeof(s.value_json -> 'locale') = 'string';
+         AND s.module_name = 'academy'
+         AND s.key = 'locale'
+         AND jsonb_typeof(s.value_json) = 'string';
+
+      -- 1) Sin ajuste: el idioma elegido en el alta sencilla.
+      IF idioma IS NULL THEN
+        SELECT CASE split_part(translate(lower(btrim(s.value_json ->> 'locale')), '_', '-'), '-', 1)
+                 WHEN 'en' THEN 'en'
+                 WHEN 'es' THEN 'es'
+               END
+          INTO idioma
+          FROM "tenant_setting" s
+         WHERE s.tenant_id = t.id
+           AND s.module_name = 'simple-mode'
+           AND s.key = 'state'
+           AND jsonb_typeof(s.value_json -> 'locale') = 'string';
+      END IF;
 
       -- 2) El perfil de la primera persona que administra el aula (de las 5
       --    más antiguas, la primera con un idioma que el aula conoce).

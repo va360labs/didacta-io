@@ -23,8 +23,11 @@ import { SessionRegistryService, SessionRevokedError } from './session-registry.
 import { TokenService, type SignedTokens } from './token.service';
 import type { SigninDto, SignupDto } from './dto';
 import { storedEmailFor } from './email-lookup';
-import { ALLOWED_LOCALES } from './me.controller';
-import { newUserTimeZone, type AcademyDefaultsPrisma } from '../common/academy-defaults';
+import {
+  newUserLocale,
+  newUserTimeZone,
+  type AcademyDefaultsPrisma,
+} from '../common/academy-defaults';
 
 export class AmbiguousTenantError extends UnauthorizedException {
   constructor(public readonly candidateSlugs: string[]) {
@@ -203,9 +206,12 @@ export class AuthService {
       tenant.id,
       dto.timezone,
     );
-    const locale = (ALLOWED_LOCALES as readonly string[]).includes(dto.locale ?? '')
-      ? dto.locale
-      : undefined;
+    // Idioma: el del navegador si es uno de los del perfil; si no, el del aula.
+    const locale = await newUserLocale(
+      this.prisma as unknown as AcademyDefaultsPrisma,
+      tenant.id,
+      dto.locale,
+    );
     const user = await this.prisma.$transaction(async (tx) => {
       const created = await tx.user.create({
         data: {
@@ -215,7 +221,7 @@ export class AuthService {
           passwordHash,
           status: 'ACTIVE',
           timezone,
-          ...(locale ? { locale } : {}),
+          locale,
         },
         include: {
           roles: { include: { role: true } },

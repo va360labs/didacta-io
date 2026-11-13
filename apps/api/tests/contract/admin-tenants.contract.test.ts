@@ -202,7 +202,15 @@ describe('CONTRATO · admin/tenants ↔ didacta-cloud', () => {
       };
       expect(createTenantSchema.parse(body)).toEqual(body);
       expect(Object.keys(createTenantSchema.shape).sort()).toEqual(
-        ['slug', 'name', 'adminEmail', 'adminName', 'primaryHostname', 'simpleMode'].sort(),
+        [
+          'slug',
+          'name',
+          'adminEmail',
+          'adminName',
+          'primaryHostname',
+          'simpleMode',
+          'locale',
+        ].sort(),
       );
     });
 
@@ -218,7 +226,20 @@ describe('CONTRATO · admin/tenants ↔ didacta-cloud', () => {
       expect(createTenantSchema.safeParse({ ...base, simpleMode: 'si' }).success).toBe(false);
     });
 
-    it('`adminName` y `simpleMode` son los únicos opcionales al crear', () => {
+    it('`locale` es opcional: Cloud puede no enviarlo, y si lo envía es `es` o `en`', () => {
+      const base = {
+        slug: 'acme',
+        name: 'Acme Corp',
+        adminEmail: 'admin@acme.io',
+        primaryHostname: 'acme.didacta.io',
+      };
+      expect(createTenantSchema.safeParse(base).success).toBe(true);
+      expect(createTenantSchema.parse({ ...base, locale: 'en' }).locale).toBe('en');
+      expect(createTenantSchema.parse({ ...base, locale: 'es' }).locale).toBe('es');
+      expect(createTenantSchema.safeParse({ ...base, locale: 'pt-BR' }).success).toBe(false);
+    });
+
+    it('`adminName`, `simpleMode` y `locale` son los únicos opcionales al crear', () => {
       const sinAdminName = {
         slug: 'acme',
         name: 'Acme Corp',

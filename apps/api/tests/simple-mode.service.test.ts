@@ -284,6 +284,24 @@ describe('alta en 3 preguntas', () => {
     expect(db.settings.get('academy')).toMatchObject({ completedAt: expect.any(String) });
   });
 
+  it('el idioma elegido en el alta queda como idioma del aula (ajuste academy/locale)', async () => {
+    const { db, service } = mundo();
+    await service.quickStart(T, { id: U }, { ...ALTA, locale: 'en' });
+    expect(db.settings.get('locale')).toBe('en');
+    expect(db.settings.get('state')).toMatchObject({ locale: 'en' });
+    expect(db.posts[0]?.title).toBe('Welcome to Taller de Acuarela');
+  });
+
+  it('sin idioma en la petición (cliente anterior): el que ya tenía el aula, no español', async () => {
+    const { db, service } = mundo();
+    // El aprovisionamiento de Cloud lo dejó en inglés.
+    db.settings.set('locale', 'en');
+    const { locale: _sinIdioma, ...sinIdioma } = ALTA;
+    await service.quickStart(T, { id: U }, sinIdioma);
+    expect(db.settings.get('locale')).toBe('en');
+    expect(db.posts[0]?.title).toBe('Welcome to Taller de Acuarela');
+  });
+
   it('repetirla no duplica el curso ni el post: actualiza nombre y precio', async () => {
     const { db, service } = mundo();
     await service.quickStart(T, { id: U }, ALTA);
