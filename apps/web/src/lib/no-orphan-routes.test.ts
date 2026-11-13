@@ -86,7 +86,7 @@ const ALLOWLIST: Record<string, { kind: AllowKind; reason: string }> = {
   // repartida, y por eso NO están en la nav (tenerlas duplicaría la entrada).
   '/admin/metrics': {
     kind: 'external',
-    reason: 'redirect a /admin?tab=negocio (las métricas son pestaña del panel)',
+    reason: 'redirect a /admin?tab=business (las métricas son pestaña del panel)',
   },
   '/admin/sso-saml': {
     kind: 'external',
@@ -111,7 +111,7 @@ const ALLOWLIST: Record<string, { kind: AllowKind; reason: string }> = {
   '/account/subscriptions': {
     kind: 'reachable',
     reason:
-      'redirige a /account?tab=suscripcion (la gestión vive en la pestaña "Suscripción" de /account). La ruta se conserva como success_url/cancel_url del checkout de Stripe.',
+      'redirige a /account?tab=subscription (la gestión vive en la pestaña "Suscripción" de /account). La ruta se conserva como success_url/cancel_url del checkout de Stripe.',
   },
 };
 

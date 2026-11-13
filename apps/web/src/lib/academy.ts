@@ -69,7 +69,7 @@ export type OnboardingStep = (typeof ONBOARDING_STEPS)[number];
 export const DESTINOS: Partial<Record<OnboardingStep, string>> = {
   curso: '/studio/courses',
   alumnos: '/admin/users/invite',
-  cobros: '/admin/settings?tab=pagos',
+  cobros: '/admin/settings?tab=payments',
   correo: '/admin/settings?tab=notifications',
 };
 

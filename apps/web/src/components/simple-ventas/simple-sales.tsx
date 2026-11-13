@@ -31,6 +31,7 @@ import { fetchTenantContext } from '@/lib/tenant-context';
 import { getPublicCatalog } from '@/lib/catalog';
 import { parseAmount, saleState, simpleModeApi, type StartHereView } from '@/lib/simple-mode';
 import { cn } from '@/lib/utils';
+import { useModernUrl } from '@/lib/use-modern-url';
 import { bpsToPercentInput, percentToBps, primaryCurrency, referralSales } from './sales-math';
 
 const TONE: Record<string, string> = {
@@ -66,6 +67,9 @@ export function SimpleSales({
 }) {
   const t = useTranslations('modoSencilloVentas');
   const tPagos = useTranslations('adminPagos.payouts.sales');
+  // `#referidos` y `#enlace`, las anclas de antes (un enlace guardado), pasan a
+  // `#referrals` y `#sale-link` y la página baja a la sección.
+  useModernUrl();
   const [view, setView] = useState<StartHereView | null>(null);
   const [status, setStatus] = useState<PayoutsStatusDto | null>(null);
   const [summary, setSummary] = useState<PayoutsSummaryDto | null>(null);
@@ -200,7 +204,7 @@ export function SimpleSales({
                 </div>
                 {!ready ? null : view.salePath ? (
                   <a
-                    href="#enlace"
+                    href="#sale-link"
                     className="inline-flex h-10 items-center rounded-xl bg-brand-600 px-4 text-sm font-semibold text-white hover:bg-brand-700"
                   >
                     {t('vacio.botonCompartir')}
@@ -282,7 +286,7 @@ export function SimpleSales({
                 {view.sales.count > 0 ? t('propias.texto') : t('propias.vacio')}
               </p>
               <Link
-                href="/admin?tab=negocio"
+                href="/admin?tab=business"
                 className="mt-3 inline-block text-sm font-bold text-brand-600 hover:underline"
               >
                 {t('propias.detalle')}
@@ -346,7 +350,7 @@ function SaleLinkCard({
 
   return (
     <section
-      id="enlace"
+      id="sale-link"
       className="rounded-2xl border border-border bg-surface p-4"
       aria-label={t('titulo')}
     >
@@ -602,7 +606,7 @@ function ReferralsSection() {
   if (!somethingOnSale) {
     return (
       <section
-        id="referidos"
+        id="referrals"
         className="mt-8 scroll-mt-32 flex flex-wrap items-start gap-4 rounded-2xl border border-dashed border-border-strong bg-surface p-5"
         aria-label={t('titulo')}
         data-testid="referidos-nada-a-la-venta"
@@ -638,7 +642,7 @@ function ReferralsSection() {
 
   return (
     <section
-      id="referidos"
+      id="referrals"
       className="mt-8 scroll-mt-32 rounded-2xl border border-border bg-surface p-5"
       aria-label={t('titulo')}
     >

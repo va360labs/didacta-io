@@ -396,7 +396,7 @@ describe('Empieza aquí', () => {
     });
     expect(view.salePath).toBeNull();
     // Sin cobros de plataforma, los cobros se conectan con las claves propias.
-    expect(view.paymentsSetupPath).toBe('/admin/settings?tab=pagos');
+    expect(view.paymentsSetupPath).toBe('/admin/settings?tab=payments');
 
     // Una lección VACÍA no completa el paso; con texto, sí.
     db.lessons.push({ type: 'TEXT', content: {}, module: { courseId: 'c1' } });

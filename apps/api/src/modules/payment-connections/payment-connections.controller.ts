@@ -896,7 +896,7 @@ export class PaymentConnectionsController {
   ) {
     if (!rawUser) throw new UnauthorizedException();
     const webBaseUrl = await this.tenantResolver.resolveTenantWebBaseUrl(rawUser.tenantId, req);
-    const returnUrl = `${webBaseUrl.replace(/\/$/, '')}/account?tab=suscripcion`;
+    const returnUrl = `${webBaseUrl.replace(/\/$/, '')}/account?tab=subscription`;
     const url = await this.registry
       .getPaymentConnectionsService()
       .createMyBillingPortalSession(rawUser.tenantId, rawUser.sub, body.subscriberId, returnUrl);

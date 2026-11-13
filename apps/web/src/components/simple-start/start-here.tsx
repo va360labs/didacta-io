@@ -676,7 +676,7 @@ function Resumen({ view }: { view: StartHereView }) {
             <span className="text-sm text-text-muted">{t('referidos.texto')}</span>
           </div>
           <Link
-            href="/admin/payments#referidos"
+            href="/admin/payments#referrals"
             className="inline-flex h-10 items-center rounded-xl bg-brand-600 px-4 text-sm font-semibold text-white hover:bg-brand-700"
           >
             {t('referidos.boton')}

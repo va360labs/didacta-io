@@ -143,3 +143,120 @@ export function queryParam(
   if (!params) return null;
   return params.get(key) ?? params.get(LEGACY_QUERY_KEYS[key]);
 }
+
+/**
+ * Valores de `?tab=` que antes iban en español. Un solo mapa para todas las
+ * pantallas: ninguna palabra vieja va a dos valores nuevos distintos
+ * (`actividad` es `activity` en el panel y en el expediente; `compras`,
+ * `purchases` en la cuenta y en el expediente). El valor nuevo es el nombre
+ * inglés de la pestaña.
+ *
+ * Hay enlaces ya fuera con el valor viejo: la vuelta del portal de facturación
+ * de Stripe de una sesión abierta antes del cambio (`/account?tab=suscripcion`),
+ * correos, marcadores. Cada pantalla los acepta (`modernTab`) y cambia la URL
+ * por la nueva sin entrada nueva en el historial (`useModernUrl`).
+ *
+ * Las pestañas que aporta un módulo declaran sus valores de antes en su propia
+ * extensión (`legacyKeys`), no aquí.
+ */
+export const LEGACY_TAB_VALUES: Readonly<Record<string, string>> = {
+  // /account
+  datos: 'details',
+  notificaciones: 'notifications',
+  suscripcion: 'subscription',
+  compras: 'purchases',
+  seguridad: 'security',
+  // /admin (panel)
+  actividad: 'activity',
+  negocio: 'business',
+  // /admin/settings
+  registro: 'registration',
+  pagos: 'payments',
+  // /admin/api-keys
+  claves: 'keys',
+  // /admin/webhooks
+  salientes: 'outbound',
+  // /u/<id> (expediente)
+  resumen: 'overview',
+  formacion: 'training',
+  mensajes: 'messages',
+  acceso: 'access',
+  sanciones: 'sanctions',
+};
+
+/** Otros valores de query que antes iban en español, por clave (la nueva). */
+export const LEGACY_QUERY_VALUES: Readonly<Record<string, Readonly<Record<string, string>>>> = {
+  view: { eventos: 'events' },
+};
+
+/** Anclas que antes iban en español (sin `#`). */
+export const LEGACY_HASHES: Readonly<Record<string, string>> = {
+  referidos: 'referrals',
+  enlace: 'sale-link',
+};
+
+function own(map: Readonly<Record<string, string>>, key: string): string | undefined {
+  return Object.prototype.hasOwnProperty.call(map, key) ? map[key] : undefined;
+}
+
+/**
+ * Valor de pestaña de ahora para lo que trae la URL: el de antes traducido
+ * (de la tabla del core o de `extra`, los que declaran los módulos), o el
+ * mismo si ya es de los de ahora. `null` si no viene.
+ */
+export function modernTab(
+  value: string | null | undefined,
+  extra: Readonly<Record<string, string>> = {},
+): string | null {
+  const v = value?.trim();
+  if (!v) return null;
+  return own(LEGACY_TAB_VALUES, v) ?? own(extra, v) ?? v;
+}
+
+/**
+ * La misma URL con todo lo de antes cambiado por lo de ahora, o `null` si no
+ * hay nada que cambiar:
+ *
+ *  - claves de query de antes (`?vista=` → `?view=`), salvo que ya venga la nueva;
+ *  - el valor de `?tab=` (`seguridad` → `security`; `extra`: los de los módulos);
+ *  - otros valores (`?view=eventos` → `?view=events`);
+ *  - el ancla (`#referidos` → `#referrals`).
+ *
+ * El resto de la query (`?ref=`, `?status=`…) se conserva tal cual.
+ */
+export function modernizeUrl(
+  pathname: string,
+  search: string,
+  hash: string,
+  extra: Readonly<Record<string, string>> = {},
+): string | null {
+  const params = new URLSearchParams(search);
+  let changed = false;
+  for (const [key, old] of Object.entries(LEGACY_QUERY_KEYS)) {
+    if (!params.has(old)) continue;
+    const value = params.get(old)!;
+    params.delete(old);
+    if (!params.has(key)) params.set(key, value);
+    changed = true;
+  }
+  const tab = params.get('tab');
+  const tabNow = modernTab(tab, extra);
+  if (tab !== null && tabNow !== null && tabNow !== tab) {
+    params.set('tab', tabNow);
+    changed = true;
+  }
+  for (const [key, values] of Object.entries(LEGACY_QUERY_VALUES)) {
+    const value = params.get(key);
+    const now = value === null ? undefined : own(values, value);
+    if (now) {
+      params.set(key, now);
+      changed = true;
+    }
+  }
+  const anchor = hash.replace(/^#/, '');
+  const anchorNow = own(LEGACY_HASHES, anchor) ?? anchor;
+  if (anchorNow !== anchor) changed = true;
+  if (!changed) return null;
+  const qs = params.toString();
+  return `${pathname}${qs ? `?${qs}` : ''}${anchorNow ? `#${anchorNow}` : ''}`;
+}

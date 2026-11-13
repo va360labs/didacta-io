@@ -1383,10 +1383,10 @@ describe('me/subscription (self-service del usuario)', () => {
       TENANT,
       'user_1',
       'subr_1',
-      'https://aula.test/account?tab=suscripcion',
+      'https://aula.test/account?tab=subscription',
     );
     expect(url).toContain('cus_me');
-    expect(url).toContain(encodeURIComponent('https://aula.test/account?tab=suscripcion'));
+    expect(url).toContain(encodeURIComponent('https://aula.test/account?tab=subscription'));
   });
 
   it('createMyBillingPortalSession: la suscripción de otro usuario → NotFound (no la abre)', async () => {

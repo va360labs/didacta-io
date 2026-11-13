@@ -578,12 +578,12 @@ describe('POST /modules/subscriptions/me/portal y la marca billingPortal', () =>
     });
     expect(subs.createBillingPortalSession).toHaveBeenCalledWith(A, 'alumna', {
       subscriptionId: 's1',
-      returnUrl: 'https://aula.test/account?tab=suscripcion',
+      returnUrl: 'https://aula.test/account?tab=subscription',
     });
     await ctrl.portal(user, { headers: {} } as never, undefined);
     expect(subs.createBillingPortalSession).toHaveBeenLastCalledWith(A, 'alumna', {
       subscriptionId: undefined,
-      returnUrl: 'https://aula.test/account?tab=suscripcion',
+      returnUrl: 'https://aula.test/account?tab=subscription',
     });
   });
 

@@ -823,7 +823,7 @@ function TrialLockedLessonCard({
           {busy ? t('processingPayment') : t('payNowUnlock')}
         </Button>
         <a
-          href="/account?tab=suscripcion"
+          href="/account?tab=subscription"
           className="text-xs font-semibold text-brand-700 underline"
         >
           {t('manageSubscription')}

@@ -111,15 +111,15 @@
   "configTabs": {
     "general": "General",
     "notifications": "Notificaciones",
-    "registro": "Registro",
-    "pagos": "Pagos",
+    "registration": "Registro",
+    "payments": "Pagos",
     "modules": "Módulos",
     "storage": "Storage",
     "raw": "Avanzado",
-    "aula-virtual": "Aula virtual"
+    "virtual-classroom": "Aula virtual"
   },
   "configTabsDesc": {
-    "aula-virtual": "Credenciales Zoom Server-to-Server para sesiones síncronas."
+    "virtual-classroom": "Credenciales Zoom Server-to-Server para sesiones síncronas."
   },
   "modulesTab": {
     "loadError": "No pudimos cargar los módulos.",

@@ -45,6 +45,8 @@ import { ApiHttpError } from '@/lib/api-client';
 import { authStorage } from '@/lib/auth-storage';
 import { apiErrorMessage } from '@/lib/i18n/api-error';
 import { formatDateTime } from '@/lib/i18n/format';
+import { modernTab } from '@/lib/legacy-routes';
+import { useModernUrl } from '@/lib/use-modern-url';
 import {
   webhooksApi,
   type WebhookDeadLetterItem,
@@ -53,7 +55,7 @@ import {
   type WebhooksInfo,
 } from '@/lib/webhooks';
 
-const TABS = ['salientes', 'zoom'] as const;
+const TABS = ['outbound', 'zoom'] as const;
 type TabKey = (typeof TABS)[number];
 
 /**
@@ -67,10 +69,12 @@ export default function AdminWebhooksPage() {
   const t = useTranslations('adminApi');
   const router = useRouter();
   const params = useSearchParams();
-  const requested = params.get('tab');
+  // `?tab=salientes` (el de antes) también vale; la URL se cambia por la nueva.
+  const requested = modernTab(params.get('tab'));
+  useModernUrl({ search: params.toString() });
   const tab: TabKey = (TABS as readonly string[]).includes(requested ?? '')
     ? (requested as TabKey)
-    : 'salientes';
+    : 'outbound';
 
   return (
     <div className="flex flex-col gap-6">
@@ -82,15 +86,15 @@ export default function AdminWebhooksPage() {
       <Tabs
         value={tab}
         onValueChange={(next) =>
-          router.replace(next === 'salientes' ? '/admin/webhooks' : `/admin/webhooks?tab=${next}`)
+          router.replace(next === 'outbound' ? '/admin/webhooks' : `/admin/webhooks?tab=${next}`)
         }
       >
         <TabsList>
-          <TabsTrigger value="salientes">{t('webhooks.tabOutbound')}</TabsTrigger>
+          <TabsTrigger value="outbound">{t('webhooks.tabOutbound')}</TabsTrigger>
           <TabsTrigger value="zoom">{t('webhooks.tabZoom')}</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="salientes" className="mt-5">
+        <TabsContent value="outbound" className="mt-5">
           <div className="flex flex-col gap-4">
             <p className="text-sm text-text-muted">{t('webhooks.outboundIntro')}</p>
             <WebhooksDashboard />

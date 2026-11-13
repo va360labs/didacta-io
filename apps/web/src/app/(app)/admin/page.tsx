@@ -30,25 +30,29 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { apiErrorMessage } from '@/lib/i18n/api-error';
 import type { TranslatorLike } from '@/lib/i18n/labels';
 import { adminStatsApi, type AdminStats, type StatsRange } from '@/lib/admin-stats';
+import { modernTab } from '@/lib/legacy-routes';
+import { useModernUrl } from '@/lib/use-modern-url';
 
 const RANGES: StatsRange[] = ['all', '30d', '7d'];
 
-const TABS = ['actividad', 'negocio'] as const;
+const TABS = ['activity', 'business'] as const;
 type TabKey = (typeof TABS)[number];
 
 export default function AdminDashboardPage() {
   const t = useTranslations('adminFundae');
   const router = useRouter();
   const params = useSearchParams();
-  const requested = params.get('tab');
+  // `?tab=negocio` (el de antes) también vale; la URL se cambia por la nueva.
+  const requested = modernTab(params.get('tab'));
+  useModernUrl({ search: params.toString() });
   const tab: TabKey = (TABS as readonly string[]).includes(requested ?? '')
     ? (requested as TabKey)
-    : 'actividad';
+    : 'activity';
 
   // La pestaña vive en la URL para que `/admin/metrics` pueda redirigir a
-  // `/admin?tab=negocio` y el enlace sea compartible.
+  // `/admin?tab=business` y el enlace sea compartible.
   function selectTab(next: string): void {
-    router.replace(next === 'actividad' ? '/admin' : `/admin?tab=${next}`);
+    router.replace(next === 'activity' ? '/admin' : `/admin?tab=${next}`);
   }
 
   return (
@@ -60,14 +64,14 @@ export default function AdminDashboardPage() {
 
       <Tabs value={tab} onValueChange={selectTab}>
         <TabsList>
-          <TabsTrigger value="actividad">{t('dashboard.tabActivity')}</TabsTrigger>
-          <TabsTrigger value="negocio">{t('dashboard.tabBusiness')}</TabsTrigger>
+          <TabsTrigger value="activity">{t('dashboard.tabActivity')}</TabsTrigger>
+          <TabsTrigger value="business">{t('dashboard.tabBusiness')}</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="actividad" className="mt-5">
+        <TabsContent value="activity" className="mt-5">
           <ActivityTab />
         </TabsContent>
-        <TabsContent value="negocio" className="mt-5">
+        <TabsContent value="business" className="mt-5">
           <BusinessMetricsPanel />
         </TabsContent>
       </Tabs>

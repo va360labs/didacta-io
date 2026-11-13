@@ -70,7 +70,7 @@ describe('alumnos y ajustes sencillos', () => {
     // El nombre de antes, de enlaces ya enviados.
     expect(wantsFullSettings(p('completo=1'))).toBe(true);
     expect(wantsFullSettings(p('full=0'))).toBe(false);
-    expect(wantsFullSettings(p('tab=pagos'))).toBe(true);
+    expect(wantsFullSettings(p('tab=payments'))).toBe(true);
     expect(wantsFullSettings(p(''))).toBe(false);
     expect(wantsFullSettings(null)).toBe(false);
   });

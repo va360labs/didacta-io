@@ -17,6 +17,7 @@ import { useCanModerate } from '@/components/restriction-shield';
 import { UserDossierPanel } from '@/components/user-dossier';
 import { authStorage } from '@/lib/auth-storage';
 import { fetchPublicProfile, type PublicProfile } from '@/lib/public-users';
+import { useModernUrl } from '@/lib/use-modern-url';
 import { communityApi, useCommunityTags, type Post } from '@/modules/community';
 
 /**
@@ -36,6 +37,8 @@ export default function PublicProfilePage({ params }: { params: Promise<{ id: st
   const t = useTranslations('alumnoSocial');
   const { id } = use(params);
   const searchParams = useSearchParams();
+  // `?tab=acceso` (el de antes) abre igual el expediente; la URL pasa a `?tab=access`.
+  useModernUrl({ search: searchParams.toString() });
   const canModerate = useCanModerate(id);
   const [profile, setProfile] = useState<PublicProfile | null>(null);
   const [loading, setLoading] = useState(true);

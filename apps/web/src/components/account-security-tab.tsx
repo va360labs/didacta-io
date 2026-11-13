@@ -27,7 +27,7 @@ import { meApi, type ActiveSession } from '@/lib/me';
  * Contenido de la pestaña "Seguridad" del perfil (/account): cambio de
  * contraseña, sesiones activas y MFA. Antes vivía en la ruta /account/seguridad,
  * que se eliminó para consolidar todo en el perfil. El gate de contraseña
- * temporal (`mustChangePassword`) redirige a /account?tab=seguridad.
+ * temporal (`mustChangePassword`) redirige a /account?tab=security.
  */
 export function AccountSecurityTab() {
   const t = useTranslations('cuentaComponentes');

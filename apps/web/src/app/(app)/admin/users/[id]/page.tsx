@@ -30,7 +30,7 @@ export default function AdminUserDetailRedirect() {
 
   useEffect(() => {
     if (!id) return;
-    router.replace(`/u/${encodeURIComponent(id)}?tab=acceso` as never);
+    router.replace(`/u/${encodeURIComponent(id)}?tab=access` as never);
   }, [id, router]);
 
   return <div className="p-8 text-center text-sm text-text-muted">{t('detail.opening')}</div>;

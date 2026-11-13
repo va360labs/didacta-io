@@ -21,6 +21,7 @@ import {
 import { formatDate, formatTime } from '@/lib/i18n/format';
 import { EventosView } from './eventos-view';
 import { queryParam } from '@/lib/legacy-routes';
+import { useModernUrl } from '@/lib/use-modern-url';
 
 /** Ventana de la agenda: medio año atrás y un año hacia delante. */
 const AGENDA_MONTHS_BACK = 6;
@@ -61,9 +62,10 @@ export default function CalendarioPage() {
   const t = useTranslations('alumnoAprendizaje');
   const today = new Date();
   const [view, setView] = useState<View>('Mes');
+  useModernUrl();
 
   // `/events` redirige aquí con `?view=events` (bloque 9 — navegación; un
-  // enlace de antes puede traer `?vista=eventos`). Se
+  // enlace de antes puede traer `?vista=eventos`, y la URL pasa a la nueva). Se
   // aplica tras el montaje (no en el inicializador) para que el primer render
   // del cliente coincida con el HTML del servidor (evita hydration mismatch).
   useEffect(() => {
