@@ -17,9 +17,8 @@ import { describe, expect, it } from 'vitest';
  * azul fijo: los acentos con significado (verde de «en línea» y de los puntos,
  * oro de la medalla, coral del 3.º) no son azules y siguen permitidos.
  *
- * Fuera de la lista, a propósito: `post-composer-modal.tsx` (su selector de
- * espacio lo está cambiando otra rama) y `clase-embed-card.tsx` (su botón
- * «Inscribirme», idem). Cuando se integren, se añaden aquí.
+ * `post-composer-modal.tsx` (selector de espacio) y `clase-embed-card.tsx`
+ * (botón «Inscribirme») entraron al unir las dos ramas que los tocaban.
  */
 
 const WEB_SRC = path.resolve(__dirname, '..');
@@ -36,9 +35,11 @@ const FILES = [
   'components/community-tag-chip.tsx',
   'components/community-thread-card.tsx',
   'components/community-upcoming-card.tsx',
+  'components/clase-embed-card.tsx',
   'components/course-card.tsx',
   'components/invite-and-earn-card.tsx',
   'components/mention-textarea.tsx',
+  'components/post-composer-modal.tsx',
   'components/post-detail-view.tsx',
   'components/post-reactions.tsx',
   'components/rich-body.tsx',

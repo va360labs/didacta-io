@@ -319,12 +319,12 @@ export function PostComposerModal({ open, onClose, spaceSlug, onSuccess, editPos
               <button
                 type="button"
                 onClick={() => setSpaceOpen((v) => !v)}
-                className="flex items-center gap-1.5 rounded-full border border-[#1E5AA8]/30 bg-[#1E5AA8]/8 px-2.5 py-0.5 text-xs font-semibold text-[#1E5AA8] hover:bg-[#1E5AA8]/15 transition-colors"
+                className="flex items-center gap-1.5 rounded-full border border-brand-500/30 bg-brand-500/8 px-2.5 py-0.5 text-xs font-semibold text-brand-700 hover:bg-brand-500/15 transition-colors"
               >
                 <SpaceIcon
                   icon={spaceMeta?.icon ?? 'hash'}
                   size={13}
-                  className="shrink-0 text-[#1E5AA8]"
+                  className="shrink-0 text-brand-600"
                 />
                 {t('publishingIn', { space: spaceMeta?.title ?? selectedSpace })}
                 <svg
@@ -349,10 +349,10 @@ export function PostComposerModal({ open, onClose, spaceSlug, onSuccess, editPos
                         setSelectedSpace(s.slug);
                         setSpaceOpen(false);
                       }}
-                      className={`flex w-full items-center gap-2 px-3 py-2 text-sm text-left transition-colors first:rounded-t-xl last:rounded-b-xl hover:bg-[#F1F5F9] ${selectedSpace === s.slug ? 'font-semibold text-[#1E5AA8]' : 'text-[#374151]'}`}
+                      className={`flex w-full items-center gap-2 px-3 py-2 text-sm text-left transition-colors first:rounded-t-xl last:rounded-b-xl hover:bg-[#F1F5F9] ${selectedSpace === s.slug ? 'font-semibold text-brand-700' : 'text-[#374151]'}`}
                     >
                       {/* El nombre del icono («megaphone», «help») salía como texto. */}
-                      <SpaceIcon icon={s.icon} size={15} className="shrink-0 text-[#1E5AA8]" />
+                      <SpaceIcon icon={s.icon} size={15} className="shrink-0 text-brand-600" />
                       {s.title}
                     </button>
                   ))}
