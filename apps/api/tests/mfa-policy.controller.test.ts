@@ -13,7 +13,7 @@
  *  - Acceso restringido a super_admin / tenant_admin.
  */
 
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, vi, type Mock } from 'vitest';
 import {
   LicenseService,
   LICENSE_CAPABILITIES,
@@ -32,7 +32,7 @@ type FakeAuditLog = ConstructorParameters<typeof MfaPolicyController>[1];
 function makeTenantConfig(
   opts: {
     initial?: unknown;
-    setSpy?: ReturnType<typeof vi.fn>;
+    setSpy?: Mock<(...args: any[]) => any>;
   } = {},
 ): FakeTenantConfig {
   const setSpy = opts.setSpy ?? vi.fn().mockResolvedValue(undefined);
@@ -49,7 +49,7 @@ function makeTenantConfig(
 
 function makeAuditLog(): {
   audit: FakeAuditLog;
-  recordSpy: ReturnType<typeof vi.fn>;
+  recordSpy: Mock<(...args: any[]) => any>;
 } {
   const recordSpy = vi.fn().mockResolvedValue(undefined);
   return {
@@ -81,7 +81,7 @@ describe('MfaPolicyController · gate feat:mfa.enforcement (A.1)', () => {
   let tenantConfig: FakeTenantConfig;
   let policyService: MfaPolicyService;
   let auditLog: FakeAuditLog;
-  let recordSpy: ReturnType<typeof vi.fn>;
+  let recordSpy: Mock<(...args: any[]) => any>;
   let controller: MfaPolicyController;
 
   beforeEach(() => {
