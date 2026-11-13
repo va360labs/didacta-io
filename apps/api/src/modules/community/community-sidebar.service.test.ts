@@ -37,7 +37,14 @@ interface World {
   tenants: Record<string, string>;
   themes: Record<
     string,
-    { logoUrl: string | null; logoDisplayMode: string; signinHeadline: string | null }
+    {
+      logoUrl: string | null;
+      logoDisplayMode: string;
+      signinHeadline: string | null;
+      about?: string | null;
+      coverUrl?: string | null;
+      socialLinks?: unknown;
+    }
   >;
   domains: Array<{ tenantId: string; hostname: string; isPrimary: boolean; surface: string }>;
   users: UserRow[];
@@ -109,24 +116,26 @@ function matchesUser(u: UserRow, where: UserWhere): boolean {
 }
 
 function build(world: World) {
-  const calls = { queries: 0 };
+  // `academy` cuenta las lecturas de la tarjeta (en vivo, fuera de la caché);
+  // `queries`, todo lo demás.
+  const calls = { queries: 0, academy: 0 };
   const prisma = {
     tenant: {
       findUnique: async ({ where }: { where: { id: string } }) => {
-        calls.queries++;
+        calls.academy++;
         const name = world.tenants[where.id];
         return name === undefined ? null : { name };
       },
     },
     modThemingTenantTheme: {
       findUnique: async ({ where }: { where: TenantWhere }) => {
-        calls.queries++;
+        calls.academy++;
         return world.themes[requireTenant(where, 'theme')] ?? null;
       },
     },
     tenantDomain: {
       findFirst: async ({ where }: { where: TenantWhere }) => {
-        calls.queries++;
+        calls.academy++;
         const t = requireTenant(where, 'tenantDomain');
         return (
           world.domains.find(
@@ -290,8 +299,12 @@ describe('CommunitySidebarService', () => {
       name: 'Morning Pour',
       logoUrl: 'https://cdn.example.com/logo-a.png',
       logoDisplayMode: 'logo_and_name',
+      // Sin portada, descripción propia ni enlaces: banda de color, titular de
+      // acceso y nada de enlaces, como antes de que existieran.
+      coverUrl: null,
       description: 'Brew better coffee at home.',
       host: 'morningpour.example.com',
+      links: [],
     });
     // 4 activos: la borrada y la pendiente no cuentan. 1 admin.
     expect(data.members.total).toBe(4);
@@ -352,8 +365,10 @@ describe('CommunitySidebarService', () => {
       name: 'Aula Vacía',
       logoUrl: null,
       logoDisplayMode: 'logo_only',
+      coverUrl: null,
       description: null,
       host: null,
+      links: [],
     });
     expect(data.members).toEqual({
       total: 1,
@@ -392,6 +407,78 @@ describe('CommunitySidebarService', () => {
     const data = await service.get(A, world.b.zoe.id);
     expect(data.members.online).toBeNull();
     expect(data.members.faces.map((f) => f.id)).not.toContain(world.b.zoe.id);
+  });
+
+  it('la tarjeta con portada, descripción propia y enlaces (y nada de la otra aula)', async () => {
+    const world = twoAcademies();
+    world.themes[A] = {
+      ...world.themes[A]!,
+      about: '  Home baristas learning together.  ',
+      coverUrl: '/api/v1/modules/theming/tenants/a/cover?v=1',
+      socialLinks: [
+        { kind: 'instagram', url: 'https://instagram.com/' },
+        { kind: 'whatsapp', url: 'https://wa.me/' },
+      ],
+    };
+    world.themes[B] = {
+      ...world.themes[B]!,
+      about: 'Descripción de B',
+      coverUrl: '/api/v1/modules/theming/tenants/b/cover?v=1',
+      socialLinks: [{ kind: 'youtube', url: 'https://youtube.com/@de-b' }],
+    };
+    const { service } = build(world);
+    const a = await service.get(A);
+    expect(a.academy).toMatchObject({
+      coverUrl: '/api/v1/modules/theming/tenants/a/cover?v=1',
+      // La descripción propia manda sobre el titular de acceso.
+      description: 'Home baristas learning together.',
+      links: [
+        { kind: 'instagram', url: 'https://instagram.com/' },
+        { kind: 'whatsapp', url: 'https://wa.me/' },
+      ],
+    });
+    const todo = JSON.stringify(a);
+    for (const deB of ['Descripción de B', 'tenants/b/cover', '@de-b']) {
+      expect(todo).not.toContain(deB);
+    }
+    expect((await service.get(B)).academy.description).toBe('Descripción de B');
+  });
+
+  it('sin descripción propia (o en blanco) cae al titular de acceso', async () => {
+    const world = twoAcademies();
+    world.themes[A]!.about = '   ';
+    const { service } = build(world);
+    expect((await service.get(A)).academy.description).toBe('Brew better coffee at home.');
+  });
+
+  it('enlaces de la base que el DTO no aceptaría no llegan a la tarjeta', async () => {
+    const world = twoAcademies();
+    world.themes[A]!.socialLinks = [
+      { kind: 'whatsapp', url: 'https://evil.example.com/wa' },
+      { kind: 'web', url: 'javascript:alert(1)' },
+      { kind: 'instagram', url: 'http://instagram.com/x' },
+      { kind: 'fax', url: 'https://fax.example.com' },
+      'https://suelto.example.com',
+      { kind: 'web', url: 'https://morningpour.example.com' },
+    ];
+    const { service } = build(world);
+    expect((await service.get(A)).academy.links).toEqual([
+      { kind: 'web', url: 'https://morningpour.example.com' },
+    ]);
+  });
+
+  it('la tarjeta se lee en vivo: un cambio en Ajustes se ve sin esperar a la caché', async () => {
+    const world = twoAcademies();
+    const { service } = build(world);
+    let now = 1_000_000;
+    service.clock = () => now;
+    await service.get(A);
+    now += 1_000;
+    world.themes[A]!.about = 'Nueva descripción';
+    world.themes[A]!.coverUrl = '/api/v1/modules/theming/tenants/a/cover?v=2';
+    const data = await service.get(A);
+    expect(data.academy.description).toBe('Nueva descripción');
+    expect(data.academy.coverUrl).toBe('/api/v1/modules/theming/tenants/a/cover?v=2');
   });
 
   it('un titular en blanco no es una descripción', async () => {
@@ -471,11 +558,12 @@ describe('CommunitySidebarService', () => {
     service.clock = () => now;
     await service.get(A);
     const tras1 = calls.queries;
-    await service.get(A);
+    world.points[A] = [{ userId: world.a.bea.id, points: 999 }];
+    // Dentro de la vida de la caché no se repiten ni los COUNT ni el ranking.
+    expect((await service.get(A)).leaderboard?.entries[0]?.name).toBe('Ana');
     expect(calls.queries).toBe(tras1);
     now += SIDEBAR_CACHE_TTL_MS + 1;
-    world.tenants[A] = 'Morning Pour Renamed';
-    expect((await service.get(A)).academy.name).toBe('Morning Pour Renamed');
+    expect((await service.get(A)).leaderboard?.entries[0]?.name).toBe('Bea');
     expect(calls.queries).toBeGreaterThan(tras1);
   });
 
@@ -483,9 +571,9 @@ describe('CommunitySidebarService', () => {
     const world = twoAcademies();
     const { service } = build(world);
     await service.get(A);
-    world.tenants[A] = 'Nuevo nombre';
+    world.points[A] = [{ userId: world.a.bea.id, points: 999 }];
     service.invalidate(A);
-    expect((await service.get(A)).academy.name).toBe('Nuevo nombre');
+    expect((await service.get(A)).leaderboard?.entries[0]?.name).toBe('Bea');
   });
 });
 

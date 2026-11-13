@@ -13,6 +13,7 @@ import { Test } from '@nestjs/testing';
 import { PrismaClient } from '@didacta/database';
 import { CommunityService } from '@didacta/mod-community';
 import { GamificationService } from '@didacta/mod-gamification';
+import { CoverNotFoundError, ThemingService } from '@didacta/mod-theming';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { CommunitySidebarService } from '../../src/modules/community/community-sidebar.service';
 import { MessagingPresenceService } from '../../src/modules/messaging/messaging-presence.service';
@@ -215,9 +216,71 @@ describeWithDb('Barra lateral de la comunidad — Postgres real como didacta_app
     expect(JSON.stringify(b)).not.toContain('Ana A');
   });
 
+  it('portada, descripción y enlaces de A por el service real de mod.theming: solo en la barra de A', async () => {
+    const blobs = new Map<string, Buffer>();
+    const storage = {
+      uploadImage: async (key: string, data: Buffer, contentType: string) => {
+        blobs.set(key, data);
+        return { key, contentType, optimized: false, size: data.length, previousSize: data.length };
+      },
+      download: async (key: string) => blobs.get(key)!,
+      delete: async (key: string) => void blobs.delete(key),
+    };
+    const theming = new ThemingService(
+      prisma as never,
+      {
+        logger: { info: () => undefined, warn: () => undefined, error: () => undefined },
+        storage,
+        eventBus: { publish: async () => undefined },
+      } as never,
+    );
+    const png = Buffer.from([0x89, 0x50, 0x4e, 0x47, 1, 2, 3]).toString('base64');
+    await runAsTenant(tenants.a, async () => {
+      await theming.update(tenants.a, {
+        about: 'Descripción propia de A',
+        socialLinks: [
+          { kind: 'instagram', url: 'https://instagram.com/' },
+          { kind: 'whatsapp', url: 'https://wa.me/' },
+        ],
+      });
+      await theming.uploadCover(tenants.a, {
+        data: png,
+        filename: 'a.png',
+        contentType: 'image/png',
+      });
+    });
+
+    const a = await runAsTenant(tenants.a, () => service.get(tenants.a));
+    expect(a.academy).toMatchObject({
+      description: 'Descripción propia de A',
+      coverUrl: expect.stringContaining(`/modules/theming/tenants/${tenants.a}/cover?v=`),
+      links: [
+        { kind: 'instagram', url: 'https://instagram.com/' },
+        { kind: 'whatsapp', url: 'https://wa.me/' },
+      ],
+    });
+    // B sigue con su titular, sin portada ni enlaces…
+    const b = await runAsTenant(tenants.b, () => service.get(tenants.b));
+    expect(b.academy).toMatchObject({ description: 'Titular B', coverUrl: null, links: [] });
+    expect(JSON.stringify(b)).not.toContain('Descripción propia de A');
+    // …y desde B la fila de A no existe (RLS): ni su portada se sirve.
+    await expect(
+      runAsTenant(tenants.b, () => theming.getCoverBlob(tenants.a)),
+    ).rejects.toBeInstanceOf(CoverNotFoundError);
+    expect(
+      (await runAsTenant(tenants.a, () => theming.getCoverBlob(tenants.a))).buffer.length,
+    ).toBeGreaterThan(0);
+  });
+
   it('un aula sin nada no pinta bloques: sin descripción, ranking ni comentarios', async () => {
     const v = await runAsTenant(tenants.vacia, () => service.get(tenants.vacia));
-    expect(v.academy).toMatchObject({ logoUrl: null, description: null, host: null });
+    expect(v.academy).toMatchObject({
+      logoUrl: null,
+      coverUrl: null,
+      description: null,
+      host: null,
+      links: [],
+    });
     expect(v.members).toMatchObject({ total: 1, admins: null, online: null });
     expect(v.leaderboard).toBeNull();
     expect(v.recentComments).toEqual([]);

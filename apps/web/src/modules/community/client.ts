@@ -5,6 +5,7 @@
 
 import { ApiHttpError, apiFetch } from '@/lib/api-client';
 import { authStorage } from '@/lib/auth-storage';
+import type { SocialLink } from '@/lib/social-links';
 
 export interface Post {
   id: string;
@@ -137,8 +138,12 @@ export interface CommunitySidebar {
     name: string;
     logoUrl: string | null;
     logoDisplayMode: 'logo_only' | 'logo_and_name';
+    /** Portada propia del aula; `null` = banda con su color. */
+    coverUrl: string | null;
     description: string | null;
     host: string | null;
+    /** Enlaces sociales del aula, en su orden (vacío = no se pintan). */
+    links: SocialLink[];
   };
   members: {
     total: number;
