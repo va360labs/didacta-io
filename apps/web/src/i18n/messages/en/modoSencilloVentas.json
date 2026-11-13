@@ -77,7 +77,22 @@
     },
     "verDetalle": "See referral details",
     "descuentoTitulo": "Let them use it as a discount on their fee",
-    "descuentoTexto": "Members can take what they earned off their next fee instead of being paid out. You cover it: that fee reaches you with the discount."
+    "descuentoTexto": "Members can take what they earned off their next fee instead of being paid out. You cover it: that fee reaches you with the discount.",
+    "cobros": {
+      "titulo": "Payment requests",
+      "texto": "Your students request here to be paid what they have earned. Make the bank transfer and mark it as paid: a receipt is generated.",
+      "vacio": "Nobody has requested payment yet.",
+      "pedidoEl": "Requested on {date}",
+      "referencia": "Transfer reference",
+      "marcar": "Mark as paid",
+      "marcando": "Saving…",
+      "pagadoEl": "Paid on {date} · {ref}",
+      "sinDatos": "No payment details",
+      "nif": "Tax ID",
+      "iban": "IBAN",
+      "error": "It could not be saved. Please try again.",
+      "justificante": "Receipt"
+    }
   },
   "propias": {
     "titulo": "Sales",

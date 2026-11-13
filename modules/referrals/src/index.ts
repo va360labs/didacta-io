@@ -44,6 +44,7 @@ export type {
   ReferralsCreditPort,
   MemberCreditView,
   ReferralsPublicTerms,
+  ReferralsCipher,
 } from './referrals.service.js';
 export { deriveInviteeState, initialsOf } from './invitees.js';
 export type { InviteeState, InviteeFacts } from './invitees.js';
@@ -60,7 +61,22 @@ export {
   ReferralsCreditUnavailableError,
   ReferralsCreditFailedError,
   ReferralsTermsRequiredError,
+  ReferralsPayeeInvalidError,
+  ReferralsPayeeRequiredError,
+  ReferralsPayoutAlreadyRequestedError,
+  ReferralsPayoutNotFoundError,
+  ReferralsPayeeUnavailableError,
 } from './errors.js';
+export {
+  normalizePayee,
+  isValidIban,
+  isValidSpanishTaxId,
+  maskIban,
+  maskTaxId,
+  formatIban,
+  PayeeValidationError,
+} from './payee.js';
+export type { PayeeDetails, PayeeField } from './payee.js';
 
 export function buildReferralsModule(_service: ReferralsService): DidactaModule {
   return {

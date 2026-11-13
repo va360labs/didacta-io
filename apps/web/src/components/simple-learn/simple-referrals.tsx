@@ -11,6 +11,7 @@ import { useTranslations } from 'next-intl';
 import { Icon } from '@/components/icon';
 import { percentFromBps } from '@/components/invite-and-earn-card';
 import { ReferralTermsGate } from '@/components/referral-terms-gate';
+import { CashPayoutSection } from './cash-payout';
 import { ApiHttpError } from '@/lib/api-client';
 import { formatCents, formatDate, formatNumber } from '@/lib/i18n/format';
 import {
@@ -412,6 +413,14 @@ export function SimpleReferrals() {
                 </p>
               ) : null}
             </section>
+          ) : null}
+
+          {stats.cashPayoutAvailable && stats.terms?.accepted ? (
+            <CashPayoutSection
+              stats={stats}
+              academy={academy}
+              onChanged={async () => setStats(await referralsApi.myStats())}
+            />
           ) : null}
 
           <section

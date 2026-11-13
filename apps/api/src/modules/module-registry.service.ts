@@ -3,6 +3,8 @@
  * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
  */
 
+import { SecretCipherService } from './secret-cipher.service';
+import { loadCipherKey } from '../auth/cipher-key';
 import { withStripeTestApi } from './stripe-test-api';
 import { Injectable, Optional, type OnModuleInit } from '@nestjs/common';
 import { ModuleRegistry } from '@didacta/core-registry';
@@ -575,6 +577,9 @@ export class ModuleRegistryService implements OnModuleInit {
         credit: async (tenantId, params) =>
           (await this.resolveSubscriptionsStripeAdapter(tenantId)).creditCustomerBalance(params),
       },
+      // Datos de cobro en dinero (nombre, NIF, IBAN): cifrados con la clave
+      // maestra de siempre, la que rota `maintenance/rotate-cipher-key`.
+      new SecretCipherService(loadCipherKey().key),
     );
     const referralsModule = buildReferralsModule(this.referrals);
 

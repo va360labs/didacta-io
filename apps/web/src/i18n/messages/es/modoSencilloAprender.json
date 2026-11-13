@@ -108,6 +108,32 @@
       "vacio": "Aún no tienes nada confirmado que restar. Lo verás aquí cuando pase el plazo de devolución.",
       "nada": "Ahora mismo no tienes nada que restar de tu próxima cuota.",
       "error": "No hemos podido aplicar el descuento. Vuelve a intentarlo: no se aplicará dos veces."
+    },
+    "cobroDinero": {
+      "titulo": "Cobrar en dinero",
+      "texto": "Lo confirmado te lo paga {academia} por transferencia. Necesitamos tu nombre completo, tu NIF y tu cuenta. Didacta no retiene nada.",
+      "confirmado": "Tienes {amount} confirmados para cobrar.",
+      "nadaConfirmado": "Todavía no tienes nada confirmado para cobrar.",
+      "minimo": "Podrás pedir el cobro cuando llegues a {min}.",
+      "pedir": "Pedir el cobro de {amount}",
+      "pidiendo": "Pidiendo…",
+      "pedido": "Has pedido {amount} el {date}. {academia} te lo pagará por transferencia.",
+      "datosTitulo": "Tus datos de cobro",
+      "datosResumen": "{name} · {iban} · {taxId}",
+      "cambiar": "Cambiar",
+      "nombre": "Nombre y apellidos",
+      "pais": "País",
+      "nif": "NIF o NIE",
+      "idFiscal": "Identificador fiscal",
+      "iban": "Cuenta (IBAN)",
+      "guardarYPedir": "Guardar y pedir el cobro",
+      "guardar": "Guardar",
+      "cancelar": "Cancelar",
+      "privacidad": "Se guardan cifrados. {academia} solo los ve para pagarte.",
+      "campoMal": "Revisa este dato.",
+      "error": "No se ha podido enviar. Vuelve a intentarlo.",
+      "pagado": "Pagado el {date}",
+      "justificante": "Descargar justificante"
     }
   }
 }

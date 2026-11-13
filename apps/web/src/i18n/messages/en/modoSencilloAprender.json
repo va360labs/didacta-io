@@ -108,6 +108,32 @@
       "vacio": "You have nothing confirmed to take off yet. It will show here once the refund period is over.",
       "nada": "Right now you have nothing to take off your next fee.",
       "error": "We could not apply the discount. Try again: it will not be applied twice."
+    },
+    "cobroDinero": {
+      "titulo": "Get paid in money",
+      "texto": "{academia} pays what is confirmed by bank transfer. We need your full name, your tax ID and your account. Didacta withholds nothing.",
+      "confirmado": "You have {amount} confirmed to be paid.",
+      "nadaConfirmado": "You have nothing confirmed to be paid yet.",
+      "minimo": "You can request payment once you reach {min}.",
+      "pedir": "Request payment of {amount}",
+      "pidiendo": "Requesting…",
+      "pedido": "You requested {amount} on {date}. {academia} will pay it by bank transfer.",
+      "datosTitulo": "Your payment details",
+      "datosResumen": "{name} · {iban} · {taxId}",
+      "cambiar": "Change",
+      "nombre": "Full name",
+      "pais": "Country",
+      "nif": "NIF or NIE",
+      "idFiscal": "Tax ID",
+      "iban": "Account (IBAN)",
+      "guardarYPedir": "Save and request payment",
+      "guardar": "Save",
+      "cancelar": "Cancel",
+      "privacidad": "They are stored encrypted. {academia} only sees them to pay you.",
+      "campoMal": "Check this field.",
+      "error": "It could not be sent. Please try again.",
+      "pagado": "Paid on {date}",
+      "justificante": "Download receipt"
     }
   }
 }

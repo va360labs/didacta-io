@@ -73,6 +73,18 @@ const acceptTermsSchema = z.object({
   adult: z.literal(true),
 });
 
+/** Datos para cobrar en dinero. El formato fino lo valida el dominio (`normalizePayee`). */
+const payeeSchema = z.object({
+  fullName: z.string().max(200),
+  country: z.string().max(4),
+  taxId: z.string().max(40),
+  iban: z.string().max(64),
+});
+
+const markPaidSchema = z.object({
+  externalReference: z.string().trim().min(3).max(200),
+});
+
 const listCommissionsSchema = z.object({
   status: z.enum(['PENDING', 'APPROVED', 'PAID', 'REVOKED']).optional(),
   referrerUserId: z.string().uuid().optional(),
@@ -128,6 +140,46 @@ export class ReferralsController {
     return this.registry
       .getReferralsService()
       .acceptTerms(u.tenantId, u.sub, { version: dto.version, adult: dto.adult });
+  }
+
+  @Get('me/payee')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary:
+      'Datos del alumno para cobrar en dinero, ENMASCARADOS (NIF e IBAN con solo los 4 últimos). null si no los ha dado.',
+  })
+  async myPayee(@CurrentUser() user: SessionClaims | undefined) {
+    const u = this.requireUser(user);
+    return { payee: await this.registry.getReferralsService().payeeMasked(u.tenantId, u.sub) };
+  }
+
+  @Put('me/payee')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary:
+      'Guarda los datos para cobrar en dinero (nombre completo, país, NIF/NIE o identificador fiscal, IBAN), cifrados. 422 REFERRALS_PAYEE_INVALID con los campos que fallan (nunca sus valores).',
+  })
+  async savePayee(
+    @CurrentUser() user: SessionClaims | undefined,
+    @Body(new ZodValidationPipe(payeeSchema)) dto: z.infer<typeof payeeSchema>,
+  ) {
+    const u = this.requireUser(user);
+    return { payee: await this.registry.getReferralsService().savePayee(u.tenantId, u.sub, dto) };
+  }
+
+  @Post('me/payouts')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @HttpCode(200)
+  @ApiOperation({
+    summary:
+      'El alumno pide el cobro en dinero de lo confirmado. Necesita datos de cobro y llegar al mínimo del aula. 409 si ya hay uno pedido o faltan los datos.',
+  })
+  async requestPayout(@CurrentUser() user: SessionClaims | undefined) {
+    const u = this.requireUser(user);
+    return this.registry.getReferralsService().requestCashPayout(u.tenantId, u.sub);
   }
 
   @Get('me/stats')
@@ -279,6 +331,38 @@ export class ReferralsController {
     const u = this.requireAdmin(user);
     await this.registry.getReferralsService().revokeCommission(u.tenantId, id, dto.reason, u.sub);
     return { ok: true };
+  }
+
+  @Get('admin/cash-payouts')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary:
+      'Cobros en dinero del aula (pedidos y pagados) con lo necesario para pagar: nombre, identificador fiscal e IBAN.',
+  })
+  async listCashPayouts(@CurrentUser() user: SessionClaims | undefined) {
+    const u = this.requireAdmin(user);
+    return { payouts: await this.registry.getReferralsService().listCashPayouts(u.tenantId) };
+  }
+
+  @Post('admin/cash-payouts/:id/paid')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @HttpCode(200)
+  @ApiOperation({
+    summary:
+      'El creador marca pagado un cobro pedido, con la referencia de la transferencia: la liquidación pasa a DONE y sus comisiones a PAID.',
+  })
+  async markPaid(
+    @CurrentUser() user: SessionClaims | undefined,
+    @Param('id') id: string,
+    @Body(new ZodValidationPipe(markPaidSchema)) dto: z.infer<typeof markPaidSchema>,
+  ) {
+    const u = this.requireAdmin(user);
+    return this.registry.getReferralsService().markCashPayoutPaid(u.tenantId, id, {
+      externalReference: dto.externalReference,
+      actorId: u.sub,
+    });
   }
 
   @Post('admin/payouts')

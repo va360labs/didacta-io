@@ -114,6 +114,14 @@ export const ENCRYPTED_TABLES: readonly EncryptedTable[] = [
     tag: 'document_tag',
     ref: `tenant_id::text || '/' || full_number`,
   },
+  {
+    // Datos del alumno para cobrar sus referidos en dinero (nombre, NIF, IBAN).
+    table: 'mod_referrals_member',
+    cipher: 'payee_cipher',
+    iv: 'payee_iv',
+    tag: 'payee_tag',
+    ref: `tenant_id::text || '/' || user_id::text || '/datos-de-cobro'`,
+  },
 ];
 
 export interface TableReport {

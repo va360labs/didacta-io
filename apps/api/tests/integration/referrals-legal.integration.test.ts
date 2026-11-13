@@ -8,14 +8,19 @@
  * aula A.
  */
 
-import { randomUUID } from 'node:crypto';
 import { Test } from '@nestjs/testing';
 import { PrismaClient } from '@didacta/database';
+import { randomBytes, randomUUID } from 'node:crypto';
 import {
   REFERRAL_TERMS_VERSION,
+  ReferralsPayeeInvalidError,
+  ReferralsPayoutAlreadyRequestedError,
+  ReferralsPayoutNotFoundError,
+  ReferralsPayoutValidationError,
   ReferralsService,
   ReferralsTermsRequiredError,
 } from '@didacta/mod-referrals';
+import { SecretCipherService } from '../../src/modules/secret-cipher.service';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { PrismaModule } from '../../src/prisma/prisma.module';
 import { PrismaService } from '../../src/prisma/prisma.service';
@@ -86,6 +91,8 @@ describeWithDb('Referidos — puntos legales, Postgres real como didacta_app', (
         const u = await admin.user.findFirst({ where: { id: userId, tenantId } });
         return u?.email ?? null;
       },
+      null,
+      new SecretCipherService(randomBytes(32).toString('hex')),
     );
   }, 120_000);
 
@@ -158,6 +165,137 @@ describeWithDb('Referidos — puntos legales, Postgres real como didacta_app', (
       expect(await admin.modReferralsCommission.count({ where: { tenantId: ids.tenantB } })).toBe(
         0,
       );
+    });
+  });
+
+  /** Referido y comisiones APPROVED sin liquidar del alumno A (lo que ya ha ganado). */
+  async function approved(...amounts: number[]): Promise<string[]> {
+    let referral = await admin.modReferralsReferral.findFirst({
+      where: { tenantId: ids.tenantA, referrerUserId: ids.referrerA },
+    });
+    referral ??= await admin.modReferralsReferral.create({
+      data: {
+        tenantId: ids.tenantA,
+        referrerUserId: ids.referrerA,
+        referredUserId: ids.buyerA,
+        code: `legal${stamp}`.slice(0, 12),
+      },
+    });
+    const out: string[] = [];
+    for (const amountCents of amounts) {
+      const row = await admin.modReferralsCommission.create({
+        data: {
+          tenantId: ids.tenantA,
+          referralId: referral.id,
+          referrerUserId: ids.referrerA,
+          stripeInvoiceId: `legal:${randomUUID()}`,
+          baseAmountCents: amountCents * 3,
+          amountCents,
+          currency: 'eur',
+          commissionBps: 3000,
+          status: 'APPROVED',
+          approveAfter: new Date(),
+          approvedAt: new Date(),
+        },
+      });
+      out.push(row.id);
+    }
+    return out;
+  }
+
+  describe('2. datos para cobrar en dinero', () => {
+    const datos = {
+      fullName: 'Lucía Pérez Gil',
+      country: 'ES',
+      taxId: '12345678Z',
+      iban: 'ES91 2100 0418 4502 0005 1332',
+    };
+
+    it('valida el formato y guarda los datos CIFRADOS; el alumno los ve enmascarados', async () => {
+      await expect(
+        runAsTenant(ids.tenantA, () =>
+          referrals.savePayee(ids.tenantA, ids.referrerA, { ...datos, iban: 'ES00 1234' }),
+        ),
+      ).rejects.toBeInstanceOf(ReferralsPayeeInvalidError);
+
+      const masked = await runAsTenant(ids.tenantA, () =>
+        referrals.savePayee(ids.tenantA, ids.referrerA, datos),
+      );
+      expect(masked).toMatchObject({
+        fullName: 'Lucía Pérez Gil',
+        taxIdMasked: '•••••678Z',
+        ibanMasked: 'ES•• •••• 1332',
+      });
+      // En la base no hay ni rastro en claro.
+      const raw = await admin.$queryRawUnsafe<Array<{ txt: string }>>(
+        `SELECT encode(payee_cipher, 'escape') AS txt FROM mod_referrals_member WHERE tenant_id = '${ids.tenantA}'::uuid AND user_id = '${ids.referrerA}'::uuid`,
+      );
+      expect(raw[0]!.txt).not.toContain('12345678Z');
+      expect(raw[0]!.txt).not.toContain('ES9121000418450200051332');
+      expect(raw[0]!.txt).not.toContain('Lucía');
+    });
+
+    it('pide el cobro (mínimo del aula), reserva lo confirmado y el creador lo marca pagado; B no ve nada', async () => {
+      await approved(600);
+      // 6 € no llegan al mínimo de 10 €.
+      await expect(
+        runAsTenant(ids.tenantA, () => referrals.requestCashPayout(ids.tenantA, ids.referrerA)),
+      ).rejects.toBeInstanceOf(ReferralsPayoutValidationError);
+      await approved(700);
+      const req = await runAsTenant(ids.tenantA, () =>
+        referrals.requestCashPayout(ids.tenantA, ids.referrerA),
+      );
+      expect(req).toMatchObject({ totalCents: 1300, currency: 'eur', count: 2 });
+      await expect(
+        runAsTenant(ids.tenantA, () => referrals.requestCashPayout(ids.tenantA, ids.referrerA)),
+      ).rejects.toBeInstanceOf(ReferralsPayoutAlreadyRequestedError);
+      // Reservadas: siguen APPROVED pero ya con su liquidación.
+      expect(
+        await admin.modReferralsCommission.count({
+          where: { tenantId: ids.tenantA, payoutId: req.payoutId, status: 'APPROVED' },
+        }),
+      ).toBe(2);
+
+      // El creador ve lo necesario para pagar, en claro.
+      const list = await runAsTenant(ids.tenantA, () => referrals.listCashPayouts(ids.tenantA));
+      expect(list[0]).toMatchObject({
+        id: req.payoutId,
+        status: 'REQUESTED',
+        payee: {
+          fullName: 'Lucía Pérez Gil',
+          taxId: '12345678Z',
+          iban: 'ES9121000418450200051332',
+        },
+      });
+      // Aislamiento: el aula B no ve el cobro ni los datos de A.
+      expect(await runAsTenant(ids.tenantB, () => referrals.listCashPayouts(ids.tenantB))).toEqual(
+        [],
+      );
+      await expect(
+        runAsTenant(ids.tenantB, () =>
+          referrals.markCashPayoutPaid(ids.tenantB, req.payoutId, {
+            externalReference: 'TRF-B',
+            actorId: ids.referrerB,
+          }),
+        ),
+      ).rejects.toBeInstanceOf(ReferralsPayoutNotFoundError);
+
+      await runAsTenant(ids.tenantA, () =>
+        referrals.markCashPayoutPaid(ids.tenantA, req.payoutId, {
+          externalReference: 'TRF-2026-0001',
+          actorId: ids.referrerA,
+        }),
+      );
+      const done = await admin.modReferralsPayout.findUniqueOrThrow({
+        where: { id: req.payoutId },
+      });
+      expect(done).toMatchObject({ status: 'DONE', externalReference: 'TRF-2026-0001' });
+      expect(done.paidAt).toBeInstanceOf(Date);
+      expect(
+        await admin.modReferralsCommission.count({
+          where: { tenantId: ids.tenantA, payoutId: req.payoutId, status: 'PAID' },
+        }),
+      ).toBe(2);
     });
   });
 });

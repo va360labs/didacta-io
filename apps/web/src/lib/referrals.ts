@@ -47,8 +47,40 @@ export interface ReferralPayoutRow {
   externalReference: string;
   /** CASH = pago aparte; CREDIT = descuento en la cuota. */
   method?: 'CASH' | 'CREDIT';
-  status?: 'PENDING' | 'DONE';
+  /** REQUESTED = cobro en dinero pedido, aún sin pagar. */
+  status?: 'PENDING' | 'REQUESTED' | 'DONE';
+  /** Cobro en dinero: cuándo lo marcó pagado el creador. */
+  paidAt?: string | null;
   createdAt: string;
+}
+
+/** Datos de cobro del alumno, ENMASCARADOS (lo que ve él). */
+export interface PayeeMasked {
+  fullName: string;
+  country: string;
+  taxIdMasked: string;
+  ibanMasked: string;
+  updatedAt: string | null;
+}
+
+export interface PayeeInput {
+  fullName: string;
+  country: string;
+  taxId: string;
+  iban: string;
+}
+
+/** Un cobro en dinero, para el creador: con lo necesario para pagar. */
+export interface AdminCashPayout {
+  id: string;
+  referrerUserId: string;
+  totalCents: number;
+  currency: string;
+  status: 'REQUESTED' | 'DONE';
+  externalReference: string | null;
+  requestedAt: string;
+  paidAt: string | null;
+  payee: { fullName: string; country: string; taxId: string; iban: string } | null;
 }
 
 /** Lo que el alumno puede usar como descuento en su próxima cuota. */
@@ -87,6 +119,10 @@ export interface MemberReferralStats {
   code: string | null;
   /** Casilla «mayor de 18 y acepto las condiciones»: sin ella no hay enlace. */
   terms?: ReferralTermsStatus;
+  /** Datos para cobrar en dinero, enmascarados (null si no los ha dado). */
+  payee?: PayeeMasked | null;
+  /** La instancia puede guardar datos de cobro (cobro en dinero disponible). */
+  cashPayoutAvailable?: boolean;
   clicks: number;
   referrals: number;
   totals: { pendingCents: number; approvedCents: number; paidCents: number };
@@ -166,6 +202,16 @@ export const referralsApi = {
       { method: 'POST', body: JSON.stringify({ version, adult: true }) },
       withAuth(),
     );
+  },
+
+  /** Guarda los datos para cobrar en dinero (se guardan cifrados). */
+  async savePayee(input: PayeeInput): Promise<{ payee: PayeeMasked }> {
+    return apiFetch(`${BASE}/me/payee`, { method: 'PUT', body: JSON.stringify(input) }, withAuth());
+  },
+
+  /** Pide el cobro en dinero de lo confirmado. */
+  async requestPayout(): Promise<{ payoutId: string; totalCents: number; currency: string }> {
+    return apiFetch(`${BASE}/me/payouts`, { method: 'POST', body: '{}' }, withAuth());
   },
 
   async redeemCredit(): Promise<RedeemCreditResult> {
@@ -257,6 +303,20 @@ export function getStoredReferralCode(): string | null {
 // ── Admin ────────────────────────────────────────────────────────────────────
 
 export const referralsAdminApi = {
+  /** Cobros en dinero (pedidos y pagados) con lo necesario para pagar. */
+  async listCashPayouts(): Promise<{ payouts: AdminCashPayout[] }> {
+    return apiFetch(`${BASE}/admin/cash-payouts`, { method: 'GET' }, withAuth());
+  },
+
+  /** Marca pagado un cobro pedido, con la referencia de la transferencia. */
+  async markCashPayoutPaid(id: string, externalReference: string): Promise<void> {
+    await apiFetch(
+      `${BASE}/admin/cash-payouts/${encodeURIComponent(id)}/paid`,
+      { method: 'POST', body: JSON.stringify({ externalReference }) },
+      withAuth(),
+    );
+  },
+
   async getConfig(): Promise<ReferralsConfig> {
     return apiFetch<ReferralsConfig>(`${BASE}/admin/config`, { method: 'GET' }, withAuth());
   },

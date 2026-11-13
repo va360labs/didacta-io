@@ -17,7 +17,19 @@ import {
   ReferralsPayoutValidationError,
   ReferralsProgramInactiveError,
   ReferralsTermsRequiredError,
+  ReferralsPayeeInvalidError,
+  ReferralsPayeeRequiredError,
+  ReferralsPayeeUnavailableError,
+  ReferralsPayoutAlreadyRequestedError,
+  ReferralsPayoutNotFoundError,
 } from './errors.js';
+import {
+  maskIban,
+  maskTaxId,
+  normalizePayee,
+  PayeeValidationError,
+  type PayeeDetails,
+} from './payee.js';
 import { deriveInviteeState, initialsOf, type InviteeState } from './invitees.js';
 
 /**
@@ -84,6 +96,24 @@ export interface ReferralsCreditPort {
  * cargo) y un cargo minúsculo deja al creador con neto negativo.
  */
 export const CREDIT_MAX_SHARE_BPS = 8000;
+
+/**
+ * Cifrado de los datos de cobro (AES-256-GCM con la clave maestra). Lo
+ * implementa el host con `SecretCipherService`: el módulo no conoce la clave.
+ */
+export interface ReferralsCipher {
+  encrypt(plaintext: string): { cipher: Buffer; iv: Buffer; tag: Buffer };
+  decrypt(payload: { cipher: Buffer; iv: Buffer; tag: Buffer }): string;
+}
+
+/** Lo que el ALUMNO ve de sus datos de cobro: enmascarado. */
+export interface PayeeMaskedView {
+  fullName: string;
+  country: string;
+  taxIdMasked: string;
+  ibanMasked: string;
+  updatedAt: Date | null;
+}
 
 /**
  * Versión vigente de las condiciones del programa («Invita y gana»). Se guarda
@@ -307,6 +337,8 @@ export class ReferralsService {
     private readonly getUserEmail: UserEmailLookup,
     /** Sin puerto (tests, instancia sin Stripe) el canje como descuento no está disponible. */
     private readonly creditPort: ReferralsCreditPort | null = null,
+    /** Sin cifrado no se guardan datos de cobro (el cobro en dinero no está disponible). */
+    private readonly cipher: ReferralsCipher | null = null,
   ) {}
 
   // ---------------- Config ----------------
@@ -1086,6 +1118,218 @@ export class ReferralsService {
     return { payoutId, totalCents, currency, count: input.commissionIds.length };
   }
 
+  // ---------------- Cobro en dinero (datos y petición) ----------------
+
+  /**
+   * Guarda (o cambia) los datos para cobrar en dinero, cifrados. Valida el
+   * formato; los errores dicen QUÉ campo falla, nunca su valor.
+   */
+  async savePayee(tenantId: string, userId: string, input: PayeeDetails): Promise<PayeeMaskedView> {
+    const cipher = this.requireCipher();
+    let details: PayeeDetails;
+    try {
+      details = normalizePayee(input);
+    } catch (err) {
+      if (err instanceof PayeeValidationError) throw new ReferralsPayeeInvalidError(err.fields);
+      throw err;
+    }
+    if (!(await this.termsStatus(tenantId, userId)).accepted) {
+      throw new ReferralsTermsRequiredError();
+    }
+    const enc = cipher.encrypt(JSON.stringify(details));
+    const now = new Date();
+    await this.prisma.modReferralsMember.update({
+      where: { tenantId_userId: { tenantId, userId } },
+      data: { payeeCipher: enc.cipher, payeeIv: enc.iv, payeeTag: enc.tag, payeeUpdatedAt: now },
+    });
+    return this.maskPayee(details, now);
+  }
+
+  /** Los datos de cobro del alumno, ENMASCARADOS (para su propia pantalla). */
+  async payeeMasked(tenantId: string, userId: string): Promise<PayeeMaskedView | null> {
+    const found = await this.readPayee(tenantId, userId);
+    return found ? this.maskPayee(found.details, found.updatedAt) : null;
+  }
+
+  /**
+   * El alumno pide el cobro en dinero de lo confirmado (APPROVED sin
+   * liquidar). Hacen falta los datos de cobro y llegar al mínimo del aula. La
+   * liquidación nace REQUESTED y reserva las comisiones (`payout_id`), así no
+   * se pueden canjear también como descuento. A lo sumo una pedida a la vez.
+   */
+  async requestCashPayout(
+    tenantId: string,
+    userId: string,
+  ): Promise<{ payoutId: string; totalCents: number; currency: string; count: number }> {
+    if (!(await this.readPayee(tenantId, userId))) throw new ReferralsPayeeRequiredError();
+    const open = await this.prisma.modReferralsPayout.findFirst({
+      where: { tenantId, referrerUserId: userId, method: 'CASH', status: 'REQUESTED' },
+      select: { id: true },
+    });
+    if (open) throw new ReferralsPayoutAlreadyRequestedError();
+    const config = await this.getConfig(tenantId);
+    try {
+      return await this.prisma.$transaction(async (tx) => {
+        const db = tx as unknown as PrismaClient;
+        const rows = await db.modReferralsCommission.findMany({
+          where: { tenantId, referrerUserId: userId, status: 'APPROVED', payoutId: null },
+          orderBy: [{ approvedAt: 'asc' }, { createdAt: 'asc' }],
+          select: { id: true, amountCents: true, currency: true },
+        });
+        // Una sola divisa por cobro: la de la comisión confirmada más antigua.
+        const currency = rows[0]?.currency;
+        const picked = rows.filter((r) => r.currency === currency);
+        const totalCents = picked.reduce((sum, r) => sum + r.amountCents, 0);
+        if (!currency || totalCents <= 0) {
+          throw new ReferralsPayoutValidationError('Todavía no tienes nada confirmado que cobrar.');
+        }
+        if (config.minPayoutCents > 0 && totalCents < config.minPayoutCents) {
+          throw new ReferralsPayoutValidationError(
+            `El total (${totalCents} cts) no llega al mínimo de cobro (${config.minPayoutCents} cts).`,
+          );
+        }
+        const payout = await db.modReferralsPayout.create({
+          data: {
+            tenantId,
+            referrerUserId: userId,
+            totalCents,
+            currency,
+            externalReference: 'pedido',
+            createdByUserId: userId,
+            method: 'CASH',
+            status: 'REQUESTED',
+          },
+        });
+        const ids = picked.map((r) => r.id);
+        const updated = await db.modReferralsCommission.updateMany({
+          where: { id: { in: ids }, tenantId, status: 'APPROVED', payoutId: null },
+          data: { payoutId: payout.id },
+        });
+        if (updated.count !== ids.length) {
+          throw new ReferralsPayoutValidationError(
+            'Lo confirmado cambió mientras lo pedías; reintenta.',
+          );
+        }
+        return { payoutId: payout.id, totalCents, currency, count: ids.length };
+      });
+    } catch (err) {
+      // El índice parcial «uno pedido por alumno»: dos peticiones a la vez.
+      if (isUniqueViolation(err)) throw new ReferralsPayoutAlreadyRequestedError();
+      throw err;
+    }
+  }
+
+  /**
+   * Cobros en dinero del aula para el CREADOR, con lo necesario para pagar:
+   * nombre, identificador fiscal e IBAN (descifrados solo aquí).
+   */
+  async listCashPayouts(tenantId: string) {
+    const rows = await this.prisma.modReferralsPayout.findMany({
+      where: { tenantId, method: 'CASH' },
+      orderBy: { createdAt: 'desc' },
+      take: 100,
+    });
+    const out = [];
+    for (const r of rows) {
+      const payee = await this.readPayee(tenantId, r.referrerUserId);
+      out.push({
+        id: r.id,
+        referrerUserId: r.referrerUserId,
+        totalCents: r.totalCents,
+        currency: r.currency,
+        status: r.status === 'REQUESTED' ? ('REQUESTED' as const) : ('DONE' as const),
+        externalReference: r.status === 'REQUESTED' ? null : r.externalReference,
+        requestedAt: r.createdAt,
+        paidAt: r.paidAt,
+        payee: payee
+          ? {
+              fullName: payee.details.fullName,
+              country: payee.details.country,
+              taxId: payee.details.taxId,
+              iban: payee.details.iban,
+            }
+          : null,
+      });
+    }
+    return out;
+  }
+
+  /**
+   * El creador marca pagado un cobro pedido: la liquidación pasa a DONE con
+   * la referencia de la transferencia y sus comisiones a PAID. Atómico.
+   */
+  async markCashPayoutPaid(
+    tenantId: string,
+    payoutId: string,
+    input: { externalReference: string; actorId: string },
+    now: Date = new Date(),
+  ): Promise<{ payoutId: string; totalCents: number; currency: string }> {
+    const reference = input.externalReference.trim();
+    if (reference.length < 3) {
+      throw new ReferralsPayoutValidationError(
+        'La referencia del pago (transferencia…) es obligatoria.',
+      );
+    }
+    const payout = await this.prisma.modReferralsPayout.findFirst({
+      where: { id: payoutId, tenantId, method: 'CASH', status: 'REQUESTED' },
+    });
+    if (!payout) throw new ReferralsPayoutNotFoundError();
+    await this.prisma.$transaction(async (tx) => {
+      const db = tx as unknown as PrismaClient;
+      const closed = await db.modReferralsPayout.updateMany({
+        where: { id: payoutId, tenantId, status: 'REQUESTED' },
+        data: { status: 'DONE', externalReference: reference, paidAt: now },
+      });
+      if (closed.count !== 1) throw new ReferralsPayoutNotFoundError();
+      await db.modReferralsCommission.updateMany({
+        where: { tenantId, payoutId, status: 'APPROVED' },
+        data: { status: 'PAID' },
+      });
+    });
+    await this.publisher.publish(tenantId, input.actorId, REFERRALS_EVENT.PAYOUT_RECORDED, {
+      payoutId,
+      referrerUserId: payout.referrerUserId,
+      totalCents: payout.totalCents,
+      currency: payout.currency,
+      externalReference: reference,
+      method: 'CASH',
+    });
+    return { payoutId, totalCents: payout.totalCents, currency: payout.currency };
+  }
+
+  private requireCipher(): ReferralsCipher {
+    if (!this.cipher) throw new ReferralsPayeeUnavailableError();
+    return this.cipher;
+  }
+
+  /** Descifra los datos de cobro del alumno (null si no los ha dado). */
+  private async readPayee(
+    tenantId: string,
+    userId: string,
+  ): Promise<{ details: PayeeDetails; updatedAt: Date | null } | null> {
+    const row = await this.prisma.modReferralsMember.findUnique({
+      where: { tenantId_userId: { tenantId, userId } },
+      select: { payeeCipher: true, payeeIv: true, payeeTag: true, payeeUpdatedAt: true },
+    });
+    if (!row?.payeeCipher || !row.payeeIv || !row.payeeTag || !this.cipher) return null;
+    const plain = this.cipher.decrypt({
+      cipher: Buffer.from(row.payeeCipher),
+      iv: Buffer.from(row.payeeIv),
+      tag: Buffer.from(row.payeeTag),
+    });
+    return { details: JSON.parse(plain) as PayeeDetails, updatedAt: row.payeeUpdatedAt };
+  }
+
+  private maskPayee(details: PayeeDetails, updatedAt: Date | null): PayeeMaskedView {
+    return {
+      fullName: details.fullName,
+      country: details.country,
+      taxIdMasked: maskTaxId(details.taxId),
+      ibanMasked: maskIban(details.iban),
+      updatedAt,
+    };
+  }
+
   // ---------------- Vistas (miembro y admin) ----------------
 
   /** Stats del área del miembro (/referidos). Datos reales, cero inventos. */
@@ -1119,13 +1363,16 @@ export class ReferralsService {
       orderBy: { createdAt: 'desc' },
       take: 20,
     });
-    const [credit, terms] = await Promise.all([
+    const [credit, terms, payee] = await Promise.all([
       this.memberCredit(tenantId, userId, config),
       this.termsStatus(tenantId, userId),
+      this.payeeMasked(tenantId, userId).catch(() => null),
     ]);
     return {
       programActive: config.active,
       terms,
+      payee,
+      cashPayoutAvailable: this.cipher !== null,
       memberCopy: config.memberCopy,
       commissionBps: config.commissionBps,
       scope: config.scope,
@@ -1155,7 +1402,13 @@ export class ReferralsService {
         currency: p.currency,
         externalReference: p.externalReference,
         method: p.method === 'CREDIT' ? ('CREDIT' as const) : ('CASH' as const),
-        status: p.status === 'PENDING' ? ('PENDING' as const) : ('DONE' as const),
+        status:
+          p.status === 'PENDING'
+            ? ('PENDING' as const)
+            : p.status === 'REQUESTED'
+              ? ('REQUESTED' as const)
+              : ('DONE' as const),
+        paidAt: p.paidAt,
         createdAt: p.createdAt,
       })),
       credit,

@@ -77,7 +77,22 @@
     },
     "verDetalle": "Ver el detalle de los referidos",
     "descuentoTitulo": "Dejar que lo usen como descuento en su cuota",
-    "descuentoTexto": "Quien tenga membresía puede restar lo que ha ganado de su próxima cuota en vez de cobrarlo aparte. Lo pagas tú: esa cuota te llega con ese descuento."
+    "descuentoTexto": "Quien tenga membresía puede restar lo que ha ganado de su próxima cuota en vez de cobrarlo aparte. Lo pagas tú: esa cuota te llega con ese descuento.",
+    "cobros": {
+      "titulo": "Cobros pedidos",
+      "texto": "Tus alumnos piden aquí cobrar lo que han ganado. Hazles la transferencia y márcalo como pagado: se genera un justificante.",
+      "vacio": "Nadie ha pedido cobrar todavía.",
+      "pedidoEl": "Pedido el {date}",
+      "referencia": "Referencia de la transferencia",
+      "marcar": "Marcar como pagado",
+      "marcando": "Guardando…",
+      "pagadoEl": "Pagado el {date} · {ref}",
+      "sinDatos": "Sin datos de cobro",
+      "nif": "NIF",
+      "iban": "IBAN",
+      "error": "No se ha podido guardar. Vuelve a intentarlo.",
+      "justificante": "Justificante"
+    }
   },
   "propias": {
     "titulo": "Ventas",

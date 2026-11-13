@@ -4052,11 +4052,19 @@ model ModReferralsConfig {
 /// Alumno del programa: aceptación de las condiciones (mayor de 18 y versión
 /// aceptada). Sin aceptación no hay enlace ni se atribuyen comisiones.
 model ModReferralsMember {
+  /// Identificador de fila (lo usa la rotación de la clave de cifrado).
+  id              String    @unique @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   tenantId        String    @map("tenant_id") @db.Uuid
   userId          String    @map("user_id") @db.Uuid
   /// Versión de las condiciones aceptada (`REFERRAL_TERMS_VERSION`).
   termsVersion    String?   @map("terms_version")
   termsAcceptedAt DateTime? @map("terms_accepted_at")
+  /// Datos para cobrar en dinero (nombre, identificador fiscal, IBAN) en JSON
+  /// cifrado con AES-256-GCM (la clave maestra; la rota `rotate-cipher-key`).
+  payeeCipher     Bytes?    @map("payee_cipher")
+  payeeIv         Bytes?    @map("payee_iv")
+  payeeTag        Bytes?    @map("payee_tag")
+  payeeUpdatedAt  DateTime? @map("payee_updated_at")
   createdAt       DateTime  @default(now()) @map("created_at")
   updatedAt       DateTime  @updatedAt @map("updated_at")
 
@@ -4195,6 +4203,8 @@ model ModReferralsPayout {
   /// CREDIT: cliente de Stripe (`cus_…`) al que se abona. Un reintento usa el
   /// mismo cliente y la misma clave de idempotencia (el id de esta fila).
   stripeCustomerId  String?  @map("stripe_customer_id")
+  /// Cobro en dinero: cuándo lo marcó pagado el creador (pedido = `created_at`).
+  paidAt            DateTime? @map("paid_at")
   createdAt         DateTime @default(now()) @map("created_at")
 
   commissions ModReferralsCommission[]

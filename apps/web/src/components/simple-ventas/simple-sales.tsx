@@ -25,6 +25,7 @@ import {
   type PayoutsSummaryDto,
 } from '@/lib/payouts';
 import { referralsAdminApi, type AdminCommissionRow, type ReferralsConfig } from '@/lib/referrals';
+import { CashPayoutsAdmin } from './cash-payouts-admin';
 import { fetchTenantContext } from '@/lib/tenant-context';
 import { getPublicCatalog } from '@/lib/catalog';
 import { parseAmount, saleState, simpleModeApi, type StartHereView } from '@/lib/simple-mode';
@@ -790,6 +791,7 @@ function ReferralsSection() {
           </Link>
         </div>
       ) : null}
+      {moduleOn && config ? <CashPayoutsAdmin /> : null}
     </section>
   );
 }
