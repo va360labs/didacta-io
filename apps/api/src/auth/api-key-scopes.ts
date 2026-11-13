@@ -4,6 +4,7 @@
  */
 
 import { ForbiddenException, UnauthorizedException } from '@nestjs/common';
+import { AGENT_SCOPES } from '../agent/agent-scopes';
 import type { SessionClaims } from './token.service';
 
 /**
@@ -34,6 +35,9 @@ export const ALLOWED_API_KEY_SCOPES = [
   'community:post',
   'orders:write',
   'orders:read',
+  // Puerta de agentes (servidor MCP del aula). Ver `agent/agent-scopes.ts`:
+  // ahí está qué concede cada uno y, sobre todo, lo que NO conceden.
+  ...AGENT_SCOPES,
 ] as const;
 export type ApiKeyScope = (typeof ALLOWED_API_KEY_SCOPES)[number];
 

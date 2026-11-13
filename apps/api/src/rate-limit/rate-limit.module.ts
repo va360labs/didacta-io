@@ -102,7 +102,9 @@ const redisProvider: FactoryProvider<RateLimitRedisClient | null> = {
       useClass: RateLimitInterceptor,
     },
   ],
-  exports: [RateLimitService],
+  // El token de Redis se exporta para el límite por clave de la puerta de
+  // agentes (`AgentRateLimiter`): misma conexión dedicada, otro contador.
+  exports: [RateLimitService, RATE_LIMIT_REDIS_TOKEN],
 })
 export class RateLimitModule {
   static forRoot(): DynamicModule {

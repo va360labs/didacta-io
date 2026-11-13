@@ -8,6 +8,7 @@ import { LoggerModule } from 'nestjs-pino';
 import { PrometheusModule } from '@willsoto/nestjs-prometheus';
 import { LicenseModule } from '@didacta/license-sdk';
 import { AdminModule } from './admin/admin.module';
+import { AgentModule } from './agent/agent.module';
 import { ModerationModule } from './moderation/moderation.module';
 import { AiModule } from './ai/ai.module';
 import { AuthModule } from './auth/auth.module';
@@ -107,6 +108,10 @@ import { WebhooksModule } from './webhooks/webhooks.module';
     SetupModule,
     // Modo sencillo del aula (Didacta Cloud): alta en 3 preguntas y «Empieza aquí».
     SimpleModeModule,
+    // Puerta de agentes: servidor MCP del aula (`/api/v1/mcp`) y la clave del
+    // panel «Hazlo más rápido con tu agente de IA». Orquesta los servicios
+    // públicos de los módulos, como SimpleModeModule.
+    AgentModule,
     PublicModule,
     // Endpoints transversales (proxy a Docker Hub para "versión nueva", etc.).
     SystemModule,
