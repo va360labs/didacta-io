@@ -8,3 +8,48 @@
 08adfab2052529bb12cf70f483bf3323a6500d2b:apps/api/tests/video-protection.test.ts:generic-api-key:55
 08adfab2052529bb12cf70f483bf3323a6500d2b:apps/api/tests/video-protection.test.ts:generic-api-key:57
 08adfab2052529bb12cf70f483bf3323a6500d2b:apps/api/tests/video-protection.test.ts:generic-api-key:99
+
+# Cobros de plataforma, vídeo de Cloud y contrato con Cloud (beta.14): claves
+# y secretos INVENTADOS de los tests (sk_test_inventada…, sk_test_deInstancia…,
+# rk_live_claveInventada…, whsec_operador_e4_integracion…, api-key-de-la-
+# biblioteca-0001…). Revisados uno a uno: ninguno es una credencial real. Solo
+# en ficheros de test; los nuevos deben llevar «de-prueba» (allowlist).
+00c66cb7c86dec19d44c97f43fa3da5d06ae8eaf:apps/api/tests/integration/payouts-settlement.integration.test.ts:generic-api-key:54
+00c66cb7c86dec19d44c97f43fa3da5d06ae8eaf:apps/api/tests/integration/payouts-settlement.integration.test.ts:stripe-access-token:56
+19b489ae5855c76fde7c84aca931e1105d62326b:modules/payouts/tests/platform-stripe.client.test.ts:stripe-access-token:23
+19b489ae5855c76fde7c84aca931e1105d62326b:modules/payouts/tests/platform-stripe.client.test.ts:stripe-access-token:383
+3631bb5eb9a051011ef924243a14c6ea45b97759:apps/api/tests/video-cloud-config.test.ts:generic-api-key:25
+4761ac23b4deaf6a0d52249ab063507e208531a7:apps/api/tests/integration/payouts-invoices.integration.test.ts:stripe-access-token:55
+62803f4ea044c77487e0c33b718a54cbf11a5959:apps/api/tests/contract/admin-tenants.contract.test.ts:generic-api-key:613
+62803f4ea044c77487e0c33b718a54cbf11a5959:apps/api/tests/payouts-webhook.controller.test.ts:stripe-access-token:256
+62803f4ea044c77487e0c33b718a54cbf11a5959:apps/api/tests/payouts-webhook.controller.test.ts:stripe-access-token:260
+63c0e821655cdba1b477bcae34345929a221e9a8:apps/api/tests/integration/payouts-membership.integration.test.ts:generic-api-key:48
+63c0e821655cdba1b477bcae34345929a221e9a8:apps/api/tests/integration/payouts-membership.integration.test.ts:stripe-access-token:50
+88f7cd1ecfb5248818d99ab6b9cd82c98263e2ee:apps/api/tests/integration/payouts-losses.integration.test.ts:stripe-access-token:63
+a20eecfc9f5fa17ec0ca6de30ea3e1b88c4a7b62:apps/api/tests/integration/platform-webhook-tenant-isolation.integration.test.ts:stripe-access-token:63
+a8e49eef4a34221047a2f98cfe63b1b378de06fc:apps/api/tests/integration/payouts-losses.integration.test.ts:generic-api-key:56
+a8e49eef4a34221047a2f98cfe63b1b378de06fc:apps/api/tests/integration/payouts-losses.integration.test.ts:stripe-access-token:58
+bc2c6da7b7c127509ba0dc040e9ed2315c178012:apps/api/tests/integration/payouts-membership-losses.integration.test.ts:generic-api-key:59
+bc2c6da7b7c127509ba0dc040e9ed2315c178012:apps/api/tests/integration/payouts-membership-losses.integration.test.ts:stripe-access-token:61
+be057b98b0ff6b3f0ee4bb9de612c5cf96edddc4:apps/api/tests/integration/payouts-foundations.integration.test.ts:stripe-access-token:1024
+be057b98b0ff6b3f0ee4bb9de612c5cf96edddc4:apps/api/tests/integration/payouts-foundations.integration.test.ts:stripe-access-token:805
+be057b98b0ff6b3f0ee4bb9de612c5cf96edddc4:apps/api/tests/integration/payouts-foundations.integration.test.ts:stripe-access-token:915
+be057b98b0ff6b3f0ee4bb9de612c5cf96edddc4:apps/api/tests/integration/payouts-foundations.integration.test.ts:stripe-access-token:935
+be057b98b0ff6b3f0ee4bb9de612c5cf96edddc4:apps/api/tests/integration/payouts-foundations.integration.test.ts:stripe-access-token:967
+be057b98b0ff6b3f0ee4bb9de612c5cf96edddc4:apps/api/tests/platform-payments.config.test.ts:stripe-access-token:29
+be057b98b0ff6b3f0ee4bb9de612c5cf96edddc4:modules/payouts/tests/platform-stripe.client.test.ts:stripe-access-token:23
+c862d476db1fc67f7a19d9aebed613695876619f:apps/api/tests/integration/payouts-foundations.integration.test.ts:generic-api-key:1025
+c862d476db1fc67f7a19d9aebed613695876619f:apps/api/tests/integration/payouts-foundations.integration.test.ts:generic-api-key:916
+c862d476db1fc67f7a19d9aebed613695876619f:apps/api/tests/integration/payouts-foundations.integration.test.ts:generic-api-key:936
+c862d476db1fc67f7a19d9aebed613695876619f:apps/api/tests/integration/payouts-foundations.integration.test.ts:stripe-access-token:1024
+c862d476db1fc67f7a19d9aebed613695876619f:apps/api/tests/integration/payouts-foundations.integration.test.ts:stripe-access-token:805
+c862d476db1fc67f7a19d9aebed613695876619f:apps/api/tests/integration/payouts-foundations.integration.test.ts:stripe-access-token:915
+c862d476db1fc67f7a19d9aebed613695876619f:apps/api/tests/integration/payouts-foundations.integration.test.ts:stripe-access-token:935
+c862d476db1fc67f7a19d9aebed613695876619f:apps/api/tests/integration/payouts-foundations.integration.test.ts:stripe-access-token:967
+c862d476db1fc67f7a19d9aebed613695876619f:apps/api/tests/payment-mode.resolver.test.ts:stripe-access-token:191
+c862d476db1fc67f7a19d9aebed613695876619f:apps/api/tests/payment-mode.resolver.test.ts:stripe-access-token:35
+c862d476db1fc67f7a19d9aebed613695876619f:apps/api/tests/payment-mode.resolver.test.ts:stripe-access-token:40
+c862d476db1fc67f7a19d9aebed613695876619f:apps/api/tests/payment-mode.resolver.test.ts:stripe-access-token:47
+c862d476db1fc67f7a19d9aebed613695876619f:apps/api/tests/platform-payments.config.test.ts:generic-api-key:31
+c862d476db1fc67f7a19d9aebed613695876619f:apps/api/tests/platform-payments.config.test.ts:stripe-access-token:133
+c862d476db1fc67f7a19d9aebed613695876619f:apps/api/tests/platform-payments.config.test.ts:stripe-access-token:29
