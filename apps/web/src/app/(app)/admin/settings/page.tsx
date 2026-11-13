@@ -6,6 +6,7 @@
  */
 
 import { SimpleSettings } from '@/components/simple-gestion/simple-settings';
+import { BackToSimpleModeCard } from '@/components/simple-gestion/back-to-simple';
 import { wantsFullSettings } from '@/components/simple-gestion/helpers';
 import { useSimpleMode } from '@/lib/simple-mode';
 import { useEffect, useState, type FormEvent } from 'react';
@@ -259,6 +260,8 @@ function ConfiguracionCompleta() {
         <h1 className="font-display text-2xl font-bold tracking-tight">{t('config.title')}</h1>
         <p className="mt-1 max-w-3xl text-text-muted">{t('config.description')}</p>
       </header>
+
+      <BackToSimpleModeCard />
 
       {error ? (
         <div
