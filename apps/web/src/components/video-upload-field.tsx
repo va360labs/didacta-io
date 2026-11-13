@@ -6,49 +6,68 @@
  */
 
 import { useTranslations } from 'next-intl';
-import { useEffect, useRef, useState, type DragEvent } from 'react';
+import { useRef, useState, type DragEvent } from 'react';
 import { Icon } from '@/components/icon';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { useQuotaLines } from '@/components/video-quota';
-import { ApiHttpError } from '@/lib/api-client';
 import { apiErrorMessage } from '@/lib/i18n/api-error';
+import { useVideoQuota, useVideoUpload, type UploadProblem } from '@/lib/use-video-upload';
 import { formatSeconds } from '@/lib/video';
 import {
   formatBytes,
   formatDuration,
   formatUsedDuration,
-  preflight,
-  readVideoDuration,
-  startTusUpload,
-  videoUploadApi,
-  type UploadHandle,
   type VideoAsset,
   type VideoQuota,
 } from '@/lib/video-upload';
 
-type Phase =
-  | { kind: 'idle' }
-  | { kind: 'reading' }
-  | { kind: 'preparing' }
-  | {
-      kind: 'uploading';
-      asset: VideoAsset;
-      sent: number;
-      total: number;
-      paused: boolean;
-      cut: boolean;
-    };
-
-const POLL_MS = 5000;
+/** El motivo de un fallo de subida, en llano (lo usan los dos editores). */
+export function useUploadProblemText(): (problem: UploadProblem) => string {
+  const t = useTranslations('formadorCursos.videoUpload');
+  const tErrors = useTranslations('errors');
+  return (p) => {
+    switch (p.kind) {
+      case 'noDuration':
+        return t('errors.noDuration');
+      case 'notVideo':
+        return t('errors.notVideo');
+      case 'tooBig':
+        return t('errors.tooBig', {
+          size: formatBytes(p.sizeBytes),
+          limit: formatBytes(p.limitBytes),
+        });
+      case 'tooLong':
+        return t('errors.tooLong', {
+          duration: formatUsedDuration(p.durationSeconds),
+          limit: formatDuration(p.limitSeconds),
+        });
+      case 'noRoom':
+        return t('errors.noRoom', {
+          duration: formatUsedDuration(p.durationSeconds),
+          free: formatDuration(p.freeSeconds),
+        });
+      case 'api':
+        return apiErrorMessage(p.error, tErrors);
+      case 'failed':
+        return p.reason === 'tooLong'
+          ? t('failed.tooLong', { limit: formatDuration(p.limitSeconds) })
+          : t(`failed.${p.reason}`);
+      default:
+        return t('errors.generic');
+    }
+  };
+}
 
 /**
- * «Subir vídeo» en el editor de una lección de vídeo: arrastrar o elegir el
- * fichero, progreso con pausa y reanudar, y el estado del procesado. Al
- * terminar de subir, rellena el enlace de la lección con el del vídeo subido.
+ * «Subir vídeo» en el editor de una lección de vídeo (modo completo):
+ * arrastrar o elegir el fichero, progreso con pausa y reanudar, y el estado
+ * del procesado. Al terminar de subir, rellena el enlace de la lección con el
+ * del vídeo subido.
  *
  * Si la academia no tiene subida de vídeo (sin Didacta Cloud) no pinta nada y
- * el editor se queda solo con el campo del enlace, como siempre.
+ * el editor se queda solo con el campo del enlace, como siempre. El modo
+ * sencillo tiene su propia maqueta (`SimpleVideoField`) sobre la misma lógica.
  */
 export function VideoUploadField({
   lessonId,
@@ -67,212 +86,32 @@ export function VideoUploadField({
   onDuration?: (minutes: number) => void;
 }) {
   const t = useTranslations('formadorCursos.videoUpload');
-  const tErrors = useTranslations('errors');
-  const [quota, setQuota] = useState<VideoQuota | null>(null);
-  // La subida en curso (si la hay) y, aparte, el vídeo subido que enseña la
-  // ficha: un error al intentar sustituirlo no hace desaparecer el que hay.
-  const [phase, setPhase] = useState<Phase>({ kind: 'idle' });
-  const [current, setCurrent] = useState<VideoAsset | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const problemText = useUploadProblemText();
+  const { state, refresh } = useVideoQuota();
+  const quota = state.kind === 'on' ? state.quota : null;
+  const up = useVideoUpload({
+    quota,
+    refreshQuota: refresh,
+    lessonId,
+    videoUrl,
+    savedVideoUrl,
+    onVideoUrl,
+    onDuration,
+  });
   const [dragging, setDragging] = useState(false);
-  const handle = useRef<UploadHandle | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-  const mounted = useRef(true);
-
-  useEffect(() => {
-    mounted.current = true;
-    let cancelled = false;
-    void (async () => {
-      const q = await videoUploadApi.quota().catch(() => null);
-      if (cancelled || !q) return;
-      setQuota(q);
-      // ¿La lección ya usa un vídeo subido? Se enseña su estado.
-      const assets = await videoUploadApi.listForLesson(lessonId).catch(() => []);
-      const found = assets.find((a) => a.embedUrl === savedVideoUrl);
-      if (cancelled || !found) return;
-      if (
-        found.status === 'READY' ||
-        found.status === 'PROCESSING' ||
-        found.status === 'UPLOADING'
-      ) {
-        setCurrent(found);
-      }
-    })();
-    return () => {
-      cancelled = true;
-      mounted.current = false;
-      void handle.current?.abort();
-    };
-    // Solo al abrir la lección.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lessonId]);
-
-  // Mientras se procesa, se pregunta cada 5 s.
-  const processingId =
-    current && (current.status === 'PROCESSING' || current.status === 'UPLOADING')
-      ? current.id
-      : null;
-  useEffect(() => {
-    if (!processingId) return;
-    const timer = window.setInterval(() => {
-      void videoUploadApi
-        .get(processingId)
-        .then((asset) => {
-          if (!mounted.current) return;
-          if (asset.status === 'READY') {
-            setCurrent(asset);
-            if (asset.durationSeconds) {
-              onDuration?.(Math.max(1, Math.round(asset.durationSeconds / 60)));
-            }
-            void refreshQuota();
-          } else if (asset.status === 'FAILED' || asset.status === 'DELETED') {
-            setCurrent(null);
-            setError(failureMessage(asset));
-            if (videoUrl === asset.embedUrl) onVideoUrl('');
-            void refreshQuota();
-          }
-        })
-        .catch(() => undefined);
-    }, POLL_MS);
-    return () => window.clearInterval(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [processingId]);
-
-  async function refreshQuota() {
-    const q = await videoUploadApi.quota().catch(() => null);
-    if (q && mounted.current) setQuota(q);
-  }
-
-  function failureMessage(asset: VideoAsset): string {
-    switch (asset.failureReason) {
-      case 'too_long':
-        return t('failed.tooLong', { limit: formatDuration(quota?.maxFileSeconds ?? 7200) });
-      case 'quota':
-        return t('failed.quota');
-      case 'upload_failed':
-        return t('failed.uploadFailed');
-      case 'abandoned':
-        return t('failed.abandoned');
-      default:
-        return t('failed.encoding');
-    }
-  }
-
-  async function handleFile(file: File) {
-    if (!quota) return;
-    setError(null);
-    setPhase({ kind: 'reading' });
-    const duration = await readVideoDuration(file);
-    if (duration === null) {
-      setPhase({ kind: 'idle' });
-      setError(t('errors.noDuration'));
-      return;
-    }
-    const problem = preflight(file, duration, quota);
-    if (problem) {
-      setPhase({ kind: 'idle' });
-      if (problem.kind === 'not_video') setError(t('errors.notVideo'));
-      else if (problem.kind === 'too_big') {
-        setError(
-          t('errors.tooBig', {
-            size: formatBytes(file.size),
-            limit: formatBytes(problem.limitBytes),
-          }),
-        );
-      } else if (problem.kind === 'too_long') {
-        setError(
-          t('errors.tooLong', {
-            duration: formatUsedDuration(duration),
-            limit: formatDuration(problem.limitSeconds),
-          }),
-        );
-      } else {
-        setError(
-          t('errors.noRoom', {
-            duration: formatUsedDuration(duration),
-            free: formatDuration(Math.max(0, quota.stored.limitSeconds - quota.stored.usedSeconds)),
-          }),
-        );
-      }
-      return;
-    }
-
-    setPhase({ kind: 'preparing' });
-    let created: Awaited<ReturnType<typeof videoUploadApi.create>>;
-    try {
-      created = await videoUploadApi.create({
-        lessonId,
-        fileName: file.name,
-        mimeType: file.type,
-        sizeBytes: file.size,
-        durationSeconds: duration,
-      });
-    } catch (e) {
-      setPhase({ kind: 'idle' });
-      setError(e instanceof ApiHttpError ? apiErrorMessage(e, tErrors) : t('errors.generic'));
-      void refreshQuota();
-      return;
-    }
-    const { asset, upload } = created;
-    void refreshQuota();
-    setPhase({ kind: 'uploading', asset, sent: 0, total: file.size, paused: false, cut: false });
-    handle.current = await startTusUpload({
-      file,
-      assetId: asset.id,
-      ticket: upload,
-      onProgress: (sent, total) => {
-        if (!mounted.current) return;
-        setPhase((p) =>
-          p.kind === 'uploading' && p.asset.id === asset.id ? { ...p, sent, total, cut: false } : p,
-        );
-      },
-      onSuccess: () => {
-        handle.current = null;
-        if (!mounted.current) return;
-        onVideoUrl(asset.embedUrl);
-        setCurrent({ ...asset, status: 'PROCESSING' });
-        setPhase({ kind: 'idle' });
-      },
-      onError: () => {
-        if (!mounted.current) return;
-        setPhase((p) => (p.kind === 'uploading' ? { ...p, paused: true, cut: true } : p));
-      },
-    });
-  }
-
-  function pause() {
-    handle.current?.pause();
-    setPhase((p) => (p.kind === 'uploading' ? { ...p, paused: true } : p));
-  }
-
-  function resume() {
-    handle.current?.resume();
-    setPhase((p) => (p.kind === 'uploading' ? { ...p, paused: false, cut: false } : p));
-  }
-
-  async function cancel() {
-    if (phase.kind !== 'uploading') return;
-    const id = phase.asset.id;
-    await handle.current?.abort();
-    handle.current = null;
-    setPhase({ kind: 'idle' });
-    await videoUploadApi.remove(id).catch(() => undefined);
-    void refreshQuota();
-  }
+  const { phase, current: shown, attached, busy } = up;
 
   function onDrop(e: DragEvent<HTMLLabelElement>) {
     e.preventDefault();
     setDragging(false);
     const file = e.dataTransfer.files?.[0];
-    if (file) void handleFile(file);
+    if (file) void up.handleFile(file);
   }
 
   if (!quota) return null;
 
-  const busy = phase.kind === 'reading' || phase.kind === 'preparing' || phase.kind === 'uploading';
   const inputId = `video-upload-${lessonId}`;
-  const shown = current;
-  const attached = shown !== null && videoUrl === shown.embedUrl;
 
   return (
     <div className="space-y-3" data-testid="video-upload">
@@ -314,16 +153,16 @@ export function VideoUploadField({
           </p>
           <div className="flex flex-wrap gap-2">
             {phase.paused ? (
-              <Button type="button" size="sm" onClick={resume}>
+              <Button type="button" size="sm" onClick={up.resume}>
                 <Icon name="play" size={13} />
                 {t('resume')}
               </Button>
             ) : (
-              <Button type="button" size="sm" variant="outline" onClick={pause}>
+              <Button type="button" size="sm" variant="outline" onClick={up.pause}>
                 {t('pause')}
               </Button>
             )}
-            <Button type="button" size="sm" variant="ghost" onClick={() => void cancel()}>
+            <Button type="button" size="sm" variant="ghost" onClick={() => void up.cancel()}>
               {t('cancel')}
             </Button>
           </div>
@@ -376,16 +215,16 @@ export function VideoUploadField({
         onChange={(e) => {
           const file = e.target.files?.[0];
           e.target.value = '';
-          if (file) void handleFile(file);
+          if (file) void up.handleFile(file);
         }}
       />
 
-      {error ? (
+      {up.problem ? (
         <div
           role="alert"
           className="rounded-md border border-danger-100 bg-danger-50 p-2 text-xs text-danger-700"
         >
-          {error}
+          {problemText(up.problem)}
         </div>
       ) : null}
     </div>

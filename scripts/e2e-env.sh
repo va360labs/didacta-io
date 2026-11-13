@@ -161,6 +161,21 @@
 : "${E2E_STRIPE_DOUBLE_PORT:=12111}"
 : "${STRIPE_TEST_API_URL:=http://127.0.0.1:${E2E_STRIPE_DOUBLE_PORT}}"
 
+# Subida de vídeo de Didacta Cloud contra el doble de Bunny Stream
+# (apps/e2e/helpers/bunny-double.ts): con BUNNY_STREAM_API_KEY la API registra
+# las rutas de subida, como en Cloud. Claves de mentira; el spec que sube
+# levanta el doble en este puerto y comprueba la firma TUS con esta clave.
+# El navegador sube por https (la CSP de la web solo deja https:) a un host
+# .test que el spec desvía al doble (routeTusToDouble).
+: "${E2E_BUNNY_DOUBLE_PORT:=12112}"
+: "${BUNNY_STREAM_API_KEY:=e2e-bunny-api-key-de-prueba}"
+: "${BUNNY_STREAM_LIBRARY_ID:=990011}"
+: "${BUNNY_STREAM_CDN_HOSTNAME:=vz-e2e-doble.b-cdn.net}"
+: "${BUNNY_STREAM_TOKEN_KEY:=e2e-bunny-token-key-de-prueba}"
+: "${BUNNY_STREAM_WEBHOOK_SECRET:=e2e-bunny-solo-lectura-de-prueba}"
+: "${BUNNY_STREAM_API_BASE_URL:=http://127.0.0.1:${E2E_BUNNY_DOUBLE_PORT}}"
+: "${BUNNY_STREAM_TUS_ENDPOINT:=https://tus.bunny-doble.test/tusupload}"
+
 E2E_ENV_VARS="
 DATABASE_URL REDIS_URL
 E2E_PG_CONTAINER E2E_PG_USER E2E_PG_DB E2E_PG_PORT
@@ -175,6 +190,8 @@ E2E_TENANT_SLUG E2E_ADMIN_EMAIL E2E_ADMIN_PASSWORD
 E2E_WEBHOOK_SECRET STRIPE_SECRET_KEY STRIPE_WEBHOOK_SECRET
 SUBSCRIPTIONS_WEBHOOK_SECRET E2E_STRIPE_WEBHOOK_SECRET E2E_BILLING_WEBHOOK_SECRET
 STRIPE_ALLOW_GLOBAL_FALLBACK ZOOM_ALLOW_STUB E2E_STRIPE_DOUBLE_PORT STRIPE_TEST_API_URL
+E2E_BUNNY_DOUBLE_PORT BUNNY_STREAM_API_KEY BUNNY_STREAM_LIBRARY_ID BUNNY_STREAM_CDN_HOSTNAME
+BUNNY_STREAM_TOKEN_KEY BUNNY_STREAM_WEBHOOK_SECRET BUNNY_STREAM_API_BASE_URL BUNNY_STREAM_TUS_ENDPOINT
 "
 
 # shellcheck disable=SC2086

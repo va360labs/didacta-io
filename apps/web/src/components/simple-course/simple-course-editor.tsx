@@ -10,10 +10,11 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import { useTranslations } from 'next-intl';
 import { Icon, type IconName } from '@/components/icon';
-import { VideoUploadField } from '@/components/video-upload-field';
 import { coursesApi, type CourseDetail, type CourseLesson, type LessonType } from '@/lib/courses';
 import { storageApi } from '@/lib/storage';
+import { useVideoQuota, useVideoUpload, type VideoQuotaState } from '@/lib/use-video-upload';
 import { cn } from '@/lib/utils';
+import { SimpleVideoField } from './simple-video-field';
 import { toSlug } from './slug';
 
 type SimpleKind = 'VIDEO' | 'TEXT' | 'PDF';
@@ -28,6 +29,19 @@ const KINDS: Array<{
   { kind: 'TEXT', icon: 'file', label: 'texto', help: 'textoAyuda' },
   { kind: 'PDF', icon: 'download-cloud', label: 'archivo', help: 'archivoAyuda' },
 ];
+
+/**
+ * Título de la lección a partir del nombre del fichero, si la creadora aún no
+ * le ha puesto uno: «espresso-basics_final.mp4» → «espresso basics final».
+ */
+export function titleFromFileName(name: string): string {
+  const words = name
+    .replace(/\.[a-z0-9]{1,5}$/i, '')
+    .replace(/[_-]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return (words || name).slice(0, 200);
+}
 
 /** ¿Tiene contenido la lección? (misma regla que «Empieza aquí» en el servidor). */
 export function lessonReady(lesson: Pick<CourseLesson, 'type' | 'content'>): boolean {
@@ -57,6 +71,9 @@ export function SimpleCourseEditor({ courseId }: { courseId: string }) {
     search?.get('anadir') === '1' ? 'choose' : null,
   );
   const [editing, setEditing] = useState<string | null>(null);
+  // ¿Puede el aula subir vídeos? Se pregunta una vez para el selector y los
+  // formularios: si no puede, «Vídeo» lo dice en vez de esconder la subida.
+  const video = useVideoQuota();
 
   const load = useCallback(async () => {
     try {
@@ -189,7 +206,11 @@ export function SimpleCourseEditor({ courseId }: { courseId: string }) {
                       : 'TEXT') as SimpleKind
                   }
                   lesson={lesson}
-                  onCancel={() => setEditing(null)}
+                  video={video}
+                  onCancel={async (changed) => {
+                    setEditing(null);
+                    if (changed) await load();
+                  }}
                   onSaved={async () => {
                     setEditing(null);
                     await load();
@@ -250,7 +271,11 @@ export function SimpleCourseEditor({ courseId }: { courseId: string }) {
                   </span>
                   <span>
                     <span className="block font-bold text-text">{t(k.label)}</span>
-                    <span className="block text-sm text-text-muted">{t(k.help)}</span>
+                    <span className="block text-sm text-text-muted">
+                      {k.kind === 'VIDEO' && video.state.kind === 'off'
+                        ? t('subida.ayudaSoloEnlace')
+                        : t(k.help)}
+                    </span>
                   </span>
                 </button>
               ))}
@@ -268,7 +293,14 @@ export function SimpleCourseEditor({ courseId }: { courseId: string }) {
             <LessonForm
               kind={adding}
               getModuleId={moduleId}
-              onCancel={() => setAdding(null)}
+              video={video}
+              onCancel={async (changed) => {
+                setAdding(null);
+                if (changed) {
+                  await load();
+                  window.dispatchEvent(new Event('didacta:empieza-cambio'));
+                }
+              }}
               onSaved={async () => {
                 setAdding(null);
                 await load();
@@ -295,13 +327,16 @@ function LessonForm({
   kind,
   lesson,
   getModuleId,
+  video,
   onCancel,
   onSaved,
 }: {
   kind: SimpleKind;
   lesson?: CourseLesson;
   getModuleId?: () => Promise<string>;
-  onCancel: () => void;
+  video: { state: VideoQuotaState; refresh: () => Promise<void> };
+  /** `changed`: la lección se ha creado o cambiado aunque no se pulse «Guardar». */
+  onCancel: (changed: boolean) => Promise<void> | void;
   onSaved: () => Promise<void>;
 }) {
   const t = useTranslations('modoSencillo.curso');
@@ -309,27 +344,86 @@ function LessonForm({
   const [title, setTitle] = useState(lesson?.title ?? '');
   const [text, setText] = useState(c.text ?? '');
   const [videoUrl, setVideoUrl] = useState(c.videoUrl ?? '');
+  const [savedVideoUrl, setSavedVideoUrl] = useState(c.videoUrl ?? '');
   const [pdfUrl, setPdfUrl] = useState(c.pdfUrl ?? '');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // Para subir un vídeo directo hace falta la lección: se crea al elegir «Vídeo».
+  // Una lección NUEVA de vídeo no existe hasta que se elige el fichero (subir
+  // exige la lección). Antes se creaba al pulsar «Vídeo» y, si se cancelaba,
+  // quedaba una lección «Vídeo» vacía en el curso.
   const [lessonId, setLessonId] = useState<string | null>(lesson?.id ?? null);
+  const lessonRef = useRef<string | null>(lesson?.id ?? null);
+  const createdHere = useRef(false);
+  const titleRef = useRef(title);
+  titleRef.current = title;
   const fileRef = useRef<HTMLInputElement>(null);
-  const creating = useRef(false);
 
-  useEffect(() => {
-    if (kind !== 'VIDEO' || lessonId || !getModuleId || creating.current) return;
-    creating.current = true;
-    void (async () => {
+  const isVideo = kind === 'VIDEO';
+  const quota = isVideo && video.state.kind === 'on' ? video.state.quota : null;
+
+  async function ensureLessonId(file: File): Promise<string> {
+    if (lessonRef.current) return lessonRef.current;
+    const name = titleRef.current.trim() || titleFromFileName(file.name);
+    if (!titleRef.current.trim()) setTitle(name);
+    const mid = await getModuleId!();
+    const created = await coursesApi.addLesson(mid, { type: 'VIDEO', title: name });
+    lessonRef.current = created.id;
+    createdHere.current = true;
+    setLessonId(created.id);
+    return created.id;
+  }
+
+  const upload = useVideoUpload({
+    quota,
+    refreshQuota: video.refresh,
+    lessonId: isVideo ? lessonId : null,
+    ensureLessonId,
+    videoUrl,
+    savedVideoUrl,
+    onVideoUrl: setVideoUrl,
+    // Subido = guardado en la lección: quien no pulse «Guardar» no lo pierde.
+    onUploaded: async (asset, id) => {
       try {
-        const mid = await getModuleId();
-        const created = await coursesApi.addLesson(mid, { type: 'VIDEO', title: t('video') });
-        setLessonId(created.id);
+        await coursesApi.updateLesson(id, {
+          title: titleRef.current.trim() || asset.title,
+          content: { videoUrl: asset.embedUrl },
+        });
+        setSavedVideoUrl(asset.embedUrl);
+        window.dispatchEvent(new Event('didacta:empieza-cambio'));
       } catch {
         setError(t('error'));
       }
-    })();
-  }, [kind, lessonId, getModuleId, t]);
+    },
+    onDuration: (minutes) => {
+      const id = lessonRef.current;
+      if (id) void coursesApi.updateLesson(id, { durationMinutes: minutes }).catch(() => undefined);
+    },
+  });
+
+  async function removeUploaded() {
+    setVideoUrl('');
+    const id = lessonRef.current;
+    if (!id) return;
+    try {
+      await coursesApi.updateLesson(id, { content: { videoUrl: '' } });
+      setSavedVideoUrl('');
+    } catch {
+      setError(t('error'));
+    }
+  }
+
+  async function cancel() {
+    // Una subida a medias se cancela de verdad (y libera el espacio).
+    if (upload.phase.kind === 'uploading') await upload.cancel();
+    const id = lessonRef.current;
+    // La lección que se creó aquí para subir y se quedó sin vídeo, fuera.
+    if (createdHere.current && id && !savedVideoUrl) {
+      await coursesApi.deleteLesson(id).catch(() => undefined);
+      await onCancel(true);
+      return;
+    }
+    await onCancel(createdHere.current);
+  }
 
   async function uploadPdf(file: File) {
     try {
@@ -342,10 +436,10 @@ function LessonForm({
 
   async function submit(e: FormEvent) {
     e.preventDefault();
-    if (!title.trim()) return;
+    if (!title.trim() || upload.busy) return;
     setSaving(true);
     setError(null);
-    const content = kind === 'TEXT' ? { text } : kind === 'VIDEO' ? { videoUrl } : { pdfUrl };
+    const content = kind === 'TEXT' ? { text } : isVideo ? { videoUrl } : { pdfUrl };
     try {
       if (lessonId) {
         await coursesApi.updateLesson(lessonId, { title: title.trim(), content });
@@ -390,29 +484,16 @@ function LessonForm({
             className="mt-1.5 w-full rounded-xl border border-border bg-surface p-4 text-base text-text outline-none focus:border-brand-600 focus:ring-4 focus:ring-brand-100"
           />
         </div>
-      ) : kind === 'VIDEO' ? (
-        <div className="grid gap-3">
-          {lessonId ? (
-            <VideoUploadField
-              lessonId={lessonId}
-              videoUrl={videoUrl}
-              savedVideoUrl={c.videoUrl ?? ''}
-              onVideoUrl={setVideoUrl}
-            />
-          ) : null}
-          <div>
-            <label htmlFor="leccion-video" className="text-sm font-semibold text-text">
-              {t('enlaceVideo')}
-            </label>
-            <input
-              id="leccion-video"
-              value={videoUrl}
-              onChange={(e) => setVideoUrl(e.target.value)}
-              placeholder="https://"
-              className="mt-1.5 h-12 w-full rounded-xl border border-border bg-surface px-4 text-base text-text outline-none focus:border-brand-600"
-            />
-          </div>
-        </div>
+      ) : isVideo ? (
+        <SimpleVideoField
+          quotaState={video.state}
+          onRetryQuota={() => void video.refresh()}
+          upload={upload}
+          inputId={`video-upload-${lessonId ?? 'nueva'}`}
+          videoUrl={videoUrl}
+          onLinkChange={setVideoUrl}
+          onRemove={() => void removeUploaded()}
+        />
       ) : (
         <div>
           <input
@@ -434,18 +515,25 @@ function LessonForm({
       )}
 
       {error ? <p className="text-sm font-semibold text-danger-700">{error}</p> : null}
-      <div className="flex items-center gap-3">
+      <div className="flex flex-wrap items-center gap-3">
         <button
           type="submit"
-          disabled={saving || !title.trim()}
+          disabled={saving || !title.trim() || upload.busy}
           className="h-11 rounded-xl bg-brand-600 px-5 font-semibold text-white hover:bg-brand-700 disabled:opacity-50"
           data-testid="guardar-leccion"
         >
           {saving ? t('guardando') : t('guardar')}
         </button>
-        <button type="button" onClick={onCancel} className="text-sm font-semibold text-text-muted">
+        <button
+          type="button"
+          onClick={() => void cancel()}
+          className="text-sm font-semibold text-text-muted"
+        >
           {t('cancelar')}
         </button>
+        {upload.busy ? (
+          <span className="text-sm text-text-muted">{t('subida.esperaSubida')}</span>
+        ) : null}
       </div>
     </form>
   );
