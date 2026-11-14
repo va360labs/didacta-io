@@ -67,6 +67,11 @@ export function notificationLink(
         actionLabel: view,
       };
     }
+    case 'payouts.sale.course':
+    case 'payouts.sale.membership':
+    case 'payouts.sale.renewal':
+      // Venta nueva (aviso a quien administra el aula): a «Ventas».
+      return { href: '/admin/payments', actionLabel: view };
     default:
       return null;
   }
