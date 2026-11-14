@@ -6,8 +6,7 @@
  */
 
 import Image from 'next/image';
-import Link from 'next/link';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { Icon } from '@/components/icon';
 import {
@@ -26,8 +25,9 @@ import {
   type AgentId,
   type AgentScreenMatch,
 } from '@/lib/agent-connect';
-import { agentKeysApi, type CreatedAgentKey } from '@/lib/agent-keys';
+import { agentKeysApi, type AgentKeyView, type CreatedAgentKey } from '@/lib/agent-keys';
 import { coursesApi } from '@/lib/courses';
+import { formatDate, formatDateTime } from '@/lib/i18n/format';
 import { cn } from '@/lib/utils';
 
 /**
@@ -195,7 +195,12 @@ function PanelBody({
   const t = useTranslations('agenteIa');
   const match = state.match!;
   const [courseTitle, setCourseTitle] = useState<string | null>(null);
-  const [activeKeys, setActiveKeys] = useState<number | null>(null);
+  // Claves de agente vivas del aula. El panel las lista y deja revocarlas: la
+  // recién creada solo vive en memoria, así que tras recargar era la única
+  // forma de revocar y mandaba a la pantalla técnica de claves API.
+  const [keys, setKeys] = useState<AgentKeyView[] | null>(null);
+  const [showKeys, setShowKeys] = useState(false);
+  const [revokingId, setRevokingId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [revoked, setRevoked] = useState(false);
@@ -218,16 +223,16 @@ function PanelBody({
     };
   }, [match.screen, match.courseId]);
 
+  const loadKeys = useCallback(async () => {
+    try {
+      setKeys(await agentKeysApi.listActive());
+    } catch {
+      /* sin lista: el panel sigue sirviendo para crear y conectar */
+    }
+  }, []);
   useEffect(() => {
-    let cancelled = false;
-    agentKeysApi
-      .activeCount()
-      .then((n) => !cancelled && setActiveKeys(n))
-      .catch(() => undefined);
-    return () => {
-      cancelled = true;
-    };
-  }, [state.created]);
+    void loadKeys();
+  }, [state.created, loadKeys]);
 
   async function create() {
     setBusy(true);
@@ -242,16 +247,22 @@ function PanelBody({
     }
   }
 
-  async function revoke() {
-    if (!state.created) return;
+  async function revoke(id: string) {
+    setRevokingId(id);
+    setError(null);
     try {
-      await agentKeysApi.revoke(state.created.id);
-      state.setCreated(null);
+      await agentKeysApi.revoke(id);
+      if (state.created?.id === id) state.setCreated(null);
       setRevoked(true);
+      await loadKeys();
     } catch {
-      setError(t('errorCrear'));
+      setError(t('errorRevocar'));
+    } finally {
+      setRevokingId(null);
     }
   }
+
+  const otherKeys = (keys ?? []).filter((k) => k.id !== state.created?.id);
 
   const origin = typeof window === 'undefined' ? '' : window.location.origin;
   const url = mcpUrlFor(origin);
@@ -314,10 +325,11 @@ function PanelBody({
             </p>
             <button
               type="button"
-              onClick={() => void revoke()}
+              onClick={() => void revoke(state.created!.id)}
+              disabled={revokingId !== null}
               className="justify-self-start text-[12px] font-semibold text-text-muted hover:text-text hover:underline"
             >
-              {t('revocar')}
+              {revokingId === state.created.id ? t('revocando') : t('revocar')}
             </button>
           </>
         ) : (
@@ -333,19 +345,61 @@ function PanelBody({
               {busy ? t('creando') : t('crearClave')}
             </button>
             {revoked ? <p className="text-[12px] text-text-muted">{t('revocada')}</p> : null}
-            {activeKeys && activeKeys > 0 ? (
-              <p className="text-[12px] leading-5 text-text-muted">
-                {t('clavesActivas', { count: activeKeys })}{' '}
-                <Link
-                  href="/admin/api-keys"
-                  className="font-semibold text-brand-600 hover:underline"
-                >
-                  {t('gestionar')}
-                </Link>
-              </p>
-            ) : null}
           </>
         )}
+        {otherKeys.length > 0 ? (
+          <div className="grid gap-2">
+            <p className="text-[12px] leading-5 text-text-muted">
+              {t('clavesActivas', { count: otherKeys.length })}{' '}
+              <button
+                type="button"
+                onClick={() => setShowKeys((v) => !v)}
+                aria-expanded={showKeys}
+                className="font-semibold text-brand-600 hover:underline"
+                data-testid="agente-ia-gestionar"
+              >
+                {showKeys ? t('ocultarClaves') : t('gestionar')}
+              </button>
+            </p>
+            {showKeys ? (
+              <ul className="grid gap-1.5" data-testid="agente-ia-claves">
+                {otherKeys.map((k) => (
+                  <li
+                    key={k.id}
+                    className="flex items-center justify-between gap-2 rounded-lg border border-border-soft bg-bg-subtle px-3 py-2"
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate font-mono text-[12px] text-text">{k.preview}</p>
+                      <p className="text-[11px] leading-4 text-text-muted">
+                        {t('claveCreada', {
+                          fecha: formatDate(k.createdAt, { dateStyle: 'medium' }),
+                        })}
+                        {' · '}
+                        {k.lastUsedAt
+                          ? t('claveUsada', {
+                              fecha: formatDateTime(k.lastUsedAt, {
+                                dateStyle: 'medium',
+                                timeStyle: 'short',
+                              }),
+                            })
+                          : t('claveSinUso')}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => void revoke(k.id)}
+                      disabled={revokingId !== null}
+                      className="shrink-0 rounded-lg px-2 py-1 text-[12px] font-semibold text-danger-700 hover:bg-danger-50 disabled:opacity-50"
+                      data-testid="agente-ia-revocar"
+                    >
+                      {revokingId === k.id ? t('revocando') : t('revocar')}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+          </div>
+        ) : null}
         {error ? <p className="text-[12px] font-semibold text-danger-700">{error}</p> : null}
       </section>
 

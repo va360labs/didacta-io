@@ -53,5 +53,11 @@
   },
   "puede": "Cria e edita cursos e aulas, agenda aulas ao vivo e publica na comunidade. Os cursos novos ficam em rascunho até você publicá-los; as aulas ao vivo, as publicações da comunidade e as aulas de um curso já publicado aparecem na hora.",
   "noPuede": "Não define preços, não coloca nada à venda, não exclui nada e não convida ninguém.",
-  "chatgpt": "O ChatGPT ainda não permite conectar com uma chave."
+  "chatgpt": "O ChatGPT ainda não permite conectar com uma chave.",
+  "errorRevocar": "Não foi possível revogar a chave. Tente novamente.",
+  "revocando": "Revogando…",
+  "ocultarClaves": "Ocultar chaves",
+  "claveCreada": "Criada em {fecha}",
+  "claveUsada": "último uso: {fecha}",
+  "claveSinUso": "ainda não usada"
 }
