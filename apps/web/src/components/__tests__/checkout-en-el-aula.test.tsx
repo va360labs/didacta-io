@@ -21,7 +21,11 @@ import es from '@/i18n/messages/es';
 import pt from '@/i18n/messages/pt';
 import { checkoutOutcome, isCheckoutSessionId, normalizeCheckoutStart } from '@/lib/checkout';
 
-function html(node: ReactNode, messages: Record<string, unknown> = es, locale = 'es-ES') {
+function html(
+  node: ReactNode,
+  messages: Record<string, unknown> = es,
+  locale: 'es-ES' | 'en-US' | 'pt-BR' = 'es-ES',
+) {
   return renderToString(
     <NextIntlClientProvider locale={locale} messages={messages} timeZone="Europe/Madrid">
       {node}
