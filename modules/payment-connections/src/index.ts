@@ -41,6 +41,7 @@ export {
   tierLabelFallback,
   DEFAULT_PAST_DUE_GRACE_DAYS,
   DEFAULT_RENEWAL_TEMPLATE,
+  DEFAULT_RENEWAL_TEMPLATES,
 } from './payment-connections.service.js';
 export type {
   ConfigPort,

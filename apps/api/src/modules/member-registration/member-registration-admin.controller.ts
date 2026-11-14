@@ -27,6 +27,7 @@ import { CurrentUser } from '../../auth/decorators';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { ZodValidationPipe } from '../../auth/zod-validation.pipe';
 import type { SessionClaims } from '../../auth/token.service';
+import { academyLocale, type AcademyDefaultsPrisma } from '../../common/academy-defaults';
 import { renewalEmailHtml } from '../../common/renewal-email-html';
 import { resolveEmailBranding, type BrandingPrisma } from '../../common/branded-email';
 import { ModuleRegistryService } from '../module-registry.service';
@@ -278,7 +279,12 @@ export class MemberRegistrationAdminController {
           )
         : null;
     }
-    const template = await svc.getRenewalTemplate(user.tenantId);
+    // La plantilla por defecto, en el idioma del aula (es la de todos).
+    const lang = await academyLocale(
+      this.prisma as unknown as AcademyDefaultsPrisma,
+      user.tenantId,
+    );
+    const template = await svc.getRenewalTemplate(user.tenantId, lang);
     return { template, renewalUrl };
   }
 
@@ -315,13 +321,18 @@ export class MemberRegistrationAdminController {
       // Best-effort, como el resto del branding: sin ella el correo sale sin logo.
       await this.tenantResolver.resolveTenantWebBaseUrlForBackground(user.tenantId).catch(() => ''),
     );
+    // El cuerpo lo escribió el admin sobre la plantilla del idioma del aula.
+    const lang = await academyLocale(
+      this.prisma as unknown as AcademyDefaultsPrisma,
+      user.tenantId,
+    );
     const result = await this.smtp.send(
       resolved.config,
       {
         to,
         subject: dto.subject,
         text: dto.body,
-        html: renewalEmailHtml(dto.body, branding, dto.subject),
+        html: renewalEmailHtml(dto.body, branding, dto.subject, lang),
       },
       branding.tenantName,
     );
