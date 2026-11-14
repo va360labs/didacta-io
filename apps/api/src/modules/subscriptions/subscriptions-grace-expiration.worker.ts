@@ -35,6 +35,10 @@ type GraceExpirationJobData = Record<string, never>;
  *     - emite `subscriptions.subscription.unpaid` por cada una.
  *  2. El bridge `SubscriptionsLearningBridge` escucha el evento y pausa el
  *     enrollment correspondiente (sin borrar progreso).
+ *  3. Las PAUSAS aceptadas al darse de baja que ya deberían haber empezado
+ *     (`RetentionService.startDuePausesForTenant`): ACTIVE → PAUSED y
+ *     `subscriptions.subscription.paused` (fuera acceso). Normalmente lo hace
+ *     antes el webhook de la renovación; esto es la red por si no llega.
  *
  * Si REDIS_URL no está set, el worker no arranca (warn). En tests
  * (NODE_ENV=test) tampoco, para no romper bootstraps de Nest sin Redis.
@@ -167,9 +171,25 @@ export class SubscriptionsGraceExpirationWorker implements OnApplicationBootstra
         );
         count += expired.length;
       }
+      // Pausas que empiezan (oferta al darse de baja). Mismo patrón: barrido
+      // sancionado de tenants y procesado bajo el contexto RLS de cada uno.
+      let pausesStarted = 0;
+      const retention = this.retentionOrNull();
+      const pauseTenants = retention
+        ? await runSanctionedGlobalAccess(() => retention.findTenantsWithDuePauses(now))
+        : [];
+      for (const tenantId of pauseTenants) {
+        if (!retention) break;
+        const started = await runAsTenant(
+          tenantId,
+          () => retention.startDuePausesForTenant(tenantId, now),
+          { traceLabel: 'pause-start' },
+        );
+        pausesStarted += started.length;
+      }
       const elapsedMs = Date.now() - startedAt;
       this.logger.log(
-        { tenants: tenants.length, count, elapsedMs },
+        { tenants: tenants.length, count, pausesStarted, elapsedMs },
         'subscriptions grace-expiration job completado',
       );
     } catch (err) {
@@ -178,6 +198,15 @@ export class SubscriptionsGraceExpirationWorker implements OnApplicationBootstra
         'subscriptions grace-expiration: el barrido de grace periods lanzó error',
       );
       throw err; // re-lanzamos para que BullMQ aplique retry exponencial
+    }
+  }
+
+  /** El servicio de la oferta al darse de baja, o null si el registro no lo tiene. */
+  private retentionOrNull() {
+    try {
+      return this.registry.getRetentionService();
+    } catch {
+      return null;
     }
   }
 

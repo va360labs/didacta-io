@@ -543,7 +543,9 @@ describe('IntegrationsService · estado del alumno', () => {
     await h.service.getLearnerState(TENANT_ID, 'ana@x.com', undefined, WEB_BASE);
 
     const where = h.findFirstSubscription.mock.calls[0]![0].where;
-    expect(where.status.in).toEqual(['TRIALING', 'ACTIVE', 'PAST_DUE']);
+    // PAUSED: una pausa pedida al darse de baja sigue siendo membresía viva
+    // (vuelve sola): venderle otra le cobraría dos veces.
+    expect(where.status.in).toEqual(['TRIALING', 'ACTIVE', 'PAST_DUE', 'PAUSED']);
     expect(where.planId).toEqual({ not: null });
     expect(where.tenantId).toBe(TENANT_ID);
     expect(where.userId).toBe('u1');

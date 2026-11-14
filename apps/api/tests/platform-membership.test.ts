@@ -134,6 +134,36 @@ function fakeSubscriptions(
       log.push([tag, 'creditCustomerBalance', `${p.customerId}:${p.amountCents}`]);
       return { id: `cbtxn_${label}` };
     },
+    retrieveSubscription: async (id) => {
+      log.push([tag, 'retrieveSubscription', id]);
+      return {
+        id,
+        status: 'active',
+        cancelAtPeriodEnd: false,
+        currentPeriodStart: 1_797_000_000,
+        currentPeriodEnd: 1_800_000_000,
+        intervalMonths: 1,
+        pauseCollection: null,
+        hasDiscount: false,
+      };
+    },
+    pauseCollection: async (p) => {
+      log.push([tag, 'pauseCollection', `${p.subscriptionId}:${p.resumesAt}`]);
+      return {
+        id: p.subscriptionId,
+        status: 'active',
+        cancelAtPeriodEnd: false,
+        currentPeriodStart: 1_797_000_000,
+        currentPeriodEnd: 1_800_000_000,
+        intervalMonths: 1,
+        pauseCollection: { behavior: 'void', resumesAt: p.resumesAt },
+        hasDiscount: false,
+      };
+    },
+    applyRetentionDiscount: async (p) => {
+      log.push([tag, 'applyRetentionDiscount', `${p.subscriptionId}:${p.percentOff}`]);
+      return { couponId: `coupon_${label}`, discountEnd: null };
+    },
     constructWebhookEvent: () => {
       throw new Error('no se usa');
     },
@@ -308,6 +338,43 @@ describe('PlatformSubscriptionsStripeAdapter · objetos que ya existen (enrutado
       'propia:retrievePrice',
       'plataforma:retrievePrice',
     ]);
+  });
+
+  it('oferta al darse de baja: leer, pausar y el cupón van a la cuenta donde vive la suscripción', async () => {
+    const { adapters, log } = build(READY, { own: true, registered: ['sub_1P'] });
+    const adapter = await adapters.subscriptions(A);
+    await adapter.retrieveSubscription('sub_1H');
+    await adapter.retrieveSubscription('sub_1P');
+    await adapter.pauseCollection({ subscriptionId: 'sub_1H', resumesAt: 1, idempotencyKey: 'k' });
+    await adapter.pauseCollection({ subscriptionId: 'sub_1P', resumesAt: 1, idempotencyKey: 'k' });
+    const discount = {
+      percentOff: 30,
+      duration: 'repeating' as const,
+      durationInMonths: 3,
+      name: '-30% · 3m',
+      metadata: {},
+      idempotencyKey: 'k',
+    };
+    await adapter.applyRetentionDiscount({ ...discount, subscriptionId: 'sub_1H' });
+    await adapter.applyRetentionDiscount({ ...discount, subscriptionId: 'sub_1P' });
+    expect(log.map(([who, what]) => `${who.split('@')[0]}:${what}`)).toEqual([
+      'propia:retrieveSubscription',
+      'plataforma:retrieveSubscription',
+      'propia:pauseCollection',
+      'plataforma:pauseCollection',
+      'propia:applyRetentionDiscount',
+      'plataforma:applyRetentionDiscount',
+    ]);
+  });
+
+  it('con la cuenta restringida la pausa y el descuento siguen yendo a la plataforma', async () => {
+    const { adapters, log } = build(
+      { mode: 'platform', ready: false, reason: 'restricted' },
+      { own: true, registered: ['sub_1P'] },
+    );
+    const adapter = await adapters.subscriptions(A);
+    await adapter.pauseCollection({ subscriptionId: 'sub_1P', resumesAt: 1, idempotencyKey: 'k' });
+    expect(log[0]?.[0]).toBe('plataforma');
   });
 
   it('sin claves propias todo va a la plataforma (no hay otra cuenta)', async () => {
@@ -555,6 +622,10 @@ describe('POST /modules/subscriptions/me/portal y la marca billingPortal', () =>
       {
         getSubscriptionsService: () => subs,
         getSubscriptionsServiceOrNull: () => subs,
+        getRetentionService: () => ({
+          activeDiscounts: async () =>
+            new Map([['s1', { percent: 30, months: 3, duration: 'repeating', endsAt: null }]]),
+        }),
       } as never,
       prisma as never,
       {} as never,
@@ -610,6 +681,16 @@ describe('POST /modules/subscriptions/me/portal y la marca billingPortal', () =>
       subscriptions: Array<{ billingPortal: boolean }>;
     };
     expect(community.subscriptions.map((s) => s.billingPortal)).toEqual([false, false]);
+  });
+
+  it('cada suscripción trae su descuento de retención vivo (o null)', async () => {
+    const res = (await controller(anyGate).ctrl.listMine(user)) as {
+      subscriptions: Array<{ id: string; retentionDiscount: { percent: number } | null }>;
+    };
+    expect(res.subscriptions.map((s) => [s.id, s.retentionDiscount?.percent ?? null])).toEqual([
+      ['s1', 30],
+      ['s2', null],
+    ]);
   });
 });
 

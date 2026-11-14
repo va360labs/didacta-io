@@ -17,6 +17,7 @@ import { MembershipPublicController } from './membership-public.controller';
 import { MembershipAdminController } from './membership-admin.controller';
 import { MembershipProvisioningService } from './membership-provisioning.service';
 import { MembershipAccessGroupsBridge } from './membership-access-groups.bridge';
+import { RetentionMailerBridge } from './retention-mailer.bridge';
 
 /// Backend del módulo `mod.subscriptions`. Encapsula los controllers
 /// alumno + webhook idempotente, el filter, el bridge cross-module hacia
@@ -44,6 +45,8 @@ import { MembershipAccessGroupsBridge } from './membership-access-groups.bridge'
     SubscriptionsGraceExpirationWorker,
     MembershipProvisioningService,
     MembershipAccessGroupsBridge,
+    // Oferta al darse de baja: correo de confirmación (pausa, descuento, baja).
+    RetentionMailerBridge,
     { provide: APP_FILTER, useClass: SubscriptionsErrorFilter },
   ],
 })

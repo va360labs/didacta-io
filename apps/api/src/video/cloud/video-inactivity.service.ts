@@ -179,7 +179,9 @@ export class VideoInactivityService {
           _max: { chargedAt: true },
         }),
         this.prisma.modSubscriptionsSubscription.count({
-          where: { tenantId, status: { in: ['ACTIVE', 'TRIALING', 'PAST_DUE'] } },
+          // PAUSED cuenta como viva: el alumno vuelve solo cuando acaba la pausa
+          // y sus vídeos tienen que seguir ahí.
+          where: { tenantId, status: { in: ['ACTIVE', 'TRIALING', 'PAST_DUE', 'PAUSED'] } },
         }),
       ]);
       if (liveSubs > 0) return { at: now, source: 'subscription' };
