@@ -13,6 +13,8 @@ import http from 'node:http';
  * como Stripe), y para una compra de curso: `POST /v1/checkout/sessions` devuelve
  * una sesión cuya `url` es una página de pago de mentira servida por el propio
  * doble (`GET /pagar/:id`); el test completa el pago con el webhook firmado.
+ * El recibo pregunta por el medio de pago (`GET /v1/payment_intents/:id`): el
+ * doble contesta la tarjeta de pruebas de Stripe (Visa ···· 4242).
  * La API habla con él cuando
  * arranca con `STRIPE_TEST_API_URL` y una clave `sk_test_` (ver
  * `apps/api/src/modules/stripe-test-api.ts`). Guarda lo creado en memoria y
@@ -86,6 +88,23 @@ export async function startStripeDouble(
         return;
       } else if (req.method === 'GET' && /^\/v1\/(prices|products)\//.test(path)) {
         obj = objects.get(path.split('/').pop()!);
+      } else if (req.method === 'GET' && /^\/v1\/payment_intents\/[^/]+$/.test(path)) {
+        // El medio de pago del recibo: como Stripe en modo prueba con la
+        // tarjeta 4242 (`expand[]=latest_charge`).
+        const id = decodeURIComponent(path.split('/').pop()!);
+        obj = {
+          id,
+          object: 'payment_intent',
+          status: 'succeeded',
+          latest_charge: {
+            id: `ch_doble_${id}`,
+            object: 'charge',
+            payment_method_details: {
+              type: 'card',
+              card: { brand: 'visa', last4: '4242', wallet: null },
+            },
+          },
+        };
       } else if (req.method === 'GET' && /^\/v1\/customers\/[^/]+$/.test(path)) {
         const id = decodeURIComponent(path.split('/').pop()!);
         obj = { id, object: 'customer', balance: balances.get(id) ?? 0, currency: 'eur' };

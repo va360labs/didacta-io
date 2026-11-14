@@ -44,3 +44,16 @@ services:
       interval: 2s
       timeout: 3s
       retries: 30
+
+  # Buzón de pruebas: los specs que comprueban un correo (el recibo de una
+  # compra, la prueba de una plantilla) apuntan el SMTP de su aula aquí y leen
+  # lo que llega por la API de Mailpit. Acepta cualquier usuario/contraseña.
+  mailpit-test:
+    image: axllent/mailpit:v1.33.1
+    container_name: didacta-mailpit-test
+    environment:
+      MP_SMTP_AUTH_ACCEPT_ANY: 1
+      MP_SMTP_AUTH_ALLOW_INSECURE: 1
+    ports:
+      - '1026:1025'
+      - '8026:8025'

@@ -95,7 +95,7 @@ mkdir -p "$RUN_DIR"
 
 # ── infra ───────────────────────────────────────────────────────────────────
 cmd_up() {
-  log "Levantando docker-compose.test.yml (postgres $E2E_PG_PORT, redis 6380)…"
+  log "Levantando docker-compose.test.yml (postgres $E2E_PG_PORT, redis 6380, mailpit 1026/8026)…"
   docker compose -f "$COMPOSE_FILE" up -d --wait
   log "Infra lista."
 }
