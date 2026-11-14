@@ -48,6 +48,7 @@ function requireAdmin(user: SessionClaims | undefined): SessionClaims {
 /** Errores que el creador puede arreglar él mismo: 409 con un código estable. */
 const CONFLICT_CODES = new Set([
   'SIMPLE_MODE_PAYMENTS_NOT_READY',
+  'SIMPLE_MODE_TAX_PROFILE_MISSING',
   'SIMPLE_MODE_NO_LESSONS',
   'SIMPLE_MODE_NO_PRICE',
   'SIMPLE_MODE_NO_OFFER',

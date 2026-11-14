@@ -61,6 +61,14 @@ export interface StartHereView {
   nextLive: { id: string; topic: string; startTime: string } | null;
   /** Dónde se conectan los cobros: la tarjeta de la plataforma o las claves propias. */
   paymentsSetupPath: string;
+  /**
+   * La cuenta de cobros ya puede vender, pero faltan los datos fiscales y,
+   * sin ellos, el dinero de las ventas se queda retenido. El paso «Conecta tus
+   * cobros» sigue sin hacer y lleva directo a completarlos.
+   */
+  taxProfilePending: boolean;
+  /** Dónde se completan los datos fiscales (la sección de cobros, en su ancla). */
+  taxProfilePath: string;
 }
 
 /** Monedas con claves propias de Stripe (Community): las de siempre. */

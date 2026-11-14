@@ -319,6 +319,14 @@ export class SimpleModeService {
         'Conecta tus cobros antes de publicar: sin ellos nadie podría pagarte.',
       );
     }
+    // Sin datos fiscales se podría vender, pero el dinero se quedaría retenido
+    // sin que la creadora lo supiera (ensayo general): primero, completarlos.
+    if (await this.taxProfilePending(tenantId)) {
+      throw new SimpleModeError(
+        'SIMPLE_MODE_TAX_PROFILE_MISSING',
+        'Completa tus datos fiscales antes de publicar: sin ellos el dinero de tus ventas se quedaría retenido.',
+      );
+    }
 
     if (offer.kind === 'membership') {
       if (!offer.planId) {
@@ -374,16 +382,27 @@ export class SimpleModeService {
         })
       : null;
 
-    const [academyDone, courseDone, paymentsReady, invited, sales, nextLive, published] =
-      await Promise.all([
-        this.academyDone(tenantId, state),
-        this.courseWithContent(tenantId, offer),
-        this.paymentsReady(tenantId),
-        this.invitedCount(tenantId),
-        this.salesSummary(tenantId),
-        this.nextLive(tenantId),
-        this.isPublished(tenantId, offer, course),
-      ]);
+    const [
+      academyDone,
+      courseDone,
+      paymentsReady,
+      invited,
+      sales,
+      nextLive,
+      published,
+      taxPending,
+    ] = await Promise.all([
+      this.academyDone(tenantId, state),
+      this.courseWithContent(tenantId, offer),
+      this.paymentsReady(tenantId),
+      this.invitedCount(tenantId),
+      this.salesSummary(tenantId),
+      this.nextLive(tenantId),
+      this.isPublished(tenantId, offer, course),
+      this.taxProfilePending(tenantId),
+    ]);
+    // La cuenta puede vender pero, sin datos fiscales, el dinero no llegaría.
+    const taxProfilePending = paymentsReady && taxPending;
 
     const done: Record<StepId, boolean> = {
       // Quien ya vende o tiene algo publicado tiene academia, aunque nunca
@@ -391,8 +410,12 @@ export class SimpleModeService {
       academy: academyDone || published || sales.count > 0,
       course: courseDone.done,
       price: (offer?.amountCents ?? 0) > 0,
-      payments: paymentsReady,
-      // Publicado no basta: sin cobros nadie puede comprar todavía.
+      // «Listo para cobrar» es que el dinero LLEGA: con la cuenta conectada y
+      // los datos fiscales completos (si la plataforma los exige).
+      payments: paymentsReady && !taxProfilePending,
+      // Publicado no basta: sin cobros nadie puede comprar todavía. (Con los
+      // datos fiscales pendientes sí se puede comprar: el paso de cobros lo
+      // marca aparte.)
       publish: published && paymentsReady,
       invite: invited > 0 || sales.count > 0,
     };
@@ -423,6 +446,8 @@ export class SimpleModeService {
       students: invited,
       nextLive,
       paymentsSetupPath: this.payoutsGate ? '/admin/payments' : '/admin/settings?tab=payments',
+      taxProfilePending,
+      taxProfilePath: '/admin/payments#tax-profile',
     };
   }
 
@@ -589,6 +614,17 @@ export class SimpleModeService {
       },
       update: { valueJson: value, updatedById: actorId },
     });
+  }
+
+  /** ¿Cobra por la plataforma y le faltan los datos fiscales (que se exigen)? */
+  async taxProfilePending(tenantId: string): Promise<boolean> {
+    if (!this.payoutsGate) return false;
+    try {
+      return await this.payoutsGate.taxProfilePending(tenantId);
+    } catch {
+      // Sin poder leerlo, no se bloquea nada: el aviso de «Ventas» sigue ahí.
+      return false;
+    }
   }
 
   /** ¿Puede cobrar ya este aula? Plataforma lista, o claves propias puestas. */
