@@ -3,8 +3,14 @@
  * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
  */
 
-import type { PayoutsDbPort, PayoutsLogger, PayoutsTx } from './accounts.service.js';
+import type {
+  PayoutScheduleView,
+  PayoutsDbPort,
+  PayoutsLogger,
+  PayoutsTx,
+} from './accounts.service.js';
 import { SILENT_NOTIFIER, type PayoutsNotifier, type SaleNoticeKind } from './losses.js';
+import { estimatePayoutDate } from './reports.service.js';
 import { TAX_PROFILE_HOLD_REASON } from './tax/tax-profile.service.js';
 
 /**
@@ -73,7 +79,9 @@ export class PayoutsSaleNoticesService {
         where: { id: saleId, tenantId },
         select: {
           id: true,
+          accountId: true,
           sourceKind: true,
+          sourceRef: true,
           description: true,
           presentmentAmount: true,
           presentmentCurrency: true,
@@ -81,15 +89,35 @@ export class PayoutsSaleNoticesService {
           stripeInvoiceId: true,
           chargedAt: true,
           createdAt: true,
+          currency: true,
+          gross: true,
+          stripeFee: true,
+          platformFee: true,
+          feeBpsApplied: true,
+          debtNetted: true,
+          creatorNet: true,
+          transferAmount: true,
+          status: true,
+          availableOn: true,
         },
       });
       if (!sale) return { outcome: 'not_found' as const };
       if (count === 0) return { outcome: 'already' as const };
-      return { outcome: 'claimed' as const, sale, kind: await saleKind(tx, tenantId, sale) };
+      // Calendario de pagos del creador, para decir hacia qué día llega.
+      const account = await tx.modPayoutsAccount.findFirst({
+        where: { id: sale.accountId, tenantId },
+        select: { payoutSchedule: true },
+      });
+      return {
+        outcome: 'claimed' as const,
+        sale,
+        kind: await saleKind(tx, tenantId, sale),
+        schedule: (account?.payoutSchedule as PayoutScheduleView | null | undefined) ?? null,
+      };
     });
     if (claimed.outcome !== 'claimed') return claimed.outcome;
 
-    const { sale, kind } = claimed;
+    const { sale, kind, schedule } = claimed;
     let heldForTaxData = false;
     try {
       heldForTaxData =
@@ -107,6 +135,23 @@ export class PayoutsSaleNoticesService {
         currency: sale.presentmentCurrency,
         buyerEmail: sale.buyerEmail,
         heldForTaxData,
+        sourceRef: sale.sourceRef,
+        chargedAt: sale.chargedAt ?? sale.createdAt,
+        split: {
+          currency: sale.currency,
+          gross: sale.gross,
+          stripeFee: sale.stripeFee,
+          platformFee: sale.platformFee,
+          feeBpsApplied: sale.feeBpsApplied,
+          debtNetted: sale.debtNetted,
+          creatorNet: sale.creatorNet,
+          transferAmount: sale.transferAmount,
+          status: sale.status,
+          estimatedArrival:
+            sale.status === 'READY' || sale.status === 'TRANSFERRED'
+              ? estimatePayoutDate(sale.availableOn, schedule)
+              : null,
+        },
       });
     } catch (err) {
       this.logger.warn(

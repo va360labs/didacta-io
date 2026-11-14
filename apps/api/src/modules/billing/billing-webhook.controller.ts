@@ -180,6 +180,9 @@ export class BillingWebhookController {
     // El Host de este request es el de la API (Stripe), no el del frontend
     // del tenant — con el tenant ya resuelto, preferimos su dominio primario.
     const webBaseUrl = await this.tenantResolver.resolveTenantWebBaseUrl(tenantId, req);
+    // Si va a salir el RECIBO de esta compra, él lleva el enlace para elegir
+    // contraseña: la bienvenida suelta no se manda (un correo, no dos).
+    const deferWelcome = (await this.consents?.receiptPending(tenantId, event)) ?? false;
     // 3) PROCESADO: siempre bajo el contexto de ESE tenant (nunca sancionado:
     //    un evento sin dueño reconocible se archiva en el del dominio) y
     //    diciéndole al módulo cuál es, para que compruebe cada fila que toque.
@@ -190,10 +193,11 @@ export class BillingWebhookController {
       webBaseUrl,
       ctx,
       billing,
-      provisionBuyer: (args) => this.provisioning.provision(args),
+      provisionBuyer: (args) => this.provisioning.provision({ ...args, deferWelcome }),
     });
-    // Pago confirmado: correo con el texto que aceptó el comprador. Nunca lanza.
-    await this.consents?.confirmCheckout(tenantId, event);
+    // Pago confirmado: el recibo con los datos, el acceso y el texto que
+    // aceptó el comprador. Nunca lanza.
+    await this.consents?.confirmCheckout(tenantId, event, ctx);
     return { received: true, type: event.type, id: event.id };
   }
 }

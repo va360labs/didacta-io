@@ -12,10 +12,11 @@ import {
   creatorFooter,
   debtChargedTexts,
   disputeOpenedTexts,
+  creatorSaleData,
   formatMinor,
-  refundIssuedTexts,
   saleMadeTexts,
 } from '../src/modules/payouts/payouts-notifier';
+import { buildRefundEmail } from '../src/modules/sale-emails/sale-email-render';
 
 const TENANT = '11111111-1111-4111-8111-111111111111';
 
@@ -415,6 +416,86 @@ describe('aviso de VENTA a quien administra el aula', () => {
     expect(sent[2]!.subject).toMatch(/^Nova venda: “Torno para principiantes”/);
   });
 
+  it('desglose del reparto: comisión de la tarjeta, la de Didacta (5 %), lo que llega y cuándo', async () => {
+    const { notifier, sent } = deps();
+    await notifier.saleMade({
+      ...SALE,
+      sourceRef: '7c1e3a90-0000-4000-8000-00003f2a9c1b',
+      chargedAt: new Date('2026-11-14T09:30:00Z'),
+      split: {
+        currency: 'eur',
+        gross: 4900,
+        stripeFee: 99,
+        platformFee: 245,
+        feeBpsApplied: 500,
+        debtNetted: 0,
+        creatorNet: 4556,
+        transferAmount: 4556,
+        status: 'READY',
+        estimatedArrival: new Date('2026-11-21T00:00:00Z'),
+      },
+    });
+    const es = sent[0]!;
+    expect(es.text).toContain('Pedido: 3F2A9C1B');
+    expect(es.text).toMatch(/Pagado por el alumno: 49,00\s€/);
+    expect(es.text).toMatch(/Comisión de la tarjeta: −0,99\s€/);
+    expect(es.text).toMatch(/5 % de Didacta: −2,45\s€/);
+    expect(es.text).toMatch(/Te llega: 45,56\s€/);
+    expect(es.text).toContain('Llegará a tu banco hacia el 21 de noviembre de 2026.');
+    expect(es.text).toContain('Marta Ensayo');
+    expect(es.text).toContain('marta@example.test');
+    expect(es.html).toContain('Nueva venta en Aula de Ana');
+    const en = sent[1]!;
+    expect(en.text).toMatch(/Didacta 5% fee: −€2\.45/);
+    expect(en.text).toContain('It will reach your bank around 21 November 2026.');
+    const pt = sent[2]!;
+    expect(pt.text).toMatch(/5% da Didacta: −€\s2,45/);
+    expect(pt.text).toContain('Chega ao seu banco por volta de 21 de novembro de 2026.');
+  });
+
+  it('sin la comisión de la tarjeta todavía: «Calculando…», nunca un importe inventado', () => {
+    const data = creatorSaleData(
+      {
+        ...SALE,
+        split: {
+          currency: 'eur',
+          gross: null,
+          stripeFee: null,
+          platformFee: null,
+          feeBpsApplied: null,
+          currentFeeBps: 500,
+          debtNetted: 0,
+          creatorNet: null,
+          transferAmount: null,
+          status: 'AWAITING_FEE',
+          estimatedArrival: null,
+        },
+      },
+      'es',
+      {
+        operator: 'Didacta',
+        academy: 'Aula de Ana',
+        timeZone: 'Europe/Madrid',
+        buyerName: 'Marta Ensayo',
+        salesUrl: 'https://ana.test/admin/payments',
+        footer: null,
+      },
+    );
+    expect(data.cardFee).toBeNull();
+    expect(data.youReceive).toBeNull();
+    expect(data.status).toBe('pending');
+    expect(data.feeBps).toBe(500);
+    const held = creatorSaleData({ ...SALE, heldForTaxData: true }, 'es', {
+      operator: 'Didacta',
+      academy: 'Aula de Ana',
+      timeZone: 'Europe/Madrid',
+      buyerName: null,
+      salesUrl: null,
+      footer: null,
+    });
+    expect(held.status).toBe('held_tax_data');
+  });
+
   it('respeta las preferencias: quien apagó el correo de «Sistema» no lo recibe', async () => {
     const { notifier, sent, prisma } = deps();
     prisma.userNotificationPreference.findUnique.mockImplementation(async (args?: unknown) =>
@@ -449,37 +530,57 @@ describe('aviso al ALUMNO al reembolsarle', () => {
   };
 
   it('textos: total pierde el acceso, parcial lo conserva; membresía no habla de acceso', () => {
-    const full = refundIssuedTexts({
+    const base = {
+      timeZone: 'Europe/Madrid',
+      buyerName: 'Marta Ensayo',
+      buyerEmail: 'marta@example.com',
+      orderRef: '3F2A9C1B',
+      refundedAt: new Date('2026-11-14T10:00:00Z'),
+      currency: 'eur',
+      refunded: 4900,
+      originallyPaid: 4900,
+      paymentMethod: { type: 'card', brand: 'visa', last4: '4242' },
+    } as const;
+    const brand = (tenantName: string) => ({ tenantName, logoUrl: null, brandColor: '#1E5AA8' });
+    const full = buildRefundEmail(brand('Cerámica con Lucía'), {
+      ...base,
       lang: 'es',
       academy: 'Cerámica con Lucía',
-      kind: 'course',
-      product: 'Torno',
-      amount: '49,00 €',
+      product: { title: 'Torno', kind: 'course' },
       full: true,
+      seller: { name: 'Cerámica con Lucía', legalName: null, contactEmail: null },
     });
-    expect(full.subject).toBe('Te hemos devuelto 49,00 € de «Torno»');
-    expect(full.body).toContain('Cerámica con Lucía te ha devuelto 49,00 €');
-    expect(full.body).toContain('ya no tienes acceso al curso');
-    const partial = refundIssuedTexts({
+    expect(full.subject).toMatch(/^Te hemos devuelto 49,00\s€ de «Torno»$/);
+    expect(full.text).toMatch(/Cerámica con Lucía te ha devuelto 49,00\s€/);
+    expect(full.text).toContain('ya no tienes acceso al curso');
+    expect(full.text).toContain('Pedido: 3F2A9C1B');
+    expect(full.text).toContain('Se devuelve a: Visa ···· 4242');
+    const partial = buildRefundEmail(brand('Sourdough with Sam'), {
+      ...base,
       lang: 'en',
       academy: 'Sourdough with Sam',
-      kind: 'course',
-      product: 'Bread',
-      amount: '£10.00',
+      currency: 'gbp',
+      refunded: 1000,
+      originallyPaid: 4900,
+      product: { title: 'Bread', kind: 'course' },
       full: false,
+      seller: { name: 'Sourdough with Sam', legalName: null, contactEmail: null },
     });
-    expect(partial.body).toContain('You still have access to the course.');
-    const membership = refundIssuedTexts({
+    expect(partial.text).toContain('You still have access to the course.');
+    expect(partial.text).toContain('You paid: £49.00');
+    const membership = buildRefundEmail(brand('Escola de Violão da Ana'), {
+      ...base,
       lang: 'pt',
       academy: 'Escola de Violão da Ana',
-      kind: 'membership',
-      product: 'Mensal',
-      amount: '€ 29,00',
+      refunded: 2900,
+      originallyPaid: 2900,
+      product: { title: 'Mensal', kind: 'membership' },
       full: true,
+      seller: { name: 'Escola de Violão da Ana', legalName: null, contactEmail: null },
     });
-    expect(membership.subject).toBe('Devolvemos € 29,00 de “Mensal”');
-    expect(membership.body).not.toMatch(/acesso/);
-    expect(`${membership.subject} ${membership.body}`).not.toMatch(/devuelto|tarjeta|«/);
+    expect(membership.subject).toMatch(/^Devolvemos €\s29,00 de “Mensal”$/);
+    expect(membership.text).not.toMatch(/acesso ao curso/);
+    expect(`${membership.subject} ${membership.text}`).not.toMatch(/devuelto|tarjeta|«/);
   });
 
   it('va al alumno, en su idioma, con la marca y el SMTP de la academia', async () => {
@@ -489,6 +590,9 @@ describe('aviso al ALUMNO al reembolsarle', () => {
     expect(sent).toHaveLength(1);
     expect(sent[0]).toMatchObject({ to: 'marta@example.test', from: 'Aula de Ana' });
     expect(sent[0]!.subject).toMatch(/^Te hemos devuelto 49,00\s€ de «Torno para principiantes»$/);
+    // Con aspecto de recibo y la marca del aula: importe grande, pedido y vendedor.
+    expect(sent[0]!.html).toContain('Reembolso de Aula de Ana');
+    expect(sent[0]!.text).toContain('Vendido por'.toUpperCase());
     expect(sent[0]!.text).toContain('ya no tienes acceso al curso');
   });
 

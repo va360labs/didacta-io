@@ -640,6 +640,24 @@ model PurchaseConsent {
   @@map("purchase_consent")
 }
 
+/// Correos de venta que salen por un evento REPETIBLE de Stripe (recibo de una
+/// renovación, aviso de cobro fallido): sello de idempotencia. Quien envía
+/// inserta primero la fila (`tenant_id`, `kind`, `ref`); si ya existe, una
+/// reentrega del webhook no vuelve a escribir al alumno. Preferimos un correo
+/// de menos a dos iguales: si el envío falla después de sellar, no se reintenta.
+model SaleEmailSent {
+  id       String   @id @default(uuid()) @db.Uuid
+  tenantId String   @map("tenant_id") @db.Uuid
+  /// `renewal_receipt` | `payment_failed`.
+  kind     String   @db.VarChar(40)
+  /// La factura de Stripe (y el intento, en un cobro fallido).
+  ref      String   @db.VarChar(200)
+  sentAt   DateTime @default(now()) @map("sent_at")
+
+  @@unique([tenantId, kind, ref])
+  @@map("sale_email_sent")
+}
+
 // ============================================================================
 // EVIDENCE VAULT
 // ============================================================================

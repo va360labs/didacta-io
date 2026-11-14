@@ -188,6 +188,9 @@ export class SubscriptionsWebhookController {
     // del tenant — con el tenant ya resuelto arriba, preferimos su dominio
     // primario.
     const webBaseUrl = await this.tenantResolver.resolveTenantWebBaseUrl(tenantId, req);
+    // Si va a salir el RECIBO de esta compra, él lleva el enlace para elegir
+    // contraseña: la bienvenida suelta no se manda (un correo, no dos).
+    const deferWelcome = (await this.consents?.receiptPending(tenantId, event)) ?? false;
     await dispatchStripeEventToAll({
       event,
       parsedBody,
@@ -195,12 +198,13 @@ export class SubscriptionsWebhookController {
       webBaseUrl,
       ctx,
       consumers,
-      provisionMember: (args) => this.provisioning.provision(args),
-      provisionBuyer: (args) => this.billingProvisioning.provision(args),
+      provisionMember: (args) => this.provisioning.provision({ ...args, deferWelcome }),
+      provisionBuyer: (args) => this.billingProvisioning.provision({ ...args, deferWelcome }),
       logger: this.logger,
     });
-    // Pago confirmado: correo con el texto que aceptó el comprador. Nunca lanza.
-    await this.consents?.confirmCheckout(tenantId, event);
+    // Correos al comprador: recibo de la compra, de cada renovación y aviso de
+    // cobro fallido. Nunca lanza.
+    await this.consents?.afterStripeEvent(tenantId, event, ctx);
 
     return { received: true, type: event.type, id: event.id };
   }

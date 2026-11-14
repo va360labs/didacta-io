@@ -1,0 +1,323 @@
+/**
+ * Copyright (c) VA360 LABS S.L.
+ * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
+ */
+
+import type { EmailLang } from '../../common/branded-email';
+
+/**
+ * Textos FIJOS de los correos de venta y acceso: rótulos del recibo, notas,
+ * botones y letra pequeña. No los edita el creador (lo editable es el asunto y
+ * el mensaje, `sale-email-templates.ts`): son la parte que da validez al recibo
+ * y que tiene que salir igual en cada aula.
+ *
+ * Portugués de Brasil: «escola» es la academia, «assinatura» la membresía y la
+ * suscripción, «recebimentos» los cobros del creador y «nota fiscal» la
+ * factura, como en el panel.
+ *
+ * `{marcadores}` entre llaves sencillas: los rellena `fill()`.
+ */
+export const SALE_EMAIL_COPY = {
+  es: {
+    receiptEyebrow: 'Recibo de {academy}',
+    paidOn: 'Pagado el {date}',
+    trialNote: 'Prueba gratis: hoy no se cobra nada',
+    factOrder: 'Pedido',
+    factDate: 'Fecha',
+    factMethod: 'Método de pago',
+    summaryHeading: 'Resumen del pedido',
+    kindCourse: 'Curso · pago único',
+    kindMembership: 'Membresía · {interval}',
+    kindCourseSubscription: 'Curso · suscripción {interval}',
+    intervalWeek: 'semanal',
+    intervalMonth: 'mensual',
+    intervalQuarter: 'trimestral',
+    intervalHalf: 'semestral',
+    intervalYear: 'anual',
+    intervalMonths: 'cada {n} meses',
+    subtotal: 'Subtotal',
+    discount: 'Descuento',
+    tax: 'Impuestos',
+    totalPaid: 'Total pagado',
+    totalToday: 'Total hoy',
+    // Sin línea de impuestos de Stripe no se afirma nada sobre el IVA (hay
+    // creadores que no lo cobran): el total se llama «Precio final».
+    finalPrice: 'Precio final',
+    nextRenewal:
+      'Se renueva el {date} por {amount}. Puedes darte de baja cuando quieras desde tu cuenta.',
+    trialFirstCharge:
+      'Tu prueba gratis dura hasta el {date}. Ese día se cobrarán {amount} si no te das de baja antes.',
+    soldBy: 'Vendido por',
+    legalName: 'Nombre fiscal: {name}',
+    contact: 'Contacto: {email}',
+    withdrawalHeading: 'Tu derecho de desistimiento',
+    withdrawalLead: 'Antes de pagar, el {date}, marcaste esta casilla:',
+    withdrawalQuote: '«{text}»',
+    withdrawalEffect:
+      'Por eso tienes acceso desde ya y no hay plazo de 14 días para desistir de esta compra (versión del texto {version}).',
+    refundPolicy: 'Política de devoluciones',
+    notInvoice:
+      'Este correo es tu justificante de pago, no una factura. Si necesitas factura, responde a este correo.',
+    securePayment: 'Pago procesado de forma segura por Stripe.',
+    whyPurchase: 'Recibes este correo porque has comprado en {academy}.',
+    whySubscription: 'Recibes este correo porque tienes una suscripción en {academy}.',
+    ctaSetPassword: 'Elige tu contraseña y entra',
+    ctaSetPasswordNote: 'El botón vale 7 días. Tu usuario es {email}.',
+    ctaCourse: 'Ir a mi curso',
+    ctaAcademy: 'Entrar en {academy}',
+    ctaEnterNote: 'Entra con tu correo {email}.',
+    subscriptionHeading: 'Tu suscripción',
+    nextRenewalShort: 'Próxima renovación: {date}.',
+    manageSubscription: 'Gestionar mi suscripción',
+    failedEyebrow: 'Pago pendiente en {academy}',
+    failedOn: 'No hemos podido cobrarlo el {date}',
+    failedSummaryHeading: 'Detalle del cobro',
+    amountDue: 'Importe pendiente',
+    failedDeadline: 'Actualiza tu método de pago antes del {date} para no perder el acceso.',
+    failedNoDeadline: 'Actualiza tu método de pago cuanto antes para no perder el acceso.',
+    failedRetry: 'Volveremos a intentar el cobro el {date}.',
+    ctaUpdateCard: 'Actualizar mi método de pago',
+    refundEyebrow: 'Reembolso de {academy}',
+    refundedOn: 'Devuelto el {date}',
+    refundedTo: 'Se devuelve a',
+    refundSummaryHeading: 'Detalle del reembolso',
+    youPaid: 'Pagaste',
+    refunded: 'Te devolvemos',
+    refundArrival: 'Lo verás en tu cuenta en 5 a 10 días hábiles, según tu banco.',
+    refundAccessGone: 'Al devolverte el importe completo, ya no tienes acceso al curso.',
+    refundAccessKept: 'Sigues teniendo acceso al curso.',
+    fallbackProduct: 'tu compra',
+    sepaDebit: 'Domiciliación SEPA',
+  },
+  en: {
+    receiptEyebrow: 'Receipt from {academy}',
+    paidOn: 'Paid on {date}',
+    trialNote: 'Free trial: nothing is charged today',
+    factOrder: 'Order',
+    factDate: 'Date',
+    factMethod: 'Payment method',
+    summaryHeading: 'Order summary',
+    kindCourse: 'Course · one-off payment',
+    kindMembership: 'Membership · {interval}',
+    kindCourseSubscription: 'Course · {interval} subscription',
+    intervalWeek: 'weekly',
+    intervalMonth: 'monthly',
+    intervalQuarter: 'quarterly',
+    intervalHalf: 'every six months',
+    intervalYear: 'yearly',
+    intervalMonths: 'every {n} months',
+    subtotal: 'Subtotal',
+    discount: 'Discount',
+    tax: 'Tax',
+    totalPaid: 'Total paid',
+    totalToday: 'Total today',
+    finalPrice: 'Final price',
+    nextRenewal: 'Renews on {date} for {amount}. You can cancel at any time from your account.',
+    trialFirstCharge:
+      'Your free trial lasts until {date}. On that day you will be charged {amount} unless you cancel before.',
+    soldBy: 'Sold by',
+    legalName: 'Legal name: {name}',
+    contact: 'Contact: {email}',
+    withdrawalHeading: 'Your right of withdrawal',
+    withdrawalLead: 'Before paying, on {date}, you ticked this box:',
+    withdrawalQuote: '“{text}”',
+    withdrawalEffect:
+      "That's why you have access right away and there is no 14-day period to withdraw from this purchase (text version {version}).",
+    refundPolicy: 'Refund policy',
+    notInvoice:
+      'This email is your proof of payment, not an invoice. If you need an invoice, reply to this email.',
+    securePayment: 'Payment processed securely by Stripe.',
+    whyPurchase: 'You are receiving this email because you made a purchase at {academy}.',
+    whySubscription: 'You are receiving this email because you have a subscription at {academy}.',
+    ctaSetPassword: 'Choose your password and get in',
+    ctaSetPasswordNote: 'The button works for 7 days. Your username is {email}.',
+    ctaCourse: 'Go to my course',
+    ctaAcademy: 'Go to {academy}',
+    ctaEnterNote: 'Sign in with your email {email}.',
+    subscriptionHeading: 'Your subscription',
+    nextRenewalShort: 'Next renewal: {date}.',
+    manageSubscription: 'Manage my subscription',
+    failedEyebrow: 'Payment due at {academy}',
+    failedOn: 'We could not charge it on {date}',
+    failedSummaryHeading: 'Payment details',
+    amountDue: 'Amount due',
+    failedDeadline: 'Update your payment method before {date} to keep your access.',
+    failedNoDeadline: 'Update your payment method as soon as possible to keep your access.',
+    failedRetry: 'We will try to charge it again on {date}.',
+    ctaUpdateCard: 'Update my payment method',
+    refundEyebrow: 'Refund from {academy}',
+    refundedOn: 'Refunded on {date}',
+    refundedTo: 'Refunded to',
+    refundSummaryHeading: 'Refund details',
+    youPaid: 'You paid',
+    refunded: 'Refunded',
+    refundArrival: 'It will show in your account in 5 to 10 business days, depending on your bank.',
+    refundAccessGone:
+      'As the full amount has been refunded, you no longer have access to the course.',
+    refundAccessKept: 'You still have access to the course.',
+    fallbackProduct: 'your purchase',
+    sepaDebit: 'SEPA Direct Debit',
+  },
+  pt: {
+    receiptEyebrow: 'Recibo de {academy}',
+    paidOn: 'Pago em {date}',
+    trialNote: 'Teste grátis: nada é cobrado hoje',
+    factOrder: 'Pedido',
+    factDate: 'Data',
+    factMethod: 'Forma de pagamento',
+    summaryHeading: 'Resumo do pedido',
+    kindCourse: 'Curso · pagamento único',
+    kindMembership: 'Assinatura · {interval}',
+    kindCourseSubscription: 'Curso · assinatura {interval}',
+    intervalWeek: 'semanal',
+    intervalMonth: 'mensal',
+    intervalQuarter: 'trimestral',
+    intervalHalf: 'semestral',
+    intervalYear: 'anual',
+    intervalMonths: 'a cada {n} meses',
+    subtotal: 'Subtotal',
+    discount: 'Desconto',
+    tax: 'Impostos',
+    totalPaid: 'Total pago',
+    totalToday: 'Total hoje',
+    finalPrice: 'Preço final',
+    nextRenewal: 'Renova em {date} por {amount}. Você pode cancelar quando quiser na sua conta.',
+    trialFirstCharge:
+      'Seu teste grátis vai até {date}. Nesse dia serão cobrados {amount}, a menos que você cancele antes.',
+    soldBy: 'Vendido por',
+    legalName: 'Nome legal: {name}',
+    contact: 'Contato: {email}',
+    withdrawalHeading: 'Seu direito de desistência',
+    withdrawalLead: 'Antes de pagar, em {date}, você marcou esta caixa:',
+    withdrawalQuote: '“{text}”',
+    withdrawalEffect:
+      'Por isso você tem acesso desde já e não há prazo de 14 dias para desistir desta compra (versão do texto {version}).',
+    refundPolicy: 'Política de reembolso',
+    notInvoice:
+      'Este e-mail é o seu comprovante de pagamento, não uma nota fiscal. Se precisar de nota fiscal, responda a este e-mail.',
+    securePayment: 'Pagamento processado com segurança pela Stripe.',
+    whyPurchase: 'Você está recebendo este e-mail porque fez uma compra em {academy}.',
+    whySubscription: 'Você está recebendo este e-mail porque tem uma assinatura em {academy}.',
+    ctaSetPassword: 'Crie sua senha e entre',
+    ctaSetPasswordNote: 'O botão vale por 7 dias. Seu usuário é {email}.',
+    ctaCourse: 'Ir para o meu curso',
+    ctaAcademy: 'Entrar em {academy}',
+    ctaEnterNote: 'Entre com seu e-mail {email}.',
+    subscriptionHeading: 'Sua assinatura',
+    nextRenewalShort: 'Próxima renovação: {date}.',
+    manageSubscription: 'Gerenciar minha assinatura',
+    failedEyebrow: 'Pagamento pendente em {academy}',
+    failedOn: 'Não conseguimos cobrar em {date}',
+    failedSummaryHeading: 'Detalhes da cobrança',
+    amountDue: 'Valor pendente',
+    failedDeadline: 'Atualize sua forma de pagamento antes de {date} para não perder o acesso.',
+    failedNoDeadline: 'Atualize sua forma de pagamento o quanto antes para não perder o acesso.',
+    failedRetry: 'Vamos tentar cobrar de novo em {date}.',
+    ctaUpdateCard: 'Atualizar forma de pagamento',
+    refundEyebrow: 'Reembolso de {academy}',
+    refundedOn: 'Devolvido em {date}',
+    refundedTo: 'Devolvido para',
+    refundSummaryHeading: 'Detalhes do reembolso',
+    youPaid: 'Você pagou',
+    refunded: 'Devolvido',
+    refundArrival: 'O valor aparece na sua conta em 5 a 10 dias úteis, dependendo do banco.',
+    refundAccessGone: 'Como o valor foi devolvido por completo, você não tem mais acesso ao curso.',
+    refundAccessKept: 'Você continua com acesso ao curso.',
+    fallbackProduct: 'sua compra',
+    sepaDebit: 'Débito SEPA',
+  },
+} satisfies Record<EmailLang, Record<string, string>>;
+
+export type SaleEmailCopy = (typeof SALE_EMAIL_COPY)['es'];
+
+/**
+ * Textos del aviso de VENTA a la creadora (lo firma el operador: Didacta).
+ * `{percent}` y `{operator}` en el rótulo de la comisión, como en «Ventas».
+ */
+export const CREATOR_SALE_COPY = {
+  es: {
+    eyebrowCourse: 'Nueva venta en {academy}',
+    eyebrowMembership: 'Nuevo miembro en {academy}',
+    eyebrowRenewal: 'Renovación en {academy}',
+    factBuyer: 'Comprador',
+    breakdownHeading: 'Lo que te llega',
+    paidByStudent: 'Pagado por el alumno',
+    receivedIn: 'Recibido en {currency}',
+    cardFee: 'Comisión de la tarjeta',
+    operatorFee: '{percent} % de {operator}',
+    debtNetted: 'Para saldar lo que debías',
+    youReceive: 'Te llega',
+    pendingValue: 'Calculando…',
+    feesPending:
+      'La comisión de la tarjeta se conoce en cuanto el banco confirma el pago. En unos minutos la tienes en Ventas.',
+    whenHeading: 'Cuándo te llega',
+    whenArrival: 'Llegará a tu banco hacia el {date}.',
+    whenSent: 'Ya está enviada a tu cuenta.',
+    whenPending: 'En cuanto se confirme el pago verás en Ventas el día exacto.',
+    whenNetted: 'Se ha usado entera para saldar lo que debías.',
+    whenHeldTaxData:
+      'Retenida hasta que completes tus datos fiscales. Es un minuto: entra en Ventas y complétalos; el dinero está a salvo y te llega en cuanto lo hagas.',
+    whenHeld:
+      'Retenida: lo volvemos a intentar cada día. Si falta algún dato de cobro, lo verás en Ventas.',
+    buyerHeading: 'Quién ha comprado',
+  },
+  en: {
+    eyebrowCourse: 'New sale at {academy}',
+    eyebrowMembership: 'New member at {academy}',
+    eyebrowRenewal: 'Renewal at {academy}',
+    factBuyer: 'Buyer',
+    breakdownHeading: 'What you receive',
+    paidByStudent: 'Paid by the student',
+    receivedIn: 'Received in {currency}',
+    cardFee: 'Card fee',
+    operatorFee: '{operator} {percent}% fee',
+    debtNetted: 'To settle what you owed',
+    youReceive: 'You receive',
+    pendingValue: 'Calculating…',
+    feesPending:
+      'The card fee is known as soon as the bank confirms the payment. You will see it in Sales in a few minutes.',
+    whenHeading: 'When it arrives',
+    whenArrival: 'It will reach your bank around {date}.',
+    whenSent: 'It has already been sent to your account.',
+    whenPending: 'As soon as the payment is confirmed you will see the exact day in Sales.',
+    whenNetted: 'It was used in full to settle what you owed.',
+    whenHeldTaxData:
+      'On hold until you complete your tax details. It only takes a minute: open Sales and fill them in; the money is safe and reaches you as soon as you do.',
+    whenHeld:
+      'On hold: we try again every day. If a payout detail is missing, you will see it in Sales.',
+    buyerHeading: 'Who bought it',
+  },
+  pt: {
+    eyebrowCourse: 'Nova venda em {academy}',
+    eyebrowMembership: 'Novo membro em {academy}',
+    eyebrowRenewal: 'Renovação em {academy}',
+    factBuyer: 'Comprador',
+    breakdownHeading: 'O que você recebe',
+    paidByStudent: 'Pago pelo aluno',
+    receivedIn: 'Recebido em {currency}',
+    cardFee: 'Taxa do cartão',
+    operatorFee: '{percent}% da {operator}',
+    debtNetted: 'Para quitar o que você devia',
+    youReceive: 'Você recebe',
+    pendingValue: 'Calculando…',
+    feesPending:
+      'A taxa do cartão é conhecida assim que o banco confirma o pagamento. Em poucos minutos ela aparece em Vendas.',
+    whenHeading: 'Quando chega',
+    whenArrival: 'Chega ao seu banco por volta de {date}.',
+    whenSent: 'Já foi enviado para a sua conta.',
+    whenPending: 'Assim que o pagamento for confirmado, você vê o dia exato em Vendas.',
+    whenNetted: 'Foi usado por inteiro para quitar o que você devia.',
+    whenHeldTaxData:
+      'Retido até você completar seus dados fiscais. Leva um minuto: abra Vendas e preencha; o dinheiro está seguro e chega assim que você fizer isso.',
+    whenHeld:
+      'Retido: tentamos de novo todos os dias. Se faltar algum dado de recebimentos, você verá em Vendas.',
+    buyerHeading: 'Quem comprou',
+  },
+} satisfies Record<EmailLang, Record<string, string>>;
+
+/** Rellena `{marcador}` con los valores dados; lo que no esté se queda tal cual. */
+export function fill(template: string, values: Record<string, string | number>): string {
+  return template.replace(/\{(\w+)\}/g, (whole, key: string) =>
+    key in values ? String(values[key]) : whole,
+  );
+}

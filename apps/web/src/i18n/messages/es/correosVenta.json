@@ -1,0 +1,64 @@
+{
+  "titulo": "Correos",
+  "tituloCompleto": "Correos de venta y acceso",
+  "sub": "Lo que reciben tus alumnos al comprar. Cambia el asunto y el mensaje a tu gusto: debajo va siempre el recibo con los datos de la compra.",
+  "errorCargar": "No se han podido cargar los correos. Recarga la página.",
+  "original": "Original",
+  "personalizado": "Personalizado",
+  "plantillas": {
+    "purchase_receipt": {
+      "nombre": "Recibo de compra",
+      "cuando": "Al pagar un curso o empezar una membresía. Lleva el botón para entrar."
+    },
+    "purchase_renewal_receipt": {
+      "nombre": "Recibo de renovación",
+      "cuando": "Cada vez que se cobra una suscripción."
+    },
+    "purchase_payment_failed": {
+      "nombre": "Pago fallido",
+      "cuando": "Cuando el banco rechaza el cobro de una renovación."
+    },
+    "purchase_refund": {
+      "nombre": "Reembolso",
+      "cuando": "Cuando devuelves el dinero de una venta."
+    }
+  },
+  "idioma": "Idioma del correo",
+  "idiomaAyuda": "Cada alumno lo recibe en su idioma. Si vendes en varios idiomas, revisa el texto de cada uno.",
+  "asunto": "Asunto",
+  "mensaje": "Mensaje",
+  "datos": "Añadir un dato de la compra",
+  "datosAyuda": "Se cambia por el dato real de cada alumno al enviarlo.",
+  "vars": {
+    "name": "Nombre del alumno",
+    "product": "Curso o membresía",
+    "amount": "Importe",
+    "order": "Nº de pedido",
+    "date": "Fecha",
+    "academy": "Tu academia",
+    "email": "Correo del alumno",
+    "nextDate": "Próxima renovación",
+    "deadline": "Fecha límite para pagar"
+  },
+  "reciboFijo": "El recibo (pedido, importe, método de pago, quién vende y la renuncia al desistimiento) va siempre debajo de tu mensaje y no se puede quitar.",
+  "guardar": "Guardar",
+  "guardando": "Guardando…",
+  "guardado": "Guardado. Los próximos correos saldrán así.",
+  "probar": "Enviarme una prueba",
+  "enviando": "Enviando…",
+  "pruebaEnviada": "Te hemos enviado una prueba a {email}. Si no llega, mira en spam.",
+  "volverOriginal": "Volver al original",
+  "originalConfirmar": "¿Volver al texto original de «{nombre}» en {idioma}? Se pierde lo que escribiste.",
+  "originalHecho": "Vuelve a salir el texto original.",
+  "vistaPrevia": "Vista previa con datos de ejemplo",
+  "ordenador": "Ordenador",
+  "movil": "Móvil",
+  "errorVista": "No se ha podido preparar la vista previa.",
+  "errorGuardar": "No se ha podido guardar. Inténtalo de nuevo.",
+  "errorPrueba": "No se ha podido enviar la prueba.",
+  "politica": "Política de devoluciones",
+  "politicaAyuda": "Si tienes una página con tu política de devoluciones, pega aquí el enlace y saldrá en cada recibo.",
+  "politicaGuardar": "Guardar enlace",
+  "politicaGuardada": "Enlace guardado.",
+  "politicaInvalida": "Pega un enlace que empiece por https://"
+}

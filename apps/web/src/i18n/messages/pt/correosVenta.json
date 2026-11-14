@@ -1,0 +1,64 @@
+{
+  "titulo": "E-mails",
+  "tituloCompleto": "E-mails de venda e acesso",
+  "sub": "O que seus alunos recebem ao comprar. Mude o assunto e a mensagem como quiser: o recibo com os dados da compra vai sempre embaixo.",
+  "errorCargar": "Não foi possível carregar os e-mails. Recarregue a página.",
+  "original": "Original",
+  "personalizado": "Personalizado",
+  "plantillas": {
+    "purchase_receipt": {
+      "nombre": "Recibo de compra",
+      "cuando": "Ao pagar um curso ou começar uma assinatura. Leva o botão para entrar."
+    },
+    "purchase_renewal_receipt": {
+      "nombre": "Recibo de renovação",
+      "cuando": "Cada vez que uma assinatura é cobrada."
+    },
+    "purchase_payment_failed": {
+      "nombre": "Pagamento recusado",
+      "cuando": "Quando o banco recusa a cobrança de uma renovação."
+    },
+    "purchase_refund": {
+      "nombre": "Reembolso",
+      "cuando": "Quando você devolve o dinheiro de uma venda."
+    }
+  },
+  "idioma": "Idioma do e-mail",
+  "idiomaAyuda": "Cada aluno recebe no seu idioma. Se você vende em vários idiomas, revise o texto de cada um.",
+  "asunto": "Assunto",
+  "mensaje": "Mensagem",
+  "datos": "Adicionar um dado da compra",
+  "datosAyuda": "É trocado pelo dado real de cada aluno no envio.",
+  "vars": {
+    "name": "Nome do aluno",
+    "product": "Curso ou assinatura",
+    "amount": "Valor",
+    "order": "Nº do pedido",
+    "date": "Data",
+    "academy": "Sua escola",
+    "email": "E-mail do aluno",
+    "nextDate": "Próxima renovação",
+    "deadline": "Prazo para pagar"
+  },
+  "reciboFijo": "O recibo (pedido, valor, forma de pagamento, quem vende e a renúncia à desistência) vai sempre embaixo da sua mensagem e não pode ser removido.",
+  "guardar": "Salvar",
+  "guardando": "Salvando…",
+  "guardado": "Salvo. Os próximos e-mails vão sair assim.",
+  "probar": "Enviar um teste para mim",
+  "enviando": "Enviando…",
+  "pruebaEnviada": "Enviamos um teste para {email}. Se não chegar, olhe no spam.",
+  "volverOriginal": "Voltar ao original",
+  "originalConfirmar": "Voltar ao texto original de “{nombre}” em {idioma}? O que você escreveu será perdido.",
+  "originalHecho": "O texto original voltou.",
+  "vistaPrevia": "Prévia com dados de exemplo",
+  "ordenador": "Computador",
+  "movil": "Celular",
+  "errorVista": "Não foi possível preparar a prévia.",
+  "errorGuardar": "Não foi possível salvar. Tente de novo.",
+  "errorPrueba": "Não foi possível enviar o teste.",
+  "politica": "Política de reembolso",
+  "politicaAyuda": "Se você tem uma página com sua política de reembolso, cole o link aqui e ele vai aparecer em cada recibo.",
+  "politicaGuardar": "Salvar link",
+  "politicaGuardada": "Link salvo.",
+  "politicaInvalida": "Cole um link que comece com https://"
+}

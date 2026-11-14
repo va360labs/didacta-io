@@ -91,6 +91,11 @@ export class BillingProvisioningService {
      * primer acceso («tu curso ya te espera dentro»), no a la comunidad.
      */
     courseId?: string;
+    /**
+     * Va a salir el RECIBO de la compra y él lleva el enlace para elegir
+     * contraseña: no se manda la bienvenida suelta (un correo, no dos).
+     */
+    deferWelcome?: boolean;
   }): Promise<{ userId: string; created: boolean }> {
     const { tenantId, email } = args;
     const existing = await this.prisma.user.findUnique({
@@ -160,15 +165,19 @@ export class BillingProvisioningService {
       userAgent: args.ctx.userAgent ?? undefined,
     });
 
-    await this.sendWelcomeEmail(
-      tenantId,
-      email,
-      args.name,
-      args.webBaseUrl,
-      args.ctx,
-      resolveRecipientLocale(user.locale),
-      await this.coursePath(tenantId, args.courseId),
-    );
+    // Con recibo de la compra en camino, el enlace para elegir contraseña va
+    // dentro del recibo: aquí no se manda otra bienvenida.
+    if (!args.deferWelcome) {
+      await this.sendWelcomeEmail(
+        tenantId,
+        email,
+        args.name,
+        args.webBaseUrl,
+        args.ctx,
+        resolveRecipientLocale(user.locale),
+        await this.coursePath(tenantId, args.courseId),
+      );
+    }
     return { userId: user.id, created: true };
   }
 

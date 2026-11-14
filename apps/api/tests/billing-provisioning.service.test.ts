@@ -150,6 +150,16 @@ describe('BillingProvisioningService.provision', () => {
     expect(sent.text).toContain('reset-password?token=tok-123');
   });
 
+  it('con el recibo de la compra en camino, la cuenta se crea pero la bienvenida suelta NO sale', async () => {
+    // El recibo lleva el enlace para elegir contraseña: un correo, no dos.
+    const { svc, smtp, passwordReset, auditLog } = makeMocks();
+    const result = await svc.provision({ ...args, deferWelcome: true });
+    expect(result).toEqual({ userId: 'user-nuevo', created: true });
+    expect((auditLog as { record: ReturnType<typeof vi.fn> }).record).toHaveBeenCalled();
+    expect((smtp as { send: ReturnType<typeof vi.fn> }).send).not.toHaveBeenCalled();
+    expect((passwordReset as { request: ReturnType<typeof vi.fn> }).request).not.toHaveBeenCalled();
+  });
+
   it('sin SMTP del tenant: el user se crea igual y el webhook NO falla', async () => {
     const { svc, smtp, logger } = makeMocks({ smtpResolved: false });
 

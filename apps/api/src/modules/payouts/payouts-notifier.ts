@@ -11,18 +11,36 @@ import type {
   SaleNoticeKind,
 } from '@didacta/mod-payouts';
 import type { Logger as PinoLogger } from 'nestjs-pino';
-import { academyLocale, type AcademyDefaultsPrisma } from '../../common/academy-defaults';
+import {
+  academyLocale,
+  academyTimeZone,
+  type AcademyDefaultsPrisma,
+} from '../../common/academy-defaults';
 import {
   escapeHtml,
-  PLAIN_EMAIL_INTL_LOCALE,
   renderBrandedEmail,
   resolveEmailBranding,
   textToHtmlParagraphs,
   type BrandingPrisma,
+  type EmailBranding,
   type EmailLang,
 } from '../../common/branded-email';
+import { formatDay, formatMinor } from '../../common/money-format';
 import type { PrismaService } from '../../prisma/prisma.service';
-import { toHubTemplateLang } from '../notifications/email-template-catalog';
+import {
+  fetchEmailOverride,
+  toHubTemplateLang,
+  type TemplateOverridePrisma,
+} from '../notifications/email-template-catalog';
+import {
+  buildCreatorSaleEmail,
+  buildRefundEmail,
+  orderReference,
+  type CreatorSaleData,
+  type PaymentMethodView,
+  type RenderedEmail,
+} from '../sale-emails/sale-email-render';
+import { SALE_EMAIL_STORAGE_LOCALE } from '../sale-emails/sale-email-templates';
 import { runAsTenant } from '../../tenancy/tenant-context.storage';
 import type { TenantResolverService } from '../../tenancy/tenant-resolver.service';
 import type { SmtpAdapterService } from '../smtp-adapter.service';
@@ -76,6 +94,11 @@ export interface PayoutsEmailNotifierDeps {
   readonly tenantResolver?: TenantResolverService;
   /** La campana (notificaciones del aula). Perezoso: el hub vive en otro módulo. */
   readonly hub?: () => NotificationHubLike | null;
+  /**
+   * Marca y 4 últimas cifras del medio de pago de un cargo (Stripe de la
+   * plataforma), para el recibo del reembolso. Sin él, el recibo no lo dice.
+   */
+  readonly chargeMethod?: (chargeId: string) => Promise<PaymentMethodView | null>;
 }
 
 const ADMIN_ROLES = ['tenant_admin'];
@@ -105,46 +128,8 @@ interface CreatorRecipient {
   readonly locale: string | null;
 }
 
-/** Importe de Stripe (unidad mínima) legible: «93,25 €», «€93.25». */
-export function formatMinor(amount: number, currency: string, lang: EmailLang): string {
-  const zeroDecimal = new Set([
-    'bif',
-    'clp',
-    'djf',
-    'gnf',
-    'jpy',
-    'kmf',
-    'krw',
-    'mga',
-    'pyg',
-    'rwf',
-    'vnd',
-    'vuv',
-    'xaf',
-    'xof',
-    'xpf',
-  ]);
-  const digits = zeroDecimal.has(currency.toLowerCase()) ? 0 : 2;
-  try {
-    return new Intl.NumberFormat(PLAIN_EMAIL_INTL_LOCALE[lang], {
-      style: 'currency',
-      currency: currency.toUpperCase(),
-      minimumFractionDigits: digits,
-      maximumFractionDigits: digits,
-    }).format(digits === 0 ? amount : amount / 100);
-  } catch {
-    return `${(digits === 0 ? amount : amount / 100).toFixed(digits)} ${currency.toUpperCase()}`;
-  }
-}
-
-function formatDay(date: Date, lang: EmailLang): string {
-  return new Intl.DateTimeFormat(PLAIN_EMAIL_INTL_LOCALE[lang], {
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric',
-    timeZone: 'UTC',
-  }).format(date);
-}
+/** Re-exportado: los avisos de cobros lo han importado siempre de aquí. */
+export { formatMinor };
 
 /** «una venta» cuando el pago no trae descripción. */
 const A_SALE: Readonly<Record<EmailLang, string>> = {
@@ -409,72 +394,6 @@ export function saleMadeTexts(input: {
   };
 }
 
-/**
- * Aviso al ALUMNO de un reembolso. Puro. Un curso devuelto ENTERO pierde el
- * acceso (lo retira `mod.billing` con el mismo `charge.refunded`); uno parcial
- * lo conserva. En una membresía el acceso no depende del reembolso: no se dice
- * nada de él.
- */
-export function refundIssuedTexts(input: {
-  readonly lang: EmailLang;
-  readonly academy: string;
-  readonly kind: 'course' | 'membership';
-  readonly product: string | null;
-  readonly amount: string;
-  readonly full: boolean;
-}): Omit<Texts, 'cta'> {
-  const { academy, amount } = input;
-  if (input.lang === 'pt') {
-    const item = input.product ? ` de “${input.product}”` : '';
-    const access =
-      input.kind === 'course'
-        ? input.full
-          ? 'Como o valor foi devolvido por completo, você não tem mais acesso ao curso.'
-          : 'Você continua com acesso ao curso.'
-        : null;
-    return {
-      subject: `Devolvemos ${amount}${item}`,
-      title: `Devolvemos ${amount}${item}`,
-      body:
-        `${academy} devolveu ${amount} da sua compra${item}. Você verá o valor no seu cartão em 5 a 10 dias, dependendo do banco.` +
-        (access ? `\n\n${access}` : '') +
-        `\n\nSe tiver alguma dúvida, responda a este e-mail.`,
-    };
-  }
-  if (input.lang === 'en') {
-    const item = input.product ? ` for "${input.product}"` : '';
-    const access =
-      input.kind === 'course'
-        ? input.full
-          ? 'As the full amount has been refunded, you no longer have access to the course.'
-          : 'You still have access to the course.'
-        : null;
-    return {
-      subject: `We've refunded you ${amount}${item}`,
-      title: `We've refunded you ${amount}${item}`,
-      body:
-        `${academy} has refunded ${amount} of your purchase${item}. It will show on your card in 5 to 10 days, depending on your bank.` +
-        (access ? `\n\n${access}` : '') +
-        `\n\nIf you have any questions, just reply to this email.`,
-    };
-  }
-  const item = input.product ? ` de «${input.product}»` : '';
-  const access =
-    input.kind === 'course'
-      ? input.full
-        ? 'Al devolverte el importe completo, ya no tienes acceso al curso.'
-        : 'Sigues teniendo acceso al curso.'
-      : null;
-  return {
-    subject: `Te hemos devuelto ${amount}${item}`,
-    title: `Te hemos devuelto ${amount}${item}`,
-    body:
-      `${academy} te ha devuelto ${amount} de tu compra${item}. Lo verás en tu tarjeta en 5 a 10 días, según tu banco.` +
-      (access ? `\n\n${access}` : '') +
-      `\n\nSi tienes cualquier duda, responde a este correo.`,
-  };
-}
-
 export class PayoutsEmailNotifier implements PayoutsNotifier {
   constructor(private readonly deps: PayoutsEmailNotifierDeps) {}
 
@@ -569,25 +488,33 @@ export class PayoutsEmailNotifier implements PayoutsNotifier {
       if (await this.emailWanted(input.tenantId, admin.id)) wanted.push(admin);
     }
     if (wanted.length === 0) return;
-    await this.toCreator(
+    const timeZone = await this.timeZone(input.tenantId);
+    const buyerName = buyer && buyer !== input.buyerEmail ? buyer : null;
+    await this.toCreatorRendered(
       input.tenantId,
       'payouts.sale_made',
-      (lang) =>
-        saleMadeTexts({
-          lang,
-          kind: input.kind,
-          product: input.description,
-          amount: formatMinor(input.amount, input.currency, lang),
-          buyer,
-          heldForTaxData: input.heldForTaxData,
-        }),
+      (lang, ctx) =>
+        buildCreatorSaleEmail(
+          ctx.branding,
+          creatorSaleData(input, lang, {
+            operator: this.deps.operatorName,
+            academy: ctx.academy,
+            timeZone,
+            buyerName,
+            salesUrl: ctx.base ? `${ctx.base}/admin/payments` : null,
+            footer: ctx.academy ? creatorFooter(lang, this.deps.operatorName, ctx.academy) : null,
+          }),
+        ),
       wanted,
     );
   }
 
   /**
    * Reembolso hecho: correo al ALUMNO en su idioma (o el del aula si no tiene
-   * cuenta), con la marca y el SMTP de la academia. Nunca lanza.
+   * cuenta), con la marca y el SMTP de la academia y aspecto de recibo: lo
+   * devuelto, lo que pagó, el pedido, a qué tarjeta vuelve y si pierde el
+   * acceso. El asunto y el mensaje los puede personalizar el aula
+   * (`purchase.refund`); el recibo no. Nunca lanza.
    */
   async refundIssued(input: RefundIssuedNotice): Promise<void> {
     const { prisma, logger, smtpResolver, smtp } = this.deps;
@@ -605,7 +532,7 @@ export class PayoutsEmailNotifier implements PayoutsNotifier {
       const student = await runAsTenant(input.tenantId, () =>
         prisma.user.findFirst({
           where: { tenantId: input.tenantId, email: { equals: buyerEmail, mode: 'insensitive' } },
-          select: { email: true, locale: true, deletedAt: true, status: true },
+          select: { email: true, name: true, locale: true, deletedAt: true, status: true },
         }),
       );
       // A una cuenta eliminada o suspendida no se le escribe (como en el hub).
@@ -635,23 +562,59 @@ export class PayoutsEmailNotifier implements PayoutsNotifier {
         input.tenantId,
         base,
       );
-      const t = refundIssuedTexts({
-        lang,
-        academy: branding.tenantName,
-        kind: input.kind,
-        product: input.description,
-        amount: formatMinor(input.amount, input.currency, lang),
-        full: input.full,
-      });
-      const { html, text } = renderBrandedEmail(branding, {
-        lang,
-        title: t.title,
-        bodyHtml: textToHtmlParagraphs(t.body),
-        bodyText: t.body,
-      });
+      const sale = await this.saleForReceipt(input.tenantId, input.saleId);
+      const override = await runAsTenant(input.tenantId, () =>
+        fetchEmailOverride(
+          prisma as unknown as TemplateOverridePrisma,
+          input.tenantId,
+          'purchase.refund',
+          SALE_EMAIL_STORAGE_LOCALE[lang],
+        ),
+      );
+      const contact =
+        addressOf(resolved.config.sender?.replyTo) ??
+        (resolved.source === 'tenant' || resolved.source === 'tenant_unverified'
+          ? addressOf(resolved.config.from)
+          : null);
+      let method: PaymentMethodView | null = null;
+      if (sale?.stripeChargeId && this.deps.chargeMethod) {
+        method = await this.deps.chargeMethod(sale.stripeChargeId).catch(() => null);
+      }
+      const email = buildRefundEmail(
+        branding,
+        {
+          lang,
+          timeZone: await this.timeZone(input.tenantId),
+          academy: branding.tenantName,
+          buyerName: student?.name ?? null,
+          buyerEmail: student?.email ?? buyerEmail,
+          product: {
+            title: input.description,
+            kind: input.kind === 'membership' ? 'membership' : 'course',
+            imageUrl: sale?.imageUrl ?? null,
+          },
+          orderRef: sale?.sourceRef ? orderReference(sale.sourceRef) : null,
+          refundedAt: new Date(),
+          currency: input.currency,
+          refunded: input.amount,
+          originallyPaid:
+            sale && sale.presentmentCurrency.toLowerCase() === input.currency.toLowerCase()
+              ? sale.presentmentAmount
+              : null,
+          full: input.full,
+          paymentMethod: method,
+          seller: { name: branding.tenantName, legalName: null, contactEmail: contact },
+        },
+        override,
+      );
       const result = await smtp.send(
         resolved.config,
-        { to: student?.email ?? buyerEmail, subject: t.subject, text, html },
+        {
+          to: student?.email ?? buyerEmail,
+          subject: email.subject,
+          text: email.text,
+          html: email.html,
+        },
         branding.tenantName,
       );
       if (!result.ok) {
@@ -665,6 +628,89 @@ export class PayoutsEmailNotifier implements PayoutsNotifier {
         { tenantId: input.tenantId, refundId: input.refundId, err },
         'payouts: excepción al avisar al alumno del reembolso',
       );
+    }
+  }
+
+  /** La venta de un reembolso: pedido, lo que pagó, el cargo y la portada del curso. */
+  private async saleForReceipt(
+    tenantId: string,
+    saleId: string,
+  ): Promise<{
+    sourceRef: string;
+    presentmentAmount: number;
+    presentmentCurrency: string;
+    stripeChargeId: string;
+    imageUrl: string | null;
+  } | null> {
+    try {
+      const sale = await runAsTenant(tenantId, () =>
+        this.deps.prisma.modPayoutsSale.findFirst({
+          where: { id: saleId, tenantId },
+          select: {
+            sourceKind: true,
+            sourceRef: true,
+            presentmentAmount: true,
+            presentmentCurrency: true,
+            stripeChargeId: true,
+          },
+        }),
+      );
+      if (!sale) return null;
+      let imageUrl: string | null = null;
+      if (sale.sourceKind === 'ORDER') {
+        try {
+          const order = await runAsTenant(tenantId, () =>
+            this.deps.prisma.modBillingOrder.findFirst({
+              where: { id: sale.sourceRef, tenantId },
+              select: { productId: true },
+            }),
+          );
+          const product = order
+            ? await runAsTenant(tenantId, () =>
+                this.deps.prisma.modBillingProduct.findFirst({
+                  where: { id: order.productId, tenantId },
+                  select: { courseId: true },
+                }),
+              )
+            : null;
+          const course = product
+            ? await runAsTenant(tenantId, () =>
+                this.deps.prisma.modCoursesCourse.findFirst({
+                  where: { id: product.courseId, tenantId },
+                  select: { thumbnailUrl: true },
+                }),
+              )
+            : null;
+          imageUrl =
+            course?.thumbnailUrl && /^https?:\/\//i.test(course.thumbnailUrl)
+              ? course.thumbnailUrl
+              : null;
+        } catch {
+          imageUrl = null;
+        }
+      }
+      return {
+        sourceRef: sale.sourceRef,
+        presentmentAmount: sale.presentmentAmount,
+        presentmentCurrency: sale.presentmentCurrency,
+        stripeChargeId: sale.stripeChargeId,
+        imageUrl,
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  /** Zona horaria del aula para las fechas de los correos (por defecto, Madrid). */
+  private async timeZone(tenantId: string): Promise<string> {
+    try {
+      return (
+        (await runAsTenant(tenantId, () =>
+          academyTimeZone(this.deps.prisma as unknown as AcademyDefaultsPrisma, tenantId),
+        )) ?? 'Europe/Madrid'
+      );
+    } catch {
+      return 'Europe/Madrid';
     }
   }
 
@@ -769,6 +815,37 @@ export class PayoutsEmailNotifier implements PayoutsNotifier {
     texts: (lang: EmailLang) => Texts,
     recipients?: readonly CreatorRecipient[],
   ): Promise<void> {
+    await this.toCreatorRendered(
+      tenantId,
+      kind,
+      (lang, ctx) => {
+        const t = texts(lang);
+        const { html, text } = renderBrandedEmail(ctx.branding, {
+          lang,
+          title: t.title,
+          bodyHtml: textToHtmlParagraphs(t.body),
+          bodyText: t.body,
+          ...(ctx.base ? { cta: { label: t.cta, url: `${ctx.base}/admin/payments` } } : {}),
+          ...(ctx.academy
+            ? { footerNote: creatorFooter(lang, this.deps.operatorName, ctx.academy) }
+            : {}),
+        });
+        return { subject: t.subject, html, text };
+      },
+      recipients,
+    );
+  }
+
+  /** Igual que `toCreator`, con el correo ya compuesto por idioma. */
+  private async toCreatorRendered(
+    tenantId: string,
+    kind: string,
+    compose: (
+      lang: EmailLang,
+      ctx: { branding: EmailBranding; base: string; academy: string },
+    ) => RenderedEmail,
+    recipients?: readonly CreatorRecipient[],
+  ): Promise<void> {
     const { prisma, logger, smtpResolver, smtp, operatorName } = this.deps;
     try {
       if (!smtpResolver || !smtp) return;
@@ -779,9 +856,10 @@ export class PayoutsEmailNotifier implements PayoutsNotifier {
       }
       const admins = recipients ?? (await this.admins(tenantId, kind));
       if (admins.length === 0) return;
-      const base = this.deps.tenantResolver
+      const rawBase = this.deps.tenantResolver
         ? await this.deps.tenantResolver.resolveTenantWebBaseUrlForBackground(tenantId)
         : (process.env['WEB_BASE_URL'] ?? '');
+      const base = rawBase.replace(/\/+$/, '');
       let academy = '';
       try {
         const tenant = await runAsTenant(tenantId, () =>
@@ -791,7 +869,7 @@ export class PayoutsEmailNotifier implements PayoutsNotifier {
       } catch {
         // Sin el nombre del aula, el pie no la nombra.
       }
-      const branding = {
+      const branding: EmailBranding = {
         tenantName: operatorName,
         logoUrl: null,
         brandColor: OPERATOR_BRAND_COLOR,
@@ -799,20 +877,10 @@ export class PayoutsEmailNotifier implements PayoutsNotifier {
       for (const admin of admins) {
         // Inglés y portugués con su copy; cualquier otro idioma, español.
         const lang: EmailLang = toHubTemplateLang(admin.locale);
-        const t = texts(lang);
-        const { html, text } = renderBrandedEmail(branding, {
-          lang,
-          title: t.title,
-          bodyHtml: textToHtmlParagraphs(t.body),
-          bodyText: t.body,
-          ...(base
-            ? { cta: { label: t.cta, url: `${base.replace(/\/+$/, '')}/admin/payments` } }
-            : {}),
-          ...(academy ? { footerNote: creatorFooter(lang, operatorName, academy) } : {}),
-        });
+        const email = compose(lang, { branding, base, academy });
         const result = await smtp.send(
           resolved.config,
-          { to: admin.email, subject: t.subject, text, html },
+          { to: admin.email, subject: email.subject, text: email.text, html: email.html },
           operatorName,
         );
         if (!result.ok) {
@@ -826,4 +894,84 @@ export class PayoutsEmailNotifier implements PayoutsNotifier {
       logger.warn({ tenantId, kind, err }, 'payouts: excepción al avisar al creador');
     }
   }
+}
+
+/** La dirección de un remitente «Nombre <correo>» o un correo suelto. */
+function addressOf(raw: string | null | undefined): string | null {
+  if (!raw) return null;
+  const angle = /<([^>]+)>/.exec(raw);
+  const value = (angle ? angle[1]! : raw).trim();
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value) ? value : null;
+}
+
+/**
+ * Datos del aviso de venta a la creadora a partir de lo que trae el módulo de
+ * cobros. Puro: lo fijan los tests. Dice lo que se sabe y, lo que aún no (la
+ * comisión de la tarjeta antes de que el banco confirme), lo deja «calculando»
+ * en vez de inventarlo.
+ */
+export function creatorSaleData(
+  input: SaleMadeNotice,
+  lang: EmailLang,
+  ctx: {
+    readonly operator: string;
+    readonly academy: string;
+    readonly timeZone: string;
+    readonly buyerName: string | null;
+    readonly salesUrl: string | null;
+    readonly footer: string | null;
+  },
+): CreatorSaleData {
+  const split = input.split ?? null;
+  const feeKnown = split?.stripeFee !== null && split?.stripeFee !== undefined;
+  const youReceive = !feeKnown
+    ? null
+    : (split!.transferAmount ??
+      (split!.creatorNet !== null ? split!.creatorNet - split!.debtNetted : null));
+  const status: CreatorSaleData['status'] = input.heldForTaxData
+    ? 'held_tax_data'
+    : !split
+      ? 'pending'
+      : split.status === 'SETTLED_NETTED'
+        ? 'netted'
+        : split.status === 'HELD' || split.status === 'FAILED'
+          ? 'held'
+          : (split.status === 'READY' || split.status === 'TRANSFERRED') && split.estimatedArrival
+            ? 'arrival'
+            : split.status === 'TRANSFERRED'
+              ? 'sent'
+              : 'pending';
+  return {
+    lang,
+    timeZone: ctx.timeZone,
+    operator: ctx.operator,
+    academy: ctx.academy,
+    kind: input.kind,
+    product: input.description,
+    buyerName: ctx.buyerName,
+    buyerEmail: input.buyerEmail,
+    orderRef: input.sourceRef ? orderReference(input.sourceRef) : null,
+    paidAt: input.chargedAt ?? new Date(),
+    presentmentAmount: input.amount,
+    presentmentCurrency: input.currency,
+    settlementCurrency: split?.currency ?? null,
+    gross: split?.gross ?? null,
+    cardFee: split?.stripeFee ?? null,
+    operatorFee: split?.platformFee ?? null,
+    feeBps: split?.feeBpsApplied ?? split?.currentFeeBps ?? null,
+    debtNetted: split?.debtNetted ?? 0,
+    youReceive,
+    status,
+    arrival: split?.estimatedArrival ?? null,
+    texts: saleMadeTexts({
+      lang,
+      kind: input.kind,
+      product: input.description,
+      amount: formatMinor(input.amount, input.currency, lang),
+      buyer: ctx.buyerName ?? input.buyerEmail,
+      heldForTaxData: input.heldForTaxData,
+    }),
+    salesUrl: ctx.salesUrl,
+    footer: ctx.footer,
+  };
 }

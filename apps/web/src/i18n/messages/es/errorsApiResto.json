@@ -44,5 +44,10 @@
   "VIDEO_FILE_TOO_LONG": "Este vídeo dura más de lo permitido (2 h).",
   "VIDEO_STORAGE_QUOTA": "Este vídeo no cabe en tu espacio de vídeo.",
   "VIDEO_NOT_A_VIDEO": "Esto no parece un vídeo.",
-  "ADMIN_VIDEO_PROTECTION_PLATFORM_LIBRARY": "Los vídeos subidos a la academia ya van protegidos: no hace falta ninguna clave."
+  "ADMIN_VIDEO_PROTECTION_PLATFORM_LIBRARY": "Los vídeos subidos a la academia ya van protegidos: no hace falta ninguna clave.",
+  "SALE_EMAILS_ADMIN_REQUIRED": "Solo quien administra el aula puede cambiar sus correos.",
+  "SALE_EMAIL_NOT_FOUND": "Ese correo no existe.",
+  "SALE_EMAIL_TEST_NO_ADDRESS": "No sabemos a qué correo enviarte la prueba.",
+  "SALE_EMAIL_TEST_NO_SMTP": "Tu aula todavía no puede enviar correos.",
+  "SALE_EMAIL_TEST_FAILED": "El servidor de correo no aceptó la prueba: {detail}"
 }

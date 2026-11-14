@@ -68,5 +68,10 @@
   "VIDEO_FILE_TOO_LONG": "Este vídeo é mais longo do que o permitido (2 h).",
   "VIDEO_STORAGE_QUOTA": "Este vídeo não cabe no seu espaço de vídeo.",
   "VIDEO_NOT_A_VIDEO": "Isso não parece ser um vídeo.",
-  "ADMIN_VIDEO_PROTECTION_PLATFORM_LIBRARY": "Os vídeos enviados para a escola já são protegidos: não é preciso nenhuma chave."
+  "ADMIN_VIDEO_PROTECTION_PLATFORM_LIBRARY": "Os vídeos enviados para a escola já são protegidos: não é preciso nenhuma chave.",
+  "SALE_EMAILS_ADMIN_REQUIRED": "Só quem administra a escola pode mudar os e-mails dela.",
+  "SALE_EMAIL_NOT_FOUND": "Esse e-mail não existe.",
+  "SALE_EMAIL_TEST_NO_ADDRESS": "Não sabemos para qual e-mail enviar o teste.",
+  "SALE_EMAIL_TEST_NO_SMTP": "Sua escola ainda não pode enviar e-mails.",
+  "SALE_EMAIL_TEST_FAILED": "O servidor de e-mail não aceitou o teste: {detail}"
 }
