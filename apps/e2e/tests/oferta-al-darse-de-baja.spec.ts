@@ -271,7 +271,7 @@ test('oferta al darse de baja: pausa, descuento y baja con motivo; resumen para 
   await creadora.locator('#retencion-pct').selectOption('30');
   await creadora.locator('#retencion-meses').selectOption('3');
   await creadora.getByTestId('retencion-guardar').click();
-  await expect(ajustes.getByText('Guardado')).toBeVisible({ timeout: 15_000 });
+  await expect(ajustes.getByText('Oferta guardada')).toBeVisible({ timeout: 15_000 });
   await ajustes.scrollIntoViewIfNeeded();
   await shot(creadora, '01-ajustes-cuando-alguien-quiere-irse');
   const guardada = await apiAs<Record<string, unknown>>(
