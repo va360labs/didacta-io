@@ -293,3 +293,23 @@ describe('PlatformCheckoutGate.pricePolicy', () => {
     expect(policy?.currencies).toContain('eur');
   });
 });
+
+describe('comisiones para «con 49 € te llegan ~…»', () => {
+  it('modo plataforma: la comisión VIGENTE del aula y la tarjeta configurada', async () => {
+    const g = new PlatformCheckoutGate({
+      mode: { resolve: async () => ({ mode: 'platform', ready: true, reason: null }) },
+      accounts: { getAccount: async () => ({ country: 'ES', defaultCurrency: 'eur' }) },
+      settings: { get: async () => ({ feeBps: 700 }) },
+      config: { displayName: 'Didacta', cardFeeEstimate: { bps: 150, fixedMinor: 25 } },
+    } as never);
+    expect(await g.feeEstimate('t')).toEqual({
+      platformFeeBps: 700,
+      operatorName: 'Didacta',
+      cardFee: { bps: 150, fixedMinor: 25 },
+    });
+  });
+
+  it('con claves propias no hay comisión del operador', async () => {
+    expect(await gate('own', null).feeEstimate('t')).toBeNull();
+  });
+});

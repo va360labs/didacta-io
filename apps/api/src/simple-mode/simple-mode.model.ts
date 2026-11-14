@@ -70,6 +70,50 @@ export interface StartHereView {
   taxProfilePending: boolean;
   /** Dónde se completan los datos fiscales (la sección de cobros, en su ancla). */
   taxProfilePath: string;
+  /**
+   * El creador confirmó el precio (o ya vende). El del alta en 3 preguntas es
+   * de partida: con precio sin confirmar, el paso «Precio» sigue pendiente y
+   * publicar lo enseña para confirmarlo.
+   */
+  priceConfirmed: boolean;
+}
+
+/**
+ * Comisiones para estimar lo que le llega al creador de un precio. Es una
+ * ESTIMACIÓN (la comisión real de la tarjeta depende de la tarjeta).
+ */
+export interface PriceFeesView {
+  /** Comisión del operador en puntos básicos (500 = 5 %); `null` con claves propias. */
+  platformFeeBps: number | null;
+  operatorName: string | null;
+  /** Comisión aproximada de la tarjeta: puntos básicos + fijo (unidad mínima). */
+  cardFeeBps: number;
+  cardFeeFixed: number;
+}
+
+/**
+ * Precio y venta de UN curso, para el bloque «Precio y venta» del editor del
+ * curso. Es la misma oferta que «Empieza aquí» (paso «Precio»), vista desde el
+ * curso: no hay un segundo precio guardado en ningún sitio.
+ *
+ *  - `offer`: el curso es lo que vende el aula; el precio es el de la oferta.
+ *  - `membership`: el aula vende una membresía y el curso va dentro; el precio
+ *    es el de la membresía (cambiarlo es cambiar el de la membresía).
+ *  - `separate`: el aula vende otra cosa; el curso se vende aparte si tiene su
+ *    propia opción de compra (y entonces su precio se cambia aquí).
+ */
+export interface CourseSaleView {
+  courseId: string;
+  role: 'offer' | 'membership' | 'separate';
+  price: { amountCents: number; currency: string; intervalMonths: number | null } | null;
+  /** Igual que `saleState` de la web: a la venta, publicado sin cobros, o sin publicar. */
+  state: 'on-sale' | 'not-purchasable' | 'unpublished';
+  /** Ruta del enlace de venta cuando está publicado (`/catalog/<slug>` o `/join`). */
+  salePath: string | null;
+  /** ¿Se puede cambiar el precio desde el curso? */
+  editable: boolean;
+  /** Lo que vende el aula si no es este curso (el plan o el otro curso). */
+  offerTitle: string | null;
 }
 
 /** Monedas con claves propias de Stripe (Community): las de siempre. */

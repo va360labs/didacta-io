@@ -16,6 +16,7 @@ import { meApi } from '@/lib/me';
 import { storageApi } from '@/lib/storage';
 import { useVideoQuota, useVideoUpload, type VideoQuotaState } from '@/lib/use-video-upload';
 import { cn } from '@/lib/utils';
+import { CourseSaleBlock } from './course-sale-block';
 import { SimpleQuizForm } from './simple-quiz-form';
 import { SimpleVideoField } from './simple-video-field';
 import { toSlug } from './slug';
@@ -95,8 +96,9 @@ export function lessonReady(lesson: Pick<CourseLesson, 'type' | 'content'>): boo
  * Editor de curso del MODO SENCILLO: título y lecciones. Sin «slug», sin
  * apartados, sin goteo ni niveles: añadir una lección es elegir Vídeo, Texto o
  * Archivo, ponerle título y su contenido. Las lecciones se crean en el primer
- * apartado del curso (se crea uno si no hay). El precio y la publicación viven
- * en «Empieza aquí».
+ * apartado del curso (se crea uno si no hay). El precio se cambia aquí mismo
+ * («Precio y venta», la misma oferta que «Empieza aquí»); publicar sigue en
+ * «Empieza aquí».
  */
 export function SimpleCourseEditor({ courseId }: { courseId: string }) {
   const t = useTranslations('modoSencillo.curso');
@@ -185,6 +187,10 @@ export function SimpleCourseEditor({ courseId }: { courseId: string }) {
       </form>
 
       <CourseCover courseId={courseId} coverUrl={course.thumbnailUrl} onChanged={load} />
+
+      {/* El precio, dentro del propio curso (antes había que ir a buscarlo a
+          «Empieza aquí» o a «Ventas»): la misma oferta, el mismo precio. */}
+      <CourseSaleBlock courseId={courseId} />
 
       <div className="mt-3 flex flex-wrap items-center gap-2 text-sm">
         <span
@@ -370,15 +376,6 @@ export function SimpleCourseEditor({ courseId }: { courseId: string }) {
           </div>
         ) : null}
       </section>
-
-      {!published ? (
-        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-bg-subtle p-4 text-sm text-text-muted">
-          <span>{t('publicarDesde')}</span>
-          <Link href="/start" className="font-semibold text-brand-600 hover:underline">
-            {t('irEmpieza')}
-          </Link>
-        </div>
-      ) : null}
     </div>
   );
 }

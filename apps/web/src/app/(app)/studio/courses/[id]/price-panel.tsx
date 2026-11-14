@@ -23,6 +23,8 @@ import {
 } from '@/lib/pricing';
 import { OWN_KEYS_PRICE_CURRENCIES, minorToInput } from '@/lib/stripe-currencies';
 import { billingApi, type BillingProduct } from '@/modules/billing';
+import { TakeHomeEstimate, usePriceOptions } from '@/components/simple-price/price-editor';
+import { parseAmount } from '@/lib/simple-mode';
 
 /**
  * Precio del curso en su propia ficha: importe y moneda, sin `price_…`.
@@ -36,7 +38,16 @@ import { billingApi, type BillingProduct } from '@/modules/billing';
  * panel no se pinta. Un curso con varias opciones de compra se gestiona en
  * Productos (aquí solo el precio único).
  */
-export function PricePanel({ courseId, published }: { courseId: string; published: boolean }) {
+export function PricePanel({
+  courseId,
+  published,
+  courseSlug,
+}: {
+  courseId: string;
+  published: boolean;
+  /** Para el enlace de venta (`/catalog/<slug>`) cuando está a la venta. */
+  courseSlug?: string;
+}) {
   const t = useTranslations('modBilling.coursePrice');
   const tErrors = useTranslations('errors');
   const locale = useLocale();
@@ -51,6 +62,9 @@ export function PricePanel({ courseId, published }: { courseId: string; publishe
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
 
   const product = products.length === 1 && !products[0]!.name ? products[0]! : null;
+  const { fees } = usePriceOptions(product?.currency ?? currency ?? 'eur');
+  const [origin, setOrigin] = useState('');
+  useEffect(() => setOrigin(window.location.origin), []);
   const severalOptions = products.length > 1 || (products.length === 1 && !product);
 
   function fill(p: BillingProduct | null) {
@@ -180,6 +194,23 @@ export function PricePanel({ courseId, published }: { courseId: string; publishe
                   onCurrency={setCurrency}
                   onOptions={setOptions}
                 />
+                <TakeHomeEstimate
+                  amount={parseAmount(amount, shownCurrency)}
+                  currency={shownCurrency}
+                  fees={fees}
+                />
+                {product?.active && published && courseSlug && origin ? (
+                  <p className="text-sm text-text-muted" data-testid="course-price-link">
+                    <a
+                      href={`/catalog/${courseSlug}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-brand-500 underline"
+                    >
+                      {`${origin}/catalog/${courseSlug}`.replace(/^https?:\/\//, '')}
+                    </a>
+                  </p>
+                ) : null}
                 {policy.platform && !policy.ready ? (
                   <p className="text-sm text-text-subtle">
                     {t('connectFirst')}{' '}

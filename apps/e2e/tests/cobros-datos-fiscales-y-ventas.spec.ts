@@ -106,6 +106,62 @@ function venta(over: Record<string, unknown>) {
   };
 }
 
+/**
+ * La misma venta como la da `GET /admin/sales` («Ventas» con los datos del
+ * comprador): en el arnés no hay cobros de plataforma, así que se responde lo
+ * que daría Cloud para esa venta.
+ */
+function filaVentas(v: ReturnType<typeof venta>) {
+  const refunded = (v.refundedAmount as number) > 0;
+  return {
+    items: [
+      {
+        id: 'order:7b0c3f6e-1d2a-4c55-9a0e-2f3b4c5d6e7f',
+        kind: 'order',
+        at: v.chargedAt,
+        buyer: {
+          userId: null,
+          name: 'Marta Compradora',
+          email: 'marta.compradora@example.com',
+          checkoutEmail: null,
+          country: 'ES',
+          deleted: false,
+        },
+        product: {
+          kind: 'course',
+          ref: 'course:7b0c3f6e-1d2a-4c55-9a0e-2f3b4c5d6e70',
+          title: v.description,
+          option: null,
+          intervalMonths: null,
+        },
+        amount: v.presentmentAmount,
+        currency: v.presentmentCurrency,
+        coupon: null,
+        referralCredit: null,
+        referral: null,
+        settlement: {
+          currency: v.currency,
+          gross: v.gross,
+          cardFee: v.stripeFee,
+          platformFee: v.platformFee,
+          net: v.transferAmount,
+          debtNetted: 0,
+          refunded: v.refundedAmount,
+        },
+        status: refunded ? 'refunded' : v.status === 'HELD' ? 'held' : 'paid',
+        refundState: v.refundState,
+        payoutSaleId: v.id,
+      },
+    ],
+    page: 1,
+    pageSize: 25,
+    total: 1,
+    totals: [{ currency: 'eur', count: 1, amount: v.presentmentAmount }],
+    products: [],
+    platform: { operatorName: 'Didacta', feeBps: 500 },
+  };
+}
+
 function resumen(over: Record<string, unknown>) {
   return {
     currencies: [
@@ -275,6 +331,12 @@ async function aulaCloud(
         total: 1,
       },
     }),
+  );
+  const ventaSimulada =
+    (opts.ventas?.[0] as ReturnType<typeof venta> | undefined) ??
+    (faltan ? venta({}) : venta({ status: 'READY', reason: null, estimatedArrival: '2026-11-23' }));
+  await page.route('**/api/v1/admin/sales?*', (route) =>
+    route.fulfill({ json: filaVentas(ventaSimulada) }),
   );
   await page.route('**/api/v1/modules/payouts/tax-profile', async (route) => {
     if (route.request().method() === 'GET') {
@@ -476,8 +538,11 @@ test('tras devolver una venta entera: «Recibido» no sigue diciendo 44,76 € n
     /0,00\s€/,
   );
   await expect(resumenCard).not.toContainText(/Recibido\s*44,76/);
-  const fila = page.getByTestId('payouts-sales-table').locator('tbody tr').first();
+  // «Tus ventas» del modo completo es ahora la lista con los datos del
+  // comprador: la venta devuelta entera dice «Reembolsada» y ninguna fecha.
+  const fila = page.getByTestId('ventas-tabla').locator('tbody tr').first();
   await expect(fila).toContainText('Reembolsada');
+  await expect(fila).toContainText('Marta Compradora');
   await expect(fila).not.toContainText('hacia el');
   await captura(page, 'despues-ventas-tras-reembolso.png');
   await ctx.close();

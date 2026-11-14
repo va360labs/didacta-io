@@ -128,7 +128,18 @@ describe('modo plataforma ENCENDIDO — valores por defecto del plan', () => {
       // datos fiscales, y sin datos del emisor no se factura.
       taxProfileRequired: true,
       invoicing: null,
+      // Lo que se ENSEÑA al poner precio («te llegan ~…»): tarjeta europea
+      // estándar de Stripe en una cuenta española, 1,5 % + 0,25 €.
+      cardFeeEstimate: { bps: 150, fixedMinor: 25 },
     });
+  });
+
+  it('la comisión de la tarjeta que se enseña al poner precio es configurable', () => {
+    const c = cargar(encendido({ PAYMENTS_PLATFORM_CARD_FEE_ESTIMATE: '250+30' }));
+    expect(c.cardFeeEstimate).toEqual({ bps: 250, fixedMinor: 30 });
+    expect(() =>
+      loadPlatformPaymentsConfig(encendido({ PAYMENTS_PLATFORM_CARD_FEE_ESTIMATE: '1,5%' })),
+    ).toThrow(/PAYMENTS_PLATFORM_CARD_FEE_ESTIMATE/);
   });
 
   it('facturas: con los datos del emisor completos se factura (NIF y NIF-IVA validados)', () => {

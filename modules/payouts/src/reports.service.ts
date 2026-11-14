@@ -4,7 +4,7 @@
  */
 
 import type { PayoutsSaleStatus } from '@didacta/database';
-import type { PayoutScheduleView, PayoutsDbPort } from './accounts.service.js';
+import type { PayoutScheduleView, PayoutsDbPort, PayoutsTx } from './accounts.service.js';
 import { frozenDisputeSaleIds, wonDisputeFeeDebtIds, type DebtView } from './debts.service.js';
 import type { DisputeView } from './disputes.service.js';
 import { saleReasonCode } from './settlement.service.js';
@@ -176,6 +176,118 @@ function fullyRefunded(row: { readonly refundedAmount: number; readonly gross: n
   return row.gross !== null && row.refundedAmount > 0 && row.refundedAmount >= row.gross;
 }
 
+/**
+ * Lo que le queda al creador de una venta, en la divisa de liquidación: lo que
+ * se le transfirió (más lo devuelto al ganar una reclamación) o, si aún no se
+ * le ha transferido, lo calculado. `null` mientras Stripe no ha asentado el
+ * cobro. Una venta que se fue entera a saldar deuda solo cuenta lo devuelto.
+ * Misma regla que la columna «Te llega» de «Tus ventas».
+ */
+export function creatorReceives(
+  sale: Pick<SaleView, 'status' | 'transferAmount' | 'creatorNet' | 'reinstatedAmount'>,
+): number | null {
+  const reinstated = sale.reinstatedAmount ?? 0;
+  if (sale.status === 'SETTLED_NETTED') return reinstated;
+  if (sale.transferAmount === null) return sale.creatorNet;
+  return sale.transferAmount + reinstated;
+}
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+type SaleRow = Awaited<ReturnType<PayoutsTx['modPayoutsSale']['findMany']>>[number];
+
+/**
+ * Filas de `mod_payouts_sale` → lo que ve el creador. Una sola implementación
+ * para «Tus ventas» y para «Ventas» con los datos del comprador: el estado, lo
+ * devuelto, la reclamación y si se puede reembolsar se deciden aquí y en
+ * ningún otro sitio.
+ */
+async function toSaleViews(
+  tx: PayoutsTx,
+  tenantId: string,
+  rows: readonly SaleRow[],
+): Promise<SaleView[]> {
+  const account = await tx.modPayoutsAccount.findFirst({
+    where: { tenantId, closedAt: null },
+    orderBy: { createdAt: 'desc' },
+    select: { payoutSchedule: true },
+  });
+  const schedule = (account?.payoutSchedule as PayoutScheduleView | null | undefined) ?? null;
+  const disputed = new Set(await frozenDisputeSaleIds(tx, tenantId));
+  const ids = rows.map((r) => r.id);
+  const decided = ids.length
+    ? await tx.modPayoutsDispute.findMany({
+        where: { tenantId, saleId: { in: ids }, outcome: { not: null } },
+        select: { saleId: true, outcome: true },
+      })
+    : [];
+  const reinstatedRows = ids.length
+    ? await tx.modPayoutsLedgerEntry.groupBy({
+        by: ['saleId'],
+        where: {
+          tenantId,
+          saleId: { in: ids },
+          type: 'TRANSFER',
+          idempotencyKey: { startsWith: 'payouts:reinstate:' },
+        },
+        _sum: { amount: true },
+        orderBy: { saleId: 'asc' },
+      })
+    : [];
+  const outcomes = new Map(decided.map((d) => [d.saleId, d.outcome]));
+  const reinstated = new Map(reinstatedRows.map((r) => [r.saleId, -(r._sum.amount ?? 0)]));
+  return rows.map((row): SaleView => {
+    // Una venta devuelta entera ya no «llega» ningún día: no se estima.
+    const arrival =
+      ARRIVAL_STATUSES.has(row.status) && !fullyRefunded(row)
+        ? estimatePayoutDate(row.availableOn, schedule)
+        : null;
+    return {
+      id: row.id,
+      chargedAt: row.chargedAt?.toISOString() ?? null,
+      description: row.description,
+      sourceKind: row.sourceKind,
+      status: row.status,
+      reason:
+        row.status === 'HELD' || row.status === 'FAILED' ? saleReasonCode(row.lastError) : null,
+      presentmentAmount: row.presentmentAmount,
+      presentmentCurrency: row.presentmentCurrency,
+      currency: row.currency,
+      gross: row.gross,
+      stripeFee: row.stripeFee,
+      feeBpsApplied: row.feeBpsApplied,
+      platformFee: row.platformFee,
+      creatorNet: row.creatorNet,
+      debtNetted: row.debtNetted,
+      transferAmount: row.transferAmount,
+      refundedAmount: row.refundedAmount,
+      reversedAmount: row.reversedAmount,
+      refundState: row.refundedAmount <= 0 ? 'none' : fullyRefunded(row) ? 'full' : 'partial',
+      disputeOpen: disputed.has(row.id),
+      disputeOutcome: disputed.has(row.id)
+        ? null
+        : outcomes.get(row.id) === 'won'
+          ? 'won'
+          : outcomes.get(row.id) === 'lost'
+            ? 'lost'
+            : null,
+      reinstatedAmount: reinstated.get(row.id) ?? 0,
+      canRefund:
+        row.status !== 'AWAITING_FEE' &&
+        row.status !== 'FAILED' &&
+        row.gross !== null &&
+        row.transferAmount !== null &&
+        row.refundedAmount < row.gross &&
+        // Con disputa (abierta o decidida) Stripe no deja reembolsar el cargo.
+        !disputed.has(row.id) &&
+        !outcomes.has(row.id),
+      transferredAt: row.transferredAt?.toISOString() ?? null,
+      availableOn: row.availableOn?.toISOString() ?? null,
+      estimatedArrival: arrival ? arrival.toISOString().slice(0, 10) : null,
+    };
+  });
+}
+
 export class PayoutsReportsService {
   constructor(private readonly db: PayoutsDbPort) {}
 
@@ -186,105 +298,36 @@ export class PayoutsReportsService {
   ): Promise<SalesPage> {
     const pageSize = Math.min(Math.max(Math.trunc(options.pageSize ?? 20), 1), 100);
     const page = Math.max(Math.trunc(options.page ?? 1), 1);
-    const { rows, total, schedule, disputed, outcomes, reinstated } = await this.db.inTenant(
-      tenantId,
-      async (tx) => {
-        const [rows, total, account] = await Promise.all([
-          tx.modPayoutsSale.findMany({
-            where: { tenantId },
-            orderBy: [{ chargedAt: { sort: 'desc', nulls: 'last' } }, { createdAt: 'desc' }],
-            skip: (page - 1) * pageSize,
-            take: pageSize,
-          }),
-          tx.modPayoutsSale.count({ where: { tenantId } }),
-          tx.modPayoutsAccount.findFirst({
-            where: { tenantId, closedAt: null },
-            orderBy: { createdAt: 'desc' },
-            select: { payoutSchedule: true },
-          }),
-        ]);
-        const disputed = new Set(await frozenDisputeSaleIds(tx, tenantId));
-        const ids = rows.map((r) => r.id);
-        const decided = ids.length
-          ? await tx.modPayoutsDispute.findMany({
-              where: { tenantId, saleId: { in: ids }, outcome: { not: null } },
-              select: { saleId: true, outcome: true },
-            })
-          : [];
-        const reinstated = ids.length
-          ? await tx.modPayoutsLedgerEntry.groupBy({
-              by: ['saleId'],
-              where: {
-                tenantId,
-                saleId: { in: ids },
-                type: 'TRANSFER',
-                idempotencyKey: { startsWith: 'payouts:reinstate:' },
-              },
-              _sum: { amount: true },
-              orderBy: { saleId: 'asc' },
-            })
-          : [];
-        return {
-          rows,
-          total,
-          schedule: (account?.payoutSchedule as PayoutScheduleView | null | undefined) ?? null,
-          disputed,
-          outcomes: new Map(decided.map((d) => [d.saleId, d.outcome])),
-          reinstated: new Map(reinstated.map((r) => [r.saleId, -(r._sum.amount ?? 0)])),
-        };
-      },
-    );
-    const items = rows.map((row): SaleView => {
-      // Una venta devuelta entera ya no «llega» ningún día: no se estima.
-      const arrival =
-        ARRIVAL_STATUSES.has(row.status) && !fullyRefunded(row)
-          ? estimatePayoutDate(row.availableOn, schedule)
-          : null;
-      return {
-        id: row.id,
-        chargedAt: row.chargedAt?.toISOString() ?? null,
-        description: row.description,
-        sourceKind: row.sourceKind,
-        status: row.status,
-        reason:
-          row.status === 'HELD' || row.status === 'FAILED' ? saleReasonCode(row.lastError) : null,
-        presentmentAmount: row.presentmentAmount,
-        presentmentCurrency: row.presentmentCurrency,
-        currency: row.currency,
-        gross: row.gross,
-        stripeFee: row.stripeFee,
-        feeBpsApplied: row.feeBpsApplied,
-        platformFee: row.platformFee,
-        creatorNet: row.creatorNet,
-        debtNetted: row.debtNetted,
-        transferAmount: row.transferAmount,
-        refundedAmount: row.refundedAmount,
-        reversedAmount: row.reversedAmount,
-        refundState: row.refundedAmount <= 0 ? 'none' : fullyRefunded(row) ? 'full' : 'partial',
-        disputeOpen: disputed.has(row.id),
-        disputeOutcome: disputed.has(row.id)
-          ? null
-          : outcomes.get(row.id) === 'won'
-            ? 'won'
-            : outcomes.get(row.id) === 'lost'
-              ? 'lost'
-              : null,
-        reinstatedAmount: reinstated.get(row.id) ?? 0,
-        canRefund:
-          row.status !== 'AWAITING_FEE' &&
-          row.status !== 'FAILED' &&
-          row.gross !== null &&
-          row.transferAmount !== null &&
-          row.refundedAmount < row.gross &&
-          // Con disputa (abierta o decidida) Stripe no deja reembolsar el cargo.
-          !disputed.has(row.id) &&
-          !outcomes.has(row.id),
-        transferredAt: row.transferredAt?.toISOString() ?? null,
-        availableOn: row.availableOn?.toISOString() ?? null,
-        estimatedArrival: arrival ? arrival.toISOString().slice(0, 10) : null,
-      };
+    const { items, total } = await this.db.inTenant(tenantId, async (tx) => {
+      const [rows, total] = await Promise.all([
+        tx.modPayoutsSale.findMany({
+          where: { tenantId },
+          orderBy: [{ chargedAt: { sort: 'desc', nulls: 'last' } }, { createdAt: 'desc' }],
+          skip: (page - 1) * pageSize,
+          take: pageSize,
+        }),
+        tx.modPayoutsSale.count({ where: { tenantId } }),
+      ]);
+      return { items: await toSaleViews(tx, tenantId, rows), total };
     });
     return { items, page, pageSize, total };
+  }
+
+  /**
+   * Las ventas de estos ids, tal como las enseña «Tus ventas» (estado,
+   * reembolsos, reclamaciones, si se puede reembolsar, cuándo llega). Las de
+   * otra academia no se ven (RLS y filtro por tenant): simplemente no vuelven.
+   * Para quien compone «Ventas» con los datos del comprador.
+   */
+  async salesByIds(tenantId: string, ids: readonly string[]): Promise<SaleView[]> {
+    const unique = [...new Set(ids)].filter((id) => UUID.test(id));
+    if (unique.length === 0) return [];
+    return this.db.inTenant(tenantId, async (tx) => {
+      const rows = await tx.modPayoutsSale.findMany({
+        where: { tenantId, id: { in: unique } },
+      });
+      return toSaleViews(tx, tenantId, rows);
+    });
   }
 
   /** Resumen por divisa de liquidación. Nunca suma divisas distintas. */

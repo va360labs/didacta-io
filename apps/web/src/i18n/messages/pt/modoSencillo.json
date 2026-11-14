@@ -140,7 +140,10 @@
         "titulo": "Preço",
         "que": "O que cada aluno vai pagar.",
         "hecho": "{precio}",
-        "guardar": "Salvar preço"
+        "guardar": "Salvar preço",
+        "porConfirmar": "{precio} · a confirmar",
+        "queConfirmar": "É o preço que você definiu ao começar. Confirme ou altere antes de publicar.",
+        "confirmar": "Confirmar {precio}"
       },
       "payments": {
         "titulo": "Conecte seus recebimentos",
@@ -165,7 +168,11 @@
         "boton": "Publicar e criar meu link",
         "publicando": "Publicando…",
         "faltaAntes": "Primeiro conclua os passos acima.",
-        "avisoRetenido": "Você já pode publicar: seus alunos poderão comprar, mas o dinheiro das suas vendas ficará retido até você completar seus dados fiscais."
+        "avisoRetenido": "Você já pode publicar: seus alunos poderão comprar, mas o dinheiro das suas vendas ficará retido até você completar seus dados fiscais.",
+        "botonPrecio": "Publicar por {precio}",
+        "resumenCurso": "Você vai publicar «{titulo}» por {precio}.",
+        "resumenMembresia": "Você vai publicar sua assinatura por {precio}.",
+        "cambiarPrecio": "Alterar preço"
       },
       "invite": {
         "titulo": "Convide seus primeiros alunos",
@@ -307,6 +314,33 @@
         "sinCorrecta": "Marque a resposta correta da pergunta {n}.",
         "unaCorrecta": "A pergunta {n} tem mais de uma resposta correta: marque “Várias respostas corretas” ou deixe só uma."
       }
+    },
+    "precioVenta": {
+      "titulo": "Preço e venda",
+      "precio": "Preço",
+      "moneda": "Moeda",
+      "pagoUnico": "pagamento único",
+      "periodo": "{n, plural, one {por mês} other {a cada # meses}}",
+      "aLaVenta": "À venda",
+      "sinPublicar": "Não publicado",
+      "noComprable": "Ainda não pode ser comprado",
+      "sinPrecio": "Ainda sem preço",
+      "copiar": "Copiar link",
+      "copiado": "Copiado",
+      "verPagina": "Ver página de venda",
+      "cambiar": "Alterar preço",
+      "guardar": "Salvar preço",
+      "cancelar": "Cancelar",
+      "guardado": "Preço salvo",
+      "error": "Não foi possível alterar o preço. Tente novamente.",
+      "invalido": "Digite um preço maior que zero.",
+      "notaOferta": "É o mesmo preço de Comece aqui: é um só, altere onde for mais prático.",
+      "notaMembresia": "Este curso faz parte da sua assinatura «{plan}»: o preço é o da assinatura.",
+      "notaAparte": "Este curso é vendido separadamente, com seu próprio link.",
+      "notaNoAparte": "O que você vende agora é «{oferta}». Este curso não é vendido separadamente.",
+      "notaNoPublicado": "O link de venda fica ativo quando você publica em Comece aqui.",
+      "notaNoComprable": "Conecte seus recebimentos para que seja possível comprar.",
+      "irEmpieza": "Ir para Comece aqui"
     }
   },
   "perfil": {

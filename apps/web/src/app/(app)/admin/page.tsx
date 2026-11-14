@@ -24,6 +24,9 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { StatCard } from '@/components/stat-card';
 import { BusinessMetricsPanel } from '@/components/admin/business-metrics-panel';
+import { SalesLedger } from '@/components/sales/sales-ledger';
+import { authStorage } from '@/lib/auth-storage';
+import { meApi } from '@/lib/me';
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -71,12 +74,37 @@ export default function AdminDashboardPage() {
         <TabsContent value="activity" className="mt-5">
           <ActivityTab />
         </TabsContent>
-        <TabsContent value="business" className="mt-5">
+        <TabsContent value="business" className="mt-5 space-y-6">
           <BusinessMetricsPanel />
+          <BusinessSales />
         </TabsContent>
       </Tabs>
     </section>
   );
+}
+
+/**
+ * Las ventas con los datos de cada una, en el modo completo de un aula que
+ * cobra con sus claves. Con cobros de plataforma (`mod.payouts`) viven en
+ * Ingresos → Cobros, junto a su resumen: un solo sitio por modo.
+ */
+function BusinessSales(): ReactNode {
+  const [show, setShow] = useState(false);
+  useEffect(() => {
+    const token = authStorage.getAccessToken();
+    if (!token) return;
+    let cancelled = false;
+    meApi
+      .getMyModules(token)
+      .then((r) => {
+        if (!cancelled) setShow(!r.activeModules.includes('mod.payouts'));
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+  return show ? <SalesLedger /> : null;
 }
 
 function ActivityTab(): ReactNode {

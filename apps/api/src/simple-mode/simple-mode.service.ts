@@ -20,6 +20,7 @@ import {
 import { ModuleRegistryService } from '../modules/module-registry.service';
 import { TenantStripeResolverService } from '../modules/tenant-stripe-resolver.service';
 import { PlatformCheckoutGate } from '../modules/payouts/platform-checkout-gate';
+import { DEFAULT_CARD_FEE_ESTIMATE } from '../modules/payouts/platform-payments.config';
 import {
   SimpleModeError,
   emptyOfferIntent,
@@ -29,7 +30,9 @@ import {
   STEP_IDS,
   textsFor,
   toCourseSlug,
+  type CourseSaleView,
   type OfferIntent,
+  type PriceFeesView,
   type QuickStartInput,
   type SimpleLocale,
   type StartHereView,
@@ -58,6 +61,14 @@ interface SimpleModeState {
    * todos: ver `common/academy-defaults.ts`.
    */
   locale?: SimpleLocale;
+  /**
+   * Cuándo confirmó el creador el precio (lo guardó en «Empieza aquí», en
+   * «Ventas» o en el editor del curso, o publicó viéndolo). El del alta en 3
+   * preguntas es solo un precio de partida: hasta confirmarlo, el paso
+   * «Precio» no cuenta como hecho (ensayo de venta real: se publicó a un
+   * precio que nadie había vuelto a mirar). `null` tras repetir el alta.
+   */
+  priceConfirmedAt?: string | null;
 }
 
 /** Color por defecto del tema (el azul de Didacta): igual = el creador no lo tocó. */
@@ -111,7 +122,19 @@ export class SimpleModeService {
    * la lista de la plataforma (y la de liquidación del creador si ya conectó);
    * con claves propias, las de siempre.
    */
-  async currencies(
+  async currencies(tenantId: string): Promise<{
+    currencies: readonly string[];
+    settlementCurrency: string | null;
+    fees: PriceFeesView;
+  }> {
+    const [allowed, fees] = await Promise.all([
+      this.priceCurrencies(tenantId),
+      this.feesFor(tenantId),
+    ]);
+    return { ...allowed, fees };
+  }
+
+  private async priceCurrencies(
     tenantId: string,
   ): Promise<{ currencies: readonly string[]; settlementCurrency: string | null }> {
     const policy = this.payoutsGate ? await this.payoutsGate.pricePolicy(tenantId) : null;
@@ -121,6 +144,25 @@ export class SimpleModeService {
     return {
       currencies: this.payoutsGate ? PLATFORM_CURRENCIES : OWN_KEYS_CURRENCIES,
       settlementCurrency: null,
+    };
+  }
+
+  /**
+   * Comisiones para la estimación «con 49 € te llegan ~44 €»: la del operador
+   * es la VIGENTE del aula (`mod_payouts_settings`, por defecto
+   * `PAYMENTS_PLATFORM_DEFAULT_FEE_BPS`) y la de la tarjeta, la configurada
+   * (`PAYMENTS_PLATFORM_CARD_FEE_ESTIMATE`). Con claves propias no hay
+   * comisión del operador y la de la tarjeta es la tarifa estándar como
+   * aproximación.
+   */
+  private async feesFor(tenantId: string): Promise<PriceFeesView> {
+    const platform = this.payoutsGate ? await this.payoutsGate.feeEstimate(tenantId) : null;
+    const card = platform?.cardFee ?? DEFAULT_CARD_FEE_ESTIMATE;
+    return {
+      platformFeeBps: platform?.platformFeeBps ?? null,
+      operatorName: platform?.operatorName ?? null,
+      cardFeeBps: card.bps,
+      cardFeeFixed: card.fixedMinor,
     };
   }
 
@@ -224,6 +266,8 @@ export class SimpleModeService {
     await this.writeState(tenantId, creator.id, {
       quickStartAt: new Date().toISOString(),
       locale,
+      // El precio del alta es de partida: se confirma en «Empieza aquí».
+      priceConfirmedAt: null,
     });
     await writeAcademyLocale(
       this.prisma as unknown as AcademyLocaleWriter,
@@ -259,7 +303,121 @@ export class SimpleModeService {
       if (product) await this.upsertSinglePrice(tenantId, next.courseId, price);
     }
     await this.writeSetting(tenantId, actorId, OFFER_KEY, next);
+    await this.writeState(tenantId, actorId, { priceConfirmedAt: new Date().toISOString() });
     return next;
+  }
+
+  // ── Precio y venta de un curso (editor del curso) ────────────────────────
+
+  /**
+   * El bloque «Precio y venta» del editor de un curso: el precio y el estado
+   * de venta tal como los ve «Empieza aquí» (curso de la oferta o membresía) o
+   * los de su propia opción de compra (curso vendido aparte).
+   */
+  async courseSale(tenantId: string, courseId: string): Promise<CourseSaleView> {
+    const course = await this.prisma.modCoursesCourse.findFirst({
+      where: { id: courseId, tenantId, deletedAt: null },
+      select: { id: true, slug: true, title: true, status: true },
+    });
+    if (!course) {
+      throw new SimpleModeError('SIMPLE_MODE_COURSE_NOT_FOUND', 'El curso no existe.');
+    }
+    const [offer, canSell] = await Promise.all([
+      this.currentOffer(tenantId),
+      this.paymentsReady(tenantId),
+    ]);
+    const stateOf = (published: boolean): CourseSaleView['state'] =>
+      published ? (canSell ? 'on-sale' : 'not-purchasable') : 'unpublished';
+
+    if (offer?.kind === 'course' && offer.courseId === course.id) {
+      const published = await this.isPublished(tenantId, offer, course);
+      return {
+        courseId: course.id,
+        role: 'offer',
+        price:
+          offer.amountCents > 0
+            ? { amountCents: offer.amountCents, currency: offer.currency, intervalMonths: null }
+            : null,
+        state: stateOf(published),
+        salePath: published ? `/catalog/${course.slug}` : null,
+        editable: true,
+        offerTitle: null,
+      };
+    }
+    if (offer?.kind === 'membership') {
+      const plan = offer.planId
+        ? await this.prisma.modSubscriptionsPlan.findFirst({
+            where: { id: offer.planId, tenantId },
+            select: { name: true, intervalMonths: true },
+          })
+        : null;
+      const published = await this.isPublished(tenantId, offer, null);
+      return {
+        courseId: course.id,
+        role: 'membership',
+        price:
+          offer.amountCents > 0
+            ? {
+                amountCents: offer.amountCents,
+                currency: offer.currency,
+                intervalMonths: plan?.intervalMonths ?? 1,
+              }
+            : null,
+        state: stateOf(published),
+        salePath: published ? '/join' : null,
+        editable: plan !== null,
+        offerTitle: plan?.name ?? null,
+      };
+    }
+    // Se vende aparte (o no se vende): su propia opción de compra.
+    const product = await this.activeProductFor(tenantId, course.id);
+    const published = course.status === 'PUBLISHED' && product !== null;
+    const offerCourse =
+      offer?.kind === 'course' && offer.courseId
+        ? await this.prisma.modCoursesCourse.findFirst({
+            where: { id: offer.courseId, tenantId, deletedAt: null },
+            select: { title: true },
+          })
+        : null;
+    return {
+      courseId: course.id,
+      role: 'separate',
+      price: product
+        ? { amountCents: product.unitAmount, currency: product.currency, intervalMonths: null }
+        : null,
+      state: stateOf(published),
+      salePath: published ? `/catalog/${course.slug}` : null,
+      editable: product !== null,
+      offerTitle: offerCourse?.title ?? null,
+    };
+  }
+
+  /**
+   * Cambia el precio desde el editor del curso. Si el curso es la oferta (o va
+   * dentro de la membresía) es EXACTAMENTE el paso «Precio» de «Empieza aquí»
+   * (`updatePrice`); si se vende aparte, cambia su opción de compra con el
+   * mismo camino que el panel de precios del curso.
+   */
+  async updateCoursePrice(
+    tenantId: string,
+    actorId: string,
+    courseId: string,
+    price: { amountCents: number; currency: string },
+  ): Promise<CourseSaleView> {
+    const view = await this.courseSale(tenantId, courseId);
+    if (!view.editable) {
+      throw new SimpleModeError(
+        'SIMPLE_MODE_COURSE_NOT_FOR_SALE',
+        'Este curso no se vende por separado.',
+      );
+    }
+    if (view.role === 'separate') {
+      await this.assertCurrency(tenantId, price.currency, price.amountCents);
+      await this.upsertSinglePrice(tenantId, courseId, price);
+    } else {
+      await this.updatePrice(tenantId, actorId, price);
+    }
+    return this.courseSale(tenantId, courseId);
   }
 
   /** «Tu academia» guardada (aunque el creador se quede con el logo y color de serie). */
@@ -322,6 +480,10 @@ export class SimpleModeService {
     // Sin datos fiscales SÍ se publica (decisión de producto, web #39: se
     // cobra igual y se retienen las transferencias; que venda cuanto antes).
     // Lo avisan el paso «Conecta tus cobros» y «Ventas», no un bloqueo.
+
+    // Publicar es confirmar el precio: el botón lo enseña («Publicar a 49 €»)
+    // junto a lo que le llega y la opción de cambiarlo.
+    await this.writeState(tenantId, actorId, { priceConfirmedAt: new Date().toISOString() });
 
     if (offer.kind === 'membership') {
       if (!offer.planId) {
@@ -398,13 +560,18 @@ export class SimpleModeService {
     ]);
     // La cuenta puede vender pero, sin datos fiscales, el dinero no llegaría.
     const taxProfilePending = paymentsReady && taxPending;
+    // El precio del alta es de partida hasta que el creador lo confirma. Las
+    // aulas sin alta (adoptadas o de antes) y lo ya publicado o vendido lo
+    // tienen confirmado: es el precio que eligieron y el que se cobra.
+    const priceConfirmed =
+      !state.quickStartAt || Boolean(state.priceConfirmedAt) || published || sales.count > 0;
 
     const done: Record<StepId, boolean> = {
       // Quien ya vende o tiene algo publicado tiene academia, aunque nunca
       // tocara el logo ni el color.
       academy: academyDone || published || sales.count > 0,
       course: courseDone.done,
-      price: (offer?.amountCents ?? 0) > 0,
+      price: (offer?.amountCents ?? 0) > 0 && priceConfirmed,
       // «Listo para cobrar» es que el dinero LLEGA: con la cuenta conectada y
       // los datos fiscales completos (si la plataforma los exige).
       payments: paymentsReady && !taxProfilePending,
@@ -443,6 +610,7 @@ export class SimpleModeService {
       paymentsSetupPath: this.payoutsGate ? '/admin/payments' : '/admin/settings?tab=payments',
       taxProfilePending,
       taxProfilePath: '/admin/payments#tax-profile',
+      priceConfirmed,
     };
   }
 
@@ -476,7 +644,33 @@ export class SimpleModeService {
    * de lo que ya tiene a la venta. Así no le pide de nuevo precio ni publicar.
    */
   async currentOffer(tenantId: string): Promise<OfferIntent | null> {
-    return (await this.readOffer(tenantId)) ?? (await this.inferOffer(tenantId));
+    const stored = await this.readOffer(tenantId);
+    if (!stored) return this.inferOffer(tenantId);
+    return this.withLivePrice(tenantId, stored);
+  }
+
+  /**
+   * Ya a la venta, el precio que manda es el que paga el alumno: el de la
+   * opción de compra del curso o el del plan de la membresía. La intención
+   * guardada solo lleva el precio ANTES de publicar. Así «Empieza aquí»,
+   * «Ventas» y el editor del curso enseñan el mismo precio aunque se cambiara
+   * desde el modo completo (que escribe en la opción de compra o en el plan).
+   */
+  private async withLivePrice(tenantId: string, offer: OfferIntent): Promise<OfferIntent> {
+    if (offer.kind === 'membership' && offer.planId) {
+      const plan = await this.prisma.modSubscriptionsPlan.findFirst({
+        where: { id: offer.planId, tenantId },
+        select: { amountCents: true, currency: true },
+      });
+      return plan ? { ...offer, amountCents: plan.amountCents, currency: plan.currency } : offer;
+    }
+    if (offer.kind === 'course' && offer.courseId) {
+      const product = await this.activeProductFor(tenantId, offer.courseId);
+      return product
+        ? { ...offer, amountCents: product.unitAmount, currency: product.currency }
+        : offer;
+    }
+    return offer;
   }
 
   /**
@@ -636,7 +830,7 @@ export class SimpleModeService {
   }
 
   private async assertCurrency(tenantId: string, currency: string, amountCents: number) {
-    const { currencies } = await this.currencies(tenantId);
+    const { currencies } = await this.priceCurrencies(tenantId);
     if (!currencies.includes(currency)) {
       throw new SimpleModeError(
         'SIMPLE_MODE_CURRENCY_NOT_SUPPORTED',
@@ -807,9 +1001,11 @@ export class SimpleModeService {
     });
   }
 
+  /** La opción de compra activa del curso: la de precio único si la hay. */
   private async activeProductFor(tenantId: string, courseId: string) {
     const products = await this.registry.getBillingService().listProducts(tenantId);
-    return products.find((p) => p.courseId === courseId && p.active) ?? null;
+    const active = products.filter((p) => p.courseId === courseId && p.active);
+    return active.find((p) => !p.name) ?? active[0] ?? null;
   }
 
   private async isPublished(

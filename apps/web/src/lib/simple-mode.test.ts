@@ -7,6 +7,7 @@ import { describe, expect, it } from 'vitest';
 import {
   canPublish,
   currentStep,
+  priceToConfirm,
   saleState,
   startHereHeadline,
   type StartHereView,
@@ -104,5 +105,52 @@ describe('cobros conectados sin datos fiscales (ensayo general)', () => {
     ).toBe('invite');
     // Y sin curso con lección no se publica aunque la cuenta pueda cobrar.
     expect(canPublish({ steps: pasos(['academy', 'price']), taxProfilePending: true })).toBe(false);
+  });
+});
+
+describe('precio de partida del alta (venta real: se publicó a un precio que nadie miró)', () => {
+  const pasos = (hechos: string[]) =>
+    (['academy', 'course', 'price', 'payments', 'publish', 'invite'] as const).map((id) => ({
+      id,
+      done: hechos.includes(id),
+    }));
+  const oferta = (amountCents: number) => ({
+    kind: 'course' as const,
+    courseId: 'c1',
+    planId: null,
+    amountCents,
+    currency: 'eur',
+    courseTitle: 'Curso',
+    courseSlug: 'curso',
+    courseCoverUrl: null,
+  });
+
+  it('sin confirmar, el paso «Precio» queda pendiente pero no bloquea: se abre «Publica»', () => {
+    const vista = {
+      steps: pasos(['academy', 'course', 'payments']),
+      offer: oferta(2900),
+      priceConfirmed: false,
+    };
+    expect(priceToConfirm(vista)).toBe(true);
+    expect(currentStep(vista)).toBe('publish');
+    expect(canPublish(vista)).toBe(true);
+  });
+
+  it('control: sin precio no hay nada que confirmar y el paso «Precio» manda', () => {
+    const vista = {
+      steps: pasos(['academy', 'course', 'payments']),
+      offer: oferta(0),
+      priceConfirmed: false,
+    };
+    expect(priceToConfirm(vista)).toBe(false);
+    expect(currentStep(vista)).toBe('price');
+    expect(canPublish(vista)).toBe(false);
+  });
+
+  it('confirmado (o una API anterior, sin el campo) no hay nada pendiente', () => {
+    const hecho = pasos(['academy', 'course', 'price', 'payments']);
+    expect(priceToConfirm({ steps: hecho, offer: oferta(2900), priceConfirmed: true })).toBe(false);
+    expect(priceToConfirm({ steps: hecho, offer: oferta(2900) })).toBe(false);
+    expect(currentStep({ steps: hecho, offer: oferta(2900) })).toBe('publish');
   });
 });

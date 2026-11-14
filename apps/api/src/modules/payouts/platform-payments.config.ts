@@ -86,7 +86,32 @@ export const PLATFORM_PAYMENTS_ENV = {
   invoiceSeries: 'PAYMENTS_PLATFORM_INVOICE_SERIES',
   /** Nombre del servicio en la factura («Didacta Cloud»). */
   invoiceServiceName: 'PAYMENTS_PLATFORM_INVOICE_SERVICE_NAME',
+  /**
+   * Comisión de la tarjeta que se le ENSEÑA al creador al poner precio («con
+   * 49 € te llegan ~44 €»): `150+25` = 1,5 % + 0,25 (en la unidad mínima de la
+   * moneda del precio). Solo es una estimación: lo que se le descuenta de
+   * verdad es la comisión real de cada cobro (`balance_transaction.fee`).
+   */
+  cardFeeEstimate: 'PAYMENTS_PLATFORM_CARD_FEE_ESTIMATE',
 } as const;
+
+/**
+ * Estimación por defecto de la comisión de la tarjeta: la tarifa estándar de
+ * Stripe para tarjetas del Espacio Económico Europeo en una cuenta española
+ * (1,5 % + 0,25 €). La usa también un aula con claves propias, como
+ * aproximación (su tarifa real es la de su cuenta).
+ */
+export const DEFAULT_CARD_FEE_ESTIMATE: Readonly<CardFeeEstimate> = Object.freeze({
+  bps: 150,
+  fixedMinor: 25,
+});
+
+/** Comisión de la tarjeta aproximada: porcentaje (puntos básicos) + fijo. */
+export interface CardFeeEstimate {
+  readonly bps: number;
+  /** En la unidad mínima de la moneda del precio. */
+  readonly fixedMinor: number;
+}
 
 /**
  * Países a cuyos creadores puede pagar una plataforma española, por defecto:
@@ -205,6 +230,11 @@ export interface PlatformPaymentsEnabled {
   readonly taxProfileRequired?: boolean;
   /** Factura mensual de la comisión. `null`/ausente: no se factura. */
   readonly invoicing?: PlatformInvoicingConfig | null;
+  /**
+   * Comisión de la tarjeta para la estimación que ve el creador al poner
+   * precio. Ausente (configuraciones escritas a mano): la de por defecto.
+   */
+  readonly cardFeeEstimate?: CardFeeEstimate;
 }
 
 export interface PlatformInvoicingConfig {
@@ -235,6 +265,21 @@ function integerFromEnv(min: number, max: number) {
     .transform(Number)
     .pipe(z.number().int().min(min).max(max));
 }
+
+/** `150+25` → 1,5 % + 25 en la unidad mínima. */
+const cardFeeEstimateSchema = z
+  .string()
+  .regex(/^\d{1,4}\+\d{1,6}$/, 'debe ser «puntos básicos+fijo», p. ej. 150+25')
+  .transform((raw) => {
+    const [bps, fixed] = raw.split('+').map(Number) as [number, number];
+    return { bps, fixedMinor: fixed };
+  })
+  .pipe(
+    z.object({
+      bps: z.number().int().min(0).max(5000),
+      fixedMinor: z.number().int().min(0),
+    }),
+  );
 
 const webhookSecretsSchema = z.string().transform((raw, ctx) => {
   const secrets = [
@@ -332,6 +377,7 @@ const enabledSchema = z.object({
   accountsApi: z.enum(['v2', 'v1']).default('v2'),
   displayName: z.string().max(80).default('Didacta'),
   debtAlertMinor: integerFromEnv(0, 2_147_483_647).prefault('10000'),
+  cardFeeEstimate: cardFeeEstimateSchema.optional(),
   refundPlatformFee: z.enum(['proportional', 'none']).default('proportional'),
   refundCardFeeBearer: z.enum(['creator', 'platform']).default('creator'),
   disputeLossBearer: z.enum(['creator', 'platform']).default('creator'),
@@ -443,6 +489,7 @@ export function loadPlatformPaymentsConfig(
     operatorAlertEmail: data.operatorAlertEmail ?? null,
     taxProfileRequired: data.taxProfileRequired === 'true',
     invoicing,
+    cardFeeEstimate: Object.freeze({ ...(data.cardFeeEstimate ?? DEFAULT_CARD_FEE_ESTIMATE) }),
   });
 }
 

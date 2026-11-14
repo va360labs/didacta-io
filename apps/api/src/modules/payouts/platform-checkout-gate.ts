@@ -17,6 +17,7 @@ import { runAsTenant, runGlobalWithoutTenant } from '../../tenancy/tenant-contex
 import type { PaymentModeNotReadyReason } from '../payment-mode.resolver';
 import { PayoutsBrandingSync } from './payouts-branding.sync';
 import { PayoutsRuntime } from './payouts-runtime.service';
+import { DEFAULT_CARD_FEE_ESTIMATE, type CardFeeEstimate } from './platform-payments.config';
 
 /** Motivo público de que un curso no esté a la venta en modo plataforma. */
 export const PAYOUTS_NOT_READY_OFFER_REASON = 'payouts_not_ready';
@@ -101,6 +102,26 @@ export class PlatformCheckoutGate {
     return {
       settlementCurrency: settlementCurrencyOf(account),
       currencies: PLATFORM_PRICE_CURRENCIES,
+    };
+  }
+
+  /**
+   * Comisiones para la estimación «con 49 € te llegan ~44 €» que ve el
+   * creador al poner precio: la del operador (la VIGENTE de este aula, la
+   * misma que se sellará en cada venta) y la de la tarjeta configurada. `null`
+   * si el aula cobra con sus claves (no hay comisión del operador).
+   */
+  async feeEstimate(tenantId: string): Promise<{
+    platformFeeBps: number;
+    operatorName: string;
+    cardFee: CardFeeEstimate;
+  } | null> {
+    if ((await this.pricePolicy(tenantId)) === null) return null;
+    const settings = await runAsTenant(tenantId, () => this.runtime.settings.get(tenantId));
+    return {
+      platformFeeBps: settings.feeBps,
+      operatorName: this.runtime.config.displayName,
+      cardFee: this.runtime.config.cardFeeEstimate ?? DEFAULT_CARD_FEE_ESTIMATE,
     };
   }
 

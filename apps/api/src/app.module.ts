@@ -32,6 +32,7 @@ import { ScimModule } from './scim/scim.module';
 import { PublicModule } from './public/public.module';
 import { SetupModule } from './setup/setup.module';
 import { SimpleModeModule } from './simple-mode/simple-mode.module';
+import { SalesModule } from './sales/sales.module';
 import { SystemModule } from './system/system.module';
 import { SsoOidcModule } from './sso/oidc/oidc.module';
 import { SsoSamlModule } from './sso/saml/saml.module';
@@ -108,6 +109,8 @@ import { WebhooksModule } from './webhooks/webhooks.module';
     SetupModule,
     // Modo sencillo del aula (Didacta Cloud): alta en 3 preguntas y «Empieza aquí».
     SimpleModeModule,
+    // «Ventas» con los datos de cada venta, su detalle y la exportación.
+    SalesModule,
     // Puerta de agentes: servidor MCP del aula (`/api/v1/mcp`) y la clave del
     // panel «Hazlo más rápido con tu agente de IA». Orquesta los servicios
     // públicos de los módulos, como SimpleModeModule.
