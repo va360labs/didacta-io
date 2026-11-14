@@ -26,7 +26,9 @@ import {
 import {
   formatReceiptAmount,
   receiptLabel,
+  receiptSecondLang,
   renderReceiptPdf,
+  toReceiptLang,
   type ReceiptLine,
 } from './receipt-pdf.js';
 import {
@@ -380,14 +382,18 @@ export function netAgainstAdjustments<T extends { amountCents: number }>(
 /** Concepto de una línea del justificante. */
 function receiptConcept(
   c: { amountCents: number; baseAmountCents: number; commissionBps: number; currency: string },
-  bilingual: boolean,
+  second: 'en' | 'pt' | null,
 ): string {
   if (c.amountCents < 0) {
-    return bilingual ? 'Ajuste por devolución / Refund adjustment' : 'Ajuste por devolución';
+    if (second === 'pt') return 'Ajuste por devolución / Ajuste por reembolso';
+    return second ? 'Ajuste por devolución / Refund adjustment' : 'Ajuste por devolución';
   }
   const pct = String(c.commissionBps / 100).replace('.', ',');
   const base = formatReceiptAmount(c.baseAmountCents, c.currency);
-  return bilingual
+  if (second === 'pt') {
+    return `Comisión del ${pct} % sobre ${base} / Comissão de ${pct} % sobre ${base}`;
+  }
+  return second
     ? `Comisión del ${pct} % sobre ${base} / ${pct}% commission on ${base}`
     : `Comisión del ${pct} % sobre una venta de ${base}`;
 }
@@ -1784,18 +1790,26 @@ export class ReferralsService {
       },
     });
     if (!payout || payout.receiptNumber === null) throw new ReferralsPayoutNotFoundError();
-    const [tenant, commissions] = await Promise.all([
+    const [tenant, commissions, referrer] = await Promise.all([
       this.prisma.tenant.findUnique({ where: { id: tenantId }, select: { name: true } }),
       this.prisma.modReferralsCommission.findMany({
         where: { tenantId, payoutId },
         orderBy: { createdAt: 'asc' },
       }),
+      // Idioma del perfil de quien cobra: con portugués, el justificante lleva
+      // también el portugués (`receiptSecondLang`). Lectura del core, filtrada
+      // por aula.
+      this.prisma.user.findFirst({
+        where: { id: payout.referrerUserId, tenantId },
+        select: { locale: true },
+      }),
     ]);
     const payee = this.decryptSnapshot(payout);
-    const bilingual = payee !== null && payee.country !== 'ES';
+    const payeeLang = toReceiptLang(referrer?.locale);
+    const second = receiptSecondLang(payeeLang, payee?.country);
     const lines: ReceiptLine[] = commissions.map((c) => ({
       date: c.createdAt,
-      concept: receiptConcept(c, bilingual),
+      concept: receiptConcept(c, second),
       amountCents: c.amountCents,
     }));
     const pdf = await renderReceiptPdf({
@@ -1807,6 +1821,7 @@ export class ReferralsService {
       issuerName: tenant?.name ?? '',
       payee,
       lines,
+      payeeLang,
     });
     return { filename: `justificante-${receiptLabel(payout.receiptNumber)}.pdf`, pdf };
   }

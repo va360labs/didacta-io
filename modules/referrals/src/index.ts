@@ -80,8 +80,14 @@ export {
   PayeeValidationError,
 } from './payee.js';
 export type { PayeeDetails, PayeeField } from './payee.js';
-export { renderReceiptPdf, receiptLabel, formatReceiptAmount } from './receipt-pdf.js';
-export type { ReceiptPdfInput, ReceiptLine } from './receipt-pdf.js';
+export {
+  renderReceiptPdf,
+  receiptLabel,
+  receiptSecondLang,
+  formatReceiptAmount,
+  toReceiptLang,
+} from './receipt-pdf.js';
+export type { ReceiptPdfInput, ReceiptLine, ReceiptLang } from './receipt-pdf.js';
 
 export function buildReferralsModule(_service: ReferralsService): DidactaModule {
   return {

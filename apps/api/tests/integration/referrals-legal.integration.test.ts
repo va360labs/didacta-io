@@ -360,6 +360,51 @@ describeWithDb('Referidos — puntos legales, Postgres real como didacta_app', (
         runAsTenant(ids.tenantB, () => referrals.receiptPdf(ids.tenantB, first.id)),
       ).rejects.toBeInstanceOf(ReferralsPayoutNotFoundError);
     });
+
+    it('quien cobra con el perfil en pt-BR lo recibe también en portugués (idioma leído bajo RLS)', async () => {
+      const first = await admin.modReferralsPayout.findFirstOrThrow({
+        where: { tenantId: ids.tenantA, method: 'CASH', status: 'DONE', receiptNumber: 1 },
+      });
+      const decoder = new TextDecoder('windows-1252');
+      const { inflateSync } = await import('node:zlib');
+      const texto = (pdf: Buffer) =>
+        [...pdf.toString('latin1').matchAll(/stream\r?\n([\s\S]*?)\r?\nendstream/g)]
+          .map((m) => {
+            try {
+              return inflateSync(Buffer.from(m[1]!, 'latin1')).toString('latin1');
+            } catch {
+              return '';
+            }
+          })
+          .flatMap((c) => [...c.matchAll(/\[([^\]]*)\]\s*TJ/g)])
+          .map((tj) =>
+            decoder.decode(
+              Buffer.from(
+                [...tj[1]!.matchAll(/<([0-9a-fA-F]*)>/g)].map((h) => h[1]).join(''),
+                'hex',
+              ),
+            ),
+          )
+          .join(' ');
+
+      // Control: con el perfil por defecto (español) y receptor en España, solo español.
+      const antes = await runAsTenant(ids.tenantA, () =>
+        referrals.receiptPdf(ids.tenantA, first.id),
+      );
+      expect(texto(antes.pdf)).toContain('Justificante de pago');
+      expect(texto(antes.pdf)).not.toContain('Comprovante');
+
+      await admin.user.update({ where: { id: ids.referrerA }, data: { locale: 'pt-BR' } });
+      try {
+        const pt = await runAsTenant(ids.tenantA, () =>
+          referrals.receiptPdf(ids.tenantA, first.id),
+        );
+        expect(texto(pt.pdf)).toContain('Justificante de pago / Comprovante de pagamento');
+        expect(texto(pt.pdf)).toContain('Comissão de');
+      } finally {
+        await admin.user.update({ where: { id: ids.referrerA }, data: { locale: 'es-ES' } });
+      }
+    });
   });
 
   describe('6. baja con saldo de referidos sin usar', () => {
