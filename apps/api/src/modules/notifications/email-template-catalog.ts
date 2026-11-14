@@ -1545,9 +1545,10 @@ export function rendersFromCatalog(locale?: string | null): boolean {
  * byte a byte la respuesta de antes — es el default nombrado del producto, no
  * un accidente, y por eso los clientes viejos siguen viendo lo mismo.
  *
- * `name`, `description` y `category` NO se traducen todavía: son metadatos de
- * la UI del catálogo (36 entradas) y viven en `HUB_TEMPLATE_META` /
- * `TRANSACTIONAL_EMAIL_DEFS` solo en español. Es un hueco conocido y aparte.
+ * `name`, `description`, la nota del pie y las descripciones de las variables
+ * se mandan en español (`HUB_TEMPLATE_META` / `TRANSACTIONAL_EMAIL_DEFS`): son
+ * metadatos de la UI y la web los traduce por clave estable (decisión D6), con
+ * este texto como respaldo. Lo vigila `email-template-catalog-web-labels.test.ts`.
  */
 export function buildEmailTemplateCatalog(locale?: string | null): EmailTemplateCatalogEntry[] {
   const hubEntries: EmailTemplateCatalogEntry[] = Object.keys(HUB_TEMPLATE_DEFAULTS).map((key) => {
