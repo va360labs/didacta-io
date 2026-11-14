@@ -98,7 +98,8 @@ const INGLES = new Set([
 /**
  * Lo que puede salir en una pantalla portuguesa sin ser un fallo, y por qué:
  *  - «Powered by Didacta»: el lema de la marca, igual en todos los idiomas
- *    (el catálogo español tampoco lo traduce).
+ *    (el catálogo español tampoco lo traduce). Lo que lo sigue en el pie sí va
+ *    traducido («— Crie sua escola grátis») y se revisa como el resto.
  *  - «Español (España)», «English (US)»…: endónimos en los selectores de
  *    idioma; quien no entiende la interfaz tiene que reconocer el suyo.
  *  - El código que la pantalla enseña para copiar (`<code>`, `<pre>`, `<kbd>`:
@@ -151,6 +152,10 @@ test('el detector discrimina: marca español e inglés y deja pasar el portugué
   expect(palabrasAjenas('Comece aqui · Comunidade · Ao vivo · Configurações', [])).toEqual([]);
   expect(palabrasAjenas('Sua escola já está à venda. Convide e ganhe.', [])).toEqual([]);
   expect(palabrasAjenas('Powered by Didacta', [])).toEqual([]);
+  expect(palabrasAjenas('Powered by Didacta — Crie sua escola grátis', [])).toEqual([]);
+  // Control: el pie en español o en inglés SÍ se caza en una pantalla portuguesa.
+  expect(palabrasAjenas('Powered by Didacta — Crea tu academia gratis', [])).not.toEqual([]);
+  expect(palabrasAjenas('Powered by Didacta — Create your own academy free', [])).not.toEqual([]);
   expect(palabrasAjenas('Empieza aquí', [])).toHaveLength(2);
   expect(palabrasAjenas('Configuración', [])).toHaveLength(1);
   expect(palabrasAjenas('¿Te atascas?', [])).toHaveLength(1);
