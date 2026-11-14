@@ -217,3 +217,67 @@ export class WebhookTenantMismatchError extends SubscriptionsError {
     this.name = 'WebhookTenantMismatchError';
   }
 }
+
+/**
+ * Oferta al darse de baja: lo elegido (pausa o descuento) no está disponible
+ * para esta suscripción ahora mismo (el aula no lo ofrece, la suscripción no
+ * está al día, se cobra por años…). 409: la petición choca con el estado.
+ */
+export class RetentionNotEligibleError extends SubscriptionsError {
+  constructor(que: string) {
+    super(
+      `Esta oferta no está disponible para tu suscripción (${que}).`,
+      'SUBSCRIPTIONS_RETENTION_NOT_ELIGIBLE',
+      { detail: que },
+    );
+    this.name = 'RetentionNotEligibleError';
+  }
+}
+
+/** El descuento ya se usó (una vez por persona) o hubo una pausa hace menos de un año. */
+export class RetentionAlreadyUsedError extends SubscriptionsError {
+  constructor(que: 'discount' | 'pause') {
+    super(
+      que === 'discount'
+        ? 'Ya aceptaste este descuento antes: es una vez por persona.'
+        : 'Ya pausaste tu suscripción en los últimos 12 meses.',
+      'SUBSCRIPTIONS_RETENTION_ALREADY_USED',
+      { detail: que },
+    );
+    this.name = 'RetentionAlreadyUsedError';
+  }
+}
+
+/** Configuración de la oferta fuera de los límites (meses, porcentaje). */
+export class RetentionConfigInvalidError extends SubscriptionsError {
+  constructor(campo: string) {
+    super(
+      `Configuración de la oferta no válida: ${campo}.`,
+      'SUBSCRIPTIONS_RETENTION_CONFIG_INVALID',
+      { detail: campo },
+    );
+    this.name = 'RetentionConfigInvalidError';
+  }
+}
+
+/** Motivo de baja que no está en la lista. */
+export class RetentionReasonInvalidError extends SubscriptionsError {
+  constructor(reason: string) {
+    super(`Motivo de baja no válido: ${reason}.`, 'SUBSCRIPTIONS_RETENTION_REASON_INVALID', {
+      detail: reason,
+    });
+    this.name = 'RetentionReasonInvalidError';
+  }
+}
+
+/** La suscripción ya está cancelada o con la baja programada: no hay nada que dar de baja. */
+export class SubscriptionAlreadyLeavingError extends SubscriptionsError {
+  constructor(id: string) {
+    super(
+      'Esta suscripción ya está cancelada o con la baja programada.',
+      'SUBSCRIPTIONS_ALREADY_LEAVING',
+      { detail: id },
+    );
+    this.name = 'SubscriptionAlreadyLeavingError';
+  }
+}

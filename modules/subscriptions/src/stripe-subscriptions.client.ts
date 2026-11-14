@@ -23,7 +23,13 @@ import {
   StripeConfigMissingError,
   WebhookSignatureInvalidError,
 } from './errors.js';
-import { currentPeriodEndFromSubscription } from './stripe-shape.js';
+import {
+  currentPeriodEndFromSubscription,
+  currentPeriodStartFromSubscription,
+  intervalMonthsFromSubscription,
+  pauseCollectionFromSubscription,
+  subscriptionHasDiscount,
+} from './stripe-shape.js';
 
 export interface SubscriptionsStripeAdapter {
   createCheckoutSession(
@@ -73,6 +79,67 @@ export interface SubscriptionsStripeAdapter {
    * Idempotente por `idempotencyKey`.
    */
   debitCustomerBalance(params: CreditCustomerBalanceParams): Promise<{ id: string }>;
+  /**
+   * Estado de la suscripción EN STRIPE (oferta al darse de baja): periodo en
+   * curso, cada cuántos meses se cobra, si ya está en pausa o con descuento.
+   * La oferta se decide con esto y no con la fila local, que puede ir atrasada.
+   */
+  retrieveSubscription(subscriptionId: string): Promise<StripeSubscriptionDetails>;
+  /**
+   * Pausa el cobro: Stripe sigue renovando, pero ANULA cada factura nueva
+   * (`pause_collection.behavior = void`) hasta `resumesAt`. El periodo ya
+   * pagado no se toca. Idempotente por `idempotencyKey`.
+   */
+  pauseCollection(params: PauseCollectionParams): Promise<StripeSubscriptionDetails>;
+  /**
+   * Descuento de retención: crea un cupón de UN SOLO USO y lo aplica a la
+   * suscripción. Vale para las próximas facturas (`repeating` N meses, u
+   * `once`: solo la siguiente). Idempotente por `idempotencyKey`.
+   */
+  applyRetentionDiscount(params: RetentionDiscountParams): Promise<RetentionDiscountResult>;
+}
+
+/** Lo que la oferta al darse de baja necesita saber de una suscripción en Stripe. */
+export interface StripeSubscriptionDetails {
+  id: string;
+  /** Estado literal de Stripe (`active`, `trialing`, `past_due`…). */
+  status: string;
+  cancelAtPeriodEnd: boolean;
+  /** Epoch en segundos. */
+  currentPeriodStart: number | null;
+  currentPeriodEnd: number | null;
+  /** Meses por cobro (1 mensual, 3 trimestral, 12 anual) o null (semanas/días). */
+  intervalMonths: number | null;
+  /** `null` = cobrando con normalidad. */
+  pauseCollection: { behavior: string; resumesAt: number | null } | null;
+  /** ¿Tiene ya un descuento vivo? (no se apila otro). */
+  hasDiscount: boolean;
+}
+
+export interface PauseCollectionParams {
+  subscriptionId: string;
+  /** Epoch en segundos: desde aquí Stripe vuelve a cobrar las facturas nuevas. */
+  resumesAt: number;
+  idempotencyKey: string;
+}
+
+export interface RetentionDiscountParams {
+  subscriptionId: string;
+  /** 1..99 */
+  percentOff: number;
+  /** `repeating` = las facturas de los próximos `durationInMonths` meses; `once` = la siguiente. */
+  duration: 'repeating' | 'once';
+  durationInMonths?: number;
+  /** Nombre del cupón (lo ve el alumno en su factura). Máx. 40 caracteres. */
+  name: string;
+  metadata: Record<string, string>;
+  idempotencyKey: string;
+}
+
+export interface RetentionDiscountResult {
+  couponId: string;
+  /** Epoch en segundos en que deja de aplicarse (null con `once`). */
+  discountEnd: number | null;
 }
 
 export interface CustomerBalanceView {
@@ -432,6 +499,68 @@ export class SubscriptionsStripeSdkAdapter implements SubscriptionsStripeAdapter
     }
   }
 
+  async retrieveSubscription(subscriptionId: string): Promise<StripeSubscriptionDetails> {
+    try {
+      return subscriptionDetails(await this.client.subscriptions.retrieve(subscriptionId));
+    } catch (err) {
+      throw new StripeApiError((err as Error).message);
+    }
+  }
+
+  async pauseCollection(p: PauseCollectionParams): Promise<StripeSubscriptionDetails> {
+    if (!Number.isInteger(p.resumesAt) || p.resumesAt <= 0) {
+      throw new StripeApiError(`fecha de reanudación no válida: ${p.resumesAt}`);
+    }
+    try {
+      const sub = await this.client.subscriptions.update(
+        p.subscriptionId,
+        { pause_collection: { behavior: 'void', resumes_at: p.resumesAt } },
+        { idempotencyKey: p.idempotencyKey },
+      );
+      return subscriptionDetails(sub);
+    } catch (err) {
+      throw new StripeApiError((err as Error).message);
+    }
+  }
+
+  async applyRetentionDiscount(p: RetentionDiscountParams): Promise<RetentionDiscountResult> {
+    if (!Number.isInteger(p.percentOff) || p.percentOff < 1 || p.percentOff > 99) {
+      throw new StripeApiError(`porcentaje no válido: ${p.percentOff}`);
+    }
+    if (
+      p.duration === 'repeating' &&
+      (!Number.isInteger(p.durationInMonths) || (p.durationInMonths ?? 0) < 1)
+    ) {
+      throw new StripeApiError(`meses no válidos: ${p.durationInMonths}`);
+    }
+    try {
+      // Un cupón POR ACEPTACIÓN y de un solo uso: en una cuenta compartida
+      // (cobros de plataforma) un cupón reutilizable valdría en cualquier
+      // academia. Se aplica en el servidor, sin código que se pueda compartir.
+      const coupon = await this.client.coupons.create(
+        {
+          percent_off: p.percentOff,
+          duration: p.duration,
+          ...(p.duration === 'repeating' ? { duration_in_months: p.durationInMonths } : {}),
+          max_redemptions: 1,
+          name: p.name.slice(0, 40),
+          metadata: p.metadata,
+        },
+        { idempotencyKey: `${p.idempotencyKey}:coupon` },
+      );
+      const sub = await this.client.subscriptions.update(
+        p.subscriptionId,
+        // Sin prorrateo: el descuento vale para las facturas que vengan, no
+        // reescribe lo ya cobrado.
+        { discounts: [{ coupon: coupon.id }], proration_behavior: 'none' },
+        { idempotencyKey: `${p.idempotencyKey}:subscription` },
+      );
+      return { couponId: coupon.id, discountEnd: discountEndOf(sub, coupon.id) };
+    } catch (err) {
+      throw new StripeApiError((err as Error).message);
+    }
+  }
+
   constructWebhookEvent(rawBody: string | Buffer, signatureHeader: string): Stripe.Event {
     try {
       return this.client.webhooks.constructEvent(rawBody, signatureHeader, this.webhookSecret);
@@ -439,4 +568,47 @@ export class SubscriptionsStripeSdkAdapter implements SubscriptionsStripeAdapter
       throw new WebhookSignatureInvalidError((err as Error).message);
     }
   }
+}
+
+/** La vista que necesita la oferta, leída con los lectores tolerantes. */
+export function subscriptionDetails(sub: unknown): StripeSubscriptionDetails {
+  const s = sub as { id?: unknown; status?: unknown; cancel_at_period_end?: unknown };
+  return {
+    id: typeof s.id === 'string' ? s.id : '',
+    status: typeof s.status === 'string' ? s.status : 'unknown',
+    cancelAtPeriodEnd: s.cancel_at_period_end === true,
+    currentPeriodStart: currentPeriodStartFromSubscription(sub),
+    currentPeriodEnd: currentPeriodEndFromSubscription(sub),
+    intervalMonths: intervalMonthsFromSubscription(sub),
+    pauseCollection: pauseCollectionFromSubscription(sub),
+    hasDiscount: subscriptionHasDiscount(sub),
+  };
+}
+
+/**
+ * Fin del descuento de ESE cupón en la suscripción devuelta por Stripe:
+ * `discount.end` (versiones viejas) o el de la lista `discounts` si viene
+ * expandida. `null` si no se puede leer (con `once` no hay fecha).
+ */
+function discountEndOf(sub: unknown, couponId: string): number | null {
+  const s = sub as { discount?: unknown; discounts?: unknown };
+  const candidates: unknown[] = [s.discount, ...(Array.isArray(s.discounts) ? s.discounts : [])];
+  for (const d of candidates) {
+    if (!d || typeof d !== 'object') continue;
+    const disc = d as { end?: unknown; coupon?: unknown; source?: unknown };
+    const fromCoupon =
+      disc.coupon && typeof disc.coupon === 'object'
+        ? (disc.coupon as { id?: unknown }).id
+        : undefined;
+    const fromSource =
+      disc.source && typeof disc.source === 'object'
+        ? (disc.source as { coupon?: unknown }).coupon
+        : undefined;
+    const id = fromCoupon ?? fromSource;
+    const couponMatches =
+      id === couponId || (id && typeof id === 'object' && (id as { id?: unknown }).id === couponId);
+    if (!couponMatches) continue;
+    return typeof disc.end === 'number' ? disc.end : null;
+  }
+  return null;
 }

@@ -3027,6 +3027,11 @@ enum SubscriptionStatus {
   UNPAID
   /// Cancelada definitivamente (por alumno o admin). El bridge desenrolla.
   CANCELED
+  /// En pausa a petición del alumno (oferta al darse de baja): Stripe no cobra
+  /// (`pause_collection` con las facturas anuladas) y el alumno no tiene acceso
+  /// hasta que vuelve a pagar. Conserva cuenta, progreso y certificados. Entra
+  /// al acabar el periodo ya pagado y sale con el primer cobro tras la pausa.
+  PAUSED
 }
 
 enum SubscriptionInvoiceStatus {
@@ -3090,6 +3095,14 @@ model ModSubscriptionsSubscription {
   /// el fulfillment (now + plan.trialDays); Stripe es la fuente de verdad y
   /// los webhooks posteriores convergen el estado real.
   trialEndsAt          DateTime?          @map("trial_ends_at")
+  /// Pausa aceptada en la oferta al darse de baja: empieza al acabar el periodo
+  /// ya pagado (el `current_period_end` de Stripe al aceptarla). Desde ahí la
+  /// suscripción pasa a PAUSED y se retira el acceso. NULL = sin pausa.
+  pauseStartsAt        DateTime?          @map("pause_starts_at")
+  /// Fecha del primer cobro tras la pausa (inicio + N meses). Stripe deja de
+  /// anular facturas un día antes (`pause_collection.resumes_at`); el acceso
+  /// vuelve cuando ese cobro entra (`invoice.paid`).
+  pauseEndsAt          DateTime?          @map("pause_ends_at")
   createdAt            DateTime           @default(now()) @map("created_at")
   updatedAt            DateTime           @updatedAt @map("updated_at")
 
@@ -3100,6 +3113,7 @@ model ModSubscriptionsSubscription {
   @@index([tenantId, courseId])
   @@index([tenantId, planId])
   @@index([gracePeriodEndsAt])
+  @@index([pauseStartsAt])
   @@map("mod_subscriptions_subscription")
 }
 
@@ -3246,6 +3260,79 @@ model ModSubscriptionsWebhookEvent {
   @@index([type])
   @@index([tenantId, receivedAt])
   @@map("mod_subscriptions_webhook_event")
+}
+
+/// Oferta al darse de baja: lo que la creadora ofrece a quien quiere irse.
+/// Una fila por aula; sin fila = todo apagado (solo se pregunta el motivo).
+model ModSubscriptionsRetentionConfig {
+  tenantId        String   @id @map("tenant_id") @db.Uuid
+  /// Ofrecer pausar la suscripción sin cobrar (y sin acceso) unos meses.
+  pauseEnabled    Boolean  @default(false) @map("pause_enabled")
+  /// Meses máximos de pausa (1..3). La pausa salta cobros ENTEROS: con un plan
+  /// mensual se elige 1..máx; con uno trimestral, 3; con uno anual no se ofrece.
+  pauseMaxMonths  Int      @default(3) @map("pause_max_months")
+  /// Ofrecer un descuento de retención (cupón de Stripe sobre la suscripción).
+  discountEnabled Boolean  @default(false) @map("discount_enabled")
+  /// % de descuento (5..90).
+  discountPercent Int      @default(30) @map("discount_percent")
+  /// Meses con descuento (1..12) en planes mensuales. En planes de periodo más
+  /// largo el descuento va a la siguiente renovación.
+  discountMonths  Int      @default(3) @map("discount_months")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  @@map("mod_subscriptions_retention_config")
+}
+
+/// Qué hizo quien quiso darse de baja.
+enum SubscriptionExitOutcome {
+  /// Aceptó pausar la suscripción.
+  PAUSED
+  /// Aceptó el descuento de retención.
+  DISCOUNTED
+  /// Siguió adelante: baja al final del periodo pagado.
+  CANCELED
+}
+
+/// Una salida: el motivo que dio quien quiso darse de baja, lo que se le
+/// ofreció y lo que eligió. Sirve para el resumen de la creadora (cuántos se
+/// quedaron y por qué se van) y para las reglas «una vez por persona».
+model ModSubscriptionsExit {
+  id               String                  @id @default(uuid()) @db.Uuid
+  tenantId         String                  @map("tenant_id") @db.Uuid
+  /// Suscripción local (ID lógico, mismo módulo).
+  subscriptionId   String                  @map("subscription_id") @db.Uuid
+  userId           String                  @map("user_id") @db.Uuid
+  /// Clave de la lista corta (`too_expensive`, `no_time`…); la valida el módulo.
+  reason           String
+  /// Texto libre opcional (máx. 500).
+  reasonText       String?                 @map("reason_text")
+  outcome          SubscriptionExitOutcome
+  /// Qué se le ofreció (para ver cuántos vieron cada oferta).
+  offeredPause     Boolean                 @default(false) @map("offered_pause")
+  offeredDiscount  Boolean                 @default(false) @map("offered_discount")
+  pauseMonths      Int?                    @map("pause_months")
+  pauseStartsAt    DateTime?               @map("pause_starts_at")
+  pauseEndsAt      DateTime?               @map("pause_ends_at")
+  discountPercent  Int?                    @map("discount_percent")
+  discountMonths   Int?                    @map("discount_months")
+  /// `once` = solo la siguiente renovación (planes de periodo largo).
+  discountDuration String?                 @map("discount_duration")
+  discountEndsAt   DateTime?               @map("discount_ends_at")
+  stripeCouponId   String?                 @map("stripe_coupon_id")
+  /// = user_id SOLO en las filas DISCOUNTED: con el único de abajo, una persona
+  /// acepta el descuento una vez por aula aunque pulse dos veces a la vez
+  /// (los NULL no chocan entre sí).
+  discountedUserId String?                 @map("discounted_user_id") @db.Uuid
+  /// Cuándo se aplicó en Stripe (NULL mientras se aplica).
+  appliedAt        DateTime?               @map("applied_at")
+  createdAt        DateTime                @default(now()) @map("created_at")
+
+  @@unique([tenantId, discountedUserId])
+  @@index([tenantId, createdAt])
+  @@index([tenantId, userId])
+  @@index([tenantId, subscriptionId])
+  @@map("mod_subscriptions_exit")
 }
 
 // Backref desde Subscription → Invoice para el query "lista invoices de mi sub".
@@ -4921,6 +5008,10 @@ model ModPayoutsAccount {
   payoutSchedule           Json?                @map("payout_schedule")
   /// Configuración del portal de cliente propia del creador (`bpc_…`).
   portalConfigurationId    String?              @map("portal_configuration_id")
+  /// Versión de la configuración del portal ya aplicada en Stripe. 2 = sin
+  /// «cancelar» (la baja pasa por la oferta del aula). Las de versión 1 se
+  /// actualizan la próxima vez que un alumno abre el portal.
+  portalConfigVersion      Int                  @default(1) @map("portal_configuration_version")
   livemode                 Boolean              @default(false)
   /// Primera vez que la cuenta llegó a READY. Null = nunca ha operado.
   readyAt                  DateTime?            @map("ready_at")
