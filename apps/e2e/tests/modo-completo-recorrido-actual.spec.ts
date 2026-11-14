@@ -75,10 +75,11 @@ test('modo completo (hoy): de cero a enlace de venta con precio', async ({ brows
   await fill(pw.nth(0), tenant.password);
   await fill(pw.nth(1), tenant.password);
   await click(page.getByRole('button', { name: /contraseña|password/i }).last());
-  await page.waitForURL(/\/signin/, { timeout: 20_000 });
-  await fill(page.locator('input[autocomplete="email"]'), tenant.creatorEmail);
-  await fill(page.locator('input[autocomplete="current-password"]'), tenant.password);
-  await click(page.locator('button[type="submit"]'));
+  // Al guardar la contraseña se entra sola (ensayo general, 14-nov): ya no
+  // pasa por «Bienvenido de nuevo» con el correo en blanco.
+  await page.waitForURL((u) => !u.pathname.startsWith('/reset-password'), {
+    timeout: 30_000,
+  });
 
   // ── Perfil: foto OBLIGATORIA, nombre, avisos, listo ─────────────────────
   tramo('perfil');

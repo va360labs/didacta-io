@@ -62,10 +62,11 @@ async function acceso(page: Page, url: string, email: string, password: string):
   await a.fill(pw.nth(0), password);
   await a.fill(pw.nth(1), password);
   await a.click(page.getByRole('button', { name: /contraseña|password/i }).last());
-  await page.waitForURL(/\/signin/, { timeout: 20_000 });
-  await a.fill(page.locator('input[autocomplete="email"]'), email);
-  await a.fill(page.locator('input[autocomplete="current-password"]'), password);
-  await a.click(page.locator('button[type="submit"]'));
+  // Al guardar la contraseña se entra sola (ensayo general, 14-nov): ya no
+  // pasa por «Bienvenido de nuevo» con el correo en blanco.
+  await page.waitForURL((u) => !u.pathname.startsWith('/reset-password'), {
+    timeout: 30_000,
+  });
   return a;
 }
 
