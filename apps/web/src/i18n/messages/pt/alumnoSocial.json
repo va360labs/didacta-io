@@ -256,9 +256,9 @@
     "tuPuesto": "Sua posição",
     "deTotal": "de {total}",
     "tuNivel": "Seu nível",
-    "cargando": "Carregando ranking…",
+    "cargando": "Carregando o ranking…",
     "vacioTitulo": "Ainda não há atividade registrada",
-    "vacioNota": "O ranking aparecerá quando os membros publicarem, comentarem ou compartilharem recursos.",
+    "vacioNota": "O ranking vai aparecer quando os membros publicarem, comentarem ou compartilharem recursos.",
     "colMiembro": "Membro",
     "colPuntos": "Pontos"
   },
@@ -315,5 +315,10 @@
     "mencionComentario": "Mencionaram você como <mark>@{handle}</mark> em um comentário.",
     "mencionPost": "Mencionaram você como <mark>@{handle}</mark> em uma publicação.",
     "irHilo": "Ir para o tópico →"
+  },
+  "rankingTabs": {
+    "aria": "Ranking e desafios",
+    "ranking": "Ranking",
+    "retos": "Desafios"
   }
 }

@@ -253,7 +253,7 @@
   },
   "dashboard": {
     "title": "Painel do tenant",
-    "description": "Como vai a sua organização: a atividade da sala de aula e os números do negócio.",
+    "description": "Como vai a sua organização: a atividade da escola e os números do negócio.",
     "tabActivity": "Atividade",
     "tabBusiness": "Negócio",
     "rangeNote": "As <strong>matrículas</strong> e os <strong>certificados</strong> respeitam o período; usuários ativos e cursos publicados são sempre o snapshot atual.",

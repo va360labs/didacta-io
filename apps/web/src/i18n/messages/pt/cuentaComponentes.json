@@ -181,7 +181,8 @@
     "noInvoices": "Nenhuma fatura ainda.",
     "downloadPdf": "Ver / baixar PDF ↗",
     "unavailableTitle": "Não conseguimos consultar suas assinaturas",
-    "unavailableDesc": "Recarregue a página em alguns minutos. Isso não afeta seus pagamentos nem seu acesso."
+    "unavailableDesc": "Recarregue a página em alguns minutos. Isso não afeta seus pagamentos nem seu acesso.",
+    "saldoReferidos": "Pago com saldo de indicações: {amount} · cobrado {paid}"
   },
   "security": {
     "sessionsLoadError": "Não conseguimos carregar suas sessões.",

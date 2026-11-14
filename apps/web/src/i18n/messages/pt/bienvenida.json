@@ -6,28 +6,24 @@
   "guardando": "Salvando…",
   "cargando": "Preparando sua escola…",
   "errorGuardar": "Não foi possível salvar a alteração. Tente novamente.",
-
   "pasoNombre": "Nome",
   "pasoMarca": "Logo e cor",
   "pasoCurso": "Primeiro curso",
   "pasoAlumnos": "Alunos",
   "pasoCobros": "Cobrança",
   "pasoCorreo": "E-mail",
-
   "bienvenidaTitulo": "Sua escola já está no ar.",
   "bienvenidaCuerpo": "Vamos deixá-la pronta em poucos minutos. Tudo o que você definir aqui pode ser alterado depois, então não precisa pensar demais.",
   "bienvenidaPunto1": "Escolha o nome, o logo e a cor",
   "bienvenidaPunto2": "Crie seu primeiro curso sem sair daqui",
   "bienvenidaPunto3": "Convide seus primeiros alunos, se quiser",
   "bienvenidaEmpezar": "Começar",
-
   "nombreTitulo": "Como se chama a sua escola?",
   "nombreCuerpo": "É o nome que seus alunos vão ver ao entrar e o que vai assinar os e-mails que você enviar a eles.",
   "nombreEtiqueta": "Nome da escola",
   "nombrePlaceholder": "Instituto Sanz, Formação Aribau, Escola de Idiomas…",
   "nombreAviso": "No momento ela se chama “{nombre}”, que veio do seu e-mail na hora da compra. Coloque o nome de verdade.",
   "nombreVacio": "Digite um nome para continuar.",
-
   "marcaTitulo": "Deixe com a sua cara",
   "marcaCuerpo": "Seu logo e sua cor fazem seus alunos sentirem que estão na sua escola, e não em uma ferramenta qualquer.",
   "marcaLogo": "Seu logo",
@@ -53,9 +49,8 @@
   "marcaVista": "É assim que seus alunos vão ver",
   "marcaVistaCurso": "Meu primeiro curso",
   "marcaVistaBoton": "Continuar curso",
-
   "cursoTitulo": "Seu primeiro curso",
-  "cursoCuerpo": "Uma sala de aula com conteúdo se explica sozinha. Dê um título e nós criamos o curso como rascunho: seus alunos não vão vê-lo até você publicar.",
+  "cursoCuerpo": "Uma escola com conteúdo se explica sozinha. Dê um título e nós criamos o curso como rascunho: seus alunos não vão vê-lo até você publicar.",
   "cursoNombre": "Título do curso",
   "cursoPlaceholder": "Introdução à segurança do trabalho",
   "cursoCrear": "Criar o curso",
@@ -66,7 +61,6 @@
   "cursoAbrirEditor": "Abrir o editor do curso",
   "cursoYaTienes": "{n, plural, one {Você já tem # curso criado} other {Você já tem # cursos criados}}, então este passo está concluído. Você pode criar outro, se quiser.",
   "cursoError": "Não foi possível criar o curso. Tente novamente ou faça isso mais tarde em Meus cursos.",
-
   "alumnosTitulo": "Traga seus alunos",
   "alumnosCuerpo": "Digite os e-mails deles e nós enviamos um convite para entrarem na sua escola com a própria senha.",
   "alumnosEtiqueta": "E-mails, um por linha",
@@ -80,15 +74,13 @@
   "alumnosResultadoError": "Não foi possível enviar",
   "alumnosEnviadas": "{n, plural, one {# convite enviado} other {# convites enviados}}.",
   "alumnosDespues": "Se preferir fazer isso mais tarde, o convite individual e a importação por CSV ficam em Administração → Usuários.",
-
   "cobrosTitulo": "Você vai cobrar pelos seus cursos?",
   "cobrosCuerpo": "Você pode vender seus cursos com pagamento por cartão pela Stripe. O dinheiro vai direto para a sua conta: nós não tocamos nele.",
+  "cobrosCuerpoConectar": "Conecte seus recebimentos e seus alunos vão poder pagar você com cartão. Leva poucos minutos e você não precisa colar nenhuma chave.",
   "cobrosNo": "Não vendo cursos",
-
   "correoTitulo": "Os e-mails, com o seu nome",
   "correoCuerpo": "No momento, os e-mails para seus alunos saem pela Didacta. Se quiser que saiam do seu próprio endereço, configure aqui mesmo.",
   "correoAyuda": "São necessários alguns dados técnicos que normalmente ficam com quem cuida do seu e-mail ou do seu site. Não há pressa nenhuma.",
-
   "resumenTitulo": "Pronto, {nombre}",
   "resumenCuerpo": "Sua escola já tem o seu nome e a sua cara. Este é o endereço dela: compartilhe com quem quiser.",
   "resumenDireccionCopiar": "Copiar",

@@ -3,6 +3,7 @@
   "backToCatalog": "Voltar ao catálogo",
   "goToSignIn": "Ir para o login",
   "discountBadge": "−{percent}%",
+  "localCurrencyNote": "Ao pagar, você pode ver o valor na sua moeda",
   "catalogo": {
     "metaTitle": "Cursos",
     "title": "Cursos",
@@ -168,6 +169,7 @@
     "faq3A": "Se você ainda não tem uma conta, vai receber um e-mail com um link para definir sua senha e entrar direto.",
     "faq4Q": "Como o pagamento é processado?",
     "faq4A": "O pagamento é processado pela Stripe, com segurança. Você pode aplicar um cupom na tela de pagamento.",
+    "faq4ANoCoupon": "O pagamento é processado com segurança pela Stripe.",
     "intervalSuffixYear": "/ano",
     "intervalSuffixSemester": "/semestre",
     "intervalSuffixQuarter": "/trimestre",
@@ -197,5 +199,15 @@
     "issuedAt": "Data de emissão",
     "certNumber": "Nº do certificado",
     "verifiedBy": "Verificado por {name}"
+  },
+  "withdrawalWaiver": {
+    "loading": "Carregando as condições da compra…",
+    "loadError": "Não conseguimos carregar as condições da compra e, sem elas, não é possível pagar.",
+    "retry": "Tentar novamente",
+    "mustTick": "Marque a caixa para continuar"
+  },
+  "siteNotFound": {
+    "title": "Página não encontrada",
+    "body": "O endereço que você pediu não existe neste site."
   }
 }

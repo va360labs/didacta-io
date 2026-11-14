@@ -92,6 +92,10 @@
     "scopeCommunityPost": "Publicar na comunidade como o dono da chave (POST /community-api/posts)",
     "scopeOrdersWrite": "Registrar no perfil do aluno compras feitas em uma loja externa (POST /integrations/orders)",
     "scopeOrdersRead": "Ler o histórico de compras de qualquer aluno do tenant (GET /integrations/learners/orders)",
+    "scopeAgentCoursesRead": "Agente de IA: ver cursos e aulas (servidor MCP)",
+    "scopeAgentCoursesWrite": "Agente de IA: criar e editar cursos e aulas em rascunho (servidor MCP)",
+    "scopeAgentLiveWrite": "Agente de IA: agendar aulas ao vivo com link próprio (servidor MCP)",
+    "scopeAgentCommunityPost": "Agente de IA: publicar na comunidade sem avisar por e-mail (servidor MCP)",
     "nameLabel": "Nome",
     "namePlaceholder": "ex.: Página de vendas",
     "expiresLabel": "Expira em (opcional)",
@@ -270,7 +274,8 @@
     "previous": "Anterior",
     "next": "Próximo",
     "shownOf": "{shown} de {total}",
-    "sessionPrefix": "session: {id}…"
+    "sessionPrefix": "session: {id}…",
+    "outOfSchedule": "Fora do horário da aula ao vivo: não se aplica. Alguém abriu ou fechou a reunião antes da hora."
   },
   "zoomResult": {
     "OK": "OK",

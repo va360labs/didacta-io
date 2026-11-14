@@ -12,7 +12,7 @@
     "HTML": "HTML inline renderizado no player. Útil para slides ou microcopy.",
     "PDF": "URL do PDF. É exibido em um iframe a 70dvh.",
     "TEXT": "Texto simples longo. As quebras de linha são preservadas.",
-    "QUIZ": "Crie um novo quiz ou vincule um existente pelo ID. O editor do quiz fica em /formador/quizzes/'<id>'.",
+    "QUIZ": "Crie um novo quiz ou vincule um existente pelo ID. O editor do quiz fica em /studio/quizzes/'<id>'.",
     "SCORM": "Envie o ZIP do pacote SCORM 1.2 / 2004. O sistema descompacta o arquivo, interpreta o imsmanifest.xml e o exibe em um iframe."
   },
   "enrollStatus": {
@@ -63,7 +63,7 @@
   "categoryLabel": "Categoria",
   "categoryNone": "— Sem categoria —",
   "categoryPlaceholder": "Ex.: Tecnologia",
-  "categoryTip": "Dica: o admin pode fazer a curadoria das categorias, com cor e ícone, em <code>/admin/cursos/categorias</code>.",
+  "categoryTip": "Dica: o admin pode fazer a curadoria das categorias, com cor e ícone, em <code>/admin/courses/categories</code>.",
   "estimatedLabel": "Duração estimada (min)",
   "estimatedPlaceholder": "Ex.: 90",
   "heroTitle": "Destaques do hero",
@@ -283,5 +283,53 @@
   "noDescription": "Ainda sem descrição.",
   "updatedAt": "Atualizado em {date}",
   "backToMyCourses": "← Voltar aos meus cursos",
-  "newCoursePageDescription": "O curso fica como rascunho até você publicá-lo. Depois, você adiciona seções, aulas e conteúdo."
+  "newCoursePageDescription": "O curso fica como rascunho até você publicá-lo. Depois, você adiciona seções, aulas e conteúdo.",
+  "videoUpload": {
+    "dropTitle": "Envie o vídeo desta aula",
+    "dropReplace": "Envie outro vídeo para substituir este",
+    "dropHelp": "Arraste o arquivo até aqui ou clique para escolher. Até {size} e {duration} por vídeo.",
+    "reading": "Lendo o vídeo…",
+    "preparing": "Preparando o envio…",
+    "uploadingAria": "Progresso do envio",
+    "uploading": "Enviando: {sent} de {total}. Você pode continuar editando a aula.",
+    "paused": "Envio pausado: {sent} de {total}. Clique em “Retomar” para continuar de onde parou.",
+    "cut": "A conexão caiu. Clique em “Retomar” para continuar de onde parou.",
+    "pause": "Pausar",
+    "resume": "Retomar",
+    "cancel": "Cancelar",
+    "processing": "Enviado. Estamos preparando o vídeo para ficar bom em qualquer tela; isso leva alguns minutos e você pode continuar editando.",
+    "ready": "Pronto · {duration} · até {resolution}",
+    "saveHint": "Clique em “Salvar alterações” para que seus alunos vejam o vídeo.",
+    "replace": "Substituir",
+    "remove": "Remover da aula",
+    "errors": {
+      "noDuration": "Não conseguimos ler este vídeo. Exporte em MP4 e tente novamente.",
+      "notVideo": "Isso não parece ser um vídeo. Envie um MP4, MOV ou similar.",
+      "tooBig": "Este vídeo tem {size} e o máximo é {limit}. Exporte com qualidade menor ou divida em partes.",
+      "tooLong": "Este vídeo tem {duration} de duração e o máximo é {limit} por vídeo. Divida em partes menores.",
+      "noRoom": "Este vídeo tem {duration} de duração e você só tem {free} de espaço livre. Remova os vídeos que não usa mais para liberar espaço.",
+      "generic": "Não foi possível iniciar o envio. Tente novamente daqui a pouco."
+    },
+    "failed": {
+      "tooLong": "O vídeo tem mais de {limit}, por isso não foi salvo. Divida em partes menores.",
+      "quota": "O vídeo não cabe no seu espaço, por isso não foi salvo. Remova os vídeos que não usa mais e envie de novo.",
+      "uploadFailed": "O envio não chegou completo. Envie o vídeo de novo.",
+      "abandoned": "O envio não foi concluído. Envie o vídeo de novo.",
+      "encoding": "Não conseguimos preparar este vídeo. Exporte de novo em MP4 e envie outra vez."
+    },
+    "quota": {
+      "title": "Seu espaço de vídeo",
+      "storedAria": "Horas de vídeo usadas",
+      "watchedAria": "Horas assistidas neste mês",
+      "storedPre": "Você usou {used} de {limit}. Quando vender seu primeiro curso, terá {post}.",
+      "storedPost": "Você usou {used} de {limit}.",
+      "bonus": "Inclui {bonus} a mais pelas suas vendas.",
+      "watchedPre": "Neste mês, seus alunos assistiram a {used} de {limit}.",
+      "watchedPost": "Neste mês, seus alunos assistiram a {used} de vídeo.",
+      "resolutionPre": "Seus vídeos são exibidos em até 720p. A partir da sua primeira venda, os que você enviar serão exibidos em até 1080p.",
+      "resolutionPost": "Seus vídeos são exibidos em até 1080p.",
+      "fullPre": "Você não tem mais espaço. Remova os vídeos que não usa ou, quando vender seu primeiro curso, terá {post}.",
+      "fullPost": "Você não tem mais espaço. Remova os vídeos que não usa; quanto mais você vender, mais espaço terá."
+    }
+  }
 }

@@ -60,7 +60,13 @@ import modZoomLive from './modZoomLive.json';
 import nav from './nav.json';
 import playersContenido from './playersContenido.json';
 import publicSite from './publicSite.json';
+import modoSencillo from './modoSencillo.json';
+import modoSencilloVentas from './modoSencilloVentas.json';
+import referidosCondiciones from './referidosCondiciones.json';
+import modoSencilloGestion from './modoSencilloGestion.json';
+import modoSencilloAprender from './modoSencilloAprender.json';
 import shell from './shell.json';
+import agenteIa from './agenteIa.json';
 
 export default {
   adminApi,
@@ -109,5 +115,11 @@ export default {
   nav,
   playersContenido,
   publicSite,
+  modoSencillo,
+  modoSencilloVentas,
+  referidosCondiciones,
+  modoSencilloGestion,
+  modoSencilloAprender,
   shell,
+  agenteIa,
 } as const;

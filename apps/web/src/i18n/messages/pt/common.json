@@ -1,5 +1,19 @@
 {
   "durationMinutes": "{minutes, plural, other {# min}}",
   "durationHours": "{hours, plural, other {# h}}",
-  "durationHoursMinutes": "{hours} h {minutes} min"
+  "durationHoursMinutes": "{hours} h {minutes} min",
+  "tenantSuspended": {
+    "metaTitle": "Escola suspensa",
+    "title": "Esta escola está suspensa",
+    "body": "No momento, não é possível acessá-la.",
+    "owner": "Se você é responsável por ela, confira sua assinatura."
+  },
+  "zonas": {
+    "espana": "Espanha",
+    "europa": "Europa",
+    "norteamerica": "América do Norte",
+    "latam": "América Latina",
+    "argentina": "Argentina",
+    "utc": "UTC"
+  }
 }

@@ -1,4 +1,37 @@
 {
+  "academyProfile": {
+    "title": "Sua academia na comunidade",
+    "description": "O que seus membros veem no card da academia, ao lado do feed da comunidade: capa, descrição e links.",
+    "coverLabel": "Capa",
+    "coverUpload": "Enviar uma capa",
+    "coverFormats": "JPG, PNG, WebP ou SVG, até 10 MB",
+    "coverHelp": "Uma imagem horizontal (por exemplo, 1600 × 800). Ela substitui a faixa de cor do card.",
+    "coverChange": "Trocar",
+    "coverRemove": "Remover",
+    "coverUploading": "Enviando…",
+    "coverRemoving": "Removendo…",
+    "coverAlt": "Capa da academia",
+    "coverErrorType": "Esse arquivo não serve: use JPG, PNG, WebP ou SVG.",
+    "coverErrorSize": "O arquivo tem {mb} MB e o máximo é 10 MB.",
+    "coverError": "Não foi possível salvar a capa. Tente novamente.",
+    "aboutLabel": "Descrição",
+    "aboutPlaceholder": "O que é a sua academia e para quem ela é, em uma ou duas frases.",
+    "aboutHelp": "Se ficar em branco, usamos o título da sua tela de login.",
+    "linksLabel": "Links",
+    "linksHelp": "WhatsApp, Telegram, Instagram, YouTube, TikTok, Facebook, LinkedIn, X ou o seu site. Cole o link e o ícone aparece.",
+    "linkAdd": "Adicionar um link",
+    "linkAria": "Link {n}",
+    "linkRemove": "Remover o link {n}",
+    "linkWeb": "Site",
+    "linksMax": "No máximo {max} links.",
+    "linksInvalid": "Revise os links destacados antes de salvar.",
+    "linkError": {
+      "https": "Precisa começar com https://",
+      "credentials": "Remova o usuário e a senha do link.",
+      "host": "Não parece um endereço completo.",
+      "length": "Esse link é longo demais."
+    }
+  },
   "branding": {
     "title": "Branding",
     "headerDescription": "Personalize a identidade visual da sua organização. As alterações são salvas ao clicar em <strong>Salvar</strong>; você pode ver uma prévia enquanto edita.",
@@ -111,15 +144,15 @@
   "configTabs": {
     "general": "Geral",
     "notifications": "Notificações",
-    "registro": "Cadastro",
-    "pagos": "Pagamentos",
+    "registration": "Cadastro",
+    "payments": "Pagamentos",
     "modules": "Módulos",
     "storage": "Storage",
     "raw": "Avançado",
-    "aula-virtual": "Sala de aula virtual"
+    "virtual-classroom": "Sala de aula virtual"
   },
   "configTabsDesc": {
-    "aula-virtual": "Credenciais Zoom Server-to-Server para sessões síncronas."
+    "virtual-classroom": "Credenciais Zoom Server-to-Server para as aulas ao vivo."
   },
   "modulesTab": {
     "loadError": "Não foi possível carregar os módulos.",
@@ -332,5 +365,16 @@
     "tooLong": "Máximo de {max} caracteres ({current} atuais).",
     "saving": "Salvando…",
     "save": "Salvar"
+  },
+  "idiomaAula": {
+    "title": "Idioma da academia",
+    "description": "O idioma em que a academia aparece para quem ainda não escolheu o seu: a página de vendas, o catálogo, o login e os e-mails. Cada usuário pode trocar o seu no próprio perfil.",
+    "label": "Idioma",
+    "deducido": "Ainda não foi escolhido: por enquanto, usamos o do perfil de quem administra a academia. Salve para fixar este idioma.",
+    "save": "Salvar",
+    "saving": "Salvando…",
+    "saved": "Idioma salvo.",
+    "error": "Não foi possível salvar o idioma. Tente novamente.",
+    "loadError": "Não foi possível carregar o idioma da academia."
   }
 }

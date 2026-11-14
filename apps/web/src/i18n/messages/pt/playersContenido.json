@@ -109,7 +109,14 @@
   "video": {
     "missing": "Falta o vídeo. Peça ao instrutor para enviá-lo.",
     "chapters": "Capítulos",
-    "resources": "Recursos"
+    "resources": "Recursos",
+    "forbidden": "Você não tem acesso a este vídeo.",
+    "rateLimited": "Você abriu muitos vídeos em pouco tempo. Tente novamente daqui a pouco.",
+    "loadError": "Não foi possível carregar o vídeo. Recarregue a página para tentar de novo.",
+    "fullscreen": "Tela cheia",
+    "exitFullscreen": "Sair da tela cheia",
+    "embeddedTitle": "Vídeo da aula",
+    "watchQuota": "Esta academia atingiu o limite de horas de vídeo deste mês. Avise quem a administra."
   },
   "aiTutor": {
     "title": "Tutor de IA",
