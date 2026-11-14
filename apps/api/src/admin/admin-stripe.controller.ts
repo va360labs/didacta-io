@@ -21,6 +21,7 @@ import { CurrentUser } from '../auth/decorators';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import type { SessionClaims } from '../auth/token.service';
 import { ZodValidationPipe } from '../auth/zod-validation.pipe';
+import { publishableKeyProblem } from '../common/stripe-publishable-key';
 import { ModuleContextFactory } from '../modules/module-context.factory';
 import {
   StripeCredentialsSchema,
@@ -39,10 +40,17 @@ const StripeUpsertSchema = z.object({
   secretKey: z.string().max(500).optional(),
   webhookSecret: z.string().max(500).optional(),
   subscriptionsWebhookSecret: z.string().max(500).optional(),
+  /** `pk_…` de la misma cuenta: con ella, el pago se pinta dentro del aula. */
+  publishableKey: z.string().max(300).optional(),
 });
 
 interface StripeResponseDto {
   hasSecretKey: boolean;
+  /**
+   * La clave publicable guardada (no es secreta: va en la página de pago), o
+   * `null`. Sin ella el pago va por el redirect a la página de Stripe.
+   */
+  publishableKey: string | null;
   hasWebhookSecret: boolean;
   hasSubscriptionsWebhookSecret: boolean;
   /** 'test'/'live' derivado del prefijo `sk_test_`/`sk_live_`, o null si no hay clave. */
@@ -145,7 +153,23 @@ export class AdminStripeController {
       webhookSecret: nonEmpty(body.webhookSecret) ?? existing?.webhookSecret,
       subscriptionsWebhookSecret:
         nonEmpty(body.subscriptionsWebhookSecret) ?? existing?.subscriptionsWebhookSecret,
+      publishableKey: nonEmpty(body.publishableKey?.trim()) ?? existing?.publishableKey,
     };
+    if (merged.publishableKey) {
+      const problem = publishableKeyProblem(merged.publishableKey, merged.secretKey);
+      if (problem) {
+        throw new BadRequestException({
+          message:
+            problem === 'format'
+              ? 'La clave publicable debe empezar por pk_test_ o pk_live_.'
+              : 'La clave publicable es de otro modo que la secreta (prueba con producción o al revés).',
+          code:
+            problem === 'format'
+              ? 'ADMIN_STRIPE_PUBLISHABLE_KEY_INVALID'
+              : 'ADMIN_STRIPE_PUBLISHABLE_KEY_MODE_MISMATCH',
+        });
+      }
+    }
     const parsed = StripeCredentialsSchema.safeParse(merged);
     if (!parsed.success) {
       throw new BadRequestException({
@@ -263,6 +287,7 @@ export class AdminStripeController {
 
     return {
       hasSecretKey: Boolean(secret?.secretKey),
+      publishableKey: secret?.publishableKey ?? null,
       hasWebhookSecret: Boolean(secret?.webhookSecret),
       hasSubscriptionsWebhookSecret: Boolean(secret?.subscriptionsWebhookSecret),
       mode: deriveMode(secret?.secretKey),

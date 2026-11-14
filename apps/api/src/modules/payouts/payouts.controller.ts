@@ -9,12 +9,14 @@ import {
   ForbiddenException,
   Get,
   HttpCode,
+  Optional,
   Post,
   Query,
   Req,
   UnauthorizedException,
   UseGuards,
 } from '@nestjs/common';
+import { PayoutsBrandingSync } from './payouts-branding.sync';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import {
   PLATFORM_PRICE_CURRENCIES,
@@ -127,6 +129,8 @@ export class PayoutsController {
     private readonly runtime: PayoutsRuntime,
     private readonly tenantResolver: TenantResolverService,
     private readonly auditLog: PrismaAuditLogService,
+    /** La marca del aula en su cuenta, al volver del alta (en segundo plano). */
+    @Optional() private readonly branding?: PayoutsBrandingSync,
   ) {}
 
   @Get('status')
@@ -144,6 +148,7 @@ export class PayoutsController {
       if (sync === '1' || sync === 'true') {
         try {
           await this.runtime.accounts.syncAccount(tenantId);
+          this.branding?.request(tenantId);
         } catch (err) {
           if (!(err instanceof PayoutsAccountNotFoundError)) throw err;
         }

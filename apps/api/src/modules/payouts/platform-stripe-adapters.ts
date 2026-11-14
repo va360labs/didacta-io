@@ -10,6 +10,7 @@ import {
   type StripeAdapter,
   type StripeAdapterOptions,
   type StripeCheckoutSessionResult,
+  type StripeCheckoutSessionStatus,
   type StripePriceResult,
   type StripeProductResult,
 } from '@didacta/mod-billing';
@@ -25,6 +26,7 @@ import {
   type StripePriceResult as SubscriptionsStripePriceResult,
   type StripeSubscriptionCheckoutResult,
   type StripeSubscriptionView,
+  type SubscriptionCheckoutSessionStatus,
   type SubscriptionsStripeAdapter,
   type SubscriptionsStripeAdapterOptions,
 } from '@didacta/mod-subscriptions';
@@ -208,6 +210,11 @@ export class PlatformBillingStripeAdapter implements StripeAdapter {
     return (await this.route(priceId)).retrievePrice(priceId);
   }
 
+  /** La vuelta del pago: la sesión vive donde se creó (registrada → plataforma). */
+  async retrieveCheckoutSession(sessionId: string): Promise<StripeCheckoutSessionStatus> {
+    return (await this.route(sessionId)).retrieveCheckoutSession(sessionId);
+  }
+
   async retrieveProduct(productId: string): Promise<StripeProductResult> {
     return (await this.route(productId)).retrieveProduct(productId);
   }
@@ -326,6 +333,11 @@ export class PlatformSubscriptionsStripeAdapter implements SubscriptionsStripeAd
 
   async retrievePrice(priceId: string): Promise<SubscriptionsStripePriceResult> {
     return (await this.route(priceId)).retrievePrice(priceId);
+  }
+
+  /** La vuelta del pago: la sesión vive donde se creó (registrada → plataforma). */
+  async retrieveCheckoutSession(sessionId: string): Promise<SubscriptionCheckoutSessionStatus> {
+    return (await this.route(sessionId)).retrieveCheckoutSession(sessionId);
   }
 
   async updateProduct(productId: string, name: string): Promise<void> {

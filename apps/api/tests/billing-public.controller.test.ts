@@ -26,6 +26,8 @@ function makeController(opts?: {
   gate?: PlatformCheckoutGate;
   sections?: Array<{ id: string; courseId: string; title: string }>;
   lessons?: Array<{ moduleId: string; title: string }>;
+  /** Clave publicable de la cuenta que cobra (pago embebido); `null` = no hay. */
+  publishableKey?: string | null;
 }) {
   const billing = opts?.billing ?? {
     getCatalog: vi.fn().mockResolvedValue([]),
@@ -36,6 +38,7 @@ function makeController(opts?: {
   };
   const registry = {
     getBillingService: () => billing,
+    resolveCheckoutPublishableKey: vi.fn(async () => opts?.publishableKey ?? null),
   } as never;
   const tenantResolver = {
     resolveByHost: vi
@@ -297,7 +300,7 @@ describe('BillingPublicController — checkout anónimo', () => {
     });
 
     // Al visitante solo se le devuelve lo que necesita para redirigir.
-    expect(result).toEqual({ url: 'https://stripe/cs_1', sessionId: 'cs_1' });
+    expect(result).toEqual({ mode: 'hosted', url: 'https://stripe/cs_1', sessionId: 'cs_1' });
     const args = (billing as { startCheckout: ReturnType<typeof vi.fn> }).startCheckout.mock
       .calls[0]![0];
     expect(args.userId).toBeNull();
@@ -305,6 +308,120 @@ describe('BillingPublicController — checkout anónimo', () => {
     expect(args.optionId).toBe('33333333-3333-4333-8333-333333333333');
     expect(args.successUrl).toContain('/catalog/checkout/success?session_id=');
     expect(args.cancelUrl).toContain('/catalog/checkout/cancel');
+    // Sin pedir el embebido: ni modo ni vuelta del embebido.
+    expect(args).not.toHaveProperty('uiMode');
+    expect(args).not.toHaveProperty('returnUrl');
+  });
+});
+
+describe('BillingPublicController — pago dentro de la ficha (Checkout embebido)', () => {
+  const embeddedBilling = () => ({
+    startCheckout: vi.fn().mockResolvedValue({
+      orderId: 'ord-1',
+      sessionId: 'cs_test_embebida',
+      url: null,
+      clientSecret: 'cs_test_embebida_secret_x',
+      amountTotal: 100,
+      currency: 'eur',
+    }),
+  });
+
+  it('con clave publicable: sesión embebida con vuelta que pregunta, y el importe DE LA SESIÓN', async () => {
+    const billing = embeddedBilling();
+    const { controller } = makeController({
+      courseFirst: { status: 'PUBLISHED', title: 'Espresso en casa' },
+      billing,
+      publishableKey: 'pk_test_abcdefgh123',
+    });
+    const result = await controller.checkout(
+      { headers: { host: 'academia.example.com', cookie: 'didacta_locale=pt-BR' } } as never,
+      COURSE,
+      { uiMode: 'embedded', referralCode: 'ANA123' },
+    );
+    expect(result).toEqual({
+      mode: 'embedded',
+      sessionId: 'cs_test_embebida',
+      url: null,
+      clientSecret: 'cs_test_embebida_secret_x',
+      publishableKey: 'pk_test_abcdefgh123',
+      amountTotal: 100,
+      currency: 'eur',
+    });
+    const args = billing.startCheckout.mock.calls[0]![0];
+    expect(args.uiMode).toBe('embedded');
+    expect(args.returnUrl).toBe(
+      'https://academia.example.com/catalog/checkout/success?session_id={CHECKOUT_SESSION_ID}&checkout=embedded',
+    );
+    // La pantalla de Stripe en el idioma del aula, y el referido intacto.
+    expect(args.checkoutLocale).toBe('pt-BR');
+    expect(args.referralCode).toBe('ana123');
+  });
+
+  it('sin clave publicable: el redirect de siempre aunque se pida el embebido', async () => {
+    const { controller, billing } = makeController({
+      courseFirst: { status: 'PUBLISHED' },
+      publishableKey: null,
+    });
+    const result = await controller.checkout(req(), COURSE, { uiMode: 'embedded' });
+    expect(result).toEqual({ mode: 'hosted', url: 'https://stripe/cs_1', sessionId: 'cs_1' });
+    const args = (billing as { startCheckout: ReturnType<typeof vi.fn> }).startCheckout.mock
+      .calls[0]![0];
+    expect(args).not.toHaveProperty('uiMode');
+  });
+});
+
+describe('BillingPublicController — vuelta del pago (pantalla de gracias)', () => {
+  const SESSION = 'cs_test_a1B2c3D4e5F6g7';
+
+  it('un id que no es de Checkout Session es 404 sin tocar nada', async () => {
+    const getCheckoutSessionState = vi.fn();
+    const { controller } = makeController({ billing: { getCheckoutSessionState } });
+    for (const bad of ['x', 'cs_test_', 'pi_123456789012', 'cs_test_../../etc']) {
+      await expect(controller.checkoutSession(req(), bad)).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
+    }
+    expect(getCheckoutSessionState).not.toHaveBeenCalled();
+  });
+
+  it('una sesión que no es de una compra de esta academia es 404', async () => {
+    const { controller } = makeController({
+      billing: { getCheckoutSessionState: vi.fn().mockResolvedValue(null) },
+    });
+    await expect(controller.checkoutSession(req(), SESSION)).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
+  });
+
+  it('pagada: qué curso (título, ficha y portada), cuánto y cuándo; nunca el id de la sesión', async () => {
+    const { controller, prisma } = makeController({
+      billing: {
+        getCheckoutSessionState: vi.fn().mockResolvedValue({
+          status: 'complete',
+          paid: true,
+          courseId: COURSE,
+          amount: 100,
+          currency: 'eur',
+          at: '2026-11-14T10:00:00.000Z',
+        }),
+      },
+      courseFirst: { title: 'Espresso en casa', slug: 'espresso', thumbnailUrl: '/p.jpg' },
+    });
+    const view = await controller.checkoutSession(req(), SESSION);
+    expect(view).toEqual({
+      status: 'complete',
+      paid: true,
+      amount: 100,
+      currency: 'eur',
+      at: '2026-11-14T10:00:00.000Z',
+      course: { title: 'Espresso en casa', slug: 'espresso', thumbnailUrl: '/p.jpg' },
+    });
+    expect(JSON.stringify(view)).not.toContain(SESSION);
+    // El curso se busca por el de la orden y en el aula del dominio.
+    expect(
+      (prisma as { modCoursesCourse: { findFirst: ReturnType<typeof vi.fn> } }).modCoursesCourse
+        .findFirst.mock.calls[0]![0].where,
+    ).toEqual({ id: COURSE, tenantId: TENANT });
   });
 });
 

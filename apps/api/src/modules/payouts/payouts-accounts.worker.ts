@@ -3,7 +3,13 @@
  * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
  */
 
-import { Injectable, type OnApplicationBootstrap, type OnModuleDestroy } from '@nestjs/common';
+import {
+  Injectable,
+  Optional,
+  type OnApplicationBootstrap,
+  type OnModuleDestroy,
+} from '@nestjs/common';
+import { PayoutsBrandingSync } from './payouts-branding.sync';
 import { Queue, Worker, type ConnectionOptions } from 'bullmq';
 import IORedis, { type Redis } from 'ioredis';
 import { Logger as PinoLogger } from 'nestjs-pino';
@@ -50,6 +56,8 @@ export class PayoutsAccountsWorker implements OnApplicationBootstrap, OnModuleDe
   constructor(
     private readonly runtime: PayoutsRuntime,
     private readonly logger: PinoLogger,
+    /** La marca del aula en las cuentas listas (barrido de las READY). */
+    @Optional() private readonly branding?: PayoutsBrandingSync,
   ) {}
 
   async onApplicationBootstrap(): Promise<void> {
@@ -126,6 +134,8 @@ export class PayoutsAccountsWorker implements OnApplicationBootstrap, OnModuleDe
               schedulesApplied += 1;
             }
             await this.runtime.accounts.syncAccount(account.tenantId, account.stripeAccountId);
+            // Nunca lanza: una marca que no se puede aplicar no tumba el barrido.
+            if (data.ready) await this.branding?.syncNow(account.tenantId);
           },
           { traceLabel: 'payouts-accounts' },
         );

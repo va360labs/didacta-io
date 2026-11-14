@@ -10,6 +10,7 @@ import {
   ForbiddenException,
   Get,
   HttpCode,
+  Optional,
   Param,
   Post,
   Put,
@@ -39,6 +40,7 @@ import { ZodValidationPipe } from '../auth/zod-validation.pipe';
 import type { SessionClaims } from '../auth/token.service';
 import { runAsTenant } from '../tenancy/tenant-context.storage';
 import { ModuleRegistryService } from './module-registry.service';
+import { PayoutsBrandingSync } from './payouts/payouts-branding.sync';
 
 const ADMIN_ROLES = new Set(['super_admin', 'tenant_admin']);
 
@@ -60,6 +62,12 @@ export class ThemingController {
   constructor(
     private readonly registry: ModuleRegistryService,
     private readonly license: LicenseService,
+    /**
+     * Solo con los cobros de plataforma encendidos: el logo y el color del aula
+     * también son los de su cuenta de Stripe (pago, recibos y extracto). Se
+     * sincronizan en segundo plano al guardarlos.
+     */
+    @Optional() private readonly paymentsBranding?: PayoutsBrandingSync,
   ) {}
 
   @Get('me')
@@ -100,7 +108,9 @@ export class ThemingController {
     if (touchesWhiteLabel) {
       this.license.requireCapability(LICENSE_CAPABILITIES.WHITE_LABEL);
     }
-    return this.registry.getThemingService().update(user.tenantId, dto);
+    const updated = await this.registry.getThemingService().update(user.tenantId, dto);
+    this.paymentsBranding?.request(user.tenantId);
+    return updated;
   }
 
   @Post('me/reset')
@@ -115,7 +125,9 @@ export class ThemingController {
         code: 'THEMING_RESET_FORBIDDEN',
       });
     }
-    return this.registry.getThemingService().reset(user.tenantId);
+    const reset = await this.registry.getThemingService().reset(user.tenantId);
+    this.paymentsBranding?.request(user.tenantId);
+    return reset;
   }
 
   @Post('me/logo')
@@ -135,7 +147,9 @@ export class ThemingController {
         code: 'THEMING_LOGO_UPLOAD_FORBIDDEN',
       });
     }
-    return this.registry.getThemingService().uploadLogo(user.tenantId, dto);
+    const uploaded = await this.registry.getThemingService().uploadLogo(user.tenantId, dto);
+    this.paymentsBranding?.request(user.tenantId);
+    return uploaded;
   }
 
   @Delete('me/logo')
@@ -151,7 +165,9 @@ export class ThemingController {
         code: 'THEMING_LOGO_DELETE_FORBIDDEN',
       });
     }
-    return this.registry.getThemingService().removeLogo(user.tenantId);
+    const removed = await this.registry.getThemingService().removeLogo(user.tenantId);
+    this.paymentsBranding?.request(user.tenantId);
+    return removed;
   }
 
   @Get('tenants/:tenantId/logo')

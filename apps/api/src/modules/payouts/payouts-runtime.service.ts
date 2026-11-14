@@ -9,6 +9,7 @@ import type { PrismaClient } from '@didacta/database';
 import {
   FetchViesClient,
   PayoutsAccountsService,
+  PayoutsBrandingService,
   PayoutsDebtsService,
   PayoutsInvoicesService,
   PayoutsTaxProfileService,
@@ -64,6 +65,8 @@ export const PAYOUTS_VIES_CLIENT = Symbol('PAYOUTS_VIES_CLIENT');
 @Injectable()
 export class PayoutsRuntime {
   readonly accounts: PayoutsAccountsService;
+  /** La marca del aula (logo, color, descriptor) en su cuenta conectada. */
+  readonly branding: PayoutsBrandingService;
   readonly settings: PayoutsSettingsService;
   readonly mode: PaymentModeResolver;
   /** Registro objeto → tenant con el cliente global (resolver bajo acceso sancionado). */
@@ -111,6 +114,16 @@ export class PayoutsRuntime {
         livemode: config.livemode,
         payout: config.payout,
       },
+      {
+        logger: {
+          warn: (obj, msg) => logger.warn(obj, msg),
+          log: (obj, msg) => logger.log(obj, msg),
+        },
+      },
+    );
+    this.branding = new PayoutsBrandingService(
+      db,
+      createConnectedAccountsApi(stripe, config.accountsApi),
       {
         logger: {
           warn: (obj, msg) => logger.warn(obj, msg),

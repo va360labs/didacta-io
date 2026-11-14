@@ -88,6 +88,18 @@ function fakeSubscriptions(
       log.push([tag, 'createCheckoutSession', { options, metadata: p.metadata }]);
       return { id: `cs_test_${label}`, url: `https://checkout.test/${label}` };
     },
+    retrieveCheckoutSession: async (id) => {
+      log.push([tag, 'retrieveCheckoutSession', id]);
+      return {
+        id,
+        status: 'open',
+        paymentStatus: 'unpaid',
+        metadata: {},
+        amountTotal: 2900,
+        currency: 'eur',
+        created: 1_794_000_000,
+      };
+    },
     retrievePrice: async (id) => {
       log.push([tag, 'retrievePrice', id]);
       return {
