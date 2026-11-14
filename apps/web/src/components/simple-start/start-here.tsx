@@ -211,6 +211,20 @@ function Step({
     );
   }
 
+  // Cobros conectados pero sin datos fiscales: el dinero no llegaría. El paso
+  // sigue pendiente y lo dice con todas las letras (ensayo general: marcaba
+  // «Listo para cobrar» y el dinero se quedaba retenido).
+  const taxPending = id === 'payments' && view.taxProfilePending === true;
+  const que = taxPending ? t('pasos.payments.faltanFiscales') : t(`pasos.${id}.que`);
+  const pendingBadge = taxPending ? (
+    <span
+      className="ml-2 rounded-full bg-warning-50 px-2 py-0.5 text-[11px] font-bold text-warning-700"
+      data-testid="cobros-pendiente-fiscales"
+    >
+      {t('pasos.payments.pendienteFiscales')}
+    </span>
+  ) : null;
+
   if (!open && !editing) {
     return (
       <li
@@ -221,8 +235,11 @@ function Step({
           {n}
         </span>
         <div>
-          <h3 className="text-base font-semibold text-text-subtle">{t(`pasos.${id}.titulo`)}</h3>
-          <p className="text-sm text-text-subtle">{t(`pasos.${id}.que`)}</p>
+          <h3 className="flex items-center text-base font-semibold text-text-subtle">
+            {t(`pasos.${id}.titulo`)}
+            {pendingBadge}
+          </h3>
+          <p className="text-sm text-text-subtle">{que}</p>
         </div>
       </li>
     );
@@ -240,9 +257,10 @@ function Step({
       <div className="min-w-0">
         <h3 className="flex min-h-8 items-center text-base font-bold text-text">
           {t(`pasos.${id}.titulo`)}
+          {pendingBadge}
         </h3>
         <div className="mt-1.5 rounded-2xl border border-border bg-surface p-4 shadow-sm">
-          <p className="max-w-[60ch] text-text-muted">{t(`pasos.${id}.que`)}</p>
+          <p className="max-w-[60ch] text-text-muted">{que}</p>
           <StepAction
             id={id}
             view={view}
@@ -250,7 +268,7 @@ function Step({
             onChange={onChange}
             onDone={() => setEditing(false)}
           />
-          {id === 'payments' ? (
+          {id === 'payments' && !taxPending ? (
             <HowItWorks
               items={[
                 t('pasos.payments.ayuda1'),
@@ -295,6 +313,17 @@ function StepAction({
       <Link href={courseHref} className={primary}>
         <Icon name="plus" size={18} />
         {t('pasos.course.boton')}
+      </Link>
+    );
+  if (id === 'payments' && view.taxProfilePending)
+    return (
+      <Link
+        href={view.taxProfilePath ?? view.paymentsSetupPath}
+        className={primary}
+        data-testid="completar-fiscales"
+      >
+        <Icon name="briefcase" size={18} />
+        {t('pasos.payments.botonFiscales')}
       </Link>
     );
   if (id === 'payments')
@@ -423,6 +452,7 @@ function PublishButton({ view, onChange }: { view: StartHereView; onChange: () =
       const code = e instanceof ApiHttpError ? e.code : undefined;
       const known = [
         'SIMPLE_MODE_PAYMENTS_NOT_READY',
+        'SIMPLE_MODE_TAX_PROFILE_MISSING',
         'SIMPLE_MODE_NO_LESSONS',
         'SIMPLE_MODE_NO_PRICE',
       ];

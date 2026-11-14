@@ -146,7 +146,10 @@
         "titulo": "Connect your payouts",
         "que": "So the money from each sale reaches your bank account. We will ask for your details and your account number; no keys or anything technical.",
         "hecho": "Ready to get paid",
+        "faltanFiscales": "Your payout account is connected. One step left: your tax details (your tax ID and your address). Without them, the money from your sales stays on hold and doesn't reach you.",
+        "pendienteFiscales": "Missing: tax details",
         "boton": "Connect payouts",
+        "botonFiscales": "Complete my tax details",
         "ayuda1": "Your students pay by card on a secure checkout page.",
         "ayuda2": "Didacta keeps 5% of each sale. The rest is yours and goes to your bank.",
         "ayuda3": "You sell in your currency and each student sees the price in theirs."
@@ -199,6 +202,7 @@
     "error": "Could not load. Try again.",
     "errores": {
       "SIMPLE_MODE_PAYMENTS_NOT_READY": "Connect your payouts before publishing: without them nobody could pay you.",
+      "SIMPLE_MODE_TAX_PROFILE_MISSING": "Complete your tax details before publishing: without them the money from your sales would stay on hold.",
       "SIMPLE_MODE_NO_LESSONS": "Add at least one lesson before publishing.",
       "SIMPLE_MODE_NO_PRICE": "Set a price before publishing.",
       "generico": "Could not publish. Try again."

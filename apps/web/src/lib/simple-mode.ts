@@ -134,17 +134,31 @@ export interface StartHereView {
   students: number;
   nextLive: { id: string; topic: string; startTime: string } | null;
   paymentsSetupPath: string;
+  /**
+   * La cuenta de cobros ya puede vender pero faltan los datos fiscales: el
+   * dinero de las ventas se quedaría retenido. El paso de cobros sigue
+   * pendiente y lleva a completarlos. Ausente en una API anterior: `false`.
+   */
+  taxProfilePending?: boolean;
+  /** Dónde se completan los datos fiscales. */
+  taxProfilePath?: string;
 }
 
 /**
  * ¿Se puede comprar ya? Un curso publicado con los cobros sin conectar NO se
- * puede comprar: el enlace existe pero nadie podría pagar.
+ * puede comprar: el enlace existe pero nadie podría pagar. Con la cuenta
+ * conectada y los datos fiscales pendientes SÍ se puede comprar (el dinero se
+ * retiene hasta completarlos, y eso lo avisa el paso de cobros).
  */
 export type SaleState = 'on-sale' | 'not-purchasable' | 'unpublished';
 
-export function saleState(view: Pick<StartHereView, 'salePath' | 'steps'>): SaleState {
+export function saleState(
+  view: Pick<StartHereView, 'salePath' | 'steps' | 'taxProfilePending'>,
+): SaleState {
   if (!view.salePath) return 'unpublished';
-  return view.steps.find((s) => s.id === 'payments')?.done ? 'on-sale' : 'not-purchasable';
+  const canSell =
+    view.steps.find((s) => s.id === 'payments')?.done === true || view.taxProfilePending === true;
+  return canSell ? 'on-sale' : 'not-purchasable';
 }
 
 /**
@@ -155,7 +169,7 @@ export function saleState(view: Pick<StartHereView, 'salePath' | 'steps'>): Sale
 export type StartHereHeadline = 'celebra' | 'listo' | 'casi';
 
 export function startHereHeadline(
-  view: Pick<StartHereView, 'salePath' | 'steps' | 'sales'>,
+  view: Pick<StartHereView, 'salePath' | 'steps' | 'sales' | 'taxProfilePending'>,
 ): StartHereHeadline {
   if (view.sales.count > 0) return 'celebra';
   if (view.steps.every((s) => s.done) || saleState(view) === 'on-sale') return 'listo';

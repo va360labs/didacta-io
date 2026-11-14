@@ -4,7 +4,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { startHereHeadline, type StartHereView } from './simple-mode';
+import { saleState, startHereHeadline, type StartHereView } from './simple-mode';
 
 type Vista = Pick<StartHereView, 'salePath' | 'steps' | 'sales'>;
 
@@ -55,5 +55,29 @@ describe('startHereHeadline', () => {
         }),
       ),
     ).toBe('celebra');
+  });
+});
+
+describe('cobros conectados sin datos fiscales (ensayo general)', () => {
+  const pasos = (hechos: string[]) =>
+    (['academy', 'course', 'price', 'payments', 'publish', 'invite'] as const).map((id) => ({
+      id,
+      done: hechos.includes(id),
+    }));
+
+  it('el paso de cobros sigue pendiente, pero lo publicado SÍ se puede comprar', () => {
+    // La API marca «payments» sin hacer y `taxProfilePending`: el dinero se
+    // retendría, pero el alumno puede pagar.
+    expect(
+      saleState({
+        salePath: '/catalog/x',
+        steps: pasos(['academy', 'course', 'price', 'publish']),
+        taxProfilePending: true,
+      }),
+    ).toBe('on-sale');
+    // Control: sin cuenta de cobros (sin la marca) nadie puede pagar.
+    expect(
+      saleState({ salePath: '/catalog/x', steps: pasos(['academy', 'course', 'price']) }),
+    ).toBe('not-purchasable');
   });
 });
