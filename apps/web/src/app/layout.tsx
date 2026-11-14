@@ -11,8 +11,7 @@ import { NextIntlClientProvider } from 'next-intl';
 import { getLocale, getMessages } from 'next-intl/server';
 import { LocaleSync } from '@/components/locale-sync';
 import { getAcademyLocale, publicHost } from '@/lib/academy-locale';
-import { ACADEMY_ICON_PATH, ACADEMY_OG_PATH } from '@/lib/academy-mark';
-import { requestOrigin } from '@/lib/seo-server';
+import { ACADEMY_ICON_PATH } from '@/lib/academy-mark';
 import { SubscriptionGate } from '@/components/subscription-gate';
 import { TenantThemeProvider } from '@/components/tenant-theme-provider';
 import { TenantTitle } from '@/components/tenant-title';
@@ -50,36 +49,27 @@ const figtree = Figtree({
  * pertenece el visitante (se resuelve por dominio contra la API). `TenantTitle`
  * lo completa en el cliente a "<Tenant> powered by Didacta" en cuanto conoce el
  * tenant — "Didacta" no debe aparecer solo cuando hay tenant resuelto.
+ *
+ * Favicon de TODAS las páginas del aula: `app/academy-brand/icon` sirve el del
+ * aula (su favicon, su logo o, si no tiene ninguno, sus iniciales sobre su
+ * color) — nunca el logo de Didacta. Es una ruta relativa: no necesita conocer
+ * el dominio, así que los metadatos de la raíz siguen siendo estáticos (un
+ * `generateMetadata` aquí los haría dinámicos en todas las páginas: ver
+ * `lib/academy-og.ts`). La vista previa en redes por defecto la pone cada
+ * página compartible (`academyOgDefaults`).
  */
-const BASE_METADATA: Metadata = {
+export const metadata: Metadata = {
   title: {
     default: 'Didacta',
     template: '%s | Didacta',
   },
   description: 'Plataforma educativa modular, abierta y preparada para escalar.',
   robots: { index: false, follow: false },
+  icons: {
+    icon: [{ url: ACADEMY_ICON_PATH }],
+    apple: [{ url: `${ACADEMY_ICON_PATH}?size=180`, sizes: '180x180' }],
+  },
 };
-
-/**
- * Favicon y vista previa en redes de TODAS las páginas del aula: los genera
- * `app/academy-brand` con los del aula (su favicon, logo o portada) y, si no
- * los tiene, con sus iniciales sobre su color — nunca con el logo de Didacta.
- * Las páginas indexables ponen su propia imagen y caen a esta si no la tienen.
- */
-export async function generateMetadata(): Promise<Metadata> {
-  const h = await headers();
-  const origin = requestOrigin(h, publicHost(h));
-  return {
-    ...BASE_METADATA,
-    ...(origin ? { metadataBase: new URL(origin) } : {}),
-    icons: {
-      icon: [{ url: ACADEMY_ICON_PATH }],
-      apple: [{ url: `${ACADEMY_ICON_PATH}?size=180`, sizes: '180x180' }],
-    },
-    openGraph: { images: [{ url: ACADEMY_OG_PATH }] },
-    twitter: { card: 'summary_large_image', images: [ACADEMY_OG_PATH] },
-  };
-}
 
 export default async function RootLayout({ children }: { children: ReactNode }) {
   // Idioma por cookie `didacta_locale` (ver src/i18n/request.ts). LocaleSync

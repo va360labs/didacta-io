@@ -7,10 +7,11 @@ import type { Metadata } from 'next';
 import { getTranslations } from 'next-intl/server';
 import { Suspense } from 'react';
 import { UneteView } from './unete-view';
+import { academyOgDefaults } from '@/lib/academy-og';
 
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getTranslations('publicSite');
-  return { title: t('unete.metaTitle') };
+  return { title: t('unete.metaTitle'), ...(await academyOgDefaults()) };
 }
 
 /**
