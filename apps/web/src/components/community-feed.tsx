@@ -29,6 +29,7 @@ import { usePostModalRoute } from '@/lib/use-post-modal-route';
 import { cn } from '@/lib/utils';
 import {
   communityApi,
+  spaceTagLabel,
   useCommunitySpaces,
   useCommunityTags,
   type CommunityTag,
@@ -69,6 +70,9 @@ export function CommunityFeed({
   const t = useTranslations('comunidadComponentes');
   const tSimple = useTranslations('modoSencillo');
   const spaces = useCommunitySpaces();
+  // El tag de un espacio es su slug (`preguntas`): se lee con el título del
+  // espacio, que va en el idioma del aula. En los dos modos.
+  const tagLabel = (tag: string) => spaceTagLabel(spaces, tag);
   const viewer = authStorage.getSession()?.user ?? null;
   const tErrors = useTranslations('errors');
   const [posts, setPosts] = useState<Post[] | null>(null);
@@ -174,7 +178,7 @@ export function CommunityFeed({
                     style={{ background: swatchColor, opacity: 0.18 }}
                   />
                   <span className="min-w-0 flex-1 wrap-break-word text-sm font-medium text-text">
-                    {tag}
+                    {tagLabel(tag)}
                   </span>
                   <span className="text-xs text-text-subtle tabular-nums">
                     {posts?.filter((p) => p.tags.includes(tag)).length ?? 0}
@@ -317,7 +321,7 @@ export function CommunityFeed({
                             : undefined
                         }
                       >
-                        <CommunityTagChip name={tag} tag={curated} />
+                        <CommunityTagChip name={tagLabel(tag)} tag={curated} />
                       </button>
                     );
                   }
@@ -333,7 +337,7 @@ export function CommunityFeed({
                           : 'bg-[var(--didacta-surface)] text-text-muted hover:text-text',
                       )}
                     >
-                      {tag === ALL_TAGS ? t('filterAll') : tag}
+                      {tag === ALL_TAGS ? t('filterAll') : tagLabel(tag)}
                     </button>
                   );
                 })}
@@ -379,7 +383,7 @@ export function CommunityFeed({
                   <>
                     <span>
                       {t.rich('emptyTagFiltered', {
-                        tag: activeTag,
+                        tag: tagLabel(activeTag),
                         strong: (chunks) => <strong>{chunks}</strong>,
                       })}
                     </span>
@@ -406,9 +410,7 @@ export function CommunityFeed({
                 onOpen={() => openPost(p.id)}
                 onTagClick={(tag) => setActiveTag(tag)}
                 onReactionToggle={(emoji) => void handleReactPost(p.id, emoji)}
-                tagLabel={
-                  simple ? (tag) => spaces.find((sp) => sp.slug === tag)?.title ?? tag : undefined
-                }
+                tagLabel={tagLabel}
               />
             ))
           )}
