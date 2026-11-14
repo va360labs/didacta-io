@@ -2,7 +2,7 @@
  * Copyright (c) VA360 LABS S.L.
  * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
  *
- * Avisos de dinero de los cobros de plataforma (E6): textos en llano (es/en),
+ * Avisos de dinero de los cobros de plataforma (E6): textos en llano (es/en/pt),
  * a quién van y por qué SMTP. Nunca lanzan.
  */
 
@@ -41,6 +41,7 @@ function deps(overrides: Record<string, unknown> = {}) {
       findMany: vi.fn(async () => [
         { email: 'creadora@aula.test', locale: 'es' },
         { email: 'socio@aula.test', locale: 'en-GB' },
+        { email: 'socia@escola.test', locale: 'pt-BR' },
       ]),
     },
     tenant: { findUnique: vi.fn(async () => ({ name: 'Aula de Ana' })) },
@@ -145,6 +146,76 @@ describe('textos', () => {
   });
 });
 
+describe('textos en portugués (pt-BR)', () => {
+  it('importes y fechas al estilo brasileño', () => {
+    expect(formatMinor(9325, 'eur', 'pt')).toMatch(/^€\s93,25$/);
+    expect(formatMinor(17500, 'brl', 'pt')).toMatch(/^R\$\s175,00$/);
+  });
+
+  it('disputa: «contestação», fecha límite y qué pasa con el dinero, sin español ni jerga', () => {
+    const pt = disputeOpenedTexts({
+      lang: 'pt',
+      operator: 'Didacta',
+      description: 'Curso de Excel',
+      amount: '€ 100,00',
+      dueBy: '22 de novembro de 2026',
+    });
+    expect(pt.subject).toBe('Um aluno contestou um pagamento junto ao banco');
+    expect(pt.body).toContain('o pagamento de “Curso de Excel” (€ 100,00)');
+    expect(pt.body).toContain('até 22 de novembro de 2026');
+    expect(pt.body).toContain('o banco fica com a taxa dele mesmo quando ganhamos');
+    expect(pt.cta).toBe('Ver minhas vendas');
+    const sinDescripcion = disputeOpenedTexts({
+      lang: 'pt',
+      operator: 'Didacta',
+      description: null,
+      amount: '€ 1,00',
+      dueBy: null,
+      wonFeeCharged: false,
+    });
+    expect(sinDescripcion.body).toContain('“uma venda”');
+    expect(sinDescripcion.body).toContain('devolvemos o valor inteiro a você');
+    for (const ajeno of ['chargeback', 'dispute', 'Stripe', 'alumno', 'cobros', 'una venta']) {
+      expect(`${pt.body}\n${sinDescripcion.body}`, ajeno).not.toContain(ajeno);
+    }
+  });
+
+  it('deuda y disputa ganada: «recebimentos» y comillas curvas', () => {
+    const refund = debtChargedTexts({
+      lang: 'pt',
+      description: 'Curso de Excel',
+      amount: '€ 1,75',
+      cause: 'refund',
+    });
+    expect(refund.subject).toBe('Vamos descontar € 1,75 dos seus próximos recebimentos');
+    expect(refund.body).toContain(
+      'Por causa do reembolso de “Curso de Excel”, vamos descontar € 1,75 dos seus próximos recebimentos.',
+    );
+    const lost = debtChargedTexts({
+      lang: 'pt',
+      description: 'Curso',
+      amount: '€ 23,40',
+      cause: 'dispute_lost',
+    });
+    expect(lost.body).toContain('Por causa da contestação de “Curso”');
+    expect(lost.body).toContain('taxa do banco e taxa do cartão');
+    const won = debtChargedTexts({
+      lang: 'pt',
+      description: 'Curso de Excel',
+      amount: '€ 20,00',
+      cause: 'dispute_won',
+    });
+    expect(won.subject).toBe('Ganhamos a contestação de “Curso de Excel”');
+    expect(won.body).toContain(
+      'Essa taxa (€ 20,00) será descontada dos seus próximos recebimentos.',
+    );
+    // Control: el español sigue igual.
+    expect(
+      debtChargedTexts({ lang: 'es', description: 'X', amount: '1 €', cause: 'refund' }).subject,
+    ).toBe('Te descontaremos 1 € de tus próximos cobros');
+  });
+});
+
 describe('envío', () => {
   it('al creador: a cada administrador en su idioma, con el SMTP del aula', async () => {
     const { notifier, sent, smtpResolver } = deps();
@@ -160,8 +231,11 @@ describe('envío', () => {
     expect(sent.map((m) => [m.to, m.subject])).toEqual([
       ['creadora@aula.test', expect.stringMatching(/^Te descontaremos 1,75\s€/)],
       ['socio@aula.test', "We'll take €1.75 from your next payouts"],
+      // pt-BR: importe al estilo brasileño y botón en portugués.
+      ['socia@escola.test', expect.stringMatching(/^Vamos descontar €\s1,75 dos seus próximos/)],
     ]);
     expect(sent[0]!.text).toContain('https://ana.test/admin/payments');
+    expect(sent[2]!.text).toContain('Ver minhas vendas: https://ana.test/admin/payments');
   });
 
   it('al operador: solo con correo configurado y por el SMTP global', async () => {

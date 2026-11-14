@@ -48,6 +48,19 @@ export interface EmailBranding {
  */
 export type EmailLang = 'es' | 'en' | 'pt';
 
+/**
+ * Locale de `Intl` de los avisos redactados en código fuera del catálogo del
+ * hub (cobros de la plataforma, factura de la comisión, confirmación de compra,
+ * inactividad de vídeo). Su inglés es BRITÁNICO («1 November 2026», «€93.25»)
+ * desde que nacieron, y se respeta para no cambiar lo que ya salía; el del hub
+ * (`EMAIL_DATE_LOCALE`) es `en-US`. El portugués es el de Brasil en los dos.
+ */
+export const PLAIN_EMAIL_INTL_LOCALE: Readonly<Record<EmailLang, string>> = {
+  es: 'es-ES',
+  en: 'en-GB',
+  pt: 'pt-BR',
+};
+
 export interface BrandedEmailContent {
   /**
    * Idioma del contenido. OBLIGATORIO a propósito: con un opcional no se

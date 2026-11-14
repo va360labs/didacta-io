@@ -6,16 +6,29 @@
 import { Injectable, Optional } from '@nestjs/common';
 import { formatInvoiceAmount, type InvoiceView } from '@didacta/mod-payouts';
 import { Logger as PinoLogger } from 'nestjs-pino';
-import { escapeHtml, textToHtmlParagraphs, type EmailLang } from '../../common/branded-email';
+import {
+  escapeHtml,
+  PLAIN_EMAIL_INTL_LOCALE,
+  textToHtmlParagraphs,
+  type EmailLang,
+} from '../../common/branded-email';
 import { PrismaService } from '../../prisma/prisma.service';
 import { runAsTenant } from '../../tenancy/tenant-context.storage';
 import { TenantResolverService } from '../../tenancy/tenant-resolver.service';
+import { toHubTemplateLang } from '../notifications/email-template-catalog';
 import { SmtpAdapterService } from '../smtp-adapter.service';
 import { TenantSmtpResolverService } from '../tenant-smtp-resolver.service';
 import { PayoutsRuntime } from './payouts-runtime.service';
 
 const ADMIN_ROLES = ['tenant_admin'];
 const MAX_RECIPIENTS = 5;
+
+/** Enlace del correo a la sección de cobros del panel, con su nombre en cada idioma. */
+export const OPEN_PAYOUTS: Readonly<Record<EmailLang, string>> = {
+  es: 'Abrir Cobros',
+  en: 'Open Payouts',
+  pt: 'Abrir Recebimentos',
+};
 
 /** Textos del correo de una factura. Puro: lo fijan los tests. */
 export function invoiceEmailTexts(input: {
@@ -41,11 +54,15 @@ export function invoiceEmailTexts(input: {
   const total = formatInvoiceAmount(invoice.total, invoice.currency);
   const from = dayLabel(invoice.periodStart, input.lang);
   const to = dayLabel(invoice.periodEnd, input.lang);
+  const base = formatInvoiceAmount(invoice.taxBase, invoice.currency);
+  const rate = invoice.vatRateBps / 100;
   const vat =
     invoice.vatRateBps > 0
-      ? input.lang === 'en'
-        ? ` (${formatInvoiceAmount(invoice.taxBase, invoice.currency)} + ${invoice.vatRateBps / 100} % VAT)`
-        : ` (${formatInvoiceAmount(invoice.taxBase, invoice.currency)} + IVA del ${invoice.vatRateBps / 100} %)`
+      ? {
+          es: ` (${base} + IVA del ${rate} %)`,
+          en: ` (${base} + ${rate} % VAT)`,
+          pt: ` (${base} + ${rate} % de IVA)`,
+        }[input.lang]
       : '';
   const rectified = invoice.rectifies.map((r) => r.fullNumber).join(', ');
   if (input.lang === 'en') {
@@ -66,6 +83,29 @@ export function invoiceEmailTexts(input: {
         (invoice.recipientComplete
           ? ''
           : `\n\nYour tax details are missing. Add them in Payouts and we'll send you this invoice again with them.`),
+    };
+  }
+  if (input.lang === 'pt') {
+    // «Recebimentos» y «Suas faturas»: los nombres de la sección y de la lista
+    // en el panel en portugués. «Fatura» y no «nota fiscal»: es la factura
+    // española del operador, no un documento fiscal brasileño.
+    const lead =
+      invoice.kind === 'RECTIFYING'
+        ? `Segue em anexo a fatura retificadora ${invoice.fullNumber}, que corrige ${rectified}. Valor: ${total}${vat}.`
+        : `Segue em anexo a fatura ${invoice.fullNumber} da nossa comissão de ${input.serviceName} de ${from} a ${to}: ${total}${vat}.`;
+    return {
+      subject:
+        invoice.kind === 'RECTIFYING'
+          ? `Fatura retificadora ${invoice.fullNumber} de ${input.operator}`
+          : `Sua fatura de ${input.serviceName} ${invoice.fullNumber}`,
+      body:
+        `${lead}\n\n` +
+        (invoice.total < 0
+          ? `Você não precisa fazer nada: esta parte da nossa comissão já voltou para os seus recebimentos quando o reembolso foi feito. Você também a encontra em Recebimentos → Suas faturas.`
+          : `Você não precisa pagar nada: o valor já foi descontado das vendas que recebemos em seu nome. Você também a encontra em Recebimentos → Suas faturas.`) +
+        (invoice.recipientComplete
+          ? ''
+          : `\n\nFaltam seus dados fiscais. Complete-os em Recebimentos e enviaremos esta fatura de novo com eles.`),
     };
   }
   const lead =
@@ -89,7 +129,7 @@ export function invoiceEmailTexts(input: {
 }
 
 function dayLabel(isoDay: string, lang: EmailLang): string {
-  return new Intl.DateTimeFormat(lang === 'en' ? 'en-GB' : 'es-ES', {
+  return new Intl.DateTimeFormat(PLAIN_EMAIL_INTL_LOCALE[lang], {
     day: 'numeric',
     month: 'long',
     year: 'numeric',
@@ -167,7 +207,8 @@ export class PayoutsInvoiceMailer {
         : '';
       let ok = true;
       for (const admin of admins) {
-        const lang: EmailLang = (admin.locale ?? '').toLowerCase().startsWith('en') ? 'en' : 'es';
+        // Inglés y portugués con su copy; cualquier otro idioma, español.
+        const lang: EmailLang = toHubTemplateLang(admin.locale);
         const texts = invoiceEmailTexts({
           lang,
           operator: this.runtime.config.displayName,
@@ -179,7 +220,7 @@ export class PayoutsInvoiceMailer {
           `<div style="font-family:system-ui,-apple-system,Segoe UI,sans-serif;font-size:15px;line-height:1.55;color:#0f172a;max-width:560px">` +
           textToHtmlParagraphs(texts.body) +
           (link
-            ? `<p style="margin:16px 0 0"><a href="${escapeHtml(link)}" style="color:#1d4ed8">${lang === 'en' ? 'Open Payouts' : 'Abrir Cobros'}</a></p>`
+            ? `<p style="margin:16px 0 0"><a href="${escapeHtml(link)}" style="color:#1d4ed8">${OPEN_PAYOUTS[lang]}</a></p>`
             : '') +
           `</div>`;
         const result = await this.smtp.send(
