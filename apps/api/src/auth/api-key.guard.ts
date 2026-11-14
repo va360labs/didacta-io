@@ -16,6 +16,17 @@ import { ApiKeyService } from './api-key.service';
 import { PUBLIC_ROUTE_KEY } from './jwt-auth.guard';
 import { TokenService } from './token.service';
 
+declare module 'fastify' {
+  interface FastifyRequest {
+    /**
+     * Id de la clave de API con la que entró la petición. Marca la identidad
+     * como MÁQUINA: el rate limit la deja en el cubo del aula, no en el cubo
+     * por usuario de las personas con sesión (`rate-limit.interceptor.ts`).
+     */
+    apiKeyId?: string;
+  }
+}
+
 /**
  * Guard combinado: acepta Bearer JWT o `Authorization: ApiKey <token>`.
  * Si el token de API key es válido, popula request.user con un SessionClaims
@@ -78,6 +89,7 @@ export class JwtOrApiKeyGuard implements CanActivate {
         roles: grantableApiKeyScopes(key.scopes),
         mfaVerified: true,
       };
+      req.apiKeyId = key.id;
       return true;
     }
 

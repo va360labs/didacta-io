@@ -5,14 +5,15 @@
  * RateLimitInterceptor — sexto piloto License SDK.
  *
  * Aplicado global vía APP_INTERCEPTOR. Para cada request HTTP:
- *   1. Identifica `tenantId` desde `request.user` (lo setea JwtAuthGuard) o
- *      desde `request.scimTenantId` (lo setea ScimAuthGuard con el Bearer del
- *      IdP). Si no hay ninguno, trata la request como pública y deriva el
- *      cubo de la IP canónica del cliente (ver `anonymousIdentifier`).
- *   2. Decide `isPublic`: si no hay ninguna identidad resuelta, es pública.
- *   3. Llama `RateLimitService.recordRequest`.
- *   4. Setea SIEMPRE los headers estándar (`X-RateLimit-*`).
- *   5. Si la request fue rechazada, lanza `HttpException(429)` con
+ *   1. Persona con sesión (`request.user` de JwtAuthGuard, sin clave de API
+ *      ni de agente): su cubo POR USUARIO y el tope del aula
+ *      (`RateLimitService.recordUserRequest`).
+ *   2. SCIM (`request.scimTenantId`) y claves de API/agente: el cubo del aula
+ *      (`recordRequest(tenantId, false)`), como siempre.
+ *   3. Sin identidad: pública, un cubo por IP canónica del cliente (ver
+ *      `anonymousIdentifier`).
+ *   Setea SIEMPRE los headers estándar (`X-RateLimit-*`) y, si la request
+ *   fue rechazada, lanza `HttpException(429)` con
  *      `Retry-After` adicional.
  *
  * Por qué interceptor y no guard:
@@ -36,9 +37,9 @@ import {
   Injectable,
   NestInterceptor,
 } from '@nestjs/common';
-import { createHash } from 'node:crypto';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { Observable, from, of, switchMap } from 'rxjs';
+import { clientIpKey } from './client-ip';
 import { RateLimitService } from './rate-limit.service';
 import type { RateLimitDecision } from './rate-limit.types';
 
@@ -54,29 +55,6 @@ const RATE_LIMIT_EXEMPT_PREFIXES = [
   '/api/docs',
   '/api/license', // estado público de la licencia — necesario para el frontend incluso bajo rate limit
 ];
-
-/**
- * Sal del hash de IP. `AUTH_SECRET` ya es un secreto por instancia, así que
- * dos despliegues no producen las mismas claves y nadie que vea Redis puede
- * revertir el hash por fuerza bruta sobre el espacio IPv4.
- */
-function ipHashSalt(): string {
-  return process.env['AUTH_SECRET'] ?? 'didacta-rate-limit';
-}
-
-/**
- * Reduce una IPv6 a su prefijo /64. Un cliente doméstico con IPv6 tiene una
- * /64 entera para él: limitar por dirección exacta sería regalar miles de
- * cubos a la misma persona. En IPv4 se usa la dirección completa.
- */
-function normalizeIp(ip: string): string {
-  if (!ip.includes(':')) return ip;
-  // `::ffff:1.2.3.4` — IPv4 mapeada, se trata como IPv4.
-  const mapped = /^::ffff:(\d+\.\d+\.\d+\.\d+)$/i.exec(ip);
-  if (mapped?.[1]) return mapped[1];
-  const groups = ip.split(':');
-  return groups.slice(0, 4).join(':') + '::/64';
-}
 
 /**
  * Identificador de cubo para tráfico sin identidad resuelta.
@@ -99,17 +77,21 @@ function normalizeIp(ip: string): string {
  * Reportado por Bruno (ingenierosindustriales.com), ver SECURITY-CREDITS.md.
  */
 function anonymousIdentifier(request: FastifyRequest): string {
-  const ip = typeof request.ip === 'string' ? request.ip.trim() : '';
+  const digest = clientIpKey(request.ip);
   // Sin IP (transporte no-TCP, tests) volvemos al cubo compartido: es el
   // comportamiento anterior y sigue siendo mejor que no limitar nada.
-  if (!ip) return 'anonymous';
-  const digest = createHash('sha256')
-    .update(ipHashSalt())
-    .update(':')
-    .update(normalizeIp(ip))
-    .digest('hex')
-    .slice(0, 16);
+  if (!digest) return 'anonymous';
   return `anon:${digest}`;
+}
+
+/**
+ * ¿La identidad de la petición es una MÁQUINA (clave de API, clave de agente)
+ * y no una persona con sesión? Las dos rellenan `request.user` igual que un
+ * JWT, pero no son un usuario navegando: siguen en el cubo del aula, como
+ * siempre, y no en el cubo por usuario.
+ */
+function isMachineIdentity(request: FastifyRequest): boolean {
+  return request.apiKeyId !== undefined || request.agentKey !== undefined;
 }
 
 @Injectable()
@@ -147,12 +129,26 @@ export class RateLimitInterceptor implements NestInterceptor {
     //
     // Sin ninguna de las dos, la request es pública y el bucket se deriva de
     // la IP del cliente (ver `anonymousIdentifier`).
+    //
+    // Una persona con sesión (JWT) va a SU cubo por usuario, con el tope del
+    // aula encima (`recordUserRequest`). SCIM y las claves de API/agente se
+    // quedan en el cubo del aula, como antes.
     const user = request.user;
     const identifiedTenantId = user?.tenantId ?? request.scimTenantId;
     const isPublic = identifiedTenantId === undefined;
     const identifier = identifiedTenantId ?? anonymousIdentifier(request);
+    const perUser =
+      user !== undefined &&
+      typeof user.sub === 'string' &&
+      user.sub.length > 0 &&
+      typeof user.tenantId === 'string' &&
+      !isMachineIdentity(request);
 
-    return from(this.rateLimit.recordRequest(identifier, isPublic)).pipe(
+    const decision$ = perUser
+      ? this.rateLimit.recordUserRequest(user.tenantId, user.sub)
+      : this.rateLimit.recordRequest(identifier, isPublic);
+
+    return from(decision$).pipe(
       switchMap((decision) => {
         this.applyHeaders(reply, decision);
 
@@ -165,6 +161,7 @@ export class RateLimitInterceptor implements NestInterceptor {
               message:
                 `Has superado el límite de ${decision.limit} req/min para tu plan ` +
                 `(${decision.tier}). Reintenta en ${decision.retryAfterSeconds ?? 60}s.`,
+              scope: decision.bucket,
               capability: 'feat:api.rate_limit.elevated',
               tier: decision.tier,
               limit: decision.limit,

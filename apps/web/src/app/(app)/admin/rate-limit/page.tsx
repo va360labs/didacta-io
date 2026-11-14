@@ -122,6 +122,17 @@ function RateLimitPanel({ info }: { info: RateLimitInfo }) {
                 </tr>
               </thead>
               <tbody>
+                {info.user ? (
+                  <tr className="border-t border-border-soft">
+                    <td className="px-4 py-3">{t('rateLimit.rowUser')}</td>
+                    <td className="px-4 py-3 font-mono">
+                      {t('rateLimit.reqCount', { limit: info.user.limit })}
+                    </td>
+                    <td className="px-4 py-3 font-mono">
+                      {t('rateLimit.windowSeconds', { seconds: info.user.windowSeconds })}
+                    </td>
+                  </tr>
+                ) : null}
                 <tr className="border-t border-border-soft">
                   <td className="px-4 py-3">{t('rateLimit.rowAuthenticated')}</td>
                   <td className="px-4 py-3 font-mono">
@@ -165,6 +176,18 @@ function RateLimitPanel({ info }: { info: RateLimitInfo }) {
                 </tr>
               </thead>
               <tbody>
+                {typeof info.community.user === 'number' &&
+                typeof info.enterprise.user === 'number' ? (
+                  <tr className="border-t border-border-soft">
+                    <td className="px-4 py-3">{t('rateLimit.rowUserShort')}</td>
+                    <td className="px-4 py-3 font-mono">
+                      {t('rateLimit.reqPerMin', { count: info.community.user })}
+                    </td>
+                    <td className="px-4 py-3 font-mono">
+                      {t('rateLimit.reqPerMin', { count: info.enterprise.user })}
+                    </td>
+                  </tr>
+                ) : null}
                 <tr className="border-t border-border-soft">
                   <td className="px-4 py-3">{t('rateLimit.rowAuth')}</td>
                   <td className="px-4 py-3 font-mono">

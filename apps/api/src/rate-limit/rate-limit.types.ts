@@ -5,22 +5,29 @@
  * Tipos y defaults del sexto piloto License SDK — gate
  * `feat:api.rate_limit.elevated`.
  *
- * Modelo:
- *   - Plan Community: rate "fair" — `community.authenticated` y
- *     `community.public`. Los endpoints autenticados se identifican por
- *     `tenantId` extraído del JWT; los públicos (sin token) se cuentan
- *     todos contra un único bucket especial `'anonymous'`.
+ * Modelo (tres cubos):
+ *   - `user` — tráfico con SESIÓN: un cubo por usuario (`tenantId` + `sub`).
+ *     Antes no existía y toda el aula compartía UN cubo de 100/min: una clase
+ *     de diez alumnos navegando a la vez se lo comía y el aula entera recibía
+ *     429.
+ *   - `authenticated` — el TOPE POR AULA: suma de todo el tráfico con sesión
+ *     del aula, más SCIM y las claves de API (que siguen contando aquí, como
+ *     siempre). Red de seguridad contra abusos, no el límite del día a día.
+ *   - `public` — tráfico sin identidad, un cubo por IP del visitante.
  *   - Plan Enterprise (capability `feat:api.rate_limit.elevated`): mismas
- *     dimensiones pero con multiplicadores ~10x.
+ *     dimensiones con multiplicadores ~10x, y nunca por debajo del Community.
  *
- * Configurable vía env (todas opcionales — si no están seteadas se usan
- * los defaults del piloto):
- *   - RATE_LIMIT_COMMUNITY_AUTH_PER_MIN
- *   - RATE_LIMIT_COMMUNITY_PUBLIC_PER_MIN
- *   - RATE_LIMIT_ENTERPRISE_AUTH_PER_MIN
- *   - RATE_LIMIT_ENTERPRISE_PUBLIC_PER_MIN
- *   - RATE_LIMIT_WINDOW_SECONDS  (default 60 — sliding window simple por
- *     minuto natural; ver design notes en rate-limit.service.ts)
+ * Configurable vía env (todas opcionales; sin ellas, los defaults Community):
+ *   - RATE_LIMIT_COMMUNITY_USER_PER_MIN    (por usuario; sin ella = el tope
+ *     por aula, así que quien no la pone se queda EXACTAMENTE como estaba)
+ *   - RATE_LIMIT_COMMUNITY_AUTH_PER_MIN    (tope por aula)
+ *   - RATE_LIMIT_COMMUNITY_PUBLIC_PER_MIN  (por IP, sin sesión)
+ *   - RATE_LIMIT_ENTERPRISE_USER_PER_MIN / _AUTH_PER_MIN / _PUBLIC_PER_MIN
+ *   - RATE_LIMIT_WINDOW_SECONDS  (default 60 — ventana fija por minuto
+ *     natural; ver design notes en rate-limit.service.ts)
+ *
+ * El acceso (login, alta, restablecer contraseña, MFA) tiene además su propio
+ * limitador por IP y por cuenta: ver `login-limit.types.ts`.
  *
  * NOTA — sliding window simple vs token bucket:
  *   El piloto usa una ventana fija de 1 minuto natural (clave Redis con
@@ -37,8 +44,11 @@ import { LICENSE_CAPABILITIES, type LicenseCapability } from '@didacta/license-s
 /** Tier efectivo del request — comunidad o enterprise. */
 export type RateLimitTier = 'community' | 'enterprise';
 
-/** Tipo de bucket — separa autenticados de públicos. */
-export type RateLimitBucket = 'authenticated' | 'public';
+/**
+ * Tipo de bucket: `user` (por usuario con sesión), `authenticated` (tope por
+ * aula, y el de SCIM y las claves de API) y `public` (por IP, sin sesión).
+ */
+export type RateLimitBucket = 'user' | 'authenticated' | 'public';
 
 /**
  * Resultado de evaluar una request contra el rate limiter.
@@ -52,7 +62,8 @@ export type RateLimitBucket = 'authenticated' | 'public';
  * - `retryAfterSeconds`: solo presente si `allowed === false` — segundos
  *   hasta que el cliente puede reintentar (header `Retry-After`).
  * - `tier`: tier resuelto al momento de la decisión, expuesto para logs.
- * - `bucket`: bucket usado.
+ * - `bucket`: el bucket que manda en la decisión. En el tráfico con sesión es
+ *   `user` salvo que lo que se agote sea el tope del aula (`authenticated`).
  */
 export interface RateLimitDecision {
   allowed: boolean;
@@ -65,15 +76,18 @@ export interface RateLimitDecision {
 }
 
 /** Configuración de límites efectiva en runtime. */
+export interface RateLimitTierConfig {
+  /** Por usuario con sesión. */
+  user: number;
+  /** Tope por aula (todo el tráfico con sesión, SCIM y claves de API). */
+  authenticated: number;
+  /** Por IP, sin sesión. */
+  public: number;
+}
+
 export interface RateLimitConfig {
-  community: {
-    authenticated: number;
-    public: number;
-  };
-  enterprise: {
-    authenticated: number;
-    public: number;
-  };
+  community: RateLimitTierConfig;
+  enterprise: RateLimitTierConfig;
   /** Tamaño de la ventana en segundos. Default 60 (1 minuto). */
   windowSeconds: number;
 }
@@ -81,10 +95,12 @@ export interface RateLimitConfig {
 /** Defaults del piloto (LMS — sexto pilote License SDK). */
 export const DEFAULT_RATE_LIMIT_CONFIG: RateLimitConfig = {
   community: {
+    user: 100,
     authenticated: 100,
     public: 30,
   },
   enterprise: {
+    user: 1000,
     authenticated: 1000,
     public: 300,
   },
@@ -130,11 +146,16 @@ export function readPositiveIntEnv(name: string, fallback: number): number {
  * community deja de tener efecto (vale el del community).
  */
 export function resolveRateLimitConfig(): RateLimitConfig {
-  const community = {
-    authenticated: readPositiveIntEnv(
-      'RATE_LIMIT_COMMUNITY_AUTH_PER_MIN',
-      DEFAULT_RATE_LIMIT_CONFIG.community.authenticated,
-    ),
+  const authenticated = readPositiveIntEnv(
+    'RATE_LIMIT_COMMUNITY_AUTH_PER_MIN',
+    DEFAULT_RATE_LIMIT_CONFIG.community.authenticated,
+  );
+  const community: RateLimitTierConfig = {
+    // Sin variable, el límite por usuario es el mismo tope del aula: una
+    // instalación que no la pone se comporta EXACTAMENTE como antes (el tope
+    // del aula es el que manda), incluida la que subió el tope a 100.000.
+    user: readPositiveIntEnv('RATE_LIMIT_COMMUNITY_USER_PER_MIN', authenticated),
+    authenticated,
     public: readPositiveIntEnv(
       'RATE_LIMIT_COMMUNITY_PUBLIC_PER_MIN',
       DEFAULT_RATE_LIMIT_CONFIG.community.public,
@@ -143,6 +164,13 @@ export function resolveRateLimitConfig(): RateLimitConfig {
   return {
     community,
     enterprise: {
+      user: Math.max(
+        community.user,
+        readPositiveIntEnv(
+          'RATE_LIMIT_ENTERPRISE_USER_PER_MIN',
+          DEFAULT_RATE_LIMIT_CONFIG.enterprise.user,
+        ),
+      ),
       authenticated: Math.max(
         community.authenticated,
         readPositiveIntEnv(
