@@ -41,6 +41,7 @@ import { SmtpAdapterService } from '../smtp-adapter.service';
 import { TenantSmtpResolverService } from '../tenant-smtp-resolver.service';
 import { TenantStripeResolverService } from '../tenant-stripe-resolver.service';
 import { PayoutsEmailNotifier } from './payouts-notifier';
+import { paymentMethodFromCharge } from '../sale-emails/sale-email-render';
 import type { PlatformPaymentsEnabled } from './platform-payments.config';
 import type { PlatformPortalPort, PlatformRefsPort } from './platform-stripe-adapters';
 
@@ -185,6 +186,11 @@ export class PayoutsRuntime {
       smtpResolver,
       smtp,
       tenantResolver,
+      // Medio de pago del cargo devuelto, para el recibo del reembolso.
+      chargeMethod: async (chargeId) =>
+        paymentMethodFromCharge(
+          await stripe.v1('GET', `/v1/charges/${encodeURIComponent(chargeId)}`),
+        ),
       hub: () => {
         try {
           return (

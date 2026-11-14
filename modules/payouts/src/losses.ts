@@ -102,6 +102,35 @@ export interface SaleMadeNotice {
   readonly buyerEmail: string | null;
   /** El dinero de la venta se queda retenido porque faltan los datos fiscales. */
   readonly heldForTaxData: boolean;
+  /**
+   * De qué pedido es (la orden de `mod.billing` o la factura de Stripe): la
+   * referencia corta del correo, la misma que ve el comprador en su recibo.
+   */
+  readonly sourceRef?: string | null;
+  /** Cuándo se cobró. */
+  readonly chargedAt?: Date | null;
+  /**
+   * El reparto tal como está al avisar (en la divisa de liquidación). Los
+   * importes son `null` mientras el cargo no tiene `balance_transaction`.
+   */
+  readonly split?: SaleNoticeSplit | null;
+}
+
+export interface SaleNoticeSplit {
+  readonly currency: string | null;
+  readonly gross: number | null;
+  readonly stripeFee: number | null;
+  readonly platformFee: number | null;
+  readonly feeBpsApplied: number | null;
+  readonly debtNetted: number;
+  readonly creatorNet: number | null;
+  readonly transferAmount: number | null;
+  /** `PayoutsSaleStatus`. */
+  readonly status: string;
+  /** Día estimado en que sale hacia el banco (calendario de pagos del creador). */
+  readonly estimatedArrival: Date | null;
+  /** Comisión del operador vigente si el reparto aún no se ha sellado. */
+  readonly currentFeeBps?: number | null;
 }
 
 export interface RefundIssuedNotice {

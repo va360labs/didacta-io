@@ -111,11 +111,60 @@ describe('aviso de una venta', () => {
         currency: 'eur',
         buyerEmail: 'marta@example.test',
         heldForTaxData: false,
+        // El pedido (para la referencia corta del correo) y cuándo se cobró.
+        sourceRef: s['sourceRef'],
+        chargedAt: new Date(clock),
+        // Aún sin `balance_transaction`: el reparto va vacío, nada inventado.
+        split: {
+          currency: null,
+          gross: null,
+          stripeFee: null,
+          platformFee: null,
+          feeBpsApplied: null,
+          debtNetted: 0,
+          creatorNet: null,
+          transferAmount: null,
+          status: 'AWAITING_FEE',
+          estimatedArrival: null,
+        },
       },
     ]);
     expect(db.rows('modPayoutsSale', { id: s['id'] })[0]!['creatorNotifiedAt']).toEqual(
       new Date(NOW),
     );
+  });
+
+  it('con el reparto hecho: comisiones, lo que llega y el día estimado según su calendario', async () => {
+    db.update(
+      'modPayoutsAccount',
+      { id: account[A] },
+      { payoutSchedule: { interval: 'weekly', weeklyDay: 'friday', monthlyDay: null } },
+    );
+    const s = sale(A, {
+      currency: 'eur',
+      gross: 4900,
+      stripeFee: 99,
+      platformFee: 245,
+      feeBpsApplied: 500,
+      creatorNet: 4556,
+      transferAmount: 4556,
+      status: 'READY',
+      // Disponible el miércoles 18-nov-2026: el viernes siguiente es el 20.
+      availableOn: new Date('2026-11-18T00:00:00Z'),
+    });
+    expect(await notices.notify(A, s['id'] as string)).toBe('sent');
+    expect(sent[0]!.split).toEqual({
+      currency: 'eur',
+      gross: 4900,
+      stripeFee: 99,
+      platformFee: 245,
+      feeBpsApplied: 500,
+      debtNetted: 0,
+      creatorNet: 4556,
+      transferAmount: 4556,
+      status: 'READY',
+      estimatedArrival: new Date('2026-11-20T00:00:00Z'),
+    });
   });
 
   it('UNA vez por venta: reentregas y llamadas a la vez no repiten el aviso', async () => {

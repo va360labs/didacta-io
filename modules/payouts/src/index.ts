@@ -220,6 +220,7 @@ export type {
   ReversalStatus,
   SaleMadeNotice,
   SaleNoticeKind,
+  SaleNoticeSplit,
 } from './losses.js';
 
 // Aviso de cada venta a quien administra el aula (una vez por venta).
