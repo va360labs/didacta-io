@@ -118,6 +118,14 @@ interface FormState {
   birthDate: string;
 }
 
+/**
+ * ¿Ya sabemos si es particular o empresa? Sí si los datos se guardaron, o si
+ * Stripe lo propone (se eligió al conectar los cobros). Puro.
+ */
+export function entityKnown(dto: PayoutsTaxProfileDto): boolean {
+  return Boolean(dto.profile?.entityType ?? dto.prefill?.entityType);
+}
+
 /** Del DTO al formulario (perfil guardado o, si no hay, lo que propone Stripe). Puro. */
 export function formFromDto(dto: PayoutsTaxProfileDto): FormState {
   const source = dto.profile ?? dto.prefill;
@@ -207,6 +215,10 @@ export function PayoutsTaxProfileCard({
   const [error, setError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [saved, setSaved] = useState(false);
+  // Particular o empresa ya se eligió al conectar los cobros (va en la cuenta
+  // de Stripe y llega aquí propuesto): no se vuelve a preguntar. Se enseña con
+  // «Cambiar» por si acaso (prueba real: se preguntaba tres veces).
+  const [entityEditing, setEntityEditing] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -382,26 +394,42 @@ export function PayoutsTaxProfileCard({
             {dto.status === 'missing' && dto.prefill?.legalName ? (
               <p className="text-sm text-text-muted">{t('prefillNote')}</p>
             ) : null}
-            <fieldset className="space-y-1.5">
-              <legend className="mb-1.5 text-sm font-medium text-text">{t('entityLabel')}</legend>
-              <div className="flex flex-col gap-2 sm:flex-row">
-                {(['individual', 'company'] as const).map((value) => (
-                  <label
-                    key={value}
-                    className="flex cursor-pointer items-center gap-2.5 rounded-lg border border-border-strong px-3 py-2 text-[0.9375rem] has-[:checked]:border-brand-500 has-[:checked]:bg-brand-50"
+            {entityKnown(dto) && !entityEditing ? (
+              <div className="space-y-1.5" data-testid="tax-entity-known">
+                <p className="text-sm font-medium text-text">{t('entityLabel')}</p>
+                <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[0.9375rem] text-text">
+                  <span>{t(`entity.${form.entityType}`)}</span>
+                  <button
+                    type="button"
+                    onClick={() => setEntityEditing(true)}
+                    className="text-sm font-semibold text-brand-600 hover:underline"
                   >
-                    <input
-                      type="radio"
-                      name="tax-entity"
-                      value={value}
-                      checked={form.entityType === value}
-                      onChange={() => set({ entityType: value })}
-                    />
-                    {t(`entity.${value}`)}
-                  </label>
-                ))}
+                    {t('entityChange')}
+                  </button>
+                </p>
               </div>
-            </fieldset>
+            ) : (
+              <fieldset className="space-y-1.5">
+                <legend className="mb-1.5 text-sm font-medium text-text">{t('entityLabel')}</legend>
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  {(['individual', 'company'] as const).map((value) => (
+                    <label
+                      key={value}
+                      className="flex cursor-pointer items-center gap-2.5 rounded-lg border border-border-strong px-3 py-2 text-[0.9375rem] has-[:checked]:border-brand-500 has-[:checked]:bg-brand-50"
+                    >
+                      <input
+                        type="radio"
+                        name="tax-entity"
+                        value={value}
+                        checked={form.entityType === value}
+                        onChange={() => set({ entityType: value })}
+                      />
+                      {t(`entity.${value}`)}
+                    </label>
+                  ))}
+                </div>
+              </fieldset>
+            )}
             <div className="grid gap-4 sm:grid-cols-2">
               <Field
                 id="tax-legal-name"

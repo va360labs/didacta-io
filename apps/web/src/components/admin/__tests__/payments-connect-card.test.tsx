@@ -25,6 +25,7 @@ import es from '@/i18n/messages/es';
 import pt from '@/i18n/messages/pt';
 import type { PayoutsAccountDto, PayoutsStatusDto, payoutsApi } from '@/lib/payouts';
 import { PaymentsConnectCard } from '../payments-connect-card';
+import { payoutsNavigation } from '../payouts-redirect';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -168,4 +169,56 @@ describe('tarjeta de cobros: el país que el creador declaró en el alta', () =>
     expect(c.submit.disabled).toBe(true);
     expect([...c.select.options].some((o) => o.value === 'OTHER')).toBe(false);
   });
+});
+
+// Prueba real del 14-nov-2026: «Abriendo Stripe…» tardó 8 s sin más señal y
+// se volvió a pulsar. Ahora: indicador, aviso de que tarda y una sola petición.
+describe('tarjeta de cobros: abrir el alta de Stripe', () => {
+  it('mientras se crea el enlace: botón apagado con indicador y aviso; doble clic, una sola petición', async () => {
+    const go = vi.spyOn(payoutsNavigation, 'go').mockImplementation(() => undefined);
+    const c = await render('es', status({ declaredCountry: 'ES' }));
+    let finish!: (value: unknown) => void;
+    c.connect.mockImplementation(() => new Promise((resolve) => (finish = resolve)));
+
+    await act(async () => {
+      c.submit.click();
+      c.submit.click();
+    });
+
+    expect(c.connect).toHaveBeenCalledTimes(1);
+    expect(c.connect).toHaveBeenCalledWith('ES', 'individual');
+    expect(c.submit.disabled).toBe(true);
+    expect(c.submit.textContent).toBe('Abriendo Stripe…');
+    expect(c.submit.querySelector('[data-testid="payouts-spinner"]')).not.toBeNull();
+    expect(c.container.querySelector('[data-testid="payouts-opening-notice"]')?.textContent).toBe(
+      'Estamos preparando tu alta en Stripe. Puede tardar unos segundos: no cierres esta página.',
+    );
+
+    await act(async () => {
+      finish({ account: null, onboardingUrl: 'https://connect.stripe.test/setup/e/x' });
+    });
+    expect(go).toHaveBeenCalledTimes(1);
+    expect(go).toHaveBeenCalledWith('https://connect.stripe.test/setup/e/x');
+  });
+
+  it('en reposo el aviso de espera está vacío (solo para lectores de pantalla) (control)', async () => {
+    const c = await render('es', status({ declaredCountry: 'ES' }));
+    const notice = c.container.querySelector('[data-testid="payouts-opening-notice"]');
+    expect(notice?.textContent).toBe('');
+    expect(c.submit.textContent).toBe('Conectar cobros');
+  });
+
+  it.each([
+    ['es', 'Si no quieres dar tu móvil personal, pon uno de trabajo.'],
+    ['en', "If you'd rather not share your personal mobile, use a work number."],
+    ['pt', 'Se não quiser informar seu celular pessoal, use um número de trabalho.'],
+  ] as const)(
+    '%s: avisa del teléfono de atención que pedirá Stripe (lo verán los alumnos)',
+    async (locale, text) => {
+      const c = await render(locale, status({ declaredCountry: 'ES' }));
+      expect(
+        c.container.querySelector('[data-testid="payouts-support-phone-note"]')?.textContent,
+      ).toContain(text);
+    },
+  );
 });
