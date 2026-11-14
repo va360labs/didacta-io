@@ -15,6 +15,7 @@ import { TenantModulesService } from '../modules/tenant-modules.service';
 import { PlatformCheckoutGate } from '../modules/payouts/platform-checkout-gate';
 import { PrismaService } from '../prisma/prisma.service';
 import { isShareableHost, publicName } from '../modules/community/community-sidebar.service';
+import { STAFF_ROLES, showsPublicCounts } from './public-counts';
 
 /**
  * La PÁGINA PÚBLICA de la academia (la raíz del aula para quien entra sin
@@ -24,7 +25,8 @@ import { isShareableHost, publicName } from '../modules/community/community-side
  *  - marca: nombre, logo, portada, descripción y enlaces (mod.theming), como
  *    la tarjeta de la comunidad;
  *  - miembros: SOLO el número (ni caras ni nombres de alumnos a un visitante),
- *    y solo cuando hay alguien además del equipo;
+ *    y solo con alumnos suficientes (`public-counts.ts`, la misma regla que
+ *    las cifras del login);
  *  - quien la lleva: nombre y foto de la primera persona que la administra
  *    (es pública por su rol; nunca un correo);
  *  - próximo directo: título y fecha (nunca el enlace de la sala);
@@ -53,9 +55,6 @@ const ACADEMY_HOME_CACHE_MAX_TENANTS = 500;
 export const ACADEMY_HOME_MAX_COURSES = 6;
 /** Cursos gratuitos que se nombran en la opción gratuita. */
 export const ACADEMY_HOME_MAX_FREE_COURSES = 3;
-
-/** Equipo del aula: no cuentan para decidir si hay comunidad que enseñar. */
-const STAFF_ROLES = ['super_admin', 'tenant_admin', 'formador'];
 
 export interface AcademyHomePrice {
   amountCents: number;
@@ -113,7 +112,7 @@ export interface AcademyHomeData {
     brandHue: number | null;
     brandSaturation: number | null;
   };
-  /** Número de miembros activos; `null` si no hay nadie además del equipo. */
+  /** Número de miembros activos; `null` si el aula aún no tiene alumnos suficientes. */
   members: number | null;
   creator: { name: string; avatarUrl: string | null } | null;
   nextLive: { title: string; startTime: string; durationMinutes: number } | null;
@@ -241,19 +240,23 @@ export class AcademyHomeService {
   }
 
   /**
-   * Miembros activos del aula. Solo el número, y solo si hay alguien que no
-   * sea del equipo: un aula recién creada no presume de «1 miembro» (que es
-   * quien la creó).
+   * Miembros activos del aula. Solo el número, y solo con alumnos suficientes
+   * (`showsPublicCounts`, la misma regla que las cifras del login): un aula
+   * recién creada no presume de «1 miembro» (que es quien la creó), ni una
+   * con su primer alumno de «2».
    */
   private async members(tenantId: string): Promise<number | null> {
     const active = { tenantId, status: 'ACTIVE' as const, deletedAt: null };
     const [total, students] = await Promise.all([
       this.prisma.user.count({ where: active }),
       this.prisma.user.count({
-        where: { ...active, NOT: { roles: { some: { role: { name: { in: STAFF_ROLES } } } } } },
+        where: {
+          ...active,
+          NOT: { roles: { some: { role: { name: { in: [...STAFF_ROLES] } } } } },
+        },
       }),
     ]);
-    return students > 0 ? total : null;
+    return showsPublicCounts(students) ? total : null;
   }
 
   /**

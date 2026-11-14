@@ -121,6 +121,8 @@ test.describe('Página pública de la academia', () => {
       body: { name: 'Mensual', intervalMonths: 1, amountCents: 1900, trialDays: 7 },
     });
     await alumna(a, 'Lucía Prueba');
+    // Las cifras solo se enseñan desde 10 alumnos (`public-counts.ts`): nueve más.
+    for (let i = 1; i <= 9; i++) await alumna(a, `Alumna ${i}`);
     const inicio = new Date(Date.now() + 3 * 86_400_000);
     sql(
       `INSERT INTO mod_zoom_live_session (id, tenant_id, topic, start_time, duration_minutes, timezone, host_email, join_url, updated_at)
@@ -135,8 +137,8 @@ test.describe('Página pública de la academia', () => {
     await expect(page.getByTestId('portada-descripcion')).toHaveText(
       'Café de especialidad en casa.',
     );
-    // operador + creadora + alumna: 3 miembros (solo el número).
-    await expect(page.getByTestId('portada-miembros')).toContainText('3');
+    // operador + creadora + 10 alumnas: 12 miembros (solo el número).
+    await expect(page.getByTestId('portada-miembros')).toContainText('12');
     await expect(page.getByTestId('portada-creadora')).toContainText('Clara Barista');
     await expect(page.getByTestId('portada-creadora')).toContainText('CB');
     await expect(portada).not.toContainText('Lucía Prueba');

@@ -92,7 +92,7 @@
     "faviconUrlPlaceholder": "https://cdn.yourdomain.com/favicon.png",
     "faviconUrlHint": "Alternative: paste the https URL of a favicon already hosted on your domain.",
     "signinTitle": "Sign-in screen",
-    "signinDescription": "Copy for the dark panel of <code>/signin</code>. If you leave it empty, the generic Didacta text is used. The figures shown below (active students, published courses) are real and calculated automatically: they are not configured here.",
+    "signinDescription": "Copy for the dark panel of <code>/signin</code>. If you leave it empty, the generic Didacta text is used. The figures shown below (active students, published courses) are real and calculated automatically: they are not configured here. They only show once the academy has at least 10 students.",
     "headlineLabel": "Headline",
     "headlinePlaceholder": "Applied AI training, with the community that uses it every day.",
     "headlineHint": "Maximum 160 characters. It renders very large: a short sentence works best.",
