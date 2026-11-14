@@ -58,3 +58,13 @@ c862d476db1fc67f7a19d9aebed613695876619f:apps/api/tests/platform-payments.config
 # prueba para GET /admin/tenants/payouts/countries: un secreto de webhook inventado de 16 caracteres
 # (empieza por «whsec_invent»). No es una credencial.
 c608243750098cdb39c33e914bda3aa223319164:apps/api/tests/contract/admin-tenants.contract.test.ts:generic-api-key:826
+# Claves inventadas de los tests del pago dentro de la ficha (beta.21): pk_/sk_ de prueba con
+# valores de relleno («abcdefgh1234», «operador123»), nunca claves reales.
+fb99eb74c1579f4a1a35e0ae48a205e6cdf418d3:apps/api/tests/admin-stripe.controller.test.ts:generic-api-key:171
+fb99eb74c1579f4a1a35e0ae48a205e6cdf418d3:apps/api/tests/admin-stripe.controller.test.ts:generic-api-key:187
+fb99eb74c1579f4a1a35e0ae48a205e6cdf418d3:apps/api/tests/billing-public.controller.test.ts:generic-api-key:334
+fb99eb74c1579f4a1a35e0ae48a205e6cdf418d3:apps/api/tests/billing-public.controller.test.ts:generic-api-key:346
+fb99eb74c1579f4a1a35e0ae48a205e6cdf418d3:apps/api/tests/checkout-embebido.test.ts:stripe-access-token:51
+fb99eb74c1579f4a1a35e0ae48a205e6cdf418d3:apps/api/tests/checkout-embebido.test.ts:generic-api-key:63
+fb99eb74c1579f4a1a35e0ae48a205e6cdf418d3:apps/api/tests/checkout-embebido.test.ts:generic-api-key:72
+fb99eb74c1579f4a1a35e0ae48a205e6cdf418d3:apps/api/tests/checkout-embebido.test.ts:generic-api-key:139
