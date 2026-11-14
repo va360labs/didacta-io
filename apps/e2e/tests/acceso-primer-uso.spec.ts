@@ -112,13 +112,15 @@ async function crearAlumna(email: string, nombre: string): Promise<string> {
   return r.id;
 }
 
-/** Perfil de primer acceso de una alumna, sin foto ni cambios. */
+/**
+ * Perfil de primer acceso de una alumna, sin foto ni cambios: en el modo
+ * sencillo es UN paso (foto opcional y nombre) y sin DNI.
+ */
 async function perfilAlumna(page: Page) {
   await page.waitForURL(/\/onboarding/, { timeout: 30_000 });
-  await page.getByRole('button', { name: 'Continuar' }).click();
-  await page.getByRole('button', { name: 'Continuar' }).click();
-  await page.getByRole('button', { name: 'Continuar' }).click();
-  await page.getByRole('button', { name: 'Entrar a la plataforma' }).click();
+  await expect(page.getByTestId('perfil-un-paso')).toBeVisible();
+  await expect(page.locator('#ob-doc')).toHaveCount(0);
+  await page.getByRole('button', { name: 'Entrar', exact: true }).click();
 }
 
 test.beforeAll(async ({ browser }) => {

@@ -361,12 +361,10 @@ test('7 y 2: la alumna nace con la zona del aula, su primer acceso toma la de su
   const page = await ctx.newPage();
   await setPasswordAndSignIn(page, setPasswordLink(STUDENT_EMAIL), STUDENT_EMAIL);
   await page.waitForURL(/\/onboarding/, { timeout: 30_000 });
-  await page.getByRole('button', { name: 'Continue' }).click();
-  await expect(page.locator('#ob-tz')).toHaveValue('America/New_York');
-  await expect(page.locator('#ob-tz option:checked')).toHaveText('America/New_York');
-  await page.getByRole('button', { name: 'Continue' }).click();
-  await page.getByRole('button', { name: 'Continue' }).click();
-  await page.getByRole('button', { name: 'Enter the platform' }).click();
+  // Modo sencillo: un solo paso (foto y nombre). La zona no se pregunta: se
+  // toma la de su navegador, y es lo que comprueba la fila de abajo.
+  await expect(page.getByTestId('perfil-un-paso')).toBeVisible();
+  await page.getByRole('button', { name: 'Go in' }).click();
   await page.waitForURL((u) => !u.pathname.startsWith('/onboarding'), { timeout: 30_000 });
   expect(userRow(STUDENT_EMAIL)).toEqual({ timezone: 'America/New_York', locale: 'en-US' });
 

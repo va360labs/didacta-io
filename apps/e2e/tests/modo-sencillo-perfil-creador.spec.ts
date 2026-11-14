@@ -237,15 +237,15 @@ test('control: un alumno del mismo aula sencilla ve el perfil de alumno, no el d
     page.getByRole('heading', { name: 'Introduce yourself to your students' }),
   ).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Skip for now' })).toHaveCount(0);
-  // Su foto también es opcional en modo sencillo, con el texto de siempre.
+  // Su foto también es opcional en modo sencillo, con el texto de siempre, y
+  // todo va en UN paso: foto y nombre, y dentro (primera venta, 14-nov).
   await expect(
     page.getByText('Optional. If you do not upload one, we use your initials.'),
   ).toBeVisible();
-  await page.getByRole('button', { name: 'Continue' }).click();
+  await expect(page.getByTestId('perfil-un-paso')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Go in' })).toBeDisabled();
   await page.getByLabel(/Profile name/).fill('Student Test');
-  await page.getByRole('button', { name: 'Continue' }).click();
-  await page.getByRole('button', { name: 'Continue' }).click();
-  await page.getByRole('button', { name: 'Enter the platform' }).click();
+  await page.getByRole('button', { name: 'Go in' }).click();
   // El alumno no va a la academia del creador.
   await page.waitForURL((u) => !/\/(onboarding|bienvenida|empieza)/.test(u.pathname), {
     timeout: 30_000,

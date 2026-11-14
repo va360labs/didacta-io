@@ -21,7 +21,12 @@ import { initialsOf } from '@/components/user-chip';
 import { ApiHttpError } from '@/lib/api-client';
 import { authStorage } from '@/lib/auth-storage';
 import { asksSpanishDocument, isDocumentFieldValid } from '@/lib/document-id';
-import { afterProfilePath, isCreatorProfile } from '@/lib/first-access';
+import {
+  afterProfilePath,
+  isCreatorProfile,
+  profilePlan,
+  type ProfileStep,
+} from '@/lib/first-access';
 import { consumeIntendedPath } from '@/lib/post-login-redirect';
 import { apiErrorMessage } from '@/lib/i18n/api-error';
 import { toSupportedLocale } from '@/i18n/config';
@@ -47,6 +52,9 @@ import { communityApi } from '@/modules/community';
  * primer acceso, antes del alta en 3 preguntas (ver `lib/first-access.ts`):
  * mismas pantallas, textos que le hablan de sus alumnos, la foto se puede
  * dejar para luego y al terminar sigue hacia su academia.
+ *
+ * Y el ALUMNO de un aula en modo sencillo (el que acaba de comprar) tiene un
+ * solo paso: foto opcional y nombre, y a su curso (`profilePlan`). Sin DNI.
  */
 export default function OnboardingPage() {
   const router = useRouter();
@@ -58,6 +66,13 @@ export default function OnboardingPage() {
   const tSimple = useTranslations('modoSencillo');
   const creador = isCreatorProfile(authStorage.getSession()?.user.roles, simpleMode);
   const tc = useTranslations('modoSencillo.perfil.creador');
+  const ta = useTranslations('modoSencillo.perfil.alumno');
+  // Qué pasos tiene este perfil y si pide el DNI/NIE (ver `profilePlan`).
+  const plan = profilePlan({
+    sencillo: simple,
+    creador,
+    espanol: asksSpanishDocument(uiLocale),
+  });
   // Dentro del efecto de carga el modo aún puede no haber llegado: se mira la
   // caché, y sin ella /home (el gate del shell sabe llevar al creador).
   const creadorAhora = () =>
@@ -155,23 +170,28 @@ export default function OnboardingPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [router]);
 
-  const steps = [
-    t('onboarding.stepPhoto'),
-    t('onboarding.stepData'),
-    t('onboarding.stepNotifications'),
-    t('onboarding.stepDone'),
-  ];
+  const stepLabel: Record<ProfileStep, string> = {
+    profile: t('onboarding.stepData'),
+    photo: t('onboarding.stepPhoto'),
+    data: t('onboarding.stepData'),
+    notifications: t('onboarding.stepNotifications'),
+    done: t('onboarding.stepDone'),
+  };
+  const steps = plan.steps.map((id) => stepLabel[id]);
+  const stepId: ProfileStep = plan.steps[Math.min(step, plan.steps.length - 1)]!;
 
   // El DNI/NIE es opcional, pero si se rellena tiene que pasar el checksum: el
   // backend lo rechazaría igual en el PATCH final, y descubrirlo en "Listo"
   // en vez de en el campo era el issue #59.
   const documentInvalid = !isDocumentFieldValid(documentId);
   const canNext =
-    step === 0
+    stepId === 'photo'
       ? avatarUrl !== null || simple
-      : step === 1
+      : stepId === 'data'
         ? name.trim().length > 0 && !documentInvalid
-        : true;
+        : stepId === 'profile'
+          ? name.trim().length > 0
+          : true;
 
   async function handleComplete() {
     const token = authStorage.getAccessToken();
@@ -190,14 +210,20 @@ export default function OnboardingPage() {
         documentId: documentId.trim() === '' ? null : documentId.trim().toUpperCase(),
         avatarUrl,
       });
-      await meApi.updateNotificationPreferences(token, prefs);
-      // Reconciliar el digest de community (best-effort; ignoramos 403/404).
-      const communityEmail = prefs.find((p) => p.category === 'COMMUNITY' && p.channel === 'EMAIL');
-      if (communityEmail) {
-        try {
-          await communityApi.updateMyPreferences({ digestOptOut: !communityEmail.enabled });
-        } catch {
-          /* community deshabilitado */
+      // Sin el paso de avisos (alumno del modo sencillo) se quedan como están:
+      // no se le ha preguntado nada y se cambian luego en su perfil.
+      if (plan.steps.includes('notifications')) {
+        await meApi.updateNotificationPreferences(token, prefs);
+        // Reconciliar el digest de community (best-effort; ignoramos 403/404).
+        const communityEmail = prefs.find(
+          (p) => p.category === 'COMMUNITY' && p.channel === 'EMAIL',
+        );
+        if (communityEmail) {
+          try {
+            await communityApi.updateMyPreferences({ digestOptOut: !communityEmail.enabled });
+          } catch {
+            /* community deshabilitado */
+          }
         }
       }
       const res = await meApi.completeOnboarding(token);
@@ -249,29 +275,58 @@ export default function OnboardingPage() {
         </p>
       </header>
 
-      <ol className="flex items-center justify-center gap-2">
-        {steps.map((label, i) => (
-          <li key={label} className="flex items-center gap-2">
-            <span
-              className={
-                'grid h-7 w-7 place-items-center rounded-full text-xs font-bold ' +
-                (i < step
-                  ? 'bg-success-500 text-white'
-                  : i === step
-                    ? 'bg-brand-500 text-white'
-                    : 'bg-surface-3 text-text-subtle')
-              }
-            >
-              {i < step ? '✓' : i + 1}
-            </span>
-            {i < steps.length - 1 ? <span className="h-px w-6 bg-border-soft" /> : null}
-          </li>
-        ))}
-      </ol>
+      {steps.length > 1 ? (
+        <ol className="flex items-center justify-center gap-2">
+          {steps.map((label, i) => (
+            <li key={label} className="flex items-center gap-2">
+              <span
+                className={
+                  'grid h-7 w-7 place-items-center rounded-full text-xs font-bold ' +
+                  (i < step
+                    ? 'bg-success-500 text-white'
+                    : i === step
+                      ? 'bg-brand-500 text-white'
+                      : 'bg-surface-3 text-text-subtle')
+                }
+              >
+                {i < step ? '✓' : i + 1}
+              </span>
+              {i < steps.length - 1 ? <span className="h-px w-6 bg-border-soft" /> : null}
+            </li>
+          ))}
+        </ol>
+      ) : null}
 
       <Card>
         <CardContent className="space-y-5 p-6">
-          {step === 0 ? (
+          {stepId === 'profile' ? (
+            <div className="space-y-5" data-testid="perfil-un-paso">
+              <div>
+                <h2 className="text-lg font-semibold">{ta('titulo')}</h2>
+                <p className="text-sm text-text-muted">{tSimple('perfil.fotoOpcional')}</p>
+              </div>
+              <AvatarUpload
+                value={avatarUrl}
+                onChange={setAvatarUrl}
+                name={name || null}
+                email={email}
+              />
+              <div className="space-y-1.5">
+                <Label htmlFor="ob-name">
+                  {t('onboarding.nameLabel')} <span className="text-danger-700">*</span>
+                </Label>
+                <Input
+                  id="ob-name"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  maxLength={120}
+                  placeholder={t('onboarding.namePlaceholder')}
+                />
+              </div>
+            </div>
+          ) : null}
+
+          {stepId === 'photo' ? (
             <div className="space-y-3">
               <div>
                 <h2 className="text-lg font-semibold">{t('onboarding.photoTitle')}</h2>
@@ -292,7 +347,7 @@ export default function OnboardingPage() {
             </div>
           ) : null}
 
-          {step === 1 ? (
+          {stepId === 'data' ? (
             <div className="space-y-4">
               <div>
                 <h2 className="text-lg font-semibold">{t('onboarding.dataTitle')}</h2>
@@ -354,10 +409,11 @@ export default function OnboardingPage() {
                   </Select>
                 </div>
               </div>
-              {/* El DNI/NIE es para que un ALUMNO pueda pedir factura de lo que
-                  paga: a quien lleva la academia no se le pide (sus datos
-                  fiscales van en Cobros). */}
-              {asksSpanishDocument(uiLocale) && !creador ? (
+              {/* El DNI/NIE es para que un ALUMNO del modo completo pueda pedir
+                  factura de lo que paga: a quien lleva la academia no se le
+                  pide (sus datos fiscales van en Cobros) y en el modo sencillo
+                  no hay dónde pedir una factura (`profilePlan`). */}
+              {plan.asksDocument ? (
                 <div className="space-y-1.5">
                   <Label htmlFor="ob-doc">
                     {t('onboarding.documentLabel')}{' '}
@@ -385,7 +441,7 @@ export default function OnboardingPage() {
             </div>
           ) : null}
 
-          {step === 2 ? (
+          {stepId === 'notifications' ? (
             <div className="space-y-4">
               <div>
                 <h2 className="text-lg font-semibold">{t('onboarding.notificationsTitle')}</h2>
@@ -397,7 +453,7 @@ export default function OnboardingPage() {
             </div>
           ) : null}
 
-          {step === 3 ? (
+          {stepId === 'done' ? (
             <div className="space-y-4">
               <div>
                 <h2 className="text-lg font-semibold">{t('onboarding.readyTitle')}</h2>
@@ -439,15 +495,23 @@ export default function OnboardingPage() {
             </p>
           ) : null}
 
-          <div className="flex items-center justify-between gap-3 border-t border-border pt-4">
-            <Button
-              type="button"
-              variant="ghost"
-              disabled={step === 0 || submitting}
-              onClick={() => setStep((s) => Math.max(0, s - 1))}
-            >
-              {t('onboarding.back')}
-            </Button>
+          <div
+            className={
+              'flex items-center gap-3 border-t border-border pt-4 ' +
+              (steps.length > 1 ? 'justify-between' : 'justify-end')
+            }
+          >
+            {/* Un solo paso: no hay «Atrás» al que volver. */}
+            {steps.length > 1 ? (
+              <Button
+                type="button"
+                variant="ghost"
+                disabled={step === 0 || submitting}
+                onClick={() => setStep((s) => Math.max(0, s - 1))}
+              >
+                {t('onboarding.back')}
+              </Button>
+            ) : null}
             {step < steps.length - 1 ? (
               <Button type="button" disabled={!canNext} onClick={() => setStep((s) => s + 1)}>
                 {/* Sin foto, el creador ve que la está dejando para luego. */}
@@ -456,12 +520,18 @@ export default function OnboardingPage() {
                   : t('onboarding.continue')}
               </Button>
             ) : (
-              <Button type="button" disabled={submitting} onClick={() => void handleComplete()}>
+              <Button
+                type="button"
+                disabled={submitting || !canNext}
+                onClick={() => void handleComplete()}
+              >
                 {submitting
                   ? t('onboarding.submitPending')
                   : creador
                     ? tc('seguir')
-                    : t('onboarding.submit')}
+                    : stepId === 'profile'
+                      ? ta('entrar')
+                      : t('onboarding.submit')}
               </Button>
             )}
           </div>

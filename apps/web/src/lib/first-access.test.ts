@@ -9,6 +9,7 @@ import {
   afterProfilePath,
   firstAccessDoor,
   isCreatorProfile,
+  profilePlan,
   type FirstAccessState,
 } from './first-access';
 
@@ -90,5 +91,31 @@ describe('afterProfilePath', () => {
   it('el creador sigue hacia su academia; el resto, a /home', () => {
     expect(afterProfilePath(true)).toBe('/start');
     expect(afterProfilePath(false)).toBe('/home');
+  });
+});
+
+describe('profilePlan', () => {
+  it('alumno de un aula sencilla: un solo paso y sin DNI (primera venta, 14-nov)', () => {
+    expect(profilePlan({ sencillo: true, creador: false, espanol: true })).toEqual({
+      steps: ['profile'],
+      asksDocument: false,
+    });
+  });
+
+  it('quien lleva la academia sencilla: sus 4 pasos de siempre y nunca el DNI', () => {
+    expect(profilePlan({ sencillo: true, creador: true, espanol: true })).toEqual({
+      steps: ['photo', 'data', 'notifications', 'done'],
+      asksDocument: false,
+    });
+  });
+
+  it('modo completo: 4 pasos; el DNI solo al alumno en español', () => {
+    expect(profilePlan({ sencillo: false, creador: false, espanol: true })).toEqual({
+      steps: ['photo', 'data', 'notifications', 'done'],
+      asksDocument: true,
+    });
+    expect(profilePlan({ sencillo: false, creador: false, espanol: false }).asksDocument).toBe(
+      false,
+    );
   });
 });

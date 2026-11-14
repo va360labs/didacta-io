@@ -72,3 +72,38 @@ export function isCreatorProfile(
 export function afterProfilePath(creator: boolean): string {
   return creator ? '/start' : '/home';
 }
+
+/**
+ * Pasos del asistente de perfil (`/onboarding`) y si pide el DNI/NIE.
+ *
+ *  · `profile` es el paso ÚNICO del alumno de un aula en modo sencillo: foto
+ *    (opcional) y nombre en una sola pantalla, y dentro. Primera venta real de
+ *    Didacta Cloud (14-nov-2026): tras pagar, al alumno se le pedían 4 pasos
+ *    (foto, datos, notificaciones y un resumen) antes de ver su curso, con un
+ *    DNI «para solicitar facturas» que en el aula no se puede pedir. Idioma y
+ *    zona salen de su navegador y los avisos se quedan como están; todo se
+ *    cambia luego en su perfil.
+ *  · Quien lleva la academia y el modo completo siguen con los 4 pasos.
+ *  · El DNI/NIE solo se pide en el modo completo, al alumno y en español: en
+ *    el sencillo no hay dónde pedir una factura (las ventas las cobra la
+ *    plataforma) y a quien lleva la academia nunca se le pidió.
+ */
+export type ProfileStep = 'profile' | 'photo' | 'data' | 'notifications' | 'done';
+
+export interface ProfilePlan {
+  steps: ProfileStep[];
+  asksDocument: boolean;
+}
+
+export function profilePlan(s: {
+  sencillo: boolean;
+  creador: boolean;
+  /** El usuario usa la interfaz en español (`asksSpanishDocument`). */
+  espanol: boolean;
+}): ProfilePlan {
+  if (s.sencillo && !s.creador) return { steps: ['profile'], asksDocument: false };
+  return {
+    steps: ['photo', 'data', 'notifications', 'done'],
+    asksDocument: !s.sencillo && !s.creador && s.espanol,
+  };
+}

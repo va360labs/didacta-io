@@ -321,6 +321,10 @@
       "bioPlaceholder": "Conte aos seus alunos quem você é e o que ensina (máx. 280 caracteres)",
       "listoTexto": "É assim que seus alunos vão ver você. Agora, sua escola.",
       "seguir": "Continuar para minha escola"
+    },
+    "alumno": {
+      "titulo": "É assim que vão te ver na comunidade",
+      "entrar": "Entrar"
     }
   }
 }

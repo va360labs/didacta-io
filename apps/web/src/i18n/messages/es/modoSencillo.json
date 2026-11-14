@@ -321,6 +321,10 @@
       "bioPlaceholder": "Cuéntales a tus alumnos quién eres y qué enseñas (máx. 280 caracteres)",
       "listoTexto": "Así te verán tus alumnos. Ahora, tu academia.",
       "seguir": "Seguir con mi academia"
+    },
+    "alumno": {
+      "titulo": "Así te verán en la comunidad",
+      "entrar": "Entrar"
     }
   }
 }
