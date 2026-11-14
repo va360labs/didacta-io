@@ -265,7 +265,7 @@ export type { RefundEventOutcome } from './handlers/refund.js';
 export { handleDisputeEvent, DISPUTE_EVENT_TYPES } from './handlers/dispute.js';
 export type { DisputeEventOutcome } from './handlers/dispute.js';
 
-export { PayoutsReportsService, estimatePayoutDate } from './reports.service.js';
+export { PayoutsReportsService, creatorReceives, estimatePayoutDate } from './reports.service.js';
 export type {
   CurrencySummary,
   SaleView,
