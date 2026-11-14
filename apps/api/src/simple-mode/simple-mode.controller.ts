@@ -12,6 +12,9 @@ import {
   Get,
   HttpCode,
   HttpStatus,
+  NotFoundException,
+  Param,
+  ParseUUIDPipe,
   Post,
   Put,
   UnauthorizedException,
@@ -51,6 +54,7 @@ const CONFLICT_CODES = new Set([
   'SIMPLE_MODE_NO_LESSONS',
   'SIMPLE_MODE_NO_PRICE',
   'SIMPLE_MODE_NO_OFFER',
+  'SIMPLE_MODE_COURSE_NOT_FOR_SALE',
 ]);
 
 async function translate<T>(fn: () => Promise<T>): Promise<T> {
@@ -59,6 +63,7 @@ async function translate<T>(fn: () => Promise<T>): Promise<T> {
   } catch (err) {
     if (err instanceof SimpleModeError) {
       const body = { message: err.message, code: err.code };
+      if (err.code === 'SIMPLE_MODE_COURSE_NOT_FOUND') throw new NotFoundException(body);
       throw CONFLICT_CODES.has(err.code)
         ? new ConflictException(body)
         : new BadRequestException(body);
@@ -133,6 +138,33 @@ export class SimpleModeController {
   ) {
     const u = requireAdmin(user);
     return translate(() => this.service.updatePrice(u.tenantId, u.sub, body));
+  }
+
+  @Get('courses/:courseId/sale')
+  @ApiOperation({
+    summary:
+      'Precio y venta de un curso para su editor: el de la oferta de «Empieza aquí», el de la membresía que lo incluye o el de su propia opción de compra.',
+  })
+  async courseSale(
+    @CurrentUser() user: SessionClaims | undefined,
+    @Param('courseId', new ParseUUIDPipe()) courseId: string,
+  ) {
+    const u = requireAdmin(user);
+    return translate(() => this.service.courseSale(u.tenantId, courseId));
+  }
+
+  @Put('courses/:courseId/price')
+  @ApiOperation({
+    summary:
+      'Cambia el precio desde el editor del curso: el mismo cambio que el paso «Precio» de «Empieza aquí» (o su opción de compra si se vende aparte).',
+  })
+  async coursePrice(
+    @CurrentUser() user: SessionClaims | undefined,
+    @Param('courseId', new ParseUUIDPipe()) courseId: string,
+    @Body(new ZodValidationPipe(priceSchema)) body: z.infer<typeof priceSchema>,
+  ) {
+    const u = requireAdmin(user);
+    return translate(() => this.service.updateCoursePrice(u.tenantId, u.sub, courseId, body));
   }
 
   @Post('academy/confirm')

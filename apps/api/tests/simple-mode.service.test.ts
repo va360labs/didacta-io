@@ -433,11 +433,23 @@ describe('Empieza aquí', () => {
       // El alta ya le dio nombre; logo y color son opcionales (Didacta por defecto).
       academy: true,
       course: false,
-      price: true,
+      // El precio del alta es de PARTIDA: no cuenta hasta confirmarlo (venta
+      // real: se publicó a un precio que nadie volvió a mirar).
+      price: false,
       payments: false,
       publish: false,
       invite: false,
     });
+    expect(view.priceConfirmed).toBe(false);
+    expect(view.offer?.amountCents).toBeGreaterThan(0);
+    // Confirmarlo (guardar el mismo precio) lo da por hecho.
+    await service.updatePrice(T, U, {
+      amountCents: view.offer!.amountCents,
+      currency: view.offer!.currency,
+    });
+    view = await service.startHere(T);
+    expect(view.priceConfirmed).toBe(true);
+    expect(view.steps.find((s) => s.id === 'price')?.done).toBe(true);
     expect(view.salePath).toBeNull();
     // Sin cobros de plataforma, los cobros se conectan con las claves propias.
     expect(view.paymentsSetupPath).toBe('/admin/settings?tab=payments');
@@ -702,5 +714,171 @@ describe('aulas que ya trabajaban antes del modo sencillo', () => {
     const { service } = mundo({ paymentsReady: true });
     await service.quickStart(T, { id: U }, ALTA);
     expect(await service.adoptExisting(T, U)).toEqual({ adopted: false });
+  });
+});
+
+describe('Precio y venta desde el editor del curso (misma fuente que «Empieza aquí»)', () => {
+  it('curso de la oferta: el precio es el de la oferta; cambiarlo aquí es el paso «Precio»', async () => {
+    const { service, billing } = mundo({ paymentsReady: true });
+    await service.quickStart(T, { id: U }, ALTA);
+    let view = await service.courseSale(T, 'c1');
+    expect(view).toMatchObject({
+      role: 'offer',
+      price: { amountCents: 4900, currency: 'eur', intervalMonths: null },
+      state: 'unpublished',
+      salePath: null,
+      editable: true,
+    });
+    // Sin publicar: el precio vive en la oferta (no se crea nada en Stripe).
+    view = await service.updateCoursePrice(T, U, 'c1', { amountCents: 3900, currency: 'eur' });
+    expect(view.price?.amountCents).toBe(3900);
+    expect(billing.upsertCoursePrice).not.toHaveBeenCalled();
+    const start = await service.startHere(T);
+    expect(start.offer?.amountCents).toBe(3900);
+    // Cambiarlo desde el curso cuenta como confirmarlo.
+    expect(start.priceConfirmed).toBe(true);
+    expect(start.steps.find((s) => s.id === 'price')?.done).toBe(true);
+  });
+
+  it('ya a la venta: cambia lo que paga el alumno y «Empieza aquí» lo ve igual', async () => {
+    const { db, service, billing } = mundo({ paymentsReady: true });
+    await service.quickStart(T, { id: U }, ALTA);
+    db.lessons.push({ type: 'TEXT', content: { text: 'Hola' }, module: { courseId: 'c1' } });
+    await service.publish(T, U);
+    let view = await service.courseSale(T, 'c1');
+    expect(view).toMatchObject({
+      state: 'on-sale',
+      salePath: '/catalog/acuarela-desde-cero',
+    });
+    view = await service.updateCoursePrice(T, U, 'c1', { amountCents: 2900, currency: 'eur' });
+    expect(billing.upsertCoursePrice).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        courseId: 'c1',
+        unitAmount: 2900,
+        currency: 'eur',
+        optionName: '',
+      }),
+    );
+    expect(view.price?.amountCents).toBe(2900);
+    expect((await service.startHere(T)).offer?.amountCents).toBe(2900);
+    // Y si se cambia desde el modo completo (la opción de compra), manda ese:
+    // no hay un segundo precio guardado que se quede viejo.
+    db.products[0]!.unitAmount = 5900;
+    expect((await service.startHere(T)).offer?.amountCents).toBe(5900);
+    expect((await service.courseSale(T, 'c1')).price?.amountCents).toBe(5900);
+  });
+
+  it('membresía: el curso va dentro y su precio es el de la membresía', async () => {
+    const { db, service, membership } = mundo({ paymentsReady: true });
+    await service.quickStart(T, { id: U }, { ...ALTA, offer: 'membership', title: 'Club' });
+    db.courses.push({
+      id: 'c7',
+      slug: 'acuarela',
+      title: 'Acuarela',
+      status: 'PUBLISHED',
+      deletedAt: null,
+      createdAt: new Date(),
+    });
+    const view = await service.courseSale(T, 'c7');
+    expect(view).toMatchObject({
+      role: 'membership',
+      price: { amountCents: 4900, intervalMonths: 1 },
+      editable: true,
+      offerTitle: 'Club',
+    });
+    await service.updateCoursePrice(T, U, 'c7', { amountCents: 1900, currency: 'eur' });
+    expect(membership.updatePlan).toHaveBeenLastCalledWith(T, 'p1', {
+      amountCents: 1900,
+      currency: 'eur',
+    });
+  });
+
+  it('otro curso que no se vende aparte: no se cambia aquí; con su opción de compra, sí', async () => {
+    const { db, service, billing } = mundo({ paymentsReady: true });
+    await service.quickStart(T, { id: U }, ALTA);
+    db.courses.push({
+      id: 'c9',
+      slug: 'otro',
+      title: 'Otro',
+      status: 'PUBLISHED',
+      deletedAt: null,
+      createdAt: new Date(),
+    });
+    let view = await service.courseSale(T, 'c9');
+    expect(view).toMatchObject({
+      role: 'separate',
+      price: null,
+      editable: false,
+      state: 'unpublished',
+      offerTitle: 'Acuarela desde cero',
+    });
+    await expect(
+      service.updateCoursePrice(T, U, 'c9', { amountCents: 1000, currency: 'eur' }),
+    ).rejects.toMatchObject({ code: 'SIMPLE_MODE_COURSE_NOT_FOR_SALE' });
+    expect(billing.upsertCoursePrice).not.toHaveBeenCalled();
+    db.products.push({
+      id: 'pr9',
+      courseId: 'c9',
+      active: true,
+      unitAmount: 1500,
+      currency: 'eur',
+    });
+    view = await service.courseSale(T, 'c9');
+    expect(view).toMatchObject({ editable: true, state: 'on-sale', salePath: '/catalog/otro' });
+    view = await service.updateCoursePrice(T, U, 'c9', { amountCents: 2500, currency: 'eur' });
+    expect(view.price?.amountCents).toBe(2500);
+    // La oferta del aula no se toca.
+    expect((await service.startHere(T)).offer?.amountCents).toBe(4900);
+  });
+
+  it('un curso que no existe (o de otra aula) es un 404, no un precio', async () => {
+    const { service } = mundo();
+    await expect(service.courseSale(T, 'nada')).rejects.toMatchObject({
+      code: 'SIMPLE_MODE_COURSE_NOT_FOUND',
+    });
+  });
+});
+
+describe('precio de partida y publicar', () => {
+  it('publicar viendo el precio lo confirma', async () => {
+    const { db, service } = mundo({ paymentsReady: true });
+    await service.quickStart(T, { id: U }, ALTA);
+    expect((await service.startHere(T)).priceConfirmed).toBe(false);
+    db.lessons.push({ type: 'TEXT', content: { text: 'Hola' }, module: { courseId: 'c1' } });
+    await service.publish(T, U);
+    const view = await service.startHere(T);
+    expect(view.priceConfirmed).toBe(true);
+    expect(view.steps.find((s) => s.id === 'price')?.done).toBe(true);
+  });
+
+  it('repetir el alta vuelve a dejar el precio de partida sin confirmar', async () => {
+    const { service } = mundo();
+    await service.quickStart(T, { id: U }, ALTA);
+    await service.updatePrice(T, U, { amountCents: 4900, currency: 'eur' });
+    expect((await service.startHere(T)).priceConfirmed).toBe(true);
+    await service.quickStart(T, { id: U }, { ...ALTA, amountCents: 2900 });
+    expect((await service.startHere(T)).priceConfirmed).toBe(false);
+  });
+
+  it('un aula sin alta (adoptada o de antes) tiene su precio confirmado', async () => {
+    const { db, service } = mundo();
+    db.settings.set('offer', {
+      kind: 'course',
+      courseId: null,
+      planId: null,
+      amountCents: 4900,
+      currency: 'eur',
+    });
+    expect((await service.startHere(T)).priceConfirmed).toBe(true);
+  });
+
+  it('comisiones para «te llegan»: con claves propias, solo la tarjeta (aproximada)', async () => {
+    const { service } = mundo();
+    expect((await service.currencies(T)).fees).toEqual({
+      platformFeeBps: null,
+      operatorName: null,
+      cardFeeBps: 150,
+      cardFeeFixed: 25,
+    });
   });
 });

@@ -222,11 +222,14 @@ describeWithDb('Modo sencillo — Postgres real como didacta_app (RLS forzada)',
     expect(Object.fromEntries(vista.steps.map((s) => [s.id, s.done]))).toEqual({
       academy: true,
       course: false,
-      price: true,
+      // El precio del alta es de partida: hasta confirmarlo (o publicar
+      // viéndolo) el paso no cuenta.
+      price: false,
       payments: false,
       publish: false,
       invite: false,
     });
+    expect(vista.priceConfirmed).toBe(false);
     expect(vista.offer).toMatchObject({
       kind: 'course',
       amountCents: 4900,
