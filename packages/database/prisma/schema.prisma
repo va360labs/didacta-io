@@ -2960,6 +2960,14 @@ model ModBillingOrder {
   currency              String             @default("eur")
   /// Email del comprador según Stripe (puede diferir del email del user).
   customerEmail         String?            @map("customer_email")
+  /// País del comprador (ISO 3166-1 alfa-2) que confirmó Stripe en el pago
+  /// (`customer_details.address.country`). Null en las compras anteriores a
+  /// la columna o si Stripe no lo pidió. Para «Ventas» y su exportación.
+  customerCountry       String?            @map("customer_country") @db.VarChar(2)
+  /// Descuento de un cupón de Stripe aplicado en el checkout
+  /// (`total_details.amount_discount`), en céntimos de `currency`. Null = sin
+  /// cupón (o compra anterior a la columna).
+  discountAmount        Int?               @map("discount_amount")
   completedAt           DateTime?          @map("completed_at")
   refundedAt            DateTime?          @map("refunded_at")
   createdAt             DateTime           @default(now()) @map("created_at")
@@ -3086,6 +3094,10 @@ model ModSubscriptionsSubscription {
   canceledAt           DateTime?          @map("canceled_at")
   /// Causa de cancelación para auditoría: 'user_request' | 'unpaid_grace_expired' | 'admin'.
   canceledReason       String?            @map("canceled_reason")
+  /// País del comprador (ISO 3166-1 alfa-2) que confirmó Stripe en el checkout
+  /// del alta (`customer_details.address.country`). Null si no se conoce. Para
+  /// «Ventas»: cada cuota cobrada hereda el de su suscripción.
+  customerCountry      String?            @map("customer_country") @db.VarChar(2)
   /// Fin estimado del periodo de prueba (solo status TRIALING). Se calcula en
   /// el fulfillment (now + plan.trialDays); Stripe es la fuente de verdad y
   /// los webhooks posteriores convergen el estado real.

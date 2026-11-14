@@ -843,6 +843,7 @@ export class MembershipService {
         unitAmount: plan.amountCents,
         currency: plan.currency,
         interval: intervalLabel(plan.intervalMonths),
+        customerCountry: checkoutBuyerCountry(session),
       },
     });
 
@@ -962,6 +963,19 @@ function isMembershipPaymentSettled(session: Stripe.Checkout.Session): boolean {
  * Etiqueta informativa para la columna `interval` (texto libre): los periodos
  * con nombre usan el término clásico y el resto queda como «Nm» (p. ej. '6m').
  */
+/**
+ * País del comprador que confirmó Stripe en el checkout del alta
+ * (`customer_details.address.country`), en ISO alfa-2 y mayúsculas; `null` si
+ * no viene. Para «Ventas»: cada cuota cobrada hereda el de su suscripción.
+ */
+export function checkoutBuyerCountry(
+  session: Pick<Stripe.Checkout.Session, 'customer_details'>,
+): string | null {
+  const raw = session.customer_details?.address?.country;
+  const code = typeof raw === 'string' ? raw.trim().toUpperCase() : '';
+  return /^[A-Z]{2}$/.test(code) ? code : null;
+}
+
 function intervalLabel(intervalMonths: number): string {
   if (intervalMonths === 12) return 'year';
   if (intervalMonths === 3) return 'quarter';

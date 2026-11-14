@@ -1009,6 +1009,8 @@ export class BillingService {
         userId,
         amountPaid: session.amount_total ?? null,
         customerEmail: session.customer_details?.email ?? session.customer_email ?? null,
+        customerCountry: checkoutBuyerCountry(session),
+        discountAmount: checkoutDiscount(session),
         // Guardamos el PaymentIntent aquí porque es el único identificador que
         // comparten el cobro y un futuro `charge.refunded` (el Charge NO lleva
         // la metadata de la sesión). Sin esto, un reembolso es irreconocible.
@@ -1173,6 +1175,30 @@ export class BillingService {
  */
 function isPaymentSettled(session: Stripe.Checkout.Session): boolean {
   return session.payment_status === 'paid' || session.payment_status === 'no_payment_required';
+}
+
+/**
+ * País del comprador que confirmó Stripe (`customer_details.address.country`),
+ * en ISO alfa-2 y mayúsculas; `null` si no viene o no es un código válido.
+ * Para «Ventas» y su exportación: no da ni quita acceso.
+ */
+export function checkoutBuyerCountry(
+  session: Pick<Stripe.Checkout.Session, 'customer_details'>,
+): string | null {
+  const raw = session.customer_details?.address?.country;
+  const code = typeof raw === 'string' ? raw.trim().toUpperCase() : '';
+  return /^[A-Z]{2}$/.test(code) ? code : null;
+}
+
+/**
+ * Descuento de un cupón de Stripe en el checkout (`total_details.amount_discount`),
+ * en la unidad mínima de la moneda; `null` si no hubo.
+ */
+export function checkoutDiscount(
+  session: Pick<Stripe.Checkout.Session, 'total_details'>,
+): number | null {
+  const amount = session.total_details?.amount_discount;
+  return typeof amount === 'number' && Number.isInteger(amount) && amount > 0 ? amount : null;
 }
 
 /** Proyección de una fila de producto a la opción de compra que ve el alumno. */
