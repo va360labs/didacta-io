@@ -82,6 +82,18 @@ const publicCheckoutSchema = z
       .trim()
       .regex(/^[a-z0-9]{3,32}$/i)
       .optional(),
+    /**
+     * El precio que el comprador tiene delante (unidad mínima + moneda de la
+     * opción). Si ya no es el de ahora: 409 BILLING_PRICE_CHANGED, sin cobrar
+     * otro importe (la página de venta abierta enseñaba 29 € y se cobró 1 €).
+     */
+    expectedPrice: z
+      .object({
+        unitAmount: z.number().int().nonnegative(),
+        currency: z.string().trim().length(3),
+      })
+      .strict()
+      .optional(),
   })
   .strict()
   .optional()
@@ -91,6 +103,7 @@ type PublicCheckoutDto = {
   email?: string;
   withdrawalWaiver?: WithdrawalWaiverDto;
   referralCode?: string;
+  expectedPrice?: { unitAmount: number; currency: string };
 };
 
 /** Curso del catálogo público, con lo justo para la ficha de venta. */
@@ -301,6 +314,16 @@ export class BillingPublicController {
       // Modo plataforma: 409 PAYOUTS_NOT_READY si la cuenta no puede vender
       // (antes de crear la orden), y precios del curso en la cuenta del operador.
       await this.payoutsGate?.prepareCheckout(tenantId, courseId, billing);
+      // ¿Sigue valiendo el precio que tiene delante? Antes de guardar su casilla.
+      const expectedPrice = dto.expectedPrice;
+      if (expectedPrice) {
+        await billing.assertCurrentPrice({
+          tenantId,
+          courseId,
+          optionId: dto.optionId,
+          expectedPrice,
+        });
+      }
 
       // La casilla de la renuncia al desistimiento, con el texto vigente: sin
       // ella no se crea la orden ni la sesión de pago (422/409).
@@ -332,6 +355,7 @@ export class BillingPublicController {
         // Enlace de referido: opaco aquí; lo valida mod.referrals (código del
         // aula, sin autorreferidos) cuando el pago se completa.
         ...(dto.referralCode ? { referralCode: dto.referralCode.toLowerCase() } : {}),
+        ...(dto.expectedPrice ? { expectedPrice: dto.expectedPrice } : {}),
         // Retorno a las páginas PÚBLICAS del catálogo: el comprador aún no tiene
         // sesión y las de /courses/checkout viven tras el gate de login.
         successUrl: `${base}/catalog/checkout/success?session_id={CHECKOUT_SESSION_ID}`,

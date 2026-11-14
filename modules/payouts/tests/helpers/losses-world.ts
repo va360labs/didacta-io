@@ -55,7 +55,9 @@ export function installLosses(fake: InMemoryPlatformStripeClient): FakeLossesWor
       reason: req.params['reason'] ?? null,
       metadata: req.params['metadata'] ?? {},
       balance_transaction: null,
-      livemode: false,
+      // Sin `livemode`: el objeto Refund de Stripe NO lo trae (el Charge sí). El
+      // doble lo traía a `false` y por eso ningún test veía que un reembolso
+      // real se registraba como de prueba (venta real del 14-nov-2026).
       created: 1_762_960_000,
     };
     refunds.push(refund);

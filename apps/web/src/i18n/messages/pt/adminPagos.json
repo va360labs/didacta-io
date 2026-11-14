@@ -489,7 +489,7 @@
     },
     "tax": {
       "title": "Seus dados fiscais",
-      "intro": "Precisamos deles para emitir a fatura da nossa comissão e porque o fisco nos obriga a coletá-los e informá-los (norma DAC7). O que o Stripe já sabia vem preenchido; só falta o seu NIF.",
+      "intro": "A lei obriga as plataformas a informar ao fisco o que os criadores vendem; com esses dados também emitimos a fatura da nossa comissão.",
       "status": {
         "missing": "Pendentes",
         "incomplete": "Incompletos",
@@ -585,7 +585,8 @@
       "edit": "Alterar",
       "cancel": "Cancelar",
       "loadError": "Não foi possível carregar seus dados fiscais.",
-      "saveError": "Não foi possível salvar seus dados. Tente novamente."
+      "saveError": "Não foi possível salvar seus dados. Tente novamente.",
+      "entityChange": "Alterar"
     },
     "invoices": {
       "title": "Suas faturas",
@@ -615,6 +616,9 @@
       "running": "Emitindo…",
       "runDone": "{month}: {issued} faturas emitidas, {sent} e-mails enviados, {errors} erros.",
       "runError": "Não foi possível emitir."
-    }
+    },
+    "connectingHint": "Estamos preparando seu cadastro no Stripe. Pode levar alguns segundos: não feche esta página.",
+    "supportPhoneNote": "O Stripe vai pedir um telefone de atendimento ao cliente: seus alunos vão vê-lo nos recibos. Se não quiser informar seu celular pessoal, use um número de trabalho.",
+    "continueCta": "Continuar no Stripe"
   }
 }

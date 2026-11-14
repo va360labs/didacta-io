@@ -62,6 +62,18 @@ const checkoutBodySchema = z
       .trim()
       .regex(/^[a-z0-9]{3,32}$/i)
       .optional(),
+    /**
+     * El precio que el comprador tiene delante (unidad mínima + moneda de la
+     * opción). Si ya no es el de ahora: 409 BILLING_PRICE_CHANGED, sin cobrar
+     * otro importe (la página de venta abierta enseñaba 29 € y se cobró 1 €).
+     */
+    expectedPrice: z
+      .object({
+        unitAmount: z.number().int().nonnegative(),
+        currency: z.string().trim().length(3),
+      })
+      .strict()
+      .optional(),
   })
   .strict()
   .optional()
@@ -125,7 +137,12 @@ export class BillingController {
     @CurrentUser() user: SessionClaims | undefined,
     @Req() req: FastifyRequest,
     @Body(new ZodValidationPipe(checkoutBodySchema))
-    body: { optionId?: string; withdrawalWaiver?: WithdrawalWaiverDto; referralCode?: string },
+    body: {
+      optionId?: string;
+      withdrawalWaiver?: WithdrawalWaiverDto;
+      referralCode?: string;
+      expectedPrice?: { unitAmount: number; currency: string };
+    },
   ) {
     if (!user) throw new UnauthorizedException();
 
@@ -183,6 +200,16 @@ export class BillingController {
     // (antes de crear la orden), y precios del curso en la cuenta del operador.
     const billing = this.registry.getBillingService();
     await this.payoutsGate?.prepareCheckout(user.tenantId, courseId, billing);
+    // ¿Sigue valiendo el precio que tiene delante? Antes de guardar su casilla.
+    const expectedPrice = body?.expectedPrice;
+    if (expectedPrice) {
+      await billing.assertCurrentPrice({
+        tenantId: user.tenantId,
+        courseId,
+        optionId: body?.optionId,
+        expectedPrice,
+      });
+    }
     // La casilla de la renuncia al desistimiento (422 sin ella, 409 si el
     // texto cambió): la prueba se guarda ANTES de crear la orden.
     const consentId = await this.consents.accept({
@@ -202,6 +229,7 @@ export class BillingController {
       courseId,
       optionId: body?.optionId,
       ...(body?.referralCode ? { referralCode: body.referralCode.toLowerCase() } : {}),
+      ...(body?.expectedPrice ? { expectedPrice: body.expectedPrice } : {}),
       successUrl: `${webBaseUrl}/courses/checkout/success?session_id={CHECKOUT_SESSION_ID}`,
       cancelUrl: `${webBaseUrl}/courses/checkout/cancel`,
     });

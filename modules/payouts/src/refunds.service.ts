@@ -820,6 +820,24 @@ export class PayoutsRefundsService {
 
   // ── Interno ────────────────────────────────────────────────────────────
 
+  /**
+   * ¿Reembolso real o de prueba?
+   *
+   * El objeto Refund de Stripe NO trae `livemode` (el Charge, el Dispute o el
+   * Transfer sí). Antes se leía `refund.livemode === true`, que con un reembolso
+   * real daba siempre `false`: el reembolso del 14-nov-2026 en aula-pruebas
+   * quedó registrado como de prueba.
+   *
+   * Si algún día lo trae, manda el objeto. Si no, el modo de la clave con la que
+   * se ha leído o creado: con una clave de prueba no se puede ver un objeto real
+   * ni al revés, y el webhook de plataforma solo admite eventos de su mismo modo
+   * (`event.livemode` distinto → 400, `platform-webhook.controller.ts`), así que
+   * es exactamente el `livemode` del evento y del cargo original.
+   */
+  private livemodeOf(refund: RefundFromApi): boolean {
+    return typeof refund.livemode === 'boolean' ? refund.livemode : this.stripe.livemode;
+  }
+
   private split(shares: GrossShares) {
     const platformFeeReturned = this.policy.refundPlatformFee ? shares.platform : 0;
     const platformFeeToCreator = this.policy.refundPlatformFee ? 0 : shares.platform;
@@ -948,7 +966,7 @@ export class PayoutsRefundsService {
         source: 'payouts',
         localRef: row.id,
         parentObjectId: chargeId,
-        livemode: refund.livemode === true,
+        livemode: this.livemodeOf(refund),
       });
       return tx.modPayoutsRefund.findFirstOrThrow({ where: { id: row.id, tenantId } });
     });
@@ -1002,7 +1020,7 @@ export class PayoutsRefundsService {
         source: 'payouts',
         localRef: row.id,
         parentObjectId: idOf(refund.charge),
-        livemode: refund.livemode === true,
+        livemode: this.livemodeOf(refund),
       });
       return { row, previousStatus };
     });

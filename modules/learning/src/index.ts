@@ -13,6 +13,7 @@ export {
   type LessonType,
   type LessonCompletionSource,
   type ProgressSource,
+  type PurchaseAccessRevocation,
   type DripScheduleView,
   type CreateDripScheduleInput,
   type UpdateDripScheduleInput,

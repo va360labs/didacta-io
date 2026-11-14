@@ -19,6 +19,7 @@ import {
   isCountryRejection,
   sanitizeStatementDescriptor,
   type AccountEntityType,
+  type ConnectedAccountIdentityPrefill,
   type ConnectedAccountsApi,
   type StripeBalanceSettings,
   type StripeConnectedAccount,
@@ -83,6 +84,22 @@ export interface OnboardingPrefill {
   readonly hostname?: string | null;
   /** `es`, `en`… del aula, para el idioma del alta alojada. */
   readonly locale?: string | null;
+  /**
+   * Correo PÚBLICO de atención a los alumnos (sale en sus recibos). Sin él,
+   * Stripe lo pide en el alta.
+   */
+  readonly supportEmail?: string | null;
+  /**
+   * Lo que ya sabemos del titular (sus datos fiscales, si los dio antes de
+   * conectar): así el alta alojada solo lo confirma en vez de volver a
+   * preguntarlo. Solo se usa si coincide con el país y el tipo elegidos.
+   */
+  readonly identity?:
+    | (ConnectedAccountIdentityPrefill & {
+        readonly country?: string | null;
+        readonly entityType?: string | null;
+      })
+    | null;
 }
 
 export interface OnboardingUrls {
@@ -759,12 +776,16 @@ export class PayoutsAccountsService {
     entityType: AccountEntityType,
     prefill: OnboardingPrefill,
   ): Promise<{ id: string; livemode: boolean }> {
+    const businessUrl = publicBusinessUrl(prefill.hostname);
     const request = {
       country,
       entityType,
       email: prefill.email,
       displayName: prefill.displayName,
-      businessUrl: publicBusinessUrl(prefill.hostname),
+      businessUrl,
+      supportUrl: businessUrl,
+      supportEmail: prefill.supportEmail?.trim() || null,
+      identity: identityFor(prefill, country, entityType),
       productDescription: 'Cursos online y membresías',
       statementDescriptor: sanitizeStatementDescriptor(prefill.displayName),
       currency: defaultCurrencyForCountry(country),
@@ -791,6 +812,32 @@ export class PayoutsAccountsService {
       }
     }
   }
+}
+
+/**
+ * Datos del titular para precargar, solo si casan con lo elegido al conectar:
+ * unos datos fiscales de «empresa» no rellenan una cuenta de particular, ni
+ * los de otro país. El correo de quien conecta va siempre (es su persona).
+ */
+export function identityFor(
+  prefill: OnboardingPrefill,
+  country: string,
+  entityType: AccountEntityType,
+): ConnectedAccountIdentityPrefill | null {
+  const email = entityType === 'individual' ? prefill.email?.trim() || null : null;
+  const known = prefill.identity;
+  const matches =
+    !!known &&
+    (known.country ?? country).toUpperCase() === country.toUpperCase() &&
+    (known.entityType ?? entityType) === entityType;
+  if (!matches) return email ? { email } : null;
+  return {
+    email: entityType === 'individual' ? known.email?.trim() || email : null,
+    companyName: entityType === 'company' ? known.companyName?.trim() || null : null,
+    address: known.address ?? null,
+    birthDate: entityType === 'individual' ? (known.birthDate ?? null) : null,
+    taxId: known.taxId?.trim() || null,
+  };
 }
 
 function findLiveAccount(tx: PayoutsTx, tenantId: string) {

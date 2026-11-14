@@ -66,6 +66,26 @@ export class ProductInactiveError extends BillingError {
   }
 }
 
+/**
+ * El precio que vio el comprador ya no es el de ahora: el admin lo cambió con
+ * la página de venta abierta. Antes se cobraba el precio nuevo sin avisar (la
+ * página enseñaba 29 € y se cobró 1 €, 14-nov-2026). La pantalla, al recibirlo,
+ * vuelve a pedir el precio y deja que el comprador decida.
+ */
+export class PriceChangedError extends BillingError {
+  constructor(
+    readonly current: { readonly unitAmount: number; readonly currency: string },
+    courseId: string,
+  ) {
+    super(
+      `El precio de este curso ha cambiado: ahora es ${current.unitAmount} ${current.currency}.`,
+      'BILLING_PRICE_CHANGED',
+      { detail: courseId },
+    );
+    this.name = 'PriceChangedError';
+  }
+}
+
 export class OrderNotFoundError extends BillingError {
   constructor(id: string) {
     super(`Orden no encontrada: ${id}`, 'BILLING_ORDER_NOT_FOUND', { detail: id });

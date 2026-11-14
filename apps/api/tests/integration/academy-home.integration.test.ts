@@ -83,14 +83,18 @@ describeWithDb('Página pública de la academia — Postgres real como didacta_a
         },
       });
       await admin.userRole.create({ data: { userId: duena.id, roleId: rol.id } });
-      await admin.user.create({
-        data: {
-          tenantId: tenants[k],
-          email: `alumna-${k}-${stamp}@example.com`,
-          name: `Alumna ${k.toUpperCase()}`,
-          status: 'ACTIVE',
-        },
-      });
+      // A llega al umbral de cifras públicas (10 alumnas); B tiene solo una.
+      const alumnas = k === 'a' ? 10 : 1;
+      for (let i = 0; i < alumnas; i++) {
+        await admin.user.create({
+          data: {
+            tenantId: tenants[k],
+            email: `alumna${i}-${k}-${stamp}@example.com`,
+            name: `Alumna ${k.toUpperCase()} ${i}`,
+            status: 'ACTIVE',
+          },
+        });
+      }
       await admin.modThemingTenantTheme.create({
         data: { tenantId: tenants[k], about: `Descripción ${k}`, coverUrl: `/cover-${k}.jpg` },
       });
@@ -208,7 +212,8 @@ describeWithDb('Página pública de la academia — Postgres real como didacta_a
         description: `Descripción ${k}`,
         host: host(k),
       });
-      expect(res.members).toBe(2);
+      // 10 alumnas + la dueña en A; en B una sola alumna: no se enseña el número.
+      expect(res.members).toBe(k === 'a' ? 11 : null);
       expect(res.creator).toEqual({
         name: `Dueña ${k.toUpperCase()}`,
         avatarUrl: `https://cdn.example.com/duena-${k}.png`,

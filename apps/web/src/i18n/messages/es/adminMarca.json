@@ -92,7 +92,7 @@
     "faviconUrlPlaceholder": "https://cdn.tudominio.com/favicon.png",
     "faviconUrlHint": "Alternativa: pega la URL https de un favicon ya alojado en tu dominio.",
     "signinTitle": "Pantalla de acceso",
-    "signinDescription": "Texto del panel oscuro de <code>/signin</code>. Si lo dejas vacío se usa el texto genérico de Didacta. Las cifras que aparecen debajo (alumnos activos, cursos publicados) son reales y se calculan solas: no se configuran aquí.",
+    "signinDescription": "Texto del panel oscuro de <code>/signin</code>. Si lo dejas vacío se usa el texto genérico de Didacta. Las cifras que aparecen debajo (alumnos activos, cursos publicados) son reales y se calculan solas: no se configuran aquí. Solo se enseñan cuando la academia tiene al menos 10 alumnos.",
     "headlineLabel": "Titular",
     "headlinePlaceholder": "Formación en IA aplicada, con la comunidad que la usa cada día.",
     "headlineHint": "Máximo 160 caracteres. Se ve muy grande: funciona mejor con una frase corta.",

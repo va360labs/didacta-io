@@ -47,6 +47,7 @@ import { CreateSpaceModal } from '@/components/create-space-modal';
 import { MobileNavDrawer } from '@/components/mobile-nav-drawer';
 import { MobileTabBar } from '@/components/mobile-tab-bar';
 import { SimpleShell } from '@/components/simple-shell/simple-shell';
+import { AppLoadingScreen } from '@/components/page-skeleton';
 import {
   readSimpleModeCache,
   SIMPLE_MODE_CHANGED_EVENT,
@@ -188,7 +189,9 @@ export default function AppLayout({ children }: { children: ReactNode }) {
     return () => window.removeEventListener('didacta:session-updated', refresh);
   }, []);
 
-  if (!session) return null;
+  // Mientras se decide (sesión, asistentes pendientes): el esqueleto del aula,
+  // no una pantalla en blanco (primera venta real, 14-nov-2026).
+  if (!session) return <AppLoadingScreen />;
 
   function logout() {
     const tenantId = session?.user.tenantId;
@@ -463,8 +466,9 @@ function Shell({
   );
 
   // Aún no se sabe qué armazón toca (sin caché, primera respuesta en vuelo):
-  // fondo vacío un instante en vez de pintar un menú y cambiarlo después.
-  if (simpleMode === null) return <div className="min-h-dvh bg-bg-subtle" />;
+  // el esqueleto del contenido, sin menú, en vez de pintar un menú y cambiarlo
+  // después (ni dejar la pantalla en blanco).
+  if (simpleMode === null) return <AppLoadingScreen />;
 
   if (simpleMode) {
     // Modo sencillo: el árbol COMPLETO (principal + administración) alimenta

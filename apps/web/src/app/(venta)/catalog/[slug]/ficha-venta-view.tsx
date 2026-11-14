@@ -119,12 +119,28 @@ export function FichaVentaView({ initialCourse, description, initialBrand }: Pro
         email: session?.user.email,
         withdrawalWaiver: waiver.acceptance,
         referralCode: getStoredReferralCode() ?? undefined,
+        // Lo que tiene delante: si el precio cambió con la página abierta, la
+        // API no cobra otro importe (antes enseñaba 29 € y se cobró 1 €).
+        expectedPrice: { unitAmount: selected.unitAmount, currency: selected.currency },
       });
       window.location.assign(url);
     } catch (err) {
       if (err instanceof ApiHttpError && err.code?.startsWith('CHECKOUT_WITHDRAWAL_WAIVER')) {
         setPayError(apiErrorMessage(err, tErrors));
         waiver.reload();
+      } else if (err instanceof ApiHttpError && err.code === 'BILLING_PRICE_CHANGED') {
+        setPayError(t('ficha.priceChanged'));
+        // Se vuelve a pedir el curso con sus precios de ahora; la opción
+        // elegida se mantiene si sigue existiendo.
+        const fresh = await getPublicCatalog()
+          .then((r) => r.courses.find((c) => c.id === course.id) ?? null)
+          .catch(() => null);
+        if (fresh) {
+          setCourse(fresh);
+          if (!fresh.options.some((o) => o.id === selected.id)) {
+            setSelectedId(featuredOption(fresh.options)?.id ?? null);
+          }
+        }
       } else {
         setPayError(t('ficha.payError'));
       }

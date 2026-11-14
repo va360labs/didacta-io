@@ -489,7 +489,7 @@
     },
     "tax": {
       "title": "Your tax details",
-      "intro": "We need them to invoice you our fee, and because the tax authorities require us to collect and report them (DAC7 rules). What Stripe already knew is filled in; you only need to add your tax ID.",
+      "intro": "The law requires platforms to report what creators sell to the tax authorities; we also use these details to invoice you our fee.",
       "status": {
         "missing": "Missing",
         "incomplete": "Incomplete",
@@ -585,7 +585,8 @@
       "edit": "Change",
       "cancel": "Cancel",
       "loadError": "We couldn't load your tax details.",
-      "saveError": "We couldn't save your details. Please try again."
+      "saveError": "We couldn't save your details. Please try again.",
+      "entityChange": "Change"
     },
     "invoices": {
       "title": "Your invoices",
@@ -615,6 +616,9 @@
       "running": "Issuing…",
       "runDone": "{month}: {issued} invoices issued, {sent} emails sent, {errors} errors.",
       "runError": "Couldn't issue them."
-    }
+    },
+    "connectingHint": "We're setting up your Stripe sign-up. It can take a few seconds: please don't close this page.",
+    "supportPhoneNote": "Stripe will ask for a customer support phone number: your students will see it on their receipts. If you'd rather not share your personal mobile, use a work number.",
+    "continueCta": "Continue on Stripe"
   }
 }

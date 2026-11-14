@@ -593,6 +593,74 @@ describe('Reembolso hecho a mano en el panel de Stripe', () => {
     expect(await invariantViolations()).toEqual([]);
   });
 
+  it('reembolso REAL (clave de producción): queda registrado como real aunque el Refund no traiga livemode', async () => {
+    // Mismo mundo, pero con la clave de producción (venta real del 14-nov-2026).
+    fake = new InMemoryPlatformStripeClient({ livemode: true });
+    transfers = installTransfers(fake, { now: () => Math.floor(clock / 1000) });
+    world = installLosses(fake);
+    build();
+    const s = await transferredSale({});
+    await fake.v1('POST', '/v1/refunds', { charge: s.chargeId, amount: 10000 });
+
+    await handleRefundEvent(
+      { refunds },
+      { tenantId: A, eventType: 'charge.refunded', object: { id: s.chargeId } },
+    );
+
+    const refs = db.rows('modPayoutsObjectRef').filter((r) => r['kind'] === 'refund');
+    expect(refs).toHaveLength(1);
+    expect(refs[0]).toMatchObject({ livemode: true, tenantId: A });
+  });
+
+  it('reembolso REAL pedido desde el botón de Didacta: también real', async () => {
+    fake = new InMemoryPlatformStripeClient({ livemode: true });
+    transfers = installTransfers(fake, { now: () => Math.floor(clock / 1000) });
+    world = installLosses(fake);
+    build();
+    const s = await transferredSale({});
+
+    await refunds.refund({ tenantId: A, saleId: s.saleId, initiatedBy: 'admin' });
+
+    const refs = db.rows('modPayoutsObjectRef').filter((r) => r['kind'] === 'refund');
+    expect(refs.map((r) => r['livemode'])).toEqual([true]);
+  });
+
+  it('control: con la clave de prueba el reembolso queda como de prueba', async () => {
+    const s = await transferredSale({});
+    await fake.v1('POST', '/v1/refunds', { charge: s.chargeId, amount: 2500 });
+    await refunds.syncCharge(A, s.chargeId);
+    const refs = db.rows('modPayoutsObjectRef').filter((r) => r['kind'] === 'refund');
+    expect(refs.map((r) => r['livemode'])).toEqual([false]);
+  });
+
+  it('el reembolso real ya guardado como de prueba se corrige al volver a sincronizar, sin conflicto', async () => {
+    fake = new InMemoryPlatformStripeClient({ livemode: true });
+    transfers = installTransfers(fake, { now: () => Math.floor(clock / 1000) });
+    world = installLosses(fake);
+    build();
+    const s = await transferredSale({});
+    const refund = (await fake.v1('POST', '/v1/refunds', {
+      charge: s.chargeId,
+      amount: 10000,
+    })) as { id: string };
+    // Lo que dejó en producción el código anterior: la fila del `re_` en prueba.
+    db.insert('modPayoutsObjectRef', {
+      stripeObjectId: refund.id,
+      tenantId: A,
+      kind: 'refund',
+      source: 'payouts',
+      localRef: null,
+      parentObjectId: s.chargeId,
+      livemode: false,
+    });
+
+    await expect(refunds.syncCharge(A, s.chargeId)).resolves.toMatchObject({
+      outcome: 'synced',
+    });
+    const ref = db.rows('modPayoutsObjectRef').find((r) => r['stripeObjectId'] === refund.id);
+    expect(ref?.['livemode']).toBe(true);
+  });
+
   it('refund.created de un cargo de otra academia no toca nada', async () => {
     const s = await transferredSale({});
     const result = await handleRefundEvent(

@@ -24,6 +24,7 @@ import {
 } from '../src/billing.service.js';
 import {
   OrderNotFoundError,
+  PriceChangedError,
   ProductAlreadyExistsError,
   ProductInactiveError,
   ProductNotFoundError,
@@ -188,6 +189,38 @@ class MockPrisma {
       Object.assign(row, args.data, { updatedAt: new Date() });
       return row;
     },
+    // Lo justo para `expireOpenCheckouts`: tenant, estado, desde cuándo y por
+    // opción de compra o curso.
+    findMany: async (args: {
+      where: {
+        tenantId: string;
+        status?: OrderRow['status'];
+        createdAt?: { gte: Date };
+        productId?: { in: string[] };
+        courseId?: string;
+      };
+    }) => {
+      const w = args.where;
+      return [...this.orders.values()].filter(
+        (o) =>
+          o.tenantId === w.tenantId &&
+          (w.status === undefined || o.status === w.status) &&
+          (w.createdAt === undefined || o.createdAt >= w.createdAt.gte) &&
+          (w.productId === undefined || w.productId.in.includes(o.productId)) &&
+          (w.courseId === undefined || o.courseId === w.courseId),
+      );
+    },
+    updateMany: async (args: {
+      where: { id: string; tenantId: string; status: OrderRow['status'] };
+      data: Partial<OrderRow>;
+    }) => {
+      const row = this.orders.get(args.where.id);
+      if (!row || row.tenantId !== args.where.tenantId || row.status !== args.where.status) {
+        return { count: 0 };
+      }
+      Object.assign(row, args.data, { updatedAt: new Date() });
+      return { count: 1 };
+    },
   };
 
   modBillingWebhookEvent = {
@@ -313,6 +346,20 @@ class MockStripe implements StripeAdapter {
 
   async retrieveProduct(productId: string) {
     return { id: productId, name: 'Test product', active: true };
+  }
+
+  /** Estado de cada sesión en «Stripe»: `open` por defecto. */
+  sessionStatus = new Map<string, string>();
+  expired: string[] = [];
+  failExpire = false;
+
+  async expireCheckoutSession(sessionId: string) {
+    if (this.failExpire) throw new StripeApiError('Stripe no responde');
+    const status = this.sessionStatus.get(sessionId) ?? 'open';
+    if (status !== 'open') return { status };
+    this.sessionStatus.set(sessionId, 'expired');
+    this.expired.push(sessionId);
+    return { status: 'expired' };
   }
 
   constructWebhookEvent(): Stripe.Event {
@@ -2012,5 +2059,186 @@ describe('BillingService — resyncStripeCatalog (el tenant cambia de cuenta de 
       resynced: 0,
       skipped: 0,
     });
+  });
+});
+
+describe('BillingService — sesiones de pago con un precio viejo (venta real del 14-nov)', () => {
+  let prisma: MockPrisma;
+  let stripe: MockStripe;
+  let svc: BillingService;
+
+  beforeEach(() => {
+    prisma = new MockPrisma();
+    stripe = new MockStripe();
+    svc = new BillingService(
+      prisma as unknown as never,
+      async () => stripe,
+      new MockPublisher(),
+      urls,
+    );
+  });
+
+  async function curso29() {
+    const { product } = await svc.upsertCoursePrice({
+      tenantId: 't1',
+      courseId: 'course-1',
+      unitAmount: 2900,
+      currency: 'eur',
+    });
+    return product;
+  }
+
+  async function abrirSesion(productId: string, status = 'open', hace = 0) {
+    const r = await svc.startCheckout({ tenantId: 't1', userId: 'u1', courseId: 'course-1' });
+    const order = prisma.orders.get(r.orderId)!;
+    expect(order.productId).toBe(productId);
+    if (hace) order.createdAt = new Date(Date.now() - hace);
+    if (status !== 'open') stripe.sessionStatus.set(r.sessionId, status);
+    return r;
+  }
+
+  it('el precio que vio el comprador ya no es el actual: 409 y NO se crea ni pedido ni sesión', async () => {
+    await curso29();
+    await svc.upsertCoursePrice({
+      tenantId: 't1',
+      courseId: 'course-1',
+      unitAmount: 100,
+      currency: 'eur',
+    });
+    const antes = stripe.sessionCounter;
+
+    const err = await svc
+      .startCheckout({
+        tenantId: 't1',
+        userId: 'u1',
+        courseId: 'course-1',
+        expectedPrice: { unitAmount: 2900, currency: 'eur' },
+      })
+      .catch((e: unknown) => e);
+
+    expect(err).toBeInstanceOf(PriceChangedError);
+    expect((err as PriceChangedError).code).toBe('BILLING_PRICE_CHANGED');
+    expect((err as PriceChangedError).current).toEqual({ unitAmount: 100, currency: 'eur' });
+    expect(prisma.orders.size).toBe(0);
+    expect(stripe.sessionCounter).toBe(antes);
+  });
+
+  it('control: con el precio actual (y la moneda en mayúsculas) se crea la sesión', async () => {
+    await curso29();
+    const r = await svc.startCheckout({
+      tenantId: 't1',
+      userId: 'u1',
+      courseId: 'course-1',
+      expectedPrice: { unitAmount: 2900, currency: 'EUR' },
+    });
+    expect(r.sessionId).toMatch(/^cs_test_/);
+  });
+
+  it('bajar el precio caduca las sesiones abiertas de esa opción y cierra sus pedidos; lo pagado y lo viejo no se tocan', async () => {
+    const product = await curso29();
+    const abierta = await abrirSesion(product.id);
+    const pagada = await abrirSesion(product.id, 'complete');
+    const vieja = await abrirSesion(product.id, 'open', 26 * 60 * 60 * 1000);
+
+    const r = await svc.upsertCoursePrice({
+      tenantId: 't1',
+      courseId: 'course-1',
+      unitAmount: 100,
+      currency: 'eur',
+    });
+
+    expect(r.accion).toBe('actualizado');
+    expect(r.checkouts).toEqual({ expired: 1, cancelledOrders: 1, alreadyPaid: 1, failed: 0 });
+    expect(stripe.expired).toEqual([abierta.sessionId]);
+    expect(prisma.orders.get(abierta.orderId)!.status).toBe('CANCELLED');
+    // Pagada mientras tanto: la completa su webhook.
+    expect(prisma.orders.get(pagada.orderId)!.status).toBe('PENDING');
+    // Más de 24 h: Stripe ya la caducó sola; no se le pregunta.
+    expect(prisma.orders.get(vieja.orderId)!.status).toBe('PENDING');
+  });
+
+  it('cambiar solo el precio tachado no toca las sesiones abiertas', async () => {
+    const product = await curso29();
+    const abierta = await abrirSesion(product.id);
+    const r = await svc.upsertCoursePrice({
+      tenantId: 't1',
+      courseId: 'course-1',
+      unitAmount: 2900,
+      currency: 'eur',
+      compareAtAmount: 4900,
+    });
+    expect(r.checkouts).toBeUndefined();
+    expect(stripe.expired).toEqual([]);
+    expect(prisma.orders.get(abierta.orderId)!.status).toBe('PENDING');
+  });
+
+  it('retirar la opción de la venta caduca sus sesiones; reactivarla no', async () => {
+    const product = await curso29();
+    const abierta = await abrirSesion(product.id);
+    await svc.updateProduct({ tenantId: 't1', productId: product.id, patch: { active: false } });
+    expect(stripe.expired).toEqual([abierta.sessionId]);
+    expect(prisma.orders.get(abierta.orderId)!.status).toBe('CANCELLED');
+
+    await svc.updateProduct({ tenantId: 't1', productId: product.id, patch: { active: true } });
+    expect(stripe.expired).toHaveLength(1);
+  });
+
+  it('borrar la opción caduca antes sus sesiones abiertas', async () => {
+    const product = await curso29();
+    const abierta = await abrirSesion(product.id);
+    await svc.deleteProduct('t1', product.id);
+    expect(stripe.expired).toEqual([abierta.sessionId]);
+    expect(prisma.orders.get(abierta.orderId)!.status).toBe('CANCELLED');
+  });
+
+  it('archivar el curso (por curso): caduca las de todas sus opciones', async () => {
+    const product = await curso29();
+    const abierta = await abrirSesion(product.id);
+    const r = await svc.expireOpenCheckouts('t1', { courseId: 'course-1' });
+    expect(r.cancelledOrders).toBe(1);
+    expect(prisma.orders.get(abierta.orderId)!.status).toBe('CANCELLED');
+  });
+
+  it('Stripe no responde: el cambio de precio sigue, y el pedido queda pendiente (no se miente)', async () => {
+    const product = await curso29();
+    const abierta = await abrirSesion(product.id);
+    stripe.failExpire = true;
+    const r = await svc.upsertCoursePrice({
+      tenantId: 't1',
+      courseId: 'course-1',
+      unitAmount: 100,
+      currency: 'eur',
+    });
+    expect(r.product.unitAmount).toBe(100);
+    expect(r.checkouts).toMatchObject({ failed: 1, cancelledOrders: 0 });
+    expect(prisma.orders.get(abierta.orderId)!.status).toBe('PENDING');
+  });
+
+  it('el webhook checkout.session.expired posterior no hace nada más (idempotente)', async () => {
+    const product = await curso29();
+    const abierta = await abrirSesion(product.id);
+    await svc.upsertCoursePrice({
+      tenantId: 't1',
+      courseId: 'course-1',
+      unitAmount: 100,
+      currency: 'eur',
+    });
+
+    await svc.handleWebhookEvent(
+      {
+        id: 'evt_expired_1',
+        type: 'checkout.session.expired',
+        data: {
+          object: {
+            id: abierta.sessionId,
+            status: 'expired',
+            metadata: { orderId: abierta.orderId, tenantId: 't1', courseId: 'course-1' },
+          },
+        },
+      } as unknown as Stripe.Event,
+      {},
+      { tenantId: 't1' },
+    );
+    expect(prisma.orders.get(abierta.orderId)!.status).toBe('CANCELLED');
   });
 });

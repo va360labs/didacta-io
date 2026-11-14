@@ -212,6 +212,11 @@ export class PlatformBillingStripeAdapter implements StripeAdapter {
     return (await this.route(productId)).retrieveProduct(productId);
   }
 
+  /** La sesión vive donde se creó: registrada → cuenta del operador; si no, claves propias. */
+  async expireCheckoutSession(sessionId: string): Promise<{ status: string }> {
+    return (await this.route(sessionId)).expireCheckoutSession(sessionId);
+  }
+
   constructWebhookEvent(rawBody: string | Buffer, signatureHeader: string): Stripe.Event {
     // Nadie lo usa en modo plataforma: los heredados construyen su propio
     // adaptador y el de plataforma verifica con los secretos del operador.

@@ -294,7 +294,9 @@ describe('datos que propone Stripe', () => {
         line2: null,
         postalCode: '28013',
         city: 'Madrid',
-        region: 'M',
+        // Stripe guarda la provincia como código ISO 3166-2 («M»); al
+        // creador se le enseña su nombre (prueba real: veía «CA» por Cádiz).
+        region: 'Madrid',
       },
       birthDate: '1901-01-01',
     });

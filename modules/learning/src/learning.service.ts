@@ -109,6 +109,24 @@ export type LessonCompletionSource = 'SELF' | 'TIME' | 'ASSESSMENT' | 'SCORM' | 
  */
 export type ProgressSource = 'STUDENT' | 'ASSESSMENT' | 'SCORM' | 'INSTRUCTOR';
 
+/** Lo que hizo `revokePurchaseAccess` con la matrícula de la compra. */
+export type PurchaseAccessRevocation =
+  /** Estaba viva (también COMPLETED) y se ha cancelado ahora. */
+  | {
+      readonly outcome: 'cancelled';
+      readonly enrollmentId: string;
+      readonly previousStatus: 'ACTIVE' | 'PAUSED' | 'COMPLETED';
+    }
+  /** Ya estaba cancelada (una reentrega, o una pasada anterior): sin acceso. */
+  | { readonly outcome: 'already_cancelled'; readonly enrollmentId: string }
+  /** El alumno conserva el curso por un grupo de acceso: vuelve a GROUP, sigue viva. */
+  | { readonly outcome: 'kept_by_group'; readonly enrollmentId: string }
+  /** No hay matrícula de compra: el curso lo tiene por otra vía (a mano, grupo…) o no lo tiene. */
+  | { readonly outcome: 'none' };
+
+/** Estados con acceso al curso. COMPLETED también: se puede volver a verlo. */
+const LIVE_ENROLLMENT_STATUSES = ['ACTIVE', 'PAUSED', 'COMPLETED'] as const;
+
 /**
  * Tipos de lección que un alumno puede dar por vistos él mismo. Los que faltan
  * (QUIZ, SCORM) tienen un veredicto objetivo que emite otro sistema, así que
@@ -525,31 +543,81 @@ export class LearningService {
   }
 
   /**
-   * Cancela el acceso obtenido COMPRANDO el curso. Lo invoca el puente de
-   * mod.billing al recibir un reembolso total.
+   * Retira el acceso obtenido COMPRANDO el curso, tras el reembolso total de la
+   * compra. Lo decide el puente de mod.billing (que es quien sabe si hay otra
+   * compra viva del mismo curso o un grupo que lo sigue dando).
    *
-   * SOLO toca `source = 'PURCHASE'`, igual que sus hermanos: si el alumno tiene
-   * además acceso por grupo o por la membresía, ese acceso sobrevive al
-   * reembolso — le devolvimos su compra, no le quitamos lo que ya tenía.
+   * SOLO toca `source = 'PURCHASE'`, igual que sus hermanos: lo dado a mano o
+   * por grupo no es de esta compra.
    *
-   * Idempotente: devuelve cuántas matrículas se cancelaron (0 = ya no había
-   * ninguna viva por compra, p. ej. una reentrega del webhook).
+   * Incluye las COMPLETED. Antes solo se cancelaban ACTIVE y PAUSED, y quien
+   * terminaba el curso antes de pedir el reembolso se quedaba el curso y el
+   * certificado («reembolso sin matrícula de compra viva (no-op)», venta real
+   * del 14-nov-2026). `completedAt` se conserva: es historia, y si vuelve a
+   * comprar la reactivación lo devuelve a COMPLETED (`createEnrollment`).
+   *
+   * `keepAsGroup`: el alumno sigue teniendo el curso por un grupo de acceso (la
+   * membresía, un grupo manual). Comprar sobre ese acceso selló la matrícula
+   * como PURCHASE (`enrollFromPurchase`); el reembolso le devuelve su origen
+   * GROUP en vez de cancelarla, y así la gobierna otra vez el refcount de grupos.
+   *
+   * Idempotente: una segunda pasada devuelve `already_cancelled` o `none`.
    */
-  async unenrollFromPurchase(tenantId: string, userId: string, courseId: string): Promise<number> {
+  async revokePurchaseAccess(
+    tenantId: string,
+    userId: string,
+    courseId: string,
+    opts: { keepAsGroup?: boolean } = {},
+  ): Promise<PurchaseAccessRevocation> {
+    const enrollment = await this.prisma.modLearningEnrollment.findFirst({
+      where: { tenantId, userId, courseId, source: 'PURCHASE' },
+      select: { id: true, status: true },
+    });
+    if (!enrollment) return { outcome: 'none' };
+    if (enrollment.status === 'CANCELLED') {
+      return { outcome: 'already_cancelled', enrollmentId: enrollment.id };
+    }
+
+    if (opts.keepAsGroup) {
+      const { count } = await this.prisma.modLearningEnrollment.updateMany({
+        where: { id: enrollment.id, tenantId, source: 'PURCHASE' },
+        data: { source: 'GROUP' },
+      });
+      return count > 0
+        ? { outcome: 'kept_by_group', enrollmentId: enrollment.id }
+        : { outcome: 'none' };
+    }
+
+    // Condicional: si otro proceso la cambió entre la lectura y aquí, no se pisa.
     const { count } = await this.prisma.modLearningEnrollment.updateMany({
       where: {
+        id: enrollment.id,
         tenantId,
-        userId,
-        courseId,
-        status: { in: ['ACTIVE', 'PAUSED'] },
         source: 'PURCHASE',
+        status: { in: [...LIVE_ENROLLMENT_STATUSES] },
       },
       data: { status: 'CANCELLED', cancelledAt: new Date() },
     });
-    if (count > 0) {
-      await this.publish(tenantId, userId, 'learning.enrollment.cancelled', { courseId, userId });
+    if (count === 0) {
+      // Lo hizo otro (una reentrega del webhook a la vez): el resultado es el mismo.
+      return { outcome: 'already_cancelled', enrollmentId: enrollment.id };
     }
-    return count;
+    await this.publish(tenantId, userId, 'learning.enrollment.cancelled', { courseId, userId });
+    return {
+      outcome: 'cancelled',
+      enrollmentId: enrollment.id,
+      previousStatus: enrollment.status as 'ACTIVE' | 'PAUSED' | 'COMPLETED',
+    };
+  }
+
+  /**
+   * Compatibilidad: cancela el acceso por compra sin mirar grupos. Devuelve
+   * cuántas matrículas se cancelaron (0 o 1). El reembolso usa
+   * `revokePurchaseAccess` a través del puente de mod.billing.
+   */
+  async unenrollFromPurchase(tenantId: string, userId: string, courseId: string): Promise<number> {
+    const result = await this.revokePurchaseAccess(tenantId, userId, courseId);
+    return result.outcome === 'cancelled' ? 1 : 0;
   }
 
   async listInvitationsForCourse(tenantId: string, courseId: string) {
@@ -1228,9 +1296,18 @@ export class LearningService {
       // REACTIVAMOS la existente. Esto cubre el ciclo quitar→re-añadir de los
       // grupos de acceso (unenrollFromGroup deja la fila en CANCELLED) sin
       // reventar con P2002.
+      //
+      // Si ya lo había TERMINADO (`completedAt`: un reembolso retira también las
+      // COMPLETED, o una baja administrativa), vuelve como COMPLETED. Como
+      // ACTIVE se quedaba al 100 % sin poder terminarlo nunca: la finalización
+      // solo se dispara con `completedAt` a null.
       const reactivated = await this.prisma.modLearningEnrollment.update({
         where: { id: existing.id },
-        data: { status: 'ACTIVE', source: params.source, cancelledAt: null },
+        data: {
+          status: existing.completedAt ? 'COMPLETED' : 'ACTIVE',
+          source: params.source,
+          cancelledAt: null,
+        },
       });
       await this.publish(params.tenantId, params.actorId, 'learning.enrollment.created', {
         enrollmentId: reactivated.id,

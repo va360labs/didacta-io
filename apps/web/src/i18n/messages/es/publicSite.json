@@ -61,6 +61,7 @@
     "defaultOptionName": "Curso",
     "recommended": "Recomendado",
     "payError": "No se pudo iniciar el pago. Inténtalo de nuevo en unos segundos.",
+    "priceChanged": "El precio de este curso acaba de cambiar. Ya ves el precio actual: revísalo y vuelve a pulsar para pagar.",
     "openingPayment": "Abriendo pago seguro…",
     "buyNow": "Comprar ahora",
     "securePayment": "Pago seguro con Stripe. IVA incluido.",

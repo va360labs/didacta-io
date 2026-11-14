@@ -140,3 +140,34 @@ describe('BillingLearningBridge.onModuleInit', () => {
     expect(subscribe).toHaveBeenCalledWith('billing.order.completed', expect.any(Function));
   });
 });
+
+describe('BillingLearningBridge.enroll — volver a comprar tras un reembolso', () => {
+  function registry(status: string, restoreRevokedForRefund: ReturnType<typeof vi.fn>) {
+    return {
+      getLearningService: () => ({ enrollFromPurchase: vi.fn().mockResolvedValue({ status }) }),
+      getCertificatesService: () => ({ restoreRevokedForRefund }),
+    } as never;
+  }
+
+  it('si la matrícula vuelve COMPLETED, el certificado revocado por el reembolso vuelve a valer', async () => {
+    const restore = vi.fn().mockResolvedValue(1);
+    const bridge = new BillingLearningBridge(
+      registry('COMPLETED', restore),
+      noopFactory,
+      noopLogger as never,
+    );
+    await bridge.enroll(event());
+    expect(restore).toHaveBeenCalledWith('tenant-1', 'user-1', 'course-1');
+  });
+
+  it('una compra normal (ACTIVE) no toca certificados', async () => {
+    const restore = vi.fn();
+    const bridge = new BillingLearningBridge(
+      registry('ACTIVE', restore),
+      noopFactory,
+      noopLogger as never,
+    );
+    await bridge.enroll(event());
+    expect(restore).not.toHaveBeenCalled();
+  });
+});

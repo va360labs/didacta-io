@@ -185,7 +185,7 @@ describeWithDb('mod.payouts E2 — alta y estado contra Postgres como didacta_ap
   let app: NestFastifyApplication;
   let appOff: NestFastifyApplication;
   let fake: InMemoryPlatformStripeClient;
-  const tenants: Record<'A' | 'B' | 'C', { id: string; adminId: string; jwt: string }> =
+  const tenants: Record<'A' | 'B' | 'C' | 'D', { id: string; adminId: string; jwt: string }> =
     {} as never;
   let studentJwtA: string;
   let provisioning: string;
@@ -257,6 +257,7 @@ describeWithDb('mod.payouts E2 — alta y estado contra Postgres como didacta_ap
     tenants.A = await seedTenant('a');
     tenants.B = await seedTenant('b');
     tenants.C = await seedTenant('c');
+    tenants.D = await seedTenant('d');
     studentJwtA = await issueTestAccessJwt({
       tenantId: tenants.A.id,
       userId: tenants.A.adminId,
@@ -294,6 +295,7 @@ describeWithDb('mod.payouts E2 — alta y estado contra Postgres como didacta_ap
       admin.modPayoutsObjectRef.deleteMany({ where }),
       admin.modPayoutsAccount.deleteMany({ where }),
       admin.modPayoutsSettings.deleteMany({ where }),
+      admin.modPayoutsTaxProfile.deleteMany({ where }),
       admin.tenantSetting.deleteMany({ where }),
       admin.auditLog.deleteMany({ where }),
       admin.user.deleteMany({ where }),
@@ -341,9 +343,23 @@ describeWithDb('mod.payouts E2 — alta y estado contra Postgres como didacta_ap
       expect(create!.params).toMatchObject({
         contact_email: 'admin-a@academia.test',
         display_name: 'Academia a Prueba',
-        identity: { country: 'es', entity_type: 'individual' },
+        // Prueba real del 14-nov-2026: lo que ya sabemos no se vuelve a pedir.
+        // El correo de quien conecta va como el de la persona y como correo
+        // de atención a los alumnos (sin teléfono: el móvil no se publica).
+        identity: {
+          country: 'es',
+          entity_type: 'individual',
+          individual: { email: 'admin-a@academia.test' },
+        },
+        configuration: { merchant: { support: { email: 'admin-a@academia.test' } } },
         metadata: { didacta_tenant_id: tenants.A.id },
       });
+      const support = (
+        create!.params['configuration'] as { merchant: { support: Record<string, unknown> } }
+      ).merchant.support;
+      expect(support).not.toHaveProperty('phone');
+      // Sin dominio público tampoco va web de atención.
+      expect(support).not.toHaveProperty('url');
       // `.didacta.test` no es un dominio público: no se manda como web.
       expect(
         (create!.params['defaults'] as { profile?: { business_url?: string } }).profile,
@@ -362,6 +378,56 @@ describeWithDb('mod.payouts E2 — alta y estado contra Postgres como didacta_ap
       expect(rows[0]!.payoutSchedule).toMatchObject({ interval: 'weekly', weeklyDay: 'monday' });
       const ref = await admin.modPayoutsObjectRef.findUnique({ where: { stripeObjectId: acctA } });
       expect(ref).toMatchObject({ tenantId: tenants.A.id, kind: 'account', source: 'payouts' });
+    });
+
+    it('datos fiscales dados ANTES de conectar: viajan a Stripe (provincia en código, NIF) y el alta no los pide', async () => {
+      const saved = await call('PUT', '/modules/payouts/tax-profile', {
+        auth: bearer(tenants.D.jwt),
+        body: {
+          entityType: 'individual',
+          legalName: 'Ana Prueba',
+          country: 'ES',
+          taxId: '12345678Z',
+          address: { line1: 'Calle Ancha 1', postalCode: '11001', city: 'Cádiz', region: 'Cádiz' },
+          birthDate: '1990-02-28',
+        },
+      });
+      expect(saved.statusCode).toBe(200);
+
+      const before = fake.callsTo('POST', '/v2/core/accounts').length;
+      const res = await call('POST', '/modules/payouts/connect', {
+        auth: bearer(tenants.D.jwt),
+        body: { country: 'ES', entityType: 'individual' },
+      });
+      expect(res.statusCode).toBe(200);
+      const create = fake.callsTo('POST', '/v2/core/accounts')[before]!;
+      expect(create.params['metadata']).toMatchObject({ didacta_tenant_id: tenants.D.id });
+      expect(create.params['identity']).toEqual({
+        country: 'es',
+        entity_type: 'individual',
+        individual: {
+          email: 'admin-d@academia.test',
+          address: {
+            country: 'es',
+            line1: 'Calle Ancha 1',
+            postal_code: '11001',
+            city: 'Cádiz',
+            state: 'CA',
+          },
+          date_of_birth: { year: 1990, month: 2, day: 28 },
+          id_numbers: [{ type: 'es_nif', value: '12345678Z' }],
+        },
+      });
+    });
+
+    it('control: los datos fiscales de D no viajan en el alta de otra aula', async () => {
+      const creates = fake.callsTo('POST', '/v2/core/accounts');
+      const others = creates.filter(
+        (c) =>
+          (c.params['metadata'] as Record<string, string>)['didacta_tenant_id'] !== tenants.D.id,
+      );
+      expect(others.length).toBeGreaterThan(0);
+      expect(JSON.stringify(others.map((c) => c.params))).not.toContain('12345678Z');
     });
 
     it('un segundo «Conectar» devuelve la misma cuenta', async () => {
@@ -617,8 +683,8 @@ describeWithDb('mod.payouts E2 — alta y estado contra Postgres como didacta_ap
     it('el barrido de pendientes sincroniza las cuentas no listas de todos los tenants', async () => {
       const worker = app.get(PayoutsAccountsWorker);
       const result = await worker.sweep({ ready: false });
-      // B y C (ONBOARDING); A ya está READY y va en el barrido diario.
-      expect(result).toMatchObject({ accounts: 2, synced: 2, failed: 0 });
+      // B, C y D (ONBOARDING); A ya está READY y va en el barrido diario.
+      expect(result).toMatchObject({ accounts: 3, synced: 3, failed: 0 });
       const ready = await worker.sweep({ ready: true });
       expect(ready).toMatchObject({ accounts: 1, synced: 1, failed: 0 });
     });

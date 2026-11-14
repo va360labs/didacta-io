@@ -489,7 +489,7 @@
     },
     "tax": {
       "title": "Tus datos fiscales",
-      "intro": "Los necesitamos para hacerte la factura de nuestra comisión y porque Hacienda nos obliga a pedirlos y comunicarlos (normativa DAC7). Lo que ya sabía Stripe viene escrito; solo te falta tu NIF.",
+      "intro": "La ley obliga a las plataformas a informar a Hacienda de lo que venden los creadores; con estos datos te hacemos también la factura de nuestra comisión.",
       "status": {
         "missing": "Faltan",
         "incomplete": "Incompletos",
@@ -585,7 +585,8 @@
       "edit": "Cambiar",
       "cancel": "Cancelar",
       "loadError": "No hemos podido cargar tus datos fiscales.",
-      "saveError": "No hemos podido guardar tus datos. Inténtalo de nuevo."
+      "saveError": "No hemos podido guardar tus datos. Inténtalo de nuevo.",
+      "entityChange": "Cambiar"
     },
     "invoices": {
       "title": "Tus facturas",
@@ -615,6 +616,9 @@
       "running": "Emitiendo…",
       "runDone": "{month}: {issued} facturas emitidas, {sent} correos enviados, {errors} errores.",
       "runError": "No se ha podido emitir."
-    }
+    },
+    "connectingHint": "Estamos preparando tu alta en Stripe. Puede tardar unos segundos: no cierres esta página.",
+    "supportPhoneNote": "Stripe te pedirá un teléfono de atención al cliente: tus alumnos lo verán en sus recibos. Si no quieres dar tu móvil personal, pon uno de trabajo.",
+    "continueCta": "Seguir con el alta en Stripe"
   }
 }

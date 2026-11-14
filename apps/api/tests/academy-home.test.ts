@@ -315,6 +315,13 @@ describe('AcademyHomeService — datos publicables del aula', () => {
     expect(data.nextLive).toBeNull();
   });
 
+  // Misma regla que las cifras del login (`public-counts.ts`): con pocos
+  // alumnos el número no se enseña. 9 alumnos + la creadora no son «10 miembros».
+  it('con menos de 10 alumnos no enseña el número de miembros', async () => {
+    const w = world({ a: { ...A, students: 9 } });
+    expect((await service(w).get('a')).members).toBeNull();
+  });
+
   it('sin titular propio de la membresía, la portada no enseña ninguno (pone el del plan)', async () => {
     const w = world({ a: { ...A, membership: { plans: 1 } } });
     expect((await service(w).get('a')).offers.membership?.headline).toBeNull();

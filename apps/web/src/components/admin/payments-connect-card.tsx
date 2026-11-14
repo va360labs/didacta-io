@@ -27,6 +27,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { NativeSelect } from '@/components/ui/select';
+import { ButtonSpinner, usePayoutsRedirect } from '@/components/admin/payouts-redirect';
 import { StripeSettingsCard } from '@/components/admin/stripe-settings-card';
 import { ApiHttpError } from '@/lib/api-client';
 import { apiErrorMessage } from '@/lib/i18n/api-error';
@@ -97,6 +98,10 @@ export function PaymentsConnectCard({
   const [country, setCountry] = useState<string>('');
   const [entityType, setEntityType] = useState<PayoutsEntityType>('individual');
   const [rejectedCountry, setRejectedCountry] = useState<string | null>(null);
+  // Alta y «Completar»: un solo camino con su cerrojo (un doble clic no crea
+  // dos peticiones) y su estado de carga (ver `payouts-redirect.tsx`).
+  const redirect = usePayoutsRedirect(api);
+  const opening = redirect.busy;
 
   const load = useCallback(
     async (sync: boolean) => {
@@ -180,38 +185,30 @@ export function PaymentsConnectCard({
       setRejectedCountry(country);
       return;
     }
-    setBusy('connect');
-    try {
-      const { onboardingUrl } = await api.connect(country, entityType);
-      if (onboardingUrl) {
-        window.location.assign(onboardingUrl);
-        return;
-      }
+    const outcome = await redirect.connect(country, entityType);
+    if (outcome.kind === 'ready') {
       await load(false);
-    } catch (err) {
-      if (err instanceof ApiHttpError && err.code === 'PAYOUTS_COUNTRY_UNSUPPORTED') {
-        setRejectedCountry(err.detail ?? country);
-      } else if (err instanceof ApiHttpError && err.code === 'PAYOUTS_ACCOUNT_ALREADY_STARTED') {
-        setActionError(t('alreadyStarted', { country: countryName(err.detail ?? country) }));
-        await load(false);
-      } else {
-        setActionError(err instanceof ApiHttpError ? apiErrorMessage(err, tErrors) : String(err));
-      }
+      return;
     }
-    setBusy(null);
+    if (outcome.kind !== 'failed') return;
+    const err = outcome.error;
+    if (err instanceof ApiHttpError && err.code === 'PAYOUTS_COUNTRY_UNSUPPORTED') {
+      setRejectedCountry(err.detail ?? country);
+    } else if (err instanceof ApiHttpError && err.code === 'PAYOUTS_ACCOUNT_ALREADY_STARTED') {
+      setActionError(t('alreadyStarted', { country: countryName(err.detail ?? country) }));
+      await load(false);
+    } else {
+      setActionError(err instanceof ApiHttpError ? apiErrorMessage(err, tErrors) : String(err));
+    }
   }
 
   async function handleFinish(): Promise<void> {
     setActionError(null);
-    setBusy('finish');
-    try {
-      const { url } = await api.onboardingLink();
-      window.location.assign(url);
-      return;
-    } catch (err) {
+    const outcome = await redirect.finish();
+    if (outcome.kind === 'failed') {
+      const err = outcome.error;
       setActionError(err instanceof ApiHttpError ? apiErrorMessage(err, tErrors) : String(err));
     }
-    setBusy(null);
   }
 
   async function handleDashboard(): Promise<void> {
@@ -278,7 +275,7 @@ export function PaymentsConnectCard({
           ) : null}
 
           {status && view.kind === 'not-connected' ? (
-            <form onSubmit={handleConnect} className="space-y-5" aria-busy={busy === 'connect'}>
+            <form onSubmit={handleConnect} className="space-y-5" aria-busy={opening}>
               <StatusLine tone="neutral">{t('notConnected')}</StatusLine>
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-1.5">
@@ -331,10 +328,19 @@ export function PaymentsConnectCard({
                       })}
                 </StatusLine>
               ) : null}
-              <div className="border-t border-border-soft pt-4">
-                <Button type="submit" disabled={busy !== null || !country || !selectedSupported}>
-                  {busy === 'connect' ? t('connectingCta') : t('connectCta')}
+              <div className="space-y-2 border-t border-border-soft pt-4">
+                <Button
+                  type="submit"
+                  disabled={busy !== null || opening || !country || !selectedSupported}
+                  data-testid="payouts-connect"
+                >
+                  {opening ? <ButtonSpinner /> : null}
+                  {opening ? t('connectingCta') : t('connectCta')}
                 </Button>
+                <OpeningNotice opening={opening} />
+                <p className="text-sm text-text-muted" data-testid="payouts-support-phone-note">
+                  {t('supportPhoneNote')}
+                </p>
               </div>
             </form>
           ) : null}
@@ -344,9 +350,16 @@ export function PaymentsConnectCard({
               <StatusLine tone="info">
                 {t('missing', { requirement: t(`requirements.${view.requirement}`) })}
               </StatusLine>
-              <Button type="button" onClick={() => void handleFinish()} disabled={busy !== null}>
-                {busy === 'finish' ? t('connectingCta') : t('finishCta')}
+              <Button
+                type="button"
+                onClick={() => void handleFinish()}
+                disabled={busy !== null || opening}
+                data-testid="payouts-finish"
+              >
+                {busy === 'finish' || opening ? <ButtonSpinner /> : null}
+                {busy === 'finish' || opening ? t('connectingCta') : t('finishCta')}
               </Button>
+              <OpeningNotice opening={opening || busy === 'finish'} />
             </div>
           ) : null}
 
@@ -398,6 +411,24 @@ export function PaymentsConnectCard({
         </div>
       ) : null}
     </div>
+  );
+}
+
+/**
+ * «Puede tardar unos segundos» mientras se abre Stripe. Siempre montado (vacío
+ * en reposo) para que los lectores de pantalla anuncien el cambio.
+ */
+function OpeningNotice({ opening }: { opening: boolean }): React.JSX.Element {
+  const t = useTranslations('adminPagos.payouts');
+  return (
+    <p
+      role="status"
+      aria-live="polite"
+      data-testid="payouts-opening-notice"
+      className={opening ? 'text-sm text-text-muted' : 'sr-only'}
+    >
+      {opening ? t('connectingHint') : ''}
+    </p>
   );
 }
 

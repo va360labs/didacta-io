@@ -67,6 +67,10 @@ function fakeAdapter(
       log.push([label, 'retrieveProduct', id]);
       return { id, name: 'Curso', active: true };
     },
+    expireCheckoutSession: async (id) => {
+      log.push([label, 'expireCheckoutSession', id]);
+      return { status: 'expired' };
+    },
     constructWebhookEvent: () => {
       throw new Error('no se usa');
     },
@@ -211,6 +215,22 @@ describe('PlatformStripeAdapters.billing', () => {
       'plataforma:retrievePrice:price_de_plataforma',
       'propia:retrievePrice:price_heredado',
       'propia:retrieveProduct:prod_heredado',
+    ]);
+  });
+});
+
+describe('PlatformStripeAdapters.billing — caducar sesiones de pago con un precio viejo', () => {
+  it('la sesión se caduca en la cuenta donde se creó: registrada → operador; heredada → claves propias', async () => {
+    const { adapters, log } = build(
+      { mode: 'platform', ready: true, stripeAccountId: 'acct_1C', country: 'ES', feeBps: 500 },
+      { own: true, registered: ['cs_live_de_plataforma'] },
+    );
+    const adapter = await adapters.billing(TENANT);
+    await adapter.expireCheckoutSession('cs_live_de_plataforma');
+    await adapter.expireCheckoutSession('cs_live_heredada');
+    expect(log.map(([who, what, id]) => `${who}:${what}:${id as string}`)).toEqual([
+      'plataforma:expireCheckoutSession:cs_live_de_plataforma',
+      'propia:expireCheckoutSession:cs_live_heredada',
     ]);
   });
 });

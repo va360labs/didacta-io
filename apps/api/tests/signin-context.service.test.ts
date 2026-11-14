@@ -101,7 +101,7 @@ describe('SigninContextService', () => {
   });
 
   it('sin theme configurado: copy null y colores default Didacta', async () => {
-    const { prisma } = makePrisma({ theme: null, users: 3, courses: 0 });
+    const { prisma } = makePrisma({ theme: null, users: 30, courses: 0 });
     const service = new SigninContextService(prisma, makeLogger());
 
     const ctx = await service.get(TENANT);
@@ -110,7 +110,23 @@ describe('SigninContextService', () => {
     expect(ctx.subheadline).toBeNull();
     expect(ctx.brandHue).toBe(213);
     expect(ctx.brandSaturation).toBe(70);
-    expect(ctx.stats).toEqual({ activeMembers: 3, publishedCourses: 0 });
+    expect(ctx.stats).toEqual({ activeMembers: 30, publishedCourses: 0 });
+  });
+
+  // Primera venta real de Didacta Cloud (14-nov): la entrada presumía de
+  // «1 alumno activo · 1 curso». Por debajo del umbral, ninguna de las dos.
+  it('con menos de 10 alumnos no enseña ninguna cifra (tampoco la de cursos)', async () => {
+    for (const users of [0, 1, 9]) {
+      const { prisma } = makePrisma({ theme: null, users, courses: 1 });
+      const ctx = await new SigninContextService(prisma, makeLogger()).get(TENANT);
+      expect(ctx.stats, `${users} alumnos`).toEqual({ activeMembers: 0, publishedCourses: 0 });
+    }
+  });
+
+  it('a partir de 10 alumnos enseña las dos cifras reales', async () => {
+    const { prisma } = makePrisma({ theme: null, users: 10, courses: 1 });
+    const ctx = await new SigninContextService(prisma, makeLogger()).get(TENANT);
+    expect(ctx.stats).toEqual({ activeMembers: 10, publishedCourses: 1 });
   });
 
   it('sin membresía configurada, el login no enlaza /join', async () => {

@@ -55,6 +55,13 @@ interface BuyCourseButtonProps {
   size?: 'sm' | 'default' | 'lg';
   /** Clase extra opcional para layout. */
   className?: string;
+  /**
+   * El precio que el alumno está viendo. Si al pulsar ya no es el actual, no
+   * se le cobra otro importe: sale el aviso y se llama a `onPriceChanged`
+   * para que la pantalla vuelva a pedir el precio.
+   */
+  expectedPrice?: { unitAmount: number; currency: string };
+  onPriceChanged?: () => void;
 }
 
 export function BuyCourseButton({
@@ -64,6 +71,8 @@ export function BuyCourseButton({
   variant = 'primary',
   size = 'lg',
   className,
+  expectedPrice,
+  onPriceChanged,
 }: BuyCourseButtonProps) {
   const t = useTranslations('playersContenido');
   const tSite = useTranslations('publicSite');
@@ -91,6 +100,7 @@ export function BuyCourseButton({
         waiver.acceptance,
         // Enlace de referido con el que llegó a cualquier página de venta.
         getStoredReferralCode() ?? undefined,
+        expectedPrice,
       );
       // Redirigimos a la URL hosted de Stripe. NO usamos router.push() porque
       // es un dominio externo — sólo `window.location.href` cambia de origin.
@@ -100,6 +110,11 @@ export function BuyCourseButton({
       if (e instanceof ApiHttpError && e.code?.startsWith('CHECKOUT_WITHDRAWAL_WAIVER')) {
         setError(apiErrorMessage(e, tErrors));
         waiver.reload();
+      } else if (e instanceof ApiHttpError && e.code === 'BILLING_PRICE_CHANGED') {
+        // El admin cambió el precio con la página abierta: se enseña el de
+        // ahora y decide el alumno. Nunca se cobra otro importe sin avisar.
+        setError(t('buyCourse.errors.BILLING_PRICE_CHANGED'));
+        onPriceChanged?.();
       } else {
         setError(translateBillingError(e, t));
       }
@@ -158,6 +173,8 @@ function translateBillingError(e: unknown, t: TranslatorLike): string {
         return t('buyCourse.errors.BILLING_PRODUCT_NOT_FOUND');
       case 'BILLING_PRODUCT_INACTIVE':
         return t('buyCourse.errors.BILLING_PRODUCT_INACTIVE');
+      case 'BILLING_PRICE_CHANGED':
+        return t('buyCourse.errors.BILLING_PRICE_CHANGED');
       case 'BILLING_STRIPE_API_ERROR':
         return t('buyCourse.errors.BILLING_STRIPE_API_ERROR');
       case 'BILLING_STRIPE_CONFIG_MISSING':

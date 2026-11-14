@@ -41,6 +41,7 @@
     "errors": {
       "BILLING_PRODUCT_NOT_FOUND": "This course is not on sale yet. Get in touch with your organisation.",
       "BILLING_PRODUCT_INACTIVE": "Sales for this course are paused right now.",
+      "BILLING_PRICE_CHANGED": "The price of this course has just changed. You now see the current price: check it and press again to pay.",
       "BILLING_STRIPE_API_ERROR": "There was a problem with the payment gateway. Try again in a few minutes.",
       "BILLING_STRIPE_CONFIG_MISSING": "Payments are not enabled in your organisation. Get in touch with your admin.",
       "fallback": "We could not start the payment. Try again."

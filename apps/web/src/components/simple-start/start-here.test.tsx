@@ -24,6 +24,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import en from '@/i18n/messages/en';
 import es from '@/i18n/messages/es';
 import pt from '@/i18n/messages/pt';
+import { payoutsNavigation } from '@/components/admin/payouts-redirect';
 import { StartHere } from './start-here';
 
 vi.mock('next/navigation', () => ({
@@ -159,6 +160,8 @@ async function render(
 }
 
 const paymentsStep = (c: HTMLElement) => c.querySelector('[data-step="payments"]')!;
+const connectButton = (c: HTMLElement) =>
+  c.querySelector<HTMLButtonElement>('[data-testid="conectar-cobros"]');
 const notice = (c: HTMLElement) => c.querySelector('[data-testid="cobros-pais-no-admitido"]');
 /** Solo el texto del aviso (sin el enlace que va debajo). */
 const noticeText = (c: HTMLElement) => notice(c)?.querySelector('[role="status"]')?.textContent;
@@ -263,12 +266,15 @@ describe('«Empieza aquí»: el paso de cobros según el país del creador', () 
     });
     const c = await render('pt', 'pt-BR');
     expect(notice(c)).toBeNull();
+    // El botón abre el alta aquí mismo (ya no lleva a Ventas); el único
+    // enlace es el secundario para quien tenga el banco en otro país.
+    expect(connectButton(c)?.textContent).toBe('Conectar recebimentos');
     expect(links(paymentsStep(c))).toEqual([
-      { text: 'Conectar recebimentos', href: '/admin/payments' },
+      { text: 'Seu banco está em outro país?', href: '/admin/payments' },
     ]);
   });
 
-  it('país admitido: el botón de siempre', async () => {
+  it('país admitido: el botón que abre Stripe, sin enlace a Ventas', async () => {
     stubApi((url) => {
       if (url.endsWith('/admin/simple-mode/start-here')) return { status: 200, body: startHere() };
       if (url.endsWith('/modules/payouts/status')) return { status: 200, body: payoutsStatus() };
@@ -276,7 +282,8 @@ describe('«Empieza aquí»: el paso de cobros según el país del creador', () 
     });
     const c = await render('en', 'en-GB');
     expect(notice(c)).toBeNull();
-    expect(links(paymentsStep(c))).toEqual([{ text: 'Connect payouts', href: '/admin/payments' }]);
+    expect(connectButton(c)?.textContent).toBe('Connect payouts');
+    expect(links(paymentsStep(c)).map((l) => l.text)).not.toContain('Connect payouts');
   });
 
   it('si el estado de cobros falla, el paso se pinta como siempre (con botón)', async () => {
@@ -305,5 +312,169 @@ describe('«Empieza aquí»: el paso de cobros según el país del creador', () 
     expect(links(paymentsStep(c))).toEqual([
       { text: 'Conectar recebimentos', href: '/admin/settings?tab=payments' },
     ]);
+  });
+});
+
+// ────────────────────────────────────────────────────────────────────────────
+// Prueba real del 14-nov-2026: «Empieza aquí» llevaba a Ventas, donde había
+// otro formulario con otro botón igual, y «Abriendo Stripe…» tardaba 8 s sin
+// más señal. Ahora el paso abre el alta él solo, con el estado de carga visible
+// y sin una segunda petición por un doble clic.
+// ────────────────────────────────────────────────────────────────────────────
+
+type Sent = { url: string; method: string; body: unknown };
+let sent: Sent[] = [];
+
+function stubFetch(handler: (url: string, method: string) => Answer | Promise<Answer> | undefined) {
+  sent = [];
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+      const url = String(input);
+      const method = (init?.method ?? 'GET').toUpperCase();
+      sent.push({ url, method, body: init?.body ? JSON.parse(String(init.body)) : undefined });
+      const answer = (await handler(url, method)) ?? { status: 404, body: { message: 'no' } };
+      return new Response(JSON.stringify(answer.body), {
+        status: answer.status,
+        headers: { 'content-type': 'application/json' },
+      });
+    }),
+  );
+}
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((r) => (resolve = r));
+  return { promise, resolve };
+}
+
+async function flush() {
+  for (let i = 0; i < 6; i++) {
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+  }
+}
+
+const posts = (path: string) => sent.filter((s) => s.method === 'POST' && s.url.endsWith(path));
+const CONNECTED = {
+  account: payoutsStatus({ country: 'ES' }).account,
+  onboardingUrl: 'https://connect.stripe.test/setup/e/acct_1',
+};
+
+describe('«Empieza aquí»: un solo botón abre el alta de Stripe', () => {
+  it('manda país y tipo, enseña que está trabajando, ignora el doble clic y va a Stripe', async () => {
+    const go = vi.spyOn(payoutsNavigation, 'go').mockImplementation(() => undefined);
+    const pending = deferred<Answer>();
+    stubFetch((url, method) => {
+      if (url.endsWith('/admin/simple-mode/start-here')) return { status: 200, body: startHere() };
+      if (url.endsWith('/modules/payouts/status')) return { status: 200, body: payoutsStatus() };
+      if (method === 'POST' && url.endsWith('/modules/payouts/connect')) return pending.promise;
+      return undefined;
+    });
+    const c = await render('es', 'es-ES');
+    const button = connectButton(c)!;
+    expect(button.disabled).toBe(false);
+    // El aviso del teléfono de atención, antes de ir a Stripe.
+    expect(c.querySelector('[data-testid="aviso-telefono"]')?.textContent).toContain(
+      'Si no quieres dar tu móvil personal, pon uno de trabajo.',
+    );
+
+    await act(async () => {
+      button.click();
+      button.click();
+    });
+    await flush();
+
+    expect(posts('/modules/payouts/connect')).toHaveLength(1);
+    expect(posts('/modules/payouts/connect')[0]!.body).toEqual({
+      country: 'ES',
+      entityType: 'individual',
+    });
+    expect(button.disabled).toBe(true);
+    expect(button.textContent).toBe('Abriendo Stripe…');
+    expect(button.querySelector('[data-testid="payouts-spinner"]')).not.toBeNull();
+    expect(c.querySelector('[data-testid="cobros-alta-espera"]')?.textContent).toBe(
+      'Estamos preparando tu alta en Stripe. Puede tardar unos segundos: no cierres esta página.',
+    );
+
+    await act(async () => {
+      pending.resolve({ status: 200, body: CONNECTED });
+    });
+    await flush();
+    expect(go).toHaveBeenCalledTimes(1);
+    expect(go).toHaveBeenCalledWith('https://connect.stripe.test/setup/e/acct_1');
+    expect(posts('/modules/payouts/connect')).toHaveLength(1);
+  });
+
+  it('«Empresa» se pregunta una vez, aquí, y viaja en la petición', async () => {
+    vi.spyOn(payoutsNavigation, 'go').mockImplementation(() => undefined);
+    stubFetch((url, method) => {
+      if (url.endsWith('/admin/simple-mode/start-here')) return { status: 200, body: startHere() };
+      if (url.endsWith('/modules/payouts/status')) return { status: 200, body: payoutsStatus() };
+      if (method === 'POST' && url.endsWith('/modules/payouts/connect'))
+        return { status: 200, body: CONNECTED };
+      return undefined;
+    });
+    const c = await render('en', 'en-GB');
+    const company = c.querySelector<HTMLInputElement>(
+      'input[name="cobros-titular"][value="company"]',
+    )!;
+    expect(company.closest('label')?.textContent).toBe('Company');
+    await act(async () => company.click());
+    await act(async () => connectButton(c)!.click());
+    await flush();
+    expect(posts('/modules/payouts/connect')[0]!.body).toEqual({
+      country: 'GB',
+      entityType: 'company',
+    });
+  });
+
+  it('alta ya empezada: el mismo botón la retoma (enlace nuevo), sin volver a preguntar nada', async () => {
+    const go = vi.spyOn(payoutsNavigation, 'go').mockImplementation(() => undefined);
+    stubFetch((url, method) => {
+      if (url.endsWith('/admin/simple-mode/start-here')) return { status: 200, body: startHere() };
+      if (url.endsWith('/modules/payouts/status'))
+        return { status: 200, body: payoutsStatus({ country: 'ES' }) };
+      if (method === 'POST' && url.endsWith('/modules/payouts/connect/link'))
+        return { status: 200, body: { url: 'https://connect.stripe.test/setup/e/acct_1b' } };
+      return undefined;
+    });
+    const c = await render('es', 'es-ES');
+    expect(connectButton(c)).toBeNull();
+    expect(c.querySelector('input[name="cobros-titular"]')).toBeNull();
+    const resume = c.querySelector<HTMLButtonElement>('[data-testid="seguir-alta-stripe"]')!;
+    expect(resume.textContent).toBe('Seguir con el alta en Stripe');
+    await act(async () => resume.click());
+    await flush();
+    expect(posts('/modules/payouts/connect/link')).toHaveLength(1);
+    expect(posts('/modules/payouts/connect')).toHaveLength(0);
+    expect(go).toHaveBeenCalledWith('https://connect.stripe.test/setup/e/acct_1b');
+  });
+
+  it('si falla, lo dice y el botón vuelve a funcionar (el cerrojo se suelta)', async () => {
+    const go = vi.spyOn(payoutsNavigation, 'go').mockImplementation(() => undefined);
+    let attempt = 0;
+    stubFetch((url, method) => {
+      if (url.endsWith('/admin/simple-mode/start-here')) return { status: 200, body: startHere() };
+      if (url.endsWith('/modules/payouts/status')) return { status: 200, body: payoutsStatus() };
+      if (method === 'POST' && url.endsWith('/modules/payouts/connect')) {
+        attempt += 1;
+        return attempt === 1
+          ? { status: 502, body: { message: 'Stripe no responde' } }
+          : { status: 200, body: CONNECTED };
+      }
+      return undefined;
+    });
+    const c = await render('es', 'es-ES');
+    await act(async () => connectButton(c)!.click());
+    await flush();
+    expect(paymentsStep(c).querySelector('[role="alert"]')).not.toBeNull();
+    expect(connectButton(c)!.disabled).toBe(false);
+    expect(go).not.toHaveBeenCalled();
+    await act(async () => connectButton(c)!.click());
+    await flush();
+    expect(posts('/modules/payouts/connect')).toHaveLength(2);
+    expect(go).toHaveBeenCalledTimes(1);
   });
 });

@@ -20,6 +20,7 @@ import {
   PLATFORM_PRICE_CURRENCIES,
   PayoutsAccountNotFoundError,
   PayoutsCountryUnsupportedError,
+  onboardingIdentityFromTax,
   settlementCurrencyOf,
   type DisconnectResult,
   type PayoutsAccountView,
@@ -261,10 +262,15 @@ export class PayoutsController {
     return result;
   }
 
-  /** Datos con los que se prerrellena el alta: correo de quien conecta, nombre y dominio del aula. */
+  /**
+   * Datos con los que se prerrellena el alta: correo de quien conecta (también
+   * como correo de atención a los alumnos, en vez de que Stripe lo pida), nombre
+   * y dominio del aula, y sus datos fiscales si ya los dio. Lo precargado el
+   * alta solo lo confirma: no se pregunta dos veces.
+   */
   private async prefill(tenantId: string, userId: string) {
     const prisma = this.runtime.prisma;
-    const [tenant, admin, hostname] = await Promise.all([
+    const [tenant, admin, hostname, tax] = await Promise.all([
       prisma.tenant.findUnique({ where: { id: tenantId }, select: { name: true } }),
       runAsTenant(tenantId, () =>
         prisma.user.findFirst({
@@ -273,6 +279,9 @@ export class PayoutsController {
         }),
       ),
       this.tenantResolver.resolvePrimaryDomain(tenantId),
+      // Sin datos fiscales (o sin cifrado configurado) se conecta igual: la
+      // precarga es una ayuda, nunca un requisito.
+      (this.runtime.taxProfiles?.full(tenantId) ?? Promise.resolve(null)).catch(() => null),
     ]);
     if (!tenant || !admin) throw new UnauthorizedException();
     return {
@@ -280,6 +289,8 @@ export class PayoutsController {
       displayName: tenant.name,
       hostname,
       locale: admin.locale,
+      supportEmail: admin.email,
+      identity: onboardingIdentityFromTax(tax),
     };
   }
 

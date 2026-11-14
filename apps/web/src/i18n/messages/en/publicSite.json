@@ -61,6 +61,7 @@
     "defaultOptionName": "Course",
     "recommended": "Recommended",
     "payError": "The payment could not be started. Try again in a few seconds.",
+    "priceChanged": "The price of this course has just changed. You now see the current price: check it and press again to pay.",
     "openingPayment": "Opening secure payment…",
     "buyNow": "Buy now",
     "securePayment": "Secure payment with Stripe. VAT included.",

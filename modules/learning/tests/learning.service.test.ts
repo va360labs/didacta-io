@@ -245,6 +245,31 @@ function makeFakePrisma() {
             return merged;
           },
         ),
+        // Igual que Prisma: igualdad campo a campo y `{ in: [...] }`.
+        updateMany: vi.fn(
+          async ({
+            where,
+            data,
+          }: {
+            where: Record<string, unknown>;
+            data: Partial<FakeEnrollment>;
+          }) => {
+            let count = 0;
+            for (const e of [...enrollments.values()]) {
+              const matches = Object.entries(where).every(([k, v]) => {
+                const actual = (e as unknown as Record<string, unknown>)[k];
+                if (v && typeof v === 'object' && 'in' in (v as object)) {
+                  return ((v as { in: unknown[] }).in ?? []).includes(actual);
+                }
+                return actual === v;
+              });
+              if (!matches) continue;
+              enrollments.set(e.id, { ...e, ...data });
+              count += 1;
+            }
+            return { count };
+          },
+        ),
       },
       modLearningLessonComment: {
         findFirst: vi.fn(
@@ -1399,5 +1424,123 @@ describe('LearningService', () => {
 
       expect(fake.invitations.get('inv-1')!.usedCount).toBe(2); // como estaba
     });
+  });
+});
+
+describe('revokePurchaseAccess — el reembolso retira el acceso de ESA compra (venta real 14-nov)', () => {
+  function enrollment(
+    fake: ReturnType<typeof makeFakePrisma>,
+    over: Partial<FakeEnrollment> & { id: string },
+  ): void {
+    fake.enrollments.set(over.id, {
+      tenantId: 't-1',
+      userId: 'u-1',
+      courseId: 'c-1',
+      status: 'ACTIVE',
+      source: 'PURCHASE',
+      completionThreshold: 75,
+      progressPercent: 0,
+      enrolledAt: new Date(),
+      startedAt: null,
+      completedAt: null,
+      cancelledAt: null,
+      ...over,
+    });
+  }
+
+  it('cancela una matrícula de compra COMPLETED (antes era un no-op) y conserva completedAt', async () => {
+    const fake = makeFakePrisma();
+    const completedAt = new Date('2026-11-14T10:00:00Z');
+    enrollment(fake, { id: 'en-1', status: 'COMPLETED', progressPercent: 100, completedAt });
+    const ctx = makeContext();
+    const service = new LearningService(fake.prisma as never, ctx as never);
+
+    const result = await service.revokePurchaseAccess('t-1', 'u-1', 'c-1');
+
+    expect(result).toEqual({
+      outcome: 'cancelled',
+      enrollmentId: 'en-1',
+      previousStatus: 'COMPLETED',
+    });
+    const after = fake.enrollments.get('en-1')!;
+    expect(after.status).toBe('CANCELLED');
+    expect(after.cancelledAt).toBeInstanceOf(Date);
+    expect(after.completedAt).toEqual(completedAt);
+    expect(ctx.eventBus.publish).toHaveBeenCalledWith(
+      expect.objectContaining({ name: 'learning.enrollment.cancelled' }),
+    );
+  });
+
+  it('cancela también una ACTIVE', async () => {
+    const fake = makeFakePrisma();
+    enrollment(fake, { id: 'en-1' });
+    const service = new LearningService(fake.prisma as never, makeContext() as never);
+    const result = await service.revokePurchaseAccess('t-1', 'u-1', 'c-1');
+    expect(result.outcome).toBe('cancelled');
+    expect(fake.enrollments.get('en-1')!.status).toBe('CANCELLED');
+  });
+
+  it('no toca una matrícula dada a mano (ADMIN): la compra no es su origen', async () => {
+    const fake = makeFakePrisma();
+    enrollment(fake, { id: 'en-1', source: 'ADMIN', status: 'COMPLETED' });
+    const ctx = makeContext();
+    const service = new LearningService(fake.prisma as never, ctx as never);
+
+    expect(await service.revokePurchaseAccess('t-1', 'u-1', 'c-1')).toEqual({ outcome: 'none' });
+    expect(fake.enrollments.get('en-1')!.status).toBe('COMPLETED');
+    expect(ctx.eventBus.publish).not.toHaveBeenCalled();
+  });
+
+  it('con un grupo que sigue dando el curso, la matrícula vuelve a GROUP y sigue viva', async () => {
+    const fake = makeFakePrisma();
+    enrollment(fake, { id: 'en-1', status: 'COMPLETED' });
+    const ctx = makeContext();
+    const service = new LearningService(fake.prisma as never, ctx as never);
+
+    const result = await service.revokePurchaseAccess('t-1', 'u-1', 'c-1', { keepAsGroup: true });
+
+    expect(result).toEqual({ outcome: 'kept_by_group', enrollmentId: 'en-1' });
+    expect(fake.enrollments.get('en-1')).toMatchObject({ status: 'COMPLETED', source: 'GROUP' });
+    expect(ctx.eventBus.publish).not.toHaveBeenCalled();
+  });
+
+  it('es idempotente: una segunda pasada no vuelve a cancelar ni a emitir', async () => {
+    const fake = makeFakePrisma();
+    enrollment(fake, { id: 'en-1', status: 'COMPLETED' });
+    const ctx = makeContext();
+    const service = new LearningService(fake.prisma as never, ctx as never);
+
+    await service.revokePurchaseAccess('t-1', 'u-1', 'c-1');
+    const second = await service.revokePurchaseAccess('t-1', 'u-1', 'c-1');
+
+    expect(second).toEqual({ outcome: 'already_cancelled', enrollmentId: 'en-1' });
+    expect(ctx.eventBus.publish).toHaveBeenCalledTimes(1);
+  });
+
+  it('unenrollFromPurchase (compatibilidad) devuelve 1 y luego 0', async () => {
+    const fake = makeFakePrisma();
+    enrollment(fake, { id: 'en-1', status: 'COMPLETED' });
+    const service = new LearningService(fake.prisma as never, makeContext() as never);
+    expect(await service.unenrollFromPurchase('t-1', 'u-1', 'c-1')).toBe(1);
+    expect(await service.unenrollFromPurchase('t-1', 'u-1', 'c-1')).toBe(0);
+  });
+
+  it('volver a comprar un curso que ya había terminado lo reactiva COMPLETED, no al 100 % sin terminar', async () => {
+    const fake = makeFakePrisma();
+    fake.courses.set('c-1', { id: 'c-1', tenantId: 't-1', status: 'PUBLISHED', deletedAt: null });
+    enrollment(fake, {
+      id: 'en-1',
+      status: 'CANCELLED',
+      progressPercent: 100,
+      completedAt: new Date('2026-11-14T10:00:00Z'),
+      cancelledAt: new Date('2026-11-14T11:00:00Z'),
+    });
+    const service = new LearningService(fake.prisma as never, makeContext() as never);
+
+    const again = await service.enrollFromPurchase('t-1', 'u-1', 'c-1');
+
+    expect(again.id).toBe('en-1');
+    expect(again.status).toBe('COMPLETED');
+    expect(again.cancelledAt).toBeNull();
   });
 });

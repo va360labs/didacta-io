@@ -306,6 +306,52 @@ describe('BillingPublicController — checkout anónimo', () => {
     expect(args.successUrl).toContain('/catalog/checkout/success?session_id=');
     expect(args.cancelUrl).toContain('/catalog/checkout/cancel');
   });
+
+  it('el precio que vio ya no es el de ahora: 409 ANTES de guardar su casilla y sin crear sesión', async () => {
+    const { PriceChangedError } = await import('@didacta/mod-billing');
+    const assertCurrentPrice = vi
+      .fn()
+      .mockRejectedValue(new PriceChangedError({ unitAmount: 100, currency: 'eur' }, COURSE));
+    const startCheckout = vi.fn();
+    const { controller } = makeController({
+      courseFirst: { status: 'PUBLISHED' },
+      billing: { assertCurrentPrice, startCheckout },
+    });
+
+    await expect(
+      controller.checkout(req(), COURSE, {
+        optionId: '33333333-3333-4333-8333-333333333333',
+        expectedPrice: { unitAmount: 2900, currency: 'eur' },
+      }),
+    ).rejects.toBeInstanceOf(PriceChangedError);
+    expect(assertCurrentPrice).toHaveBeenCalledWith({
+      tenantId: TENANT,
+      courseId: COURSE,
+      optionId: '33333333-3333-4333-8333-333333333333',
+      expectedPrice: { unitAmount: 2900, currency: 'eur' },
+    });
+    expect(startCheckout).not.toHaveBeenCalled();
+  });
+
+  it('con el precio vigente, viaja hasta startCheckout (que lo vuelve a comprobar)', async () => {
+    const assertCurrentPrice = vi.fn().mockResolvedValue(undefined);
+    const startCheckout = vi
+      .fn()
+      .mockResolvedValue({ orderId: 'ord-1', sessionId: 'cs_1', url: 'https://stripe/cs_1' });
+    const { controller } = makeController({
+      courseFirst: { status: 'PUBLISHED' },
+      billing: { assertCurrentPrice, startCheckout },
+    });
+
+    await controller.checkout(req(), COURSE, {
+      expectedPrice: { unitAmount: 100, currency: 'eur' },
+    });
+
+    expect(startCheckout.mock.calls[0]![0].expectedPrice).toEqual({
+      unitAmount: 100,
+      currency: 'eur',
+    });
+  });
 });
 
 /**

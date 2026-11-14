@@ -7,7 +7,7 @@
 
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { BuyCourseButton } from '@/components/buy-course-button';
 import { Icon } from '@/components/icon';
 import { Card, CardContent } from '@/components/ui/card';
@@ -56,7 +56,7 @@ function useActiveModules(): ReadonlySet<string> | null {
 
 export function CourseSalesPanel({ courseId }: { courseId: string }) {
   const t = useTranslations('modBilling');
-  const { offer, membership } = useOfertaYMembresia(courseId);
+  const { offer, membership, reloadOffer } = useOfertaYMembresia(courseId);
   const activeModules = useActiveModules();
   const opciones = offer?.options ?? [];
   const plan = destacado(membership);
@@ -91,7 +91,9 @@ export function CourseSalesPanel({ courseId }: { courseId: string }) {
         <div className="space-y-4">
           {/* Precio único: la caja de siempre. Cuando hay varios formatos, el
               protagonismo pasa a la rejilla de abajo y esta caja no se pinta. */}
-          {opciones.length === 1 ? <CajaPrecio courseId={courseId} opcion={opciones[0]!} /> : null}
+          {opciones.length === 1 ? (
+            <CajaPrecio courseId={courseId} opcion={opciones[0]!} onPriceChanged={reloadOffer} />
+          ) : null}
 
           {plan ? <CajaAccesoTotal plan={plan} /> : null}
 
@@ -117,7 +119,12 @@ export function CourseSalesPanel({ courseId }: { courseId: string }) {
           </div>
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             {opciones.map((o) => (
-              <TarjetaOpcion key={o.id} courseId={courseId} opcion={o} />
+              <TarjetaOpcion
+                key={o.id}
+                courseId={courseId}
+                opcion={o}
+                onPriceChanged={reloadOffer}
+              />
             ))}
           </div>
         </section>
@@ -170,7 +177,20 @@ function CajaAccesoTotal({
   );
 }
 
-function CajaPrecio({ courseId, opcion }: { courseId: string; opcion: CourseOfferOption }) {
+/** Lo que el alumno ve de una opción: con eso se comprueba que no ha cambiado al pagar. */
+function precioVisto(opcion: CourseOfferOption) {
+  return { unitAmount: opcion.unitAmount, currency: opcion.currency };
+}
+
+function CajaPrecio({
+  courseId,
+  opcion,
+  onPriceChanged,
+}: {
+  courseId: string;
+  opcion: CourseOfferOption;
+  onPriceChanged: () => void;
+}) {
   const t = useTranslations('modBilling');
 
   return (
@@ -178,13 +198,28 @@ function CajaPrecio({ courseId, opcion }: { courseId: string; opcion: CourseOffe
       <CardContent className="space-y-4 p-6">
         <Precio opcion={opcion} grande />
         <p className="text-xs text-text-muted">{t('sales.onePayment')}</p>
-        <BuyCourseButton courseId={courseId} optionId={opcion.id} size="lg" className="w-full" />
+        <BuyCourseButton
+          courseId={courseId}
+          optionId={opcion.id}
+          expectedPrice={precioVisto(opcion)}
+          onPriceChanged={onPriceChanged}
+          size="lg"
+          className="w-full"
+        />
       </CardContent>
     </Card>
   );
 }
 
-function TarjetaOpcion({ courseId, opcion }: { courseId: string; opcion: CourseOfferOption }) {
+function TarjetaOpcion({
+  courseId,
+  opcion,
+  onPriceChanged,
+}: {
+  courseId: string;
+  opcion: CourseOfferOption;
+  onPriceChanged: () => void;
+}) {
   const t = useTranslations('modBilling');
 
   return (
@@ -214,6 +249,8 @@ function TarjetaOpcion({ courseId, opcion }: { courseId: string; opcion: CourseO
         <BuyCourseButton
           courseId={courseId}
           optionId={opcion.id}
+          expectedPrice={precioVisto(opcion)}
+          onPriceChanged={onPriceChanged}
           label={t('sales.buy')}
           className="w-full"
         />
@@ -253,7 +290,7 @@ function Precio({ opcion, grande = false }: { opcion: CourseOfferOption; grande?
  */
 export function LockedContentActions({ courseId }: { courseId: string }) {
   const t = useTranslations('modBilling');
-  const { offer, membership } = useOfertaYMembresia(courseId);
+  const { offer, membership, reloadOffer } = useOfertaYMembresia(courseId);
   const plan = destacado(membership);
   const opciones = offer?.options ?? [];
   const barata = [...opciones].sort((a, b) => a.unitAmount - b.unitAmount)[0];
@@ -265,6 +302,8 @@ export function LockedContentActions({ courseId }: { courseId: string }) {
         <BuyCourseButton
           courseId={courseId}
           optionId={barata.id}
+          expectedPrice={precioVisto(barata)}
+          onPriceChanged={reloadOffer}
           label={
             opciones.length > 1
               ? t('sales.buyFrom', { price: formatCents(barata.unitAmount, barata.currency) })
@@ -289,6 +328,11 @@ function useOfertaYMembresia(courseId: string) {
   const [offer, setOffer] = useState<CourseOffer | null>(null);
   const [membership, setMembership] = useState<MembershipPage | null>(null);
 
+  // El precio cambió mientras la página estaba abierta: se vuelve a pedir.
+  const reloadOffer = useCallback(() => {
+    void getCourseOffer(courseId).then(setOffer);
+  }, [courseId]);
+
   useEffect(() => {
     let aborted = false;
     void getCourseOffer(courseId).then((o) => {
@@ -308,7 +352,7 @@ function useOfertaYMembresia(courseId: string) {
     };
   }, [courseId]);
 
-  return { offer, membership };
+  return { offer, membership, reloadOffer };
 }
 
 function Beneficio({ texto }: { texto: string }) {

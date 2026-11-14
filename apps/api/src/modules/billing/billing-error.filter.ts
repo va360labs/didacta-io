@@ -10,7 +10,7 @@ import {
   HttpException,
   HttpStatus,
 } from '@nestjs/common';
-import { BillingError } from '@didacta/mod-billing';
+import { BillingError, PriceChangedError } from '@didacta/mod-billing';
 import type { FastifyReply } from 'fastify';
 import { moduleErrorBody } from '../../common/module-error-body';
 
@@ -18,6 +18,8 @@ const STATUS_BY_CODE: Record<string, number> = {
   BILLING_PRODUCT_NOT_FOUND: HttpStatus.NOT_FOUND,
   BILLING_PRODUCT_ALREADY_EXISTS: HttpStatus.CONFLICT,
   BILLING_PRODUCT_INACTIVE: HttpStatus.CONFLICT,
+  // El precio que vio el comprador ya no es el de ahora: la pantalla lo refresca.
+  BILLING_PRICE_CHANGED: HttpStatus.CONFLICT,
   BILLING_ORDER_NOT_FOUND: HttpStatus.NOT_FOUND,
   BILLING_WEBHOOK_SIGNATURE_INVALID: HttpStatus.UNAUTHORIZED,
   // El evento toca filas de un tenant que no es el verificado: 403, no 5xx.
@@ -30,7 +32,12 @@ const STATUS_BY_CODE: Record<string, number> = {
 export class BillingErrorFilter implements ExceptionFilter<BillingError> {
   catch(exception: BillingError, host: ArgumentsHost) {
     const status = STATUS_BY_CODE[exception.code] ?? HttpStatus.BAD_REQUEST;
-    const body = moduleErrorBody(exception, status);
+    // Con el precio de ahora, para que la pantalla lo enseñe sin otra llamada.
+    const body = moduleErrorBody(
+      exception,
+      status,
+      exception instanceof PriceChangedError ? { currentPrice: exception.current } : undefined,
+    );
     if (host.getType() === 'http') {
       const reply = host.switchToHttp().getResponse<FastifyReply>();
       void reply.status(status).send(body);

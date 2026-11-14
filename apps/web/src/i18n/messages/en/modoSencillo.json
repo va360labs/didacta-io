@@ -321,6 +321,10 @@
       "bioPlaceholder": "Tell your students who you are and what you teach (max 280 characters)",
       "listoTexto": "This is how your students will see you. Next up: your academy.",
       "seguir": "Continue to my academy"
+    },
+    "alumno": {
+      "titulo": "This is how others will see you in the community",
+      "entrar": "Go in"
     }
   }
 }

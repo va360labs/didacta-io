@@ -6,6 +6,7 @@
 import { Injectable } from '@nestjs/common';
 import { Logger as PinoLogger } from 'nestjs-pino';
 import { PrismaService } from '../prisma/prisma.service';
+import { STAFF_ROLES, showsPublicCounts } from '../public/public-counts';
 
 /**
  * Copy y cifras del panel de marca de las pantallas de acceso (/signin y
@@ -17,7 +18,9 @@ import { PrismaService } from '../prisma/prisma.service';
  *    inventa una frase por tenant.
  *  - `stats`: dos COUNT sobre la BD del tenant (miembros activos y cursos
  *    publicados). Si un contador sale 0, el web no pinta ese dato en vez de
- *    enseñar un número de cartón.
+ *    enseñar un número de cartón. Por debajo del umbral de alumnos
+ *    (`public-counts.ts`, la misma regla que la portada) los DOS salen a 0:
+ *    «1 alumno activo · 1 curso» no convence a nadie.
  *
  * Lectura cross-module (`mod_theming_tenant_theme`, `mod_courses_course`) desde
  * el core, siempre filtrada por `tenant_id` y solo de LECTURA — permitido para
@@ -30,9 +33,10 @@ export interface SigninBrandingStats {
    * Alumnos: usuarios ACTIVE no borrados del tenant SIN rol de equipo. El
    * panel dice «alumnos activos»: contar al creador o a los formadores hacía
    * que un aula recién creada presumiera de «1 alumno activo» sin tener ninguno.
+   * 0 = no se enseña (no hay alumnos suficientes, ver `showsPublicCounts`).
    */
   activeMembers: number;
-  /** Cursos PUBLISHED no borrados del tenant. */
+  /** Cursos PUBLISHED no borrados del tenant. 0 = no se enseña (misma regla). */
   publishedCourses: number;
 }
 
@@ -64,9 +68,6 @@ export interface SigninBrandingContext {
 /** Defaults Didacta (los mismos de `DEFAULT_THEME` en mod.theming). */
 const DEFAULT_BRAND_HUE = 213;
 const DEFAULT_BRAND_SATURATION = 70;
-
-/** Roles de equipo: no son alumnos y no cuentan en «alumnos activos». */
-const STAFF_ROLES = ['super_admin', 'tenant_admin', 'formador'];
 
 const EMPTY: SigninBrandingContext = {
   headline: null,
@@ -107,7 +108,7 @@ export class SigninContextService {
             tenantId,
             status: 'ACTIVE',
             deletedAt: null,
-            NOT: { roles: { some: { role: { name: { in: STAFF_ROLES } } } } },
+            NOT: { roles: { some: { role: { name: { in: [...STAFF_ROLES] } } } } },
           },
         }),
         this.prisma.modCoursesCourse.count({
@@ -124,7 +125,10 @@ export class SigninContextService {
         brandHue: theme?.brandHue ?? DEFAULT_BRAND_HUE,
         brandSaturation: theme?.brandSaturation ?? DEFAULT_BRAND_SATURATION,
         logoDisplayMode: theme?.logoDisplayMode === 'logo_and_name' ? 'logo_and_name' : 'logo_only',
-        stats: { activeMembers, publishedCourses },
+        // Sin alumnos suficientes no se enseña ninguna de las dos cifras.
+        stats: showsPublicCounts(activeMembers)
+          ? { activeMembers, publishedCourses }
+          : { activeMembers: 0, publishedCourses: 0 },
         membershipPageActive: membership?.active ?? false,
       };
     } catch (err) {

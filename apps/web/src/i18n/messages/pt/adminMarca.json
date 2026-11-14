@@ -92,7 +92,7 @@
     "faviconUrlPlaceholder": "https://cdn.seudominio.com/favicon.png",
     "faviconUrlHint": "Alternativa: cole a URL https de um favicon já hospedado no seu domínio.",
     "signinTitle": "Tela de login",
-    "signinDescription": "Texto do painel escuro de <code>/signin</code>. Se você deixar em branco, é usado o texto genérico da Didacta. Os números que aparecem abaixo (alunos ativos, cursos publicados) são reais e calculados automaticamente: não são configurados aqui.",
+    "signinDescription": "Texto do painel escuro de <code>/signin</code>. Se você deixar em branco, é usado o texto genérico da Didacta. Os números que aparecem abaixo (alunos ativos, cursos publicados) são reais e calculados automaticamente: não são configurados aqui. Só aparecem quando a escola tem pelo menos 10 alunos.",
     "headlineLabel": "Título",
     "headlinePlaceholder": "Formação em IA aplicada, com a comunidade que a usa todos os dias.",
     "headlineHint": "Máximo de 160 caracteres. Aparece bem grande: funciona melhor com uma frase curta.",

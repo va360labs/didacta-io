@@ -8,11 +8,21 @@
 import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
+import { ButtonSpinner, usePayoutsRedirect } from '@/components/admin/payouts-redirect';
 import { Icon } from '@/components/icon';
 import { START_HERE_CHANGED_EVENT } from '@/components/simple-shell/simple-shell';
 import { ApiHttpError } from '@/lib/api-client';
+import { apiErrorMessage } from '@/lib/i18n/api-error';
 import { formatCents, formatDateTime, regionNameFormatter } from '@/lib/i18n/format';
-import { OTHER_COUNTRY, payoutsApi, payoutsStepView, type PayoutsStatusDto } from '@/lib/payouts';
+import {
+  OTHER_COUNTRY,
+  defaultCountry,
+  derivePayoutsCardView,
+  payoutsApi,
+  payoutsStepView,
+  type PayoutsEntityType,
+  type PayoutsStatusDto,
+} from '@/lib/payouts';
 import {
   canPublish,
   currentStep,
@@ -420,11 +430,180 @@ function PaymentsAction({ view, primary }: { view: StartHereView; primary: strin
     );
   }
 
+  // Modo plataforma: el alta de Stripe se abre AQUÍ, con un solo botón. Antes
+  // este botón llevaba a Ventas, donde había otro formulario con otro botón
+  // igual (prueba real del 14-nov-2026: «Conectar cobros» se pulsaba dos veces).
+  const card = derivePayoutsCardView(status);
+  if (status && (card.kind === 'not-connected' || card.kind === 'missing')) {
+    return (
+      <PaymentsConnectInline
+        view={view}
+        status={status}
+        stage={card.kind === 'missing' ? 'continue' : 'connect'}
+        country={step.kind === 'connect' ? defaultCountryOf(status, browser) : null}
+        primary={primary}
+      />
+    );
+  }
+  if (status && (card.kind === 'review' || card.kind === 'rejected')) {
+    return <PayoutsStateNote kind={card.kind} />;
+  }
+
   return (
     <Link href={view.paymentsSetupPath} className={primary}>
       <Icon name="briefcase" size={18} />
       {t('pasos.payments.boton')}
     </Link>
+  );
+}
+
+/** País con el que se abre el alta: su cuenta > lo que declaró en Cloud > el navegador. */
+function defaultCountryOf(status: PayoutsStatusDto, browser: string): string {
+  return defaultCountry(status.supportedCountries, browser, {
+    account: status.account?.country,
+    declared: status.declaredCountry,
+  });
+}
+
+/**
+ * «Conecta tus cobros» en el propio paso: particular o empresa (lo único que
+ * Stripe no puede deducir y que no se vuelve a preguntar después: va a la
+ * cuenta y a los datos fiscales) y UN botón que abre el alta de Stripe. Si el
+ * alta ya está empezada, el mismo botón la retoma.
+ */
+function PaymentsConnectInline({
+  view,
+  status,
+  stage,
+  country,
+  primary,
+}: {
+  view: StartHereView;
+  status: PayoutsStatusDto;
+  stage: 'connect' | 'continue';
+  country: string | null;
+  primary: string;
+}) {
+  const t = useTranslations('modoSencillo.empieza');
+  const tP = useTranslations('adminPagos.payouts');
+  const tErrors = useTranslations('errors');
+  const locale = useLocale();
+  const { busy, error, connect, finish } = usePayoutsRedirect();
+  const [entityType, setEntityType] = useState<PayoutsEntityType>('individual');
+
+  async function open() {
+    if (stage === 'continue') {
+      await finish();
+      return;
+    }
+    if (!country) return;
+    await connect(country, entityType);
+  }
+
+  const missing = status.account?.pendingRequirement ?? 'other';
+  const errorText =
+    error instanceof ApiHttpError && error.code === 'PAYOUTS_COUNTRY_UNSUPPORTED'
+      ? t('pasos.payments.paisNoAdmitido', {
+          pais: regionNameFormatter(locale)(error.detail ?? country ?? ''),
+        })
+      : error instanceof ApiHttpError && error.code === 'PAYOUTS_ACCOUNT_ALREADY_STARTED'
+        ? tP('alreadyStarted', { country: regionNameFormatter(locale)(error.detail ?? '') })
+        : error
+          ? error instanceof ApiHttpError
+            ? apiErrorMessage(error, tErrors)
+            : tP('loadError')
+          : null;
+
+  return (
+    <div data-testid="cobros-alta" data-stage={stage} aria-busy={busy}>
+      {stage === 'continue' ? (
+        <p className="mt-3 max-w-[60ch] text-[15px] text-text">
+          {tP('missing', { requirement: tP(`requirements.${missing}`) })}
+        </p>
+      ) : (
+        <fieldset className="mt-4" disabled={busy}>
+          <legend className="mb-2 text-sm font-semibold text-text">{tP('entityLabel')}</legend>
+          <div className="flex flex-col gap-2 sm:flex-row">
+            {(['individual', 'company'] as const).map((value) => (
+              <label
+                key={value}
+                className="flex min-h-11 cursor-pointer items-center gap-2.5 rounded-xl border border-border-strong px-3 text-[15px] has-[:checked]:border-brand-500 has-[:checked]:bg-brand-50"
+              >
+                <input
+                  type="radio"
+                  name="cobros-titular"
+                  value={value}
+                  checked={entityType === value}
+                  onChange={() => setEntityType(value)}
+                  className="accent-brand-600"
+                />
+                {value === 'individual' ? tP('entityIndividual') : tP('entityCompany')}
+              </label>
+            ))}
+          </div>
+        </fieldset>
+      )}
+      <button
+        type="button"
+        onClick={() => void open()}
+        disabled={busy}
+        aria-disabled={busy}
+        data-testid={stage === 'continue' ? 'seguir-alta-stripe' : 'conectar-cobros'}
+        className={primary}
+      >
+        {busy ? <ButtonSpinner /> : <Icon name="briefcase" size={18} />}
+        {busy
+          ? tP('connectingCta')
+          : stage === 'continue'
+            ? tP('continueCta')
+            : t('pasos.payments.boton')}
+      </button>
+      <p
+        role="status"
+        aria-live="polite"
+        className={cn('mt-2 max-w-[60ch] text-sm', busy ? 'text-text-muted' : 'sr-only')}
+        data-testid="cobros-alta-espera"
+      >
+        {busy ? tP('connectingHint') : ''}
+      </p>
+      {errorText ? (
+        <p role="alert" className="mt-2 max-w-[60ch] text-sm font-semibold text-danger-700">
+          {errorText}
+        </p>
+      ) : null}
+      {stage === 'connect' ? (
+        <>
+          <p className="mt-3 max-w-[60ch] text-sm text-text-subtle" data-testid="aviso-telefono">
+            {tP('supportPhoneNote')}
+          </p>
+          <Link
+            href={view.paymentsSetupPath}
+            className="mt-2 inline-block text-sm font-semibold text-brand-600 hover:underline"
+          >
+            {t('pasos.payments.otroPais')}
+          </Link>
+        </>
+      ) : null}
+    </div>
+  );
+}
+
+/** Alta enviada y en revisión, o rechazada: no hay botón que pulsar aquí. */
+function PayoutsStateNote({ kind }: { kind: 'review' | 'rejected' }) {
+  const tP = useTranslations('adminPagos.payouts');
+  return (
+    <p
+      role="status"
+      data-testid={`cobros-${kind}`}
+      className={cn(
+        'mt-4 max-w-[60ch] rounded-xl border p-3.5 text-[15px] leading-relaxed',
+        kind === 'review'
+          ? 'border-brand-100 bg-brand-50 text-brand-800'
+          : 'border-danger-100 bg-danger-50 text-danger-700',
+      )}
+    >
+      {kind === 'review' ? tP('review') : tP('rejected')}
+    </p>
   );
 }
 

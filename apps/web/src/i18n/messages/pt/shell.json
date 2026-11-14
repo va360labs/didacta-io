@@ -1,6 +1,7 @@
 {
   "closeMenu": "Fechar menu",
   "openMenu": "Abrir menu de navegação",
+  "loading": "Carregando…",
   "sections": {
     "myProfile": "Meu perfil",
     "groups": "Grupos",

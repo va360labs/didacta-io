@@ -758,7 +758,9 @@ export class PayoutsDisputesService {
           source: 'payouts',
           localRef: sale.id,
           parentObjectId: sale.stripeChargeId,
-          livemode: false,
+          // La transferencia la acaba de crear la clave de la plataforma: es de
+          // su modo. Antes iba `false` fijo y en real quedaba como de prueba.
+          livemode: this.stripe.livemode,
         });
       }
       await tx.modPayoutsDispute.updateMany({

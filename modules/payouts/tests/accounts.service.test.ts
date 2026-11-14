@@ -768,6 +768,178 @@ describe('PayoutsAccountsService', () => {
     });
   });
 
+  // Prueba real del 14-nov-2026: se preguntaba lo mismo varias veces. Lo que
+  // ya sabemos viaja al CREAR la cuenta (después Stripe no deja escribirlo).
+  const FISCALES = {
+    country: 'ES',
+    entityType: 'individual',
+    address: {
+      line1: 'Calle Ancha 1',
+      line2: null,
+      postalCode: '11001',
+      city: 'Cádiz',
+      state: 'CA',
+    },
+    birthDate: { year: 1990, month: 2, day: 28 },
+    taxId: '12345678Z',
+  };
+
+  it('alta con lo que ya sabemos (v2): correo de la persona, atención y datos fiscales precargados', async () => {
+    await service.startOnboarding({
+      tenantId: TENANT_A,
+      country: 'ES',
+      entityType: 'individual',
+      prefill: { ...PREFILL, supportEmail: 'admin@academia.test', identity: FISCALES },
+      urls: URLS,
+    });
+    const [create] = fake.callsTo('POST', '/v2/core/accounts');
+    expect(create!.params).toMatchObject({
+      identity: {
+        country: 'es',
+        entity_type: 'individual',
+        individual: {
+          email: 'admin@academia.test',
+          address: {
+            country: 'es',
+            line1: 'Calle Ancha 1',
+            postal_code: '11001',
+            city: 'Cádiz',
+            state: 'CA',
+          },
+          date_of_birth: { year: 1990, month: 2, day: 28 },
+          id_numbers: [{ type: 'es_nif', value: '12345678Z' }],
+        },
+      },
+      configuration: {
+        merchant: {
+          support: { email: 'admin@academia.test', url: 'https://academia.didacta.cloud' },
+        },
+      },
+    });
+    // Nada de teléfono: el móvil personal no se publica por nuestra cuenta.
+    const merchant = (create!.params['configuration'] as Record<string, Record<string, unknown>>)[
+      'merchant'
+    ]!;
+    expect(merchant['support']).not.toHaveProperty('phone');
+  });
+
+  it('sin datos fiscales (lo normal: se conecta primero) van igual el correo de la persona y el de atención', async () => {
+    await service.startOnboarding({
+      tenantId: TENANT_A,
+      country: 'ES',
+      entityType: 'individual',
+      prefill: { ...PREFILL, supportEmail: 'admin@academia.test' },
+      urls: URLS,
+    });
+    const [create] = fake.callsTo('POST', '/v2/core/accounts');
+    expect(create!.params['identity']).toEqual({
+      country: 'es',
+      entity_type: 'individual',
+      individual: { email: 'admin@academia.test' },
+    });
+  });
+
+  it('empresa: razón social y CIF en business_details, sin datos de persona', async () => {
+    await service.startOnboarding({
+      tenantId: TENANT_A,
+      country: 'ES',
+      entityType: 'company',
+      prefill: {
+        ...PREFILL,
+        identity: {
+          ...FISCALES,
+          entityType: 'company',
+          companyName: 'Academia Prueba SL',
+          birthDate: null,
+          taxId: 'B12345674',
+        },
+      },
+      urls: URLS,
+    });
+    const [create] = fake.callsTo('POST', '/v2/core/accounts');
+    const identity = create!.params['identity'] as Record<string, unknown>;
+    expect(identity).toMatchObject({
+      entity_type: 'company',
+      business_details: {
+        registered_name: 'Academia Prueba SL',
+        id_numbers: [{ type: 'es_cif', value: 'B12345674' }],
+        address: expect.objectContaining({ state: 'CA' }),
+      },
+    });
+    expect(identity).not.toHaveProperty('individual');
+  });
+
+  it('Stripe rechaza un dato precargado → la cuenta se crea igual sin precarga, con otra clave', async () => {
+    fake.failNext('/v2/core/accounts', {
+      message: 'Address state is invalid.',
+      status: 400,
+      stripeCode: 'address_state_invalid',
+      param: 'identity.individual.address.state',
+    });
+    const result = await service.startOnboarding({
+      tenantId: TENANT_A,
+      country: 'ES',
+      entityType: 'individual',
+      prefill: { ...PREFILL, supportEmail: 'admin@academia.test', identity: FISCALES },
+      urls: URLS,
+    });
+    expect(result.account.stripeAccountId).toMatch(/^acct_/);
+    const creates = fake.callsTo('POST', '/v2/core/accounts');
+    expect(creates).toHaveLength(2);
+    expect(creates[1]!.options.idempotencyKey).toMatch(/:sin-precarga$/);
+    expect(creates[1]!.params['identity']).toEqual({ country: 'es', entity_type: 'individual' });
+    const merchant = (
+      creates[1]!.params['configuration'] as Record<string, Record<string, unknown>>
+    )['merchant']!;
+    expect(merchant).not.toHaveProperty('support');
+  });
+
+  it('control: un error de Stripe que no es de la precarga no se reintenta', async () => {
+    fake.failNext('/v2/core/accounts', {
+      message: 'Platform must be activated to create connected accounts.',
+      status: 400,
+      stripeCode: 'account_create_activation_required',
+    });
+    const err = await service
+      .startOnboarding({
+        tenantId: TENANT_A,
+        country: 'ES',
+        entityType: 'individual',
+        prefill: { ...PREFILL, supportEmail: 'admin@academia.test', identity: FISCALES },
+        urls: URLS,
+      })
+      .catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(PlatformStripeApiError);
+    expect(fake.callsTo('POST', '/v2/core/accounts')).toHaveLength(1);
+  });
+
+  it('alternativa v1: la misma precarga en individual y business_profile', async () => {
+    const built = buildFake('v1');
+    const v1 = new PayoutsAccountsService(db, built.api, CONFIG, { retryDelayMs: 0 });
+    await v1.startOnboarding({
+      tenantId: TENANT_A,
+      country: 'ES',
+      entityType: 'individual',
+      prefill: { ...PREFILL, supportEmail: 'admin@academia.test', identity: FISCALES },
+      urls: URLS,
+    });
+    const [create] = built.fake.callsTo('POST', '/v1/accounts');
+    expect(create!.params).toMatchObject({
+      business_type: 'individual',
+      business_profile: {
+        support_email: 'admin@academia.test',
+        support_url: 'https://academia.didacta.cloud',
+      },
+      individual: {
+        email: 'admin@academia.test',
+        address: { country: 'ES', state: 'CA', postal_code: '11001' },
+        dob: { year: 1990, month: 2, day: 28 },
+        id_number: '12345678Z',
+      },
+    });
+    expect(create!.params['business_profile']).not.toHaveProperty('support_phone');
+  });
+
   it('syncAccount consulta Stripe SIEMPRE y sella ready_at al llegar a READY (una sola vez)', async () => {
     const { account } = await service.startOnboarding({
       tenantId: TENANT_A,

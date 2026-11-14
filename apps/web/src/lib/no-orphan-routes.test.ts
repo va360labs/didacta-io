@@ -68,7 +68,8 @@ const ALLOWLIST: Record<string, { kind: AllowKind; reason: string }> = {
   '/studio/paths/new': { kind: 'reachable', reason: 'acción "Nueva ruta" en /studio/paths' },
   '/home': {
     kind: 'reachable',
-    reason: 'redirige a /community (stub histórico, referenciado en layout)',
+    reason:
+      'aterrizaje tras el login: lleva a /start (admin de aula sencilla con pasos pendientes) o a /community',
   },
   '/notifications': { kind: 'reachable', reason: 'icono de campana (notifications-bell)' },
   '/admin/integrations/api': {
