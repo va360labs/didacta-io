@@ -85,7 +85,13 @@ interface DidactaRuntime {
     AlertDialogHeader: any;
     AlertDialogTitle: any;
   };
-  hooks: { useTenantContext: any };
+  hooks: {
+    useTenantContext: any;
+    /** Runtime 1.1.0+: idioma activo (`es-ES`, `en-US`, `pt-BR`…), reactivo. */
+    useLocale?: () => string;
+  };
+  /** Runtime 1.1.0+. Un host 1.0.0 no lo trae: ver `useLocale` abajo. */
+  i18n?: { getLocale: () => string };
   api: {
     fetch: <T>(path: string, init?: RequestInit, bearer?: string) => Promise<T>;
     fetchAuth: <T>(path: string, init?: RequestInit) => Promise<T>;
@@ -123,6 +129,19 @@ export const useRef = runtime.React.useRef;
 export const useCallback = runtime.React.useCallback;
 export const useMemo = runtime.React.useMemo;
 export const Fragment = runtime.React.Fragment;
+
+/**
+ * Idioma activo de la interfaz del host (tag BCP 47). Con un host 1.1.0+ es
+ * el `useLocale` de next-intl (reactivo). Con un host 1.0.0 cae a lo que ya
+ * fija el layout raíz en `<html lang>`, y si no, a español: el módulo sigue
+ * funcionando en un host viejo, solo que sin enterarse de un cambio de idioma
+ * en caliente. Por eso no hace falta subir `coreVersionRequired`.
+ */
+export const useLocale: () => string =
+  runtime.hooks.useLocale ??
+  ((): string =>
+    runtime.i18n?.getLocale() ??
+    (typeof document !== 'undefined' ? document.documentElement.lang : ''));
 
 // UI components (shadcn/ui).
 export const Badge = runtime.ui.Badge;

@@ -22,7 +22,8 @@
 /// alpha.60: primera versión del surface — antes la UI vivía en apps/web/
 /// (anti-patrón corregido por ADR-015).
 
-import { React, useState, Tabs, TabsContent, TabsList, TabsTrigger } from './_runtime';
+import { React, useState, useLocale, Tabs, TabsContent, TabsList, TabsTrigger } from './_runtime';
+import { setActiveLocale, t } from './i18n';
 import { MigratorWizard } from './wizard';
 import { JobsMonitor } from './jobs-monitor';
 
@@ -33,6 +34,10 @@ interface AdminSurfaceProps {
 }
 
 function AdminSurface(_props: AdminSurfaceProps): React.ReactElement {
+  // Idioma del host (es/en/pt) ANTES de pintar nada: todos los hijos leen sus
+  // textos con `t()`. Al ser un hook, si el idioma cambia se vuelve a pintar
+  // la superficie entera con el nuevo.
+  setActiveLocale(useLocale());
   const [tab, setTab] = useState<'wizard' | 'monitor'>('wizard');
   return (
     <Tabs
@@ -41,8 +46,8 @@ function AdminSurface(_props: AdminSurfaceProps): React.ReactElement {
       className="space-y-6"
     >
       <TabsList>
-        <TabsTrigger value="wizard">Crear migración</TabsTrigger>
-        <TabsTrigger value="monitor">Monitor de migraciones</TabsTrigger>
+        <TabsTrigger value="wizard">{t('admin.tabs.wizard')}</TabsTrigger>
+        <TabsTrigger value="monitor">{t('admin.tabs.monitor')}</TabsTrigger>
       </TabsList>
       <TabsContent value="wizard">
         <MigratorWizard />
