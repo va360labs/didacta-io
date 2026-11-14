@@ -20,6 +20,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { TenantContextService } from '../../tenancy/tenant-context.service';
 import { PrismaAuditLogService } from '../prisma-audit-log.service';
 import { ModuleRegistryService } from '../module-registry.service';
+import { countLiveCourseGrants } from './live-course-grants';
 
 type LearningServiceLike = ReturnType<ModuleRegistryService['getLearningService']>;
 
@@ -114,6 +115,11 @@ export class AccessGroupsService {
   ) {}
 
   // ----------------------------- Lectura -----------------------------
+
+  /** ¿Algún grupo le sigue dando este curso a esta persona? */
+  async hasLiveCourseGrant(tenantId: string, userId: string, courseId: string): Promise<boolean> {
+    return (await countLiveCourseGrants(this.prisma, tenantId, userId, courseId)) > 0;
+  }
 
   async listGroups(
     tenantId: string,
@@ -814,9 +820,7 @@ export class AccessGroupsService {
         where: { tenantId, groupId, userId, courseId, revokedAt: null },
         data: { revokedAt: new Date() },
       });
-      const liveGrants = await tx.modAccessGroupGrant.count({
-        where: { tenantId, userId, courseId, revokedAt: null },
-      });
+      const liveGrants = await countLiveCourseGrants(tx, tenantId, userId, courseId);
       return liveGrants === 0;
     });
     if (shouldUnenroll) {

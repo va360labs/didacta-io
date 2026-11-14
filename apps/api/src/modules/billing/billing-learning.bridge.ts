@@ -55,7 +55,17 @@ export class BillingLearningBridge implements OnModuleInit {
     const tenantId = event.metadata.tenantId;
 
     try {
-      await this.registry.getLearningService().enrollFromPurchase(tenantId, userId, courseId);
+      const enrollment = await this.registry
+        .getLearningService()
+        .enrollFromPurchase(tenantId, userId, courseId);
+      // Vuelve a comprar un curso que ya había terminado y que se le retiró por
+      // un reembolso: la matrícula vuelve COMPLETED y su certificado, que se
+      // revocó por el reembolso, vuelve a valer. Otra revocación no se toca.
+      if (enrollment?.status === 'COMPLETED') {
+        await this.registry
+          .getCertificatesService()
+          .restoreRevokedForRefund(tenantId, userId, courseId);
+      }
       this.logger.log(
         { tenantId, userId, courseId, orderId },
         'BillingLearningBridge: enrolled after purchase',

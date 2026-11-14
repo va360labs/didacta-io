@@ -42,6 +42,13 @@ export interface TemplateInput {
 export type TemplateUpdateInput = Partial<TemplateInput>;
 
 /**
+ * Motivo con el que se revoca un certificado cuando se reembolsa la compra del
+ * curso. Es lo que distingue esta revocación de cualquier otra: solo una
+ * revocación por reembolso se deshace si la persona vuelve a comprar el curso.
+ */
+export const CERTIFICATE_REVOKE_REASON_REFUND = 'refund';
+
+/**
  * Que unique violo un P2002 de Prisma. `meta.target` llega unas veces como
  * lista de columnas y otras como nombre del indice, asi que se mira el texto.
  * Devuelve null si el error no es una violacion de unicidad.
@@ -226,6 +233,49 @@ export class CertificatesService {
     });
 
     return created;
+  }
+
+  /**
+   * Revoca los certificados VIGENTES de un alumno en un curso. No los borra: la
+   * fila queda con `revokedAt` y `revokeReason`, el PDF sigue en storage y la
+   * verificación pública (`/verify/:id`) pasa a responder `valid: false`.
+   *
+   * Idempotente: devuelve cuántos se revocaron ahora (0 si ya lo estaban).
+   */
+  async revokeForCourse(
+    tenantId: string,
+    userId: string,
+    courseId: string,
+    reason: string,
+  ): Promise<number> {
+    const { count } = await this.prisma.modCertificatesIssued.updateMany({
+      where: { tenantId, userId, courseId, revokedAt: null },
+      data: { revokedAt: new Date(), revokeReason: reason.slice(0, 200) },
+    });
+    return count;
+  }
+
+  /**
+   * Deshace SOLO la revocación por reembolso de un alumno en un curso: si vuelve
+   * a comprar un curso que ya había terminado, su certificado vuelve a valer.
+   * Una revocación por otro motivo (la decidió alguien) no se toca.
+   */
+  async restoreRevokedForRefund(
+    tenantId: string,
+    userId: string,
+    courseId: string,
+  ): Promise<number> {
+    const { count } = await this.prisma.modCertificatesIssued.updateMany({
+      where: {
+        tenantId,
+        userId,
+        courseId,
+        revokedAt: { not: null },
+        revokeReason: CERTIFICATE_REVOKE_REASON_REFUND,
+      },
+      data: { revokedAt: null, revokeReason: null },
+    });
+    return count;
   }
 
   async listMyCertificates(tenantId: string, userId: string) {

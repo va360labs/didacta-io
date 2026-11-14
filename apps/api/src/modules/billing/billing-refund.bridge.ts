@@ -4,10 +4,13 @@
  */
 
 import { Injectable, type OnModuleInit } from '@nestjs/common';
+import { ModuleRef } from '@nestjs/core';
 import type { DomainEvent } from '@didacta/core-kernel';
 import { Logger as PinoLogger } from 'nestjs-pino';
+import { AccessGroupsService } from '../access-groups/access-groups.service';
 import { ModuleContextFactory } from '../module-context.factory';
 import { ModuleRegistryService } from '../module-registry.service';
+import { withdrawRefundedPurchaseAccess, type RefundAccessDeps } from './refund-access';
 
 /**
  * Puente entre mod.billing y mod.learning para los REEMBOLSOS: cuando se
@@ -16,9 +19,10 @@ import { ModuleRegistryService } from '../module-registry.service';
  * Antes de esto, devolver el dinero en Stripe no quitaba nada: el alumno
  * conservaba el curso para siempre.
  *
- * Solo cancela la matrícula de origen COMPRA. Si esa persona además es miembro
- * o tiene el curso por un grupo de acceso, ese acceso NO se toca: se le ha
- * devuelto su compra, no se le retira lo que ya tenía por otra vía.
+ * El criterio vive en `withdrawRefundedPurchaseAccess` (`refund-access.ts`):
+ * otra compra viva del curso o un grupo que lo sigue dando mantienen el acceso;
+ * si no, se cancela la matrícula de compra —también COMPLETED— y se revocan sus
+ * certificados. Lo usa igual el script de corrección de reembolsos antiguos.
  *
  * `billing.order.refunded` solo se emite en reembolsos TOTALES (uno parcial no
  * llega hasta aquí), y la operación es idempotente, así que una reentrega del
@@ -28,7 +32,7 @@ interface BillingOrderRefundedPayload {
   orderId: string;
   productId: string;
   courseId: string;
-  userId: string;
+  userId: string | null;
   amountRefunded?: number;
 }
 
@@ -38,6 +42,7 @@ export class BillingRefundBridge implements OnModuleInit {
     private readonly registry: ModuleRegistryService,
     private readonly factory: ModuleContextFactory,
     private readonly logger: PinoLogger,
+    private readonly moduleRef: ModuleRef,
   ) {}
 
   onModuleInit(): void {
@@ -55,15 +60,29 @@ export class BillingRefundBridge implements OnModuleInit {
     const { courseId, userId, orderId } = event.data;
     const tenantId = event.metadata.tenantId;
 
-    const cancelled = await this.registry
-      .getLearningService()
-      .unenrollFromPurchase(tenantId, userId, courseId);
+    const result = await withdrawRefundedPurchaseAccess(this.deps(), {
+      tenantId,
+      orderId,
+      userId: userId ?? null,
+      courseId,
+    });
 
     this.logger.log(
-      { tenantId, orderId, userId, courseId, cancelled },
-      cancelled > 0
+      { tenantId, orderId, userId, courseId, ...result },
+      result.outcome === 'withdrawn'
         ? 'BillingRefundBridge: acceso retirado tras el reembolso'
-        : 'BillingRefundBridge: reembolso sin matrícula de compra viva (no-op)',
+        : `BillingRefundBridge: reembolso sin acceso que retirar (${result.outcome})`,
     );
+  }
+
+  /** Los servicios reales. Los grupos, perezosos: importarlos aquí cerraría un ciclo de módulos. */
+  deps(): RefundAccessDeps {
+    const groups = this.moduleRef.get(AccessGroupsService, { strict: false });
+    return {
+      billing: this.registry.getBillingService(),
+      learning: this.registry.getLearningService(),
+      certificates: this.registry.getCertificatesService(),
+      groups,
+    };
   }
 }

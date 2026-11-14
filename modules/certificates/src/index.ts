@@ -9,6 +9,7 @@ import { CertificatesService } from './certificates.service.js';
 
 export { manifest };
 export { CertificatesService };
+export { CERTIFICATE_REVOKE_REASON_REFUND } from './certificates.service.js';
 export {
   CERTIFICATE_COPY,
   CERTIFICATE_LANGS,

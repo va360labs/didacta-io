@@ -595,6 +595,27 @@ export class BillingService {
     await this.prisma.modBillingProduct.delete({ where: { id: product.id } });
   }
 
+  /**
+   * Otra compra COBRADA (y no reembolsada) del mismo curso por la misma persona,
+   * distinta de `excludeOrderId`. La usa la retirada de acceso tras un
+   * reembolso: la matrícula es una por (alumno, curso), así que si hay otra
+   * compra viva del curso —dos opciones de compra, o una segunda compra— esa
+   * matrícula es también suya y no se toca.
+   */
+  async findOtherLivePurchase(
+    tenantId: string,
+    userId: string,
+    courseId: string,
+    excludeOrderId: string,
+  ): Promise<string | null> {
+    const other = await this.prisma.modBillingOrder.findFirst({
+      where: { tenantId, userId, courseId, status: 'COMPLETED', id: { not: excludeOrderId } },
+      select: { id: true },
+      orderBy: { completedAt: 'desc' },
+    });
+    return other?.id ?? null;
+  }
+
   // ---------------- Checkout (alumno) ----------------
 
   async startCheckout(input: StartCheckoutInput): Promise<StartCheckoutResult> {
