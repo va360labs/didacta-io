@@ -14,9 +14,14 @@ import { ApiHttpError } from '@/lib/api-client';
 import { formatCents, formatDateTime, regionNameFormatter } from '@/lib/i18n/format';
 import { OTHER_COUNTRY, payoutsApi, payoutsStepView, type PayoutsStatusDto } from '@/lib/payouts';
 import {
+  PriceEditor,
+  TakeHomeEstimate,
+  usePriceOptions,
+} from '@/components/simple-price/price-editor';
+import {
   canPublish,
   currentStep,
-  parseAmount,
+  priceToConfirm,
   saleState,
   simpleModeApi,
   startHereHeadline,
@@ -216,6 +221,48 @@ function Step({
       {t('pasos.payments.pendienteFiscales')}
     </span>
   ) : null;
+
+  // El precio del alta es de partida: pendiente hasta confirmarlo o cambiarlo.
+  // No bloquea (publicar lo enseña y lo confirma), pero se ve y se resuelve aquí.
+  if (id === 'price' && !editing && priceToConfirm(view) && precio) {
+    return (
+      <li
+        className="grid grid-cols-[32px_minmax(0,1fr)] gap-3 border-t border-border py-4 first:border-t-0"
+        data-step={id}
+        data-done="0"
+      >
+        <span className="grid h-8 w-8 place-items-center rounded-full border-[1.5px] border-warning-500 bg-surface text-sm font-bold text-warning-700 tabular-nums">
+          {n}
+        </span>
+        <div>
+          <h3 className="flex items-center text-base font-semibold text-text">
+            {t('pasos.price.titulo')}
+            <span
+              className="ml-2 rounded-full bg-warning-50 px-2 py-0.5 text-[11px] font-bold text-warning-700"
+              data-testid="precio-por-confirmar"
+            >
+              {t('pasos.price.porConfirmar', { precio })}
+            </span>
+          </h3>
+          <p className="text-sm text-text-muted">{t('pasos.price.queConfirmar')}</p>
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <ConfirmPriceButton
+              view={view}
+              label={t('pasos.price.confirmar', { precio })}
+              onChange={onChange}
+            />
+            <button
+              type="button"
+              onClick={() => setEditing(true)}
+              className="inline-flex h-9 items-center rounded-lg px-2 text-sm font-semibold text-brand-600 hover:underline"
+            >
+              {t('cambiar')}
+            </button>
+          </div>
+        </div>
+      </li>
+    );
+  }
 
   if (!open && !editing) {
     return (
@@ -448,67 +495,74 @@ function HowItWorks({ items }: { items: string[] }) {
   );
 }
 
-function PriceForm({ view, onSaved }: { view: StartHereView; onSaved: () => Promise<void> }) {
+/** Confirmar el precio de partida tal cual: es guardarlo (el mismo `updatePrice`). */
+function ConfirmPriceButton({
+  view,
+  label,
+  onChange,
+}: {
+  view: StartHereView;
+  label: string;
+  onChange: () => Promise<void>;
+}) {
+  const [busy, setBusy] = useState(false);
+  const offer = view.offer;
+  if (!offer) return null;
+  return (
+    <button
+      type="button"
+      disabled={busy}
+      data-testid="confirmar-precio"
+      onClick={async () => {
+        setBusy(true);
+        try {
+          await simpleModeApi.updatePrice({
+            amountCents: offer.amountCents,
+            currency: offer.currency,
+          });
+          await onChange();
+        } finally {
+          setBusy(false);
+        }
+      }}
+      className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-warning-200 bg-warning-50 px-3 text-sm font-semibold text-warning-700 hover:border-warning-400 disabled:opacity-50"
+    >
+      <Icon name="check" size={15} />
+      {label}
+    </button>
+  );
+}
+
+function PriceForm({
+  view,
+  onSaved,
+  onCancel,
+}: {
+  view: StartHereView;
+  onSaved: () => Promise<void>;
+  onCancel?: () => void;
+}) {
   const t = useTranslations('modoSencillo');
   const offer = view.offer;
-  const [monedas, setMonedas] = useState<string[]>([offer?.currency ?? 'eur']);
-  const [moneda, setMoneda] = useState(offer?.currency ?? 'eur');
-  const [importe, setImporte] = useState(
-    offer && offer.amountCents > 0 ? String(offer.amountCents / 100).replace('.', ',') : '',
-  );
-  const [error, setError] = useState<string | null>(null);
-  const [saving, setSaving] = useState(false);
-  useEffect(() => {
-    simpleModeApi
-      .currencies()
-      .then((r) => setMonedas(r.currencies))
-      .catch(() => undefined);
-  }, []);
-  async function save() {
-    const cents = parseAmount(importe, moneda);
-    if (!cents) return setError(t('alta.faltaPrecio'));
-    setSaving(true);
-    try {
-      await simpleModeApi.updatePrice({ amountCents: cents, currency: moneda });
-      await onSaved();
-    } catch {
-      setError(t('curso.error'));
-    } finally {
-      setSaving(false);
-    }
-  }
   return (
     <div className="mt-4">
-      <div className="grid max-w-[360px] grid-cols-[minmax(0,1fr)_110px] gap-2">
-        <input
-          aria-label={t('alta.precio')}
-          inputMode="decimal"
-          value={importe}
-          onChange={(e) => setImporte(e.target.value)}
-          className="h-12 rounded-xl border border-border bg-surface px-3 text-xl font-bold text-text tabular-nums outline-none focus:border-brand-600 focus:ring-4 focus:ring-brand-100"
-        />
-        <select
-          aria-label={t('alta.moneda')}
-          value={moneda}
-          onChange={(e) => setMoneda(e.target.value)}
-          className="h-12 rounded-xl border border-border bg-surface px-2 font-semibold text-text"
-        >
-          {monedas.map((m) => (
-            <option key={m} value={m}>
-              {m.toUpperCase()}
-            </option>
-          ))}
-        </select>
-      </div>
-      {error ? <p className="mt-2 text-sm text-danger-700">{error}</p> : null}
-      <button
-        type="button"
-        onClick={save}
-        disabled={saving}
-        className="mt-3 inline-flex h-11 items-center rounded-xl bg-brand-600 px-5 font-semibold text-white hover:bg-brand-700 disabled:opacity-50"
-      >
-        {t('empieza.pasos.price.guardar')}
-      </button>
+      <PriceEditor
+        amountCents={offer?.amountCents ?? 0}
+        currency={offer?.currency ?? 'eur'}
+        amountLabel={t('alta.precio')}
+        currencyLabel={t('alta.moneda')}
+        saveLabel={t('empieza.pasos.price.guardar')}
+        cancelLabel={onCancel ? t('curso.precioVenta.cancelar') : undefined}
+        onCancel={onCancel}
+        invalidText={t('alta.faltaPrecio')}
+        errorText={t('curso.error')}
+        size="lg"
+        testId="paso-precio-editor"
+        onSave={async (price) => {
+          await simpleModeApi.updatePrice(price);
+          await onSaved();
+        }}
+      />
     </div>
   );
 }
@@ -517,6 +571,13 @@ function PublishButton({ view, onChange }: { view: StartHereView; onChange: () =
   const t = useTranslations('modoSencillo.empieza');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [changing, setChanging] = useState(false);
+  const offer = view.offer;
+  const { fees } = usePriceOptions(offer?.currency ?? 'eur');
+  const precio =
+    offer && offer.amountCents > 0
+      ? formatCents(offer.amountCents, offer.currency.toUpperCase())
+      : null;
   const ready = canPublish(view);
   // Sin datos fiscales se publica igual (web #39), pero se dice ANTES de
   // pulsar: el dinero de las ventas se queda retenido hasta completarlos.
@@ -545,15 +606,64 @@ function PublishButton({ view, onChange }: { view: StartHereView; onChange: () =
   }
   return (
     <div>
+      {/* Lo que se va a publicar y a qué precio, con lo que le llega y la
+          opción de cambiarlo aquí mismo (venta real: se publicó a un precio
+          que nadie volvió a mirar). Publicar a este precio lo confirma. */}
+      {precio && offer ? (
+        <div
+          className="mt-4 rounded-xl border border-border bg-bg-subtle p-3"
+          data-testid="publicar-precio"
+        >
+          {changing ? (
+            <PriceForm
+              view={view}
+              onCancel={() => setChanging(false)}
+              onSaved={async () => {
+                setChanging(false);
+                await onChange();
+              }}
+            />
+          ) : (
+            <>
+              <p className="text-[15px] text-text">
+                {offer.kind === 'membership'
+                  ? t('pasos.publish.resumenMembresia', { precio })
+                  : t('pasos.publish.resumenCurso', {
+                      titulo: offer.courseTitle ?? '',
+                      precio,
+                    })}
+              </p>
+              <TakeHomeEstimate
+                amount={offer.amountCents}
+                currency={offer.currency}
+                fees={fees}
+                className="mt-1"
+              />
+              <button
+                type="button"
+                onClick={() => setChanging(true)}
+                className="mt-2 text-sm font-semibold text-brand-600 hover:underline"
+                data-testid="publicar-cambiar-precio"
+              >
+                {t('pasos.publish.cambiarPrecio')}
+              </button>
+            </>
+          )}
+        </div>
+      ) : null}
       <button
         type="button"
         onClick={publish}
-        disabled={busy || !ready}
+        disabled={busy || !ready || changing}
         data-testid="publicar"
         className="mt-4 inline-flex h-11 items-center gap-2 rounded-xl bg-brand-600 px-5 text-[15px] font-semibold text-white hover:bg-brand-700 disabled:opacity-50"
       >
         <Icon name="globe" size={18} />
-        {busy ? t('pasos.publish.publicando') : t('pasos.publish.boton')}
+        {busy
+          ? t('pasos.publish.publicando')
+          : precio
+            ? t('pasos.publish.botonPrecio', { precio })
+            : t('pasos.publish.boton')}
       </button>
       {!ready ? (
         <p className="mt-2 text-sm text-text-subtle">{t('pasos.publish.faltaAntes')}</p>

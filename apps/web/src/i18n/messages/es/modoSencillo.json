@@ -140,7 +140,10 @@
         "titulo": "Precio",
         "que": "Lo que pagará cada alumno.",
         "hecho": "{precio}",
-        "guardar": "Guardar precio"
+        "guardar": "Guardar precio",
+        "porConfirmar": "{precio} · por confirmar",
+        "queConfirmar": "Es el precio que pusiste al empezar. Confírmalo o cámbialo antes de publicar.",
+        "confirmar": "Confirmar {precio}"
       },
       "payments": {
         "titulo": "Conecta tus cobros",
@@ -165,7 +168,11 @@
         "boton": "Publicar y crear mi enlace",
         "publicando": "Publicando…",
         "faltaAntes": "Primero completa los pasos de arriba.",
-        "avisoRetenido": "Puedes publicar ya: tus alumnos podrán comprar, pero el dinero de tus ventas se quedará retenido hasta que completes tus datos fiscales."
+        "avisoRetenido": "Puedes publicar ya: tus alumnos podrán comprar, pero el dinero de tus ventas se quedará retenido hasta que completes tus datos fiscales.",
+        "botonPrecio": "Publicar a {precio}",
+        "resumenCurso": "Vas a publicar «{titulo}» a {precio}.",
+        "resumenMembresia": "Vas a publicar tu membresía a {precio}.",
+        "cambiarPrecio": "Cambiar precio"
       },
       "invite": {
         "titulo": "Invita a tus primeros alumnos",
@@ -307,6 +314,33 @@
         "sinCorrecta": "Marca la respuesta correcta de la pregunta {n}.",
         "unaCorrecta": "La pregunta {n} tiene más de una respuesta correcta: marca «Varias respuestas correctas» o deja solo una."
       }
+    },
+    "precioVenta": {
+      "titulo": "Precio y venta",
+      "precio": "Precio",
+      "moneda": "Moneda",
+      "pagoUnico": "pago único",
+      "periodo": "{n, plural, one {al mes} other {cada # meses}}",
+      "aLaVenta": "A la venta",
+      "sinPublicar": "Sin publicar",
+      "noComprable": "Aún no se puede comprar",
+      "sinPrecio": "Todavía sin precio",
+      "copiar": "Copiar enlace",
+      "copiado": "Copiado",
+      "verPagina": "Ver página de venta",
+      "cambiar": "Cambiar precio",
+      "guardar": "Guardar precio",
+      "cancelar": "Cancelar",
+      "guardado": "Precio guardado",
+      "error": "No se ha podido cambiar el precio. Inténtalo de nuevo.",
+      "invalido": "Escribe un precio mayor que cero.",
+      "notaOferta": "Es el mismo precio que en Empieza aquí: es uno solo, cámbialo donde te venga mejor.",
+      "notaMembresia": "Este curso va dentro de tu membresía «{plan}»: su precio es el de la membresía.",
+      "notaAparte": "Este curso se vende por separado, con su propio enlace.",
+      "notaNoAparte": "Lo que vendes ahora es «{oferta}». Este curso no se vende por separado.",
+      "notaNoPublicado": "El enlace de venta se enciende al publicar desde Empieza aquí.",
+      "notaNoComprable": "Conecta tus cobros para que se pueda comprar.",
+      "irEmpieza": "Ir a Empieza aquí"
     }
   },
   "perfil": {

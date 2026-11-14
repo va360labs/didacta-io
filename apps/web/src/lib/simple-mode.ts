@@ -10,6 +10,7 @@ import type { AcademyLocale } from '@/i18n/config';
 import { ApiHttpError, apiFetch } from './api-client';
 import { authStorage } from './auth-storage';
 import { meApi } from './me';
+import type { PriceFees } from './price-estimate';
 import { majorToMinor } from './stripe-currencies';
 
 /**
@@ -142,6 +143,23 @@ export interface StartHereView {
   taxProfilePending?: boolean;
   /** Dónde se completan los datos fiscales. */
   taxProfilePath?: string;
+  /**
+   * El creador confirmó el precio. El del alta en 3 preguntas es de partida:
+   * sin confirmar, el paso «Precio» sigue pendiente (no bloquea: publicar lo
+   * enseña y lo confirma). Ausente en una API anterior: confirmado.
+   */
+  priceConfirmed?: boolean;
+}
+
+/** Precio y venta de un curso (`GET /admin/simple-mode/courses/:id/sale`). */
+export interface CourseSaleView {
+  courseId: string;
+  role: 'offer' | 'membership' | 'separate';
+  price: { amountCents: number; currency: string; intervalMonths: number | null } | null;
+  state: SaleState;
+  salePath: string | null;
+  editable: boolean;
+  offerTitle: string | null;
 }
 
 /**
@@ -152,7 +170,21 @@ export interface StartHereView {
  */
 export type SaleState = 'on-sale' | 'not-purchasable' | 'unpublished';
 
-type StepsView = Pick<StartHereView, 'steps' | 'taxProfilePending'>;
+type StepsView = Pick<StartHereView, 'steps' | 'taxProfilePending'> &
+  Partial<Pick<StartHereView, 'offer' | 'priceConfirmed'>>;
+
+/**
+ * Precio puesto pero sin confirmar (el del alta en 3 preguntas): el paso
+ * «Precio» sigue pendiente, pero no bloquea el camino: publicar enseña el
+ * precio y lo confirma.
+ */
+export function priceToConfirm(view: StepsView): boolean {
+  return (
+    view.priceConfirmed === false &&
+    (view.offer?.amountCents ?? 0) > 0 &&
+    view.steps.find((s) => s.id === 'price')?.done !== true
+  );
+}
 
 /**
  * ¿Puede cobrar ya la cuenta? Con el paso de cobros hecho, o con la cuenta
@@ -172,13 +204,18 @@ export function paymentsCanSell(view: StepsView): boolean {
  */
 export function currentStep(view: StepsView): StepId | null {
   const skipPayments = view.taxProfilePending === true;
-  return view.steps.find((s) => !s.done && !(skipPayments && s.id === 'payments'))?.id ?? null;
+  const skipPrice = priceToConfirm(view);
+  return (
+    view.steps.find(
+      (s) => !s.done && !(skipPayments && s.id === 'payments') && !(skipPrice && s.id === 'price'),
+    )?.id ?? null
+  );
 }
 
 /** ¿Se puede publicar ya? Curso con lección, precio y una cuenta que pueda cobrar. */
 export function canPublish(view: StepsView): boolean {
   const done = new Set(view.steps.filter((s) => s.done).map((s) => s.id));
-  return done.has('course') && done.has('price') && paymentsCanSell(view);
+  return done.has('course') && (done.has('price') || priceToConfirm(view)) && paymentsCanSell(view);
 }
 
 export function saleState(
@@ -266,8 +303,31 @@ export const simpleModeApi = {
     window.dispatchEvent(new CustomEvent(SIMPLE_MODE_CHANGED_EVENT, { detail: r.enabled }));
     return r.enabled;
   },
-  currencies(): Promise<{ currencies: string[]; settlementCurrency: string | null }> {
+  /** Monedas y comisiones para estimar lo que le llega (`fees` falta en una API anterior). */
+  currencies(): Promise<{
+    currencies: string[];
+    settlementCurrency: string | null;
+    fees?: PriceFees;
+  }> {
     return apiFetch(`${BASE}/currencies`, { method: 'GET' }, bearer());
+  },
+  courseSale(courseId: string): Promise<CourseSaleView> {
+    return apiFetch(
+      `${BASE}/courses/${encodeURIComponent(courseId)}/sale`,
+      { method: 'GET' },
+      bearer(),
+    );
+  },
+  /** El mismo cambio que el paso «Precio» (o su opción de compra si se vende aparte). */
+  updateCoursePrice(
+    courseId: string,
+    price: { amountCents: number; currency: string },
+  ): Promise<CourseSaleView> {
+    return apiFetch(
+      `${BASE}/courses/${encodeURIComponent(courseId)}/price`,
+      { method: 'PUT', body: JSON.stringify(price) },
+      bearer(),
+    );
   },
   quickStart(input: QuickStartInput): Promise<{ offer: OfferView }> {
     return apiFetch(

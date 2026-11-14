@@ -140,7 +140,10 @@
         "titulo": "Price",
         "que": "What each student will pay.",
         "hecho": "{precio}",
-        "guardar": "Save price"
+        "guardar": "Save price",
+        "porConfirmar": "{precio} · to confirm",
+        "queConfirmar": "It is the price you set when you started. Confirm it or change it before publishing.",
+        "confirmar": "Confirm {precio}"
       },
       "payments": {
         "titulo": "Connect your payouts",
@@ -165,7 +168,11 @@
         "boton": "Publish and create my link",
         "publicando": "Publishing…",
         "faltaAntes": "Finish the steps above first.",
-        "avisoRetenido": "You can publish now: students will be able to buy, but the money from your sales will stay on hold until you complete your tax details."
+        "avisoRetenido": "You can publish now: students will be able to buy, but the money from your sales will stay on hold until you complete your tax details.",
+        "botonPrecio": "Publish at {precio}",
+        "resumenCurso": "You are about to publish “{titulo}” at {precio}.",
+        "resumenMembresia": "You are about to publish your membership at {precio}.",
+        "cambiarPrecio": "Change price"
       },
       "invite": {
         "titulo": "Invite your first students",
@@ -307,6 +314,33 @@
         "sinCorrecta": "Mark the correct answer for question {n}.",
         "unaCorrecta": "Question {n} has more than one correct answer: tick “More than one correct answer” or keep just one."
       }
+    },
+    "precioVenta": {
+      "titulo": "Price and sales",
+      "precio": "Price",
+      "moneda": "Currency",
+      "pagoUnico": "one-off payment",
+      "periodo": "{n, plural, one {per month} other {every # months}}",
+      "aLaVenta": "On sale",
+      "sinPublicar": "Not published",
+      "noComprable": "Cannot be bought yet",
+      "sinPrecio": "No price yet",
+      "copiar": "Copy link",
+      "copiado": "Copied",
+      "verPagina": "View sales page",
+      "cambiar": "Change price",
+      "guardar": "Save price",
+      "cancelar": "Cancel",
+      "guardado": "Price saved",
+      "error": "Could not change the price. Try again.",
+      "invalido": "Write a price greater than zero.",
+      "notaOferta": "It is the same price as in Start here: there is only one, change it wherever suits you.",
+      "notaMembresia": "This course is part of your membership “{plan}”: its price is the membership price.",
+      "notaAparte": "This course is sold separately, with its own link.",
+      "notaNoAparte": "What you sell now is “{oferta}”. This course is not sold separately.",
+      "notaNoPublicado": "The sales link switches on when you publish from Start here.",
+      "notaNoComprable": "Connect your payouts so people can buy.",
+      "irEmpieza": "Go to Start here"
     }
   },
   "perfil": {

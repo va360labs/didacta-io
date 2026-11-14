@@ -88,8 +88,14 @@ function CourseEditorCompleto() {
           </Link>
         </Button>
       </div>
+      {/* El precio, arriba: es lo primero que se busca al editar un curso que
+          se vende (antes quedaba debajo del editor entero). */}
+      <PricePanel
+        courseId={course.id}
+        published={course.status === 'PUBLISHED'}
+        courseSlug={course.slug}
+      />
       <CourseEditor initial={course} onChange={reload} />
-      <PricePanel courseId={course.id} published={course.status === 'PUBLISHED'} />
       <DripPanel courseId={course.id} />
       <InvitationsPanel courseId={course.id} />
     </div>
