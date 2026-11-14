@@ -69,11 +69,27 @@ test('Fundae: la modalidad se lee con su etiqueta, nunca con el valor interno', 
   expect(opciones).toEqual(['Presencial', 'Teleformación', 'Mixta']);
   expect(await page.locator('body').innerText()).not.toContain('TELEFORMACION');
 
-  // Control en inglés: la etiqueta del catálogo inglés, tampoco el valor interno.
-  await abrirComoAdmin(page, 'en-US', `/admin/fundae/${action.id}`);
-  await expect(page.getByRole('heading', { name: `Acción modalidad ${stamp}` })).toBeVisible({
-    timeout: 20_000,
-  });
-  await expect(page.getByText('Online training').first()).toBeVisible();
-  expect(await page.locator('body').innerText()).not.toContain('TELEFORMACION');
+  // Control en inglés: la etiqueta del catálogo inglés, tampoco el valor
+  // interno. La interfaz sigue el idioma del PERFIL de quien entra (no la
+  // cookie), así que se cambia el del admin y se devuelve al terminar.
+  const perfil = (await (await fetch(`${API_URL}/api/v1/me/profile`, { headers })).json()) as {
+    locale: string;
+  };
+  const idioma = (locale: string) =>
+    fetch(`${API_URL}/api/v1/me/profile`, {
+      method: 'PATCH',
+      headers,
+      body: JSON.stringify({ locale }),
+    });
+  expect((await idioma('en-US')).ok).toBe(true);
+  try {
+    await abrirComoAdmin(page, 'en-US', `/admin/fundae/${action.id}`);
+    await expect(page.getByRole('heading', { name: `Acción modalidad ${stamp}` })).toBeVisible({
+      timeout: 20_000,
+    });
+    await expect(page.getByText('Online training').first()).toBeVisible({ timeout: 20_000 });
+    expect(await page.locator('body').innerText()).not.toContain('TELEFORMACION');
+  } finally {
+    await idioma(perfil.locale);
+  }
 });
