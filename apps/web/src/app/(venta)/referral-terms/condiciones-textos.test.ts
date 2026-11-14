@@ -6,6 +6,7 @@
 import { describe, expect, it } from 'vitest';
 import en from '@/i18n/messages/en/referidosCondiciones.json';
 import es from '@/i18n/messages/es/referidosCondiciones.json';
+import pt from '@/i18n/messages/pt/referidosCondiciones.json';
 
 /**
  * Textos de las condiciones de «Invita y gana» (`/referral-terms`), que el
@@ -14,7 +15,7 @@ import es from '@/i18n/messages/es/referidosCondiciones.json';
  * no Didacta; Didacta no retiene— y nada de modelos tributarios concretos ni
  * marcas de borrador entre corchetes.
  */
-const CATALOGOS = { es, en } as const;
+const CATALOGOS = { es, en, pt } as const;
 
 function textos(o: unknown): string[] {
   if (typeof o === 'string') return [o];
@@ -44,5 +45,13 @@ describe('condiciones de «Invita y gana»', () => {
     expect(fiscal).toContain('each party is responsible for its own tax obligations');
     expect(fiscal).toContain('is paid to you by {academia}, not by Didacta');
     expect(fiscal).toContain('Didacta does not withhold any tax');
+  });
+
+  it('pt: la cláusula fiscal dice lo mismo, y la retención solo se nombra en ella', () => {
+    const fiscal = pt.secciones.s5.p4;
+    expect(fiscal).toContain('cada parte é responsável pelas suas próprias obrigações fiscais');
+    expect(fiscal).toContain('é pago a você por {academia}, não pela Didacta');
+    expect(fiscal).toContain('A Didacta não faz retenções');
+    expect(pt.secciones.s5.p3).not.toMatch(/retenção/);
   });
 });

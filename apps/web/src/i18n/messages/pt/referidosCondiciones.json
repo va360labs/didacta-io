@@ -44,7 +44,8 @@
       "titulo": "5. Como você recebe",
       "p1": "Como desconto na sua assinatura: se {academia} estiver com essa opção ativada e você tiver uma assinatura ativa, poderá usar o valor confirmado como desconto na sua próxima cobrança. Em cada cobrança, o desconto é de no máximo {tope}% do valor dela, já contando o saldo que você tiver a seu favor. Para o desconto, não pedimos nenhum dado seu.",
       "p2": "Em dinheiro: {hayMinimo, select, si {quando o valor confirmado chegar a {minimo}, você pode solicitar o pagamento} other {você pode solicitar o pagamento do valor confirmado quando quiser}}. Pedimos seu nome completo, seu NIF ou NIE (ou o número de identificação fiscal do seu país) e sua conta bancária (IBAN).",
-      "p3": "{academia} faz o pagamento por transferência bancária. Quando {academia} marca o valor como pago, é gerado um comprovante em PDF com numeração sequencial, que você e {academia} podem baixar. A Didacta não faz nenhuma retenção sobre o que você recebe."
+      "p3": "{academia} faz o pagamento por transferência bancária. Quando {academia} marca o valor como pago, é gerado um comprovante em PDF com numeração sequencial, que você e {academia} podem baixar.",
+      "p4": "Impostos: cada parte é responsável pelas suas próprias obrigações fiscais. O que você recebe pelo programa, em dinheiro ou como desconto na sua assinatura, é pago a você por {academia}, não pela Didacta. Se a lei obrigar {academia} a fazer alguma retenção sobre esse pagamento ou a declará-lo, quem faz isso é {academia}. Você declara o que recebe quando for o caso; se tiver dúvidas, consulte o seu contador. A Didacta não faz retenções, não apresenta declarações em nome de ninguém e não dá assessoria fiscal."
     },
     "s6": {
       "titulo": "6. A fatura da sua assinatura quando você usa o desconto",
