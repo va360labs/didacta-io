@@ -76,7 +76,7 @@ export function OidcCallbackHandler() {
     // Deep link pendiente (enlace compartido que forzó el login SSO/WP-SSO):
     // el roundtrip por el IdP ocurre en la misma pestaña, así que el valor
     // guardado en sessionStorage sobrevive y volvemos a la ruta original.
-    router.replace(consumeIntendedPath() ?? '/');
+    router.replace(consumeIntendedPath() ?? '/home');
     // `t` fuera de las deps a propósito: next-intl no garantiza identidad
     // estable y este efecto NO debe re-ejecutarse (guarda tokens y navega).
     // eslint-disable-next-line react-hooks/exhaustive-deps
