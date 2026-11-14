@@ -618,7 +618,7 @@ export class ModuleRegistryService implements OnModuleInit {
     };
     const surveysHashSecret =
       process.env['SURVEYS_HASH_SECRET']?.trim() || process.env['AUTH_SECRET']?.trim() || '';
-    this.surveys = new SurveysService(prisma, surveysPublisher, surveysHashSecret);
+    this.surveys = new SurveysService(prisma, surveysPublisher, surveysHashSecret, academyLocaleOf);
     const surveysModule = buildSurveysModule();
 
     // mod.resources: biblioteca de recursos (bloque 4).
