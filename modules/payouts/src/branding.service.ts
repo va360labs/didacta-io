@@ -29,7 +29,9 @@ import {
  *    junto al nombre del comercio);
  *  - `settings.branding.logo` — SOLO si el logo del aula ya lleva el nombre
  *    (modo «solo logo»): Stripe lo enseña EN LUGAR del nombre, y un símbolo
- *    sin letras dejaría la pantalla sin saber de quién es;
+ *    sin letras dejaría la pantalla sin saber de quién es. Ojo: Stripe no deja
+ *    QUITAR un icono o un logo ya puestos; si el aula borra el suyo, en Stripe
+ *    se queda el último;
  *  - `primary_color` / `secondary_color` — el color del aula;
  *  - `business_profile.name` — el nombre del aula, el que Stripe enseña como
  *    vendedor («Paga de forma segura en …») y en sus recibos;
@@ -195,10 +197,11 @@ export class PayoutsBrandingService {
         : null;
 
       const update: UpdateAccountBrandingInput = {
-        // Sin imagen en el aula: se quita la que hubiera (cadena vacía). Si el
-        // cliente no sabe subir ficheros, la imagen ni se toca.
-        iconFileId: input.icon ? iconFileId : '',
-        logoFileId: input.logo ? logoFileId : '',
+        // Sin imagen, no se toca: Stripe NO deja quitar el icono ni el logo de
+        // una cuenta («cannot be unset», visto en el sandbox el 14-nov). Mandar
+        // la cadena vacía tumbaba la sincronización entera.
+        iconFileId: input.icon ? iconFileId : null,
+        logoFileId: input.logo ? logoFileId : null,
         primaryColor: prepared.primaryColor,
         secondaryColor: prepared.secondaryColor,
         statementDescriptor: prepared.statementDescriptor,

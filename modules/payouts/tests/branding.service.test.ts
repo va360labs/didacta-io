@@ -107,8 +107,8 @@ describe('PayoutsBrandingService.sync', () => {
       settings: {
         branding: {
           icon: stripe.files[0]!.id,
-          // Sin logo con nombre: se quita, para que Stripe pinte el nombre del aula.
-          logo: '',
+          // Sin logo con nombre no se manda (Stripe pinta el nombre). Nunca la
+          // cadena vacía: Stripe no deja quitar un logo y rechazaría todo.
           primary_color: '#e2703a',
           secondary_color: '#e2703a',
         },
