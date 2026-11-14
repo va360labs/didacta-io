@@ -389,4 +389,74 @@ describe('AiTutorIndexerService (LMS-90.C)', () => {
     expect(chunkContents.some((c) => c.includes('Módulo Uno'))).toBe(true);
     expect(chunkContents.some((c) => c.includes('Módulo Dos'))).toBe(true);
   });
+
+  // La cabecera la pone el servidor y el tutor la repetía en sus citas: va en
+  // el idioma del aula. Control: el aula española (o sin idioma) dice «Módulo».
+  it.each([
+    ['en', '[Module 1: Basics]', '[Module 2: Advanced]'],
+    ['pt-BR', '[Módulo 1: Basics]', '[Módulo 2: Advanced]'],
+    ['es', '[Módulo 1: Basics]', '[Módulo 2: Advanced]'],
+  ])('en un aula «%s» la cabecera de módulo es %s', async (locale, primera, segunda) => {
+    const prisma = makeFakePrisma({
+      course: { id: 'c1', tenantId: 't1', status: 'PUBLISHED' },
+      modules: [
+        { id: 'm1', title: 'Basics', position: 0 },
+        { id: 'm2', title: 'Advanced', position: 1 },
+      ],
+      lessons: [
+        {
+          id: 'l1',
+          moduleId: 'm1',
+          type: 'TEXT',
+          title: 'L1',
+          content: { text: 'First lesson.' },
+          position: 0,
+        },
+        {
+          id: 'l2',
+          moduleId: 'm2',
+          type: 'TEXT',
+          title: 'L2',
+          content: { text: 'Second lesson.' },
+          position: 0,
+        },
+      ],
+    });
+    const svc = new AiTutorIndexerService(
+      prisma as never,
+      makeContext() as never,
+      fakeEmbed(),
+      async (tenantId) => (tenantId === 't1' ? locale : 'es'),
+    );
+    await svc.indexCourse('t1', 'c1');
+    const chunkContents = prisma.inserts.map((p) => p[5] as string);
+    expect(chunkContents.some((c) => c.startsWith(primera))).toBe(true);
+    expect(chunkContents.some((c) => c.startsWith(segunda))).toBe(true);
+    if (locale === 'en') expect(chunkContents.join('\n')).not.toContain('Módulo');
+  });
+
+  it('sin idioma legible indexa igual, con la cabecera en español', async () => {
+    const prisma = makeFakePrisma({
+      course: { id: 'c1', tenantId: 't1', status: 'PUBLISHED' },
+      modules: [{ id: 'm1', title: 'Basics', position: 0 }],
+      lessons: [
+        {
+          id: 'l1',
+          moduleId: 'm1',
+          type: 'TEXT',
+          title: 'L1',
+          content: { text: 'First lesson.' },
+          position: 0,
+        },
+      ],
+    });
+    const svc = new AiTutorIndexerService(
+      prisma as never,
+      makeContext() as never,
+      fakeEmbed(),
+      () => Promise.reject(new Error('sin ajuste')),
+    );
+    await svc.indexCourse('t1', 'c1');
+    expect((prisma.inserts[0]![5] as string).startsWith('[Módulo 1: Basics]')).toBe(true);
+  });
 });

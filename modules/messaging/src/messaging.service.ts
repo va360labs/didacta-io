@@ -71,6 +71,36 @@ export type MessagingUsersLookup = (
 /** IDs de usuarios del tenant con rol de staff (formador/admin). */
 export type MessagingStaffLookup = (tenantId: string) => Promise<string[]>;
 
+/**
+ * Idioma del aula (`es`, `en`, `pt` o un tag como `pt-BR`). Lo resuelve el
+ * host con la misma regla que el resto de lo que el servidor escribe para
+ * todos (`academyLocale`). Sin él, español.
+ */
+export type MessagingLocaleLookup = (tenantId: string) => Promise<string>;
+
+export type MessagingLocale = 'es' | 'en' | 'pt';
+
+/**
+ * Títulos que pone el servidor a una conversación que no tiene nombre propio:
+ * el canal del alumno con el equipo docente y los respaldos de una sala o una
+ * persona sin nombre. En el idioma del aula: «Profesores» en un aula inglesa
+ * era el nombre de un canal que nadie había elegido.
+ */
+export const MESSAGING_DEFAULT_TITLES: Readonly<
+  Record<MessagingLocale, { faculty: string; room: string; student: string; member: string }>
+> = {
+  es: { faculty: 'Profesores', room: 'Sala', student: 'Alumno', member: 'Miembro' },
+  en: { faculty: 'Teachers', room: 'Room', student: 'Student', member: 'Member' },
+  pt: { faculty: 'Professores', room: 'Sala', student: 'Aluno', member: 'Membro' },
+};
+
+/** Normaliza el idioma del aula a uno de los títulos que hay (`pt-BR` → `pt`). */
+export function messagingLocale(raw: unknown): MessagingLocale {
+  if (typeof raw !== 'string') return 'es';
+  const base = raw.trim().toLowerCase().split(/[-_]/)[0];
+  return base === 'en' || base === 'pt' ? base : 'es';
+}
+
 // ── Constantes públicas ──────────────────────────────────────────────────────
 
 export const MESSAGING_STAFF_ROLES = ['formador', 'tenant_admin', 'super_admin'] as const;
@@ -195,7 +225,19 @@ export class MessagingService {
     private readonly spacesLookup: MessagingSpacesLookup,
     private readonly usersLookup: MessagingUsersLookup,
     private readonly staffLookup: MessagingStaffLookup,
+    private readonly localeLookup?: MessagingLocaleLookup,
   ) {}
+
+  /** Títulos por defecto en el idioma del aula. De mejor esfuerzo: si falla, español. */
+  private async defaultTitles(tenantId: string) {
+    let locale: MessagingLocale = 'es';
+    try {
+      if (this.localeLookup) locale = messagingLocale(await this.localeLookup(tenantId));
+    } catch {
+      // Un listado nunca se cae por no saber el idioma.
+    }
+    return MESSAGING_DEFAULT_TITLES[locale];
+  }
 
   // ── Listado ────────────────────────────────────────────────────────────────
 
@@ -282,6 +324,11 @@ export class MessagingService {
       staff,
     );
 
+    // Solo hace falta el idioma si alguna conversación lleva un título del servidor.
+    const fallbacks = rows.some((c) => c.type !== 'SPACE')
+      ? await this.defaultTitles(tenantId)
+      : MESSAGING_DEFAULT_TITLES.es;
+
     const views: ConversationView[] = rows.map((c): ConversationView => {
       const lastMessage = lastByConv.get(c.id) ?? null;
       const unreadCount = unreadByConv.get(c.id) ?? 0;
@@ -291,19 +338,19 @@ export class MessagingService {
       let counterpart: MessagingPublicUser | null = null;
       if (c.type === 'SPACE') {
         const s = spaceById.get(c.spaceId ?? '');
-        title = s?.title ?? 'Sala';
+        title = s?.title ?? fallbacks.room;
         space = s ? { slug: s.slug, icon: s.icon, color: s.color } : null;
       } else if (c.type === 'FACULTY') {
         if (staff && c.studentId !== caller.userId) {
           counterpart = userById.get(c.studentId ?? '') ?? null;
-          title = counterpart?.name ?? 'Alumno';
+          title = counterpart?.name ?? fallbacks.student;
         } else {
-          title = 'Profesores';
+          title = fallbacks.faculty;
         }
       } else {
         const otherId = dmOthers.get(c.id);
         counterpart = otherId ? (userById.get(otherId) ?? null) : null;
-        title = counterpart?.name ?? 'Miembro';
+        title = counterpart?.name ?? fallbacks.member;
       }
 
       return {

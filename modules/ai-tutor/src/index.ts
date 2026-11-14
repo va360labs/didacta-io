@@ -63,8 +63,13 @@ export { AiTutorIndexerService, type EmbedFn, type IndexCourseOptions } from './
 export { AiTutorChatService, type ChatFn } from './chat.service.js';
 export {
   buildPrompt,
+  citationSnippet,
   extractCitations,
+  moduleHeader,
   trimHistoryToBudget,
+  tutorLocale,
+  type TutorLocale,
+  type TutorLocaleLookup,
   type BuildPromptInput,
   type BuiltPrompt,
   type ParsedCitation,

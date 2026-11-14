@@ -73,6 +73,13 @@ function makeFakePrisma() {
     userRoles: [] as UserRoleRow[],
     tenantDomains: [] as TenantDomainRow[],
     auditLogs: [] as AuditLogRow[],
+    tenantSettings: [] as Array<{
+      tenantId: string;
+      moduleName: string;
+      key: string;
+      valueJson: unknown;
+      updatedById: string | null;
+    }>,
     seq: 1,
   };
 
@@ -166,6 +173,25 @@ function makeFakePrisma() {
         state.auditLogs.push(row);
         return row;
       }),
+    },
+    // El idioma de la academia se guarda como ajuste del aula (`academy/locale`).
+    tenantSetting: {
+      upsert: vi.fn(
+        async ({
+          create,
+        }: {
+          create: {
+            tenantId: string;
+            moduleName: string;
+            key: string;
+            valueJson: unknown;
+            updatedById: string | null;
+          };
+        }) => {
+          state.tenantSettings.push(create);
+          return create;
+        },
+      ),
     },
     // Activación de módulos en el tenant inicial (setup.service.ts:182-198).
     // Sin módulos en el registry, findMany devuelve [] → createMany no se llama.
@@ -328,6 +354,75 @@ describe('SetupService.init', () => {
       roles: ['super_admin'],
       mfaEnabled: false,
     });
+  });
+
+  // Una instalación nueva toma como idioma de la academia el elegido en el
+  // asistente (o el del navegador, que resuelve el controller): como AJUSTE del
+  // aula y en el perfil del admin. Antes no se guardaba nada, el admin nacía
+  // en español y el aula entera deducía español de él.
+  it('con idioma elegido, lo fija como ajuste del aula y el admin nace en él', async () => {
+    const { client, state } = makeFakePrisma();
+    const svc = new SetupService(
+      client as never,
+      realPasswords,
+      tokensFake,
+      dummyAuditLog,
+      sessionRegistryStub(tokensFake as never),
+      permissiveSetupTokensStub(),
+    );
+
+    await svc.init(
+      { ...validDto, organization: { ...validDto.organization, locale: 'en' } },
+      'lms.acme.test',
+      { ip: null, userAgent: null },
+    );
+
+    const tenantId = state.tenants[0]!.id;
+    expect(state.tenantSettings).toEqual([
+      {
+        tenantId,
+        moduleName: 'academy',
+        key: 'locale',
+        valueJson: 'en',
+        isSecret: false,
+        updatedById: state.users[0]!.id,
+      },
+    ]);
+    expect(state.users[0]).toMatchObject({ locale: 'en-US' });
+  });
+
+  it('en portugués, el admin nace en pt-BR y el aula guarda «pt»', async () => {
+    const { client, state } = makeFakePrisma();
+    const svc = new SetupService(
+      client as never,
+      realPasswords,
+      tokensFake,
+      dummyAuditLog,
+      sessionRegistryStub(tokensFake as never),
+      permissiveSetupTokensStub(),
+    );
+    await svc.init(
+      { ...validDto, organization: { ...validDto.organization, locale: 'pt' } },
+      'lms.acme.test',
+      { ip: null, userAgent: null },
+    );
+    expect(state.tenantSettings[0]?.valueJson).toBe('pt');
+    expect(state.users[0]).toMatchObject({ locale: 'pt-BR' });
+  });
+
+  it('sin idioma, no guarda ajuste ni toca el idioma del admin (deducción de siempre)', async () => {
+    const { client, state } = makeFakePrisma();
+    const svc = new SetupService(
+      client as never,
+      realPasswords,
+      tokensFake,
+      dummyAuditLog,
+      sessionRegistryStub(tokensFake as never),
+      permissiveSetupTokensStub(),
+    );
+    await svc.init(validDto, 'lms.acme.test', { ip: null, userAgent: null });
+    expect(state.tenantSettings).toEqual([]);
+    expect(state.users[0]).not.toHaveProperty('locale');
   });
 
   it('rechaza con 409 ALREADY_INITIALIZED si ya hay un tenant', async () => {

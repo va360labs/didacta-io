@@ -95,6 +95,24 @@ export function isAcademyLocale(raw: unknown): raw is AcademyLocale {
   return typeof raw === 'string' && (ACADEMY_LOCALES as readonly string[]).includes(raw);
 }
 
+/**
+ * Idioma de academia que propone el asistente de una instalación nueva: el
+ * primero del navegador de quien instala que tiene catálogo; si ninguno, el de
+ * la interfaz. Sin aula todavía, la interfaz del setup sale en español por
+ * defecto, y proponer eso a quien navega en inglés dejaba la academia entera
+ * en español.
+ */
+export function proposedAcademyLocale(
+  browser: readonly string[],
+  uiLocale: string | null | undefined,
+): AcademyLocale {
+  for (const tag of browser) {
+    const base = typeof tag === 'string' ? tag.trim().toLowerCase().split(/[-_]/)[0] : '';
+    if (isAcademyLocale(base)) return base;
+  }
+  return catalogOf(toSupportedLocale(uiLocale));
+}
+
 /** Tag de la interfaz con el que se pinta un aula en ese idioma. */
 export function academyUiLocale(locale: AcademyLocale): SupportedLocale {
   if (locale === 'en') return 'en-US';

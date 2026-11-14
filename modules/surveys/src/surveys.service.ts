@@ -38,19 +38,56 @@ export const SURVEYS_EVENT = {
 
 export type SurveyQuestionTypeValue = 'NPS' | 'SCALE' | 'TEXT';
 
+/** Idiomas en los que se escriben las preguntas: los del aula. */
+export type SurveyLocale = 'es' | 'en' | 'pt';
+
+/**
+ * Idioma del aula (`es`, `en`, `pt` o un tag como `pt-BR`). Lo resuelve el
+ * host con la regla de siempre (`academyLocale`). Sin él, español.
+ */
+export type SurveysLocaleLookup = (tenantId: string) => Promise<string>;
+
+/** Normaliza el idioma del aula a uno de los de las preguntas (`pt-BR` → `pt`). */
+export function surveyLocale(raw: unknown): SurveyLocale {
+  if (typeof raw !== 'string') return 'es';
+  const base = raw.trim().toLowerCase().split(/[-_]/)[0];
+  return base === 'en' || base === 'pt' ? base : 'es';
+}
+
+type PostClassQuestion = { type: SurveyQuestionTypeValue; label: string };
+
 /**
  * Preguntas fijas de la encuesta post-clase. Siempre las mismas a propósito:
  * respuestas comparables entre clases y en el tiempo (doc/mejoras.md bloque 2).
+ * Se guardan en el idioma del aula al crear la encuesta: son filas que leen
+ * todos los alumnos, y en un aula inglesa salían en español.
  */
-export const POST_CLASS_QUESTIONS: ReadonlyArray<{
-  type: SurveyQuestionTypeValue;
-  label: string;
-}> = [
-  { type: 'NPS', label: 'Del 0 al 10, ¿recomendarías esta clase a otro miembro?' },
-  { type: 'SCALE', label: 'El contenido de la clase' },
-  { type: 'SCALE', label: 'El ritmo y la claridad' },
-  { type: 'TEXT', label: '¿Qué mejorarías? (opcional)' },
-];
+export const POST_CLASS_QUESTIONS_BY_LOCALE: Readonly<
+  Record<SurveyLocale, ReadonlyArray<PostClassQuestion>>
+> = {
+  es: [
+    { type: 'NPS', label: 'Del 0 al 10, ¿recomendarías esta clase a otro miembro?' },
+    { type: 'SCALE', label: 'El contenido de la clase' },
+    { type: 'SCALE', label: 'El ritmo y la claridad' },
+    { type: 'TEXT', label: '¿Qué mejorarías? (opcional)' },
+  ],
+  en: [
+    { type: 'NPS', label: 'From 0 to 10, would you recommend this class to another member?' },
+    { type: 'SCALE', label: 'The class content' },
+    { type: 'SCALE', label: 'The pace and clarity' },
+    { type: 'TEXT', label: 'What would you improve? (optional)' },
+  ],
+  pt: [
+    { type: 'NPS', label: 'De 0 a 10, você recomendaria esta aula a outro membro?' },
+    { type: 'SCALE', label: 'O conteúdo da aula' },
+    { type: 'SCALE', label: 'O ritmo e a clareza' },
+    { type: 'TEXT', label: 'O que você melhoraria? (opcional)' },
+  ],
+};
+
+/** Las preguntas en español (las de siempre); se conserva por compatibilidad. */
+export const POST_CLASS_QUESTIONS: ReadonlyArray<PostClassQuestion> =
+  POST_CLASS_QUESTIONS_BY_LOCALE.es;
 
 export interface SubmitAnswerInput {
   questionId: string;
@@ -73,9 +110,20 @@ export class SurveysService {
     private readonly publisher: SurveysEventPublisher,
     /** Secreto del HMAC de `respondentHash`. Obligatorio y estable entre deploys. */
     private readonly hashSecret: string,
+    /** Idioma del aula para las preguntas. Sin él, español. */
+    private readonly localeLookup?: SurveysLocaleLookup,
   ) {
     if (!hashSecret || hashSecret.length < 16) {
       throw new Error('mod.surveys: hashSecret obligatorio (mínimo 16 caracteres).');
+    }
+  }
+
+  /** Idioma del aula. De mejor esfuerzo: una encuesta nunca se pierde por no saberlo. */
+  private async localeOf(tenantId: string): Promise<SurveyLocale> {
+    try {
+      return this.localeLookup ? surveyLocale(await this.localeLookup(tenantId)) : 'es';
+    } catch {
+      return 'es';
     }
   }
 
@@ -101,6 +149,7 @@ export class SurveysService {
     });
     if (existing) return { surveyId: existing.id, created: false };
 
+    const questions = POST_CLASS_QUESTIONS_BY_LOCALE[await this.localeOf(tenantId)];
     try {
       const survey = await this.prisma.modSurveysSurvey.create({
         data: {
@@ -109,7 +158,7 @@ export class SurveysService {
           zoomSessionId: sessionId,
           title: topic,
           questions: {
-            create: POST_CLASS_QUESTIONS.map((q, i) => ({
+            create: questions.map((q, i) => ({
               tenantId,
               position: i + 1,
               type: q.type,

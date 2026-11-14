@@ -26,6 +26,7 @@ import {
   formatDateTime as fmtDateTime,
   formatNumber,
 } from '@/lib/i18n/format';
+import { perIntervalSuffix } from '@/lib/i18n/interval';
 import { labelOr, type TranslatorLike } from '@/lib/i18n/labels';
 import { learningApi } from '@/lib/learning';
 import { dossierApi, type UserDossier } from '@/lib/dossier';
@@ -475,6 +476,7 @@ function TiendaPropia({ d }: { d: UserDossier }) {
 
 function ComprasTab({ d }: { d: UserDossier }) {
   const t = useTranslations('cuentaComponentes');
+  const tCommon = useTranslations('common');
   return (
     <div className="space-y-4">
       <TiendaPropia d={d} />
@@ -495,7 +497,8 @@ function ComprasTab({ d }: { d: UserDossier }) {
                       {s.planName ?? t('dossier.planFallback')}
                     </p>
                     <p className="text-xs text-text-muted">
-                      {formatMoney(s.unitAmount, s.currency)} / {s.interval}
+                      {formatMoney(s.unitAmount, s.currency)}
+                      {perIntervalSuffix(tCommon, s.interval)}
                       {s.currentPeriodEnd
                         ? ` · ${t('dossier.expiresDate', { date: formatDate(s.currentPeriodEnd) })}`
                         : ''}

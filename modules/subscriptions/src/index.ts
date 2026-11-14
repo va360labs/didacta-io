@@ -36,7 +36,9 @@ export type {
 export {
   MembershipService,
   MEMBERSHIP_EVENT,
+  MEMBERSHIP_LEGACY_DEFAULT_HEADLINE,
   MEMBERSHIP_LIVE_STATUSES,
+  customMembershipHeadline,
   PLAN_DEFAULT_CURRENCY,
   PLAN_INTERVAL_MAX_MONTHS,
   stripHtmlToExcerpt,

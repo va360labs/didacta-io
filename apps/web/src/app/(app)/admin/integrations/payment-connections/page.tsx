@@ -34,6 +34,7 @@ import { ApiHttpError } from '@/lib/api-client';
 import { authStorage } from '@/lib/auth-storage';
 import { apiErrorMessage } from '@/lib/i18n/api-error';
 import { formatCentsExact, formatDateTime } from '@/lib/i18n/format';
+import { perIntervalSuffix } from '@/lib/i18n/interval';
 import { SubscriptionsDashboard } from './subscriptions-dashboard';
 import { SubscriptionAlertsSettings } from './subscription-alerts-settings';
 import {
@@ -788,6 +789,7 @@ function ReconcileSection({
   onInvited: (info: string) => void;
 }) {
   const t = useTranslations('adminPagos');
+  const tCommon = useTranslations('common');
   const tErrors = useTranslations('errors');
   const [selectedEmails, setSelectedEmails] = useState<Set<string>>(new Set());
   const [inviting, setInviting] = useState(false);
@@ -909,7 +911,7 @@ function ReconcileSection({
                       </td>
                       <td className="py-2 pr-3 font-mono text-xs">
                         {fmtAmount(s.unitAmount, s.currency)}
-                        {s.interval ? `/${s.interval}` : ''}
+                        {perIntervalSuffix(tCommon, s.interval)}
                       </td>
                       <td className="py-2">
                         <CancelLink livemode={data.livemode} subId={s.subscriptionId} />
@@ -1006,6 +1008,7 @@ function UnmatchedRow({
   onToggle: () => void;
 }) {
   const t = useTranslations('adminPagos');
+  const tCommon = useTranslations('common');
   return (
     <tr className="border-border-soft border-b last:border-0">
       <td className="py-2">
@@ -1028,7 +1031,7 @@ function UnmatchedRow({
       </td>
       <td className="py-2 pr-3 font-mono text-xs">
         {fmtAmount(sub.unitAmount, sub.currency)}
-        {sub.interval ? `/${sub.interval}` : ''}
+        {perIntervalSuffix(tCommon, sub.interval)}
       </td>
       <td className="py-2">
         <CancelLink livemode={livemode} subId={sub.subscriptionId} />

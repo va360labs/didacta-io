@@ -54,6 +54,8 @@ import { PrismaService } from '../../prisma/prisma.service';
 import type { SessionClaims } from '../../auth/token.service';
 import { CommunityDigestWorker } from './community-digest.worker';
 import { CommunityBroadcastWorker } from './community-broadcast.worker';
+import { broadcastBodyText } from './broadcast-text';
+import { academyLocale, type AcademyDefaultsPrisma } from '../../common/academy-defaults';
 import { CommunitySidebarService, type CommunitySidebarData } from './community-sidebar.service';
 import { ModuleRegistryService } from '../module-registry.service';
 
@@ -108,7 +110,11 @@ export class CommunityController {
       const excerpt = cleanBody.slice(0, 600);
       const b = await svc.createBroadcast(user.tenantId, user.sub, {
         subject: post.title,
-        bodyText: `${author.displayName ?? 'Un administrador'} ha publicado en la comunidad:\n\n${excerpt}`,
+        bodyText: broadcastBodyText(
+          await academyLocale(this.prisma as unknown as AcademyDefaultsPrisma, user.tenantId),
+          author.displayName,
+          excerpt,
+        ),
         important: dto.important,
         postId: post.id,
       });

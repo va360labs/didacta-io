@@ -23,8 +23,8 @@ import {
 } from '@/modules/resources';
 
 /// Biblioteca de recursos (bloque 4): parrilla de COLECCIONES con portada
-/// ("Workflows de clase", "Skills y agentes"…). Cualquier miembro comparte
-/// recursos; el staff crea y edita colecciones.
+/// propia. Cualquier miembro comparte recursos; el staff crea y edita
+/// colecciones.
 
 const STAFF_ROLES = new Set(['super_admin', 'tenant_admin', 'formador']);
 

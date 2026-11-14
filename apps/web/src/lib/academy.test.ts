@@ -21,6 +21,7 @@ import {
   DESTINOS,
   ONBOARDING_STEPS,
   onboardingSteps,
+  avisoDeNombre,
   pasosContables,
   paymentsSetupOf,
   tarjetaDeCobros,
@@ -185,5 +186,26 @@ describe('los destinos del asistente son rutas que existen', () => {
     // Que el escaneo encuentre algo: si no, el test pasaría sin mirar nada.
     expect(rutas).toEqual(expect.arrayContaining(['/signin', '/home']));
     expect(rutas.filter((r) => !existe(r))).toEqual([]);
+  });
+});
+
+describe('avisoDeNombre (paso del nombre con nombre autogenerado)', () => {
+  it('«salió de tu correo al comprar» solo en Didacta Cloud (modo plataforma)', () => {
+    expect(avisoDeNombre('platform')).toBe('nombreAviso');
+  });
+
+  it('en una instalación propia, el aviso neutro (no hubo compra)', () => {
+    expect(avisoDeNombre('own')).toBe('nombreAvisoPropia');
+  });
+
+  it('el aviso neutro no habla de compra en ningún idioma, y el de Cloud sí', () => {
+    for (const l of ['es', 'en', 'pt']) {
+      const cat = JSON.parse(
+        readFileSync(join(HERE, '..', 'i18n', 'messages', l, 'bienvenida.json'), 'utf8'),
+      ) as Record<string, string>;
+      expect(cat['nombreAvisoPropia'], l).toBeTruthy();
+      expect(cat['nombreAvisoPropia'], l).not.toMatch(/compra|purchase|correo|email|e-mail/i);
+      expect(cat['nombreAviso'], l).toMatch(/compra|purchase/i);
+    }
   });
 });

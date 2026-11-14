@@ -2,6 +2,12 @@
   "durationMinutes": "{minutes, plural, other {# min}}",
   "durationHours": "{hours, plural, other {# h}}",
   "durationHoursMinutes": "{hours} h {minutes} min",
+  "perInterval": {
+    "day": "/dia",
+    "week": "/semana",
+    "month": "/mês",
+    "year": "/ano"
+  },
   "tenantSuspended": {
     "metaTitle": "Escola suspensa",
     "title": "Esta escola está suspensa",

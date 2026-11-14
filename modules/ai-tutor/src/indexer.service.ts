@@ -11,6 +11,12 @@ import { chunkText, type Chunk } from './chunker.js';
 import { CourseNotPublishedError, EmbeddingsProviderError } from './errors.js';
 import { extractLessonText, type LessonType } from './lesson-extractor.js';
 import type { IndexCourseResultView } from './dto.js';
+import {
+  moduleHeader,
+  tutorLocale,
+  type TutorLocale,
+  type TutorLocaleLookup,
+} from './prompt-builder.js';
 
 /**
  * Servicio de indexación de cursos para el tutor IA (LMS-90.C).
@@ -93,7 +99,18 @@ export class AiTutorIndexerService {
     private readonly prisma: PrismaClient,
     private readonly ctx: ModuleContext,
     private readonly embedFn: EmbedFn,
+    /** Idioma del aula para la cabecera de módulo. Sin él, español. */
+    private readonly localeLookup?: TutorLocaleLookup,
   ) {}
+
+  /** Idioma del aula. De mejor esfuerzo: indexar nunca falla por no saberlo. */
+  private async localeOf(tenantId: string): Promise<TutorLocale> {
+    try {
+      return this.localeLookup ? tutorLocale(await this.localeLookup(tenantId)) : 'es';
+    } catch {
+      return 'es';
+    }
+  }
 
   async indexCourse(
     tenantId: string,
@@ -146,6 +163,7 @@ export class AiTutorIndexerService {
 
     let lessonsProcessed = 0;
     const prepared: PreparedChunk[] = [];
+    const locale = await this.localeOf(tenantId);
 
     for (const module of modules) {
       const lessons = lessonsByModule.get(module.id) ?? [];
@@ -163,7 +181,7 @@ export class AiTutorIndexerService {
           continue;
         }
         // Prepend cabecera de módulo para contexto en el RAG
-        const withModuleHeader = `[Módulo ${module.position + 1}: ${module.title}]\n\n${extracted.text}`;
+        const withModuleHeader = `${moduleHeader(locale, module.position, module.title)}\n\n${extracted.text}`;
         const lessonChunks = chunkText(withModuleHeader);
         for (const c of lessonChunks) {
           prepared.push({ ...c, lessonId: lesson.id });
@@ -368,7 +386,8 @@ export class AiTutorIndexerService {
       return { ...vacio(extracted.skipReason ?? 'sin texto indexable'), courseId };
     }
 
-    const withModuleHeader = `[Módulo ${courseModule.position + 1}: ${courseModule.title}]\n\n${extracted.text}`;
+    const locale = await this.localeOf(tenantId);
+    const withModuleHeader = `${moduleHeader(locale, courseModule.position, courseModule.title)}\n\n${extracted.text}`;
     const chunks = chunkText(withModuleHeader);
     if (chunks.length === 0) return { ...vacio('el troceado no produjo nada'), courseId };
 

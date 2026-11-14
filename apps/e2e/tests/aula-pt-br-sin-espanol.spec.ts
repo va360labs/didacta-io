@@ -7,6 +7,7 @@ import { createHash, randomBytes } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { expect, test, type Browser, type Page } from '@playwright/test';
+import { aulaCompletaSembrada, SEMBRADO_EN_ESPANOL } from '../helpers/aula-sembrada';
 import { apiAs, freshTenant, sql, type FreshTenant } from '../helpers/simple-tenant';
 
 /**
@@ -426,4 +427,102 @@ test('aula en portugués: ni la creadora, ni la alumna, ni un visitante ven espa
   expect(todas, `Texto en español o inglés en el aula portuguesa:\n${todas.join('\n')}`).toEqual(
     [],
   );
+});
+
+/**
+ * Lo que el SERVIDOR escribe para todos en un aula portuguesa en MODO
+ * COMPLETO: el canal de profesores, los espacios de la comunidad (que se
+ * pintaban por su slug español), las preguntas de la encuesta tras un directo,
+ * la biblioteca de recursos (antes seis colecciones de IA en español), el aviso
+ * de «avisar a todos» y el título por defecto de /join. Todo en portugués, y
+ * nada de lo que antes salía en español.
+ */
+test('aula en portugués, modo completo: lo que siembra el servidor sale en portugués', async ({
+  browser,
+}) => {
+  test.setTimeout(300_000);
+  const aula = await aulaCompletaSembrada(`ptsem${Date.now().toString(36)}`, 'pt', {
+    post: 'Moagem do espresso',
+    cuerpo: 'Qual moagem vocês usam em casa?',
+    directo: 'Latte art ao vivo',
+  });
+  const { tenant } = aula;
+
+  // ── La API: lo sembrado y lo compuesto, en portugués ────────────────────
+  const { conversations } = await apiAs<{ conversations: Array<{ type: string; title: string }> }>(
+    tenant.host,
+    '/api/v1/modules/messaging/conversations',
+    { bearer: aula.alumnaToken },
+  );
+  expect(conversations.find((c) => c.type === 'FACULTY')?.title).toBe('Professores');
+  const { survey } = await apiAs<{ survey: { questions: Array<{ label: string }> } | null }>(
+    tenant.host,
+    `/api/v1/modules/surveys/sessions/${aula.sessionId}`,
+    { bearer: aula.alumnaToken },
+  );
+  expect(survey?.questions.map((q) => q.label)).toEqual([
+    'De 0 a 10, você recomendaria esta aula a outro membro?',
+    'O conteúdo da aula',
+    'O ritmo e a clareza',
+    'O que você melhoraria? (opcional)',
+  ]);
+  const { collections } = await apiAs<{ collections: Array<{ title: string }> }>(
+    tenant.host,
+    '/api/v1/modules/resources/collections',
+    { bearer: aula.alumnaToken },
+  );
+  expect(collections.map((c) => c.title)).toEqual(['Geral']);
+  const pagina = await apiAs<{ headline: string | null }>(tenant.host, '/api/v1/membership/page');
+  expect(pagina.headline).toBeNull();
+  expect(
+    sql(
+      `SELECT b.body_text FROM mod_community_broadcast b JOIN tenant t ON t.id = b.tenant_id WHERE t.slug = '${tenant.slug}'`,
+    ),
+  ).toMatch(/publicou na comunidade:/);
+  expect(
+    sql(
+      `SELECT string_agg(s.title, '|' ORDER BY s.sort_order) FROM mod_community_space s JOIN tenant t ON t.id = s.tenant_id WHERE t.slug = '${tenant.slug}'`,
+    ),
+  ).toBe('Geral|Avisos|Perguntas e dúvidas|Materiais compartilhados');
+
+  // ── La alumna, sin cookie: el idioma sale del aula ──────────────────────
+  const ctx = await contexto(browser);
+  const a = await ctx.newPage();
+  await a.goto(`${tenant.base}/signin`);
+  await a.locator('input[autocomplete="email"]').fill(aula.alumnaEmail);
+  await a.locator('input[autocomplete="current-password"]').fill(tenant.password);
+  await a.locator('button[type="submit"]').click();
+  await a.waitForURL((u) => !u.pathname.startsWith('/signin'), { timeout: 30_000 });
+  const r: Hallazgos = { visitadas: [], malas: [] };
+  const vistos: string[] = [];
+  for (const ruta of ['/community', '/messages', '/resources']) {
+    await a.goto(`${tenant.base}${ruta}`);
+    await asentar(a);
+    r.visitadas.push(ruta);
+    await revisar(a, r, ruta, aula.contenido);
+    vistos.push(await textoVisible(a));
+  }
+  // El espacio de la publicación se lee por su título, no por su slug.
+  await a.goto(`${tenant.base}/community`);
+  await expect(a.getByText('Perguntas e dúvidas').first()).toBeVisible();
+  await a.goto(`${tenant.base}/messages`);
+  await expect(a.getByText('Professores').first()).toBeVisible();
+  await a.goto(`${tenant.base}/resources`);
+  await expect(a.getByText('Geral', { exact: true }).first()).toBeVisible();
+  await ctx.close();
+
+  // ── Un visitante en /join: el título por defecto, del catálogo portugués ─
+  const vctx = await contexto(browser);
+  const v = await vctx.newPage();
+  await v.goto(`${tenant.base}/join`);
+  await asentar(v);
+  await expect(v.getByRole('heading', { level: 1 })).toHaveText(pt('publicSite', 'Hazte miembro'));
+  await revisar(v, r, '/join', aula.contenido);
+  vistos.push(await textoVisible(v));
+  await vctx.close();
+
+  for (const viejo of SEMBRADO_EN_ESPANOL) {
+    expect(vistos.join('\n'), `«${viejo}» sigue en pantalla`).not.toContain(viejo);
+  }
+  expect(r.malas, `Texto en español o inglés en lo sembrado:\n${r.malas.join('\n')}`).toEqual([]);
 });

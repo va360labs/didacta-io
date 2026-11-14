@@ -29,6 +29,8 @@ import { usePublicUsers } from '@/lib/public-users';
 import {
   communityApi,
   parseBodyAttachments,
+  spaceTagLabel,
+  useCommunitySpaces,
   useCommunityTags,
   type AttachmentFile,
   type AttachmentImage,
@@ -73,6 +75,8 @@ export function PostDetailView({
   const myRoles = authStorage.getSession()?.user.roles ?? [];
   const canModerate = myRoles.includes('super_admin') || myRoles.includes('tenant_admin');
   const tagsByName = useCommunityTags();
+  // El tag del espacio (`preguntas`) se lee con el título del espacio.
+  const spaces = useCommunitySpaces();
   // Avatar del autor del post (por authorId). Los comentarios resuelven el suyo
   // en CommentBody (reusa este cache).
   const postAuthor = usePublicUsers(post ? [post.authorId] : []);
@@ -357,7 +361,11 @@ export function PostDetailView({
               className="text-sm font-semibold text-[#0D1B2A]"
             />
             {post.tags.slice(0, 3).map((tag) => (
-              <CommunityTagChip key={tag} name={tag} tag={tagsByName.get(tag)} />
+              <CommunityTagChip
+                key={tag}
+                name={spaceTagLabel(spaces, tag)}
+                tag={tagsByName.get(tag)}
+              />
             ))}
             <span className="text-xs text-[#94A3B8]">{relTime(post.createdAt, t)}</span>
             {post.editedAt ? (

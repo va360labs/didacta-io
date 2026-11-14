@@ -11,6 +11,7 @@ import {
   isAcademyLocale,
   isUsableLocaleCookie,
   MESSAGE_CATALOGS,
+  proposedAcademyLocale,
   resolveRequestLocale,
   SUPPORTED_LOCALES,
   toSupportedLocale,
@@ -168,5 +169,19 @@ describe('resolveRequestLocale (cookie → idioma del aula → es-ES)', () => {
   it('un aula en portugués pinta en pt-BR a quien entra sin cookie', () => {
     expect(resolveRequestLocale(undefined, 'pt')).toBe('pt-BR');
     expect(catalogOf(resolveRequestLocale(undefined, 'pt'))).toBe('pt');
+  });
+});
+
+describe('proposedAcademyLocale (idioma que propone el setup de una instalación nueva)', () => {
+  it('el primer idioma del navegador con catálogo, aunque la interfaz salga en español', () => {
+    expect(proposedAcademyLocale(['en-GB', 'en'], 'es-ES')).toBe('en');
+    expect(proposedAcademyLocale(['fr-FR', 'pt-BR'], 'es-ES')).toBe('pt');
+    expect(proposedAcademyLocale(['es-MX'], 'en-US')).toBe('es');
+  });
+
+  it('sin ningún idioma del navegador con catálogo, el de la interfaz', () => {
+    expect(proposedAcademyLocale(['fr-FR', 'de'], 'en-US')).toBe('en');
+    expect(proposedAcademyLocale([], 'pt-BR')).toBe('pt');
+    expect(proposedAcademyLocale([], null)).toBe('es');
   });
 });

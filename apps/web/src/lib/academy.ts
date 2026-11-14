@@ -150,6 +150,17 @@ export function tarjetaDeCobros(setup: PaymentsSetup): 'conectar' | 'claves' {
 }
 
 /**
+ * Qué aviso lleva el paso del nombre cuando el aula aún tiene un nombre
+ * autogenerado. «Salió de tu correo al comprar» solo es cierto en Didacta
+ * Cloud (modo plataforma), donde el aula se aprovisiona al pagar con el correo
+ * de quien compra; en una instalación propia el nombre lo puso quien instaló y
+ * no hubo compra: aviso neutro.
+ */
+export function avisoDeNombre(setup: PaymentsSetup): 'nombreAviso' | 'nombreAvisoPropia' {
+  return setup === 'platform' ? 'nombreAviso' : 'nombreAvisoPropia';
+}
+
+/**
  * En modo plataforma, ¿el paso de cobros ya está resuelto? Sí cuando la cuenta
  * está lista o Stripe la está revisando: no le queda nada que hacer. Si aún no
  * conectó o le falta un dato, sigue pendiente («Ahora no» lo deja en el

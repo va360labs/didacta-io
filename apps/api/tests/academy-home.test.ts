@@ -174,7 +174,9 @@ function world(tenants: Record<string, TenantFixture>) {
         const m = t(tenantId).membership;
         if (!m || m === 'inactive') throw new MembershipPageInactiveError();
         return {
-          headline: m.headline ?? 'Hazte miembro',
+          // Contrato de `getPublicPage`: `null` cuando el aula no escribió titular
+          // (vacío o el «Hazte miembro» que guardaba la columna antes).
+          headline: m.headline ?? null,
           subheadline: null,
           plans: Array.from({ length: m.plans }, (_, i) => ({
             id: `plan-${i}`,
@@ -313,7 +315,7 @@ describe('AcademyHomeService — datos publicables del aula', () => {
     expect(data.nextLive).toBeNull();
   });
 
-  it('el titular por defecto de la membresía (en español) no se enseña', async () => {
+  it('sin titular propio de la membresía, la portada no enseña ninguno (pone el del plan)', async () => {
     const w = world({ a: { ...A, membership: { plans: 1 } } });
     expect((await service(w).get('a')).offers.membership?.headline).toBeNull();
   });

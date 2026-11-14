@@ -44,6 +44,7 @@ export {
 
 export { useCommunityTags, invalidateCommunityTagsCache } from './tags-client';
 export { useCommunitySpaces, invalidateCommunitySpacesCache } from './spaces-client';
+export { spaceTagLabel } from './space-tags';
 export type { CommunitySpace } from './client';
 
 export { parseBodyAttachments, buildBodyWithAttachments } from './attachments';

@@ -283,7 +283,9 @@ export function UneteView() {
                   {tenant.name}
                 </span>
               ) : null}
-              <h1 className="mt-4 text-2xl font-bold tracking-tight text-white">{page.headline}</h1>
+              <h1 className="mt-4 text-2xl font-bold tracking-tight text-white">
+                {page.headline ?? t('unete.defaultHeadline')}
+              </h1>
               {page.subheadline ? (
                 <p className="mx-4 mt-2 text-sm leading-5 text-white/70">{page.subheadline}</p>
               ) : null}

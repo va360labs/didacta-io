@@ -125,6 +125,7 @@
   },
   "unete": {
     "metaTitle": "Join",
+    "defaultHeadline": "Become a member",
     "paymentReceived": "Payment received!",
     "activatingMembership": "Your membership is being activated. In a few seconds you will have access to all the courses.",
     "goToCourses": "Go to my courses",

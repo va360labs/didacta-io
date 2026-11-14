@@ -29,6 +29,7 @@ import { ApiHttpError } from '@/lib/api-client';
 import { authStorage } from '@/lib/auth-storage';
 import { apiErrorMessage } from '@/lib/i18n/api-error';
 import { formatCentsExact, formatDate, formatDateTime } from '@/lib/i18n/format';
+import { perIntervalSuffix } from '@/lib/i18n/interval';
 import {
   subscriptionStatusLabel,
   subscriptionsDashboardApi,
@@ -91,6 +92,7 @@ function fmtAmount(unitAmount: number, currency: string | null): string {
 
 export function SubscriptionsDashboard() {
   const t = useTranslations('adminPagos');
+  const tCommon = useTranslations('common');
   const tErrors = useTranslations('errors');
   const [summary, setSummary] = useState<SubscribersSummary | null>(null);
   const [rows, setRows] = useState<DashboardSubscriber[] | null>(null);
@@ -333,7 +335,13 @@ export function SubscriptionsDashboard() {
                     </td>
                     <td className="py-2 pr-3">
                       {r.unitAmount !== null ? fmtAmount(r.unitAmount, r.currency) : '—'}
-                      {r.interval ? <span className="text-text-muted">/{r.interval}</span> : ''}
+                      {r.interval ? (
+                        <span className="text-text-muted">
+                          {perIntervalSuffix(tCommon, r.interval)}
+                        </span>
+                      ) : (
+                        ''
+                      )}
                     </td>
                     <td className="py-2 pr-3 text-text-muted">{fmtDate(r.currentPeriodEnd)}</td>
                     <td className="py-2 pr-3">

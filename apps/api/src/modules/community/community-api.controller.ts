@@ -25,6 +25,8 @@ import type { SessionClaims } from '../../auth/token.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ModuleRegistryService } from '../module-registry.service';
 import { CommunityBroadcastWorker } from './community-broadcast.worker';
+import { broadcastBodyText } from './broadcast-text';
+import { academyLocale, type AcademyDefaultsPrisma } from '../../common/academy-defaults';
 
 const ADMIN_ROLES = new Set(['super_admin', 'tenant_admin']);
 
@@ -230,7 +232,11 @@ export class CommunityApiController {
       const cleanBody = (markerIdx === -1 ? post.body : post.body.slice(0, markerIdx)).trim();
       const b = await svc.createBroadcast(user.tenantId, user.sub, {
         subject: post.title,
-        bodyText: `${author.displayName ?? 'Un administrador'} ha publicado en la comunidad:\n\n${cleanBody.slice(0, 600)}`,
+        bodyText: broadcastBodyText(
+          await academyLocale(this.prisma as unknown as AcademyDefaultsPrisma, user.tenantId),
+          author.displayName,
+          cleanBody.slice(0, 600),
+        ),
         important: dto.important,
         postId: post.id,
       });

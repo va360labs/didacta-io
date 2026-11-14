@@ -3154,8 +3154,9 @@ model ModSubscriptionsMembershipConfig {
   tenantId          String   @id @map("tenant_id") @db.Uuid
   /// Página pública activa. En false, /join devuelve "no disponible".
   active            Boolean  @default(false)
-  /// Título grande de la tarjeta ("Hazte miembro Pro").
-  headline          String   @default("Hazte miembro")
+  /// Título grande de la tarjeta. Vacío = el de por defecto, que pone la web
+  /// en el idioma del aula (antes la columna guardaba «Hazte miembro» a todas).
+  headline          String   @default("")
   /// Subtítulo bajo el título (qué desbloquea la membresía).
   subheadline       String?
   /// Grupo de acceso (mod.access-groups) que se concede al activarse la
@@ -4471,9 +4472,9 @@ enum ResourceKind {
   LINK
 }
 
-/// Colección de recursos con portada propia ("Workflows de clase", "Skills y
-/// agentes"…). Las 6 por defecto se siembran perezosamente al primer listado
-/// del tenant (runtime, no migración: el flujo real de despliegue es db push).
+/// Colección de recursos con portada propia. La de por defecto (una, neutra y
+/// en el idioma del aula) se siembra perezosamente al primer listado de una
+/// biblioteca vacía (runtime, no migración: el flujo real de despliegue es db push).
 model ModResourcesCollection {
   id          String   @id @default(uuid()) @db.Uuid
   tenantId    String   @map("tenant_id") @db.Uuid
