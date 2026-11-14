@@ -87,8 +87,33 @@ export class InMemoryPlatformStripeClient implements PlatformStripeClient {
   private readonly failures: PendingFailure[] = [];
   private sequence = 0;
 
+  /** Ficheros subidos con `uploadFile` (marca de las cuentas conectadas). */
+  readonly files: Array<{ id: string; purpose: string; filename: string; bytes: number }> = [];
+
   constructor(options: { livemode?: boolean } = {}) {
     this.livemode = options.livemode ?? false;
+  }
+
+  async uploadFile(file: {
+    readonly purpose: string;
+    readonly bytes: Uint8Array;
+    readonly filename: string;
+  }): Promise<{ readonly id: string }> {
+    const id = this.nextId('file');
+    this.files.push({
+      id,
+      purpose: file.purpose,
+      filename: file.filename,
+      bytes: file.bytes.length,
+    });
+    this.calls.push({
+      api: 'v1',
+      method: 'POST',
+      path: '/v1/files',
+      params: { purpose: file.purpose },
+      options: {},
+    });
+    return { id };
   }
 
   // ── Preparación ──────────────────────────────────────────────────────────

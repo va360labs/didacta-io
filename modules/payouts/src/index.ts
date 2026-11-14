@@ -93,10 +93,23 @@ export {
   assertStripeAccountId,
   createConnectedAccountsApi,
   defaultCurrencyForCountry,
+  brandingParams,
   isCountryRejection,
   sanitizeStatementDescriptor,
+  sanitizeStatementDescriptorPrefix,
   translateCountryRejection,
 } from './stripe/accounts-api.js';
+export {
+  BRANDING_METADATA_KEY,
+  PayoutsBrandingService,
+  prepareBranding,
+} from './branding.service.js';
+export type {
+  PayoutsBrandImage,
+  PayoutsBrandInput,
+  PayoutsBrandingResult,
+  PreparedBranding,
+} from './branding.service.js';
 export type {
   AccountEntityType,
   AccountsApiFlavor,
@@ -106,6 +119,7 @@ export type {
   StripeBalanceSettings,
   StripeConnectedAccount,
   StripePayoutScheduleV1,
+  UpdateAccountBrandingInput,
   UpdateBalanceSettingsInput,
 } from './stripe/accounts-api.js';
 

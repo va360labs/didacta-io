@@ -408,3 +408,56 @@ describe('FetchPlatformStripeClient — la clave', () => {
     expect(peticiones[0]!.url).toBe('http://localhost:12111/v1/balance');
   });
 });
+
+describe('uploadFile (marca de la cuenta conectada)', () => {
+  it('multipart a files.stripe.com con versión fijada y propósito', async () => {
+    const { fetch, peticiones } = fetchQueResponde(200, { id: 'file_123', object: 'file' });
+    const cliente = new FetchPlatformStripeClient({ secretKey: CLAVE, fetch });
+    await expect(
+      cliente.uploadFile({
+        purpose: 'business_icon',
+        bytes: new Uint8Array([1, 2, 3]),
+        filename: 'icono.png',
+        contentType: 'image/png',
+      }),
+    ).resolves.toEqual({ id: 'file_123' });
+    const [p] = peticiones;
+    expect(p!.url).toBe('https://files.stripe.com/v1/files');
+    expect(p!.method).toBe('POST');
+    expect(p!.headers['Stripe-Version']).toBe(PLATFORM_STRIPE_API_VERSION);
+    // `fetch` pone el Content-Type multipart con su frontera: no se fija a mano.
+    expect(p!.headers['Content-Type']).toBeUndefined();
+    const form = p!.body as unknown as FormData;
+    expect(form.get('purpose')).toBe('business_icon');
+    expect((form.get('file') as File).name).toBe('icono.png');
+  });
+
+  it('con un baseUrl propio (el doble), las subidas van a ese mismo host', async () => {
+    const { fetch, peticiones } = fetchQueResponde(200, { id: 'file_9' });
+    const cliente = new FetchPlatformStripeClient({
+      secretKey: CLAVE,
+      fetch,
+      baseUrl: 'http://127.0.0.1:12111/',
+    });
+    await cliente.uploadFile({
+      purpose: 'business_logo',
+      bytes: new Uint8Array([1]),
+      filename: 'logo.jpg',
+      contentType: 'image/jpeg',
+    });
+    expect(peticiones[0]!.url).toBe('http://127.0.0.1:12111/v1/files');
+  });
+
+  it('una respuesta sin file_ es un error', async () => {
+    const { fetch } = fetchQueResponde(200, { id: 'x' });
+    const cliente = new FetchPlatformStripeClient({ secretKey: CLAVE, fetch });
+    await expect(
+      cliente.uploadFile({
+        purpose: 'business_icon',
+        bytes: new Uint8Array([1]),
+        filename: 'i.png',
+        contentType: 'image/png',
+      }),
+    ).rejects.toBeInstanceOf(PlatformStripeApiError);
+  });
+});

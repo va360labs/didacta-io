@@ -7,6 +7,7 @@ import { PayoutsCountryUnsupportedError, PlatformStripeApiError } from '../error
 import {
   PLATFORM_STRIPE_V2_API_VERSION,
   type PlatformStripeClient,
+  type StripeFileUpload,
   type StripeParams,
 } from './platform-stripe.client.js';
 
@@ -123,7 +124,43 @@ export interface StripeConnectedAccount {
   } | null;
   readonly settings?: {
     readonly payouts?: { readonly schedule?: StripePayoutScheduleV1 | null } | null;
+    readonly branding?: {
+      readonly icon?: string | null;
+      readonly logo?: string | null;
+      readonly primary_color?: string | null;
+      readonly secondary_color?: string | null;
+    } | null;
+    readonly payments?: { readonly statement_descriptor?: string | null } | null;
+    readonly card_payments?: { readonly statement_descriptor_prefix?: string | null } | null;
   } | null;
+  readonly metadata?: Readonly<Record<string, string>> | null;
+}
+
+/**
+ * La marca del aula en su cuenta conectada (`POST /v1/accounts/{id}`, que vale
+ * también para las cuentas creadas por v2: verificado en el sandbox el
+ * 2026-11-14). Lo que ve el comprador en el pago, en los recibos de Stripe y
+ * en el extracto del banco.
+ *
+ * `null` en un campo = no se toca; `''` en icono o logo = se quita.
+ */
+export interface UpdateAccountBrandingInput {
+  readonly iconFileId?: string | null;
+  readonly logoFileId?: string | null;
+  /** `#rrggbb`. */
+  readonly primaryColor?: string | null;
+  readonly secondaryColor?: string | null;
+  /** Ya saneado (5–22). */
+  readonly statementDescriptor?: string | null;
+  /** Ya saneado (2–10). Prefijo del descriptor de las tarjetas. */
+  readonly statementDescriptorPrefix?: string | null;
+  /**
+   * Nombre del comercio (`business_profile.name`): el que Stripe enseña como
+   * vendedor en el pago y en sus recibos.
+   */
+  readonly businessName?: string | null;
+  /** Metadatos a fusionar (la huella de la marca aplicada). */
+  readonly metadata?: Readonly<Record<string, string>>;
 }
 
 /** `POST /v1/balance_settings`, la parte de pagos al banco. */
@@ -172,6 +209,16 @@ export interface ConnectedAccountsApi {
     stripeAccountId: string,
     input: UpdateBalanceSettingsInput,
   ): Promise<StripeBalanceSettings>;
+  /**
+   * Sube el logo o el icono a la cuenta de la plataforma. `null` si el
+   * cliente no sabe subir ficheros (entonces la marca va sin imagen).
+   */
+  uploadBrandFile(file: StripeFileUpload): Promise<string | null>;
+  /** Aplica la marca del aula a su cuenta conectada. */
+  updateBranding(
+    stripeAccountId: string,
+    input: UpdateAccountBrandingInput,
+  ): Promise<StripeConnectedAccount>;
 }
 
 const ACCOUNT_ID = /^acct_[A-Za-z0-9]{6,64}$/;
@@ -205,6 +252,38 @@ export function sanitizeStatementDescriptor(name: string | null | undefined): st
   const cut = ascii.slice(0, 22).trim();
   if (cut.length < 5 || !/[A-Z]/.test(cut)) return null;
   return cut;
+}
+
+/**
+ * Prefijo del descriptor de las tarjetas (`settings.card_payments.
+ * statement_descriptor_prefix`): 2–10 caracteres latinos con al menos una
+ * letra, mismas exclusiones que el descriptor. Se recorta por palabra si cabe
+ * («PRIMER SORBO» → «PRIMER»), si no, a 10. `null` si no queda nada usable.
+ */
+export function sanitizeStatementDescriptorPrefix(name: string | null | undefined): string | null {
+  const full = sanitizeStatementDescriptor(name) ?? asciiDescriptor(name);
+  if (!full) return null;
+  let cut = full.length <= 10 ? full : full.slice(0, 10);
+  if (full.length > 10) {
+    const space = cut.lastIndexOf(' ');
+    if (space >= 2) cut = cut.slice(0, space);
+  }
+  cut = cut.replace(/[ .,\-&]+$/, '').trim();
+  if (cut.length < 2 || !/[A-Z]/.test(cut)) return null;
+  return cut;
+}
+
+/** Igual que el descriptor pero sin el mínimo de 5 (para el prefijo). */
+function asciiDescriptor(name: string | null | undefined): string | null {
+  if (!name) return null;
+  const ascii = name
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toUpperCase()
+    .replace(/[^A-Z0-9 .,\-&]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return ascii.length > 0 ? ascii : null;
 }
 
 /**
@@ -452,6 +531,22 @@ class StripeConnectedAccountsApi implements ConnectedAccountsApi {
     });
   }
 
+  async uploadBrandFile(file: StripeFileUpload): Promise<string | null> {
+    if (!this.client.uploadFile) return null;
+    return (await this.client.uploadFile(file)).id;
+  }
+
+  updateBranding(
+    stripeAccountId: string,
+    input: UpdateAccountBrandingInput,
+  ): Promise<StripeConnectedAccount> {
+    return this.client.v1<StripeConnectedAccount>(
+      'POST',
+      `/v1/accounts/${assertStripeAccountId(stripeAccountId)}`,
+      brandingParams(input),
+    );
+  }
+
   updateBalanceSettings(
     stripeAccountId: string,
     input: UpdateBalanceSettingsInput,
@@ -478,6 +573,32 @@ class StripeConnectedAccountsApi implements ConnectedAccountsApi {
       { account: assertStripeAccountId(stripeAccountId) },
     );
   }
+}
+
+/** Campos del formulario v1 de la marca (vacíos = no se mandan). */
+export function brandingParams(input: UpdateAccountBrandingInput): StripeParams {
+  const branding: Record<string, unknown> = {};
+  if (input.iconFileId !== undefined && input.iconFileId !== null)
+    branding['icon'] = input.iconFileId;
+  if (input.logoFileId !== undefined && input.logoFileId !== null)
+    branding['logo'] = input.logoFileId;
+  if (input.primaryColor) branding['primary_color'] = input.primaryColor;
+  if (input.secondaryColor) branding['secondary_color'] = input.secondaryColor;
+  const settings: Record<string, unknown> = {};
+  if (Object.keys(branding).length > 0) settings['branding'] = branding;
+  if (input.statementDescriptor) {
+    settings['payments'] = { statement_descriptor: input.statementDescriptor };
+  }
+  if (input.statementDescriptorPrefix) {
+    settings['card_payments'] = { statement_descriptor_prefix: input.statementDescriptorPrefix };
+  }
+  return {
+    ...(input.businessName ? { business_profile: { name: input.businessName } } : {}),
+    ...(Object.keys(settings).length > 0 ? { settings } : {}),
+    ...(input.metadata && Object.keys(input.metadata).length > 0
+      ? { metadata: { ...input.metadata } }
+      : {}),
+  };
 }
 
 export function createConnectedAccountsApi(
