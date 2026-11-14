@@ -82,7 +82,7 @@
   "TENANT_SETTINGS_SMTP_CONFIG_INVALID": "Configuração de SMTP inválida: {detail}",
   "TENANT_SETTINGS_SMTP_NOT_CONFIGURED": "O SMTP não está configurado para este tenant",
   "TENANT_SETTINGS_SMTP_TEST_FAILED": "O SMTP falhou: {detail}",
-  "THEMING_ABOUT_TOO_LONG": "A descrição da academia pode ter no máximo {detail} caracteres.",
+  "THEMING_ABOUT_TOO_LONG": "A descrição da escola pode ter no máximo {detail} caracteres.",
   "THEMING_COVER_DELETE_FORBIDDEN": "Somente administradores podem remover a capa.",
   "THEMING_COVER_NOT_FOUND": "Este tenant não tem uma capa enviada.",
   "THEMING_COVER_TOO_LARGE": "A capa ultrapassa o tamanho máximo permitido de {detail} MB.",

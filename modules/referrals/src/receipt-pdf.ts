@@ -256,7 +256,7 @@ export async function renderReceiptPdf(input: ReceiptPdfInput): Promise<Buffer> 
             L(
               `Pago realizado por ${input.issuerName} por el programa de referidos de su academia. Didacta no interviene en el pago ni practica ninguna retención.`,
               `Payment made by ${input.issuerName} under its academy's referral programme. Didacta is not involved in the payment and withholds nothing.`,
-              `Pagamento feito por ${input.issuerName} pelo programa de indicações da sua academia. A Didacta não intervém no pagamento nem faz nenhuma retenção.`,
+              `Pagamento feito por ${input.issuerName} pelo programa de indicações da sua escola. A Didacta não intervém no pagamento nem faz nenhuma retenção.`,
             ),
           ),
           left,

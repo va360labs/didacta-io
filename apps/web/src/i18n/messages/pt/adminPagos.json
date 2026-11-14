@@ -568,7 +568,7 @@
       "downloading": "Baixando…",
       "downloadError": "Não foi possível baixar a fatura.",
       "loadError": "Não foi possível carregar suas faturas.",
-      "runMonthLabel": "Mês a faturar (todas as academias)",
+      "runMonthLabel": "Mês a faturar (todas as escolas)",
       "run": "Emitir faturas do mês",
       "running": "Emitindo…",
       "runDone": "{month}: {issued} faturas emitidas, {sent} e-mails enviados, {errors} erros.",

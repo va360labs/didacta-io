@@ -13,7 +13,7 @@ import { formatDay, inactivityTexts } from '../src/video/cloud/video-inactivity-
 const DELETE_ON = new Date('2026-12-04T00:00:00Z');
 
 describe('avisos de inactividad de vídeo', () => {
-  it('portugués: fecha pt-BR, «academia» y «vídeos que você enviou», sin español', () => {
+  it('portugués: fecha pt-BR, «escola» y «vídeos que você enviou», sin español', () => {
     const d10 = inactivityTexts({
       lang: 'pt',
       stage: 10,
@@ -21,9 +21,9 @@ describe('avisos de inactividad de vídeo', () => {
       deleteOn: DELETE_ON,
     });
     expect(d10.subject).toBe('Escola Luz está há 10 dias sem atividade');
-    expect(d10.title).toBe('Sua academia está há 10 dias sem atividade');
+    expect(d10.title).toBe('Sua escola está há 10 dias sem atividade');
     expect(d10.body).toContain('em 4 de dezembro de 2026 vamos excluir os vídeos que você enviou');
-    expect(d10.cta).toBe('Entrar na minha academia');
+    expect(d10.cta).toBe('Entrar na minha escola');
     const d20 = inactivityTexts({
       lang: 'pt',
       stage: 20,
