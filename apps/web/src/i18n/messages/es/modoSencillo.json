@@ -150,8 +150,10 @@
         "ayuda1": "Tus alumnos pagan con tarjeta en una página segura de pago.",
         "ayuda2": "Didacta se queda el 5 % de cada venta. El resto es tuyo y va a tu banco.",
         "ayuda3": "Vendes en tu moneda y cada alumno ve el precio en la suya.",
-        "paisNoAdmitido": "Todavía no podemos pagar a creadores con el banco en {pais}. Mientras tanto puedes montar tu academia y tu comunidad; te avisaremos cuando se pueda cobrar desde tu país.",
-        "otroPais": "¿Tu banco está en otro país?"
+        "paisNoAdmitido": "Todavía no podemos pagar a creadores con el banco en {pais}. Mientras tanto puedes montar tu academia y tu comunidad.",
+        "paisNoAdmitidoOtro": "Al darte de alta nos dijiste que tu banco está en otro país, y todavía no podemos pagar a creadores con el banco fuera de los países admitidos. Mientras tanto puedes montar tu academia y tu comunidad.",
+        "otroPais": "¿Tu banco está en otro país?",
+        "elegirPais": "Elegir el país de mi banco"
       },
       "publish": {
         "titulo": "Publica y copia tu enlace",

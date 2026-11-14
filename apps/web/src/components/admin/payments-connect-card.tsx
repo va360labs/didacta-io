@@ -33,6 +33,7 @@ import { apiErrorMessage } from '@/lib/i18n/api-error';
 import { regionNameFormatter } from '@/lib/i18n/format';
 import { labelOr } from '@/lib/i18n/labels';
 import {
+  OTHER_COUNTRY,
   countryOptions,
   defaultCountry,
   derivePayoutsCardView,
@@ -143,16 +144,31 @@ export function PaymentsConnectCard({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [api, returnAction]);
 
+  // Preselección: su cuenta > lo que declaró en el alta de Cloud > el navegador.
   useEffect(() => {
     if (status && !country) {
       const browser = typeof navigator !== 'undefined' ? navigator.language : locale;
-      setCountry(defaultCountry(status.supportedCountries, browser));
+      setCountry(
+        defaultCountry(status.supportedCountries, browser, {
+          account: status.account?.country,
+          declared: status.declaredCountry,
+        }),
+      );
     }
   }, [status, country, locale]);
 
+  const otherLabel = t('countryOther');
   const options = useMemo(
-    () => (status ? countryOptions(status.supportedCountries, locale) : []),
-    [status, locale],
+    () =>
+      status
+        ? countryOptions(status.supportedCountries, locale, {
+            // Lo declarado y lo de la cuenta tienen que poder verse en el
+            // selector aunque no se admitan («Otro país» incluido).
+            extra: [status.declaredCountry, status.account?.country],
+            otherLabel,
+          })
+        : [],
+    [status, locale, otherLabel],
   );
   const selectedSupported = options.find((o) => o.code === country)?.supported ?? true;
 
@@ -308,7 +324,9 @@ export function PaymentsConnectCard({
               </div>
               {rejectedCountry || !selectedSupported ? (
                 <StatusLine tone="warning" testId="payouts-country-unsupported">
-                  {t('countryUnsupported', { country: countryName(rejectedCountry ?? country) })}
+                  {(rejectedCountry ?? country) === OTHER_COUNTRY
+                    ? t('countryUnsupportedOther')
+                    : t('countryUnsupported', { country: countryName(rejectedCountry ?? country) })}
                 </StatusLine>
               ) : null}
               <div className="border-t border-border-soft pt-4">

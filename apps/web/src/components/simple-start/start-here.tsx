@@ -12,7 +12,7 @@ import { Icon } from '@/components/icon';
 import { START_HERE_CHANGED_EVENT } from '@/components/simple-shell/simple-shell';
 import { ApiHttpError } from '@/lib/api-client';
 import { formatCents, formatDateTime, regionNameFormatter } from '@/lib/i18n/format';
-import { payoutsApi, payoutsStepView, type PayoutsStatusDto } from '@/lib/payouts';
+import { OTHER_COUNTRY, payoutsApi, payoutsStepView, type PayoutsStatusDto } from '@/lib/payouts';
 import {
   parseAmount,
   saleState,
@@ -321,9 +321,11 @@ function StepAction({
 /**
  * Acción del paso «Conecta tus cobros». Con cobros de plataforma, la cuenta
  * del creador tiene que estar en un país donde se le pueda pagar: si el suyo
- * (el de su cuenta o, sin ella, el del navegador) no lo está, en vez de
- * mandarlo a un alta que va a fallar se le dice aquí, con un enlace por si su
- * banco está en otro país. La decisión es `payoutsStepView`; esto solo pinta.
+ * (el de su cuenta, el que declaró en el alta de Cloud o el del navegador) no
+ * lo está, en vez de mandarlo a un alta que va a fallar se le dice aquí, con
+ * un enlace a la tarjeta por si su banco está en otro país. Si declaró «otro
+ * país» (`OTHER`), el texto lo dice así, sin nombre de país. La decisión es
+ * `payoutsStepView`; esto solo pinta.
  * Sin modo plataforma (`status` → `null`) o si la petición falla, el botón de
  * siempre.
  */
@@ -351,21 +353,24 @@ function PaymentsAction({ view, primary }: { view: StartHereView; primary: strin
   const browser = typeof navigator !== 'undefined' ? navigator.language : locale;
   const step = payoutsStepView(status, browser);
   if (step.kind === 'country-unsupported') {
+    const other = step.country === OTHER_COUNTRY;
     return (
       <div data-testid="cobros-pais-no-admitido" data-country={step.country}>
         <p
           role="status"
           className="mt-4 max-w-[60ch] rounded-xl border border-warning-200 bg-warning-50 p-3.5 text-[15px] leading-relaxed text-warning-700"
         >
-          {t('pasos.payments.paisNoAdmitido', {
-            pais: regionNameFormatter(locale)(step.country),
-          })}
+          {other
+            ? t('pasos.payments.paisNoAdmitidoOtro')
+            : t('pasos.payments.paisNoAdmitido', {
+                pais: regionNameFormatter(locale)(step.country),
+              })}
         </p>
         <Link
           href={view.paymentsSetupPath}
           className="mt-3 inline-block text-sm font-semibold text-brand-600 hover:underline"
         >
-          {t('pasos.payments.otroPais')}
+          {other ? t('pasos.payments.elegirPais') : t('pasos.payments.otroPais')}
         </Link>
       </div>
     );

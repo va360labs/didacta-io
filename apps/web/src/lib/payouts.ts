@@ -74,6 +74,12 @@ export interface PayoutsStatusDto {
   reason: string | null;
   account: PayoutsAccountDto | null;
   supportedCountries: string[];
+  /**
+   * País del banco que el creador DECLARÓ al darse de alta en Cloud (ISO
+   * alfa-2 u `OTHER`); `null` sin él. No verificado: manda el de `account`.
+   * Ausente en una API anterior.
+   */
+  declaredCountry?: string | null;
   feeBps: number;
   /** Moneda en la que cobra el creador (la de sus precios por defecto). `null` sin cuenta. */
   settlementCurrency?: string | null;
@@ -686,30 +692,65 @@ export const COMMON_UNSUPPORTED_COUNTRIES: readonly string[] = [
   'AD',
 ];
 
+/**
+ * «Mi banco está en otro país»: lo que el creador pudo declarar en el alta de
+ * Cloud en vez de un país (fuera de la lista que se le ofreció).
+ */
+export const OTHER_COUNTRY = 'OTHER';
+
+/**
+ * Opciones del selector. `extra`: países que hay que poder ver aunque no estén
+ * en ninguna de las dos listas (el declarado en el alta, el de su cuenta): van
+ * con los no admitidos si no se admiten. `OTHER` entre ellos añade al final
+ * «Otro país» (con `otherLabel`), también como no admitido.
+ */
 export function countryOptions(
   supported: readonly string[],
   locale: string,
+  options: { extra?: ReadonlyArray<string | null | undefined>; otherLabel?: string } = {},
 ): Array<{ code: string; name: string; supported: boolean }> {
   const name = regionNameFormatter(locale);
   const byName = (a: { name: string }, b: { name: string }) => a.name.localeCompare(b.name, locale);
   const supportedSet = new Set(supported.map((c) => c.toUpperCase()));
+  const extra = (options.extra ?? [])
+    .filter((c): c is string => typeof c === 'string' && c.length > 0)
+    .map((c) => c.toUpperCase());
   const yes = [...supportedSet].map((code) => ({ code, name: name(code), supported: true }));
-  const no = COMMON_UNSUPPORTED_COUNTRIES.filter((c) => !supportedSet.has(c)).map((code) => ({
-    code,
-    name: name(code),
-    supported: false,
-  }));
-  return [...yes.sort(byName), ...no.sort(byName)];
+  const unsupported = new Set(
+    [...COMMON_UNSUPPORTED_COUNTRIES, ...extra.filter((c) => /^[A-Z]{2}$/.test(c))].filter(
+      (c) => !supportedSet.has(c),
+    ),
+  );
+  const no = [...unsupported].map((code) => ({ code, name: name(code), supported: false }));
+  const other = extra.includes(OTHER_COUNTRY)
+    ? [{ code: OTHER_COUNTRY, name: options.otherLabel ?? OTHER_COUNTRY, supported: false }]
+    : [];
+  return [...yes.sort(byName), ...no.sort(byName), ...other];
 }
 
 /**
- * País por defecto del selector: el del navegador si se admite. Si el del
- * navegador es uno de los que se ofrecen como «todavía no» (un creador de
- * Brasil o de México), ESE: la tarjeta lo dice y apaga el botón, en vez de
- * caer en silencio a España y mandarlo a un alta de Stripe que fallará. Con
- * cualquier otra región, la de siempre: España o el primero admitido.
+ * País por defecto del selector, por este orden:
+ *
+ *  1. El de su cuenta conectada, si ya la abrió (es el de su banco).
+ *  2. El que DECLARÓ al darse de alta en Cloud (`OTHER` incluido: «Otro
+ *     país»), admitido o no: es lo que dijo, y si no se admite la tarjeta lo
+ *     dice y apaga el botón en vez de cambiárselo por España.
+ *  3. El del navegador si se admite, o si es uno de los que se ofrecen como
+ *     «todavía no» (un creador de Brasil o de México): ESE, por lo mismo.
+ *  4. Con cualquier otra región, la de siempre: España o el primero admitido.
+ *
+ * Quien lo usa tiene que ofrecer ese país en el selector (`countryOptions`
+ * con `extra`).
  */
-export function defaultCountry(supported: readonly string[], browserLocale: string): string {
+export function defaultCountry(
+  supported: readonly string[],
+  browserLocale: string,
+  known: { account?: string | null; declared?: string | null } = {},
+): string {
+  const account = known.account?.toUpperCase();
+  if (account && /^[A-Z]{2}$/.test(account)) return account;
+  const declared = known.declared?.toUpperCase();
+  if (declared && (declared === OTHER_COUNTRY || /^[A-Z]{2}$/.test(declared))) return declared;
   const region = localeRegion(browserLocale);
   if (region && supported.includes(region)) return region;
   if (region && COMMON_UNSUPPORTED_COUNTRIES.includes(region)) return region;
@@ -727,17 +768,25 @@ export type PayoutsStepView =
  * hacer): el botón de siempre o, si el país del creador no está admitido, el
  * aviso de que todavía no se le puede pagar.
  *
- * El país es el de su cuenta conectada si ya la abrió (es el de su banco); si
- * no, la región del navegador. Sin estado (sin modo plataforma o la petición
- * falló), sin país conocido o sin lista de admitidos: el botón, como siempre.
+ * El país, por este orden: el de su cuenta conectada si ya la abrió (es el de
+ * su banco); el que declaró al darse de alta en Cloud (`OTHER` = «otro país»,
+ * que nunca se admite); la región del navegador. Sin estado (sin modo
+ * plataforma o la petición falló), sin país conocido o sin lista de
+ * admitidos: el botón, como siempre.
  */
 export function payoutsStepView(
-  status: Pick<PayoutsStatusDto, 'account' | 'supportedCountries'> | null | undefined,
+  status:
+    | Pick<PayoutsStatusDto, 'account' | 'supportedCountries' | 'declaredCountry'>
+    | null
+    | undefined,
   browserLocale: string,
 ): PayoutsStepView {
   if (!status || status.supportedCountries.length === 0) return { kind: 'connect' };
   const supported = new Set(status.supportedCountries.map((c) => c.toUpperCase()));
-  const country = status.account?.country?.toUpperCase() || localeRegion(browserLocale);
+  const country =
+    status.account?.country?.toUpperCase() ||
+    status.declaredCountry?.toUpperCase() ||
+    localeRegion(browserLocale);
   if (country && !supported.has(country)) return { kind: 'country-unsupported', country };
   return { kind: 'connect' };
 }

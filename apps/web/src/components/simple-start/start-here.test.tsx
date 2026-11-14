@@ -73,7 +73,10 @@ function startHere(paymentsSetupPath = '/admin/payments') {
   };
 }
 
-function payoutsStatus(account: { country: string } | null = null) {
+function payoutsStatus(
+  account: { country: string } | null = null,
+  declaredCountry: string | null = null,
+) {
   return {
     platform: true,
     operatorName: 'Didacta',
@@ -97,6 +100,7 @@ function payoutsStatus(account: { country: string } | null = null) {
         }
       : null,
     supportedCountries: ['ES', 'FR', 'DE', 'PT', 'GB', 'US'],
+    declaredCountry,
     feeBps: 500,
   };
 }
@@ -156,6 +160,8 @@ async function render(
 
 const paymentsStep = (c: HTMLElement) => c.querySelector('[data-step="payments"]')!;
 const notice = (c: HTMLElement) => c.querySelector('[data-testid="cobros-pais-no-admitido"]');
+/** Solo el texto del aviso (sin el enlace que va debajo). */
+const noticeText = (c: HTMLElement) => notice(c)?.querySelector('[role="status"]')?.textContent;
 const links = (el: Element) =>
   [...el.querySelectorAll('a')].map((a) => ({
     text: a.textContent?.trim(),
@@ -214,6 +220,51 @@ describe('«Empieza aquí»: el paso de cobros según el país del creador', () 
     );
     expect(links(paymentsStep(c))).toEqual([
       { text: '¿Tu banco está en otro país?', href: '/admin/payments' },
+    ]);
+  });
+
+  it('declaró «Otro país» en el alta: el aviso sin nombre de país y «Elegir el país de mi banco»', async () => {
+    stubApi((url) => {
+      if (url.endsWith('/admin/simple-mode/start-here')) return { status: 200, body: startHere() };
+      if (url.endsWith('/modules/payouts/status'))
+        return { status: 200, body: payoutsStatus(null, 'OTHER') };
+      return undefined;
+    });
+    // Navegador en España: lo declarado manda.
+    const c = await render('es', 'es-ES');
+    expect(notice(c)?.getAttribute('data-country')).toBe('OTHER');
+    expect(noticeText(c)).toBe(
+      'Al darte de alta nos dijiste que tu banco está en otro país, y todavía no podemos pagar a creadores con el banco fuera de los países admitidos. Mientras tanto puedes montar tu academia y tu comunidad.',
+    );
+    expect(links(paymentsStep(c))).toEqual([
+      { text: 'Elegir el país de mi banco', href: '/admin/payments' },
+    ]);
+  });
+
+  it('declaró Brasil en el alta: el aviso con Brasil aunque el navegador diga España', async () => {
+    stubApi((url) => {
+      if (url.endsWith('/admin/simple-mode/start-here')) return { status: 200, body: startHere() };
+      if (url.endsWith('/modules/payouts/status'))
+        return { status: 200, body: payoutsStatus(null, 'BR') };
+      return undefined;
+    });
+    const c = await render('es', 'es-ES');
+    expect(noticeText(c)).toBe(
+      'Todavía no podemos pagar a creadores con el banco en Brasil. Mientras tanto puedes montar tu academia y tu comunidad.',
+    );
+  });
+
+  it('declaró España en el alta: el botón, aunque el navegador diga Brasil', async () => {
+    stubApi((url) => {
+      if (url.endsWith('/admin/simple-mode/start-here')) return { status: 200, body: startHere() };
+      if (url.endsWith('/modules/payouts/status'))
+        return { status: 200, body: payoutsStatus(null, 'ES') };
+      return undefined;
+    });
+    const c = await render('pt', 'pt-BR');
+    expect(notice(c)).toBeNull();
+    expect(links(paymentsStep(c))).toEqual([
+      { text: 'Conectar recebimentos', href: '/admin/payments' },
     ]);
   });
 
