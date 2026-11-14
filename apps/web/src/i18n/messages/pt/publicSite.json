@@ -64,7 +64,9 @@
     "openingPayment": "Abrindo pagamento seguro…",
     "buyNow": "Comprar agora",
     "securePayment": "Pagamento seguro via Stripe. Impostos inclusos.",
-    "haveAccountToBuy": "Já tem uma conta? <link>Faça login</link> para comprar pela sua página do curso."
+    "haveAccountToBuy": "Já tem uma conta? <link>Faça login</link> para comprar pela sua página do curso.",
+    "syllabusTitle": "O que o curso inclui",
+    "syllabusCount": "{count, plural, one {# aula} other {# aulas}}"
   },
   "inscripcion": {
     "metaTitle": "Inscrição de membros",
