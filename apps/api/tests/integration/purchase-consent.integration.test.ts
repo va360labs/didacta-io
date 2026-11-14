@@ -13,6 +13,7 @@ import { Test } from '@nestjs/testing';
 import { PrismaClient } from '@didacta/database';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { PurchaseConsentService } from '../../src/modules/purchase-consent/purchase-consent.service';
+import { SaleEmailsService } from '../../src/modules/sale-emails/sale-emails.service';
 import { WITHDRAWAL_WAIVER_VERSION } from '../../src/modules/purchase-consent/withdrawal-waiver';
 import { PrismaModule } from '../../src/prisma/prisma.module';
 import { PrismaService } from '../../src/prisma/prisma.service';
@@ -48,13 +49,16 @@ describeWithDb('Renuncia al desistimiento — Postgres real como didacta_app', (
       ] as const) {
         await admin.tenant.create({ data: { id, slug: `pc-${id.slice(0, 8)}-${stamp}`, name } });
       }
-      consents = new PurchaseConsentService(
+      const logger = { warn: vi.fn(), log: vi.fn(), error: vi.fn() } as never;
+      // El correo de la compra es el RECIBO (SaleEmailsService), con la base real.
+      const receipts = new SaleEmailsService(
         prisma,
-        { warn: vi.fn(), log: vi.fn(), error: vi.fn() } as never,
+        logger,
         { resolveTenantWebBaseUrlForBackground: async () => 'https://a.test' } as never,
-        { resolve: async () => ({ config: { from: 'aula@a.test' } }) } as never,
+        { resolve: async () => ({ config: { from: 'aula@a.test' }, source: 'tenant' }) } as never,
         smtp as never,
       );
+      consents = new PurchaseConsentService(prisma, logger, undefined, receipts);
     } finally {
       process.env['DATABASE_URL'] = previous.url;
       if (previous.mode === undefined) delete process.env['RLS_ENFORCEMENT'];

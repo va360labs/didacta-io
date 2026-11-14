@@ -81,6 +81,10 @@ export class ModulesPlatformEventDispatcher implements PlatformEventDispatcher {
     // La petición es de Stripe, no del navegador del aula: el dominio de los
     // enlaces de bienvenida es el primario del tenant, como en un envío de fondo.
     const webBaseUrl = await tenantResolver.resolveTenantWebBaseUrlForBackground(args.tenantId);
+    const consents = this.consents();
+    // Si va a salir el RECIBO de esta compra, él lleva el enlace para elegir
+    // contraseña: la bienvenida suelta no se manda (un correo, no dos).
+    const deferWelcome = (await consents?.receiptPending(args.tenantId, args.event)) ?? false;
     await dispatchStripeEventToAll({
       event: args.event,
       parsedBody: args.parsedBody,
@@ -88,14 +92,15 @@ export class ModulesPlatformEventDispatcher implements PlatformEventDispatcher {
       webBaseUrl,
       ctx: args.ctx,
       consumers: this.consumers(),
-      provisionMember: (input) => membershipProvisioning.provision(input),
-      provisionBuyer: (input) => billingProvisioning.provision(input),
+      provisionMember: (input) => membershipProvisioning.provision({ ...input, deferWelcome }),
+      provisionBuyer: (input) => billingProvisioning.provision({ ...input, deferWelcome }),
       logger: args.logger,
     });
-    // Pago confirmado: correo con el texto que aceptó el comprador (renuncia al
-    // desistimiento). Nunca lanza; sin el servicio (pruebas que montan solo
-    // este módulo), no hay nada que confirmar.
-    await this.consents()?.confirmCheckout(args.tenantId, args.event);
+    // Correos al comprador: el recibo de la compra (con el texto que aceptó,
+    // renuncia al desistimiento incluida), el de cada renovación y el aviso de
+    // cobro fallido. Nunca lanza; sin el servicio (pruebas que montan solo
+    // este módulo), no hay nada que enviar.
+    await consents?.afterStripeEvent(args.tenantId, args.event, args.ctx);
   }
 
   private consents(): PurchaseConsentService | null {

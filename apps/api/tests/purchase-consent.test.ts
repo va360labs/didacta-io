@@ -14,9 +14,13 @@ import { describe, expect, it, vi } from 'vitest';
 import { BillingPublicController } from '../src/modules/billing/billing-public.controller';
 import {
   PurchaseConsentService,
-  purchaseConfirmationTexts,
   storedWaiverLang,
 } from '../src/modules/purchase-consent/purchase-consent.service';
+import {
+  buildPurchaseReceiptEmail,
+  type PurchaseReceiptData,
+} from '../src/modules/sale-emails/sale-email-render';
+import { SaleEmailsService } from '../src/modules/sale-emails/sale-emails.service';
 import {
   WITHDRAWAL_WAIVER_VERSION,
   renderWithdrawalWaiver,
@@ -25,6 +29,30 @@ import {
 import { MembershipPublicController } from '../src/modules/subscriptions/membership-public.controller';
 
 const TENANT = '11111111-1111-4111-8111-111111111111';
+
+/** Un recibo de curso suelto pagado con tarjeta (los tests cambian lo que miran). */
+const RECEIPT: PurchaseReceiptData = {
+  lang: 'es',
+  timeZone: 'Europe/Madrid',
+  academy: 'Academia Luz',
+  buyerName: 'Lucía Martín',
+  buyerEmail: 'lucia@example.com',
+  product: { title: 'Fotografía nocturna', kind: 'course' },
+  orderRef: '3F2A9C1B',
+  paidAt: new Date('2026-11-12T16:06:00Z'),
+  currency: 'eur',
+  subtotal: 4900,
+  discount: 0,
+  tax: 0,
+  total: 4900,
+  paymentMethod: { type: 'card', brand: 'visa', last4: '4242' },
+  trial: null,
+  nextRenewal: null,
+  seller: { name: 'Academia Luz', legalName: null, contactEmail: null },
+  withdrawal: null,
+  refundPolicyUrl: null,
+  access: null,
+};
 const COURSE = '22222222-2222-4222-8222-222222222222';
 const PLAN = '33333333-3333-4333-8333-333333333333';
 
@@ -68,13 +96,19 @@ function fakePrisma() {
 
 function service(prisma: ReturnType<typeof fakePrisma>, smtp?: { send: ReturnType<typeof vi.fn> }) {
   const logger = { warn: vi.fn(), log: vi.fn(), error: vi.fn() };
-  return new PurchaseConsentService(
+  const tenantResolver = { resolveTenantWebBaseUrlForBackground: async () => 'https://luz.test' };
+  const saleEmails = new SaleEmailsService(
     prisma as never,
     logger as never,
-    { resolveTenantWebBaseUrlForBackground: async () => 'https://luz.test' } as never,
-    smtp ? ({ resolve: async () => ({ config: { from: 'aula@luz.test' } }) } as never) : undefined,
+    tenantResolver as never,
+    smtp
+      ? ({
+          resolve: async () => ({ config: { from: 'aula@luz.test' }, source: 'tenant' }),
+        } as never)
+      : undefined,
     smtp as never,
   );
+  return new PurchaseConsentService(prisma as never, logger as never, undefined, saleEmails);
 }
 
 const req = (extra: Record<string, unknown> = {}) =>
@@ -149,40 +183,32 @@ describe('texto de la casilla', () => {
     );
   });
 
-  it('el correo de confirmación en portugués: fecha pt-BR, comillas curvas y nombre legal', () => {
-    const texts = purchaseConfirmationTexts({
-      lang: 'pt',
-      tenantName: 'Escola Luz',
-      itemName: 'Fotografia noturna',
-      purchaseKind: 'course',
-      trial: false,
-      acceptedAt: new Date('2026-11-12T16:05:00Z'),
-      text: 'TEXTO ACEITO',
-      version: WITHDRAWAL_WAIVER_VERSION,
-      sellerLegal: 'Ana Pereira',
-    });
-    expect(texts.subject).toBe('Sua compra em Escola Luz está confirmada');
-    expect(texts.title).toBe('Compra confirmada');
-    expect(texts.body).toContain(
-      'Seu pagamento de “Fotografia noturna” em Escola Luz está confirmado.',
+  it('el recibo en portugués: fecha pt-BR, comillas curvas, nombre legal y sin español', () => {
+    const { subject, text, html } = buildPurchaseReceiptEmail(
+      { tenantName: 'Escola Luz', logoUrl: null, brandColor: '#1E5AA8' },
+      {
+        ...RECEIPT,
+        lang: 'pt',
+        timeZone: 'Europe/Madrid',
+        academy: 'Escola Luz',
+        product: { title: 'Fotografia noturna', kind: 'course' },
+        seller: { name: 'Escola Luz', legalName: 'Ana Pereira', contactEmail: null },
+        withdrawal: {
+          acceptedAt: new Date('2026-11-12T16:05:00Z'),
+          text: 'TEXTO ACEITO',
+          version: WITHDRAWAL_WAIVER_VERSION,
+        },
+      },
     );
-    expect(texts.body).toContain('“TEXTO ACEITO”');
-    expect(texts.body).toContain('12 de novembro de 2026');
-    expect(texts.body).toContain('17:05');
-    expect(texts.body).toContain('Nome legal do vendedor: Ana Pereira.');
-    expect(texts.body).toContain('não há prazo de 14 dias para desistir desta compra');
-    expect(texts.body).not.toMatch(/noviembre|Guarda este correo|«/);
-    const trial = purchaseConfirmationTexts({
-      lang: 'pt',
-      tenantName: 'Escola Luz',
-      itemName: null,
-      purchaseKind: 'membership',
-      trial: true,
-      acceptedAt: new Date('2026-11-12T16:05:00Z'),
-      text: 'T',
-      version: WITHDRAWAL_WAIVER_VERSION,
-    });
-    expect(trial.body).toMatch(/^Sua assinatura de .+ em Escola Luz começou\./);
+    expect(subject).toBe('Recibo da sua compra em Escola Luz (pedido 3F2A9C1B)');
+    expect(text).toContain('“TEXTO ACEITO”');
+    expect(text).toContain('12 de novembro de 2026');
+    expect(text).toContain('17:05');
+    expect(text).toContain('Nome legal: Ana Pereira');
+    expect(text).toContain('não há prazo de 14 dias para desistir desta compra');
+    expect(`${subject} ${text} ${html}`).not.toMatch(
+      /noviembre|Guarda este correo|«|Pedido nº|Vendido por Escola Luz\./,
+    );
   });
 
   it('el idioma guardado con la prueba elige el del correo; lo desconocido, español', () => {
@@ -193,24 +219,25 @@ describe('texto de la casilla', () => {
     expect(storedWaiverLang(null)).toBe('es');
   });
 
-  it('el correo de confirmación repite el texto aceptado, la fecha y el vendedor', () => {
-    const texts = purchaseConfirmationTexts({
-      lang: 'es',
-      tenantName: 'Academia Luz',
-      itemName: 'Fotografía nocturna',
-      purchaseKind: 'course',
-      trial: false,
-      acceptedAt: new Date('2026-11-12T16:05:00Z'),
-      text: 'TEXTO ACEPTADO',
-      version: WITHDRAWAL_WAIVER_VERSION,
-      sellerLegal: 'Ana Pérez',
-    });
-    expect(texts.subject).toBe('Confirmación de tu compra en Academia Luz');
-    expect(texts.body).toContain('«TEXTO ACEPTADO»');
-    expect(texts.body).toContain('12 de noviembre de 2026');
-    expect(texts.body).toContain('17:05');
-    expect(texts.body).toContain('Nombre fiscal del vendedor: Ana Pérez.');
-    expect(texts.body).toContain('no hay plazo de 14 días para desistir');
+  it('el recibo repite el texto aceptado, la fecha y el vendedor', () => {
+    const { text } = buildPurchaseReceiptEmail(
+      { tenantName: 'Academia Luz', logoUrl: null, brandColor: '#1E5AA8' },
+      {
+        ...RECEIPT,
+        seller: { name: 'Academia Luz', legalName: 'Ana Pérez', contactEmail: 'hola@luz.test' },
+        withdrawal: {
+          acceptedAt: new Date('2026-11-12T16:05:00Z'),
+          text: 'TEXTO ACEPTADO',
+          version: WITHDRAWAL_WAIVER_VERSION,
+        },
+      },
+    );
+    expect(text).toContain('«TEXTO ACEPTADO»');
+    expect(text).toContain('12 de noviembre de 2026');
+    expect(text).toContain('17:05');
+    expect(text).toContain('Nombre fiscal: Ana Pérez');
+    expect(text).toContain('Contacto: hola@luz.test');
+    expect(text).toContain('no hay plazo de 14 días para desistir');
   });
 });
 
@@ -361,8 +388,9 @@ describe('confirmación por correo al pagar', () => {
       smtp.send.mock.calls[0] as unknown as [unknown, { to: string; subject: string; text: string }]
     )[1];
     expect(mail.to).toBe('confirmado@example.com');
-    expect(mail.subject).toBe('Confirmación de tu compra en Academia Luz');
-    expect(mail.text).toContain(String(prisma.rows[0]!['text']));
+    // El recibo: asunto con el pedido (la orden), el texto aceptado entero.
+    expect(mail.subject).toBe('Recibo de tu compra en Academia Luz (pedido ORD1)');
+    expect(mail.text).toContain(`«${String(prisma.rows[0]!['text'])}»`);
     expect(prisma.rows[0]).toMatchObject({ buyerEmail: 'confirmado@example.com' });
     expect(prisma.rows[0]!['paidAt']).toBeInstanceOf(Date);
     expect(prisma.rows[0]!['confirmationSentAt']).toBeInstanceOf(Date);
