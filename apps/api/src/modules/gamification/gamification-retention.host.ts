@@ -80,18 +80,24 @@ export class GamificationRetentionHost {
    * creador, como la bienvenida del modo sencillo y los anuncios de directos.
    */
   async celebrationAuthor(tenantId: string): Promise<{ id: string; displayName: string } | null> {
-    const owner = await this.prisma.user.findFirst({
-      where: {
-        tenantId,
-        deletedAt: null,
-        status: 'ACTIVE',
-        roles: { some: { role: { name: { in: ['tenant_admin', 'super_admin'] } } } },
-      },
-      orderBy: { createdAt: 'asc' },
-      select: { id: true, name: true, email: true },
-    });
-    if (!owner) return null;
-    return { id: owner.id, displayName: owner.name?.trim() || owner.email.split('@')[0]! };
+    // Primero quien administra el aula (tenant_admin); un super_admin suele
+    // ser la cuenta de la plataforma, no la cara que conocen los alumnos.
+    for (const role of ['tenant_admin', 'super_admin']) {
+      const owner = await this.prisma.user.findFirst({
+        where: {
+          tenantId,
+          deletedAt: null,
+          status: 'ACTIVE',
+          roles: { some: { role: { name: role } } },
+        },
+        orderBy: { createdAt: 'asc' },
+        select: { id: true, name: true, email: true },
+      });
+      if (owner) {
+        return { id: owner.id, displayName: owner.name?.trim() || owner.email.split('@')[0]! };
+      }
+    }
+    return null;
   }
 
   /** Título y slug de un curso por el servicio público de mod.courses. */
