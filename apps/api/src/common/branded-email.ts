@@ -10,17 +10,27 @@
  * Objetivo (pedido de producto):
  *  - Los correos se firman con el nombre del TENANT, nunca "Didacta".
  *  - Todos comparten el mismo diseño: header con el logo del tenant, color de
- *    marca, contenido, botón CTA y footer discreto "Powered by Didacta".
+ *    marca, contenido, botón CTA y footer discreto «Powered by Didacta — Crea
+ *    tu academia gratis», enlazado al alta de didacta.io con la campaña del
+ *    aula (`academy-mark.ts`).
  *  - El logo y el color salen del theming per-tenant (`ModThemingTenantTheme`);
- *    el nombre de `tenant.name`. Si falta el logo, se muestra el nombre.
+ *    el nombre de `tenant.name`. Si falta el logo, sus INICIALES sobre su
+ *    color y el nombre al lado — nunca el logo de Didacta (Valentín, 14-nov).
  *
  * Es HTML "email-safe": estilos inline, layout con tablas y max-width 600px
  * para compatibilidad con la mayoría de clientes.
  */
 
+import {
+  academyEmailMark,
+  poweredByHref,
+  poweredByText,
+  type AcademyEmailMark,
+} from './academy-mark';
+
 /** Cliente Prisma mínimo que el resolver necesita (evita acoplar al service). */
 export interface BrandingPrisma {
-  tenant: { findUnique(args: unknown): Promise<{ name: string } | null> };
+  tenant: { findUnique(args: unknown): Promise<{ name: string; slug?: string } | null> };
   modThemingTenantTheme: {
     findUnique(
       args: unknown,
@@ -35,6 +45,13 @@ export interface EmailBranding {
   logoUrl: string | null;
   /** Color de marca en HEX (del theming del tenant). */
   brandColor: string;
+  /**
+   * Correo DE UN AULA (lo pone `resolveEmailBranding`): sin logo, la cabecera
+   * lleva sus iniciales (`mark`) y el pie enlaza al alta de didacta.io con su
+   * campaña (`slug`). Los avisos de la plataforma (cobros, comisión) no lo
+   * llevan: ni monograma ni «crea tu academia» a quien ya tiene una.
+   */
+  academy?: { slug: string | null; mark: AcademyEmailMark | null };
 }
 
 /**
@@ -123,10 +140,11 @@ export async function resolveEmailBranding(
   let tenantName = 'la plataforma';
   let logoUrl: string | null = null;
   let brandColor = '#1E5AA8';
+  let academy: EmailBranding['academy'];
   try {
     const tenant = await prisma.tenant.findUnique({
       where: { id: tenantId },
-      select: { name: true },
+      select: { name: true, slug: true },
     });
     if (tenant?.name) tenantName = tenant.name;
 
@@ -138,10 +156,18 @@ export async function resolveEmailBranding(
       brandColor = hslToHex(theme.brandHue, theme.brandSaturation, 45);
       logoUrl = resolveLogoUrl(theme.logoUrl, webBaseUrl);
     }
+    if (tenant?.name) {
+      academy = {
+        slug: tenant.slug ?? null,
+        mark: logoUrl
+          ? null
+          : academyEmailMark(tenant.name, theme?.brandHue, theme?.brandSaturation),
+      };
+    }
   } catch {
     // Branding best-effort: seguimos con los defaults.
   }
-  return { tenantName, logoUrl, brandColor };
+  return { tenantName, logoUrl, brandColor, ...(academy ? { academy } : {}) };
 }
 
 /** Un `logoUrl` del theming → URL absoluta (o null). Relativo se prefija. */
@@ -166,12 +192,20 @@ export function renderBrandedEmail(
   const name = escapeHtml(branding.tenantName);
   const color = branding.brandColor;
 
+  const mark = branding.academy?.mark ?? null;
   const header =
     branding.logoUrl && /^https?:\/\//i.test(branding.logoUrl)
       ? `<img src="${escapeHtmlAttr(branding.logoUrl)}" alt="${escapeHtmlAttr(
           branding.tenantName,
         )}" style="max-height:44px;max-width:200px;object-fit:contain;" />`
-      : `<span style="font-size:20px;font-weight:700;color:${color};">${name}</span>`;
+      : mark
+        ? academyMarkHeader(mark, name)
+        : `<span style="font-size:20px;font-weight:700;color:${color};">${name}</span>`;
+  const poweredBy = branding.academy
+    ? `<a href="${escapeHtmlAttr(poweredByHref(content.lang, branding.academy.slug))}" style="color:#94a3b8;text-decoration:none;">${escapeHtml(
+        poweredByText(content.lang),
+      )}</a>`
+    : 'Powered by Didacta';
 
   const ctaHtml = content.cta
     ? `<tr><td style="padding:8px 0 4px;">
@@ -206,7 +240,7 @@ export function renderBrandedEmail(
         </td></tr>
         <tr><td style="padding:16px 32px;background:#f8fafc;border-top:1px solid #eef2f6;font-family:'Inter',system-ui,sans-serif;font-size:12px;color:#94a3b8;">
           ${footerNoteHtml}
-          <p style="margin:0;">Powered by Didacta</p>
+          <p style="margin:0;">${poweredBy}</p>
         </td></tr>
       </table>
     </td></tr>
@@ -222,11 +256,28 @@ export function renderBrandedEmail(
     '',
     '—',
     ...(content.footerNote ? [content.footerNote] : []),
-    'Powered by Didacta',
+    branding.academy
+      ? `${poweredByText(content.lang)}: ${poweredByHref(content.lang, branding.academy.slug)}`
+      : 'Powered by Didacta',
   ];
   const text = textParts.join('\n');
 
   return { html, text };
+}
+
+/**
+ * Cabecera de un correo de aula sin logo: sus iniciales en un cuadrado con su
+ * color (una celda de tabla, no una imagen: se ve aunque el cliente bloquee
+ * las imágenes) y su nombre al lado. `name` llega ya escapado.
+ */
+function academyMarkHeader(mark: AcademyEmailMark, name: string): string {
+  const font = `'Inter',system-ui,-apple-system,Segoe UI,sans-serif`;
+  return `<table role="presentation" cellpadding="0" cellspacing="0"><tr>
+          <td width="40" height="40" align="center" valign="middle" style="width:40px;height:40px;border-radius:10px;background:${mark.background};color:${mark.foreground};font-family:${font};font-size:16px;font-weight:800;line-height:40px;text-align:center;">${escapeHtml(
+            mark.initials,
+          )}</td>
+          <td style="padding-left:12px;font-family:${font};font-size:20px;font-weight:700;color:#0D1B2A;">${name}</td>
+        </tr></table>`;
 }
 
 /** Escapa un valor para usarlo dentro de un atributo HTML (comillas dobles). */
