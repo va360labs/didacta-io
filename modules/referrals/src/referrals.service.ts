@@ -143,7 +143,7 @@ export interface PayeeMaskedView {
  * con cada aceptación; si cambia, el alumno vuelve a aceptar para seguir
  * generando enlace.
  */
-export const REFERRAL_TERMS_VERSION = '2026-11-13';
+export const REFERRAL_TERMS_VERSION = '2026-11-14';
 
 /** Lo que la página pública de condiciones necesita del programa de un aula. */
 export interface ReferralsPublicTerms {

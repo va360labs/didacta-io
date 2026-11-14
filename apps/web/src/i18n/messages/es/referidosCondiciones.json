@@ -44,7 +44,8 @@
       "titulo": "5. Cómo cobras",
       "p1": "Como descuento en tu cuota: si {academia} tiene esta opción encendida y tú tienes una membresía activa, puedes usar lo confirmado como descuento en tu próxima cuota. Cada vez se descuenta como mucho el {tope} % de una cuota, contando el saldo que ya tengas a favor. Para el descuento no te pedimos ningún dato.",
       "p2": "En dinero: {hayMinimo, select, si {cuando lo confirmado llegue a {minimo} puedes pedir el cobro} other {puedes pedir el cobro de lo confirmado cuando quieras}}. Te pedimos tu nombre completo, tu NIF o NIE (o el identificador fiscal de tu país) y tu cuenta bancaria (IBAN).",
-      "p3": "{academia} te paga por transferencia. Cuando lo marca como pagado, se genera un justificante en PDF con un número correlativo, que podéis descargar tú y {academia}. Didacta no practica ninguna retención sobre lo que cobras."
+      "p3": "{academia} te paga por transferencia. Cuando lo marca como pagado, se genera un justificante en PDF con un número correlativo, que podéis descargar tú y {academia}.",
+      "p4": "Impuestos: cada parte es responsable de sus propias obligaciones fiscales. Lo que cobras por el programa, en dinero o como descuento en tu cuota, te lo paga {academia}, no Didacta. Si la ley obliga a {academia} a practicar alguna retención sobre ese pago o a declararlo, lo hace {academia}. Tú declaras lo que cobras cuando te corresponda; si tienes dudas, consulta con tu asesor. Didacta no practica retenciones, no presenta declaraciones en nombre de nadie y no da asesoramiento fiscal."
     },
     "s6": {
       "titulo": "6. La factura de tu cuota cuando usas el descuento",

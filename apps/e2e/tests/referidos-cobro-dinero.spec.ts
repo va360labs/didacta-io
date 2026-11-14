@@ -165,7 +165,7 @@ test('referidos: casilla de mayor de 18, cobro en dinero con datos, pago y justi
     sql(
       `SELECT m.terms_version FROM mod_referrals_member m JOIN "user" u ON u.id = m.user_id WHERE u.email = '${alumnaEmail}'`,
     ),
-  ).toBe('2026-11-13');
+  ).toBe('2026-11-14');
 
   // Las condiciones públicas se leen sin sesión, con las cifras del aula.
   const anonCtx = await nuevo();
