@@ -237,6 +237,10 @@ describe('puertas comunes a todas las herramientas', () => {
       'the "Faça mais rápido com seu agente de IA" panel',
     );
     expect(localizeAgentText('{{ui:nope}}', 'es')).toBe('{{ui:nope}}');
+    // La palabra de la interfaz para «academia»: en pt-BR es «escola».
+    expect(localizeAgentText('"{{ui:academyWord}}"', 'pt')).toBe('"escola"');
+    expect(localizeAgentText('"{{ui:academyWord}}"', 'es')).toBe('"academia"');
+    expect(localizeAgentText('"{{ui:academyWord}}"', 'en')).toBe('"academy"');
   });
 
   it('módulo apagado en el aula: ni se ve ni se usa', async () => {

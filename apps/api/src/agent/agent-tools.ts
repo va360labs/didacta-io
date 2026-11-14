@@ -14,8 +14,15 @@ import type { AgentScope } from './agent-scopes';
  * aula en español o en portugués tienen que ser los que esa persona ve en
  * pantalla. Son los de los catálogos de la web (`modoSencillo.tabs.empieza`,
  * `agenteIa.titulo`); «Comece aqui» es un término fijo del glosario pt-BR.
+ *
+ * `academyWord` es la PALABRA con la que la interfaz llama a la academia. Las
+ * instrucciones dicen «academy» y el modelo la traducía a su aire: en una
+ * sesión real en pt-BR habló de «ferramentas da academia» y «Caminho na
+ * academia», cuando en portugués la interfaz dice «escola» («academia» suena a
+ * gimnasio; glosario pt-BR, commit cf34b8eb).
  */
 export const AGENT_UI_NAMES = {
+  academyWord: { es: 'academia', en: 'academy', pt: 'escola' },
   startHere: { es: 'Empieza aquí', en: 'Start here', pt: 'Comece aqui' },
   agentPanel: {
     es: 'Hazlo más rápido con tu agente de IA',

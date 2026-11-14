@@ -274,6 +274,11 @@ test('agente de IA: panel al crear lecciones, clave, comandos y un agente crea u
     params: { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'e2e' } },
   });
   expect(init.status).toBe(200);
+  // La palabra con la que la interfaz llama a la academia, en el idioma del
+  // aula (aquí español): el agente la usa al hablar con la persona.
+  expect((init.json?.['result'] as { instructions: string }).instructions).toContain(
+    `In this academy's language the academy is called "academia"`,
+  );
   const tools = await mcp(tenant.host, clave, { jsonrpc: '2.0', id: 2, method: 'tools/list' });
   const names = (tools.json?.['result'] as { tools: Array<{ name: string }> }).tools.map(
     (t) => t.name,
