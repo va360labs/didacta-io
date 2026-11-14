@@ -1,0 +1,57 @@
+{
+  "titulo": "Faça mais rápido com seu agente de IA",
+  "sub": "Peça ao seu agente (Claude, Codex, Grok…) e ele faz isso na sua academia por você.",
+  "pestana": "Agente de IA",
+  "abrirMovil": "Faça mais rápido com seu agente de IA",
+  "ocultar": "Ocultar o painel",
+  "cerrar": "Fechar",
+  "ejemploTitulo": "Peça, por exemplo:",
+  "ejemplos": {
+    "courses": "Crie um curso chamado “…” com 6 aulas de texto a partir destas anotações: …",
+    "courseNew": "Crie um curso chamado “…” com 6 aulas de texto a partir destas anotações: …",
+    "courseEdit": "Crie 5 aulas para o meu curso “{curso}” a partir deste roteiro: …",
+    "courseEditSinTitulo": "Crie 5 aulas para este curso a partir deste roteiro: …",
+    "live": "Agende uma aula ao vivo na próxima terça às 19h (no meu horário) chamada “Perguntas e respostas” com este link do Zoom: …"
+  },
+  "copiar": "Copiar",
+  "copiado": "Copiado",
+  "paso1": "Crie sua chave de conexão",
+  "paso1Ayuda": "Com ela, seu agente entra na sua academia. Ele só cria e edita conteúdo.",
+  "crearClave": "Criar chave",
+  "creando": "Criando…",
+  "claveUnaVez": "Copie agora: ela só aparece desta vez.",
+  "revocar": "Revogar",
+  "revocada": "Chave revogada: esse agente não consegue mais entrar.",
+  "clavesActivas": "Você já tem {count, plural, one {# chave ativa} other {# chaves ativas}}. Crie outra só se tiver perdido a sua.",
+  "gestionar": "Gerenciar chaves",
+  "errorCrear": "Não foi possível criar a chave. Tente novamente.",
+  "paso2": "Conecte seu agente",
+  "placeholder": "SUA_CHAVE",
+  "comprobar": "Para verificar:",
+  "guia": "Guia oficial",
+  "agentes": {
+    "claude-code": {
+      "paso": "Cole isto no seu terminal:"
+    },
+    "codex": {
+      "paso": "Adicione isto ao final de ~/.codex/config.toml:"
+    },
+    "hermes": {
+      "paso": "Adicione isto ao ~/.hermes/config.yaml:"
+    },
+    "grok": {
+      "url": "No app do Grok: Connect apps → Add a custom connector → Remote HTTPS. Em “Server URL”:",
+      "cabecera": "E em “HTTP headers”:",
+      "terminal": "Com o Grok Build, no seu terminal:"
+    },
+    "cursor": {
+      "paso": "Adicione isto ao ~/.cursor/mcp.json e ative nas configurações de MCP do Cursor:"
+    },
+    "vscode": {
+      "paso": "Adicione isto ao .mcp.json do seu projeto (GitHub Copilot no modo agente):"
+    }
+  },
+  "puede": "Cria e edita cursos e aulas, agenda aulas ao vivo e publica na comunidade. Os cursos novos ficam em rascunho até você publicá-los; as aulas ao vivo, as publicações da comunidade e as aulas de um curso já publicado aparecem na hora.",
+  "noPuede": "Não define preços, não coloca nada à venda, não exclui nada e não convida ninguém.",
+  "chatgpt": "O ChatGPT ainda não permite conectar com uma chave."
+}

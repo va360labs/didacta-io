@@ -113,9 +113,51 @@ describe('email de invitación · idioma del invitado', () => {
     );
   });
 
-  it('CAMINO DEGRADADO: un locale sin catálogo (pt-BR) cae al español, no a un hueco', () => {
-    // `pt-BR` es alcanzable HOY: lo admite `ALLOWED_LOCALES` de me.controller.
-    for (const locale of ['pt-BR', 'zz', '', '   ']) {
+  it('un invitado pt-BR lo recibe ENTERO en portugués, incluidos pasos, botón y pie', () => {
+    // Era el camino degradado de abajo mientras `pt-BR` fue guardable sin
+    // catálogo: el invitado brasileño recibía la invitación entera en español.
+    const { subject, html, text } = invitationEmailHtml(branding, {
+      ...contenido,
+      greeting: 'Olá, Ana!',
+      locale: 'pt-BR',
+    });
+    expect(subject).toBe('Academia Ejemplo convidou você para a escola');
+    expect(html).toContain('<html lang="pt">');
+    expect(html).toContain(
+      '<strong>Academia Ejemplo</strong> convidou você para a escola e <strong>sua conta já está criada</strong>.',
+    );
+    // Los 3 pasos de la lista ordenada.
+    expect(html).toContain('Clique no botão abaixo: ele leva você direto para escolher sua senha.');
+    expect(html).toContain('Complete seu perfil em poucos passos.');
+    expect(html).toContain('você já pode entrar na escola quando quiser');
+    // Botón CTA y pie: las dos piezas estructurales que un override no quita.
+    expect(html).toContain('Criar minha senha e entrar');
+    expect(html).toContain('Academia Ejemplo cadastrou você na escola');
+    expect(html).toContain('Leva menos de um minuto · o link é pessoal e vale por 7 dias.');
+    expect(text).toContain('O link é pessoal e vale por 7 dias.');
+    // Ni español ni inglés dentro de la invitación portuguesa.
+    for (const ajeno of [
+      'te ha invitado',
+      'Crear mi contraseña',
+      'Recibes este correo porque',
+      'has invited you',
+      'Create my password',
+      // El «aula» española (la academia) es «escola»: «sala de aula» es la de Zoom.
+      'sala de aula',
+    ]) {
+      expect(html, `«${ajeno}» se coló en la invitación portuguesa`).not.toContain(ajeno);
+    }
+  });
+
+  it('el plural del día también se conjuga en portugués', () => {
+    const unDia = invitationEmailHtml(branding, { ...contenido, validezDias: 1, locale: 'pt-BR' });
+    expect(unDia.html).toContain('vale por 1 dia.');
+    expect(unDia.html).not.toContain('1 dias');
+  });
+
+  it('CAMINO DEGRADADO: un locale sin catálogo (fr-FR) cae al español, no a un hueco', () => {
+    // `fr-FR` es alcanzable por SCIM, que copia el locale del IdP sin validar.
+    for (const locale of ['fr-FR', 'zz', '', '   ']) {
       const { subject, html } = invitationEmailHtml(branding, { ...contenido, locale });
       expect(subject, locale).toBe('Academia Ejemplo te ha invitado a su aula');
       expect(html, locale).toContain('<html lang="es">');

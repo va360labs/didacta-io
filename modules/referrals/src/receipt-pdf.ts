@@ -18,8 +18,36 @@ import PDFDocument from 'pdfkit';
  *    negativo) y el total;
  *  - la mención de que Didacta no interviene en el pago ni practica retención.
  *
- * Etiquetas en español; si el receptor no está en España, también en inglés.
+ * Etiquetas en español; si el receptor no está en España, también en inglés,
+ * y si el receptor tiene el perfil en portugués, también en portugués
+ * (`receiptSecondLang`). El español sigue siendo el de referencia: es el que
+ * ve siempre el aula que paga.
  */
+
+/** Idioma del perfil del receptor, reducido a los que tienen copy aquí. */
+export type ReceiptLang = 'es' | 'en' | 'pt';
+
+/**
+ * Segunda lengua del justificante (`null`: solo español).
+ *
+ * - Receptor con el perfil en portugués → portugués.
+ * - Si no, la regla de siempre: receptor fuera de España → inglés.
+ *
+ * El español y el inglés salen exactamente como antes de existir el portugués.
+ */
+export function receiptSecondLang(
+  payeeLang: ReceiptLang | null | undefined,
+  payeeCountry: string | null | undefined,
+): 'en' | 'pt' | null {
+  if (payeeLang === 'pt') return 'pt';
+  return payeeCountry && payeeCountry !== 'ES' ? 'en' : null;
+}
+
+/** `pt-BR` → `pt`, `en-GB` → `en`; cualquier otro (o nada) → `es`. */
+export function toReceiptLang(locale: string | null | undefined): ReceiptLang {
+  const base = (locale ?? '').trim().toLowerCase().split(/[-_]/)[0];
+  return base === 'en' || base === 'pt' ? base : 'es';
+}
 
 export interface ReceiptLine {
   readonly date: Date;
@@ -43,6 +71,8 @@ export interface ReceiptPdfInput {
     readonly iban: string;
   } | null;
   readonly lines: readonly ReceiptLine[];
+  /** Idioma del perfil del receptor (ver `receiptSecondLang`). Sin él, la regla de siempre. */
+  readonly payeeLang?: ReceiptLang | null;
 }
 
 /** «Justificante nº 0007». */
@@ -95,8 +125,9 @@ function groupIban(iban: string): string {
 }
 
 export async function renderReceiptPdf(input: ReceiptPdfInput): Promise<Buffer> {
-  const bilingual = input.payee !== null && input.payee.country !== 'ES';
-  const L = (es: string, en: string) => (bilingual ? `${es} / ${en}` : es);
+  const second = receiptSecondLang(input.payeeLang, input.payee?.country);
+  const L = (es: string, en: string, pt: string) =>
+    second ? `${es} / ${second === 'pt' ? pt : en}` : es;
   const money = (cents: number) => formatReceiptAmount(cents, input.currency);
   const label = receiptLabel(input.number);
 
@@ -124,19 +155,27 @@ export async function renderReceiptPdf(input: ReceiptPdfInput): Promise<Buffer> 
         .font('Helvetica-Bold')
         .fontSize(18)
         .fillColor('#0f172a')
-        .text(t(L('Justificante de pago', 'Payment receipt')), left, 50);
+        .text(
+          t(L('Justificante de pago', 'Payment receipt', 'Comprovante de pagamento')),
+          left,
+          50,
+        );
       doc
         .font('Helvetica')
         .fontSize(10)
         .fillColor('#334155')
-        .text(t(L('Comisiones por referidos', 'Referral commissions')));
+        .text(t(L('Comisiones por referidos', 'Referral commissions', 'Comissões por indicações')));
       doc.moveDown(0.8);
       doc
         .font('Helvetica-Bold')
-        .text(t(`${L('Número', 'Number')}: ${label}`))
+        .text(t(`${L('Número', 'Number', 'Número')}: ${label}`))
         .font('Helvetica')
-        .text(t(`${L('Fecha de pago', 'Payment date')}: ${formatDate(input.paidAt)}`))
-        .text(t(`${L('Referencia', 'Reference')}: ${input.reference}`));
+        .text(
+          t(
+            `${L('Fecha de pago', 'Payment date', 'Data do pagamento')}: ${formatDate(input.paidAt)}`,
+          ),
+        )
+        .text(t(`${L('Referencia', 'Reference', 'Referência')}: ${input.reference}`));
 
       doc.moveDown(1);
       const colY = doc.y;
@@ -144,20 +183,24 @@ export async function renderReceiptPdf(input: ReceiptPdfInput): Promise<Buffer> 
       doc
         .font('Helvetica-Bold')
         .fontSize(10)
-        .text(t(L('Paga (emisor)', 'Payer (issuer)')), left, colY, { width: half })
+        .text(t(L('Paga (emisor)', 'Payer (issuer)', 'Paga (emitente)')), left, colY, {
+          width: half,
+        })
         .font('Helvetica')
         .text(t(input.issuerName), { width: half });
       doc
         .font('Helvetica-Bold')
-        .text(t(L('Recibe', 'Payee')), left + half + 20, colY, { width: half })
+        .text(t(L('Recibe', 'Payee', 'Recebe')), left + half + 20, colY, { width: half })
         .font('Helvetica');
       if (input.payee) {
         doc
           .text(t(input.payee.fullName), { width: half })
-          .text(t(`${L('NIF', 'Tax ID')}: ${input.payee.taxId}`), { width: half })
+          .text(t(`${L('NIF', 'Tax ID', 'NIF')}: ${input.payee.taxId}`), { width: half })
           .text(t(`IBAN: ${groupIban(input.payee.iban)}`), { width: half });
       } else {
-        doc.text(t(L('Sin datos de cobro', 'No payment details')), { width: half });
+        doc.text(t(L('Sin datos de cobro', 'No payment details', 'Sem dados para recebimento')), {
+          width: half,
+        });
       }
 
       doc.moveDown(2);
@@ -167,9 +210,12 @@ export async function renderReceiptPdf(input: ReceiptPdfInput): Promise<Buffer> 
         .font('Helvetica-Bold')
         .fontSize(9)
         .fillColor('#0f172a')
-        .text(t(L('Fecha', 'Date')), left, tableTop)
-        .text(t(L('Concepto', 'Description')), left + 70, tableTop)
-        .text(t(L('Importe', 'Amount')), colAmount, tableTop, { width: 110, align: 'right' });
+        .text(t(L('Fecha', 'Date', 'Data')), left, tableTop)
+        .text(t(L('Concepto', 'Description', 'Descrição')), left + 70, tableTop)
+        .text(t(L('Importe', 'Amount', 'Valor')), colAmount, tableTop, {
+          width: 110,
+          align: 'right',
+        });
       doc
         .moveTo(left, tableTop + 14)
         .lineTo(left + width, tableTop + 14)
@@ -197,7 +243,7 @@ export async function renderReceiptPdf(input: ReceiptPdfInput): Promise<Buffer> 
         .font('Helvetica-Bold')
         .fontSize(11)
         .fillColor('#0f172a')
-        .text(t(L('Total pagado', 'Total paid')), left, y + 8)
+        .text(t(L('Total pagado', 'Total paid', 'Total pago')), left, y + 8)
         .text(t(money(input.totalCents)), colAmount, y + 8, { width: 110, align: 'right' });
 
       doc.moveDown(2.5);
@@ -210,6 +256,7 @@ export async function renderReceiptPdf(input: ReceiptPdfInput): Promise<Buffer> 
             L(
               `Pago realizado por ${input.issuerName} por el programa de referidos de su academia. Didacta no interviene en el pago ni practica ninguna retención.`,
               `Payment made by ${input.issuerName} under its academy's referral programme. Didacta is not involved in the payment and withholds nothing.`,
+              `Pagamento feito por ${input.issuerName} pelo programa de indicações da sua academia. A Didacta não intervém no pagamento nem faz nenhuma retenção.`,
             ),
           ),
           left,

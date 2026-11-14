@@ -26,6 +26,7 @@ import type { AcademyLocale } from '../common/academy-defaults';
 export const DEFAULT_AGENT_KEY_NAME: Record<AcademyLocale, string> = {
   es: 'Agente de IA',
   en: 'AI agent',
+  pt: 'Agente de IA',
 };
 
 /** Ruta del servidor MCP del aula, relativa al dominio del aula. */

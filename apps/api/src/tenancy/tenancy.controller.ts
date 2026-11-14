@@ -75,7 +75,7 @@ export class TenancyController {
    */
   @Get('locale')
   @ApiOperation({
-    summary: 'Idioma del aula del host del request: { locale: "es" | "en" | null }.',
+    summary: 'Idioma del aula del host del request: { locale: "es" | "en" | "pt" | null }.',
     description:
       'Mismo host que `resolve` (`X-Forwarded-Host` y, si no, `Host`). El idioma es el ajuste del aula (Ajustes, alta en 3 preguntas o aprovisionamiento) y, en las aulas sin ajuste, el deducido. `null` si el host no es de ningún aula activa.',
   })

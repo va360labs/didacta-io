@@ -6,6 +6,7 @@
  */
 
 import { useEffect, useState } from 'react';
+import type { AcademyLocale } from '@/i18n/config';
 import { ApiHttpError, apiFetch } from './api-client';
 import { authStorage } from './auth-storage';
 import { meApi } from './me';
@@ -188,6 +189,7 @@ export function suggestCurrency(locale: string, allowed: readonly string[]): str
     HU: 'huf',
     RO: 'ron',
     MX: 'mxn',
+    BR: 'brl',
   };
   const guess = byRegion[region] ?? 'eur';
   return allowed.includes(guess) ? guess : (allowed[0] ?? 'eur');
@@ -199,7 +201,7 @@ export interface QuickStartInput {
   title?: string;
   amountCents: number;
   currency: string;
-  locale: 'es' | 'en';
+  locale: AcademyLocale;
   /** Portada del curso, opcional (URL que devuelve la subida de imágenes). */
   coverUrl?: string;
 }

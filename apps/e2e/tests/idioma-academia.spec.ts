@@ -101,7 +101,7 @@ async function htmlLang(page: Page): Promise<string | null> {
 async function expectVisitorSees(
   browser: Browser,
   t: FreshTenant,
-  lang: 'en-US' | 'es-ES',
+  lang: 'en-US' | 'es-ES' | 'pt-BR',
 ): Promise<void> {
   const page = await visitante(browser);
   try {
@@ -247,7 +247,7 @@ test('alta en 3 preguntas: la creadora elige el idioma de la academia, y lo camb
   // Preseleccionado con el de la interfaz: no suma clics si no se toca.
   const idioma = page.getByLabel('Idioma de la academia');
   await expect(idioma).toHaveValue('es');
-  await expect(idioma.locator('option')).toHaveText(['Español', 'English']);
+  await expect(idioma.locator('option')).toHaveText(['Español', 'English', 'Português (Brasil)']);
   await idioma.selectOption('en');
   await page.getByRole('button', { name: 'Siguiente' }).click();
   await page.getByLabel('¿Cómo se llama el curso?').fill('Espresso at Home');
@@ -419,9 +419,19 @@ test('aprovisionamiento con `locale`: el aula nace en inglés y su administrador
   // Un idioma sin catálogo es un 400 (antes de mirar la licencia).
   const malo = await postJson(apiPort, '/api/v1/admin/tenants', bearer, {
     ...body,
-    locale: 'pt-BR',
+    locale: 'fr-FR',
   });
   expect(malo.status).toBe(400);
+  // El portugués de Brasil, en cambio, ya tiene catálogo: es lo que manda
+  // Didacta Cloud para un alta hecha desde didacta.io/pt-br.
+  const slugPt = `${slug}pt`;
+  const bodyPt = {
+    ...body,
+    slug: slugPt,
+    name: 'Academia Provisionada',
+    adminEmail: `owner@${slugPt}.test`,
+    primaryHostname: `${slugPt}.localhost`,
+  };
 
   const dev = startDevApi();
   try {
@@ -431,6 +441,11 @@ test('aprovisionamiento con `locale`: el aula nace en inglés y su administrador
       locale: 'en-US',
     });
     expect(r.status, r.body).toBe(201);
+    const rPt = await postJson(DEV_API_PORT, '/api/v1/admin/tenants', bearer, {
+      ...bodyPt,
+      locale: 'pt-BR',
+    });
+    expect(rPt.status, rPt.body).toBe(201);
   } finally {
     dev.kill();
   }
@@ -452,4 +467,20 @@ test('aprovisionamiento con `locale`: el aula nace en inglés y su administrador
     'la administradora nace en el idioma del aula',
   ).toBe('en-US');
   await expectVisitorSees(browser, t, 'en-US');
+
+  const tPt: FreshTenant = {
+    ...t,
+    slug: slugPt,
+    host: `${slugPt}.localhost`,
+    base: t.base.replace(slug, slugPt),
+    creatorEmail: bodyPt.adminEmail,
+  };
+  expect(ajuste(tPt), 'pt-BR se guarda como el código del catálogo').toBe('pt');
+  expect(
+    sql(
+      `SELECT u.locale FROM "user" u JOIN tenant tt ON tt.id = u.tenant_id ` +
+        `WHERE tt.slug = '${slugPt}' AND u.email = '${bodyPt.adminEmail}'`,
+    ),
+  ).toBe('pt-BR');
+  await expectVisitorSees(browser, tPt, 'pt-BR');
 });

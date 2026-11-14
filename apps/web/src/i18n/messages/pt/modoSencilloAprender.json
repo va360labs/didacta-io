@@ -1,0 +1,147 @@
+{
+  "seccion": "Aprender",
+  "certificado": {
+    "titulo": "Você concluiu o curso. Seu certificado está pronto.",
+    "texto": "Ele traz seu nome e pode ser validado por um link. Adicione ao seu perfil do LinkedIn ou compartilhe com quem quiser.",
+    "descargar": "Baixar PDF",
+    "descargando": "Baixando…",
+    "linkedin": "Adicionar ao LinkedIn",
+    "vistaPrevia": "Prévia do certificado",
+    "etiqueta": "CERTIFICADO DE CONCLUSÃO",
+    "haCompletado": "concluiu o curso"
+  },
+  "progreso": {
+    "certificados": "Meus certificados",
+    "certificadosTexto": "Os certificados dos cursos que você concluiu."
+  },
+  "referidos": {
+    "titulo": "Convide e ganhe",
+    "migaPerfil": "Seu perfil",
+    "migasAria": "Você está em",
+    "heroTitulo": "Ganhe {percent}% do valor pago por cada pessoa que entrar pelo seu link",
+    "heroTexto": "Compartilhe {academia} com quem pode aproveitar. Quando pagarem, uma parte é sua.",
+    "inactivoTitulo": "No momento não existe um programa para convidar e ganhar",
+    "inactivoTexto": "Sua academia não ativou esse programa. Se ativar, você verá aqui seu link e quanto ganha.",
+    "membresiaRequerida": "Para ter seu link, você precisa de uma assinatura ativa na academia.",
+    "errorEnlace": "Não foi possível preparar seu link. Tente novamente mais tarde.",
+    "errorCarga": "Não foi possível carregar. Tente novamente.",
+    "nadaALaVenta": "No momento a academia não tem nada à venda. Quando tiver, você verá seu link aqui.",
+    "porProductoTitulo": "Ou compartilhe o link de um produto específico",
+    "membresia": "A assinatura",
+    "copiar": "Copiar link",
+    "copiado": "Copiado",
+    "correo": "E-mail",
+    "mas": "Mais",
+    "mensajeCompartir": "Recomendo {academia}. Entre pelo meu link:",
+    "cifrasAria": "Seus resultados",
+    "ganadoTotal": "ganhos no total",
+    "pendiente": "Desse valor, {amount} aguardando confirmação",
+    "pagandoAhora": "pagando agora",
+    "esteMes": "este mês",
+    "invitadosTitulo": "Seus convidados",
+    "invitadosTexto": "Você só vê as iniciais e quanto cada um rendeu para você. Nome e e-mail ficam privados.",
+    "invitadosVacio": "Ninguém entrou pelo seu link ainda. Quando alguém entrar, vai aparecer aqui.",
+    "invitadosError": "Não foi possível carregar a lista de convidados. Tente novamente mais tarde.",
+    "entro": "Entrou em {date}",
+    "invitadoEstado": {
+      "trial": "Em teste",
+      "paying": "Pagando",
+      "bought_course": "Comprou um curso",
+      "cancelled": "Cancelou",
+      "joined": "Sem compras no momento"
+    },
+    "listaTitulo": "O que você ganhou",
+    "listaTexto": "Cada venda que você trouxe, com o status. Os dados das pessoas não são exibidos.",
+    "listaVacia": "Ainda não há nada. Quando alguém pagar depois de entrar pelo seu link, vai aparecer aqui.",
+    "sobre": "Sobre uma venda de {amount}",
+    "estado": {
+      "PENDING": "Aguardando confirmação",
+      "APPROVED": "Confirmada",
+      "PAID": "Paga",
+      "REVOKED": "Cancelada"
+    },
+    "comoTitulo": "Como funciona",
+    "pasos": {
+      "compartes": "Você compartilha seu link",
+      "compartesTexto": "Pelo WhatsApp, pelas redes sociais ou pessoalmente.",
+      "entra": "Alguém entra por ele",
+      "entraTexto": "A pessoa fica vinculada a você por {days} dias depois de abrir o link.",
+      "ganas": "Você ganha sua parte",
+      "ganaPrimerPago": {
+        "courses": "{percent}% da primeira compra da pessoa.",
+        "membership": "{percent}% da primeira mensalidade da pessoa.",
+        "both": "{percent}% do primeiro pagamento da pessoa, seja uma compra ou uma mensalidade."
+      },
+      "ganaCadaPago": {
+        "courses": "{percent}% de cada compra que a pessoa fizer.",
+        "membership": "{percent}% de cada mensalidade da pessoa, enquanto ela continuar assinante.",
+        "both": "{percent}% de cada compra e de cada mensalidade da pessoa, enquanto ela continuar assinante."
+      },
+      "ganaMeses": {
+        "courses": "{percent}% de cada compra da pessoa nos primeiros {months} meses.",
+        "membership": "{percent}% de cada mensalidade da pessoa nos primeiros {months} meses.",
+        "both": "{percent}% de cada compra e de cada mensalidade da pessoa nos primeiros {months} meses."
+      }
+    },
+    "cobro": "O que você ganha é confirmado quando termina o prazo de reembolso, e {academia} faz o pagamento para você.",
+    "cobroMinimo": "O que você ganha é confirmado quando termina o prazo de reembolso, e {academia} faz o pagamento quando você chegar a {min}.",
+    "cobroODescuento": "O que você ganha é confirmado quando termina o prazo de reembolso. Aí você pode usar como desconto na sua próxima mensalidade ou pedir que {academia} faça o pagamento.",
+    "cobroODescuentoMinimo": "O que você ganha é confirmado quando termina o prazo de reembolso. Aí você pode usar como desconto na sua próxima mensalidade ou, quando chegar a {min}, pedir que {academia} faça o pagamento.",
+    "dudasTitulo": "Dúvidas",
+    "dudas": {
+      "cuando": "Quando começa a contar?",
+      "cuandoTexto": "Quando alguém abre seu link. Se a pessoa pagar nos {days} dias seguintes, a venda é sua.",
+      "devolucion": "E se a pessoa pedir reembolso?",
+      "devolucionTexto": "Se ela receber o dinheiro de volta, sua parte nessa venda é cancelada.",
+      "limite": "Existe um limite?",
+      "limitePrimerPago": "Só conta o primeiro pagamento da pessoa.",
+      "limiteMeses": "Você ganha durante os primeiros {months} meses da pessoa.",
+      "limiteSin": "Não. Enquanto a pessoa continuar pagando, você continua ganhando."
+    },
+    "descuento": {
+      "titulo": "Use como desconto",
+      "texto": "O que já está confirmado pode ser descontado da sua próxima mensalidade, em vez de ser pago à parte. No máximo {max} por mensalidade.",
+      "boton": "Usar como desconto na minha próxima mensalidade ({amount})",
+      "terminar": "Terminar de aplicar o desconto",
+      "aplicando": "Aplicando…",
+      "hecho": "Pronto. Vamos descontar {amount} da sua próxima mensalidade.",
+      "vacio": "Você ainda não tem nada confirmado para descontar. Vai aparecer aqui quando terminar o prazo de reembolso.",
+      "nada": "No momento você não tem nada para descontar da sua próxima mensalidade.",
+      "error": "Não foi possível aplicar o desconto. Tente novamente: ele não será aplicado duas vezes."
+    },
+    "cobroDinero": {
+      "titulo": "Receber em dinheiro",
+      "texto": "{academia} paga o valor confirmado por transferência bancária. Precisamos do seu nome completo, do seu NIF e da sua conta. A Didacta não retém nada.",
+      "confirmado": "Você tem {amount} confirmados para receber.",
+      "nadaConfirmado": "Você ainda não tem nada confirmado para receber.",
+      "minimo": "Você poderá solicitar o pagamento quando chegar a {min}.",
+      "pedir": "Solicitar pagamento de {amount}",
+      "pidiendo": "Solicitando…",
+      "pedido": "Você solicitou {amount} em {date}. {academia} vai pagar por transferência bancária.",
+      "datosTitulo": "Seus dados para recebimento",
+      "datosResumen": "{name} · {iban} · {taxId}",
+      "cambiar": "Alterar",
+      "nombre": "Nome completo",
+      "pais": "País",
+      "nif": "NIF ou NIE",
+      "idFiscal": "Identificação fiscal",
+      "iban": "Conta (IBAN)",
+      "guardarYPedir": "Salvar e solicitar pagamento",
+      "guardar": "Salvar",
+      "cancelar": "Cancelar",
+      "privacidad": "Ficam guardados com criptografia. {academia} só tem acesso a eles para pagar você.",
+      "campoMal": "Confira este dado.",
+      "error": "Não foi possível enviar. Tente novamente.",
+      "pagado": "Pago em {date}",
+      "justificante": "Baixar comprovante"
+    },
+    "tipo": {
+      "CREDIT_RETURN": "Desconto não usado devolvido quando você cancelou",
+      "ADJUSTMENT": "Ajuste por reembolso"
+    },
+    "estadoAjuste": {
+      "APPROVED": "Será descontado dos próximos ganhos",
+      "PAID": "Descontado"
+    }
+  }
+}

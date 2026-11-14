@@ -169,11 +169,22 @@ describe('TenancyController', () => {
 
     it('un ajuste con un idioma sin catálogo se ignora', async () => {
       const { controller } = makeController(TENANT, {
-        academyLocale: 'pt-BR',
+        academyLocale: 'fr-FR',
         adminLocales: ['en-US'],
       });
       expect(await controller.locale(reqTrasProxy('aula-demo.didacta.io'))).toEqual({
         locale: 'en',
+      });
+    });
+
+    it('un aula en portugués devuelve `pt` (el código del catálogo, no el tag)', async () => {
+      const conAjuste = makeController(TENANT, { academyLocale: 'pt', adminLocales: ['es-ES'] });
+      expect(await conAjuste.controller.locale(reqTrasProxy('aula-demo.didacta.io'))).toEqual({
+        locale: 'pt',
+      });
+      const conPerfil = makeController(TENANT, { adminLocales: ['pt-BR'] });
+      expect(await conPerfil.controller.locale(reqTrasProxy('aula-demo.didacta.io'))).toEqual({
+        locale: 'pt',
       });
     });
 

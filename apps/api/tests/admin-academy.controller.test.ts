@@ -98,6 +98,19 @@ describe('AdminAcademyController — idioma del aula', () => {
     expect((await ctl.getMine(admin)).locale).toBe('en');
   });
 
+  it('un aula en portugués: guarda `pt` y lo devuelve como ajuste', async () => {
+    const prisma = fakePrisma({ adminLocale: 'es-ES' });
+    const ctl = new AdminAcademyController(prisma as never);
+    const dto = await ctl.rename(admin, { locale: 'pt' });
+    expect(dto).toMatchObject({ locale: 'pt', localeSource: 'setting' });
+    expect(prisma.settings).toEqual([expect.objectContaining({ key: 'locale', valueJson: 'pt' })]);
+  });
+
+  it('sin ajuste, un perfil pt-BR de quien administra deduce `pt`', async () => {
+    const ctl = new AdminAcademyController(fakePrisma({ adminLocale: 'pt-BR' }) as never);
+    expect(await ctl.getMine(admin)).toMatchObject({ locale: 'pt', localeSource: 'admin' });
+  });
+
   it('renombrar sin `locale` no toca el idioma', async () => {
     const prisma = fakePrisma();
     const ctl = new AdminAcademyController(prisma as never);
@@ -115,9 +128,11 @@ describe('AdminAcademyController — idioma del aula', () => {
     await expect(ctl.rename(alumno, { locale: 'en' })).rejects.toBeInstanceOf(ForbiddenException);
   });
 
-  it('el cuerpo: es | en, y al menos un cambio', () => {
+  it('el cuerpo: es | en | pt (el código, no el tag), y al menos un cambio', () => {
     expect(AcademyUpdateSchema.safeParse({ locale: 'en' }).success).toBe(true);
+    expect(AcademyUpdateSchema.safeParse({ locale: 'pt' }).success).toBe(true);
     expect(AcademyUpdateSchema.safeParse({ locale: 'pt-BR' }).success).toBe(false);
+    expect(AcademyUpdateSchema.safeParse({ locale: 'fr' }).success).toBe(false);
     expect(AcademyUpdateSchema.safeParse({ locale: 'en-US' }).success).toBe(false);
     expect(AcademyUpdateSchema.safeParse({}).success).toBe(false);
     expect(AcademyUpdateSchema.safeParse({ name: 'X' }).success).toBe(true);

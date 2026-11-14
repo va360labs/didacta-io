@@ -12,6 +12,7 @@ import {
   type BrandingPrisma,
   type EmailLang,
 } from '../../common/branded-email';
+import { toHubTemplateLang } from '../../modules/notifications/email-template-catalog';
 import type { SmtpAdapterService } from '../../modules/smtp-adapter.service';
 import type { TenantSmtpResolverService } from '../../modules/tenant-smtp-resolver.service';
 import type { PrismaService } from '../../prisma/prisma.service';
@@ -26,7 +27,7 @@ const MAX_RECIPIENTS = 5;
 /**
  * Avisos de inactividad por la infraestructura de correo de siempre: SMTP del
  * aula con caída al global y la plantilla con la marca del aula. A los
- * administradores del aula, cada uno en su idioma (es/en).
+ * administradores del aula, cada uno en su idioma (es/en/pt).
  *
  * Nunca lanza: un correo que no sale devuelve 0 y el aviso no cuenta como
  * dado (sin aviso, no hay borrado).
@@ -75,7 +76,8 @@ export class VideoInactivityEmailNotifier implements VideoInactivityNotifier {
       );
       let sent = 0;
       for (const admin of admins) {
-        const lang: EmailLang = (admin.locale ?? '').toLowerCase().startsWith('en') ? 'en' : 'es';
+        // Inglés y portugués con su copy; cualquier otro idioma, español.
+        const lang: EmailLang = toHubTemplateLang(admin.locale);
         const t = inactivityTexts({
           lang,
           stage: input.stage,

@@ -5,13 +5,15 @@
 
 import { z } from 'zod';
 import { courseImageUrlSchema } from '@didacta/mod-courses';
+import { ACADEMY_LOCALES, type AcademyLocale } from '../common/academy-defaults';
 
 /**
  * Tipos, textos y funciones PURAS del modo sencillo. Separados del servicio
  * para poder probarlos sin base de datos.
  */
 
-export type SimpleLocale = 'es' | 'en';
+/** Idioma del alta en 3 preguntas: uno de los del aula (`es`, `en`, `pt`). */
+export type SimpleLocale = AcademyLocale;
 
 /** Los seis pasos de «Empieza aquí», en orden. */
 export const STEP_IDS = ['academy', 'course', 'price', 'payments', 'publish', 'invite'] as const;
@@ -99,9 +101,10 @@ export const quickStartSchema = z.object({
   /**
    * Idioma de la academia (se elige en el alta, preseleccionado con el de la
    * interfaz). Queda como ajuste del aula. Sin él (un cliente anterior), el que
-   * ya tenga el aula: el que fijó el aprovisionamiento o el deducido.
+   * ya tenga el aula: el que fijó el aprovisionamiento o el deducido. Es el
+   * código del catálogo (`pt`, no `pt-BR`), como en Ajustes.
    */
-  locale: z.enum(['es', 'en']).optional(),
+  locale: z.enum(ACADEMY_LOCALES).optional(),
   /**
    * Portada del curso (opcional: el alta no obliga a nada más). La URL que
    * devuelve la subida de imágenes del aula; se guarda en `thumbnailUrl`.
@@ -257,6 +260,37 @@ const TEXTS: Record<SimpleLocale, SimpleTexts> = {
     welcomeTitle: (a) => `Welcome to ${a}`,
     welcomeBody: (a) =>
       `This is the community space for ${a}. I will post updates here, and you can ask anything you need.\n\nTo get started, introduce yourself in a comment: who you are and what you would like to achieve.`,
+  },
+  pt: {
+    firstModule: 'Aulas',
+    courseLanguage: 'pt-BR',
+    spaces: [
+      {
+        slug: 'general',
+        title: 'Geral',
+        description: 'Conversas abertas para toda a comunidade.',
+        icon: '#',
+        sortOrder: 1,
+      },
+      {
+        slug: 'anuncios',
+        title: 'Avisos',
+        description: 'Novidades e avisos importantes.',
+        icon: 'megaphone',
+        sortOrder: 2,
+      },
+      {
+        slug: 'preguntas',
+        title: 'Perguntas e dúvidas',
+        description: 'Pergunte o que precisar.',
+        icon: 'help',
+        sortOrder: 3,
+      },
+    ],
+    // Sin artículo delante del nombre («à», «ao», «na»…): no se sabe su género.
+    welcomeTitle: (a) => `Boas-vindas à comunidade ${a}`,
+    welcomeBody: (a) =>
+      `Este é o espaço da comunidade ${a}. Aqui vou publicar novidades e você pode perguntar o que precisar.\n\nPara começar, apresente-se em um comentário: quem você é e o que gostaria de conquistar.`,
   },
 };
 

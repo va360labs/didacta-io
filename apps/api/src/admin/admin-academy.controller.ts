@@ -47,6 +47,9 @@ export const AcademyUpdateSchema = z
      * Idioma del aula («Idioma de la academia»): el que ve quien entra sin
      * cookie ni perfil, el de los correos a quien no tiene idioma propio y el
      * de lo que el servidor escribe a todos. Ver `common/academy-defaults.ts`.
+     * Se manda el código del catálogo (`es`, `en`, `pt`), no el tag de la
+     * interfaz: es lo que guarda la web en su selector (`ACADEMY_LOCALES` de
+     * `apps/web/src/i18n/config.ts`).
      */
     locale: z.enum(ACADEMY_LOCALES).optional(),
   })
@@ -121,7 +124,7 @@ export class AdminAcademyController {
   @Put()
   @ApiOperation({
     summary:
-      'Renombra la PROPIA academia y/o cambia su idioma (`locale`: es | en). Solo super_admin o tenant_admin, y siempre sobre su tenant.',
+      'Renombra la PROPIA academia y/o cambia su idioma (`locale`: es | en | pt). Solo super_admin o tenant_admin, y siempre sobre su tenant.',
   })
   async rename(
     @CurrentUser() user: SessionClaims | undefined,

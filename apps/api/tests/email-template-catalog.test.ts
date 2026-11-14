@@ -17,13 +17,19 @@ import {
   FIXED_EMAIL_COPY,
   HUB_DEFAULT_LOCALE,
   HUB_TEMPLATE_DEFAULTS,
+  HUB_TEMPLATE_DEFAULTS_BY_LOCALE,
   HUB_TEMPLATE_DEFAULTS_EN,
+  HUB_TEMPLATE_DEFAULTS_PT,
   HUB_TEMPLATE_LANGS,
   INVITATION_EMAIL_COPY,
   SMTP_SETTINGS_PING,
   TRANSACTIONAL_EMAIL_DEFS,
   TRANSACTIONAL_TEMPLATE_DEFAULTS_EN,
+  TRANSACTIONAL_TEMPLATE_DEFAULTS_PT,
+  rendersFromCatalog,
   type FixedEmailCopyKey,
+  type HubTemplateLang,
+  type TemplateDef,
   type TemplateOverridePrisma,
 } from '../src/modules/notifications/email-template-catalog';
 import {
@@ -49,6 +55,46 @@ import type { EmailBranding } from '../src/common/branded-email';
 function branding(tenantName = 'Academia Demo'): EmailBranding {
   return { tenantName, logoUrl: null, brandColor: '#1E5AA8' };
 }
+
+/**
+ * Los idiomas TRADUCIDOS (todo lo que no es el de referencia). Los tests de
+ * coherencia de abajo recorren esta lista en vez de nombrar el inglés: así el
+ * portugués pasa por las mismas aserciones, y un idioma nuevo también.
+ */
+const TRANSLATED_LANGS = HUB_TEMPLATE_LANGS.filter(
+  (l): l is Exclude<HubTemplateLang, 'es'> => l !== 'es',
+);
+
+/** Un locale COMPLETO de cada idioma traducido, como lo guarda `user.locale`. */
+const LOCALE_OF: Record<Exclude<HubTemplateLang, 'es'>, string> = { en: 'en-US', pt: 'pt-BR' };
+
+/**
+ * Locales SIN catálogo, para los caminos degradados. `fr-FR` es el caso real
+ * (llega por SCIM, que copia el locale del IdP sin validar). Antes este papel
+ * lo hacía `pt-BR`, cuando era guardable y no estaba traducido.
+ */
+const SIN_CATALOGO = ['fr-FR', 'zz', '', '   '] as const;
+
+describe('idiomas del catálogo', () => {
+  it('son exactamente español, inglés y portugués', () => {
+    // Si alguien añade un idioma, este test se actualiza A CONCIENCIA: es el
+    // recordatorio de que `ALLOWED_LOCALES` (me.controller) y los catálogos de
+    // la web tienen que ir a la vez.
+    expect([...HUB_TEMPLATE_LANGS]).toEqual(['es', 'en', 'pt']);
+    expect([...TRANSLATED_LANGS]).toEqual(['en', 'pt']);
+  });
+
+  it('solo el español conserva la maqueta propia del composer', () => {
+    expect(rendersFromCatalog('es-ES')).toBe(false);
+    expect(rendersFromCatalog('es-AR')).toBe(false);
+    expect(rendersFromCatalog('en-US')).toBe(true);
+    expect(rendersFromCatalog('pt-BR')).toBe(true);
+    // Un locale sin catálogo cae al español, y con él a su maqueta.
+    for (const locale of [...SIN_CATALOGO, null, undefined]) {
+      expect(rendersFromCatalog(locale), String(locale)).toBe(false);
+    }
+  });
+});
 
 /** Prisma mínimo: devuelve el override fijado o lanza, según el modo. */
 function prismaWithOverride(
@@ -105,23 +151,73 @@ describe('catálogo del hub por idioma', () => {
     return [...text.matchAll(/\{\{[#^/]?\s*(\w+)\s*\}\}/g)].map((m) => m[1] as string).sort();
   }
 
-  it('el inglés cubre exactamente las mismas keys que el español', () => {
-    expect(Object.keys(HUB_TEMPLATE_DEFAULTS_EN).sort()).toEqual(
+  it.each(TRANSLATED_LANGS)('%s cubre exactamente las mismas keys que el español', (lang) => {
+    expect(Object.keys(HUB_TEMPLATE_DEFAULTS_BY_LOCALE[lang]).sort()).toEqual(
       Object.keys(HUB_TEMPLATE_DEFAULTS).sort(),
     );
   });
 
-  it('cada traducción conserva los placeholders del español', () => {
+  it.each(TRANSLATED_LANGS)('%s conserva los placeholders del español', (lang) => {
     for (const [key, es] of Object.entries(HUB_TEMPLATE_DEFAULTS)) {
-      const en = HUB_TEMPLATE_DEFAULTS_EN[key];
-      expect(en, `falta la traducción de ${key}`).toBeDefined();
-      expect(placeholders(en as typeof es), `${key} cambia los placeholders`).toEqual(
+      const translated = HUB_TEMPLATE_DEFAULTS_BY_LOCALE[lang][key];
+      expect(translated, `falta la traducción de ${key}`).toBeDefined();
+      expect(placeholders(translated as TemplateDef), `${key} cambia los placeholders`).toEqual(
         placeholders(es),
       );
-      // Un subject nulo (sin asunto) tiene que serlo en los dos idiomas.
-      expect(en?.subject === null, `${key} difiere en si tiene asunto`).toBe(es.subject === null);
-      expect((en?.body ?? '').length, `${key} tiene cuerpo vacío en inglés`).toBeGreaterThan(0);
+      // Un subject nulo (sin asunto) tiene que serlo en todos los idiomas.
+      expect(translated?.subject === null, `${key} difiere en si tiene asunto`).toBe(
+        es.subject === null,
+      );
+      expect((translated?.body ?? '').length, `${key} tiene cuerpo vacío`).toBeGreaterThan(0);
     }
+  });
+
+  it.each(TRANSLATED_LANGS)('%s no es el español copiado: cada plantilla difiere', (lang) => {
+    // Los placeholders iguales no prueban que haya traducción: el español
+    // pegado tal cual los conserva todos. Para el portugués esto NO es
+    // redundante —se parece lo bastante como para que una frase sin traducir
+    // pase por buena a simple vista—.
+    const PASSTHROUGH = new Set(['gamification.perk.handled']); // solo `{{vars}}`, sin copy.
+    for (const [key, es] of Object.entries(HUB_TEMPLATE_DEFAULTS)) {
+      if (PASSTHROUGH.has(key)) continue;
+      expect(HUB_TEMPLATE_DEFAULTS_BY_LOCALE[lang][key]?.body, `${key} sin traducir`).not.toBe(
+        es.body,
+      );
+    }
+  });
+
+  it('el resumen semanal lleva el pie de baja también en portugués (venía sin él)', () => {
+    // El `pt` llegó de una rama anterior a que develop añadiera el enlace de
+    // baja al resumen: el brasileño recibía el correo sin forma de darse de baja.
+    const vars = {
+      mentionsCount: 2,
+      repliesCount: 1,
+      sinceIso: '2026-11-07',
+      unsubUrl: 'https://u/unsub',
+    };
+    const render = (def: TemplateDef | undefined, v: Record<string, unknown>) =>
+      interpolate(def!.body, v);
+    expect(render(HUB_TEMPLATE_DEFAULTS_PT['community.digest.weekly'], vars)).toContain(
+      'Você recebe este resumo por ser membro da comunidade. Para deixar de receber os e-mails da comunidade (resumo semanal e avisos), acesse: https://u/unsub',
+    );
+    // Control: el español, byte a byte el de develop.
+    expect(render(HUB_TEMPLATE_DEFAULTS['community.digest.weekly'], vars)).toContain(
+      'Recibes este resumen como miembro de la comunidad. Para dejar de recibir los correos de la comunidad (resumen semanal y avisos), entra aquí: https://u/unsub',
+    );
+    // Sin dirección de baja (aula sin URL pública) el pie desaparece entero.
+    const sinBaja = render(HUB_TEMPLATE_DEFAULTS_PT['community.digest.weekly'], {
+      ...vars,
+      unsubUrl: '',
+    });
+    expect(sinBaja).not.toContain('———');
+    expect(sinBaja).not.toContain('{{');
+  });
+
+  it('el portugués no hereda frases del inglés ni del español', () => {
+    const pt = HUB_TEMPLATE_DEFAULTS_PT['enrollment.created'];
+    expect(pt?.subject).toBe('Você se matriculou em {{course}}');
+    expect(pt?.subject).not.toBe(HUB_TEMPLATE_DEFAULTS_EN['enrollment.created']?.subject);
+    expect(pt?.subject).not.toBe(HUB_TEMPLATE_DEFAULTS['enrollment.created']?.subject);
   });
 
   it('toHubTemplateLang normaliza variantes regionales y mayúsculas', () => {
@@ -130,11 +226,17 @@ describe('catálogo del hub por idioma', () => {
     expect(toHubTemplateLang('en_GB')).toBe('en');
     expect(toHubTemplateLang('es-AR')).toBe('es');
     expect(toHubTemplateLang(HUB_DEFAULT_LOCALE)).toBe('es');
+    expect(toHubTemplateLang('pt-BR')).toBe('pt');
+    expect(toHubTemplateLang('PT')).toBe('pt');
+    expect(toHubTemplateLang('pt_br')).toBe('pt');
+    // El portugués europeo (solo llega por SCIM) usa el catálogo `pt`: es
+    // brasileño, pero servirle español teniendo portugués sería peor.
+    expect(toHubTemplateLang('pt-PT')).toBe('pt');
   });
 
   it('un locale desconocido, vacío o nulo cae al español DELIBERADAMENTE', () => {
-    // pt-BR es alcanzable hoy: me.controller.ts lo admite pero no está traducido.
-    for (const locale of ['pt-BR', 'zz', '', '   ', null, undefined]) {
+    // `fr-FR` es alcanzable por SCIM, que copia el locale del IdP sin validar.
+    for (const locale of [...SIN_CATALOGO, null, undefined]) {
       expect(toHubTemplateLang(locale)).toBe('es');
       expect(resolveHubDefault('enrollment.created', locale)).toEqual(
         HUB_TEMPLATE_DEFAULTS['enrollment.created'],
@@ -142,9 +244,19 @@ describe('catálogo del hub por idioma', () => {
     }
   });
 
+  it('pt-BR YA NO cae al español (era el camino degradado mientras no tuvo catálogo)', () => {
+    expect(toHubTemplateLang('pt-BR')).not.toBe('es');
+    expect(resolveHubDefault('enrollment.created', 'pt-BR')).not.toEqual(
+      HUB_TEMPLATE_DEFAULTS['enrollment.created'],
+    );
+  });
+
   it('resolveHubDefault devuelve el copy del idioma pedido', () => {
     expect(resolveHubDefault('enrollment.created', 'en-US')).toEqual(
       HUB_TEMPLATE_DEFAULTS_EN['enrollment.created'],
+    );
+    expect(resolveHubDefault('enrollment.created', 'pt-BR')).toEqual(
+      HUB_TEMPLATE_DEFAULTS_PT['enrollment.created'],
     );
     expect(resolveHubDefault('enrollment.created', 'es-ES')).toEqual(
       HUB_TEMPLATE_DEFAULTS['enrollment.created'],
@@ -264,19 +376,43 @@ describe('buildEmailTemplateCatalog', () => {
     );
   });
 
-  it('CAMINO DEGRADADO: locale sin catálogo (pt-BR) devuelve el español, nunca vacío', () => {
+  it('con locale pt-BR el prefill del editor sale en portugués, no en español ni en inglés', () => {
+    // Mismo bug que el de arriba, un idioma después: el admin brasileño que
+    // crea un override `pt-BR` tiene que partir de un texto en portugués.
     const pt = buildEmailTemplateCatalog('pt-BR');
-    expect(pt).toEqual(buildEmailTemplateCatalog('es-ES'));
-    for (const entry of pt) expect(entry.defaultBody.length, entry.key).toBeGreaterThan(0);
+    const es = buildEmailTemplateCatalog('es-ES');
+    const en = buildEmailTemplateCatalog('en-US');
+    const igualesAlEspanol = pt.filter(
+      (e) => es.find((x) => x.key === e.key)!.defaultBody === e.defaultBody,
+    );
+    // Solo el passthrough puro (`{{statusText}}…`) se escribe igual.
+    expect(igualesAlEspanol.map((e) => e.key)).toEqual(['gamification.perk.handled']);
+    const reset = pt.find((e) => e.key === 'auth.password_reset');
+    expect(reset?.defaultSubject).toBe('Redefinir sua senha em {{tenantName}}');
+    expect(reset?.defaultBody).not.toBe(en.find((e) => e.key === reset?.key)?.defaultBody);
+  });
+
+  it('CAMINO DEGRADADO: locale sin catálogo (fr-FR) devuelve el español, nunca vacío', () => {
+    const fr = buildEmailTemplateCatalog('fr-FR');
+    expect(fr).toEqual(buildEmailTemplateCatalog('es-ES'));
+    for (const entry of fr) expect(entry.defaultBody.length, entry.key).toBeGreaterThan(0);
   });
 
   it('el idioma NO cambia el conjunto de keys ni los metadatos', () => {
-    const en = buildEmailTemplateCatalog('en-US');
     const es = buildEmailTemplateCatalog('es-ES');
-    expect(en.map((e) => e.key)).toEqual(es.map((e) => e.key));
-    // `name`/`description` siguen solo en español a propósito (hueco conocido):
-    // si alguien los traduce, este test le recuerda que hay que revisarlo.
-    expect(en.map((e) => e.name)).toEqual(es.map((e) => e.name));
+    for (const lang of TRANSLATED_LANGS) {
+      const translated = buildEmailTemplateCatalog(LOCALE_OF[lang]);
+      expect(
+        translated.map((e) => e.key),
+        lang,
+      ).toEqual(es.map((e) => e.key));
+      // `name`/`description` siguen solo en español a propósito (hueco conocido):
+      // si alguien los traduce, este test le recuerda que hay que revisarlo.
+      expect(
+        translated.map((e) => e.name),
+        lang,
+      ).toEqual(es.map((e) => e.name));
+    }
   });
 
   it('toda entrada tiene nombre humano, descripción, body por defecto y variables', () => {
@@ -323,29 +459,39 @@ describe('catálogo transaccional por idioma', () => {
     ]),
   );
 
-  it('toda key traducida al inglés existe en el catálogo transaccional', () => {
-    for (const key of Object.keys(TRANSACTIONAL_TEMPLATE_DEFAULTS_EN)) {
+  /** El mapa de cada idioma traducido, tal como lo exporta el catálogo. */
+  const TRANSLATED_MAPS: Record<Exclude<HubTemplateLang, 'es'>, Record<string, TemplateDef>> = {
+    en: TRANSACTIONAL_TEMPLATE_DEFAULTS_EN,
+    pt: TRANSACTIONAL_TEMPLATE_DEFAULTS_PT,
+  };
+
+  it.each(TRANSLATED_LANGS)('toda key traducida a %s existe en el catálogo', (lang) => {
+    for (const key of Object.keys(TRANSLATED_MAPS[lang])) {
       expect(esByKey.has(key), `${key} traducido pero sin entrada transaccional`).toBe(true);
     }
   });
 
-  it('cada traducción conserva los placeholders y la presencia de asunto', () => {
-    for (const [key, en] of Object.entries(TRANSACTIONAL_TEMPLATE_DEFAULTS_EN)) {
+  it.each(TRANSLATED_LANGS)('%s conserva los placeholders y la presencia de asunto', (lang) => {
+    for (const [key, translated] of Object.entries(TRANSLATED_MAPS[lang])) {
       const es = esByKey.get(key)!;
-      expect(placeholders(en), `${key} cambia los placeholders`).toEqual(placeholders(es));
-      expect(en.subject === null, `${key} difiere en si tiene asunto`).toBe(es.subject === null);
-      expect(en.body.length, `${key} tiene cuerpo vacío en inglés`).toBeGreaterThan(0);
+      expect(placeholders(translated), `${key} cambia los placeholders`).toEqual(placeholders(es));
+      expect(translated.subject === null, `${key} difiere en si tiene asunto`).toBe(
+        es.subject === null,
+      );
+      expect(translated.body.length, `${key} tiene cuerpo vacío`).toBeGreaterThan(0);
+      // Y no es el español pegado: mismos placeholders, otro texto.
+      expect(translated.body, `${key} sin traducir`).not.toBe(es.body);
     }
   });
 
-  it('el inglés declara solo variables que el catálogo documenta', () => {
-    for (const [key, en] of Object.entries(TRANSACTIONAL_TEMPLATE_DEFAULTS_EN)) {
+  it.each(TRANSLATED_LANGS)('%s declara solo variables que el catálogo documenta', (lang) => {
+    for (const [key, translated] of Object.entries(TRANSLATED_MAPS[lang])) {
       const declared = new Set(
         TRANSACTIONAL_EMAIL_DEFS.find((d) => d.key === key)!.variables.map((v) => v.name),
       );
-      const used = [...`${en.subject ?? ''}\n${en.body}`.matchAll(/\{\{[#^]?\s*(\w+)\s*\}\}/g)].map(
-        (m) => m[1] as string,
-      );
+      const used = [
+        ...`${translated.subject ?? ''}\n${translated.body}`.matchAll(/\{\{[#^]?\s*(\w+)\s*\}\}/g),
+      ].map((m) => m[1] as string);
       for (const name of used) {
         expect(declared.has(name), `${key} usa {{${name}}} sin declararla`).toBe(true);
       }
@@ -356,14 +502,17 @@ describe('catálogo transaccional por idioma', () => {
     expect(resolveTransactionalDefault('auth.password_reset', 'en-US')).toEqual(
       TRANSACTIONAL_TEMPLATE_DEFAULTS_EN['auth.password_reset'],
     );
+    expect(resolveTransactionalDefault('auth.password_reset', 'pt-BR')).toEqual(
+      TRANSACTIONAL_TEMPLATE_DEFAULTS_PT['auth.password_reset'],
+    );
     expect(resolveTransactionalDefault('auth.password_reset', 'es-ES')).toEqual(
       esByKey.get('auth.password_reset'),
     );
   });
 
   it('CAMINO DEGRADADO: idioma sin catálogo o key sin traducir → español', () => {
-    // `pt-BR` es alcanzable HOY (ALLOWED_LOCALES en me.controller.ts).
-    for (const locale of ['pt-BR', 'zz', '', '   ', null, undefined]) {
+    // `fr-FR` es alcanzable por SCIM (copia el locale del IdP sin validar).
+    for (const locale of [...SIN_CATALOGO, null, undefined]) {
       expect(resolveTransactionalDefault('auth.password_reset', locale)).toEqual(
         esByKey.get('auth.password_reset'),
       );
@@ -371,41 +520,46 @@ describe('catálogo transaccional por idioma', () => {
     // La otra mitad de la degradación —«key SIN traducir cae al español»— ya
     // NO tiene caso vivo: `member_registration.approval_request` era el último
     // y este PR lo cierra. La rama sigue en el código como red para una key
-    // NUEVA, y quien la deja sin inglés lo descubre en el test de abajo («el
-    // mapa inglés cubre TODA key transaccional»), no en la bandeja de un
-    // aprobador anglófono.
-    for (const def of TRANSACTIONAL_EMAIL_DEFS) {
-      const en = resolveTransactionalDefault(def.key, 'en-US');
-      expect(en, `${def.key} sin copy en inglés`).toBeDefined();
-      expect(en!.body.trim().length, `${def.key} con cuerpo vacío`).toBeGreaterThan(0);
+    // NUEVA, y quien la deja sin traducir lo descubre en el test de abajo
+    // («cubre TODA key transaccional»), no en la bandeja de un aprobador
+    // anglófono o brasileño.
+    for (const lang of TRANSLATED_LANGS) {
+      for (const def of TRANSACTIONAL_EMAIL_DEFS) {
+        const translated = resolveTransactionalDefault(def.key, LOCALE_OF[lang]);
+        expect(translated, `${def.key} sin copy en ${lang}`).toBeDefined();
+        expect(translated!.body.trim().length, `${def.key} con cuerpo vacío`).toBeGreaterThan(0);
+      }
     }
   });
 
-  it('el mapa inglés cubre TODA key transaccional, sin excepciones declaradas', () => {
-    // Historia de la guarda, porque explica su forma: primero el mapa era
-    // parcial con 9 huecos y solo se podía exigir «lo que esté, que sea
+  it.each(TRANSLATED_LANGS)('el mapa %s cubre TODA key transaccional, sin excepciones', (lang) => {
+    // Historia de la guarda, porque explica su forma: primero el mapa inglés
+    // era parcial con 9 huecos y solo se podía exigir «lo que esté, que sea
     // coherente»; luego quedó UNO declarado
     // (`member_registration.approval_request`, bloqueado por el copy de
     // `modules/payment-connections`); ahora no queda ninguno y la lista de
-    // excepciones desaparece. Cualquier plantilla transaccional NUEVA que
-    // llegue sin inglés rompe aquí en vez de colarse y llegarle en español a un
-    // destinatario anglófono.
-    const huecos = TRANSACTIONAL_EMAIL_DEFS.filter(
-      (d) => !TRANSACTIONAL_TEMPLATE_DEFAULTS_EN[d.key],
-    ).map((d) => d.key);
-    expect(huecos, `plantillas transaccionales sin copy inglés: ${huecos.join(', ')}`).toEqual([]);
+    // excepciones desaparece. El portugués nació completo y entra en la misma
+    // guarda. Cualquier plantilla transaccional NUEVA que llegue sin traducir
+    // rompe aquí en vez de colarse y llegarle en español a quien no lo lee.
+    const huecos = TRANSACTIONAL_EMAIL_DEFS.filter((d) => !TRANSLATED_MAPS[lang][d.key]).map(
+      (d) => d.key,
+    );
+    expect(huecos, `plantillas transaccionales sin copy ${lang}: ${huecos.join(', ')}`).toEqual([]);
   });
 
-  it('una key inexistente sigue devolviendo undefined en los dos idiomas', () => {
+  it('una key inexistente sigue devolviendo undefined en todos los idiomas', () => {
     expect(resolveTransactionalDefault('no.existe', 'en-US')).toBeUndefined();
+    expect(resolveTransactionalDefault('no.existe', 'pt-BR')).toBeUndefined();
     expect(resolveTransactionalDefault('no.existe')).toBeUndefined();
   });
 });
 
 describe('copy fijo de emails (CTA, títulos, rellenos)', () => {
-  it('los dos idiomas cubren exactamente las mismas keys y ninguna está vacía', () => {
+  it('todos los idiomas cubren exactamente las mismas keys y ninguna está vacía', () => {
     const esKeys = Object.keys(FIXED_EMAIL_COPY.es).sort();
-    expect(Object.keys(FIXED_EMAIL_COPY.en).sort()).toEqual(esKeys);
+    for (const lang of TRANSLATED_LANGS) {
+      expect(Object.keys(FIXED_EMAIL_COPY[lang]).sort(), lang).toEqual(esKeys);
+    }
     for (const lang of HUB_TEMPLATE_LANGS) {
       for (const [key, value] of Object.entries(FIXED_EMAIL_COPY[lang])) {
         expect(value.trim().length, `${lang}.${key} vacío`).toBeGreaterThan(0);
@@ -413,41 +567,86 @@ describe('copy fijo de emails (CTA, títulos, rellenos)', () => {
     }
   });
 
-  it('ninguna etiqueta inglesa se quedó en español (era el bug: cuerpo EN, botón ES)', () => {
-    // Rótulos que se escriben IGUAL en los dos idiomas. Van declarados uno a
-    // uno y no como un `skip` genérico: la coincidencia tiene que ser una
-    // decisión, no el síntoma de una traducción que falta.
-    const IGUALES_EN_LOS_DOS_IDIOMAS = new Set<FixedEmailCopyKey>([
+  /**
+   * Rótulos que se escriben IGUAL que en español, por idioma. Van declarados
+   * uno a uno y no como un `skip` genérico: la coincidencia tiene que ser una
+   * decisión, no el síntoma de una traducción que falta.
+   *
+   * El portugués declara más que el inglés porque es lengua hermana: «Entrar»,
+   * «Compras detectadas» o «Resultado parcial» son la misma grafía en las dos.
+   * Por eso mismo su lista es la que más conviene tener cerrada: sin ella, un
+   * rótulo portugués olvidado en español no se distinguiría de estos.
+   */
+  const IGUALES_QUE_EN_ESPANOL: Record<
+    Exclude<HubTemplateLang, 'es'>,
+    ReadonlySet<FixedEmailCopyKey>
+  > = {
+    en: new Set<FixedEmailCopyKey>([
       'label.applicant_email', // «Email» es la misma palabra en ES y EN.
       'label.applicant_telegram', // «Telegram ID» es un nombre propio + sigla.
-    ]);
-    for (const key of Object.keys(FIXED_EMAIL_COPY.es) as FixedEmailCopyKey[]) {
-      if (IGUALES_EN_LOS_DOS_IDIOMAS.has(key)) {
-        expect(FIXED_EMAIL_COPY.en[key], `${key} declarada igual pero difiere`).toBe(
+    ]),
+    pt: new Set<FixedEmailCopyKey>([
+      'label.applicant_telegram', // «Telegram ID» es un nombre propio + sigla.
+      'label.otp_code', // «Código».
+      'cta.signin', // «Entrar».
+      'decision.partial_result', // «⚠ Resultado parcial».
+      'decision.purchases', // «Compras detectadas ({{count}})».
+    ]),
+  };
+
+  it.each(TRANSLATED_LANGS)(
+    'ninguna etiqueta de %s se quedó en español (era el bug: cuerpo traducido, botón ES)',
+    (lang) => {
+      const iguales = IGUALES_QUE_EN_ESPANOL[lang];
+      for (const key of Object.keys(FIXED_EMAIL_COPY.es) as FixedEmailCopyKey[]) {
+        if (iguales.has(key)) {
+          expect(FIXED_EMAIL_COPY[lang][key], `${key} declarada igual pero difiere`).toBe(
+            FIXED_EMAIL_COPY.es[key],
+          );
+          continue;
+        }
+        expect(FIXED_EMAIL_COPY[lang][key], `${key} sin traducir`).not.toBe(
           FIXED_EMAIL_COPY.es[key],
         );
-        continue;
       }
-      expect(FIXED_EMAIL_COPY.en[key], `${key} sin traducir`).not.toBe(FIXED_EMAIL_COPY.es[key]);
-    }
-  });
+    },
+  );
 
-  it('los dos idiomas declaran los MISMOS placeholders en cada copy fijo', () => {
+  it.each(TRANSLATED_LANGS)('%s declara los MISMOS placeholders en cada copy fijo', (lang) => {
     // `cta.hub_enter` y `footer.hub_member` llevan `{{tenantName}}`: si una
     // traducción lo pierde, el email sale sin el nombre de la plataforma y
     // nadie lo ve hasta que un miembro anglófono recibe «Go to ».
     const vars = (s: string) => [...s.matchAll(/\{\{\s*(\w+)\s*\}\}/g)].map((m) => m[1]).sort();
     for (const key of Object.keys(FIXED_EMAIL_COPY.es) as FixedEmailCopyKey[]) {
-      expect(vars(FIXED_EMAIL_COPY.en[key]), `${key}: placeholders distintos`).toEqual(
+      expect(vars(FIXED_EMAIL_COPY[lang][key]), `${key}: placeholders distintos`).toEqual(
         vars(FIXED_EMAIL_COPY.es[key]),
       );
     }
   });
 
+  it.each(TRANSLATED_LANGS)('%s conserva el espacio load-bearing de los sufijos', (lang) => {
+    // `decision.partial_suffix` se pega detrás de otra frase: su espacio inicial
+    // es parte del contrato en español y tiene que seguir en la traducción.
+    for (const key of Object.keys(FIXED_EMAIL_COPY.es) as FixedEmailCopyKey[]) {
+      const es = FIXED_EMAIL_COPY.es[key];
+      const translated: string = FIXED_EMAIL_COPY[lang][key];
+      expect(translated.startsWith(' '), `${key}: espacio inicial`).toBe(es.startsWith(' '));
+      expect(translated.endsWith(' '), `${key}: espacio final`).toBe(es.endsWith(' '));
+    }
+  });
+
+  it('el asunto de relleno del hub sale en el idioma del destinatario', () => {
+    expect(resolveFixedEmailCopy('value.no_subject', 'es-ES')).toBe('(sin asunto)');
+    expect(resolveFixedEmailCopy('value.no_subject', 'en-US')).toBe('(no subject)');
+    expect(resolveFixedEmailCopy('value.no_subject', 'pt-BR')).toBe('(sem assunto)');
+    expect(resolveFixedEmailCopy('value.no_subject', 'fr-FR')).toBe('(sin asunto)');
+  });
+
   it('resolveFixedEmailCopy devuelve el idioma pedido y degrada al español', () => {
     expect(resolveFixedEmailCopy('cta.password_reset', 'en-US')).toBe('Reset password');
+    expect(resolveFixedEmailCopy('cta.password_reset', 'pt-BR')).toBe('Redefinir senha');
     expect(resolveFixedEmailCopy('cta.password_reset', 'es-ES')).toBe('Restablecer contraseña');
-    for (const locale of ['pt-BR', '', null, undefined]) {
+    for (const locale of ['fr-FR', '', null, undefined]) {
       expect(resolveFixedEmailCopy('cta.set_password', locale)).toBe('Define tu contraseña');
     }
   });
@@ -459,10 +658,12 @@ describe('emailGreeting', () => {
     expect(emailGreeting(null, 'es-ES')).toBe('Hola,');
     expect(emailGreeting('Ana', 'en-US')).toBe('Hi Ana,');
     expect(emailGreeting(null, 'en-US')).toBe('Hi,');
+    expect(emailGreeting('Ana', 'pt-BR')).toBe('Olá, Ana!');
+    expect(emailGreeting(null, 'pt-BR')).toBe('Olá!');
   });
 
   it('CAMINO DEGRADADO: idioma sin catálogo → español', () => {
-    for (const locale of ['pt-BR', '', '  ', null, undefined]) {
+    for (const locale of ['fr-FR', '', '  ', null, undefined]) {
       expect(emailGreeting('Ana', locale)).toBe('Hola Ana,');
     }
   });
@@ -472,9 +673,12 @@ describe('resolveRecipientLocale', () => {
   it('devuelve el locale guardado tal cual, incluso si no está traducido', () => {
     expect(resolveRecipientLocale('en-US')).toBe('en-US');
     expect(resolveRecipientLocale('es-AR')).toBe('es-AR');
-    // pt-BR NO se aplana aquí: así un override per-tenant en pt-BR puede ganar.
     expect(resolveRecipientLocale('pt-BR')).toBe('pt-BR');
-    expect(toHubTemplateLang(resolveRecipientLocale('pt-BR'))).toBe('es');
+    expect(toHubTemplateLang(resolveRecipientLocale('pt-BR'))).toBe('pt');
+    // Un locale sin catálogo NO se aplana aquí: así un override per-tenant en
+    // ese locale puede ganar. Lo absorbe `toHubTemplateLang` al elegir catálogo.
+    expect(resolveRecipientLocale('fr-FR')).toBe('fr-FR');
+    expect(toHubTemplateLang(resolveRecipientLocale('fr-FR'))).toBe('es');
   });
 
   it('CAMINO DEGRADADO: locale vacío, en blanco, null o undefined → el de referencia', () => {
@@ -485,17 +689,20 @@ describe('resolveRecipientLocale', () => {
 });
 
 describe('ping de SMTP de /tenant-settings', () => {
-  it('tiene asunto y cuerpo en los dos idiomas, con los mismos placeholders', () => {
+  it('tiene asunto y cuerpo en todos los idiomas, con los mismos placeholders', () => {
     for (const lang of HUB_TEMPLATE_LANGS) {
       const def = SMTP_SETTINGS_PING[lang];
       expect(def.subject?.length, lang).toBeGreaterThan(0);
       expect(def.body).toContain('{{tenantSlug}}');
       expect(def.body).toContain('{{timestamp}}');
     }
-    expect(SMTP_SETTINGS_PING.en.body).not.toBe(SMTP_SETTINGS_PING.es.body);
+    for (const lang of TRANSLATED_LANGS) {
+      expect(SMTP_SETTINGS_PING[lang].body, lang).not.toBe(SMTP_SETTINGS_PING.es.body);
+    }
+    expect(SMTP_SETTINGS_PING.pt.body).not.toBe(SMTP_SETTINGS_PING.en.body);
   });
 
-  it('el español no cambia byte a byte y el inglés sale en inglés', () => {
+  it('el español no cambia byte a byte y cada traducción sale en su idioma', () => {
     const vars = { tenantSlug: 'demo', timestamp: '2026-08-09T10:00:00.000Z' };
     const es = resolveSmtpSettingsPing('es-ES');
     expect(es.subject).toBe('Prueba de SMTP — Didacta');
@@ -505,10 +712,15 @@ describe('ping de SMTP de /tenant-settings', () => {
     const en = resolveSmtpSettingsPing('en-US');
     expect(en.subject).toBe('SMTP test — Didacta');
     expect(interpolate(en.body, vars)).toContain('is working correctly');
+    const pt = resolveSmtpSettingsPing('pt-BR');
+    expect(pt.subject).toBe('Teste de SMTP — Didacta');
+    expect(interpolate(pt.body, vars)).toBe(
+      'Se você recebeu este e-mail, a configuração SMTP do seu tenant na Didacta está funcionando corretamente.\n\nTenant: demo\nData: 2026-08-09T10:00:00.000Z',
+    );
   });
 
   it('CAMINO DEGRADADO: idioma sin catálogo → español', () => {
-    for (const locale of ['pt-BR', '', null, undefined]) {
+    for (const locale of ['fr-FR', '', null, undefined]) {
       expect(resolveSmtpSettingsPing(locale)).toEqual(SMTP_SETTINGS_PING.es);
     }
   });
@@ -667,8 +879,60 @@ describe('builders de inscripción · idioma del destinatario', () => {
     expect(out.html).not.toContain('>Entrar<');
   });
 
-  it('CAMINO DEGRADADO: locale sin catálogo (pt-BR) → español en los tres builders', () => {
-    for (const locale of ['pt-BR', 'zz', '', '   ']) {
+  // ── Portugués: los tres builders, con las mismas piezas que se afirman en
+  //    inglés. Aquí vivía el camino degradado «pt-BR → español»; ahora el
+  //    degradado se prueba con `fr-FR` más abajo y estos tests afirman lo
+  //    contrario para `pt-BR`.
+  it('OTP pt-BR: cuerpo portugués y el código sigue siendo estructural', () => {
+    const out = buildOtpEmail('482913', branding(), 'pt-BR');
+    expect(out.subject).toBe('Seu código de acesso');
+    expect(out.html).toContain('<html lang="pt">');
+    expect(out.html).toContain('Digite-o na tela de verificação para continuar');
+    expect(out.html).toContain('Este código expira em 10 minutos');
+    expect(out.html).toContain('482913');
+    // En texto plano va etiquetado en portugués («Código» se escribe igual que
+    // en español, así que lo que distingue es el cuerpo, no la etiqueta).
+    expect(out.text).toContain('Código: 482913');
+    expect(out.html).not.toContain('Introdúcelo en la pantalla');
+    expect(out.html).not.toContain('Enter it on the verification screen');
+  });
+
+  it('aprobación pt-BR: cuerpo portugués, saludo portugués y título sin marca de género', () => {
+    const out = buildWelcomeEmail('Ana', 'https://x/signin', branding(), 'pt-BR');
+    expect(out.subject).toBe('Sua inscrição em Academia Demo foi aprovada');
+    expect(out.html).toContain('<html lang="pt">');
+    expect(out.text).toContain('Olá, Ana!');
+    expect(out.text).toContain('Boas notícias! Sua inscrição em Academia Demo foi aprovada');
+    expect(out.html).toContain('Boas-vindas!');
+    expect(out.html).toContain('>Entrar<');
+    // Ni el español ni el inglés se cuelan en el cuerpo.
+    expect(out.text).not.toContain('Hola Ana,');
+    expect(out.html).not.toContain('¡Buenas noticias!');
+    expect(out.html).not.toContain('Sign in');
+  });
+
+  it('rechazo pt-BR: cuerpo y título en portugués', () => {
+    const out = buildRejectionEmail('Ana', branding(), 'pt-BR');
+    expect(out.subject).toBe('Sobre sua inscrição em Academia Demo');
+    expect(out.html).toContain('<html lang="pt">');
+    expect(out.text).toContain('Olá, Ana!');
+    expect(out.text).toContain('não foi possível aprovar sua inscrição neste momento');
+    expect(out.html).not.toContain('Gracias por tu interés');
+    expect(out.html).not.toContain('Thank you for your interest');
+  });
+
+  it('con override en pt-BR, el botón sigue en portugués aunque el texto lo escriba el tenant', () => {
+    const out = buildOtpEmail('482913', branding(), 'pt-BR', {
+      subject: 'Seu código da {{tenantName}}',
+      body: 'Use este código para entrar.',
+    });
+    expect(out.subject).toBe('Seu código da Academia Demo');
+    expect(out.html).toContain('<html lang="pt">');
+    expect(out.text).toContain('Código: 482913');
+  });
+
+  it('CAMINO DEGRADADO: locale sin catálogo (fr-FR) → español en los tres builders', () => {
+    for (const locale of SIN_CATALOGO) {
       expect(buildOtpEmail('1', branding(), locale).subject, locale).toBe('Tu código de acceso');
       expect(buildWelcomeEmail('Ana', 'https://x/s', branding(), locale).subject, locale).toBe(
         'Tu inscripción en Academia Demo ha sido aprobada',
@@ -837,8 +1101,85 @@ describe('builders de inscripción · idioma del destinatario', () => {
     expect(out.text).not.toContain('unknown');
   });
 
+  it('decisión pt-BR: sale ENTERA en portugués, sin una sola pieza en español ni en inglés', () => {
+    const out = buildDecisionEmail(
+      decisionParams({
+        telegramId: '42',
+        isDelinquent: true,
+        subscriptionMatches: [match({ status: 'past_due' })],
+        purchases: [
+          {
+            orderId: 'o1',
+            orderNumber: '1001',
+            createdAt: '2026-03-14T10:00:00.000Z',
+            status: 'completed',
+            total: 4900,
+            currency: 'eur',
+            products: ['Curso de TS'],
+          } as never,
+        ],
+      }),
+      'pt-BR',
+    );
+    expect(out.subject).toBe('Nova inscrição pendente — Ana');
+    expect(out.html).toContain('<html lang="pt">');
+    expect(out.text).toContain('Há uma nova inscrição aguardando sua aprovação em Academia Demo.');
+    expect(out.text).toContain('Status: Membro do grupo de Academia Demo');
+    expect(out.text).toContain('⚠ CONSTA COMO INADIMPLENTE');
+    expect(out.text).toContain('  Nome: Ana');
+    expect(out.text).toContain('  E-mail: ana@example.test');
+    // Suscripción en impago (`past_due`): «no vigente», igual que en el test
+    // inglés. Este test esperaba «Assinatura ativa:» —el fallo que develop
+    // corrigió después: decir «vigente» en el mismo correo que avisa del impago—.
+    expect(out.text).toContain('⚠ Assinatura NÃO ativa (cancelada ou inadimplente):');
+    expect(out.text).not.toContain('Assinatura ativa:');
+    // La etiqueta de estado sale de `modules/payment-connections`, en portugués.
+    expect(out.text).toContain('Pagamento em atraso (inadimplente)');
+    expect(out.text).toContain('Compras detectadas (1)');
+    expect(out.text).toContain('Aprovar: https://x/a');
+    expect(out.text).toContain('Rejeitar: https://x/r');
+    // La fecha del pedido, en formato brasileño (día/mes con cero a la izquierda).
+    expect(out.text).toContain('14/03/2026');
+
+    // Ninguna pieza española suelta. La lista es la del test inglés MENOS lo que
+    // se escribe igual en portugués («Compras detectadas»), y con las formas
+    // españolas exactas: «Suscripción» lleva «sc» y «Aprobar» lleva «b».
+    for (const espanol of [
+      'Estado:',
+      'IMPAGO',
+      'Nombre:',
+      'Suscripción',
+      'Pago atrasado',
+      'Aprobar:',
+      'Rechazar:',
+      'pendiente de tu aprobación',
+    ]) {
+      expect(out.text, `sigue en español: ${espanol}`).not.toContain(espanol);
+    }
+    // Ni inglesa.
+    for (const ingles of ['Name:', 'Approve:', 'Reject:', 'Payment overdue', 'Purchases found']) {
+      expect(out.text, `sigue en inglés: ${ingles}`).not.toContain(ingles);
+    }
+  });
+
+  it('decisión: los 4 casos del bloque de suscripción salen en portugués', () => {
+    const casos: Array<[Partial<DecisionEmailParams>, string]> = [
+      [{ subscriptionMatches: [match()] }, 'Assinatura ativa'],
+      [{ subscriptionMatches: [match({ status: 'canceled' })] }, 'Assinatura NÃO ativa'],
+      [
+        { subscriptionFailures: [{ connectionName: 'Woo' }] as never },
+        'Não foi possível verificar a assinatura',
+      ],
+      [{}, 'Assinatura detectada: nenhuma nas contas de pagamento conectadas.'],
+    ];
+    for (const [over, esperado] of casos) {
+      const out = buildDecisionEmail(decisionParams(over), 'pt-BR');
+      expect(out.text, esperado).toContain(esperado);
+    }
+  });
+
   it('CAMINO DEGRADADO: la decisión en un locale sin catálogo sale en español', () => {
-    for (const locale of ['pt-BR', 'zz', '', '   ']) {
+    for (const locale of SIN_CATALOGO) {
       expect(buildDecisionEmail(decisionParams(), locale).subject, locale).toBe(
         'Nueva inscripción pendiente — Ana',
       );
@@ -861,7 +1202,7 @@ describe('builders de inscripción · idioma del destinatario', () => {
 });
 
 describe('copy fijo nuevo · CTA, títulos y valores de relleno', () => {
-  it('las etiquetas estructurales de los emails traducidos existen en los dos idiomas', () => {
+  it('las etiquetas estructurales de los emails traducidos existen en todos los idiomas', () => {
     const nuevas: FixedEmailCopyKey[] = [
       'cta.manage_subscription',
       'cta.set_my_password',
@@ -877,12 +1218,13 @@ describe('copy fijo nuevo · CTA, títulos y valores de relleno', () => {
       'value.your_access',
     ];
     for (const key of nuevas) {
-      expect(FIXED_EMAIL_COPY.es[key], `${key} sin español`).toBeTruthy();
-      expect(FIXED_EMAIL_COPY.en[key], `${key} sin inglés`).toBeTruthy();
+      for (const lang of HUB_TEMPLATE_LANGS) {
+        expect(FIXED_EMAIL_COPY[lang][key], `${key} sin ${lang}`).toBeTruthy();
+      }
     }
   });
 
-  it('el pie con la URL de acceso conserva su placeholder en los dos idiomas', () => {
+  it('el pie con la URL de acceso conserva su placeholder en todos los idiomas', () => {
     const vars = { signinUrl: 'https://x/signin' };
     expect(interpolate(resolveFixedEmailCopy('footer.signin_hint', 'es-ES'), vars)).toBe(
       'Después podrás iniciar sesión desde https://x/signin con tu email.',
@@ -890,38 +1232,53 @@ describe('copy fijo nuevo · CTA, títulos y valores de relleno', () => {
     expect(interpolate(resolveFixedEmailCopy('footer.signin_hint', 'en-US'), vars)).toContain(
       'https://x/signin',
     );
+    expect(interpolate(resolveFixedEmailCopy('footer.signin_hint', 'pt-BR'), vars)).toBe(
+      'Depois, você poderá entrar em https://x/signin com seu e-mail.',
+    );
   });
 });
 
 describe('copy de la invitación al aula', () => {
-  it('los dos idiomas cubren las mismas piezas y ninguna se quedó en español', () => {
+  type InvitationKey = keyof typeof INVITATION_EMAIL_COPY.es;
+
+  it.each(TRANSLATED_LANGS)('%s cubre las mismas piezas y ninguna se quedó en español', (lang) => {
     const esKeys = Object.keys(INVITATION_EMAIL_COPY.es).sort();
-    expect(Object.keys(INVITATION_EMAIL_COPY.en).sort()).toEqual(esKeys);
-    for (const key of esKeys as Array<keyof typeof INVITATION_EMAIL_COPY.es>) {
-      expect(INVITATION_EMAIL_COPY.en[key], `${key} sin traducir`).not.toBe(
+    expect(Object.keys(INVITATION_EMAIL_COPY[lang]).sort()).toEqual(esKeys);
+    for (const key of esKeys as InvitationKey[]) {
+      expect(INVITATION_EMAIL_COPY[lang][key], `${key} sin traducir`).not.toBe(
         INVITATION_EMAIL_COPY.es[key],
       );
-      expect(INVITATION_EMAIL_COPY.en[key].trim().length, `${key} vacío`).toBeGreaterThan(0);
+      expect(INVITATION_EMAIL_COPY[lang][key].trim().length, `${key} vacío`).toBeGreaterThan(0);
     }
   });
 
-  it('los dos idiomas declaran los MISMOS placeholders en cada pieza', () => {
+  it.each(TRANSLATED_LANGS)('%s declara los MISMOS placeholders en cada pieza', (lang) => {
     // Si la traducción pierde `{{tenantName}}` o `{{validez}}`, el invitado
     // recibe «has invited you to their classroom» sin saber quién, o una
     // validez en blanco. Nadie lo ve hasta que llega el email.
     const vars = (s: string) => [...s.matchAll(/\{\{\s*(\w+)\s*\}\}/g)].map((m) => m[1]).sort();
-    for (const key of Object.keys(INVITATION_EMAIL_COPY.es) as Array<
-      keyof typeof INVITATION_EMAIL_COPY.es
-    >) {
-      expect(vars(INVITATION_EMAIL_COPY.en[key]), `${key}: placeholders distintos`).toEqual(
+    for (const key of Object.keys(INVITATION_EMAIL_COPY.es) as InvitationKey[]) {
+      expect(vars(INVITATION_EMAIL_COPY[lang][key]), `${key}: placeholders distintos`).toEqual(
         vars(INVITATION_EMAIL_COPY.es[key]),
       );
     }
   });
 
-  it('resolveInvitationEmailCopy degrada al español con constante nombrada', () => {
+  it.each(TRANSLATED_LANGS)('%s conserva el <strong> de la maqueta en la intro', (lang) => {
+    // `introHtml` es la única pieza con HTML: la maqueta resalta el nombre del
+    // tenant y «tu cuenta ya está creada». Una traducción que pierda una
+    // etiqueta de cierre deja en negrita el resto del email.
+    const tags = (s: string) => [...s.matchAll(/<\/?[a-z]+>/g)].map((m) => m[0]);
+    expect(tags(INVITATION_EMAIL_COPY[lang].introHtml)).toEqual(
+      tags(INVITATION_EMAIL_COPY.es.introHtml),
+    );
+    expect(tags(INVITATION_EMAIL_COPY[lang].introText)).toEqual([]);
+  });
+
+  it('resolveInvitationEmailCopy devuelve el idioma pedido y degrada al español', () => {
     expect(resolveInvitationEmailCopy('en-US')).toEqual(INVITATION_EMAIL_COPY.en);
-    for (const locale of ['pt-BR', '', '  ', null, undefined]) {
+    expect(resolveInvitationEmailCopy('pt-BR')).toEqual(INVITATION_EMAIL_COPY.pt);
+    for (const locale of ['fr-FR', '', '  ', null, undefined]) {
       expect(resolveInvitationEmailCopy(locale)).toEqual(INVITATION_EMAIL_COPY.es);
     }
     expect(resolveInvitationEmailCopy(HUB_DEFAULT_LOCALE)).toEqual(INVITATION_EMAIL_COPY.es);
@@ -940,10 +1297,19 @@ describe('emailDateLocale', () => {
     // El bug: «24 de julio de 2026» en mitad de una frase en inglés.
     expect(fmt('es-ES')).toContain('julio');
     expect(fmt('en-US')).toContain('July');
+    // Y en portugués: «julho», no «julio».
+    expect(fmt('pt-BR')).toBe('24 de julho de 2026');
+  });
+
+  it('devuelve un locale COMPLETO por idioma (Intl necesita la región)', () => {
+    expect(emailDateLocale('pt-BR')).toBe('pt-BR');
+    expect(emailDateLocale('pt')).toBe('pt-BR');
+    expect(emailDateLocale('en-GB')).toBe('en-US');
+    expect(emailDateLocale('es-AR')).toBe(HUB_DEFAULT_LOCALE);
   });
 
   it('CAMINO DEGRADADO: idioma sin catálogo → el locale de referencia', () => {
-    for (const locale of ['pt-BR', 'zz', '', null, undefined]) {
+    for (const locale of ['fr-FR', 'zz', '', null, undefined]) {
       expect(emailDateLocale(locale)).toBe(HUB_DEFAULT_LOCALE);
     }
   });

@@ -9,11 +9,15 @@
  * de trabajo amplía este tipo automáticamente.
  */
 
+import type { SupportedLocale } from './config';
 import type messages from './messages/es';
 
 declare module 'next-intl' {
   interface AppConfig {
     Messages: typeof messages;
-    Locale: 'es-ES' | 'es-AR' | 'en-US';
+    // Derivado de `SUPPORTED_LOCALES`, no una unión escrita a mano: era la
+    // cuarta lista de idiomas del producto y la única que no fallaba al
+    // quedarse atrás.
+    Locale: SupportedLocale;
   }
 }

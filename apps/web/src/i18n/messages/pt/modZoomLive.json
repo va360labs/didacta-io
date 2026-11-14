@@ -1,0 +1,60 @@
+{
+  "admin": {
+    "title": "Sala de aula virtual · Zoom Server-to-Server",
+    "description": "Cole as credenciais Server-to-Server OAuth da sua conta Zoom. Elas são salvas criptografadas (AES-256-GCM) e nunca são retornadas em texto puro. Se você deixá-las vazias, o módulo passa a usar o stub de desenvolvimento.",
+    "accountId": "Account ID",
+    "clientId": "Client ID",
+    "clientSecret": "Client Secret",
+    "webhookSecret": "Webhook Secret Token",
+    "webhookSecretPlaceholder": "(deixe vazio para manter o atual)",
+    "webhookSecretHint": "O \"Secret Token\" que o Zoom fornece quando você configura o webhook do seu app, apontando para <code>https://seu-dominio/api/v1/webhooks/zoom</code>. Salve-o aqui ANTES de clicar em “Validar” no Zoom: a validação é assinada com este token e, sem ele salvo, a Didacta responde 401 e o Zoom considera a URL inválida. Sem isso, a sala de aula virtual não recebe os eventos de início/fim de reunião.",
+    "saving": "Salvando…",
+    "save": "Salvar credenciais",
+    "testing": "Testando…",
+    "test": "Testar credenciais",
+    "clear": "Excluir credenciais",
+    "clearConfirm": "Excluir as credenciais Zoom S2S? As novas sessões passarão a usar o stub.",
+    "saved": "✓ Salvo com criptografia.",
+    "testOk": "✓ Credenciais válidas. Vinculado à conta Zoom {accountId}.",
+    "testStub": "⚠ O módulo está usando o stub local — ainda não há credenciais reais configuradas.",
+    "testError": "✗ {message}",
+    "webhookTitle": "Webhook do Zoom",
+    "webhookUrlLabel": "URL para colar no Zoom (Event Subscriptions → Event notification endpoint URL)",
+    "webhookCopy": "Copiar",
+    "webhookCopied": "✓ Copiada",
+    "webhookTest": "Verificar webhook",
+    "webhookTesting": "Verificando…",
+    "webhookOk": "✓ O webhook responde corretamente em {url}. Agora você já pode clicar em “Validate” no Zoom.",
+    "webhookNoSecret": "✗ Ainda não há Secret Token salvo. Cole-o acima e salve as credenciais; até lá, o Zoom receberá um 401 e considerará a URL inválida.",
+    "webhookUnreachable": "✗ Não foi possível conectar a {url} ({detail}). Verifique o DNS, o certificado e se o proxy publica esse domínio.",
+    "webhookRejected": "✗ {url} respondeu {status}: {detail}",
+    "webhookRejectedNoDetail": "✗ {url} respondeu {status}.",
+    "webhookBadResponse": "✗ {url} respondeu 2xx, mas não com o handshake do Zoom: algo na frente da Didacta (proxy, página de manutenção) está respondendo no lugar dela.",
+    "webhookError": "✗ {message}"
+  },
+  "calendar": {
+    "title": "Adicionar ao calendário",
+    "titleRegistered": "Você está dentro!",
+    "description": "Salve \"{topic}\" no seu calendário.",
+    "descriptionRegistered": "Você se inscreveu em \"{topic}\". Salve no seu calendário para não perder.",
+    "footer": "Também vamos avisar você por e-mail 2 horas antes de começar.",
+    "targets": {
+      "google": {
+        "label": "Google Calendar",
+        "hint": "Contas do Gmail e do Workspace"
+      },
+      "outlook": {
+        "label": "Outlook.com",
+        "hint": "Contas pessoais do Outlook ou do Hotmail"
+      },
+      "office365": {
+        "label": "Outlook (Microsoft 365)",
+        "hint": "Contas corporativas ou de estudante"
+      },
+      "ics": {
+        "label": "Apple Calendar e outros",
+        "hint": "Baixe o evento .ics e abra com o seu calendário"
+      }
+    }
+  }
+}

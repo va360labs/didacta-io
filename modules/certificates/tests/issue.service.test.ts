@@ -209,3 +209,103 @@ describe('CertificatesService.renderCertificatePdf (descarga)', () => {
     expect(fake.ctx.logger.warn).toHaveBeenCalled();
   });
 });
+
+describe('CertificatesService · idioma del certificado', () => {
+  /** Texto de los streams del PDF (mismo extractor que `pdf-renderer-i18n.test.ts`). */
+  async function textoDe(pdf: Buffer): Promise<string> {
+    const { inflateSync } = await import('node:zlib');
+    const decoder = new TextDecoder('windows-1252');
+    const out: string[] = [];
+    for (const m of pdf.toString('latin1').matchAll(/stream\r?\n([\s\S]*?)\r?\nendstream/g)) {
+      let c = Buffer.from(m[1]!, 'latin1');
+      try {
+        c = inflateSync(c);
+      } catch {
+        /* sin comprimir */
+      }
+      for (const tj of c.toString('latin1').matchAll(/\[([^\]]*)\]\s*TJ/g)) {
+        const hex = [...tj[1]!.matchAll(/<([0-9a-fA-F]*)>/g)].map((h) => h[1]).join('');
+        out.push(decoder.decode(Buffer.from(hex, 'hex')));
+      }
+    }
+    return out.join(' ').replace(/\s+/g, ' ');
+  }
+
+  it('un alumno pt-BR recibe el certificado en portugués y el snapshot guarda el idioma', async () => {
+    const fake = makeFake();
+    fake.prisma.user.findUnique = vi.fn(async () => ({
+      id: 'u1',
+      name: 'João',
+      email: 'j@b.c',
+      locale: 'pt-BR',
+    })) as never;
+    const svc = new CertificatesService(fake.prisma as never, fake.ctx as never);
+
+    const cert = await svc.issueCertificateForEnrollment(input);
+
+    expect((cert.snapshot as Record<string, unknown>).lang).toBe('pt');
+    const texto = await textoDe(fake.subidas[0]!.data);
+    expect(texto).toContain('DE CONCLUSÃO');
+    expect(texto).toContain('DATA DE EMISSÃO');
+    // Si el PDF se pierde del storage, la re-renderización sale en el MISMO idioma.
+    fake.storage.download = vi.fn(async () => {
+      throw new Error('objeto borrado');
+    });
+    expect(await textoDe(await svc.renderCertificatePdf('t1', cert.id))).toContain('DE CONCLUSÃO');
+  });
+
+  it('control: un alumno es-ES (y un snapshot de antes, sin idioma) sale en español', async () => {
+    const fake = makeFake();
+    fake.prisma.user.findUnique = vi.fn(async () => ({
+      id: 'u1',
+      name: 'Ada',
+      email: 'a@b.c',
+      locale: 'es-ES',
+    })) as never;
+    const svc = new CertificatesService(fake.prisma as never, fake.ctx as never);
+    const cert = await svc.issueCertificateForEnrollment(input);
+    expect((cert.snapshot as Record<string, unknown>).lang).toBe('es');
+    expect(await textoDe(fake.subidas[0]!.data)).toContain('DE FINALIZACIÓN');
+
+    delete (cert.snapshot as Record<string, unknown>).lang;
+    fake.storage.download = vi.fn(async () => {
+      throw new Error('objeto borrado');
+    });
+    expect(await textoDe(await svc.renderCertificatePdf('t1', cert.id))).toContain(
+      'DE FINALIZACIÓN',
+    );
+  });
+
+  it('sin idioma en el perfil, el del aula; si no se puede leer, español', async () => {
+    const fake = makeFake(); // El usuario del fake no trae `locale`.
+    Object.assign(fake.prisma, {
+      tenantSetting: { findUnique: vi.fn(async () => ({ valueJson: 'pt' })) },
+    });
+    const svc = new CertificatesService(fake.prisma as never, fake.ctx as never);
+    const cert = await svc.issueCertificateForEnrollment(input);
+    expect((cert.snapshot as Record<string, unknown>).lang).toBe('pt');
+
+    const sinAjuste = makeFake(); // Sin `tenantSetting`: la lectura falla.
+    const svc2 = new CertificatesService(sinAjuste.prisma as never, sinAjuste.ctx as never);
+    const cert2 = await svc2.issueCertificateForEnrollment(input);
+    expect((cert2.snapshot as Record<string, unknown>).lang).toBe('es');
+  });
+
+  it('la vista previa de la plantilla sale en el idioma de quien la mira', async () => {
+    const fake = makeFake();
+    Object.assign(fake.prisma.user, {
+      findFirst: vi.fn(async () => ({ locale: 'pt-BR' })),
+    });
+    const svc = new CertificatesService(fake.prisma as never, fake.ctx as never);
+    const draft = { name: 'P', body: 'Corpo da escola.' };
+
+    const pt = await textoDe(await svc.renderTemplatePreview('t1', draft, 'u1'));
+    expect(pt).toContain('Aluna de Exemplo');
+    expect(pt).toContain('Curso de Exemplo');
+    expect(pt).toContain('DE CONCLUSÃO');
+    // Sin quien mira (y sin ajuste legible), español, como siempre.
+    const es = await textoDe(await svc.renderTemplatePreview('t1', draft));
+    expect(es).toContain('Alumna de Ejemplo');
+    expect(es).toContain('DE FINALIZACIÓN');
+  });
+});

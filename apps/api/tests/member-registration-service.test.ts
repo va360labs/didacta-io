@@ -359,8 +359,21 @@ describe('MemberRegistrationService · idioma del email de decisión', () => {
     expect(h.logger.warn).toHaveBeenCalled();
   });
 
-  it('CAMINO DEGRADADO: un locale sin catálogo (pt-BR) también cae al español', async () => {
-    const { subject } = await subjectFor({ approverRow: { locale: 'pt-BR' } });
+  it('aprobador con locale pt-BR: el email sale ENTERO en portugués', async () => {
+    // Era el camino degradado de abajo mientras `pt-BR` no tuvo catálogo.
+    const { subject, h } = await subjectFor({ approverRow: { locale: 'pt-BR' } });
+    expect(subject).toBe('Nova inscrição pendente — Ana López');
+    const message = h.smtp.send.mock.calls[0]![1];
+    expect(message.text).toContain('Há uma nova inscrição aguardando sua aprovação');
+    expect(message.text).toContain('Aprovar: ');
+    expect(message.text).toContain('Rejeitar: ');
+    expect(message.text).not.toContain('Aprobar: ');
+    expect(message.text).not.toContain('Approve: ');
+    expect(message.html).toContain('<html lang="pt">');
+  });
+
+  it('CAMINO DEGRADADO: un locale sin catálogo (fr-FR) también cae al español', async () => {
+    const { subject } = await subjectFor({ approverRow: { locale: 'fr-FR' } });
     expect(subject).toBe('Nueva inscripción pendiente — Ana López');
   });
 });

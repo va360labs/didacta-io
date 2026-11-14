@@ -39,5 +39,369 @@
   "noSubject": "(no subject)",
   "edit": "Edit",
   "restore": "Restore",
-  "customize": "Customise"
+  "customize": "Customise",
+  "templates": {
+    "auth_password_reset": {
+      "name": "Password reset",
+      "description": "When a user asks to reset their password (or an admin sends them the access invitation).",
+      "structuralNote": "The “Reset password” button with the secure link is always added at the end.",
+      "vars": {
+        "greeting": "Greeting (“Hi Name,” or “Hi,”)",
+        "userName": "User’s name (may be empty)",
+        "tenantName": "Platform name",
+        "resetUrl": "Secure reset link",
+        "ttlMinutes": "Minutes the link stays valid"
+      }
+    },
+    "member_registration_otp_code": {
+      "name": "Access code (OTP)",
+      "description": "One-time code during member sign-up (email verification).",
+      "structuralNote": "The one-time code is always shown in large type below the text.",
+      "vars": {
+        "tenantName": "Platform name",
+        "ttlMinutes": "Minutes the code stays valid",
+        "code": "The code (also shown in large type automatically)"
+      }
+    },
+    "member_registration_approval_request": {
+      "name": "New registration pending (to the approver)",
+      "description": "Notice to the approver when a pending member registration request arrives.",
+      "structuralNote": "The applicant’s details (group, unpaid payments, subscriptions, purchases) and the “Approve”/“Reject” buttons are always added after the text.",
+      "vars": {
+        "name": "Applicant’s name",
+        "email": "Applicant’s email",
+        "telegramId": "Applicant’s Telegram ID",
+        "tenantName": "Platform name"
+      }
+    },
+    "member_registration_welcome_approved": {
+      "name": "Registration approved (welcome)",
+      "description": "When the approver approves the member’s registration request.",
+      "structuralNote": "The “Sign in” button with the access link is always added at the end.",
+      "vars": {
+        "greeting": "Greeting (“Hi Name,” or “Hi,”)",
+        "name": "Member’s name (may be empty)",
+        "tenantName": "Platform name",
+        "signinUrl": "Sign-in URL"
+      }
+    },
+    "member_registration_rejection": {
+      "name": "Registration rejected",
+      "description": "When the approver rejects the member’s registration request.",
+      "vars": {
+        "greeting": "Greeting (“Hi Name,” or “Hi,”)",
+        "name": "Applicant’s name (may be empty)",
+        "tenantName": "Platform name"
+      }
+    },
+    "enrollment_welcome": {
+      "name": "Welcome after API sign-up",
+      "description": "When an external sign-up through the API (n8n/Woo) creates a new user with access to course(s).",
+      "structuralNote": "The “Set your password” button with the magic link is always added at the end.",
+      "vars": {
+        "greeting": "Greeting (“Hi Name,” or “Hi,”)",
+        "name": "User’s name (may be empty)",
+        "email": "User’s email",
+        "tenantName": "Platform name",
+        "setPasswordUrl": "Magic link to set the password"
+      }
+    },
+    "membership_welcome": {
+      "name": "Membership welcome",
+      "description": "When a membership purchase (Stripe webhook) creates the buyer as a user.",
+      "structuralNote": "The “Set my password” button and the note with the sign-in URL are always added.",
+      "vars": {
+        "greeting": "Greeting (“Hi Name,” or “Hi,”)",
+        "name": "Buyer’s name (may be empty)",
+        "email": "Buyer’s email",
+        "tenantName": "Platform name",
+        "setPasswordUrl": "Magic link to set the password",
+        "signinUrl": "Sign-in URL"
+      }
+    },
+    "billing_welcome": {
+      "name": "Course purchase welcome",
+      "description": "When the public purchase of a single course (Stripe webhook) creates the buyer as a user.",
+      "structuralNote": "The “Set my password” button and the note with the sign-in URL are always added.",
+      "vars": {
+        "greeting": "Greeting (“Hi Name,” or “Hi,”)",
+        "name": "Buyer’s name (may be empty)",
+        "email": "Buyer’s email",
+        "tenantName": "Platform name",
+        "setPasswordUrl": "Magic link to set the password",
+        "signinUrl": "Sign-in URL"
+      }
+    },
+    "subscriptions_renewal_warning": {
+      "name": "Renewal notice to the subscriber",
+      "description": "Automatic notice N days before the member’s external subscription renews.",
+      "structuralNote": "If a Stripe portal is set up, the “Manage my subscription” button is added at the end.",
+      "vars": {
+        "plan": "Plan name (may be empty)",
+        "renewalDate": "Renewal date (e.g. “July 24, 2026”)",
+        "amount": "Amount with currency (may be empty)",
+        "cancelUrl": "Cancellation portal URL (may be empty)",
+        "tenantName": "Platform name"
+      }
+    },
+    "payment_connections_access_expiring": {
+      "name": "Access ending notice (one-off payment with an expiry date)",
+      "description": "Automatic notice N days before an access bought in a single payment ends (e.g. “ANNUAL access”). It is DIFFERENT from the renewal notice: this access does not renew on its own, it has to be bought again.",
+      "structuralNote": "No button: there is no portal to manage, renewing is a new purchase in the store.",
+      "vars": {
+        "plan": "Product bought (may be empty)",
+        "renewalDate": "Date the access ends",
+        "tenantName": "Platform name"
+      }
+    },
+    "subscriptions_admin_digest": {
+      "name": "Daily subscriptions digest (admins)",
+      "description": "Daily digest to admins with the active subscriptions and upcoming renewals.",
+      "vars": {
+        "activeCount": "Number of active subscriptions",
+        "upcomingCount": "Number of upcoming renewals",
+        "windowDays": "Days in the notice window",
+        "upcomingList": "Formatted list of upcoming renewals",
+        "tenantName": "Platform name"
+      }
+    },
+    "enrollment_created": {
+      "name": "Enrolment created",
+      "description": "When a student enrols in a course.",
+      "vars": {
+        "course": "Course name",
+        "tenantName": "Platform name"
+      }
+    },
+    "course_completed": {
+      "name": "Course completed",
+      "description": "When a student completes 100% of a course.",
+      "vars": {
+        "course": "Course name",
+        "tenantName": "Platform name"
+      }
+    },
+    "certificate_issued": {
+      "name": "Certificate issued",
+      "description": "When the certificate for a completed course is issued.",
+      "vars": {
+        "course": "Course name",
+        "number": "Certificate number",
+        "tenantName": "Platform name"
+      }
+    },
+    "attempt_passed": {
+      "name": "Quiz passed",
+      "description": "When a quiz attempt clears the pass mark.",
+      "vars": {
+        "quiz": "Quiz name",
+        "course": "Course name",
+        "scorePercent": "Score (%)",
+        "tenantName": "Platform name"
+      }
+    },
+    "attempt_failed": {
+      "name": "Quiz not passed",
+      "description": "When a quiz attempt falls below the pass mark.",
+      "vars": {
+        "quiz": "Quiz name",
+        "scorePercent": "Score (%)",
+        "passThreshold": "Pass mark (%)",
+        "tenantName": "Platform name"
+      }
+    },
+    "attempt_graded": {
+      "name": "Quiz graded by the instructor",
+      "description": "When the instructor grades an attempt manually.",
+      "vars": {
+        "quiz": "Quiz name",
+        "scorePercent": "Score (%)",
+        "result": "Result (passed/not passed)",
+        "tenantName": "Platform name"
+      }
+    },
+    "admin_smtp_test": {
+      "name": "SMTP test",
+      "description": "Test email sent when checking the SMTP configuration.",
+      "vars": {
+        "tenantName": "Platform name",
+        "tenantSlug": "Tenant slug",
+        "timestamp": "Date/time of the test"
+      }
+    },
+    "community_mention": {
+      "name": "Community mention",
+      "description": "When someone mentions you in a post or comment.",
+      "vars": {
+        "authorName": "Who mentioned you",
+        "tenantName": "Platform name"
+      }
+    },
+    "community_comment_on_post": {
+      "name": "Comment on your post",
+      "description": "When someone comments on one of your posts.",
+      "vars": {
+        "actorName": "Who commented",
+        "postTitle": "Post title",
+        "excerpt": "Excerpt of the comment",
+        "tenantName": "Platform name"
+      }
+    },
+    "community_reply_to_comment": {
+      "name": "Reply to your comment",
+      "description": "When someone replies to one of your comments.",
+      "vars": {
+        "actorName": "Who replied",
+        "postTitle": "Post title",
+        "excerpt": "Excerpt of the reply",
+        "tenantName": "Platform name"
+      }
+    },
+    "community_digest_weekly": {
+      "name": "Weekly community digest",
+      "description": "Weekly digest with pending mentions and replies.",
+      "vars": {
+        "mentionsCount": "Number of new mentions",
+        "repliesCount": "Number of new replies",
+        "sinceIso": "Date of the previous digest",
+        "unsubUrl": "Unsubscribe link for community emails (digest and notices)",
+        "tenantName": "Platform name"
+      }
+    },
+    "community_broadcast": {
+      "name": "Community notice (broadcast)",
+      "description": "Mass notice sent from /admin/broadcasts. The admin writes the subject and the body when sending it.",
+      "vars": {
+        "subject": "Subject written by the admin",
+        "body": "Message written by the admin",
+        "postUrl": "Link to the post (empty if the notice has none)",
+        "unsubUrl": "Unsubscribe link for community emails: notices and digest (email only)",
+        "tenantName": "Platform name"
+      }
+    },
+    "lesson_unlocked": {
+      "name": "Lesson unlocked",
+      "description": "When a lesson scheduled by date unlocks (drip).",
+      "vars": {
+        "lessonTitle": "Lesson title",
+        "courseTitle": "Course title",
+        "tenantName": "Platform name"
+      }
+    },
+    "gamification_level_reached": {
+      "name": "New level reached",
+      "description": "When a member crosses the points of a level.",
+      "vars": {
+        "levelName": "Name of the level reached",
+        "tenantName": "Platform name"
+      }
+    },
+    "gamification_challenge_approved": {
+      "name": "Challenge approved",
+      "description": "When the team approves a challenge submission and credits the points.",
+      "vars": {
+        "title": "Challenge title",
+        "points": "Points awarded",
+        "reviewNote": "Feedback from the team (may be empty)",
+        "tenantName": "Platform name"
+      }
+    },
+    "gamification_challenge_rejected": {
+      "name": "Challenge not approved",
+      "description": "When the team rejects a challenge submission.",
+      "vars": {
+        "title": "Challenge title",
+        "reviewNote": "Reason or what is missing (may be empty)",
+        "tenantName": "Platform name"
+      }
+    },
+    "gamification_staff_pending": {
+      "name": "Team notice: something to review",
+      "description": "When a challenge submission or a perk request arrives. Only inside the platform.",
+      "vars": {
+        "message": "What has arrived",
+        "tenantName": "Platform name"
+      }
+    },
+    "gamification_perk_handled": {
+      "name": "Perk request handled",
+      "description": "When the team approves, completes or rejects a perk request.",
+      "vars": {
+        "perkTitle": "Requested perk",
+        "statusText": "Sentence for the outcome (approved, done or rejected)",
+        "staffNote": "Reply from the team (may be empty)",
+        "tenantName": "Platform name"
+      }
+    },
+    "referrals_commission_earned": {
+      "name": "Referral commission earned",
+      "description": "When a payment from a referred person generates a commission for the member.",
+      "vars": {
+        "amount": "Commission amount (e.g. “€2.97”)",
+        "baseAmount": "Amount of the payment that generated it",
+        "tenantName": "Platform name"
+      }
+    },
+    "referrals_payout_recorded": {
+      "name": "Referral payout made",
+      "description": "When the admin records the payout of approved commissions.",
+      "vars": {
+        "amount": "Total paid out (e.g. “€45.00”)",
+        "reference": "External payment reference",
+        "tenantName": "Platform name"
+      }
+    },
+    "zoom_class_registration_confirmed": {
+      "name": "Live class registration confirmed",
+      "description": "When a member signs up for a live class (Zoom virtual classroom).",
+      "vars": {
+        "topic": "Class title",
+        "startsAt": "Formatted start date and time",
+        "classUrl": "Link to the class page (/live/…)",
+        "calendarGoogleUrl": "Link to add the class to Google Calendar",
+        "calendarIcsUrl": "Download of the .ics event (Outlook, Apple Calendar and others)",
+        "tenantName": "Platform name"
+      }
+    },
+    "zoom_class_reminder": {
+      "name": "Live class reminder (2 h before)",
+      "description": "Automatic notice to registrants shortly before the class starts. It is sent only once per class; if the class is rescheduled, it is sent again for the new time.",
+      "vars": {
+        "topic": "Class title",
+        "startsAt": "When it starts, in the instructor’s time zone",
+        "hoursBefore": "How many hours in advance the notice goes out (2 by default)",
+        "classUrl": "Link to the class page (/live/…)",
+        "calendarGoogleUrl": "Link to add the class to Google Calendar",
+        "calendarIcsUrl": "Download of the .ics event (Outlook, Apple Calendar and others)",
+        "tenantName": "Platform name"
+      }
+    },
+    "zoom_class_cancelled": {
+      "name": "Live class cancelled",
+      "description": "When a live class is cancelled, it notifies every registered member.",
+      "vars": {
+        "topic": "Class title",
+        "startsAt": "Date and time the class was scheduled for",
+        "tenantName": "Platform name"
+      }
+    },
+    "surveys_post_class_invitation": {
+      "name": "Post-class survey",
+      "description": "When a live class ends, it invites each registrant to rate it (anonymous answer).",
+      "vars": {
+        "topic": "Class title",
+        "surveyUrl": "Link to the class page (/live/…)",
+        "tenantName": "Platform name"
+      }
+    },
+    "surveys_post_class_reminder": {
+      "name": "Post-class survey reminder",
+      "description": "24 h after the survey is created, it reminds ONLY the registrants who have not answered yet to rate the class (a single reminder per class).",
+      "vars": {
+        "topic": "Class title",
+        "surveyUrl": "Link to the class page (/live/…)",
+        "tenantName": "Platform name"
+      }
+    }
+  }
 }

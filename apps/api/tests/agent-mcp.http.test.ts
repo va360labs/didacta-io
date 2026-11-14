@@ -80,10 +80,10 @@ const resolver = {
 const auditLog = { record: vi.fn(async () => undefined) };
 const seen: { user?: SessionClaims; als?: string } = {};
 /** Idioma del aula del doble: lo cambia el test de las instrucciones. */
-let idiomaAula: 'es' | 'en' = 'es';
+let idiomaAula: 'es' | 'en' | 'pt' = 'es';
 const agent = {
   academyName: vi.fn(async () => 'Aula A'),
-  academyLocale: vi.fn(async (): Promise<'es' | 'en'> => idiomaAula),
+  academyLocale: vi.fn(async (): Promise<'es' | 'en' | 'pt'> => idiomaAula),
   localize: vi.fn(async (_t: string, text: string) => localizeAgentText(text, idiomaAula)),
   visibleTools: vi.fn(async (u: SessionClaims) =>
     AGENT_TOOLS.filter((t) => u.roles.includes(t.scope)),
@@ -294,6 +294,11 @@ describe('MCP — protocolo', () => {
       const en = await initialize();
       expect(en).toContain('from "Start here"');
       expect(en).not.toContain('Empieza aquí');
+      idiomaAula = 'pt';
+      const pt = await initialize();
+      expect(pt).toContain('from "Comece aqui"');
+      expect(pt).not.toContain('Empieza aquí');
+      expect(pt).not.toContain('{{ui:');
     } finally {
       idiomaAula = 'es';
     }
@@ -457,6 +462,13 @@ describe('POST /agent/keys — la clave del panel', () => {
     expect(agent.academyLocale).toHaveBeenCalledWith('tenant-A');
 
     agent.academyLocale.mockResolvedValueOnce('es');
+    await create(await bearer(['tenant_admin']));
+    expect(apiKeys.create).toHaveBeenLastCalledWith(
+      expect.objectContaining({ name: 'Agente de IA' }),
+    );
+
+    // En portugués se escribe igual que en español.
+    agent.academyLocale.mockResolvedValueOnce('pt');
     await create(await bearer(['tenant_admin']));
     expect(apiKeys.create).toHaveBeenLastCalledWith(
       expect.objectContaining({ name: 'Agente de IA' }),

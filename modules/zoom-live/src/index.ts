@@ -57,8 +57,12 @@ export {
   buildGoogleCalendarUrl,
   buildIcsEvent,
   buildOutlookCalendarUrl,
+  CALENDAR_LOCALES,
+  icsFileName,
+  toCalendarLocale,
   toIcsUtc,
   type CalendarEventInput,
+  type CalendarLocale,
 } from './calendar.js';
 export {
   buildZoomApiClient,

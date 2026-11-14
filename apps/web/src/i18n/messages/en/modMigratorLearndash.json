@@ -1,1 +1,12 @@
-{}
+{
+  "page": {
+    "title": "Migrate from WordPress + LearnDash",
+    "subtitle": "Step-by-step wizard for administrators. Your current site isn't changed.",
+    "forbidden": "This action is only available to administrators with the <strong>super_admin</strong> role.",
+    "forbiddenHint": "If you need to migrate your LearnDash academy, contact the instance administrator.",
+    "backToAdmin": "Back to dashboard",
+    "loading": "Loading module…",
+    "loadError": "Couldn't load the module UI: {error}",
+    "loadErrorHint": "Check that the <code>mod.migrator-learndash</code> module is installed in a version that includes the admin surface (1.0.15+). Upload the updated ZIP from the marketplace."
+  }
+}

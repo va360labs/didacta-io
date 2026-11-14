@@ -1,0 +1,105 @@
+{
+  "seccion": "Vendas",
+  "titulo": "Vendas",
+  "sub": "O que você vendeu e o que cai na sua conta.",
+  "cargando": "Carregando…",
+  "error": "Não foi possível carregar. Tente novamente.",
+  "cobros": {
+    "conectarTitulo": "Conecte seus recebimentos para começar a vender",
+    "conectarTexto": "Sem os recebimentos conectados, ninguém consegue pagar você. Vamos pedir seus dados e o número da sua conta bancária.",
+    "listos": "Recebimentos conectados: o dinheiro de cada venda cai na sua conta.",
+    "propios": "Você recebe pela sua própria conta de pagamentos.",
+    "detalles": "Ver detalhes"
+  },
+  "resumen": {
+    "vendido": "Vendido",
+    "ventas": "{n, plural, one {# venda} other {# vendas}}",
+    "enBanco": "Já na sua conta",
+    "enCamino": "A caminho",
+    "enCaminoNota": "Cai nos próximos dias"
+  },
+  "vacio": {
+    "titulo": "Aqui você verá suas vendas",
+    "texto": "Sempre que alguém comprar, a venda aparece aqui com o valor que cai na sua conta e quando.",
+    "botonPublicar": "Ir para Comece aqui",
+    "botonCompartir": "Compartilhe seu link para conseguir a primeira"
+  },
+  "lista": {
+    "titulo": "Últimas vendas",
+    "verTodas": "Ver todas",
+    "sinDescripcion": "Venda"
+  },
+  "enlace": {
+    "titulo": "Seu link de venda",
+    "sinPublicar": "Não publicado",
+    "aLaVenta": "À venda",
+    "copiar": "Copiar link",
+    "copiado": "Copiado",
+    "verAlumno": "Ver como aluno",
+    "notaAntes": "Fica ativo quando você publica em Comece aqui.",
+    "precio": "Preço",
+    "pagoUnico": "pagamento único",
+    "alMes": "por mês",
+    "cambiar": "Alterar",
+    "guardar": "Salvar preço",
+    "cancelar": "Cancelar",
+    "precioInvalido": "Digite um preço maior que zero.",
+    "precioError": "Não foi possível alterar o preço. Tente novamente.",
+    "comision": "A Didacta fica com {percent}% de cada venda. Você vê o valor detalhado em cada recebimento.",
+    "noComprable": "Ainda não pode ser comprado",
+    "notaNoComprable": "Conecte seus recebimentos para que seja possível comprar. Até lá, o link não serve para vender."
+  },
+  "referidos": {
+    "titulo": "Seus alunos vendem por você",
+    "texto": "Cada aluno tem seu próprio link. Quando alguém entra por ele e paga, quem convidou fica com uma porcentagem do que a pessoa pagar.",
+    "nadaALaVenta": "Funciona com tudo o que você vende: quando você tiver um curso ou uma assinatura à venda, cada aluno terá seu link e vai ganhar uma porcentagem do que pagarem as pessoas que ele trouxer.",
+    "activar": "Ativar indicações",
+    "activando": "Ativando…",
+    "activo": "Programa ativo",
+    "inactivo": "Programa desligado",
+    "encender": "Ligar",
+    "apagar": "Desligar",
+    "porcentaje": "Quanto recebe quem convida (%)",
+    "guardar": "Salvar",
+    "guardado": "Salvo",
+    "porcentajeInvalido": "Digite uma porcentagem entre 0 e 100.",
+    "error": "Não foi possível salvar. Tente novamente.",
+    "ventasTitulo": "Vendas que vieram de indicações",
+    "ventasVacio": "Nenhuma ainda. Quando alguém pagar pelo link de um aluno, você verá aqui.",
+    "ventasResumen": "{n, plural, one {# pagamento trazido} other {# pagamentos trazidos}} pelos seus alunos",
+    "pago": "Pagamento de {base}",
+    "comisionDe": "{amount} para quem convidou",
+    "estado": {
+      "PENDING": "Pendente",
+      "APPROVED": "Aprovada",
+      "PAID": "Paga",
+      "REVOKED": "Cancelada"
+    },
+    "verDetalle": "Ver detalhes das indicações",
+    "descuentoTitulo": "Permitir que usem como desconto na mensalidade",
+    "descuentoTexto": "Quem tem assinatura pode descontar o que ganhou da próxima mensalidade, em vez de receber à parte. Quem paga é você: essa mensalidade chega para você já com o desconto.",
+    "cobros": {
+      "titulo": "Pagamentos solicitados",
+      "texto": "Aqui seus alunos pedem para receber o que ganharam. Faça a transferência e marque como pago: um comprovante é gerado.",
+      "vacio": "Ninguém solicitou pagamento ainda.",
+      "pedidoEl": "Solicitado em {date}",
+      "referencia": "Referência da transferência",
+      "marcar": "Marcar como pago",
+      "marcando": "Salvando…",
+      "pagadoEl": "Pago em {date} · {ref}",
+      "sinDatos": "Sem dados para pagamento",
+      "nif": "NIF",
+      "iban": "IBAN",
+      "error": "Não foi possível salvar. Tente novamente.",
+      "justificante": "Comprovante"
+    },
+    "ajuste": "Ajuste por reembolso",
+    "saldoDevuelto": "Desconto não usado devolvido no cancelamento"
+  },
+  "propias": {
+    "titulo": "Vendas",
+    "texto": "Pagamentos do seu curso ou da sua assinatura recebidos pela sua conta de pagamentos.",
+    "vacio": "Aqui você verá quantas vendas já fez. Compartilhe seu link de venda para conseguir a primeira.",
+    "detalle": "Ver detalhes da receita"
+  }
+}

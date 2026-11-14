@@ -58,10 +58,11 @@ export const createTenantSchema = z.object({
    * Idioma del aula («Idioma de la academia»). Opcional y retrocompatible: si no
    * llega, el aula no tiene ajuste y su idioma se deduce como siempre (alta en
    * 3 preguntas o perfil de quien la administra). Admite el código corto
-   * (`en`, `es`) o un tag de idioma (`en-US`, `es-AR`…), que se guarda
-   * reducido al código; un idioma sin catálogo en el aula (`pt-BR` hoy) es un
-   * 400, no un aula en otro idioma. También fija el idioma de la primera
-   * administradora: el correo de bienvenida le llega en ese idioma.
+   * (`es`, `en`, `pt`) o un tag de idioma (`en-US`, `es-AR`, `pt-BR`…), que se
+   * guarda reducido al código (`pt-BR` → `pt`); un idioma sin catálogo en el
+   * aula (`fr-FR`) es un 400, no un aula en otro idioma. También fija el idioma
+   * de la primera administradora (`pt` → `pt-BR`): el correo de bienvenida le
+   * llega en ese idioma.
    */
   locale: z
     .string()

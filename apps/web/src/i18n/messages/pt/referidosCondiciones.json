@@ -1,0 +1,81 @@
+{
+  "metaTitle": "Termos do “Convide e ganhe”",
+  "titulo": "Termos do programa “Convide e ganhe”",
+  "version": "Versão {version}",
+  "intro": "Estes termos regulam o programa de indicações de {academia}: você convida outras pessoas com seu link e {academia} dá a você uma parte do que elas pagarem.",
+  "cerrado": "{academia} não está com o programa aberto no momento. Estes são os termos que valem quando ele for aberto.",
+  "error": "Não foi possível carregar os termos. Tente novamente em instantes.",
+  "cargando": "Carregando os termos…",
+  "resumenTitulo": "Resumo em 7 pontos",
+  "resumenNota": "O resumo ajuda na leitura, mas o que vale é o texto completo.",
+  "resumen": {
+    "r1": "Quem paga você é {academia}, não a Didacta. A Didacta só fornece a ferramenta.",
+    "r2": "Você precisa ser maior de 18 anos e aceitar estes termos antes de receber seu link.",
+    "r3": "Uma pessoa fica vinculada a você por {dias} dias a partir do momento em que abre seu link. Seu próprio link não conta para você.",
+    "r4": "O que você ganha fica pendente por {garantia} dias. Se a venda for reembolsada por inteiro, o ganho é anulado; se for reembolsada em parte, é reduzido na mesma proporção.",
+    "r5": "Você recebe como desconto na sua assinatura (até {tope}% de uma cobrança) ou em dinheiro, informando seu nome, seu NIF e sua conta bancária. A Didacta não retém nada.",
+    "r6": "Se você cancelar a assinatura com desconto ainda não usado, esse saldo volta para sua carteira para você receber em dinheiro.",
+    "r7": "Se uma venda cuja comissão você já recebeu for reembolsada, o valor é descontado do que você ganhar em seguida. Nunca vamos pedir que você devolva dinheiro."
+  },
+  "secciones": {
+    "s1": {
+      "titulo": "1. Quem oferece o programa e quem paga",
+      "p1": "O programa é oferecido por {academia}. É {academia} quem decide se ele está aberto, qual porcentagem paga e quanto dura cada prazo, e é {academia} quem paga o que você ganhar.",
+      "p2": "Didacta Cloud é um serviço da VA360 LABS, S.L. que {academia} usa para o programa. A Didacta não é parte deste acordo, não deve nenhuma comissão a você e não intervém no pagamento."
+    },
+    "s2": {
+      "titulo": "2. Quem pode participar",
+      "p1": "Você pode participar se tiver uma conta em {academia} e for maior de 18 anos. Na primeira vez que abrir o “Convide e ganhe”, você marca a caixa “Declaro que sou maior de 18 anos e aceito os termos do programa”. Registramos a data e a versão dos termos que você aceitou.",
+      "p2": "Enquanto você não aceitar, não terá link, e as pessoas que chegarem por links antigos seus não vão gerar comissões. Se estes termos mudarem, vamos pedir que você aceite a nova versão para continuar compartilhando seu link."
+    },
+    "s3": {
+      "titulo": "3. Como você ganha",
+      "p1": "Você tem um link pessoal. Ele vale em qualquer página de vendas de {academia}: a da assinatura e a de cada curso.",
+      "p2": "Uma pessoa fica vinculada a você por {dias} dias a partir do momento em que abre seu link. Vale o primeiro link válido que ela abrir: se depois abrir o de outra pessoa, continua vinculada a você.",
+      "p3": "Você ganha {porcentaje}% do que essa pessoa pagar de fato: {alcance, select, primero {só o primeiro pagamento dela, seja uma compra ou uma cobrança da assinatura} meses {cada compra e cada cobrança da assinatura durante os primeiros {meses} meses dela} other {cada compra de curso e cada cobrança da assinatura}}.",
+      "p4": "Seu próprio link não conta para você: nem com a sua conta nem com outra conta que use o mesmo e-mail. Períodos de teste gratuitos e pagamentos de valor zero não geram comissão."
+    },
+    "s4": {
+      "titulo": "4. Prazo de garantia e reembolsos",
+      "p1": "Cada comissão fica pendente por {garantia} dias a partir do pagamento. Depois desse prazo, ela é confirmada.",
+      "p2": "Se {academia} reembolsar o pagamento integralmente antes de você receber, a comissão é anulada. Se reembolsar uma parte, a comissão é reduzida na mesma proporção."
+    },
+    "s5": {
+      "titulo": "5. Como você recebe",
+      "p1": "Como desconto na sua assinatura: se {academia} estiver com essa opção ativada e você tiver uma assinatura ativa, poderá usar o valor confirmado como desconto na sua próxima cobrança. Em cada cobrança, o desconto é de no máximo {tope}% do valor dela, já contando o saldo que você tiver a seu favor. Para o desconto, não pedimos nenhum dado seu.",
+      "p2": "Em dinheiro: {hayMinimo, select, si {quando o valor confirmado chegar a {minimo}, você pode solicitar o pagamento} other {você pode solicitar o pagamento do valor confirmado quando quiser}}. Pedimos seu nome completo, seu NIF ou NIE (ou o número de identificação fiscal do seu país) e sua conta bancária (IBAN).",
+      "p3": "{academia} faz o pagamento por transferência bancária. Quando {academia} marca o valor como pago, é gerado um comprovante em PDF com numeração sequencial, que você e {academia} podem baixar. A Didacta não faz nenhuma retenção sobre o que você recebe."
+    },
+    "s6": {
+      "titulo": "6. A fatura da sua assinatura quando você usa o desconto",
+      "p1": "Sua assinatura é faturada pelo valor integral, e o desconto aparece como uma linha à parte, “Pagamento com saldo de indicações”. No cartão, é cobrado o valor da assinatura menos esse saldo."
+    },
+    "s7": {
+      "titulo": "7. Se você cancelar a assinatura",
+      "p1": "Se você cancelar sua assinatura e ainda tiver saldo de indicações não usado a seu favor, esse saldo é retirado da sua conta de pagamento e volta para sua carteira como comissão confirmada, para que você possa recebê-lo em dinheiro. A movimentação fica registrada em “O que você ganhou”."
+    },
+    "s8": {
+      "titulo": "8. Vendas reembolsadas depois que você recebeu",
+      "p1": "Se {academia} reembolsar uma venda cuja comissão você já recebeu (em dinheiro ou como desconto), é criado um ajuste por reembolso com o valor correspondente. Esse ajuste é descontado do que você ganhar em seguida.",
+      "p2": "Nunca vamos pedir que você devolva dinheiro. Se você não voltar a ganhar nada, o ajuste fica lá. Você vai vê-lo em “O que você ganhou” como “Ajuste por reembolso”."
+    },
+    "s9": {
+      "titulo": "9. Seus dados",
+      "p1": "{academia} é a controladora dos dados do programa. A Didacta trata esses dados em nome de {academia}.",
+      "p2": "Seus dados para recebimento (nome, NIF/NIE e IBAN) são armazenados de forma criptografada. {academia} só vê o necessário para pagar você e emitir o comprovante. Esses dados não aparecem nos registros técnicos do serviço. Das pessoas que você convida, você só vê as iniciais, a data em que entraram e o que geraram para você."
+    },
+    "s10": {
+      "titulo": "10. Mudanças e encerramento do programa",
+      "p1": "{academia} pode alterar a porcentagem ou os prazos, ou encerrar o programa. As mudanças não afetam o que você já ganhou: cada comissão mantém a porcentagem com que foi gerada.",
+      "p2": "Se estes termos mudarem, vamos publicar uma nova versão e pedir que você a aceite para continuar compartilhando seu link. Para qualquer dúvida sobre o programa ou sobre um pagamento, escreva para {academia}."
+    }
+  },
+  "casilla": {
+    "aviso": "Antes de receber seu link, leia os termos do programa. Quem paga você é a academia, não a Didacta.",
+    "texto": "Declaro que sou maior de 18 anos e aceito os termos do programa.",
+    "verCondiciones": "Ler os termos",
+    "activar": "Ativar meu link",
+    "activando": "Ativando…",
+    "error": "Não foi possível salvar. Tente novamente."
+  }
+}

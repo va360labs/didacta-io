@@ -10,7 +10,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { invoiceEmailTexts } from '../src/modules/payouts/payouts-invoice-mailer';
+import { OPEN_PAYOUTS, invoiceEmailTexts } from '../src/modules/payouts/payouts-invoice-mailer';
 
 const base = {
   kind: 'ORDINARY' as const,
@@ -82,5 +82,65 @@ describe('correo de la factura de la comisión', () => {
     expect(texts.body).toContain('que corrige DC-2026-000007. Importe: -0,98 EUR');
     expect(texts.body).toContain('ya volvió a tus cobros');
     expect(texts.body).not.toContain('ya se descontó');
+  });
+});
+
+describe('correo de la factura en portugués (pt-BR)', () => {
+  it('ordinaria: fechas pt-BR, IVA desglosado, «Recebimentos → Suas faturas», sin español', () => {
+    const pt = invoiceEmailTexts({
+      lang: 'pt',
+      operator: 'Didacta',
+      serviceName: 'Didacta Cloud',
+      invoice: { ...base, recipientComplete: false },
+    });
+    expect(pt.subject).toBe('Sua fatura de Didacta Cloud DC-2026-000007');
+    expect(pt.body).toContain(
+      'Segue em anexo a fatura DC-2026-000007 da nossa comissão de Didacta Cloud de 1 de novembro de 2026 a 30 de novembro de 2026: 4,90 EUR (4,05 EUR + 21 % de IVA).',
+    );
+    expect(pt.body).toContain('Você não precisa pagar nada');
+    expect(pt.body).toContain('Recebimentos → Suas faturas');
+    expect(pt.body).toContain('Faltam seus dados fiscais. Complete-os em Recebimentos');
+    for (const espanol of ['Te adjuntamos', 'noviembre', 'No tienes', 'Cobros', 'IVA del']) {
+      expect(`${pt.subject}\n${pt.body}`, espanol).not.toContain(espanol);
+    }
+    // Control: el español sigue byte a byte.
+    const es = invoiceEmailTexts({
+      lang: 'es',
+      operator: 'Didacta',
+      serviceName: 'Didacta Cloud',
+      invoice: base,
+    });
+    expect(es.body).toBe(
+      'Te adjuntamos la factura DC-2026-000007 de nuestra comisión de Didacta Cloud del 1 de noviembre de 2026 al 30 de noviembre de 2026: 4,90 EUR (4,05 EUR + IVA del 21 %).\n\nNo tienes que pagar nada: ya se descontó de las ventas que cobramos en tu nombre. También la tienes en Cobros → Tus facturas.',
+    );
+  });
+
+  it('rectificativa a favor: «fatura retificadora» y que ya volvió a los recebimentos', () => {
+    const pt = invoiceEmailTexts({
+      lang: 'pt',
+      operator: 'Didacta',
+      serviceName: 'Didacta Cloud',
+      invoice: {
+        ...base,
+        kind: 'RECTIFYING',
+        fullNumber: 'DCR-2026-000002',
+        total: -98,
+        taxBase: -81,
+        vatAmount: -17,
+        rectifies: [{ fullNumber: 'DC-2026-000007', issueDate: '2026-12-01' }],
+      },
+    });
+    expect(pt.subject).toBe('Fatura retificadora DCR-2026-000002 de Didacta');
+    expect(pt.body).toContain('que corrige DC-2026-000007. Valor: -0,98 EUR');
+    expect(pt.body).toContain('já voltou para os seus recebimentos');
+    expect(pt.body).not.toContain('já foi descontado');
+  });
+
+  it('el enlace al panel se llama como la sección en cada idioma', () => {
+    expect(OPEN_PAYOUTS).toEqual({
+      es: 'Abrir Cobros',
+      en: 'Open Payouts',
+      pt: 'Abrir Recebimentos',
+    });
   });
 });

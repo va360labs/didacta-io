@@ -7,7 +7,12 @@ import { createHash, randomUUID } from 'node:crypto';
 import type { ModuleContext } from '@didacta/core-kernel';
 import { eventIdempotencyKey } from '@didacta/core-kernel';
 import type { PrismaClient } from '@didacta/database';
-import { renderCertificatePdf } from './pdf-renderer.js';
+import {
+  CERTIFICATE_COPY,
+  renderCertificatePdf,
+  toCertificateLang,
+  type CertificateLang,
+} from './pdf-renderer.js';
 import {
   CertificateNotFoundError,
   CertificateNumberExhaustedError,
@@ -88,6 +93,8 @@ export class CertificatesService {
     const issuedAt = new Date();
     const logoData = template?.logoUrl ? await this.fetchLogo(template.logoUrl) : undefined;
     const studentName = user.name ?? user.email;
+    // El certificado es del alumno: sale en SU idioma.
+    const lang = await this.certificateLang(input.tenantId, user.locale);
 
     // La clave de storage cuelga del ID del certificado, NO de su numero. Con
     // la clave por numero, dos emisiones simultaneas calculaban el mismo
@@ -122,6 +129,7 @@ export class CertificatesService {
         signerTitle: template?.signerTitle,
         tenantName: tenant.name,
         logoData,
+        lang,
       });
       hash = createHash('sha256').update(pdf).digest('hex');
       await this.ctx.storage.upload(storageKey, pdf, 'application/pdf');
@@ -153,6 +161,9 @@ export class CertificatesService {
               signerTitle: template?.signerTitle ?? null,
               tenantName: tenant.name,
               logoUrl: template?.logoUrl ?? null,
+              // Sin él, una re-renderización saldría en español aunque el
+              // emitido (el del hash) esté en otro idioma.
+              lang,
             } as never,
           },
         });
@@ -269,12 +280,15 @@ export class CertificatesService {
       signerTitle?: string | null;
       tenantName?: string | null;
       logoUrl?: string | null;
+      lang?: string | null;
     };
     const logoData = snapshot.logoUrl ? await this.fetchLogo(snapshot.logoUrl) : undefined;
+    // Los snapshots de antes no guardaban idioma: se emitieron en español.
+    const lang = toCertificateLang(snapshot.lang);
     return renderCertificatePdf({
       number: cert.number,
-      studentName: snapshot.studentName ?? 'Alumno',
-      courseTitle: snapshot.courseTitle ?? 'Curso',
+      studentName: snapshot.studentName ?? CERTIFICATE_COPY[lang].unknownStudent,
+      courseTitle: snapshot.courseTitle ?? CERTIFICATE_COPY[lang].unknownCourse,
       issuedAt: snapshot.issuedAt ? new Date(snapshot.issuedAt) : cert.issuedAt,
       body: snapshot.body ?? undefined,
       primaryColor: snapshot.primaryColor ?? undefined,
@@ -282,6 +296,7 @@ export class CertificatesService {
       signerTitle: snapshot.signerTitle ?? undefined,
       tenantName: snapshot.tenantName ?? undefined,
       logoData,
+      lang,
     });
   }
 
@@ -382,14 +397,29 @@ export class CertificatesService {
    * Renderiza un PDF dummy con los datos provistos en el draft, sin
    * persistir nada. Útil para que el formador vea un preview antes de
    * guardar la plantilla.
+   *
+   * `viewerUserId` (quien mira la vista previa) elige el idioma de los textos
+   * fijos, con la misma regla que la emisión; sin él, el del aula.
    */
-  async renderTemplatePreview(tenantId: string, draft: TemplateInput): Promise<Buffer> {
-    const tenant = await this.prisma.tenant.findUnique({ where: { id: tenantId } });
+  async renderTemplatePreview(
+    tenantId: string,
+    draft: TemplateInput,
+    viewerUserId?: string,
+  ): Promise<Buffer> {
+    const [tenant, viewer] = await Promise.all([
+      this.prisma.tenant.findUnique({ where: { id: tenantId } }),
+      viewerUserId
+        ? this.prisma.user
+            .findFirst({ where: { id: viewerUserId, tenantId }, select: { locale: true } })
+            .catch(() => null)
+        : Promise.resolve(null),
+    ]);
+    const lang = await this.certificateLang(tenantId, viewer?.locale);
     const logoData = draft.logoUrl ? await this.fetchLogo(draft.logoUrl) : undefined;
     return renderCertificatePdf({
       number: 'PREVIEW',
-      studentName: 'Alumna de Ejemplo',
-      courseTitle: 'Curso de Ejemplo',
+      studentName: CERTIFICATE_COPY[lang].sampleStudent,
+      courseTitle: CERTIFICATE_COPY[lang].sampleCourse,
       issuedAt: new Date(),
       body: draft.body,
       primaryColor: draft.primaryColor,
@@ -397,7 +427,33 @@ export class CertificatesService {
       signerTitle: draft.signerTitle ?? null,
       tenantName: tenant?.name,
       logoData,
+      lang,
     });
+  }
+
+  /**
+   * Idioma de un certificado: el del perfil de la persona (`user.locale`) y,
+   * si está vacío, el del aula (`tenant_setting academy/locale`, lectura del
+   * core filtrada por aula). Lo que no tenga catálogo, español.
+   *
+   * La columna `locale` tiene default en BD, así que la caída al aula solo se
+   * da con una fila escrita a mano en blanco. De mejor esfuerzo: un fallo al
+   * leer el ajuste no impide emitir, sale en español.
+   */
+  private async certificateLang(
+    tenantId: string,
+    userLocale: string | null | undefined,
+  ): Promise<CertificateLang> {
+    if (typeof userLocale === 'string' && userLocale.trim()) return toCertificateLang(userLocale);
+    try {
+      const row = await this.prisma.tenantSetting.findUnique({
+        where: { tenantId_moduleName_key: { tenantId, moduleName: 'academy', key: 'locale' } },
+        select: { valueJson: true },
+      });
+      return toCertificateLang(typeof row?.valueJson === 'string' ? row.valueJson : null);
+    } catch {
+      return 'es';
+    }
   }
 
   async deleteTemplate(tenantId: string, templateId: string) {

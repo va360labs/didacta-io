@@ -39,5 +39,369 @@
   "noSubject": "(sin asunto)",
   "edit": "Editar",
   "restore": "Restaurar",
-  "customize": "Personalizar"
+  "customize": "Personalizar",
+  "templates": {
+    "auth_password_reset": {
+      "name": "Restablecer contraseña",
+      "description": "Cuando un usuario pide restablecer su contraseña (o un admin le envía la invitación de acceso).",
+      "structuralNote": "El botón «Restablecer contraseña» con el enlace seguro se añade siempre al final.",
+      "vars": {
+        "greeting": "Saludo («Hola Nombre,» o «Hola,»)",
+        "userName": "Nombre del usuario (puede estar vacío)",
+        "tenantName": "Nombre de la plataforma",
+        "resetUrl": "Enlace seguro de restablecimiento",
+        "ttlMinutes": "Minutos de validez del enlace"
+      }
+    },
+    "member_registration_otp_code": {
+      "name": "Código de acceso (OTP)",
+      "description": "Código de un solo uso durante el alta de miembros (verificación de email).",
+      "structuralNote": "El código de un solo uso se muestra siempre en grande debajo del texto.",
+      "vars": {
+        "tenantName": "Nombre de la plataforma",
+        "ttlMinutes": "Minutos de validez del código",
+        "code": "El código (se muestra también en grande automáticamente)"
+      }
+    },
+    "member_registration_approval_request": {
+      "name": "Nueva inscripción pendiente (al aprobador)",
+      "description": "Aviso al aprobador cuando llega una solicitud de inscripción de miembro pendiente.",
+      "structuralNote": "Los datos del solicitante (grupo, impagos, suscripciones, compras) y los botones «Aprobar»/«Rechazar» se añaden siempre después del texto.",
+      "vars": {
+        "name": "Nombre del solicitante",
+        "email": "Email del solicitante",
+        "telegramId": "Telegram ID del solicitante",
+        "tenantName": "Nombre de la plataforma"
+      }
+    },
+    "member_registration_welcome_approved": {
+      "name": "Inscripción aprobada (bienvenida)",
+      "description": "Cuando el aprobador aprueba la solicitud de inscripción del miembro.",
+      "structuralNote": "El botón «Entrar» con el enlace de acceso se añade siempre al final.",
+      "vars": {
+        "greeting": "Saludo («Hola Nombre,» o «Hola,»)",
+        "name": "Nombre del miembro (puede estar vacío)",
+        "tenantName": "Nombre de la plataforma",
+        "signinUrl": "URL de inicio de sesión"
+      }
+    },
+    "member_registration_rejection": {
+      "name": "Inscripción rechazada",
+      "description": "Cuando el aprobador rechaza la solicitud de inscripción del miembro.",
+      "vars": {
+        "greeting": "Saludo («Hola Nombre,» o «Hola,»)",
+        "name": "Nombre del solicitante (puede estar vacío)",
+        "tenantName": "Nombre de la plataforma"
+      }
+    },
+    "enrollment_welcome": {
+      "name": "Bienvenida de alta por API",
+      "description": "Cuando el alta externa por API (n8n/Woo) crea un usuario nuevo con acceso a curso(s).",
+      "structuralNote": "El botón «Define tu contraseña» con el enlace mágico se añade siempre al final.",
+      "vars": {
+        "greeting": "Saludo («Hola Nombre,» o «Hola,»)",
+        "name": "Nombre del usuario (puede estar vacío)",
+        "email": "Email del usuario",
+        "tenantName": "Nombre de la plataforma",
+        "setPasswordUrl": "Enlace mágico para definir contraseña"
+      }
+    },
+    "membership_welcome": {
+      "name": "Bienvenida de la membresía",
+      "description": "Cuando la compra de la membresía (webhook de Stripe) crea al comprador como usuario.",
+      "structuralNote": "El botón «Definir mi contraseña» y la nota con la URL de acceso se añaden siempre.",
+      "vars": {
+        "greeting": "Saludo («Hola Nombre,» o «Hola,»)",
+        "name": "Nombre del comprador (puede estar vacío)",
+        "email": "Email del comprador",
+        "tenantName": "Nombre de la plataforma",
+        "setPasswordUrl": "Enlace mágico para definir contraseña",
+        "signinUrl": "URL de inicio de sesión"
+      }
+    },
+    "billing_welcome": {
+      "name": "Bienvenida de compra de curso",
+      "description": "Cuando la compra pública de un curso suelto (webhook de Stripe) crea al comprador como usuario.",
+      "structuralNote": "El botón «Definir mi contraseña» y la nota con la URL de acceso se añaden siempre.",
+      "vars": {
+        "greeting": "Saludo («Hola Nombre,» o «Hola,»)",
+        "name": "Nombre del comprador (puede estar vacío)",
+        "email": "Email del comprador",
+        "tenantName": "Nombre de la plataforma",
+        "setPasswordUrl": "Enlace mágico para definir contraseña",
+        "signinUrl": "URL de inicio de sesión"
+      }
+    },
+    "subscriptions_renewal_warning": {
+      "name": "Aviso de renovación al suscriptor",
+      "description": "Aviso automático N días antes de que la suscripción externa del miembro se renueve.",
+      "structuralNote": "Si hay portal de Stripe configurado, el botón «Gestionar mi suscripción» se añade al final.",
+      "vars": {
+        "plan": "Nombre del plan (puede estar vacío)",
+        "renewalDate": "Fecha de renovación (ej. «24 de julio de 2026»)",
+        "amount": "Importe con moneda (puede estar vacío)",
+        "cancelUrl": "URL del portal de cancelación (puede estar vacía)",
+        "tenantName": "Nombre de la plataforma"
+      }
+    },
+    "payment_connections_access_expiring": {
+      "name": "Aviso de fin de acceso (pago único con vigencia)",
+      "description": "Aviso automático N días antes de que termine un acceso comprado de una vez (p. ej. «Acceso ANUAL»). Es DISTINTO del aviso de renovación: este acceso no se renueva solo, hay que volver a comprarlo.",
+      "structuralNote": "No lleva botón: no hay portal que gestionar, la renovación es una compra nueva en la tienda.",
+      "vars": {
+        "plan": "Producto comprado (puede estar vacío)",
+        "renewalDate": "Fecha en que termina el acceso",
+        "tenantName": "Nombre de la plataforma"
+      }
+    },
+    "subscriptions_admin_digest": {
+      "name": "Resumen diario de suscripciones (admins)",
+      "description": "Digest diario a los admins con las suscripciones activas y las próximas renovaciones.",
+      "vars": {
+        "activeCount": "Nº de suscripciones activas",
+        "upcomingCount": "Nº de renovaciones próximas",
+        "windowDays": "Días de la ventana del aviso",
+        "upcomingList": "Lista formateada de próximas renovaciones",
+        "tenantName": "Nombre de la plataforma"
+      }
+    },
+    "enrollment_created": {
+      "name": "Matrícula creada",
+      "description": "Cuando un alumno se matricula en un curso.",
+      "vars": {
+        "course": "Nombre del curso",
+        "tenantName": "Nombre de la plataforma"
+      }
+    },
+    "course_completed": {
+      "name": "Curso completado",
+      "description": "Cuando un alumno completa el 100% de un curso.",
+      "vars": {
+        "course": "Nombre del curso",
+        "tenantName": "Nombre de la plataforma"
+      }
+    },
+    "certificate_issued": {
+      "name": "Certificado emitido",
+      "description": "Cuando se emite el certificado de un curso completado.",
+      "vars": {
+        "course": "Nombre del curso",
+        "number": "Número del certificado",
+        "tenantName": "Nombre de la plataforma"
+      }
+    },
+    "attempt_passed": {
+      "name": "Quiz aprobado",
+      "description": "Cuando un intento de quiz supera el umbral de aprobado.",
+      "vars": {
+        "quiz": "Nombre del quiz",
+        "course": "Nombre del curso",
+        "scorePercent": "Puntuación (%)",
+        "tenantName": "Nombre de la plataforma"
+      }
+    },
+    "attempt_failed": {
+      "name": "Quiz no aprobado",
+      "description": "Cuando un intento de quiz queda por debajo del umbral.",
+      "vars": {
+        "quiz": "Nombre del quiz",
+        "scorePercent": "Puntuación (%)",
+        "passThreshold": "Umbral de aprobado (%)",
+        "tenantName": "Nombre de la plataforma"
+      }
+    },
+    "attempt_graded": {
+      "name": "Quiz corregido por el formador",
+      "description": "Cuando el formador corrige manualmente un intento.",
+      "vars": {
+        "quiz": "Nombre del quiz",
+        "scorePercent": "Puntuación (%)",
+        "result": "Resultado (aprobado/no aprobado)",
+        "tenantName": "Nombre de la plataforma"
+      }
+    },
+    "admin_smtp_test": {
+      "name": "Prueba de SMTP",
+      "description": "Email de prueba al verificar la configuración SMTP.",
+      "vars": {
+        "tenantName": "Nombre de la plataforma",
+        "tenantSlug": "Slug del tenant",
+        "timestamp": "Fecha/hora de la prueba"
+      }
+    },
+    "community_mention": {
+      "name": "Mención en la comunidad",
+      "description": "Cuando alguien te menciona en un post o comentario.",
+      "vars": {
+        "authorName": "Quién mencionó",
+        "tenantName": "Nombre de la plataforma"
+      }
+    },
+    "community_comment_on_post": {
+      "name": "Comentario en tu publicación",
+      "description": "Cuando alguien comenta una publicación tuya.",
+      "vars": {
+        "actorName": "Quién comentó",
+        "postTitle": "Título de la publicación",
+        "excerpt": "Extracto del comentario",
+        "tenantName": "Nombre de la plataforma"
+      }
+    },
+    "community_reply_to_comment": {
+      "name": "Respuesta a tu comentario",
+      "description": "Cuando alguien responde a un comentario tuyo.",
+      "vars": {
+        "actorName": "Quién respondió",
+        "postTitle": "Título de la publicación",
+        "excerpt": "Extracto de la respuesta",
+        "tenantName": "Nombre de la plataforma"
+      }
+    },
+    "community_digest_weekly": {
+      "name": "Resumen semanal de la comunidad",
+      "description": "Digest semanal con menciones y respuestas pendientes.",
+      "vars": {
+        "mentionsCount": "Nº de menciones nuevas",
+        "repliesCount": "Nº de respuestas nuevas",
+        "sinceIso": "Fecha del resumen anterior",
+        "unsubUrl": "Enlace de baja de los correos de la comunidad (resumen y avisos)",
+        "tenantName": "Nombre de la plataforma"
+      }
+    },
+    "community_broadcast": {
+      "name": "Aviso de la comunidad (broadcast)",
+      "description": "Aviso masivo enviado desde /admin/broadcasts. El asunto y el cuerpo los escribe el admin al enviarlo.",
+      "vars": {
+        "subject": "Asunto escrito por el admin",
+        "body": "Mensaje escrito por el admin",
+        "postUrl": "Enlace a la publicación (vacío si el aviso no la lleva)",
+        "unsubUrl": "Enlace de baja de los correos de la comunidad: avisos y resumen (solo en el email)",
+        "tenantName": "Nombre de la plataforma"
+      }
+    },
+    "lesson_unlocked": {
+      "name": "Clase desbloqueada",
+      "description": "Cuando una clase programada por fecha se desbloquea (drip).",
+      "vars": {
+        "lessonTitle": "Título de la clase",
+        "courseTitle": "Título del curso",
+        "tenantName": "Nombre de la plataforma"
+      }
+    },
+    "gamification_level_reached": {
+      "name": "Nuevo nivel alcanzado",
+      "description": "Cuando un miembro cruza los puntos de un nivel.",
+      "vars": {
+        "levelName": "Nombre del nivel alcanzado",
+        "tenantName": "Nombre de la plataforma"
+      }
+    },
+    "gamification_challenge_approved": {
+      "name": "Reto aprobado",
+      "description": "Cuando el equipo aprueba la entrega de un reto y acredita los puntos.",
+      "vars": {
+        "title": "Título del reto",
+        "points": "Puntos concedidos",
+        "reviewNote": "Comentario del equipo (puede ir vacío)",
+        "tenantName": "Nombre de la plataforma"
+      }
+    },
+    "gamification_challenge_rejected": {
+      "name": "Reto no aprobado",
+      "description": "Cuando el equipo rechaza la entrega de un reto.",
+      "vars": {
+        "title": "Título del reto",
+        "reviewNote": "Motivo o qué falta (puede ir vacío)",
+        "tenantName": "Nombre de la plataforma"
+      }
+    },
+    "gamification_staff_pending": {
+      "name": "Aviso al equipo: algo pendiente de revisar",
+      "description": "Cuando llega una entrega de reto o una solicitud de beneficio. Solo dentro de la plataforma.",
+      "vars": {
+        "message": "Qué ha llegado",
+        "tenantName": "Nombre de la plataforma"
+      }
+    },
+    "gamification_perk_handled": {
+      "name": "Solicitud de beneficio atendida",
+      "description": "Cuando el equipo aprueba, completa o rechaza la petición de un beneficio.",
+      "vars": {
+        "perkTitle": "Beneficio solicitado",
+        "statusText": "Frase según el resultado (aprobada, hecha o rechazada)",
+        "staffNote": "Respuesta del equipo (puede ir vacío)",
+        "tenantName": "Nombre de la plataforma"
+      }
+    },
+    "referrals_commission_earned": {
+      "name": "Comisión de referido ganada",
+      "description": "Cuando un pago de un referido genera una comisión para el miembro.",
+      "vars": {
+        "amount": "Importe de la comisión (ej. «2,97 €»)",
+        "baseAmount": "Importe del cobro que la originó",
+        "tenantName": "Nombre de la plataforma"
+      }
+    },
+    "referrals_payout_recorded": {
+      "name": "Liquidación de referidos pagada",
+      "description": "Cuando el admin registra la liquidación de comisiones aprobadas.",
+      "vars": {
+        "amount": "Total liquidado (ej. «45,00 €»)",
+        "reference": "Referencia externa del pago",
+        "tenantName": "Nombre de la plataforma"
+      }
+    },
+    "zoom_class_registration_confirmed": {
+      "name": "Inscripción a clase en directo confirmada",
+      "description": "Cuando un miembro se inscribe a una clase en directo (aula virtual Zoom).",
+      "vars": {
+        "topic": "Título de la clase",
+        "startsAt": "Fecha y hora de inicio formateadas",
+        "classUrl": "Enlace a la página de la clase (/live/…)",
+        "calendarGoogleUrl": "Enlace para añadir la clase a Google Calendar",
+        "calendarIcsUrl": "Descarga del evento .ics (Outlook, Apple Calendar y otros)",
+        "tenantName": "Nombre de la plataforma"
+      }
+    },
+    "zoom_class_reminder": {
+      "name": "Recordatorio de clase en directo (2 h antes)",
+      "description": "Aviso automático a los inscritos poco antes de que empiece la clase. Se envía una sola vez por clase; si se reprograma, vuelve a enviarse a la hora nueva.",
+      "vars": {
+        "topic": "Título de la clase",
+        "startsAt": "Cuándo empieza, en la zona horaria del formador",
+        "hoursBefore": "Horas de antelación del aviso (2 por defecto)",
+        "classUrl": "Enlace a la página de la clase (/live/…)",
+        "calendarGoogleUrl": "Enlace para añadir la clase a Google Calendar",
+        "calendarIcsUrl": "Descarga del evento .ics (Outlook, Apple Calendar y otros)",
+        "tenantName": "Nombre de la plataforma"
+      }
+    },
+    "zoom_class_cancelled": {
+      "name": "Clase en directo cancelada",
+      "description": "Cuando se cancela una clase en directo, avisa a cada miembro inscrito.",
+      "vars": {
+        "topic": "Título de la clase",
+        "startsAt": "Fecha y hora que tenía la clase",
+        "tenantName": "Nombre de la plataforma"
+      }
+    },
+    "surveys_post_class_invitation": {
+      "name": "Encuesta post-clase",
+      "description": "Al terminar una clase en directo, invita a cada inscrito a valorarla (respuesta anónima).",
+      "vars": {
+        "topic": "Título de la clase",
+        "surveyUrl": "Enlace a la página de la clase (/live/…)",
+        "tenantName": "Nombre de la plataforma"
+      }
+    },
+    "surveys_post_class_reminder": {
+      "name": "Recordatorio de encuesta post-clase",
+      "description": "A las 24h de crearse la encuesta, recuerda valorarla SOLO a los inscritos que aún no respondieron (un único recordatorio por clase).",
+      "vars": {
+        "topic": "Título de la clase",
+        "surveyUrl": "Enlace a la página de la clase (/live/…)",
+        "tenantName": "Nombre de la plataforma"
+      }
+    }
+  }
 }

@@ -208,7 +208,8 @@ export class PrismaNotificationHubService implements NotificationHubService {
         notificationId: created.id,
         tenantId: notification.tenantId,
         userId: notification.to,
-        subject: rendered.subject ?? '(sin asunto)',
+        // Relleno en el idioma del destinatario (un override puede no traer asunto).
+        subject: rendered.subject ?? resolveFixedEmailCopy('value.no_subject', locale),
         body: rendered.body,
         branding,
         webBaseUrl,
@@ -423,11 +424,11 @@ export class PrismaNotificationHubService implements NotificationHubService {
    *      envío, o userId de otro tenant): no hay a quién preguntarle el idioma.
    *  (b) La fila existe pero `locale` viene vacío: la columna tiene default en
    *      BD, así que esto solo pasa si alguien la escribió a mano en blanco.
-   *  (c) El locale guardado no tiene catálogo (`pt-BR` es alcanzable HOY: lo
-   *      admite `ALLOWED_LOCALES` en me.controller.ts pero no está traducido).
-   *      No se resuelve aquí: se devuelve tal cual y lo absorbe
-   *      `resolveHubDefault`, que mapea a español. Así el override per-tenant
-   *      en `pt-BR` — si el tenant lo creó — todavía puede ganar.
+   *  (c) El locale guardado no tiene catálogo (alcanzable por SCIM, que copia
+   *      el del IdP sin validar: `fr-FR`). No se resuelve aquí: se devuelve tal
+   *      cual y lo absorbe `resolveHubDefault`, que mapea a español. Así el
+   *      override per-tenant en ese locale — si el tenant lo creó — todavía
+   *      puede ganar.
    */
   private async resolveUserLocale(tenantId: string, userId: string): Promise<string> {
     let user: { locale: string; tenantId: string } | null;

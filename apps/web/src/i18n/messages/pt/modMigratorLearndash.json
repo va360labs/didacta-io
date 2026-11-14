@@ -1,0 +1,12 @@
+{
+  "page": {
+    "title": "Migrar do WordPress + LearnDash",
+    "subtitle": "Assistente passo a passo para administradores. Seu site atual não é alterado.",
+    "forbidden": "Esta ação só está disponível para administradores com a função <strong>super_admin</strong>.",
+    "forbiddenHint": "Se você precisa migrar sua academia LearnDash, fale com o administrador da instância.",
+    "backToAdmin": "Voltar ao painel",
+    "loading": "Carregando módulo…",
+    "loadError": "Não foi possível carregar a interface do módulo: {error}",
+    "loadErrorHint": "Verifique se o módulo <code>mod.migrator-learndash</code> está instalado em uma versão que inclua a surface admin (1.0.15+). Envie o ZIP atualizado pelo marketplace."
+  }
+}

@@ -32,6 +32,7 @@
  */
 import { PrismaClient, withTenantContext } from '@didacta/database';
 import {
+  ACADEMY_LOCALES,
   ACADEMY_LOCALE_SETTING,
   deducedAcademyLocale,
   explicitAcademyLocale,
@@ -69,6 +70,13 @@ export function linea(aula: AulaRevisada): string {
   const { accion, locale } = decidir(aula);
   const por = accion === 'ya-tiene' ? 'ya fijado' : ORIGEN[aula.origen];
   return `  ${accion.padEnd(9)} ${locale}  ${aula.slug} (${aula.id}) — ${por}`;
+}
+
+/** Cuántas aulas se fijarían en cada idioma del aula: `es: 5, en: 2, pt: 1`. */
+export function recuento(fijar: readonly AulaRevisada[]): string {
+  return ACADEMY_LOCALES.map((l) => `${l}: ${fijar.filter((a) => a.deducido === l).length}`).join(
+    ', ',
+  );
 }
 
 function parseArgs(argv: string[]): { apply: boolean; tenantId: string | null } {
@@ -161,11 +169,7 @@ async function main() {
     const fijar = aulas.filter((a) => decidir(a).accion === 'fijar');
     console.info(`Aulas revisadas: ${aulas.length}`);
     for (const a of aulas) console.info(linea(a));
-    console.info(
-      `\nSe fijaría el idioma en ${fijar.length} (en: ${
-        fijar.filter((a) => a.deducido === 'en').length
-      }, es: ${fijar.filter((a) => a.deducido === 'es').length}).`,
-    );
+    console.info(`\nSe fijaría el idioma en ${fijar.length} (${recuento(fijar)}).`);
     if (!opts.apply) {
       console.info('Modo prueba: no se ha cambiado nada. Usa --apply para aplicarlo.');
       return;

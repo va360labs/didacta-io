@@ -1,0 +1,109 @@
+{
+  "closeMenu": "Fechar menu",
+  "openMenu": "Abrir menu de navegação",
+  "sections": {
+    "myProfile": "Meu perfil",
+    "groups": "Grupos",
+    "learningPaths": "Trilhas de aprendizagem"
+  },
+  "sidebar": {
+    "logoAlt": "Logo",
+    "expandMenu": "Expandir menu",
+    "collapseMenu": "Recolher menu",
+    "search": "Buscar...",
+    "searchShortcut": "Buscar (⌘K)",
+    "communitySubtitle": "Comunidade",
+    "myProfile": "Meu perfil",
+    "logout": "Sair"
+  },
+  "roles": {
+    "super_admin": "Super admin",
+    "tenant_admin": "Administrador",
+    "formador": "Instrutor",
+    "alumno": "Aluno",
+    "auditor": "Auditor",
+    "empresa_manager": "Gestor"
+  },
+  "palette": {
+    "ariaLabel": "Buscar e navegar",
+    "placeholder": "Buscar seções…",
+    "inputAriaLabel": "Buscar seções",
+    "noResults": "Nenhum resultado"
+  },
+  "drawer": {
+    "ariaLabel": "Menu de navegação"
+  },
+  "tabBar": {
+    "ariaLabel": "Navegação principal",
+    "feed": "Feed",
+    "cursos": "Cursos",
+    "miembros": "Membros",
+    "perfil": "Perfil",
+    "menu": "Menu"
+  },
+  "notifications": {
+    "title": "Notificações",
+    "unreadAria": "{count, plural, one {# notificação não lida} other {# notificações não lidas}}",
+    "unreadShort": "{count} não lidas",
+    "toastDefaultTitle": "Nova notificação",
+    "toastClose": "Fechar notificação"
+  },
+  "versionBanner": {
+    "label": "Nova versão:",
+    "view": "Ver",
+    "dismiss": "Dispensar aviso de nova versão"
+  },
+  "dialog": {
+    "close": "Fechar",
+    "fallbackLabel": "Dialog"
+  },
+  "smtpBanner": {
+    "title": "Os e-mails da sua academia ainda não podem ser enviados:",
+    "body": "falta conectar seu serviço de e-mail.",
+    "cta": "Conectar o e-mail"
+  },
+  "gettingStarted": {
+    "title": "Primeiros passos",
+    "subtitle": "{done} de {total} — o que falta para a sua escola funcionar a todo vapor.",
+    "doneTitle": "Sua escola está pronta!",
+    "doneBody": "Todos os primeiros passos foram concluídos. Você pode ocultar este cartão.",
+    "dismiss": "Ocultar",
+    "item": {
+      "nombre": "Dê um nome à sua escola",
+      "marca": "Envie seu logo",
+      "curso": "Crie seu primeiro curso",
+      "alumnos": "Convide seus alunos",
+      "cobros": "Conecte os pagamentos (Stripe)",
+      "correo": "Configure o e-mail (SMTP)"
+    }
+  },
+  "supportAccessBanner": {
+    "title": "Acesso de suporte ativo.",
+    "body": "Alguém do suporte está dentro deste espaço. Motivo: {reason}",
+    "expired": "expirado"
+  },
+  "subscriptionGate": {
+    "trialBanner": {
+      "label": "Teste grátis",
+      "daysLeft": "{days, plural, one {# dia restante} other {# dias restantes}}",
+      "cta": "Escolher plano",
+      "newTab": "(abre em uma nova aba)"
+    },
+    "lock": {
+      "brandLine": "Tudo continua aí.",
+      "adminTitle": "Seu teste grátis terminou",
+      "adminBody": "Sua academia está pausada, não excluída. Escolha um plano e ela volta a abrir exatamente como você deixou.",
+      "keptTitle": "O que fica guardado",
+      "keptCourses": "Seus cursos e aulas",
+      "keptStudents": "Seus alunos e o progresso deles",
+      "keptBrand": "Sua marca, sua comunidade e suas configurações",
+      "choosePlan": "Escolher plano",
+      "reopenNote": "Assim que o pagamento for concluído, sua academia abre de novo.",
+      "signOut": "Sair",
+      "otherTitle": "O acesso a {name} está pausado",
+      "otherBody": "Os responsáveis já estão sabendo. Nada foi perdido: quando ela reabrir, tudo vai estar onde estava.",
+      "adminSignIn": "Você é administrador? Entre na sua conta",
+      "fallbackName": "esta academia"
+    }
+  }
+}

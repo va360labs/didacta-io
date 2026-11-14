@@ -209,6 +209,15 @@ describe('puertas comunes a todas las herramientas', () => {
     });
     const en = await descripcion();
     expect(en).toContain('from "Start here"');
+    Object.assign(prisma, {
+      tenantSetting: {
+        findUnique: vi.fn(
+          async (q: { where: { tenantId_moduleName_key: { moduleName: string; key: string } } }) =>
+            q.where.tenantId_moduleName_key.moduleName === 'academy' ? { valueJson: 'pt' } : null,
+        ),
+      },
+    });
+    expect(await descripcion()).toContain('from "Comece aqui"');
     for (const tool of await service.visibleTools(user())) {
       expect(tool.description, tool.name).not.toContain('{{ui:');
     }
@@ -218,10 +227,14 @@ describe('puertas comunes a todas las herramientas', () => {
     );
   });
 
-  it('localizeAgentText: los dos idiomas, y una marca desconocida se deja tal cual', () => {
+  it('localizeAgentText: los tres idiomas, y una marca desconocida se deja tal cual', () => {
     expect(localizeAgentText('from "{{ui:startHere}}"', 'es')).toBe('from "Empieza aquí"');
     expect(localizeAgentText('the "{{ui:agentPanel}}" panel', 'en')).toBe(
       `the "${AGENT_UI_NAMES.agentPanel.en}" panel`,
+    );
+    expect(localizeAgentText('from "{{ui:startHere}}"', 'pt')).toBe('from "Comece aqui"');
+    expect(localizeAgentText('the "{{ui:agentPanel}}" panel', 'pt')).toBe(
+      'the "Faça mais rápido com seu agente de IA" panel',
     );
     expect(localizeAgentText('{{ui:nope}}', 'es')).toBe('{{ui:nope}}');
   });
@@ -381,6 +394,42 @@ describe('cursos y lecciones', () => {
     });
     expect(courses.createModule).toHaveBeenCalledWith(TENANT, OWNER, COURSE, { title: 'Lessons' });
     expect(courses.createLesson).toHaveBeenCalledWith(TENANT, OWNER, 'm-nuevo', expect.anything());
+  });
+
+  it('dueño en pt-BR: curso en pt-BR y primera sección «Aulas»; sin catálogo, español', async () => {
+    prisma.user.findFirst.mockResolvedValue({ ...ownerRow, locale: 'pt-BR' });
+    await service.call(user(), 'k', 'create_course', { title: 'Café em casa' });
+    expect(courses.createCourse).toHaveBeenLastCalledWith(
+      TENANT,
+      OWNER,
+      expect.objectContaining({ language: 'pt-BR' }),
+    );
+    courses.getCourseDetail!.mockResolvedValueOnce({ id: COURSE, modules: [] });
+    await service.call(user(), 'k', 'create_lesson', {
+      courseId: COURSE,
+      title: 'A',
+      type: 'text',
+    });
+    expect(courses.createModule).toHaveBeenLastCalledWith(TENANT, OWNER, COURSE, {
+      title: 'Aulas',
+    });
+
+    prisma.user.findFirst.mockResolvedValue({ ...ownerRow, locale: 'fr-FR' });
+    await service.call(user(), 'k', 'create_course', { title: 'Café chez moi' });
+    expect(courses.createCourse).toHaveBeenLastCalledWith(
+      TENANT,
+      OWNER,
+      expect.objectContaining({ language: 'es-ES' }),
+    );
+    courses.getCourseDetail!.mockResolvedValueOnce({ id: COURSE, modules: [] });
+    await service.call(user(), 'k', 'create_lesson', {
+      courseId: COURSE,
+      title: 'B',
+      type: 'text',
+    });
+    expect(courses.createModule).toHaveBeenLastCalledWith(TENANT, OWNER, COURSE, {
+      title: 'Lecciones',
+    });
   });
 
   it('create_lesson: vídeo sin https o texto en una de vídeo → inválido', async () => {

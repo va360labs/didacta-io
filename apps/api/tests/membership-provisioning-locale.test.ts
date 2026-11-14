@@ -114,8 +114,25 @@ describe('MembershipProvisioningService · idioma del comprador', () => {
     );
   });
 
+  it('comprador pt-BR: asunto, cuerpo, botón y pie en portugués', async () => {
+    // Era parte del camino degradado de abajo mientras `pt-BR` no tuvo catálogo.
+    const mail = await enviar('pt-BR');
+    expect(mail.subject).toBe('Sua assinatura em Academia Demo');
+    expect(mail.html).toContain('<html lang="pt">');
+    expect(mail.text).toContain('Olá, Ana!');
+    expect(mail.text).toContain('Sua assinatura em Academia Demo está ativa!');
+    expect(mail.html).toContain('Definir minha senha');
+    expect(mail.html).toContain(
+      'Depois, você poderá entrar em https://academia.example.com/signin com seu e-mail.',
+    );
+    // Ni español ni inglés dentro del email portugués.
+    expect(mail.html).not.toContain('Definir mi contraseña');
+    expect(mail.html).not.toContain('Después podrás iniciar sesión');
+    expect(mail.html).not.toContain('Set my password');
+  });
+
   it('CAMINO DEGRADADO: fila sin locale o con uno sin catálogo → español', async () => {
-    for (const locale of [undefined, '', '   ', 'pt-BR']) {
+    for (const locale of [undefined, '', '   ', 'fr-FR']) {
       vi.clearAllMocks();
       const mail = await enviar(locale);
       expect(mail.subject, String(locale)).toBe('Tu membresía en Academia Demo');
@@ -151,7 +168,7 @@ describe('MembershipProvisioningService · captura del idioma de la compra', () 
   it('sin locale capturado (o uno que la API no persiste): el idioma del aula, no el de la columna', async () => {
     // Antes se omitía y la columna tomaba su default (español) aunque el aula
     // fuera inglesa: la bienvenida le llegaba en español a un comprador inglés.
-    for (const locale of [undefined, '', '   ', 'pt-BR', 'en', 'zz-ZZ', '../etc']) {
+    for (const locale of [undefined, '', '   ', 'fr-FR', 'pt', 'en', 'zz-ZZ', '../etc']) {
       vi.clearAllMocks();
       const aulaInglesa = montar(undefined, null, 'en');
       await aulaInglesa.svc.provision({ ...args, locale });
@@ -166,8 +183,10 @@ describe('MembershipProvisioningService · captura del idioma de la compra', () 
     }
   });
 
-  it('los tres locales que la API persiste llegan enteros', async () => {
-    for (const locale of ['es-ES', 'es-AR', 'en-US']) {
+  it('los cuatro locales que la API persiste llegan enteros', async () => {
+    // `pt-BR` incluido: un comprador con la web en portugués se queda con su
+    // idioma guardado, y la bienvenida de arriba le sale en portugués.
+    for (const locale of ['es-ES', 'es-AR', 'en-US', 'pt-BR']) {
       vi.clearAllMocks();
       const { svc, tx } = montar();
       await svc.provision({ ...args, locale });

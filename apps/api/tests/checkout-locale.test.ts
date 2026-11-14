@@ -30,6 +30,12 @@ describe('readRequestLocale · el idioma activo de la UI', () => {
     expect(readRequestLocale({ cookie: `${LOCALE_COOKIE}=en-US` })).toBe('en-US');
   });
 
+  it('un comprador con la web en portugués conserva pt-BR', () => {
+    // Antes se descartaba (no había catálogo): el comprador brasileño acababa
+    // con `es-ES` guardado y recibía la bienvenida en español.
+    expect(readRequestLocale({ cookie: `${LOCALE_COOKIE}=pt-BR` })).toBe('pt-BR');
+  });
+
   it('la encuentra entre otras cookies y tolera espacios', () => {
     expect(
       readRequestLocale({ cookie: `foo=1;  ${LOCALE_COOKIE} = es-AR ; didacta.session=xyz` }),
@@ -57,10 +63,11 @@ describe('readRequestLocale · el idioma activo de la UI', () => {
   });
 
   it('CAMINO DEGRADADO: un tag que la API no persiste se descarta ENTERO', () => {
-    // `pt-BR` sigue existiendo en perfiles antiguos y `en` es un tag válido de
-    // BCP-47 que esta API no guarda. No se normaliza a `en-US`: adivinar la
-    // región es inventarse la preferencia de alguien.
-    for (const value of ['pt-BR', 'en', 'es', 'EN-US', 'zz-ZZ', '../../etc/passwd', '{}']) {
+    // `fr-FR` no tiene catálogo, y `en` / `pt` / `pt-PT` son tags válidos de
+    // BCP-47 que esta API no guarda. No se normalizan a `en-US` / `pt-BR`:
+    // adivinar la región es inventarse la preferencia de alguien.
+    const descartados = ['fr-FR', 'pt-PT', 'pt', 'en', 'es', 'EN-US', 'zz-ZZ', '../../etc', '{}'];
+    for (const value of descartados) {
       expect(readRequestLocale({ cookie: `${LOCALE_COOKIE}=${value}` }), value).toBeUndefined();
     }
   });
@@ -80,7 +87,7 @@ describe('sanitizeCheckoutLocale · lo que vuelve de Stripe', () => {
   it('descarta cualquier otra cosa', () => {
     // La metadata de una session la puede reenviar cualquiera con el secreto
     // del webhook, así que el valor se vuelve a validar antes de tocar `user`.
-    for (const value of [undefined, null, '', '  ', 42, {}, [], 'pt-BR', 'en', 'DROP TABLE']) {
+    for (const value of [undefined, null, '', '  ', 42, {}, [], 'fr-FR', 'pt', 'DROP TABLE']) {
       expect(sanitizeCheckoutLocale(value), JSON.stringify(value)).toBeUndefined();
     }
   });
@@ -99,7 +106,7 @@ describe('la lista de locales del checkout NO se desincroniza', () => {
       expect(sanitizeCheckoutLocale(locale), `${locale} no lo acepta el checkout`).toBe(locale);
     }
     // Y al revés: nada que el perfil rechace se cuela por aquí.
-    for (const locale of ['pt-BR', 'en-GB', 'fr-FR']) {
+    for (const locale of ['pt-PT', 'en-GB', 'fr-FR']) {
       expect((ALLOWED_LOCALES as readonly string[]).includes(locale), locale).toBe(false);
       expect(sanitizeCheckoutLocale(locale), locale).toBeUndefined();
     }

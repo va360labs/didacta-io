@@ -19,8 +19,9 @@
 import { catalogOf, toSupportedLocale } from '@/i18n/config';
 import en from '@/i18n/messages/en/common.json';
 import es from '@/i18n/messages/es/common.json';
+import pt from '@/i18n/messages/pt/common.json';
 
-const COPY = { es: es.tenantSuspended, en: en.tenantSuspended } as const;
+const COPY = { es: es.tenantSuspended, en: en.tenantSuspended, pt: pt.tenantSuspended } as const;
 type Catalog = keyof typeof COPY;
 
 /**
@@ -64,6 +65,7 @@ export function pickSuspendedCatalog(
   for (const { base } of preferidos) {
     if (base === 'en') return 'en';
     if (base === 'es') return 'es';
+    if (base === 'pt') return 'pt';
   }
   return 'es';
 }

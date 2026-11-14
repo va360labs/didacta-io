@@ -21,7 +21,11 @@
  */
 
 import { describe, expect, it, vi } from 'vitest';
-import { renderBrandedEmail, type EmailBranding } from '../src/common/branded-email';
+import {
+  renderBrandedEmail,
+  type EmailBranding,
+  type EmailLang,
+} from '../src/common/branded-email';
 import {
   HUB_TEMPLATE_LANGS,
   type HubTemplateLang,
@@ -49,16 +53,32 @@ describe('renderBrandedEmail · atributo lang', () => {
       bodyHtml: '<p>x</p>',
       bodyText: 'x',
     });
+    const pt = renderBrandedEmail(BRANDING, {
+      lang: 'pt',
+      title: 'Olá',
+      bodyHtml: '<p>x</p>',
+      bodyText: 'x',
+    });
     expect(es.html).toContain('<html lang="es">');
     expect(en.html).toContain('<html lang="en">');
     expect(en.html).not.toContain('lang="es"');
+    expect(pt.html).toContain('<html lang="pt">');
+    expect(pt.html).not.toContain('lang="es"');
   });
 
   it('`EmailLang` declara los MISMOS idiomas que el catálogo del hub', () => {
     // `branded-email.ts` redeclara la lista para seguir siendo un fichero hoja
-    // sin dependencias. Este test es lo que impide que las dos se separen.
-    const declarados: HubTemplateLang[] = ['es', 'en'];
-    expect([...HUB_TEMPLATE_LANGS].sort()).toEqual([...declarados].sort());
+    // sin dependencias. Este test es lo que impide que las dos se separen, por
+    // las dos puntas:
+    //  · en el TYPECHECK: `Record<EmailLang, true>` no compila si a `EmailLang`
+    //    le falta o le sobra un idioma respecto a los que se escriben aquí, y
+    //    la asignación de abajo no compila si el catálogo tiene uno que
+    //    `EmailLang` no admite;
+    //  · en RUNTIME: la lista escrita aquí tiene que ser la del catálogo.
+    const declarados: Record<EmailLang, true> = { es: true, en: true, pt: true };
+    const delCatalogo: readonly EmailLang[] = HUB_TEMPLATE_LANGS;
+    const comoDelHub: HubTemplateLang[] = Object.keys(declarados) as EmailLang[];
+    expect([...delCatalogo].sort()).toEqual([...comoDelHub].sort());
   });
 });
 
@@ -164,9 +184,21 @@ describe('NotificationHub · el envoltorio sale en el idioma del destinatario', 
     expect(html).toContain('Recibiste este correo como miembro de Academia Demo.');
   });
 
-  it('CAMINO DEGRADADO: locale sin catálogo (pt-BR) cae al español, no a un hueco', async () => {
-    // `pt-BR` es alcanzable HOY (lo admite `ALLOWED_LOCALES` de me.controller).
+  it('destinatario pt-BR: <html lang="pt">, botón y footer en portugués', async () => {
+    // Era el camino degradado mientras `pt-BR` fue guardable sin catálogo: el
+    // miembro brasileño recibía el envoltorio entero en español.
     const html = await sentHtml('pt-BR');
+    expect(html).toContain('<html lang="pt">');
+    expect(html).toContain('Acessar Academia Demo');
+    expect(html).toContain('Você recebeu este e-mail por ser membro de Academia Demo.');
+    expect(html).not.toContain('Entrar a Academia Demo');
+    expect(html).not.toContain('Recibiste este correo');
+    expect(html).not.toContain('Go to Academia Demo');
+  });
+
+  it('CAMINO DEGRADADO: locale sin catálogo (fr-FR) cae al español, no a un hueco', async () => {
+    // `fr-FR` es alcanzable por SCIM, que copia el locale del IdP sin validar.
+    const html = await sentHtml('fr-FR');
     expect(html).toContain('<html lang="es">');
     expect(html).toContain('Entrar a Academia Demo');
   });

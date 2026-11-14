@@ -226,7 +226,7 @@ describe('CONTRATO · admin/tenants ↔ didacta-cloud', () => {
       expect(createTenantSchema.safeParse({ ...base, simpleMode: 'si' }).success).toBe(false);
     });
 
-    it('`locale` es opcional: Cloud puede no enviarlo, y si lo envía es `es` o `en`', () => {
+    it('`locale` es opcional: Cloud puede no enviarlo, y si lo envía es `es`, `en` o `pt`', () => {
       const base = {
         slug: 'acme',
         name: 'Acme Corp',
@@ -236,7 +236,9 @@ describe('CONTRATO · admin/tenants ↔ didacta-cloud', () => {
       expect(createTenantSchema.safeParse(base).success).toBe(true);
       expect(createTenantSchema.parse({ ...base, locale: 'en' }).locale).toBe('en');
       expect(createTenantSchema.parse({ ...base, locale: 'es' }).locale).toBe('es');
-      expect(createTenantSchema.safeParse({ ...base, locale: 'pt-BR' }).success).toBe(false);
+      // Portugués de Brasil: Cloud puede mandar el tag; se guarda el código.
+      expect(createTenantSchema.parse({ ...base, locale: 'pt-BR' }).locale).toBe('pt');
+      expect(createTenantSchema.safeParse({ ...base, locale: 'fr-FR' }).success).toBe(false);
     });
 
     it('`adminName`, `simpleMode` y `locale` son los únicos opcionales al crear', () => {

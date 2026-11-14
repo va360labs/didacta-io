@@ -8,6 +8,7 @@ import { CourseHasNoLessonsError, CourseSlugAlreadyExistsError } from '@didacta/
 import { SimpleModeService } from '../src/simple-mode/simple-mode.service';
 import {
   lessonHasContent,
+  quickStartSchema,
   toCourseSlug,
   SimpleModeError,
 } from '../src/simple-mode/simple-mode.model';
@@ -290,6 +291,31 @@ describe('alta en 3 preguntas', () => {
     expect(db.settings.get('locale')).toBe('en');
     expect(db.settings.get('state')).toMatchObject({ locale: 'en' });
     expect(db.posts[0]?.title).toBe('Welcome to Taller de Acuarela');
+  });
+
+  it('alta en portugués: aula `pt`, curso pt-BR, espacios y post en portugués', async () => {
+    const { db, service, courses, community } = mundo();
+    await service.quickStart(T, { id: U }, { ...ALTA, locale: 'pt' });
+    expect(db.settings.get('locale')).toBe('pt');
+    expect(db.settings.get('state')).toMatchObject({ locale: 'pt' });
+    expect(courses.createCourse).toHaveBeenCalledWith(
+      T,
+      U,
+      expect.objectContaining({ language: 'pt-BR' }),
+    );
+    expect(db.modules[0]?.title).toBe('Aulas');
+    const titles = community.createSpace.mock.calls.map(
+      (c) => (c[2] as unknown as { title: string }).title,
+    );
+    expect(titles).toEqual(['Geral', 'Avisos', 'Perguntas e dúvidas']);
+    expect(db.posts[0]?.title).toBe('Boas-vindas à comunidade Taller de Acuarela');
+  });
+
+  it('el cuerpo del alta: es | en | pt (el código, no el tag)', () => {
+    const base = { ...ALTA };
+    expect(quickStartSchema.safeParse({ ...base, locale: 'pt' }).success).toBe(true);
+    expect(quickStartSchema.safeParse({ ...base, locale: 'pt-BR' }).success).toBe(false);
+    expect(quickStartSchema.safeParse({ ...base, locale: 'fr' }).success).toBe(false);
   });
 
   it('sin idioma en la petición (cliente anterior): el que ya tenía el aula, no español', async () => {

@@ -250,7 +250,9 @@ describe('pickSuspendedCatalog', () => {
     [null, 'en;q=0.2,es;q=0.9', 'es'],
     [null, 'en;q=0,es;q=0.1', 'es'],
     [null, 'fr-FR,de;q=0.8', 'es'],
-    ['pt-BR', 'en', 'es'],
+    ['pt-BR', 'en', 'pt'],
+    [null, 'pt-BR,pt;q=0.9,en;q=0.8', 'pt'],
+    ['fr-FR', 'en', 'es'],
   ] as const)('cookie=%s, Accept-Language=%s → %s', (cookie, accept, expected) => {
     expect(pickSuspendedCatalog(cookie, accept)).toBe(expected);
   });
