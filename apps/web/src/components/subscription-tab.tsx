@@ -11,8 +11,10 @@
  * Muestra DOS fuentes de suscripción del usuario:
  *  1. Su plan en la cuenta de pago EXTERNA del tenant (mod.payment-connections),
  *     con botón "Gestionar mi suscripción" → Customer Portal de Stripe.
- *  2. Sus suscripciones recurrentes a cursos (mod.subscriptions): ver / cancelar
- *     / facturas.
+ *  2. Sus suscripciones recurrentes a cursos (mod.subscriptions): ver / darse
+ *     de baja / facturas. «Darme de baja» abre la oferta al darse de baja
+ *     (motivo + pausa o descuento si el aula los ofrece); es el único camino de
+ *     baja (el portal de Stripe ya no la ofrece).
  *
  * Antes vivía como página suelta en /account/subscriptions (ruta huérfana). Todo
  * CE, sin EeGate.
@@ -21,6 +23,7 @@
 import { useTranslations } from 'next-intl';
 import { useEffect, useState } from 'react';
 import { Icon } from '@/components/icon';
+import { LeaveSubscriptionDialog } from '@/components/leave-subscription-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -68,6 +71,9 @@ export function SubscriptionTab() {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [portalBusy, setPortalBusy] = useState<string | null>(null);
   const [invoicesById, setInvoicesById] = useState<Record<string, InvoiceRow[]>>({});
+  /** Suscripción con el diálogo «Darme de baja» abierto. */
+  const [leaving, setLeaving] = useState<SubscriptionRow | null>(null);
+  const tBaja = useTranslations('bajaRetencion');
   const checkoutStatus = useCheckoutStatus();
 
   useEffect(() => {
@@ -115,43 +121,28 @@ export function SubscriptionTab() {
     }
   }
 
-  async function cancelSub(sub: SubscriptionRow, immediate: boolean) {
+  /** Tras decidir en «Darme de baja»: repinta la tarjeta conservando el enriquecimiento. */
+  function onLeaveDone(updated: SubscriptionRow) {
+    setSubs((prev) =>
+      prev.map((s) =>
+        s.id === updated.id
+          ? {
+              ...updated,
+              planName: s.planName,
+              courseTitle: s.courseTitle,
+              billingPortal: s.billingPortal,
+              retentionDiscount: s.retentionDiscount,
+            }
+          : s,
+      ),
+    );
+    // El descuento recién aceptado se ve al recargar la lista.
     const token = authStorage.getAccessToken();
-    if (!token) return;
-    const subId = sub.id;
-    const message = immediate
-      ? sub.planId
-        ? t('subscription.cancelNowConfirmMembership')
-        : t('subscription.cancelNowConfirmCourse')
-      : t('subscription.cancelPeriodConfirm');
-    if (!window.confirm(message)) return;
-    setBusyId(subId);
-    setActionError(null);
-    setActionSuccess(null);
-    try {
-      const res = await subscriptionsApi.cancel(token, subId, immediate);
-      // Conservar planName/courseTitle: la respuesta trae la fila sin enriquecer.
-      setSubs((prev) =>
-        prev.map((s) =>
-          s.id === subId
-            ? {
-                ...res.subscription,
-                planName: s.planName,
-                courseTitle: s.courseTitle,
-                billingPortal: s.billingPortal,
-              }
-            : s,
-        ),
-      );
-      setActionSuccess(
-        immediate ? t('subscription.canceledMsg') : t('subscription.cancelScheduledMsg'),
-      );
-    } catch (e) {
-      setActionError(
-        e instanceof ApiHttpError ? apiErrorMessage(e, tErrors) : t('subscription.cancelError'),
-      );
-    } finally {
-      setBusyId(null);
+    if (token) {
+      void subscriptionsApi
+        .listMine(token)
+        .then((r) => setSubs(r.subscriptions))
+        .catch(() => undefined);
     }
   }
 
@@ -311,6 +302,23 @@ export function SubscriptionTab() {
         />
       ))}
 
+      {leaving ? (
+        <LeaveSubscriptionDialog
+          sub={leaving}
+          itemName={
+            leaving.planId
+              ? (leaving.planName ?? t('subscription.membershipFallback'))
+              : (leaving.courseTitle ??
+                t('subscription.courseFallback', { id: (leaving.courseId ?? '').slice(0, 8) }))
+          }
+          open
+          onOpenChange={(next) => {
+            if (!next) setLeaving(null);
+          }}
+          onDone={(updated) => onLeaveDone(updated)}
+        />
+      ) : null}
+
       {subs.map((sub) => {
         const isMembership = sub.planId !== null;
         const title = isMembership
@@ -342,7 +350,15 @@ export function SubscriptionTab() {
                 ) : sub.currentPeriodEnd ? (
                   <>
                     {' · '}
-                    {t('subscription.nextCharge', { date: formatDate(sub.currentPeriodEnd) })}
+                    {/* Con una pausa aceptada, el próximo cobro es el de la vuelta:
+                        las renovaciones de dentro de la pausa no se cobran. */}
+                    {t('subscription.nextCharge', {
+                      date: formatDate(
+                        sub.pauseEndsAt && sub.status !== 'CANCELED'
+                          ? sub.pauseEndsAt
+                          : sub.currentPeriodEnd,
+                      ),
+                    })}
                   </>
                 ) : null}
                 {sub.cancelAtPeriodEnd ? (
@@ -366,6 +382,42 @@ export function SubscriptionTab() {
                     {' · '}
                     <span className="font-semibold text-danger-700">
                       {t('subscription.suspendedUnpaid')}
+                    </span>
+                  </>
+                ) : null}
+                {sub.status === 'PAUSED' && sub.pauseEndsAt ? (
+                  <>
+                    {' · '}
+                    <span className="font-semibold text-brand-700" data-testid="sub-en-pausa">
+                      {tBaja('alumno.enPausaHasta', { fecha: formatDate(sub.pauseEndsAt) })}
+                    </span>
+                  </>
+                ) : sub.pauseStartsAt && sub.pauseEndsAt && sub.status !== 'CANCELED' ? (
+                  <>
+                    {' · '}
+                    <span
+                      className="font-semibold text-brand-700"
+                      data-testid="sub-pausa-programada"
+                    >
+                      {tBaja('alumno.pausaProgramada', {
+                        desde: formatDate(sub.pauseStartsAt),
+                        hasta: formatDate(sub.pauseEndsAt),
+                      })}
+                    </span>
+                  </>
+                ) : null}
+                {sub.retentionDiscount ? (
+                  <>
+                    {' · '}
+                    <span className="font-semibold text-success-700" data-testid="sub-descuento">
+                      {sub.retentionDiscount.endsAt && sub.retentionDiscount.duration !== 'once'
+                        ? tBaja('alumno.descuentoActivo', {
+                            pct: sub.retentionDiscount.percent,
+                            fecha: formatDate(sub.retentionDiscount.endsAt),
+                          })
+                        : tBaja('alumno.descuentoActivoSinFecha', {
+                            pct: sub.retentionDiscount.percent,
+                          })}
                     </span>
                   </>
                 ) : null}
@@ -396,22 +448,11 @@ export function SubscriptionTab() {
                   <Button
                     type="button"
                     variant="ghost"
-                    onClick={() => cancelSub(sub, false)}
+                    onClick={() => setLeaving(sub)}
                     disabled={busyId === sub.id}
+                    data-testid="sub-darme-de-baja"
                   >
-                    {busyId === sub.id
-                      ? t('subscription.canceling')
-                      : t('subscription.cancelAtPeriodEnd')}
-                  </Button>
-                ) : null}
-                {sub.status !== 'CANCELED' ? (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    onClick={() => cancelSub(sub, true)}
-                    disabled={busyId === sub.id}
-                  >
-                    {busyId === sub.id ? t('subscription.canceling') : t('subscription.cancelNow')}
+                    {tBaja('alumno.boton')}
                   </Button>
                 ) : null}
                 <Button type="button" variant="ghost" onClick={() => void loadInvoices(sub.id)}>
@@ -504,6 +545,7 @@ function SubStatusBadge({ status }: { status: SubscriptionStatus }) {
     PAST_DUE: 'bg-warning-600 text-white',
     UNPAID: 'bg-danger-600 text-white',
     CANCELED: 'border-border-strong text-text-muted',
+    PAUSED: 'border-brand-300 bg-brand-50 text-brand-700',
   };
   return <Badge className={className[status]}>{labelOr(t, `subBadge.${status}`, status)}</Badge>;
 }

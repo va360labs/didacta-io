@@ -12,6 +12,8 @@
  * - GET  /api/v1/modules/subscriptions/me/:id/invoices
  * - POST /api/v1/modules/subscriptions/checkout/:courseId
  * - POST /api/v1/modules/subscriptions/me/:id/cancel
+ * - GET  /api/v1/modules/subscriptions/me/:id/leave  (oferta al darse de baja)
+ * - POST /api/v1/modules/subscriptions/me/:id/leave
  *
  * No es EE — todo CE. Sin `<EeGate>`.
  */
@@ -25,7 +27,8 @@ export type SubscriptionStatus =
   | 'ACTIVE'
   | 'PAST_DUE'
   | 'UNPAID'
-  | 'CANCELED';
+  | 'CANCELED'
+  | 'PAUSED';
 export type InvoiceStatus = 'OPEN' | 'PAID' | 'UNCOLLECTIBLE' | 'VOID';
 
 export interface SubscriptionRow {
@@ -54,6 +57,17 @@ export interface SubscriptionRow {
   canceledReason: string | null;
   /** Fin del periodo de prueba (solo status TRIALING). */
   trialEndsAt: string | null;
+  /** Pausa aceptada al darse de baja: empieza al acabar lo pagado. */
+  pauseStartsAt?: string | null;
+  /** Primer cobro tras la pausa (vuelve el acceso). */
+  pauseEndsAt?: string | null;
+  /** Descuento de retención vivo, o null. */
+  retentionDiscount?: {
+    percent: number;
+    months: number | null;
+    duration: string;
+    endsAt: string | null;
+  } | null;
   /**
    * Hay portal de cliente para esta suscripción (tarjeta, facturas y baja con
    * el nombre de la academia). Lo decide el backend: hoy, las cobradas a
@@ -95,6 +109,43 @@ export interface StartSubscriptionResult {
   url: string;
 }
 
+/** Motivos de baja (mismo orden que la API). */
+export const EXIT_REASONS = [
+  'too_expensive',
+  'no_time',
+  'not_expected',
+  'learned_enough',
+  'missing_topics',
+  'other',
+] as const;
+export type ExitReason = (typeof EXIT_REASONS)[number];
+
+/** Lo que el aula ofrece a esta suscripción al darse de baja. */
+export interface LeaveOffer {
+  subscriptionId: string;
+  canLeave: boolean;
+  reasons: ExitReason[];
+  /** Hasta cuándo conserva el acceso si se da de baja. */
+  accessEndsAt: string | null;
+  pause: { months: number[]; startsAt: string; endsAtByMonths: Record<string, string> } | null;
+  discount: {
+    percent: number;
+    months: number | null;
+    duration: 'repeating' | 'once';
+    amountCents: number;
+    discountedAmountCents: number;
+    currency: string;
+    nextChargeAt: string | null;
+  } | null;
+}
+
+export interface LeaveBody {
+  reason: ExitReason;
+  reasonText?: string | null;
+  choice: 'pause' | 'discount' | 'cancel';
+  pauseMonths?: number;
+}
+
 const BASE = '/api/v1/modules/subscriptions';
 
 export const subscriptionsApi = {
@@ -130,6 +181,31 @@ export const subscriptionsApi = {
     return apiFetch<{ subscription: SubscriptionRow }>(
       `${BASE}/me/${encodeURIComponent(subscriptionId)}/cancel`,
       { method: 'POST', body: JSON.stringify({ immediate }) },
+      bearer,
+    );
+  },
+
+  /** Oferta al darse de baja (motivos, pausa y descuento disponibles). */
+  async leaveOffer(bearer: string, subscriptionId: string): Promise<LeaveOffer> {
+    return apiFetch<LeaveOffer>(
+      `${BASE}/me/${encodeURIComponent(subscriptionId)}/leave`,
+      { method: 'GET' },
+      bearer,
+    );
+  },
+
+  /** Lo que decide: pausar, quedarse con el descuento o darse de baja (con su motivo). */
+  async leave(
+    bearer: string,
+    subscriptionId: string,
+    body: LeaveBody,
+  ): Promise<{ outcome: 'PAUSED' | 'DISCOUNTED' | 'CANCELED'; subscription: SubscriptionRow }> {
+    return apiFetch<{
+      outcome: 'PAUSED' | 'DISCOUNTED' | 'CANCELED';
+      subscription: SubscriptionRow;
+    }>(
+      `${BASE}/me/${encodeURIComponent(subscriptionId)}/leave`,
+      { method: 'POST', body: JSON.stringify(body) },
       bearer,
     );
   },

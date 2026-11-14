@@ -26,4 +26,8 @@ export {
   type InvoiceRow,
   type StartSubscriptionBody,
   type StartSubscriptionResult,
+  EXIT_REASONS,
+  type ExitReason,
+  type LeaveOffer,
+  type LeaveBody,
 } from './client';
