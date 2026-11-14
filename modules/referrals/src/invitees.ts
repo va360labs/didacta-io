@@ -20,7 +20,8 @@ export type SubscriptionStatusLike =
   | 'ACTIVE'
   | 'PAST_DUE'
   | 'UNPAID'
-  | 'CANCELED';
+  | 'CANCELED'
+  | 'PAUSED';
 
 export interface InviteeFacts {
   /** Suscripciones del invitado en esta aula (cualquiera, con su fecha). */
@@ -35,8 +36,9 @@ export interface InviteeFacts {
  * 1. Con su suscripción MÁS RECIENTE (las PENDING, que son pagos sin cerrar,
  *    no cuentan):
  *    - TRIALING → «En prueba» (`trial`).
- *    - ACTIVE o PAST_DUE → «Pagando» (`paying`): la suscripción sigue viva;
- *      PAST_DUE es un cobro que Stripe aún reintenta.
+ *    - ACTIVE, PAST_DUE o PAUSED → «Pagando» (`paying`): la suscripción sigue
+ *      viva; PAST_DUE es un cobro que Stripe aún reintenta y PAUSED una pausa
+ *      que pidió el invitado y que vuelve a cobrar sola.
  * 2. Si no hay suscripción viva y compró algo suelto (comisión de pedido no
  *    anulada, o referido nacido de un pedido que no devengó comisión) →
  *    «Compró un curso» (`bought_course`).
@@ -52,7 +54,11 @@ export function deriveInviteeState(facts: InviteeFacts): InviteeState {
     .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
   const latest = subs[0];
   if (latest?.status === 'TRIALING') return 'trial';
-  if (latest?.status === 'ACTIVE' || latest?.status === 'PAST_DUE') return 'paying';
+  // PAUSED: en pausa a petición del invitado; la suscripción sigue viva y
+  // vuelve a cobrar sola. No es «Se dio de baja».
+  if (latest?.status === 'ACTIVE' || latest?.status === 'PAST_DUE' || latest?.status === 'PAUSED') {
+    return 'paying';
+  }
   if (facts.hasCoursePurchase) return 'bought_course';
   if (latest) return 'cancelled';
   return 'joined';
