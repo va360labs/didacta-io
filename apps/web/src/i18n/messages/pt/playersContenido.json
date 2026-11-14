@@ -41,6 +41,7 @@
     "errors": {
       "BILLING_PRODUCT_NOT_FOUND": "Este curso ainda não está disponível para compra. Entre em contato com a sua organização.",
       "BILLING_PRODUCT_INACTIVE": "A venda deste curso está pausada no momento.",
+      "BILLING_PRICE_CHANGED": "O preço deste curso acabou de mudar. Agora você vê o preço atual: confira e clique de novo para pagar.",
       "BILLING_STRIPE_API_ERROR": "Houve um problema com o gateway de pagamento. Tente novamente em alguns minutos.",
       "BILLING_STRIPE_CONFIG_MISSING": "Os pagamentos não estão habilitados na sua organização. Entre em contato com o admin.",
       "fallback": "Não foi possível iniciar o pagamento. Tente novamente."

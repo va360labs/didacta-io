@@ -823,6 +823,115 @@ describeWithDb('Liquidación y conciliador — Postgres real como didacta_app', 
     });
   });
 
+  it('checkout.session.expired del pool (sesión caducada a mano en Stripe): el pedido pendiente queda CANCELLED', async () => {
+    // El caso del 14-nov: una sesión de 29 € caducada a mano en el panel de
+    // Stripe tras bajar el precio a 1 €. Su pedido estaba PENDING.
+    const ids = await paidOrder(A);
+    const meta = {
+      orderId: ids.orderId,
+      productId: randomUUID(),
+      tenantId: A,
+      courseId: randomUUID(),
+    };
+    const expiredObject = {
+      id: ids.sessionId,
+      object: 'checkout.session',
+      mode: 'payment',
+      status: 'expired',
+      payment_status: 'unpaid',
+      client_reference_id: ids.orderId,
+      metadata: meta,
+    };
+
+    const first = await platform.handle(
+      signed('checkout.session.expired', expiredObject, evtId('expired')),
+    );
+    expect(first).toMatchObject({ received: true, outcome: 'processed' });
+    const order = await admin.modBillingOrder.findUniqueOrThrow({ where: { id: ids.orderId } });
+    expect(order.status).toBe('CANCELLED');
+    // Ni venta ni dinero por una sesión que no se pagó.
+    expect(await admin.modPayoutsSale.count({ where: { stripeChargeId: ids.chId } })).toBe(0);
+
+    // Reentrega de Stripe: nada más.
+    const again = await platform.handle(
+      signed('checkout.session.expired', expiredObject, evtId('expiredagain')),
+    );
+    expect(again).toMatchObject({ outcome: 'processed' });
+    expect(
+      (await admin.modBillingOrder.findUniqueOrThrow({ where: { id: ids.orderId } })).status,
+    ).toBe('CANCELLED');
+  });
+
+  it('control: checkout.session.expired de una compra YA cobrada no la toca', async () => {
+    const ids = await paidOrder(A);
+    await admin.modBillingOrder.update({
+      where: { id: ids.orderId },
+      data: { status: 'COMPLETED', completedAt: new Date() },
+    });
+    await platform.handle(
+      signed(
+        'checkout.session.expired',
+        {
+          id: ids.sessionId,
+          object: 'checkout.session',
+          status: 'expired',
+          metadata: {
+            orderId: ids.orderId,
+            productId: randomUUID(),
+            tenantId: A,
+            courseId: randomUUID(),
+          },
+        },
+        evtId('expiredpaid'),
+      ),
+    );
+    expect(
+      (await admin.modBillingOrder.findUniqueOrThrow({ where: { id: ids.orderId } })).status,
+    ).toBe('COMPLETED');
+  });
+
+  it('cambiar el precio caduca en Stripe las sesiones abiertas de ESA opción (Postgres como didacta_app)', async () => {
+    const productId = randomUUID();
+    const courseId = randomUUID();
+    const open = await paidOrder(A);
+    const otherOption = await paidOrder(A);
+    const otherTenant = await paidOrder(B);
+    await admin.modBillingOrder.update({
+      where: { id: open.orderId },
+      data: { productId, courseId },
+    });
+    await admin.modBillingOrder.update({
+      where: { id: otherTenant.orderId },
+      data: { productId, courseId },
+    });
+    const expiredInStripe: string[] = [];
+    const stripeStub = {
+      expireCheckoutSession: async (id: string) => {
+        expiredInStripe.push(id);
+        return { status: 'expired' };
+      },
+    };
+    const billing = new BillingService(
+      prisma as never,
+      (async () => stripeStub) as never,
+      { publish: async () => undefined },
+      { successUrl: () => '', cancelUrl: () => '' },
+    );
+
+    const result = await runAsTenant(A, () =>
+      billing.expireOpenCheckouts(A, { productIds: [productId] }),
+    );
+
+    expect(result).toEqual({ expired: 1, cancelledOrders: 1, alreadyPaid: 0, failed: 0 });
+    expect(expiredInStripe).toEqual([open.sessionId]);
+    const status = async (id: string) =>
+      (await admin.modBillingOrder.findUniqueOrThrow({ where: { id } })).status;
+    expect(await status(open.orderId)).toBe('CANCELLED');
+    // Otra opción del mismo aula y la misma opción en OTRA aula: intactas.
+    expect(await status(otherOption.orderId)).toBe('PENDING');
+    expect(await status(otherTenant.orderId)).toBe('PENDING');
+  });
+
   it('al final, el libro de las dos aulas cuadra: sin violaciones de invariantes', async () => {
     expect(await violationsOfOurTenants()).toEqual([]);
   });

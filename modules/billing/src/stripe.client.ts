@@ -40,6 +40,13 @@ export interface StripeAdapter {
    */
   createOneOffPrice(params: CreateOneOffPriceParams): Promise<StripePriceResult>;
   /**
+   * Caduca una sesión de Checkout ABIERTA (`checkout.sessions.expire`) para que
+   * ya no se pueda pagar. Si Stripe no la deja caducar porque ya no está abierta
+   * (pagada o caducada), devuelve su estado real en vez de fallar: quien llama
+   * decide con él (una pagada NO se toca, la completa su webhook).
+   */
+  expireCheckoutSession(sessionId: string): Promise<{ status: string }>;
+  /**
    * Verifica la firma del webhook y devuelve el evento parseado. Lanza
    * WebhookSignatureInvalidError si la firma no concuerda.
    */
@@ -273,6 +280,22 @@ export class StripeSdkAdapter implements StripeAdapter {
       };
     } catch (err) {
       throw new StripeApiError((err as Error).message);
+    }
+  }
+
+  async expireCheckoutSession(sessionId: string): Promise<{ status: string }> {
+    try {
+      const session = await this.client.checkout.sessions.expire(sessionId);
+      return { status: session.status ?? 'expired' };
+    } catch (err) {
+      // Stripe solo caduca sesiones `open`. Si ya no lo está, su estado real
+      // (complete / expired) es la respuesta; si tampoco se puede leer, falla.
+      try {
+        const session = await this.client.checkout.sessions.retrieve(sessionId);
+        return { status: session.status ?? 'unknown' };
+      } catch {
+        throw new StripeApiError((err as Error).message);
+      }
     }
   }
 

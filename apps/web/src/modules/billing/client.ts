@@ -115,11 +115,17 @@ export const billingApi = {
     withdrawalWaiver?: WithdrawalWaiverAcceptance,
     /** Código del enlace de referido con el que llegó (`?ref=`), si lo hay. */
     referralCode?: string,
+    /**
+     * El precio que el alumno tiene delante. Si ya no es el actual, la API
+     * responde 409 `BILLING_PRICE_CHANGED` en vez de cobrar otro importe.
+     */
+    expectedPrice?: { unitAmount: number; currency: string },
   ): Promise<StartCheckoutResult> {
     const body = {
       ...(optionId ? { optionId } : {}),
       ...(withdrawalWaiver ? { withdrawalWaiver } : {}),
       ...(referralCode ? { referralCode } : {}),
+      ...(expectedPrice ? { expectedPrice } : {}),
     };
     return apiFetch<StartCheckoutResult>(
       `${BASE}/checkout/${encodeURIComponent(courseId)}`,

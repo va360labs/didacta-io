@@ -67,6 +67,8 @@ export async function startPublicCheckout(
     withdrawalWaiver?: WithdrawalWaiverAcceptance;
     /** Código del enlace de referido con el que llegó (`?ref=`), si lo hay. */
     referralCode?: string;
+    /** El precio que el visitante tiene delante: si cambió, 409 `BILLING_PRICE_CHANGED`. */
+    expectedPrice?: { unitAmount: number; currency: string };
   },
 ): Promise<{ url: string; sessionId: string }> {
   return apiFetch<{ url: string; sessionId: string }>(
@@ -78,6 +80,7 @@ export async function startPublicCheckout(
         ...(opts?.email ? { email: opts.email } : {}),
         ...(opts?.withdrawalWaiver ? { withdrawalWaiver: opts.withdrawalWaiver } : {}),
         ...(opts?.referralCode ? { referralCode: opts.referralCode } : {}),
+        ...(opts?.expectedPrice ? { expectedPrice: opts.expectedPrice } : {}),
       }),
     },
   );

@@ -33,6 +33,7 @@ import { Prisma, type PrismaClient } from '@didacta/database';
 import type Stripe from 'stripe';
 import {
   OrderNotFoundError,
+  PriceChangedError,
   ProductAlreadyExistsError,
   ProductInactiveError,
   ProductNotFoundError,
@@ -139,7 +140,32 @@ export interface StartCheckoutInput {
    * `attribution.referralCode`, que interpreta mod.referrals.
    */
   referralCode?: string;
+  /**
+   * El precio que el comprador TENÍA DELANTE al pulsar comprar (importe en la
+   * unidad mínima y moneda de la opción). Si ya no es el actual, no se crea la
+   * sesión: `PriceChangedError` (409) y la pantalla refresca el precio. Sin él
+   * (clientes antiguos) no se comprueba.
+   */
+  expectedPrice?: { unitAmount: number; currency: string };
 }
+
+/** Lo que hizo `expireOpenCheckouts`. */
+export interface ExpireCheckoutsResult {
+  /** Sesiones caducadas ahora en Stripe (o que ya estaban caducadas). */
+  readonly expired: number;
+  /** Pedidos pendientes que quedan CANCELLED (caducados). */
+  readonly cancelledOrders: number;
+  /** Sesiones ya pagadas: no se tocan, las completa su webhook. */
+  readonly alreadyPaid: number;
+  /** Las que no se pudieron caducar (Stripe caído…): siguen abiertas. */
+  readonly failed: number;
+}
+
+/**
+ * Una sesión de Checkout caduca sola a las 24 h como mucho. Los pedidos
+ * pendientes más viejos ya no tienen nada que se pueda pagar.
+ */
+const OPEN_CHECKOUT_WINDOW_MS = 25 * 60 * 60 * 1000;
 
 /** Una opción de compra del curso, tal y como la ve el alumno. */
 export interface CourseOfferOption {
@@ -381,7 +407,12 @@ export class BillingService {
     sortOrder?: number;
     isFeatured?: boolean;
     externalRef?: string | null;
-  }): Promise<{ product: BillingProductRow; accion: 'creado' | 'actualizado' | 'sin-cambios' }> {
+  }): Promise<{
+    product: BillingProductRow;
+    accion: 'creado' | 'actualizado' | 'sin-cambios';
+    /** Solo si cambió el importe: las sesiones abiertas que se caducaron. */
+    checkouts?: ExpireCheckoutsResult;
+  }> {
     const currency = (input.currency ?? 'eur').toLowerCase();
     const optionName = input.optionName ?? '';
     // Se busca primero por referencia externa (sobrevive a que renombren la
@@ -485,7 +516,13 @@ export class BillingService {
         active: true,
       },
     });
-    return { product, accion: 'actualizado' };
+    // Precio nuevo: las sesiones de pago abiertas con el viejo dejan de servir.
+    // Antes una de 29 € siguió abierta 24 h después de bajarlo a 1 €.
+    if (mismoImporte) return { product, accion: 'actualizado' };
+    const checkouts = await this.expireOpenCheckouts(input.tenantId, {
+      productIds: [existente.id],
+    });
+    return { product, accion: 'actualizado', checkouts };
   }
 
   async updateProduct(input: UpdateProductInput): Promise<BillingProductRow> {
@@ -511,10 +548,18 @@ export class BillingService {
       // Un `price_…` pegado trae sus propios precios por mercado (o ninguno).
       data.currencyOptions = Prisma.DbNull;
     }
-    return this.prisma.modBillingProduct.update({
+    const antes = { active: product.active, stripePriceId: product.stripePriceId };
+    const updated = await this.prisma.modBillingProduct.update({
       where: { id: product.id },
       data,
     });
+    // Retirada de la venta u otro precio: lo abierto con lo de antes, fuera.
+    const retirada = antes.active && updated.active === false;
+    const otroPrecio = updated.stripePriceId !== antes.stripePriceId;
+    if (retirada || otroPrecio) {
+      await this.expireOpenCheckouts(input.tenantId, { productIds: [product.id] });
+    }
+    return updated;
   }
 
   /**
@@ -592,7 +637,81 @@ export class BillingService {
       where: { id: productId, tenantId },
     });
     if (!product) throw new ProductNotFoundError(productId);
+    // Antes de borrarla: una sesión abierta de una opción que ya no existe se
+    // podría seguir pagando.
+    await this.expireOpenCheckouts(tenantId, { productIds: [product.id] });
     await this.prisma.modBillingProduct.delete({ where: { id: product.id } });
+  }
+
+  /**
+   * Caduca en Stripe las sesiones de pago ABIERTAS de unas opciones de compra
+   * (o de todo un curso) y deja sus pedidos pendientes CANCELLED (caducados).
+   *
+   * Se llama al cambiar el precio, al retirar o borrar la opción y al archivar
+   * el curso: una sesión abierta conserva el precio con el que se creó y se
+   * puede pagar hasta 24 h después.
+   *
+   * - Pagada mientras tanto (`complete`): NO se toca; la completa su webhook.
+   * - Ya caducada: el pedido se cierra igual (su webhook se perdió o no llegó).
+   * - Stripe no responde: cuenta como `failed` y la sesión sigue abierta. No
+   *   tumba el cambio de precio, que ya está hecho; lo protege además la
+   *   comprobación del precio visto al crear sesiones nuevas.
+   *
+   * Idempotente: el webhook `checkout.session.expired` que llega después
+   * encuentra el pedido ya CANCELLED y no hace nada.
+   */
+  async expireOpenCheckouts(
+    tenantId: string,
+    scope: { productIds?: string[]; courseId?: string },
+  ): Promise<ExpireCheckoutsResult> {
+    const result = { expired: 0, cancelledOrders: 0, alreadyPaid: 0, failed: 0 };
+    if (!scope.productIds?.length && !scope.courseId) return result;
+    const pending = await this.prisma.modBillingOrder.findMany({
+      where: {
+        tenantId,
+        status: 'PENDING',
+        createdAt: { gte: new Date(Date.now() - OPEN_CHECKOUT_WINDOW_MS) },
+        ...(scope.productIds?.length ? { productId: { in: scope.productIds } } : {}),
+        ...(scope.courseId ? { courseId: scope.courseId } : {}),
+      },
+      select: { id: true, stripeSessionId: true },
+      orderBy: { createdAt: 'desc' },
+      take: 200,
+    });
+    // Sin sesión real (`pending_…`): Stripe aún no la creó o falló al crearla.
+    const withSession = pending.filter((o) => o.stripeSessionId.startsWith('cs_'));
+    if (withSession.length === 0) return result;
+
+    let stripe: StripeAdapter;
+    try {
+      stripe = await this.stripeFor(tenantId);
+    } catch {
+      return { ...result, failed: withSession.length };
+    }
+    for (const order of withSession) {
+      let status: string;
+      try {
+        ({ status } = await stripe.expireCheckoutSession(order.stripeSessionId));
+      } catch {
+        result.failed += 1;
+        continue;
+      }
+      if (status === 'complete') {
+        result.alreadyPaid += 1;
+        continue;
+      }
+      if (status !== 'expired') {
+        result.failed += 1;
+        continue;
+      }
+      result.expired += 1;
+      const { count } = await this.prisma.modBillingOrder.updateMany({
+        where: { id: order.id, tenantId, status: 'PENDING' },
+        data: { status: 'CANCELLED' },
+      });
+      result.cancelledOrders += count;
+    }
+    return result;
   }
 
   /**
@@ -618,6 +737,27 @@ export class BillingService {
 
   // ---------------- Checkout (alumno) ----------------
 
+  /**
+   * ¿Sigue valiendo lo que el comprador tiene delante? Lanza `PriceChangedError`
+   * si no. Los controladores la llaman ANTES de guardar la casilla de la
+   * renuncia, para no dejar un consentimiento de un pago que no va a ocurrir;
+   * `startCheckout` lo vuelve a comprobar igualmente. Sin opción activa no
+   * lanza nada: el error de verdad (no disponible) lo da `startCheckout`.
+   */
+  async assertCurrentPrice(input: {
+    tenantId: string;
+    courseId: string;
+    optionId?: string;
+    expectedPrice?: { unitAmount: number; currency: string };
+  }): Promise<void> {
+    if (!input.expectedPrice) return;
+    const product = input.optionId
+      ? await this.getCourseOption(input.tenantId, input.courseId, input.optionId)
+      : await this.getProductByCourse(input.tenantId, input.courseId);
+    if (!product?.active) return;
+    assertSamePrice(product, input.expectedPrice, input.courseId);
+  }
+
   async startCheckout(input: StartCheckoutInput): Promise<StartCheckoutResult> {
     // La opción se resuelve SIEMPRE contra (tenant, curso): un id de opción de
     // otro curso u organización no puede colarse para pagar otro precio.
@@ -635,6 +775,9 @@ export class BillingService {
       throw new ProductNotFoundError(input.courseId);
     }
     if (!product.active) throw new ProductInactiveError(input.courseId);
+    // El precio que vio el comprador tiene que ser el de ahora. Si el admin lo
+    // cambió con la página abierta, no se cobra otro importe sin avisar.
+    assertSamePrice(product, input.expectedPrice, input.courseId);
 
     // Crear order en estado PENDING ANTES de llamar a Stripe — así el orderId
     // se incluye en metadata de la session y reconciliamos por client_reference_id.
@@ -1179,6 +1322,23 @@ export class BillingService {
 }
 
 // ---------------- helpers ----------------
+
+function assertSamePrice(
+  product: { unitAmount: number; currency: string },
+  expected: { unitAmount: number; currency: string } | undefined,
+  courseId: string,
+): void {
+  if (!expected) return;
+  if (
+    expected.unitAmount !== product.unitAmount ||
+    expected.currency.toLowerCase() !== product.currency.toLowerCase()
+  ) {
+    throw new PriceChangedError(
+      { unitAmount: product.unitAmount, currency: product.currency },
+      courseId,
+    );
+  }
+}
 
 /**
  * ¿El dinero de esta sesión está confirmado?
