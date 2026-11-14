@@ -16,9 +16,11 @@ import { PrismaAuditLogService } from '../modules/prisma-audit-log.service';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   academyLocale,
+  toAcademyLocale,
   type AcademyDefaultsPrisma,
   type AcademyLocale,
 } from '../common/academy-defaults';
+import { textsFor } from '../simple-mode/simple-mode.model';
 import { isAgentScope } from './agent-scopes';
 import {
   AGENT_TOOLS,
@@ -55,6 +57,16 @@ export class AgentToolError extends Error {
 }
 
 const ADMIN_ROLES: ReadonlySet<string> = new Set(['super_admin', 'tenant_admin']);
+
+/**
+ * Lo que el agente crea por su cuenta (idioma del curso, nombre de la primera
+ * sección) va en el idioma del dueño de la clave, con los mismos textos que el
+ * alta del modo sencillo: `es-ES`/«Lecciones», `en-US`/«Lessons»,
+ * `pt-BR`/«Aulas». Un perfil sin catálogo (`fr-FR`) cae a español.
+ */
+function ownerTexts(owner: { locale: string }) {
+  return textsFor(toAcademyLocale(owner.locale) ?? 'es');
+}
 
 interface Owner {
   id: string;
@@ -139,7 +151,7 @@ export class AgentService {
   }
 
   /**
-   * Idioma del aula (es/en), para los textos que el servidor pone por su
+   * Idioma del aula (es/en/pt), para los textos que el servidor pone por su
    * cuenta, como el nombre por defecto de la clave del panel o los nombres de
    * pantalla que citan las instrucciones del agente.
    */
@@ -303,7 +315,7 @@ export class AgentService {
           title: args.title,
           slug: i === 1 ? base : `${base}-${i}`,
           description: args.description || undefined,
-          language: owner.locale.startsWith('en') ? 'en-US' : 'es-ES',
+          language: ownerTexts(owner).courseLanguage,
         });
         return {
           id: course.id,
@@ -349,7 +361,7 @@ export class AgentService {
     if (!section) {
       section = {
         ...(await courses.createModule(tenantId, owner.id, course.id, {
-          title: owner.locale.startsWith('en') ? 'Lessons' : 'Lecciones',
+          title: ownerTexts(owner).firstModule,
         })),
         lessons: [],
       };

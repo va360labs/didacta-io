@@ -41,6 +41,18 @@ const PAGE_COPY = {
       message: 'We could not process your request. Please try again later.',
     },
   },
+  pt: {
+    ok: {
+      title: 'Você cancelou a inscrição',
+      message:
+        'Você não vai mais receber e-mails da comunidade: nem avisos nem o resumo semanal. Pode reativá-los quando quiser nas preferências da sua conta.',
+    },
+    invalid_token: { title: 'Link inválido', message: 'O link de cancelamento não é válido.' },
+    error: {
+      title: 'Erro',
+      message: 'Não foi possível processar seu pedido. Tente novamente mais tarde.',
+    },
+  },
 } as const satisfies Record<
   HubTemplateLang,
   Record<UnsubscribeOutcome, { title: string; message: string }>
@@ -157,10 +169,13 @@ function langFromRequest(req: FastifyRequest): HubTemplateLang {
   return toHubTemplateLang(first);
 }
 
+/** `lang` del documento: el portugués de los catálogos es el de Brasil. */
+const HTML_LANG: Record<HubTemplateLang, string> = { es: 'es', en: 'en', pt: 'pt-BR' };
+
 function page(lang: HubTemplateLang, title: string, message: string): string {
   const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   return (
-    `<!DOCTYPE html><html lang="${lang}"><head><meta charset="utf-8">` +
+    `<!DOCTYPE html><html lang="${HTML_LANG[lang]}"><head><meta charset="utf-8">` +
     `<meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(title)}</title></head>` +
     `<body style="font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:#f8fafc;margin:0;padding:40px 16px;color:#0d1b2a">` +
     `<div style="max-width:480px;margin:0 auto;background:#fff;border:1px solid #e2e8f0;border-radius:16px;padding:32px;text-align:center">` +

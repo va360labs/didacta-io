@@ -392,6 +392,31 @@ describe('CommunityPublicController · darse de baja', () => {
     expect(out.body).not.toContain('Te has dado de baja');
   });
 
+  it('destinatario en pt-BR: la página sale en portugués de Brasil', async () => {
+    const { controller } = makeController('pt-BR');
+    const { reply, out } = makeReply();
+    const token = new URL(communityUnsubscribeUrl(AULA, TENANT, USER)).searchParams.get('token')!;
+
+    await controller.unsubscribe(token, req('es-ES,es;q=0.9'), reply);
+
+    expect(out.status).toBe(200);
+    expect(out.body).toContain('<html lang="pt-BR">');
+    expect(out.body).toContain('Você cancelou a inscrição');
+    expect(out.body).toContain('nem avisos nem o resumo semanal');
+    expect(out.body).not.toContain('Te has dado de baja');
+  });
+
+  it('un idioma sin catálogo (fr-FR) degrada a español', async () => {
+    const { controller } = makeController('fr-FR');
+    const { reply, out } = makeReply();
+    const token = new URL(communityUnsubscribeUrl(AULA, TENANT, USER)).searchParams.get('token')!;
+
+    await controller.unsubscribe(token, req(), reply);
+
+    expect(out.body).toContain('<html lang="es">');
+    expect(out.body).toContain('Te has dado de baja');
+  });
+
   it('CAMINO DEGRADADO: sin fila de usuario se usa el idioma del navegador y la baja se hace igual', async () => {
     const { controller, setCommunityEmailOptOut } = makeController(null);
     const { reply, out } = makeReply();

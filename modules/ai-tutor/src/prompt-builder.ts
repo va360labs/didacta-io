@@ -90,7 +90,8 @@ const LOCALE_INSTRUCTIONS: Record<string, string> = {
   es: 'Responde SIEMPRE en español neutro. Tono profesional y cercano.',
   en: 'Always respond in English. Professional and friendly tone.',
   ca: 'Respon sempre en català. To professional i proper.',
-  pt: 'Responda sempre em português. Tom profissional e próximo.',
+  // El portugués de los catálogos del aula es el de Brasil (`pt-BR`).
+  pt: 'Responda sempre em português do Brasil, tratando o aluno por "você". Tom profissional e próximo.',
   fr: 'Réponds toujours en français. Ton professionnel et proche.',
 };
 
