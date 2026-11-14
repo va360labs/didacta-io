@@ -143,7 +143,10 @@
       "AI_PROVIDER_RATE_LIMIT": "The AI provider is overloaded right now. Try again in a few seconds.",
       "AI_PROVIDER_AUTH": "The AI provider credentials are not valid. Let your admin know.",
       "AI_PROVIDER_UNAVAILABLE": "The AI provider did not respond. Try again in a moment."
-    }
+    },
+    "offTitle": "The AI tutor is off",
+    "offBody": "Your students don't see it because your academy has no AI provider. Once you set one up, it will appear in every lesson.",
+    "offCta": "Set up the AI provider"
   },
   "claseEmbed": {
     "countdownTomorrow": "Tomorrow",

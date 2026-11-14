@@ -7,6 +7,8 @@ import {
   Body,
   Controller,
   ForbiddenException,
+  Get,
+  Optional,
   Param,
   Post,
   UnauthorizedException,
@@ -19,6 +21,7 @@ import {
   type AskDto,
   type IndexCourseDto,
 } from '@didacta/mod-ai-tutor';
+import { AiGatewayService } from '../../ai/ai-gateway.service';
 import { CurrentUser } from '../../auth/decorators';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { ZodValidationPipe } from '../../auth/zod-validation.pipe';
@@ -28,6 +31,14 @@ import { ModuleRegistryService } from '../module-registry.service';
 const ADMIN_ROLES = new Set(['super_admin', 'tenant_admin']);
 /** Mismos roles que previsualizan un curso sin matricularse (PREVIEW_ROLES en web). */
 const STAFF_ROLES = new Set(['super_admin', 'tenant_admin', 'formador']);
+
+/** Respuesta de `GET /modules/ai-tutor/status`. */
+export interface AiTutorStatus {
+  /** El tutor puede contestar en este aula: se le enseña al alumno. */
+  available: boolean;
+  /** Por qué no, si no: sin proveedor de IA o sin el módulo cargado. */
+  reason: 'NO_PROVIDER' | 'MODULE_INACTIVE' | null;
+}
 
 /**
  * Endpoints REST del tutor IA (LMS-90.E).
@@ -43,7 +54,12 @@ const STAFF_ROLES = new Set(['super_admin', 'tenant_admin', 'formador']);
 @Controller()
 @UseGuards(JwtAuthGuard)
 export class AiTutorController {
-  constructor(private readonly registry: ModuleRegistryService) {}
+  constructor(
+    private readonly registry: ModuleRegistryService,
+    // Opcional para los tests que construyen el controller a mano: sin él el
+    // estado no mira el proveedor (lo de antes).
+    @Optional() private readonly ai?: AiGatewayService,
+  ) {}
 
   private requireAuth(user: SessionClaims | undefined): SessionClaims {
     if (!user) throw new UnauthorizedException();
@@ -59,6 +75,30 @@ export class AiTutorController {
       });
     }
     return u;
+  }
+
+  @Get('modules/ai-tutor/status')
+  @ApiOperation({
+    summary:
+      '¿Puede el tutor IA contestar en este aula? Sin proveedor de IA (ni propio ni por defecto) la respuesta es no y la web no lo enseña.',
+  })
+  async status(@CurrentUser() user: SessionClaims | undefined): Promise<AiTutorStatus> {
+    const u = this.requireAuth(user);
+    // Con el módulo apagado para el aula ni se llega aquí: el
+    // ModuleAccessInterceptor responde 403 a todo `/modules/ai-tutor/…`.
+    if (!this.registry.getAiTutorIndexerServiceOrNull()) {
+      return { available: false, reason: 'MODULE_INACTIVE' };
+    }
+    if (this.ai) {
+      // El tutor necesita las dos cosas: embeddings para buscar en el curso y
+      // chat para contestar. Con una sola respondería «no está indexado».
+      const [chat, embed] = await Promise.all([
+        this.ai.isConfigured(u.tenantId, 'chat'),
+        this.ai.isConfigured(u.tenantId, 'embed'),
+      ]);
+      if (!chat || !embed) return { available: false, reason: 'NO_PROVIDER' };
+    }
+    return { available: true, reason: null };
   }
 
   @Post('modules/ai-tutor/courses/:courseId/ask')
