@@ -65,6 +65,31 @@ describe('getSiteContext', () => {
     expect((init.headers as Record<string, string>)['x-forwarded-host']).toBe('web.va360.academy');
   });
 
+  it('lleva la IP del visitante: el rate limit no la cuenta al servidor del web', async () => {
+    const spy = stubFetch((host) => ({ status: 200, body: contexto(host, 'va360') }));
+    await getSiteContext('web.va360.academy', '203.0.113.7');
+    const init = spy.mock.calls[0]?.[1] as RequestInit;
+    expect(init.headers).toEqual({
+      'x-forwarded-host': 'web.va360.academy',
+      'x-forwarded-for': '203.0.113.7',
+    });
+  });
+
+  it('un 429 no convierte el sitio en «no hay sitio» 30 s: queda lo último y se reintenta pronto', async () => {
+    let status = 200;
+    const spy = stubFetch((host) => ({ status, body: contexto(host, 'va360') }));
+    expect((await getSiteContext('web.va360.academy'))?.hostname).toBe('web.va360.academy');
+
+    vi.advanceTimersByTime(31_000);
+    status = 429;
+    expect((await getSiteContext('web.va360.academy'))?.hostname).toBe('web.va360.academy');
+
+    vi.advanceTimersByTime(6_000);
+    status = 200;
+    expect((await getSiteContext('web.va360.academy'))?.hostname).toBe('web.va360.academy');
+    expect(spy).toHaveBeenCalledTimes(3);
+  });
+
   /// El fallo que este test impide: con una caché sin el host en la clave, la
   /// PRIMERA respuesta que entre se sirve a todos los dominios de la instancia
   /// — el sitio de un tenant servido bajo el dominio de otro.

@@ -25,6 +25,7 @@ import {
   isUsableLocaleCookie,
   LOCALE_COOKIE,
   resolveRequestLocale,
+  type AcademyLocale,
   type MessageCatalog,
 } from './config';
 import en from './messages/en';
@@ -43,9 +44,11 @@ export default getRequestConfig(async () => {
   const store = await cookies();
   const cookie = store.get(LOCALE_COOKIE)?.value;
   // Solo se pregunta a la API cuando la cookie no decide.
-  const academy = isUsableLocaleCookie(cookie)
-    ? null
-    : await getAcademyLocale(publicHost(await headers()));
+  let academy: AcademyLocale | null = null;
+  if (!isUsableLocaleCookie(cookie)) {
+    const h = await headers();
+    academy = await getAcademyLocale(publicHost(h), h.get('x-forwarded-for'));
+  }
   const locale = resolveRequestLocale(cookie, academy);
   return {
     locale,

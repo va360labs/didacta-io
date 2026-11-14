@@ -32,6 +32,39 @@ describe('idioma del aula desde el servidor del web', () => {
     expect((init as RequestInit).headers).toEqual({ 'x-forwarded-host': 'cafe.didacta.io' });
   });
 
+  it('lleva la IP del visitante: el rate limit no la cuenta al servidor del web', async () => {
+    // Sin ella, la API ve la IP de loopback y todas las aulas de la instancia
+    // comparten un único cupo anónimo (30/min): con unas pocas aulas con
+    // visitas a la vez, el idioma de todas caía al de por defecto.
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({ locale: 'en' })));
+    expect(await getAcademyLocale('cafe.didacta.io', '203.0.113.7')).toBe('en');
+    const [, init] = fetchMock.mock.calls[0]!;
+    expect((init as RequestInit).headers).toEqual({
+      'x-forwarded-host': 'cafe.didacta.io',
+      'x-forwarded-for': '203.0.113.7',
+    });
+  });
+
+  it('un 429 no tira el idioma del aula: se queda el último bueno y se reintenta pronto', async () => {
+    vi.useFakeTimers();
+    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ locale: 'en' })));
+    expect(await getAcademyLocale('cafe.test', '203.0.113.7')).toBe('en');
+    vi.advanceTimersByTime(31_000);
+
+    fetchMock.mockResolvedValueOnce(new Response('{}', { status: 429 }));
+    expect(await getAcademyLocale('cafe.test', '198.51.100.2')).toBe('en');
+    // Otro fallo dentro de la ventana corta: sin llamada y con el mismo idioma.
+    expect(await getAcademyLocale('cafe.test', '198.51.100.2')).toBe('en');
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+
+    vi.advanceTimersByTime(6_000);
+    fetchMock.mockResolvedValueOnce(new Response('{}', { status: 429 }));
+    expect(await getAcademyLocale('cafe.test', '198.51.100.2')).toBe('en');
+    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ locale: 'pt' })));
+    vi.advanceTimersByTime(6_000);
+    expect(await getAcademyLocale('cafe.test', '198.51.100.2')).toBe('pt');
+  });
+
   it('caché por host: una sola llamada por aula, y cada aula con su idioma', async () => {
     fetchMock.mockImplementation(async (_u: string, init: RequestInit) => {
       const host = (init.headers as Record<string, string>)['x-forwarded-host'];

@@ -34,7 +34,7 @@ async function resolve(params: PageProps['params']) {
 
   const headerList = await headers();
   const host = headerList.get('x-forwarded-host') ?? headerList.get('host');
-  const site = await getSiteContext(host);
+  const site = await getSiteContext(host, headerList.get('x-forwarded-for'));
   if (!site) return null;
 
   // Solo se montan las rutas de los módulos ACTIVOS en este tenant. Un módulo
