@@ -107,11 +107,11 @@ async function tokenDe(email: string): Promise<string> {
 }
 
 /** Alumna que se da de alta sola (con contraseña): cuenta como alumna activa. */
-async function alumnaConCuenta(nombre: string): Promise<void> {
-  await apiAs(tenant.host, '/api/v1/auth/signup', {
+async function alumnaConCuenta(nombre: string, aula: FreshTenant = tenant): Promise<void> {
+  await apiAs(aula.host, '/api/v1/auth/signup', {
     method: 'POST',
     body: {
-      tenantSlug: tenant.slug,
+      tenantSlug: aula.slug,
       email: `al-${randomBytes(4).toString('hex')}@entrada.test`,
       password: PASSWORD,
       name: nombre,
@@ -124,26 +124,29 @@ test.beforeAll(async () => {
 });
 
 test('9: con menos de 10 alumnos, la entrada del aula no enseña cifras', async ({ browser }) => {
-  test.setTimeout(90_000);
+  test.setTimeout(120_000);
+  // Su PROPIA aula: un curso y alumnos en el aula compartida harían que el alta
+  // de la creadora (test 4) se «adoptase» y se saltara el asistente.
+  const aula = await freshTenant(`cifras${Date.now().toString(36)}`, true);
   // Un curso publicado y una alumna: hoy el panel decía «1 alumno activo · 1 curso».
   sql(
     `INSERT INTO mod_courses_course (id, tenant_id, slug, title, status, published_at, updated_at) ` +
       `SELECT gen_random_uuid(), t.id, 'cifras-${Date.now().toString(36)}', 'Curso de cifras', 'PUBLISHED', now(), now() ` +
-      `FROM tenant t WHERE t.slug = '${tenant.slug}'`,
+      `FROM tenant t WHERE t.slug = '${aula.slug}'`,
   );
-  await alumnaConCuenta('Primera Alumna');
-  const ctx = await contexto(browser);
+  await alumnaConCuenta('Primera Alumna', aula);
+  const ctx = await contexto(browser, aula.base);
   const page = await ctx.newPage();
-  await page.goto(`${tenant.base}/signin`);
+  await page.goto(`${aula.base}/signin`);
   await expect(page.getByRole('button', { name: 'Entrar' })).toBeVisible();
   await expect(page.getByText(/alumnos? activos?/)).toHaveCount(0);
   await expect(page.getByText(/cursos? incluidos?/)).toHaveCount(0);
   await capturas(page, '09-entrada-sin-cifras');
 
   // Control: con 10 alumnas, las dos cifras reales.
-  for (let i = 2; i <= 10; i++) await alumnaConCuenta(`Alumna ${i}`);
+  for (let i = 2; i <= 10; i++) await alumnaConCuenta(`Alumna ${i}`, aula);
   await page.reload();
-  await expect(page.getByText('alumnos activos')).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByText('alumnos activos', { exact: true })).toBeVisible({ timeout: 20_000 });
   await expect(page.getByText('10', { exact: true }).first()).toBeVisible();
   await expect(page.getByText('curso incluido')).toBeVisible();
   await capturas(page, '09-entrada-con-cifras-desde-10');

@@ -13,6 +13,7 @@ import http from 'node:http';
  * como Stripe), y para una compra de curso: `POST /v1/checkout/sessions` devuelve
  * una sesión cuya `url` es una página de pago de mentira servida por el propio
  * doble (`GET /pagar/:id`); el test completa el pago con el webhook firmado.
+ * `POST /v1/checkout/sessions/:id/expire` la caduca si sigue abierta (400 si no).
  * La API habla con él cuando
  * arranca con `STRIPE_TEST_API_URL` y una clave `sk_test_` (ver
  * `apps/api/src/modules/stripe-test-api.ts`). Guarda lo creado en memoria y
@@ -71,6 +72,7 @@ export async function startStripeDouble(
           id,
           object: 'checkout.session',
           mode: body.mode,
+          status: 'open',
           url: `http://127.0.0.1:${port}/pagar/${id}`,
           metadata: Object.fromEntries(
             Object.entries(body)
@@ -78,6 +80,26 @@ export async function startStripeDouble(
               .map(([k, v]) => [k.slice('metadata['.length, -1), v]),
           ),
         };
+      } else if (req.method === 'POST' && /^\/v1\/checkout\/sessions\/[^/]+\/expire$/.test(path)) {
+        // Como Stripe: solo se caduca una sesión abierta; si no, 400.
+        const session = objects.get(decodeURIComponent(path.split('/')[4]!));
+        if (session && session['status'] === 'open') {
+          session['status'] = 'expired';
+          obj = session;
+        } else if (session) {
+          res.statusCode = 400;
+          res.setHeader('content-type', 'application/json');
+          res.end(
+            JSON.stringify({
+              error: {
+                message: `Only Checkout Sessions with a status in ["open"] can be expired.`,
+              },
+            }),
+          );
+          return;
+        }
+      } else if (req.method === 'GET' && /^\/v1\/checkout\/sessions\/[^/]+$/.test(path)) {
+        obj = objects.get(decodeURIComponent(path.split('/').pop()!));
       } else if (req.method === 'GET' && path.startsWith('/pagar/')) {
         res.setHeader('content-type', 'text/html; charset=utf-8');
         res.end(

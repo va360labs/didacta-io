@@ -57,7 +57,7 @@ async function render(onPriceChanged: () => void) {
   const { BuyCourseButton } = await import('./buy-course-button');
   await act(async () => {
     root.render(
-      <NextIntlClientProvider locale="es" messages={es}>
+      <NextIntlClientProvider locale="es-ES" messages={es}>
         <BuyCourseButton
           courseId="curso-1"
           optionId="opcion-1"
