@@ -65,6 +65,12 @@ export interface ApiError {
    * Un code usa `detail` o `params`, nunca los dos.
    */
   params?: Record<string, string>;
+  /**
+   * Segundos que pide esperar la cabecera `Retry-After` (el 429 del rate
+   * limit la manda siempre). Ausente si la respuesta no la trae o no es un
+   * número: quien reintente pone su propia espera.
+   */
+  retryAfterSeconds?: number;
 }
 
 export class ApiHttpError extends Error implements ApiError {
@@ -73,6 +79,7 @@ export class ApiHttpError extends Error implements ApiError {
   code?: string;
   detail?: string;
   params?: Record<string, string>;
+  retryAfterSeconds?: number;
   constructor(payload: ApiError) {
     super(payload.message);
     this.status = payload.status;
@@ -80,8 +87,16 @@ export class ApiHttpError extends Error implements ApiError {
     this.code = payload.code;
     this.detail = payload.detail;
     this.params = payload.params;
+    this.retryAfterSeconds = payload.retryAfterSeconds;
     this.name = 'ApiHttpError';
   }
+}
+
+/** `Retry-After` en segundos (la forma que manda la API), o `undefined`. */
+function readRetryAfter(raw: string | null): number | undefined {
+  if (!raw) return undefined;
+  const seconds = Number(raw.trim());
+  return Number.isFinite(seconds) && seconds >= 0 ? seconds : undefined;
 }
 
 // Claves de almacenamiento (duplicadas de auth-storage.ts a propósito para no
@@ -244,6 +259,7 @@ export async function apiFetch<T>(
       code: typeof payload.code === 'string' ? payload.code : undefined,
       detail: typeof payload.detail === 'string' ? payload.detail : undefined,
       params: readStringMap(payload.params),
+      retryAfterSeconds: readRetryAfter(response.headers.get('retry-after')),
     });
 
     // Sesión expirada: el access token (1h) caducó pero el refresh (30d) puede

@@ -7,7 +7,7 @@
 
 import { useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
-import { apiFetch } from './api-client';
+import { ApiHttpError, apiFetch } from './api-client';
 import { authStorage } from './auth-storage';
 import { formatTenantName } from './tenant-name';
 
@@ -54,27 +54,117 @@ let cached: TenantContextResponse | null = null;
 let inflight: Promise<TenantContextResponse> | null = null;
 
 /**
+ * Última respuesta BUENA de esta pestaña, también en `sessionStorage` para que
+ * sobreviva a una recarga. Solo se usa cuando la API no contesta (un 429 del
+ * rate limit, un 5xx, la red): mejor la marca de hace un momento que «Tu
+ * academia». El almacén es por origen, y el origen es el dominio del aula, así
+ * que nunca se cruza la marca de un aula con la de otra.
+ */
+const LAST_GOOD_KEY = 'didacta.tenant-context';
+let lastGood: TenantContextResponse | null = null;
+
+/** Espera ante un fallo que no dice cuánto esperar (API caída, 5xx). */
+const RETRY_DEFAULT_MS = 5_000;
+/** Tope: la ventana del rate limit es de un minuto. */
+const RETRY_MAX_MS = 60_000;
+/** Reintentos seguidos como mucho: no se martillea una API caída. */
+const MAX_RETRIES = 3;
+
+let retryTimer: ReturnType<typeof setTimeout> | null = null;
+let retries = 0;
+/** Hooks montados: se enteran cuando un reintento trae la respuesta buena. */
+const listeners = new Set<(res: TenantContextResponse) => void>();
+
+const NO_TENANT: TenantContextResponse = { tenant: null, host: null };
+
+/** Respuestas de reserva (la API no contestó): ver `isStaleTenantContext`. */
+const staleResponses = new WeakSet<TenantContextResponse>();
+
+function fallbackResponse(): TenantContextResponse {
+  const res = { ...(readLastGood() ?? NO_TENANT) };
+  staleResponses.add(res);
+  return res;
+}
+
+/**
+ * `true` si la respuesta NO viene de la API sino de la reserva (lo último
+ * bueno de la pestaña, o «sin aula»). Sirve para pintar, no para decidir: la
+ * pantalla de pausa no puede dar el aula por reabierta con un dato de antes.
+ */
+export function isStaleTenantContext(res: TenantContextResponse): boolean {
+  return staleResponses.has(res);
+}
+
+function readLastGood(): TenantContextResponse | null {
+  if (lastGood) return lastGood;
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = window.sessionStorage.getItem(LAST_GOOD_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<TenantContextResponse> | null;
+    if (!parsed || typeof parsed !== 'object' || !('tenant' in parsed)) return null;
+    lastGood = { tenant: parsed.tenant ?? null, host: parsed.host ?? null };
+    return lastGood;
+  } catch {
+    return null;
+  }
+}
+
+function rememberGood(res: TenantContextResponse): void {
+  lastGood = res;
+  if (typeof window === 'undefined') return;
+  try {
+    window.sessionStorage.setItem(LAST_GOOD_KEY, JSON.stringify(res));
+  } catch {
+    // Almacén lleno o bloqueado: queda la copia en memoria.
+  }
+}
+
+/** Cuánto esperar antes de volver a preguntar: lo que diga `Retry-After`. */
+export function tenantContextRetryDelayMs(err: unknown): number {
+  const seconds = err instanceof ApiHttpError ? err.retryAfterSeconds : undefined;
+  if (typeof seconds === 'number' && seconds > 0) return Math.min(seconds * 1000, RETRY_MAX_MS);
+  return RETRY_DEFAULT_MS;
+}
+
+function scheduleRetry(delayMs: number): void {
+  if (typeof window === 'undefined' || retryTimer || retries >= MAX_RETRIES) return;
+  retries += 1;
+  retryTimer = setTimeout(() => {
+    retryTimer = null;
+    void fetchTenantContext();
+  }, delayMs);
+}
+
+/**
  * Cliente del endpoint `GET /auth/tenant-context`. Resuelve el tenant del
  * Host actual para que el formulario de signin/signup/forgot pueda esconder
  * el campo "Organización" cuando el dominio ya identifica al tenant.
  *
- * Cachea el resultado en memoria del módulo (válido por sesión del browser).
- * NO usa localStorage porque el host puede cambiar sin que el browser lo note
- * (ej. tras un deploy con nuevo dominio).
+ * Cachea el resultado BUENO en memoria del módulo (válido por sesión del
+ * browser). Un fallo NO se cachea: antes un solo 429 dejaba la pestaña entera
+ * con «Tu academia» y el campo «Organización» hasta recargar. Ahora, ante un
+ * fallo, se devuelve la última respuesta buena de la pestaña (o «sin aula» si
+ * no la hay) y se vuelve a preguntar UNA vez para todos, cuando la API dice
+ * (`Retry-After`). Mientras ese reintento está pendiente no se repite la
+ * llamada: gastaría el cupo que justo se ha agotado.
  */
 export async function fetchTenantContext(): Promise<TenantContextResponse> {
   if (cached) return cached;
   if (inflight) return inflight;
+  if (retryTimer) return fallbackResponse();
   inflight = apiFetch<TenantContextResponse>('/api/v1/auth/tenant-context', { method: 'GET' })
     .then((res) => {
       cached = res;
+      retries = 0;
+      rememberGood(res);
+      for (const listener of listeners) listener(res);
       return res;
     })
-    .catch(() => {
-      // API unavailable — treat as "no tenant resolved" so the form still renders.
-      const fallback: TenantContextResponse = { tenant: null, host: null };
-      cached = fallback;
-      return fallback;
+    .catch((err: unknown) => {
+      // API no disponible: el formulario se pinta igual, con lo último bueno.
+      scheduleRetry(tenantContextRetryDelayMs(err));
+      return fallbackResponse();
     })
     .finally(() => {
       inflight = null;
@@ -89,6 +179,17 @@ export async function fetchTenantContext(): Promise<TenantContextResponse> {
  */
 export function invalidateTenantContext(): void {
   cached = null;
+}
+
+/** Solo para tests: el módulo como recién cargado. */
+export function resetTenantContextForTests(): void {
+  cached = null;
+  inflight = null;
+  lastGood = null;
+  retries = 0;
+  if (retryTimer) clearTimeout(retryTimer);
+  retryTimer = null;
+  listeners.clear();
 }
 
 /**
@@ -106,24 +207,26 @@ export function useTenantContext(): {
   const [loading, setLoading] = useState<boolean>(cached === null);
 
   useEffect(() => {
-    if (cached) {
-      setTenant(cached.tenant);
-      setLoading(false);
-      return;
-    }
     let aborted = false;
-    void fetchTenantContext()
-      .then((res) => {
-        if (!aborted) {
-          setTenant(res.tenant);
-          setLoading(false);
-        }
-      })
-      .catch(() => {
-        if (!aborted) setLoading(false);
-      });
+    const apply = (res: TenantContextResponse) => {
+      if (aborted) return;
+      setTenant(res.tenant);
+      setLoading(false);
+    };
+    // Si la primera llamada falló, el reintento llega por aquí.
+    listeners.add(apply);
+    if (cached) {
+      apply(cached);
+    } else {
+      void fetchTenantContext()
+        .then(apply)
+        .catch(() => {
+          if (!aborted) setLoading(false);
+        });
+    }
     return () => {
       aborted = true;
+      listeners.delete(apply);
     };
   }, []);
 

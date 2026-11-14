@@ -5,7 +5,12 @@
 
 import { ImageResponse } from 'next/og';
 import { publicHost } from '@/lib/academy-locale';
-import { BRAND_IMAGE_CACHE, brandArt, OgArt, redirectToOwnImage } from '@/lib/academy-brand-image';
+import {
+  brandArt,
+  brandImageCacheControl,
+  OgArt,
+  redirectToOwnImage,
+} from '@/lib/academy-brand-image';
 import { fetchPublicBrandCached } from '@/lib/seo-server';
 
 /**
@@ -30,6 +35,6 @@ export async function GET(request: Request): Promise<Response> {
   return new ImageResponse(<OgArt art={brandArt(brand)} host={brand ? shownHost : null} />, {
     width: 1200,
     height: 630,
-    headers: { 'cache-control': BRAND_IMAGE_CACHE },
+    headers: { 'cache-control': brandImageCacheControl(brand) },
   });
 }

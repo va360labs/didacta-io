@@ -40,6 +40,7 @@ import {
 import {
   fetchTenantContext,
   invalidateTenantContext,
+  isStaleTenantContext,
   useTenantContext,
   type TenantPublicInfo,
 } from '@/lib/tenant-context';
@@ -134,6 +135,9 @@ export function SubscriptionLockScreen({
     invalidateTenantContext();
     forgetMyGate();
     const res = await fetchTenantContext();
+    // Sin respuesta de la API (p. ej. un 429) lo que llega es lo último que se
+    // supo: no basta para dar el aula por reabierta y recargar.
+    if (isStaleTenantContext(res)) return;
     if (res.tenant && res.tenant.subscriptionGate?.state !== 'LOCKED') {
       lockedHint.write(false);
       window.location.reload();

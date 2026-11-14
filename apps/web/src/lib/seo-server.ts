@@ -139,25 +139,34 @@ export interface PublicBrand {
  * el mismo que pide el navegador). Las páginas de venta que se pintan en el
  * servidor los necesitan YA en el HTML: sin el color, el botón de compra salía
  * en el azul de Didacta y cambiaba al del aula al hidratar, con transición
- * incluida. Sin caché: un cambio de color en Ajustes se ve en la siguiente
- * visita. `null` si la API no contesta (el navegador lo pide, como antes).
+ * incluida. Siempre se pregunta a la API: un cambio de color en Ajustes se ve
+ * en la siguiente visita. Si la API no contesta bien (un 429 del rate limit,
+ * un 5xx, caída), la última marca buena de ese host; `null` solo si nunca la
+ * hubo (el navegador la pide, como antes).
  */
 export async function fetchPublicBrand(
   host: string | null,
   forwardedFor: string | null,
 ): Promise<PublicBrand | null> {
   if (!host) return null;
+  return refreshPublicBrand(host, forwardedFor, Date.now());
+}
+
+async function loadPublicBrand(
+  host: string,
+  forwardedFor: string | null,
+): Promise<{ value: PublicBrand | null; ok: boolean }> {
   try {
     const res = await fetch(`${API_INTERNAL_URL}/api/v1/auth/tenant-context`, {
       headers: apiHeaders(host, forwardedFor),
       cache: 'no-store',
       signal: AbortSignal.timeout(TIMEOUT_MS),
     });
-    if (!res.ok) return null;
+    if (!res.ok) return { value: null, ok: false };
     const data = (await res.json()) as { tenant?: Record<string, unknown> | null };
-    return data.tenant ? toPublicBrand(data.tenant) : null;
+    return { value: data.tenant ? toPublicBrand(data.tenant) : null, ok: true };
   } catch {
-    return null;
+    return { value: null, ok: false };
   }
 }
 
@@ -180,13 +189,49 @@ export function toPublicBrand(t: Record<string, unknown>): PublicBrand | null {
 interface BrandCacheEntry {
   value: PublicBrand | null;
   expiresAt: number;
+  /** El valor lo dio la API alguna vez (no es la reserva de un fallo sin nada detrás). */
+  good: boolean;
 }
 
+/**
+ * Marca por host: la caché de `fetchPublicBrandCached` y, a la vez, la última
+ * marca BUENA de cada aula, que es la reserva cuando la API no contesta.
+ *
+ * Un fallo NO se guarda como «sin marca»: la petición que lo provoca puede ser
+ * de un único visitante con su cupo del rate limit agotado, y con esta caché
+ * compartida por host su 429 dejaba el favicon (y su caché de cinco minutos en
+ * el navegador) con las iniciales neutras a todos los visitantes del aula.
+ */
 const brandCache = new Map<string, BrandCacheEntry>();
 
 /** Solo para tests: vacía la caché de marcas. */
 export function clearPublicBrandCache(): void {
   brandCache.clear();
+}
+
+function storeBrand(host: string, entry: BrandCacheEntry): void {
+  if (!brandCache.has(host) && brandCache.size >= MAX_HOSTS) {
+    const oldest = brandCache.keys().next().value;
+    if (oldest !== undefined) brandCache.delete(oldest);
+  }
+  brandCache.delete(host);
+  brandCache.set(host, entry);
+}
+
+async function refreshPublicBrand(
+  host: string,
+  forwardedFor: string | null,
+  now: number,
+): Promise<PublicBrand | null> {
+  const prev = brandCache.get(host);
+  const { value, ok } = await loadPublicBrand(host, forwardedFor);
+  if (ok) {
+    storeBrand(host, { value, expiresAt: now + (value ? TTL_MS : TTL_FALLO_MS), good: true });
+    return value;
+  }
+  const stale = prev?.good ? prev.value : null;
+  storeBrand(host, { value: stale, expiresAt: now + TTL_FALLO_MS, good: prev?.good ?? false });
+  return stale;
 }
 
 /**
@@ -202,14 +247,7 @@ export async function fetchPublicBrandCached(
   const now = Date.now();
   const hit = brandCache.get(host);
   if (hit && hit.expiresAt > now) return hit.value;
-  const value = await fetchPublicBrand(host, forwardedFor);
-  if (brandCache.size >= MAX_HOSTS) {
-    const oldest = brandCache.keys().next().value;
-    if (oldest !== undefined) brandCache.delete(oldest);
-  }
-  brandCache.delete(host);
-  brandCache.set(host, { value, expiresAt: now + (value ? TTL_MS : TTL_FALLO_MS) });
-  return value;
+  return refreshPublicBrand(host, forwardedFor, now);
 }
 
 /** Origen público de la petición (`https://aula.ejemplo.com`), o `null`. */
