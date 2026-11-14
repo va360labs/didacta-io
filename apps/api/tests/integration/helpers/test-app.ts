@@ -29,6 +29,7 @@ import { LicenseExceptionFilter, LicenseModule } from '@didacta/license-sdk';
 import { PrismaModule } from '../../../src/prisma/prisma.module';
 import { PrismaService } from '../../../src/prisma/prisma.service';
 import { BrandingModule } from '../../../src/branding/branding.module';
+import { TenancyModule } from '../../../src/tenancy/tenancy.module';
 
 export interface TestAppOptions {
   /** JWT firmado a inyectar como licencia. `null` → estado community. */
@@ -70,8 +71,17 @@ export async function createTestApp(opts: TestAppOptions): Promise<TestApp> {
   // libre de race conditions con process.env entre tests paralelos.
   // Si el caller no provee `extraModules`, mantenemos el default histórico
   // (BrandingModule) para no romper `license-guard.integration.test.ts`.
+  //
+  // BrandingModule importa AuthModule, y el AuthController de ese módulo pide
+  // TenantResolverService y SubscriptionGateService, que en la app real vienen
+  // de TenancyModule (@Global, importado por AppModule). Sin él el arranque
+  // reventaba en la inyección y las suites que usan este default
+  // (license-guard y el beforeAll de webhooks) no llegaban a correr ni un test.
+  // Se monta el módulo REAL, no un doble: es la misma pieza que en producción.
   const featureImports =
-    opts.extraModules && opts.extraModules.length > 0 ? opts.extraModules : [BrandingModule];
+    opts.extraModules && opts.extraModules.length > 0
+      ? opts.extraModules
+      : [TenancyModule, BrandingModule];
   const moduleRef: TestingModule = await Test.createTestingModule({
     imports: [
       // LoggerModule (nestjs-pino) es global y lo necesitan algunos services
