@@ -840,9 +840,22 @@ export class GamificationService {
   }
 
   async deleteLevel(tenantId: string, id: string): Promise<void> {
-    const { count } = await this.prisma.modGamificationLevel.deleteMany({
-      where: { id, tenantId },
-    });
+    let count: number;
+    try {
+      ({ count } = await this.prisma.modGamificationLevel.deleteMany({
+        where: { id, tenantId },
+      }));
+    } catch (e) {
+      // Un curso que se desbloquea en este nivel, o un premio que se entrega
+      // con él: borrarlo abriría el curso a todo el mundo sin que nadie lo
+      // decida. Primero se quita el cierre o el premio.
+      if (typeof e === 'object' && e !== null && (e as { code?: string }).code === 'P2003') {
+        throw new GamificationConflictError(
+          'Este nivel desbloquea contenido o entrega premios: quítalos antes de borrarlo.',
+        );
+      }
+      throw e;
+    }
     if (count === 0) throw new GamificationNotFoundError('Nivel no encontrado.');
     await this.recomputeLevels(tenantId);
   }
