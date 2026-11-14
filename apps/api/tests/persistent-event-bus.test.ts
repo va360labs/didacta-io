@@ -6,7 +6,11 @@ import {
   type OutboxDispatcher,
   type OutboxJobRef,
 } from '../src/modules/persistent-event-bus';
-import { tenantContextStorage, type TenantContext } from '../src/tenancy/tenant-context.storage';
+import {
+  isSanctionedGlobalAccess,
+  tenantContextStorage,
+  type TenantContext,
+} from '../src/tenancy/tenant-context.storage';
 
 interface OutboxRow {
   id: bigint;
@@ -321,6 +325,34 @@ describe('PersistentEventBus', () => {
       const result = await bus.replayUndelivered();
       expect(result.replayed).toBe(0);
       expect(bridge).not.toHaveBeenCalled();
+    });
+
+    // Con `didacta_app` la RLS esconde la fila a una escritura sin tenant en
+    // contexto ni acceso global sancionado: el `update` de reabrirla fallaba
+    // con «Record to update not found» y abortaba el replay en cada arranque
+    // (ensayo de beta.21 con una copia de la base del pool).
+    it('cada escritura del replay corre con tenant en contexto o con acceso global sancionado', async () => {
+      const bus = new PersistentEventBus(prisma as never, silentLogger);
+      await bus.publish(makeEvent('billing.order.completed', {}, 'idem-replay-rls'));
+      bus.subscribe('billing.order.completed', async () => {});
+
+      const update = prisma.outboxEvent.update.bind(prisma.outboxEvent);
+      const sinContexto: unknown[] = [];
+      prisma.outboxEvent.update = (async (args: Parameters<typeof update>[0]) => {
+        if (!isSanctionedGlobalAccess() && !tenantContextStorage.getStore()?.tenantId) {
+          sinContexto.push(args.data);
+          throw new Error('Record to update not found');
+        }
+        return update(args);
+      }) as typeof prisma.outboxEvent.update;
+
+      const result = await bus.replayUndelivered();
+
+      expect(sinContexto).toEqual([]);
+      expect(result.replayed).toBe(1);
+      const row = [...prisma._rows.values()][0]!;
+      expect(row.processedAt).toBeInstanceOf(Date);
+      expect(row.lastError).toBeNull();
     });
 
     it('si el handler del replay falla, la fila queda pendiente y reintentable', async () => {

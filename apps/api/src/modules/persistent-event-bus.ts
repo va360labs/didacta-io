@@ -387,11 +387,16 @@ export class PersistentEventBus implements EventBus {
     for (const row of rows) {
       // Reabrir ANTES de despachar: si el proceso muere a mitad, la fila queda
       // pendiente (recuperable por recoverPending), nunca marcada como
-      // entregada sin haberlo estado.
-      await this.prisma.outboxEvent.update({
-        where: { id: row.id },
-        data: { processedAt: null, lastError: null },
-      });
+      // entregada sin haberlo estado. Con el mismo acceso global sancionado que
+      // la lectura: fuera de él, con `didacta_app`, la RLS esconde la fila (no
+      // hay tenant en contexto) y el `update` fallaba con «Record to update not
+      // found», abortando el replay entero en cada arranque.
+      await runSanctionedGlobalAccess(() =>
+        this.prisma.outboxEvent.update({
+          where: { id: row.id },
+          data: { processedAt: null, lastError: null },
+        }),
+      );
       const outcome = await this.runHandlers(row.id, rowToEvent(row));
       if (outcome === 'delivered') replayed++;
       else failed++;
