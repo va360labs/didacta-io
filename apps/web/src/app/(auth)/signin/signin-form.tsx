@@ -144,7 +144,7 @@ export function SignInForm() {
       } else {
         // Deep link guardado antes del redirect a /signin (p. ej. enlace
         // compartido de un post de la comunidad) → volvemos ahí.
-        router.push(consumeIntendedPath() ?? '/');
+        router.push(consumeIntendedPath() ?? '/home');
       }
     } catch (e) {
       if (e instanceof ApiHttpError) {

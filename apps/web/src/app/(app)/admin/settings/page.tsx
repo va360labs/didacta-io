@@ -26,6 +26,7 @@ import { SmtpSettingsCard } from '@/components/admin/smtp-settings-card';
 import { StripeSettingsCard } from '@/components/admin/stripe-settings-card';
 import { TenantIdentityCard } from '@/components/admin/tenant-identity-card';
 import { AcademyLanguageCard } from '@/components/admin/academy-language-card';
+import { PublicHomeToggle } from '@/components/admin/public-home-card';
 import { adminModulesApi, type TenantModuleListItem } from '@/lib/admin-modules';
 import { meApi } from '@/lib/me';
 import { adminTenantsApi, type TenantListItem } from '@/lib/admin-tenants';
@@ -318,6 +319,7 @@ function ConfiguracionCompleta() {
       {tab === 'general' ? (
         <div className="space-y-4">
           <AcademyLanguageCard />
+          <PublicHomeToggle />
           {isSuperAdmin ? <TenantIdentityCard /> : null}
         </div>
       ) : null}

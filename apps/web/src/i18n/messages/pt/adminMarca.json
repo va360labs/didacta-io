@@ -376,5 +376,17 @@
     "saved": "Idioma salvo.",
     "error": "Não foi possível salvar o idioma. Tente novamente.",
     "loadError": "Não foi possível carregar o idioma da escola."
+  },
+  "paginaPublica": {
+    "title": "Página pública da escola",
+    "description": "O que vê quem chega ao endereço da sua escola sem conta: sua capa, quem você é e como entrar (o que você tem à venda). Se você desativar, a pessoa vai direto para a tela de acesso.",
+    "on": "Ativada: sua página pública aparece",
+    "off": "Desativada: vai direto para o acesso",
+    "onHelp": "Quem entra sem conta vê sua capa com as opções de acesso.",
+    "offHelp": "Quem entra sem conta vê a tela de acesso.",
+    "preview": "Ver sua página pública",
+    "saved": "Salvo",
+    "error": "Não foi possível salvar. Tente de novo.",
+    "loadError": "Não foi possível carregar esta configuração."
   }
 }

@@ -4,8 +4,11 @@
  */
 
 import { Module } from '@nestjs/common';
+import { AuthModule } from '../auth/auth.module';
 import { ModulesModule } from '../modules/modules.module';
 import { PrismaModule } from '../prisma/prisma.module';
+import { AcademyHomeController } from './academy-home.controller';
+import { AcademyHomeService } from './academy-home.service';
 import { SiteContextController } from './site-context.controller';
 
 /**
@@ -17,7 +20,11 @@ import { SiteContextController } from './site-context.controller';
  * revelar qué tenants existen en la instancia.
  */
 @Module({
-  imports: [PrismaModule, ModulesModule],
-  controllers: [SiteContextController],
+  // AuthModule aporta `PrismaTenantConfigService` (la política de altas de
+  // mod.member-registration). `PlatformCheckoutGate` llega solo si
+  // `PayoutsModule` está registrado (global en modo plataforma).
+  imports: [PrismaModule, ModulesModule, AuthModule],
+  controllers: [SiteContextController, AcademyHomeController],
+  providers: [AcademyHomeService],
 })
 export class PublicModule {}
