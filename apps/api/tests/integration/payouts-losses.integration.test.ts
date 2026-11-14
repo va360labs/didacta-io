@@ -615,8 +615,12 @@ describeWithDb('Reembolsos, disputas y deudas — Postgres real como didacta_app
     const saleMade = vi.spyOn(runtime.notifier as PayoutsEmailNotifier, 'saleMade');
     saleMade.mockClear();
     const s = await soldAndTransferred(A);
-    expect(saleMade).toHaveBeenCalledTimes(1);
-    expect(saleMade.mock.calls[0]![0]).toMatchObject({
+    // El barrido es de TODAS las aulas: en esta base hay ventas de otros
+    // ficheros. Se cuentan solo los avisos de ESTA venta.
+    const ofThisSale = () =>
+      saleMade.mock.calls.filter((call) => call[0].saleId === s.saleId).length;
+    expect(ofThisSale()).toBe(1);
+    expect(saleMade.mock.calls.find((call) => call[0].saleId === s.saleId)![0]).toMatchObject({
       tenantId: A,
       saleId: s.saleId,
       kind: 'course',
@@ -649,7 +653,7 @@ describeWithDb('Reembolsos, disputas y deudas — Postgres real como didacta_app
       ),
     );
     await runtime.saleNotices.sweep();
-    expect(saleMade).toHaveBeenCalledTimes(1);
+    expect(ofThisSale()).toBe(1);
 
     // Cinco avisos a la vez de una venta sin sello: Postgres deja pasar UNO.
     await admin.modPayoutsSale.update({
@@ -661,7 +665,7 @@ describeWithDb('Reembolsos, disputas y deudas — Postgres real como didacta_app
       Array.from({ length: 5 }, () => runtime.saleNotices.notify(A, s.saleId)),
     );
     expect(outcomes.filter((o) => o === 'sent')).toHaveLength(1);
-    expect(saleMade).toHaveBeenCalledTimes(1);
+    expect(ofThisSale()).toBe(1);
     // Otra academia no la ve (RLS) ni la sella.
     expect(await runtime.saleNotices.notify(B, s.saleId)).toBe('not_found');
     saleMade.mockRestore();
