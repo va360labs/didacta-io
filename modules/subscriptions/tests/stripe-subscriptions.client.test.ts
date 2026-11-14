@@ -339,3 +339,93 @@ describe('saldo de cliente (descuento por referidos)', () => {
     ).rejects.toThrow(/borrado/);
   });
 });
+
+describe('SubscriptionsStripeSdkAdapter.createCheckoutSession — pago embebido', () => {
+  function captureEmbedded(clientSecret: string | null = 'cs_test_2_secret') {
+    const sessions: Array<Record<string, unknown>> = [];
+    class FakeStripe {
+      checkout = {
+        sessions: {
+          create: async (params: Record<string, unknown>) => {
+            sessions.push(params);
+            return {
+              id: 'cs_test_2',
+              url: null,
+              client_secret: clientSecret,
+              amount_total: 0,
+              currency: 'eur',
+            };
+          },
+          retrieve: async (id: string) => ({
+            id,
+            status: 'open',
+            payment_status: 'unpaid',
+            metadata: METADATA,
+          }),
+        },
+      };
+    }
+    const adapter = new SubscriptionsStripeSdkAdapter('sk_test_x', 'whsec_x', FakeStripe as never, {
+      connect: { onBehalfOf: 'acct_1Creador' },
+      promotionCodes: 'deny',
+    });
+    return { adapter, sessions };
+  }
+  const RETURN = 'https://aula.test/join?status=success&session_id={CHECKOUT_SESSION_ID}';
+
+  it('ui_mode embedded con return_url, idioma y on_behalf_of en la suscripción', async () => {
+    const { adapter, sessions } = captureEmbedded();
+    const result = await adapter.createCheckoutSession({
+      ...PARAMS,
+      uiMode: 'embedded',
+      returnUrl: RETURN,
+      locale: 'es',
+    });
+    expect(result).toEqual({
+      id: 'cs_test_2',
+      url: null,
+      clientSecret: 'cs_test_2_secret',
+      amountTotal: 0,
+      currency: 'eur',
+    });
+    const sent = sessions[0]!;
+    expect(sent).toMatchObject({ ui_mode: 'embedded', return_url: RETURN, locale: 'es' });
+    expect(sent).not.toHaveProperty('success_url');
+    expect(sent).not.toHaveProperty('cancel_url');
+    expect(sent).not.toHaveProperty('allow_promotion_codes');
+    expect(sent['subscription_data']).toEqual({
+      metadata: METADATA,
+      trial_period_days: 7,
+      on_behalf_of: 'acct_1Creador',
+    });
+  });
+
+  it('sin returnUrl, o sin client_secret, es un error', async () => {
+    const { adapter, sessions } = captureEmbedded();
+    await expect(adapter.createCheckoutSession({ ...PARAMS, uiMode: 'embedded' })).rejects.toThrow(
+      /returnUrl/,
+    );
+    expect(sessions).toHaveLength(0);
+    const sinSecreto = captureEmbedded(null);
+    await expect(
+      sinSecreto.adapter.createCheckoutSession({
+        ...PARAMS,
+        uiMode: 'embedded',
+        returnUrl: RETURN,
+      }),
+    ).rejects.toThrow(/client_secret/);
+  });
+
+  it('retrieveCheckoutSession: estado, cobro y metadata', async () => {
+    const { adapter } = captureEmbedded();
+    await expect(adapter.retrieveCheckoutSession('cs_test_2')).resolves.toEqual({
+      id: 'cs_test_2',
+      status: 'open',
+      paymentStatus: 'unpaid',
+      metadata: METADATA,
+      amountTotal: null,
+      currency: null,
+      created: null,
+    });
+  });
+});

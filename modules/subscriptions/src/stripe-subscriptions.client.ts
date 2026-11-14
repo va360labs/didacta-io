@@ -29,6 +29,12 @@ export interface SubscriptionsStripeAdapter {
   createCheckoutSession(
     params: CreateSubscriptionCheckoutParams,
   ): Promise<StripeSubscriptionCheckoutResult>;
+  /**
+   * Estado de una sesión ya creada, para la vuelta del pago EMBEBIDO (allí se
+   * vuelve a `return_url` aunque un medio con redirección falle). No concede
+   * nada: el acceso lo da el webhook.
+   */
+  retrieveCheckoutSession(sessionId: string): Promise<SubscriptionCheckoutSessionStatus>;
   retrievePrice(priceId: string): Promise<StripePriceResult>;
   cancelSubscription(subscriptionId: string, atPeriodEnd: boolean): Promise<StripeSubscriptionView>;
   constructWebhookEvent(rawBody: string | Buffer, signatureHeader: string): Stripe.Event;
@@ -147,10 +153,25 @@ export interface CreateRecurringPriceParams {
   metadata: Record<string, string>;
 }
 
+/**
+ * `hosted`: la página de Stripe (redirect), lo de siempre. `embedded`: la
+ * MISMA sesión con `ui_mode: 'embedded'` dentro de la página de venta del
+ * aula; vuelve a `returnUrl` al completarse (sin success/cancel).
+ */
+export type SubscriptionCheckoutUiMode = 'hosted' | 'embedded';
+
 export interface CreateSubscriptionCheckoutParams {
   priceId: string;
+  /** Solo en el alojado. */
   successUrl: string;
+  /** Solo en el alojado. */
   cancelUrl: string;
+  /** Por defecto `hosted`: sin este campo, la sesión es la de siempre. */
+  uiMode?: SubscriptionCheckoutUiMode;
+  /** Vuelta del embebido, con `{CHECKOUT_SESSION_ID}`. Obligatoria con `embedded`. */
+  returnUrl?: string;
+  /** Idioma de la pantalla de pago (`es`, `en`, `pt-BR`); sin él, el del navegador. */
+  locale?: 'es' | 'en' | 'pt-BR';
   customerEmail?: string;
   /** Días de prueba gratis (subscription_data.trial_period_days). 0/undefined = sin trial. */
   trialDays?: number;
@@ -163,7 +184,30 @@ export interface CreateSubscriptionCheckoutParams {
 
 export interface StripeSubscriptionCheckoutResult {
   id: string;
-  url: string;
+  /** Página alojada de Stripe; `null` en el embebido. */
+  url: string | null;
+  /** Secreto del embebido; `null`/ausente en el alojado. */
+  clientSecret?: string | null;
+  /**
+   * Lo que cobrará ESTA sesión (unidad mínima) y en qué moneda, tal como la
+   * creó Stripe. La pantalla de pago enseña esto y no el precio que se pintó
+   * al cargar la página: si el precio cambió entretanto, manda la sesión.
+   */
+  amountTotal?: number | null;
+  currency?: string | null;
+}
+
+/** Lo justo de una sesión para la pantalla de vuelta del pago. */
+export interface SubscriptionCheckoutSessionStatus {
+  id: string;
+  status: 'open' | 'complete' | 'expired' | null;
+  paymentStatus: string | null;
+  metadata: Record<string, string>;
+  /** Importe de la sesión (unidad mínima) y moneda, para la pantalla de gracias. */
+  amountTotal: number | null;
+  currency: string | null;
+  /** Creación de la sesión, en segundos Unix. */
+  created: number | null;
 }
 
 export interface StripePriceResult {
@@ -216,6 +260,10 @@ export class SubscriptionsStripeSdkAdapter implements SubscriptionsStripeAdapter
   async createCheckoutSession(
     p: CreateSubscriptionCheckoutParams,
   ): Promise<StripeSubscriptionCheckoutResult> {
+    const embedded = p.uiMode === 'embedded';
+    if (embedded && !p.returnUrl) {
+      throw new StripeApiError('El pago embebido necesita returnUrl');
+    }
     try {
       const trialDays = p.trialDays && p.trialDays > 0 ? p.trialDays : undefined;
       const session = await this.client.checkout.sessions.create({
@@ -230,8 +278,12 @@ export class SubscriptionsStripeSdkAdapter implements SubscriptionsStripeAdapter
         // existieron, abrir métodos de notificación diferida daba la membresía
         // sin cobrar y, cuando el cobro entraba, no la daba nunca.
         line_items: [{ price: p.priceId, quantity: 1 }],
-        success_url: p.successUrl,
-        cancel_url: p.cancelUrl,
+        // Embebido: la misma sesión dentro de la página de venta del aula, que
+        // vuelve a `return_url` (Stripe no admite success/cancel en este modo).
+        ...(embedded
+          ? { ui_mode: 'embedded' as const, return_url: p.returnUrl }
+          : { success_url: p.successUrl, cancel_url: p.cancelUrl }),
+        ...(p.locale ? { locale: p.locale } : {}),
         customer_email: p.customerEmail,
         client_reference_id: p.clientReferenceId ?? p.metadata['subscriptionLocalId'],
         ...(p.allowPromotionCodes && this.options.promotionCodes !== 'deny'
@@ -244,12 +296,41 @@ export class SubscriptionsStripeSdkAdapter implements SubscriptionsStripeAdapter
           ...(this.options.connect ? { on_behalf_of: this.options.connect.onBehalfOf } : {}),
         },
       });
+      if (embedded) {
+        if (!session.client_secret) {
+          throw new StripeApiError('Stripe devolvió session embebida sin client_secret');
+        }
+        return {
+          id: session.id,
+          url: null,
+          clientSecret: session.client_secret,
+          amountTotal: session.amount_total ?? null,
+          currency: session.currency ?? null,
+        };
+      }
       if (!session.url) {
         throw new StripeApiError('Stripe devolvió session sin URL hosted');
       }
       return { id: session.id, url: session.url };
     } catch (err) {
       if (err instanceof StripeApiError) throw err;
+      throw new StripeApiError((err as Error).message);
+    }
+  }
+
+  async retrieveCheckoutSession(sessionId: string): Promise<SubscriptionCheckoutSessionStatus> {
+    try {
+      const session = await this.client.checkout.sessions.retrieve(sessionId);
+      return {
+        id: session.id,
+        status: session.status ?? null,
+        paymentStatus: session.payment_status ?? null,
+        metadata: { ...(session.metadata ?? {}) },
+        amountTotal: session.amount_total ?? null,
+        currency: session.currency ?? null,
+        created: session.created ?? null,
+      };
+    } catch (err) {
       throw new StripeApiError((err as Error).message);
     }
   }

@@ -31,6 +31,13 @@ import {
  */
 export interface StripeAdapter {
   createCheckoutSession(params: CreateCheckoutSessionParams): Promise<StripeCheckoutSessionResult>;
+  /**
+   * Estado de una sesión ya creada. Lo usa la vuelta del pago EMBEBIDO: allí
+   * se vuelve a `return_url` también con un medio de pago con redirección que
+   * falla, y la pantalla tiene que preguntar antes de decir «gracias». No
+   * concede nada: el acceso lo sigue dando el webhook.
+   */
+  retrieveCheckoutSession(sessionId: string): Promise<StripeCheckoutSessionStatus>;
   retrievePrice(priceId: string): Promise<StripePriceResult>;
   retrieveProduct(productId: string): Promise<StripeProductResult>;
   /**
@@ -46,10 +53,51 @@ export interface StripeAdapter {
   constructWebhookEvent(rawBody: string | Buffer, signatureHeader: string): Stripe.Event;
 }
 
+/**
+ * Dónde se pinta el pago:
+ *
+ *  - `hosted` — la página de Stripe (redirect a `checkout.stripe.com`). Vuelve
+ *    a `successUrl` SOLO si se pagó y a `cancelUrl` si el comprador se echa
+ *    atrás. Es lo de siempre.
+ *  - `embedded` — la MISMA Checkout Session con `ui_mode: 'embedded'`, dentro
+ *    de la ficha de venta del aula (un iframe de Stripe: los datos de la
+ *    tarjeta nunca tocan nuestro dominio). No hay `successUrl`/`cancelUrl`:
+ *    se vuelve a `returnUrl` al completarse. La entrega no cambia: cuelga del
+ *    mismo `checkout.session.completed`.
+ */
+export type CheckoutUiMode = 'hosted' | 'embedded';
+
+/**
+ * Idiomas de la pantalla de pago que se fijan desde el aula: los del
+ * producto. Cualquier otro (o ninguno) deja que Stripe use el del navegador.
+ */
+export const CHECKOUT_LOCALES = ['es', 'en', 'pt-BR'] as const;
+export type CheckoutLocale = (typeof CHECKOUT_LOCALES)[number];
+
+/** El idioma del aula en el formato de Stripe, o `undefined` (el del navegador). */
+export function toCheckoutLocale(locale: string | null | undefined): CheckoutLocale | undefined {
+  if (!locale) return undefined;
+  const lower = locale.trim().toLowerCase();
+  if (lower === 'pt-br' || lower === 'pt') return 'pt-BR';
+  const base = lower.split('-')[0];
+  return base === 'es' || base === 'en' ? base : undefined;
+}
+
 export interface CreateCheckoutSessionParams {
   priceId: string;
+  /** Solo en el alojado (`uiMode` ausente u `hosted`). */
   successUrl: string;
+  /** Solo en el alojado (`uiMode` ausente u `hosted`). */
   cancelUrl: string;
+  /** Por defecto `hosted`: sin este campo, la sesión es exactamente la de siempre. */
+  uiMode?: CheckoutUiMode;
+  /**
+   * Vuelta del EMBEBIDO (obligatoria con `uiMode: 'embedded'`). Lleva
+   * `{CHECKOUT_SESSION_ID}`: la pantalla de vuelta pregunta por esa sesión.
+   */
+  returnUrl?: string;
+  /** Idioma de la pantalla de pago; sin él, el del navegador. */
+  locale?: CheckoutLocale;
   customerEmail?: string;
   /**
    * Deja que el comprador canjee un código promocional de Stripe en la pantalla
@@ -78,7 +126,35 @@ export interface CreateCheckoutSessionParams {
 
 export interface StripeCheckoutSessionResult {
   id: string;
-  url: string;
+  /** Página alojada de Stripe. `null` en el embebido. */
+  url: string | null;
+  /**
+   * Secreto con el que el navegador monta el embebido. `null`/ausente en el
+   * alojado. Solo sirve para pintar ESA sesión.
+   */
+  clientSecret?: string | null;
+  /**
+   * Lo que cobrará ESTA sesión (unidad mínima) y en qué moneda, tal como la
+   * creó Stripe. La pantalla de pago enseña esto y no el precio que se pintó
+   * al cargar la página: si el precio cambió entretanto, manda la sesión.
+   */
+  amountTotal?: number | null;
+  currency?: string | null;
+}
+
+/** Lo justo de una sesión para decidir qué se le dice a quien vuelve del pago. */
+export interface StripeCheckoutSessionStatus {
+  id: string;
+  /** `open` (sin completar), `complete` o `expired`. */
+  status: 'open' | 'complete' | 'expired' | null;
+  /** `paid`, `unpaid` o `no_payment_required`. */
+  paymentStatus: string | null;
+  metadata: Record<string, string>;
+  /** Importe de la sesión (unidad mínima) y moneda, para la pantalla de gracias. */
+  amountTotal: number | null;
+  currency: string | null;
+  /** Creación de la sesión, en segundos Unix. */
+  created: number | null;
 }
 
 export interface CreateOneOffPriceParams {
@@ -176,6 +252,10 @@ export class StripeSdkAdapter implements StripeAdapter {
   async createCheckoutSession(
     p: CreateCheckoutSessionParams,
   ): Promise<StripeCheckoutSessionResult> {
+    const embedded = p.uiMode === 'embedded';
+    if (embedded && !p.returnUrl) {
+      throw new StripeApiError('El pago embebido necesita returnUrl');
+    }
     try {
       const session = await this.client.checkout.sessions.create({
         mode: 'payment',
@@ -192,8 +272,13 @@ export class StripeSdkAdapter implements StripeAdapter {
         // guarda, hay que volver a poner esta línea el mismo día. En
         // mod.subscriptions rige lo mismo, con su propia guarda equivalente.
         line_items: [{ price: p.priceId, quantity: 1 }],
-        success_url: p.successUrl,
-        cancel_url: p.cancelUrl,
+        // Embebido: la misma sesión pintada dentro de la ficha del aula. Sin
+        // `success_url`/`cancel_url` (Stripe no los admite en este modo): se
+        // vuelve a `return_url` al completarse.
+        ...(embedded
+          ? { ui_mode: 'embedded' as const, return_url: p.returnUrl }
+          : { success_url: p.successUrl, cancel_url: p.cancelUrl }),
+        ...(p.locale ? { locale: p.locale } : {}),
         customer_email: p.customerEmail,
         ...(p.allowPromotionCodes && this.options.promotionCodes !== 'deny'
           ? { allow_promotion_codes: true }
@@ -212,12 +297,41 @@ export class StripeSdkAdapter implements StripeAdapter {
             : {}),
         },
       });
+      if (embedded) {
+        if (!session.client_secret) {
+          throw new StripeApiError('Stripe devolvió session embebida sin client_secret');
+        }
+        return {
+          id: session.id,
+          url: null,
+          clientSecret: session.client_secret,
+          amountTotal: session.amount_total ?? null,
+          currency: session.currency ?? null,
+        };
+      }
       if (!session.url) {
         throw new StripeApiError('Stripe devolvió session sin URL hosted');
       }
       return { id: session.id, url: session.url };
     } catch (err) {
       if (err instanceof StripeApiError) throw err;
+      throw new StripeApiError((err as Error).message);
+    }
+  }
+
+  async retrieveCheckoutSession(sessionId: string): Promise<StripeCheckoutSessionStatus> {
+    try {
+      const session = await this.client.checkout.sessions.retrieve(sessionId);
+      return {
+        id: session.id,
+        status: session.status ?? null,
+        paymentStatus: session.payment_status ?? null,
+        metadata: { ...(session.metadata ?? {}) },
+        amountTotal: session.amount_total ?? null,
+        currency: session.currency ?? null,
+        created: session.created ?? null,
+      };
+    } catch (err) {
       throw new StripeApiError((err as Error).message);
     }
   }

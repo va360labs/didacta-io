@@ -279,10 +279,25 @@ function stubStripe() {
   const createRecurringPrice = vi.fn(
     async (_p: CreateRecurringPriceParams) => `price_${++priceSeq}`,
   );
-  const createCheckoutSession = vi.fn(async (p: CreateSubscriptionCheckoutParams) => ({
-    id: 'cs_test_1',
-    url: `https://checkout.stripe.test/${p.priceId}`,
-  }));
+  const createCheckoutSession = vi.fn(async (p: CreateSubscriptionCheckoutParams) =>
+    p.uiMode === 'embedded'
+      ? {
+          id: 'cs_test_1',
+          url: null,
+          clientSecret: 'cs_test_1_secret',
+          amountTotal: 0,
+          currency: 'eur',
+        }
+      : { id: 'cs_test_1', url: `https://checkout.stripe.test/${p.priceId}` },
+  );
+  /** Lo que devuelve `retrieveCheckoutSession` (la vuelta del embebido). */
+  const sessionState: {
+    value: {
+      status: 'open' | 'complete' | 'expired';
+      paymentStatus: string;
+      metadata: Record<string, string>;
+    };
+  } = { value: { status: 'open', paymentStatus: 'unpaid', metadata: {} } };
   const endTrialNow = vi.fn(
     async (subscriptionId: string): Promise<EndTrialNowResult> => ({
       id: subscriptionId,
@@ -295,6 +310,13 @@ function stubStripe() {
   );
   const adapter: SubscriptionsStripeAdapter = {
     createCheckoutSession,
+    retrieveCheckoutSession: async (id: string) => ({
+      id,
+      amountTotal: 1_900,
+      currency: 'eur',
+      created: 1_794_000_000,
+      ...sessionState.value,
+    }),
     retrievePrice: async () => {
       throw new Error('no usado');
     },
@@ -328,6 +350,7 @@ function stubStripe() {
     createRecurringPrice,
     createCheckoutSession,
     endTrialNow,
+    sessionState,
   };
 }
 
@@ -731,6 +754,104 @@ describe('MembershipService · checkout', () => {
         cancelUrl: 'https://x/c',
       }),
     ).rejects.toBeInstanceOf(StripeConfigMissingError);
+  });
+
+  it('pago embebido: pide la sesión con su vuelta e idioma y devuelve el secreto', async () => {
+    const plan = await ctx.service.createPlan(TENANT, {
+      name: 'Mensual',
+      intervalMonths: 1,
+      amountCents: 1_900,
+    });
+    const res = await ctx.service.startMembershipCheckout({
+      tenantId: TENANT,
+      planId: plan.id,
+      referralCode: 'ana123',
+      successUrl: 'https://x/s',
+      cancelUrl: 'https://x/c',
+      uiMode: 'embedded',
+      returnUrl: 'https://x/join?status=success&session_id={CHECKOUT_SESSION_ID}',
+      checkoutLocale: 'pt-BR',
+    });
+    expect(res).toEqual({
+      url: null,
+      sessionId: 'cs_test_1',
+      clientSecret: 'cs_test_1_secret',
+      amountTotal: 0,
+      currency: 'eur',
+    });
+    expect(ctx.stripe.createCheckoutSession.mock.calls[0]![0]).toMatchObject({
+      uiMode: 'embedded',
+      returnUrl: 'https://x/join?status=success&session_id={CHECKOUT_SESSION_ID}',
+      locale: 'pt-BR',
+      metadata: { tenantId: TENANT, membership: '1', planId: plan.id, referralCode: 'ana123' },
+    });
+  });
+
+  it('sin uiMode: el alojado de siempre, sin secreto', async () => {
+    const plan = await ctx.service.createPlan(TENANT, {
+      name: 'Mensual',
+      intervalMonths: 1,
+      amountCents: 1_900,
+    });
+    const res = await ctx.service.startMembershipCheckout({
+      tenantId: TENANT,
+      planId: plan.id,
+      successUrl: 'https://x/s',
+      cancelUrl: 'https://x/c',
+    });
+    expect(res.clientSecret).toBeNull();
+    expect(res.url).toContain('checkout.stripe.test');
+    const args = ctx.stripe.createCheckoutSession.mock.calls[0]![0];
+    expect(args).not.toHaveProperty('uiMode');
+    expect(args).not.toHaveProperty('locale');
+  });
+
+  it('estado de la vuelta: solo sesiones de membresía de ESTE tenant', async () => {
+    ctx.stripe.sessionState.value = {
+      status: 'complete',
+      paymentStatus: 'paid',
+      metadata: { tenantId: TENANT, membership: '1' },
+    };
+    await expect(ctx.service.getCheckoutSessionState(TENANT, 'cs_test_9')).resolves.toEqual({
+      status: 'complete',
+      paid: true,
+      planId: null,
+      amount: 1_900,
+      currency: 'eur',
+      at: new Date(1_794_000_000_000).toISOString(),
+    });
+    // Prueba gratis: se completa sin cobro hoy, y cuenta como hecho.
+    ctx.stripe.sessionState.value = {
+      status: 'complete',
+      paymentStatus: 'no_payment_required',
+      metadata: { tenantId: TENANT, membership: '1' },
+    };
+    await expect(ctx.service.getCheckoutSessionState(TENANT, 'cs_test_9')).resolves.toMatchObject({
+      status: 'complete',
+      paid: true,
+    });
+    ctx.stripe.sessionState.value = {
+      status: 'open',
+      paymentStatus: 'unpaid',
+      metadata: { tenantId: TENANT, membership: '1' },
+    };
+    await expect(ctx.service.getCheckoutSessionState(TENANT, 'cs_test_9')).resolves.toMatchObject({
+      status: 'open',
+      paid: false,
+    });
+    // De otra academia, o de un curso (sin `membership`): no existe.
+    ctx.stripe.sessionState.value = {
+      status: 'complete',
+      paymentStatus: 'paid',
+      metadata: { tenantId: 'otra', membership: '1' },
+    };
+    await expect(ctx.service.getCheckoutSessionState(TENANT, 'cs_test_9')).resolves.toBeNull();
+    ctx.stripe.sessionState.value = {
+      status: 'complete',
+      paymentStatus: 'paid',
+      metadata: { tenantId: TENANT, orderId: 'o1' },
+    };
+    await expect(ctx.service.getCheckoutSessionState(TENANT, 'cs_test_9')).resolves.toBeNull();
   });
 
   it('plan inexistente o inactivo → MembershipPlanNotFoundError', async () => {

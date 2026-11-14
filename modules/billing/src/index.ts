@@ -31,10 +31,19 @@ export type {
   UpdateProductInput,
   StartCheckoutInput,
   StartCheckoutResult,
+  CheckoutSessionState,
   StripeAdapterResolver,
 } from './billing.service.js';
-export { StripeSdkAdapter, TRANSFER_GROUP_PREFIX } from './stripe.client.js';
+export {
+  CHECKOUT_LOCALES,
+  StripeSdkAdapter,
+  TRANSFER_GROUP_PREFIX,
+  toCheckoutLocale,
+} from './stripe.client.js';
 export type {
+  CheckoutLocale,
+  CheckoutUiMode,
+  StripeCheckoutSessionStatus,
   StripeAdapter,
   StripeAdapterOptions,
   CreateOneOffPriceParams,
