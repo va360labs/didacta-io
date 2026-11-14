@@ -23,7 +23,7 @@
 
 import { ApiHttpError, apiFetch } from './api-client';
 import { authStorage } from './auth-storage';
-import { formatCurrency, formatNumber, regionNameFormatter } from './i18n/format';
+import { formatCurrency, formatNumber, localeRegion, regionNameFormatter } from './i18n/format';
 import { STRIPE_ZERO_DECIMAL_CURRENCIES } from './stripe-currencies';
 
 export type PayoutsAccountStatus =
@@ -702,10 +702,17 @@ export function countryOptions(
   return [...yes.sort(byName), ...no.sort(byName)];
 }
 
-/** País por defecto del selector: el del navegador si se admite, si no el primero admitido. */
+/**
+ * País por defecto del selector: el del navegador si se admite. Si el del
+ * navegador es uno de los que se ofrecen como «todavía no» (un creador de
+ * Brasil o de México), ESE: la tarjeta lo dice y apaga el botón, en vez de
+ * caer en silencio a España y mandarlo a un alta de Stripe que fallará. Con
+ * cualquier otra región, la de siempre: España o el primero admitido.
+ */
 export function defaultCountry(supported: readonly string[], browserLocale: string): string {
-  const region = browserLocale.split(/[-_]/)[1]?.toUpperCase();
+  const region = localeRegion(browserLocale);
   if (region && supported.includes(region)) return region;
+  if (region && COMMON_UNSUPPORTED_COUNTRIES.includes(region)) return region;
   if (supported.includes('ES')) return 'ES';
   return supported[0] ?? 'ES';
 }

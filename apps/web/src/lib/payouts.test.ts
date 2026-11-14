@@ -7,6 +7,7 @@ import { describe, expect, it } from 'vitest';
 import enPagos from '@/i18n/messages/en/adminPagos.json';
 import esPagos from '@/i18n/messages/es/adminPagos.json';
 import {
+  COMMON_UNSUPPORTED_COUNTRIES,
   COUNTRY_NOT_SUPPORTED_REASON,
   countryOptions,
   defaultCountry,
@@ -128,8 +129,38 @@ describe('selector de país', () => {
 
   it('país por defecto: el del navegador si se admite; si no, España', () => {
     expect(defaultCountry(['ES', 'FR'], 'fr-FR')).toBe('FR');
-    expect(defaultCountry(['ES', 'FR'], 'es-MX')).toBe('ES');
+    expect(defaultCountry(['ES', 'FR'], 'en')).toBe('ES');
     expect(defaultCountry(['FR'], 'en')).toBe('FR');
+  });
+
+  it('navegador de un país que se ofrece como «todavía no»: ESE país, no España en silencio', () => {
+    // Un creador brasileño o mexicano acababa en un alta de Stripe para
+    // España que iba a fallar. Con su país preseleccionado, la tarjeta enseña
+    // el aviso y apaga el botón.
+    expect(defaultCountry(['ES', 'FR'], 'pt-BR')).toBe('BR');
+    expect(defaultCountry(['ES', 'FR'], 'es-MX')).toBe('MX');
+    expect(defaultCountry(['ES', 'FR'], 'es_AR')).toBe('AR');
+    const options = countryOptions(['ES', 'FR'], 'pt');
+    expect(options.find((o) => o.code === defaultCountry(['ES', 'FR'], 'pt-BR'))).toMatchObject({
+      supported: false,
+    });
+  });
+
+  it('si el operador admite ese país, se preselecciona como admitido', () => {
+    expect(defaultCountry(['ES', 'MX'], 'es-MX')).toBe('MX');
+    expect(countryOptions(['ES', 'MX'], 'es').find((o) => o.code === 'MX')).toMatchObject({
+      supported: true,
+    });
+  });
+
+  it('región desconocida o sin país: lo de siempre (España o el primero admitido)', () => {
+    // JP no se ofrece en el selector ni como «todavía no»: no hay opción que marcar.
+    expect(COMMON_UNSUPPORTED_COUNTRIES).not.toContain('JP');
+    expect(defaultCountry(['ES', 'FR'], 'ja-JP')).toBe('ES');
+    expect(defaultCountry(['FR', 'DE'], 'ja-JP')).toBe('FR');
+    // es-419 = español de Latinoamérica: no dice qué país.
+    expect(defaultCountry(['ES', 'FR'], 'es-419')).toBe('ES');
+    expect(defaultCountry(['ES', 'FR'], '')).toBe('ES');
   });
 });
 
