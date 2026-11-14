@@ -112,6 +112,7 @@
   "GAMIFICATION_ALREADY_REVIEWED": "This submission was already reviewed.",
   "GAMIFICATION_ALREADY_SUBMITTED": "You have already submitted this challenge.",
   "GAMIFICATION_CHALLENGE_CLOSED": "This challenge is not accepting submissions right now.",
+  "GAMIFICATION_CODES_UNAVAILABLE": "Your academy is paid through Didacta payments, which do not accept discount codes: use a reward with a message or a link.",
   "GAMIFICATION_CONFLICT": "Catalog conflict: the key or the level points are already taken.",
   "GAMIFICATION_NOT_FOUND": "Not found.",
   "GAMIFICATION_PERK_UNAVAILABLE": "This perk cannot be requested right now.",

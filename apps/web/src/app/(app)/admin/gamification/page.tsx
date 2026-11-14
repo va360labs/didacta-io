@@ -27,6 +27,7 @@ import {
   type PerkView,
   type RuleView,
   type SubmissionView,
+  RetentionSettings,
 } from '@/modules/gamification';
 
 /// Panel de mod.gamification (bloque 1). Todo el catálogo lo define el operador:
@@ -59,6 +60,7 @@ export default function AdminGamificacionPage() {
           <TabsTrigger value="beneficios">{t('gamification.tabPerks')}</TabsTrigger>
           <TabsTrigger value="solicitudes">{t('gamification.tabRequests')}</TabsTrigger>
           <TabsTrigger value="reglas">{t('gamification.tabRules')}</TabsTrigger>
+          <TabsTrigger value="premios">{t('gamification.tabRewards')}</TabsTrigger>
         </TabsList>
 
         <TabsContent value="retos">
@@ -78,6 +80,12 @@ export default function AdminGamificacionPage() {
         </TabsContent>
         <TabsContent value="reglas">
           <RulesPanel onError={setError} />
+        </TabsContent>
+        <TabsContent value="premios">
+          {/* Los niveles tienen su pestaña: aquí no se repiten. */}
+          <div className="mt-4">
+            <RetentionSettings showLevels={false} />
+          </div>
         </TabsContent>
       </Tabs>
     </div>

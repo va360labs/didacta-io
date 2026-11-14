@@ -37,6 +37,9 @@ export const manifest: ModuleManifest = parseModuleManifest({
     'gamification.challenge.reviewed',
     'gamification.perk.requested',
     'gamification.perk.handled',
+    'gamification.badge.awarded',
+    'gamification.reward.granted',
+    'gamification.content.unlocked',
   ],
   eventsConsumed: [
     'community.post.created',
@@ -48,7 +51,10 @@ export const manifest: ModuleManifest = parseModuleManifest({
     'resources.resource.created',
     'resources.resource.deleted',
     'learning.course.completed',
+    'learning.progress.updated',
     'referrals.referral.attributed',
+    'gamification.level.changed',
+    'gamification.points.awarded',
   ],
   apiNamespace: '/modules/gamification',
 });

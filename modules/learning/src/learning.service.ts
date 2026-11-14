@@ -18,6 +18,7 @@ import {
   LessonCompletionNotSelfReportableError,
   LessonLockedError,
   LessonNotInCourseError,
+  LevelContentLockedError,
   TrialContentLockedError,
 } from './errors.js';
 import {
@@ -76,7 +77,13 @@ export interface CourseDripAvailability {
    */
   lessons: Record<
     string,
-    { availableAt: string | null; available: boolean; reason?: 'DRIP' | 'TRIAL' }
+    {
+      availableAt: string | null;
+      available: boolean;
+      reason?: 'DRIP' | 'TRIAL' | 'LEVEL';
+      /** Solo con reason LEVEL: el nivel que la abre y lo que falta. */
+      level?: LevelLockInfo;
+    }
   >;
   /**
    * Presente cuando la membresía del alumno está EN PRUEBA y limita este curso:
@@ -84,7 +91,33 @@ export interface CourseDripAvailability {
    * el candado "Disponible cuando pase el periodo de prueba" + CTA de pago.
    */
   trial?: { lessonLimit: number };
+  /**
+   * Presente cuando el curso ENTERO se desbloquea en un nivel que el alumno aún
+   * no tiene. La UI lo usa para el candado «Se desbloquea en el nivel N».
+   */
+  level?: LevelLockInfo;
 }
+
+/** Un nivel de la gamificación que abre contenido, visto por un alumno. */
+export interface LevelLockInfo {
+  /** 1 = el nivel con menos puntos del aula. */
+  levelNumber: number;
+  levelName: string;
+  minPoints: number;
+  pointsMissing: number;
+}
+
+/**
+ * Cierres por nivel que siguen CERRADOS para un alumno en un curso: el curso
+ * entero y/o secciones sueltas (por id de sección). `null` = nada cerrado.
+ * Lo resuelve la capa de composición con mod.gamification (este módulo no lee
+ * sus tablas); sin cablear, no cierra nada.
+ */
+export type CourseLevelGateChecker = (
+  tenantId: string,
+  userId: string,
+  courseId: string,
+) => Promise<{ course: LevelLockInfo | null; modules: Record<string, LevelLockInfo> } | null>;
 
 const TOKEN_BYTES = 24;
 const CODE_GROUPS = 2;
@@ -194,7 +227,44 @@ export class LearningService {
      * (el caso de la mayoría) sigue permitiendo la automatrícula.
      */
     private readonly courseIsSold: CourseSaleChecker = async () => false,
+    /**
+     * Cierres por nivel de la gamificación («se desbloquea en el nivel N»). Es
+     * un filtro ENCIMA de la matrícula: nunca da acceso, solo lo retiene hasta
+     * el nivel. Por defecto no cierra nada.
+     */
+    private readonly levelGate: CourseLevelGateChecker = async () => null,
   ) {}
+
+  /**
+   * Fuentes de matrícula a las que el nivel NO cierra nada: lo que la persona
+   * tiene por su cuenta (lo compró, paga su suscripción, se lo dio una venta
+   * externa, un código o invitación personal, una importación, o es un
+   * inspector de Fundae). El nivel cierra lo que llega con la comunidad: la
+   * membresía y los grupos (GROUP) o la automatrícula (ADMIN). Mismo criterio
+   * que el límite del periodo de prueba.
+   */
+  static readonly LEVEL_EXEMPT_SOURCES: ReadonlySet<string> = new Set([
+    'PURCHASE',
+    'SUBSCRIPTION',
+    'API',
+    'CODE',
+    'INVITATION_LINK',
+    'IMPORT',
+    'INSPECTION',
+  ]);
+
+  /** Cierres por nivel que aplican a ESTA matrícula (null si ninguno). */
+  private async levelLocksFor(
+    tenantId: string,
+    userId: string,
+    courseId: string,
+    enrollmentSource: string,
+  ): Promise<{ course: LevelLockInfo | null; modules: Record<string, LevelLockInfo> } | null> {
+    if (LearningService.LEVEL_EXEMPT_SOURCES.has(enrollmentSource)) return null;
+    const gate = await this.levelGate(tenantId, userId, courseId);
+    if (!gate || (!gate.course && Object.keys(gate.modules).length === 0)) return null;
+    return gate;
+  }
 
   /**
    * Acepta la matriculación si el curso está publicado.
@@ -1678,7 +1748,42 @@ export class LearningService {
       }
     }
 
-    return { drip: Object.keys(lessons).length > 0, lessons, ...(trial ? { trial } : {}) };
+    // 4) DESBLOQUEO POR NIVEL de la gamificación: el curso entero o secciones
+    // sueltas se abren al llegar a un nivel. No depende de una fecha ni de un
+    // pago → availableAt null + reason LEVEL. Prevalece sobre todo lo demás.
+    const levelLocks = await this.levelLocksFor(tenantId, userId, courseId, enrollment.source);
+    let level: LevelLockInfo | undefined;
+    if (levelLocks) {
+      const moduleIds = Object.keys(levelLocks.modules);
+      const closed = await this.prisma.modCoursesLesson.findMany({
+        where: {
+          tenantId,
+          deletedAt: null,
+          module: levelLocks.course
+            ? { courseId, deletedAt: null }
+            : { courseId, deletedAt: null, id: { in: moduleIds } },
+        },
+        select: { id: true, moduleId: true },
+      });
+      if (levelLocks.course) level = levelLocks.course;
+      for (const l of closed) {
+        const info = levelLocks.course ?? levelLocks.modules[l.moduleId];
+        if (!info) continue;
+        lessons[l.id] = {
+          availableAt: null,
+          available: false,
+          reason: 'LEVEL',
+          level: info,
+        };
+      }
+    }
+
+    return {
+      drip: Object.keys(lessons).length > 0,
+      lessons,
+      ...(trial ? { trial } : {}),
+      ...(level ? { level } : {}),
+    };
   }
 
   /**
@@ -1922,6 +2027,21 @@ export class LearningService {
     enrollmentSource: string,
   ): Promise<void> {
     const now = new Date();
+    // DESBLOQUEO POR NIVEL: el curso entero o la sección de esta lección.
+    const levelLocks = await this.levelLocksFor(tenantId, userId, courseId, enrollmentSource);
+    if (levelLocks) {
+      let info = levelLocks.course;
+      if (!info) {
+        const owner = await this.prisma.modCoursesLesson.findFirst({
+          where: { tenantId, id: lessonId, deletedAt: null, module: { courseId } },
+          select: { moduleId: true },
+        });
+        info = owner ? (levelLocks.modules[owner.moduleId] ?? null) : null;
+      }
+      if (info)
+        throw new LevelContentLockedError(info.levelNumber, info.levelName, info.pointsMissing);
+    }
+
     // Fecha de publicación ABSOLUTA: si es futura, la lección está bloqueada.
     // El filtro por `module.courseId` no es decorativo: sin él una lección de
     // otro curso no aparecía aquí, `map.get(lessonId)` devolvía undefined en el

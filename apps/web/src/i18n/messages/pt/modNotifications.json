@@ -333,6 +333,34 @@
         "tenantName": "Nome da plataforma"
       }
     },
+    "gamification_content_unlocked": {
+      "name": "Conteúdo liberado por nível",
+      "description": "Quando um membro chega ao nível que libera um curso ou uma seção e já pode entrar.",
+      "vars": {
+        "courseTitle": "Curso que foi liberado",
+        "levelName": "Nível alcançado",
+        "tenantName": "Nome da plataforma"
+      }
+    },
+    "gamification_badge_earned": {
+      "name": "Insígnia conquistada",
+      "description": "Quando um membro ganha uma insígnia (primeira publicação, sequência, nível…).",
+      "vars": {
+        "badgeName": "Nome da insígnia",
+        "tenantName": "Nome da plataforma"
+      }
+    },
+    "gamification_reward_granted": {
+      "name": "Prêmio entregue",
+      "description": "Quando um membro chega ao nível ou aos pontos de um prêmio automático: o aviso é a entrega.",
+      "vars": {
+        "rewardTitle": "Nome do prêmio",
+        "rewardMessage": "Mensagem do prêmio (pode estar vazia)",
+        "rewardCode": "Código de desconto (pode estar vazio)",
+        "rewardUrl": "Link do prêmio (pode estar vazio)",
+        "tenantName": "Nome da plataforma"
+      }
+    },
     "referrals_commission_earned": {
       "name": "Comissão de indicação ganha",
       "description": "Quando o pagamento de uma pessoa indicada gera uma comissão para o membro.",

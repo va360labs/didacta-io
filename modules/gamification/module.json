@@ -28,6 +28,15 @@
     },
     {
       "name": "gamification.perk.handled"
+    },
+    {
+      "name": "gamification.badge.awarded"
+    },
+    {
+      "name": "gamification.reward.granted"
+    },
+    {
+      "name": "gamification.content.unlocked"
     }
   ],
   "hooks": [
@@ -59,7 +68,16 @@
       "event": "learning.course.completed"
     },
     {
+      "event": "learning.progress.updated"
+    },
+    {
       "event": "referrals.referral.attributed"
+    },
+    {
+      "event": "gamification.level.changed"
+    },
+    {
+      "event": "gamification.points.awarded"
     }
   ],
   "apiNamespace": "/modules/gamification",

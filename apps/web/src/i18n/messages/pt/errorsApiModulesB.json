@@ -112,6 +112,7 @@
   "GAMIFICATION_ALREADY_REVIEWED": "Esta entrega já foi revisada.",
   "GAMIFICATION_ALREADY_SUBMITTED": "Você já entregou este desafio.",
   "GAMIFICATION_CHALLENGE_CLOSED": "Este desafio não está aceitando entregas no momento.",
+  "GAMIFICATION_CODES_UNAVAILABLE": "Sua escola recebe pelos pagamentos da Didacta, que não aceitam códigos de desconto: use um prêmio com mensagem ou link.",
   "GAMIFICATION_CONFLICT": "Conflito no catálogo: a chave ou os pontos do nível já estão em uso.",
   "GAMIFICATION_NOT_FOUND": "Não encontrado.",
   "GAMIFICATION_PERK_UNAVAILABLE": "Este benefício não pode ser solicitado no momento.",

@@ -35,6 +35,9 @@ const TEMPLATE_LABEL: Record<string, string> = {
   'community.mention': 'notificaciones.tplMencion',
   'community.comment.on_post': 'notificaciones.tplComentario',
   'community.reply.to_comment': 'notificaciones.tplRespuesta',
+  'gamification.content.unlocked': 'notificaciones.tplContenidoDesbloqueado',
+  'gamification.badge.earned': 'notificaciones.tplInsignia',
+  'gamification.reward.granted': 'notificaciones.tplPremio',
 };
 
 interface IconSpec {
@@ -52,6 +55,9 @@ const TEMPLATE_ICON: Record<string, IconSpec> = {
   'community.mention': { name: 'messages', tone: 'info' },
   'community.comment.on_post': { name: 'messages', tone: 'info' },
   'community.reply.to_comment': { name: 'messages', tone: 'info' },
+  'gamification.content.unlocked': { name: 'lock', tone: 'success' },
+  'gamification.badge.earned': { name: 'award', tone: 'success' },
+  'gamification.reward.granted': { name: 'trophy', tone: 'success' },
 };
 
 const TONE_STYLES: Record<IconSpec['tone'], { bg: string; fg: string }> = {

@@ -67,4 +67,19 @@ describe('notificationLink', () => {
     }
     expect(notificationLink('payouts.sale.course', {}, tEn)?.actionLabel).toBe('View');
   });
+
+  it('retención: curso desbloqueado → el curso; nivel/insignia → retos; premio → «Tus premios»', () => {
+    expect(
+      notificationLink('gamification.content.unlocked', { courseSlug: 'excel-pro' }, tEs),
+    ).toEqual({ href: '/courses/excel-pro', actionLabel: 'Ver' });
+    // Sin slug (plantilla vieja) → al catálogo, nunca a una ruta rota.
+    expect(notificationLink('gamification.content.unlocked', {}, tEs)?.href).toBe('/courses');
+    for (const key of ['gamification.level.reached', 'gamification.badge.earned']) {
+      expect(notificationLink(key, {}, tEs)?.href).toBe('/challenges');
+    }
+    expect(notificationLink('gamification.reward.granted', {}, tEn)).toEqual({
+      href: '/challenges#rewards',
+      actionLabel: 'View',
+    });
+  });
 });

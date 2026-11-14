@@ -4676,7 +4676,9 @@ model ModGamificationLevel {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  perks ModGamificationPerk[]
+  perks        ModGamificationPerk[]
+  contentLocks ModGamificationContentLock[]
+  rewards      ModGamificationReward[]
 
   @@unique([tenantId, key])
   @@unique([tenantId, minPoints])
@@ -4789,6 +4791,234 @@ model ModGamificationSubmission {
   @@index([tenantId, status, createdAt(sort: Desc)])
   @@index([tenantId, userId])
   @@map("mod_gamification_submission")
+}
+
+// ── Retención estilo Skool: desbloqueo por nivel, rachas, insignias, premios
+// automáticos y celebraciones en la comunidad (ADR «niveles y premios»).
+// Todas llevan `tenant_id` (rls.sql les aplica sola la política) y ninguna
+// tiene FK fuera del módulo: los ids de cursos, secciones, posts y usuarios
+// son lógicos (contrato modular, ADR-016/039).
+
+/// «Se desbloquea en el nivel N»: cierra un curso entero o una sección suya
+/// hasta que la persona llega a ese nivel. Es un filtro ENCIMA del acceso que
+/// ya tenga (matrícula por grupo, membresía…): por sí solo nunca da acceso a
+/// un curso de pago, salvo que el creador marque `grantPaid`.
+model ModGamificationContentLock {
+  id         String  @id @default(uuid()) @db.Uuid
+  tenantId   String  @map("tenant_id") @db.Uuid
+  /// COURSE = el curso entero · MODULE = una sección del curso.
+  targetKind String  @map("target_kind") @db.VarChar(16)
+  /// Id lógico del curso o de la sección (tablas de mod.courses, sin FK).
+  targetId   String  @map("target_id") @db.Uuid
+  /// Curso al que pertenece (igual a `targetId` cuando cierra el curso).
+  courseId   String  @map("course_id") @db.Uuid
+  levelId    String  @map("level_id") @db.Uuid
+  /// Solo cursos de pago: al llegar al nivel, ¿se regala el acceso? Por
+  /// defecto NO — lo que se vende no se gana participando sin que el creador
+  /// lo decida.
+  grantPaid  Boolean @default(false) @map("grant_paid")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  /// Restrict: borrar el nivel abriría en silencio lo que cierra.
+  level   ModGamificationLevel           @relation(fields: [levelId], references: [id], onDelete: Restrict)
+  unlocks ModGamificationContentUnlock[]
+
+  @@unique([tenantId, targetKind, targetId])
+  @@index([tenantId, courseId])
+  @@map("mod_gamification_content_lock")
+}
+
+/// Quién ha abierto ya cada cierre. Sirve para avisar UNA sola vez («ya
+/// tienes disponible…») aunque el evento de nivel llegue dos veces.
+model ModGamificationContentUnlock {
+  id         String   @id @default(uuid()) @db.Uuid
+  tenantId   String   @map("tenant_id") @db.Uuid
+  lockId     String   @map("lock_id") @db.Uuid
+  userId     String   @map("user_id") @db.Uuid
+  unlockedAt DateTime @default(now()) @map("unlocked_at")
+
+  lock ModGamificationContentLock @relation(fields: [lockId], references: [id], onDelete: Cascade)
+
+  @@unique([lockId, userId])
+  @@index([tenantId, userId])
+  @@map("mod_gamification_content_unlock")
+}
+
+/// Un día con actividad de una persona, en SU zona horaria. Es la base de la
+/// racha: se guarda el hecho, no el contador, para poder recalcularla.
+model ModGamificationActivityDay {
+  id       String   @id @default(uuid()) @db.Uuid
+  tenantId String   @map("tenant_id") @db.Uuid
+  userId   String   @map("user_id") @db.Uuid
+  day      DateTime @db.Date
+
+  @@unique([tenantId, userId, day])
+  @@map("mod_gamification_activity_day")
+}
+
+/// Racha materializada (se recalcula desde `activity_day` en cada día nuevo).
+model ModGamificationStreak {
+  id           String    @id @default(uuid()) @db.Uuid
+  tenantId     String    @map("tenant_id") @db.Uuid
+  userId       String    @map("user_id") @db.Uuid
+  currentDays  Int       @default(0) @map("current_days")
+  bestDays     Int       @default(0) @map("best_days")
+  lastDay      DateTime? @map("last_day") @db.Date
+  /// Semanas seguidas (de lunes a domingo) con al menos un día activo.
+  currentWeeks Int       @default(0) @map("current_weeks")
+  bestWeeks    Int       @default(0) @map("best_weeks")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  @@unique([tenantId, userId])
+  @@map("mod_gamification_streak")
+}
+
+/// Catálogo de insignias del aula. Los TIPOS los define el producto (primera
+/// publicación, primer curso, racha de N días, nivel N); el creador las
+/// activa, desactiva y renombra. `name` NULL = nombre por defecto traducido.
+model ModGamificationBadge {
+  id        String  @id @default(uuid()) @db.Uuid
+  tenantId  String  @map("tenant_id") @db.Uuid
+  key       String  @db.VarChar(64)
+  kind      String  @db.VarChar(32)
+  threshold Int     @default(1)
+  name      String? @db.VarChar(80)
+  enabled   Boolean @default(true)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([tenantId, key])
+  @@map("mod_gamification_badge")
+}
+
+/// Insignia ganada. Una vez ganada no se retira (como el nivel).
+model ModGamificationUserBadge {
+  id        String   @id @default(uuid()) @db.Uuid
+  tenantId  String   @map("tenant_id") @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  badgeKey  String   @map("badge_key") @db.VarChar(64)
+  awardedAt DateTime @default(now()) @map("awarded_at")
+
+  @@unique([tenantId, userId, badgeKey])
+  @@index([tenantId, userId])
+  @@map("mod_gamification_user_badge")
+}
+
+/// Premio automático: al llegar a un nivel o a X puntos se ENTREGA solo (un
+/// mensaje con enlace o un código de descuento que el creador ha creado en su
+/// pasarela). A diferencia del beneficio (`perk`), nadie lo atiende.
+model ModGamificationReward {
+  id          String  @id @default(uuid()) @db.Uuid
+  tenantId    String  @map("tenant_id") @db.Uuid
+  title       String  @db.VarChar(160)
+  /// LEVEL (al llegar a `levelId`) · POINTS (al llegar a `points` de por vida).
+  triggerKind String  @map("trigger_kind") @db.VarChar(16)
+  levelId     String? @map("level_id") @db.Uuid
+  points      Int?
+  /// MESSAGE (texto + enlace opcional) · CODE (código de descuento).
+  kind        String  @db.VarChar(16)
+  message     String?
+  url         String?
+  code        String? @db.VarChar(64)
+  active      Boolean @default(true)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  level  ModGamificationLevel?        @relation(fields: [levelId], references: [id], onDelete: Restrict)
+  grants ModGamificationRewardGrant[]
+
+  @@index([tenantId, active])
+  @@map("mod_gamification_reward")
+}
+
+/// Registro de cada premio entregado, con COPIA de lo que se entregó: si el
+/// creador cambia el premio después, el registro sigue diciendo la verdad.
+model ModGamificationRewardGrant {
+  id        String   @id @default(uuid()) @db.Uuid
+  tenantId  String   @map("tenant_id") @db.Uuid
+  rewardId  String   @map("reward_id") @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  delivered Json
+  grantedAt DateTime @default(now()) @map("granted_at")
+
+  /// Restrict: un premio ya entregado no se borra (se desactiva).
+  reward ModGamificationReward @relation(fields: [rewardId], references: [id], onDelete: Restrict)
+
+  @@unique([rewardId, userId])
+  @@index([tenantId, grantedAt(sort: Desc)])
+  @@index([tenantId, userId])
+  @@map("mod_gamification_reward_grant")
+}
+
+/// Ajustes de retención del aula. Las celebraciones nacen APAGADAS: publicar
+/// en nombre del creador es decisión suya.
+model ModGamificationSettings {
+  id                     String  @id @default(uuid()) @db.Uuid
+  tenantId               String  @unique @map("tenant_id") @db.Uuid
+  streaksEnabled         Boolean @default(true) @map("streaks_enabled")
+  badgesEnabled          Boolean @default(true) @map("badges_enabled")
+  celebrateCourses       Boolean @default(false) @map("celebrate_courses")
+  celebrateIntros        Boolean @default(false) @map("celebrate_intros")
+  celebrateAnniversaries Boolean @default(false) @map("celebrate_anniversaries")
+  celebrateLevels        Boolean @default(false) @map("celebrate_levels")
+
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("mod_gamification_settings")
+}
+
+/// Preferencias de cada miembro: no salir en las celebraciones y no enseñar
+/// su racha en el perfil. Sin fila = valores por defecto (sale y se ve).
+model ModGamificationMemberPrefs {
+  id         String  @id @default(uuid()) @db.Uuid
+  tenantId   String  @map("tenant_id") @db.Uuid
+  userId     String  @map("user_id") @db.Uuid
+  celebrate  Boolean @default(true)
+  showStreak Boolean @default(true) @map("show_streak")
+
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([tenantId, userId])
+  @@map("mod_gamification_member_prefs")
+}
+
+/// Una publicación de celebración por tipo y día: si el mismo día terminan
+/// cinco personas un curso, sale UN post que las nombra a todas (sin spam).
+model ModGamificationCelebration {
+  id        String    @id @default(uuid()) @db.Uuid
+  tenantId  String    @map("tenant_id") @db.Uuid
+  /// course · intro · anniversary · level
+  kind      String    @db.VarChar(24)
+  day       DateTime  @db.Date
+  /// Post de mod.community (id lógico). NULL hasta que se publica.
+  postId    String?   @map("post_id") @db.Uuid
+  /// Quién está publicando el post: evita dos posts en una carrera.
+  claimedAt DateTime? @map("claimed_at")
+  /// [{ userId, name, detail }] en orden de llegada.
+  entries   Json      @default("[]")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([tenantId, kind, day])
+  @@map("mod_gamification_celebration")
+}
+
+/// Idempotencia de las celebraciones: cada hecho (Ana terminó el curso X) se
+/// celebra una sola vez aunque el bus entregue el evento dos veces.
+model ModGamificationCelebrationMark {
+  id         String   @id @default(uuid()) @db.Uuid
+  tenantId   String   @map("tenant_id") @db.Uuid
+  kind       String   @db.VarChar(24)
+  subjectKey String   @map("subject_key") @db.VarChar(160)
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@unique([tenantId, kind, subjectKey])
+  @@map("mod_gamification_celebration_mark")
 }
 
 // ============================================================================

@@ -333,6 +333,34 @@
         "tenantName": "Platform name"
       }
     },
+    "gamification_content_unlocked": {
+      "name": "Content unlocked by level",
+      "description": "When a member reaches the level that opens a course or a section and can now get in.",
+      "vars": {
+        "courseTitle": "Course that opened",
+        "levelName": "Level reached",
+        "tenantName": "Platform name"
+      }
+    },
+    "gamification_badge_earned": {
+      "name": "Badge earned",
+      "description": "When a member earns a badge (first post, streak, level…).",
+      "vars": {
+        "badgeName": "Badge name",
+        "tenantName": "Platform name"
+      }
+    },
+    "gamification_reward_granted": {
+      "name": "Reward delivered",
+      "description": "When a member reaches the level or points of an automatic reward: the notice is the delivery.",
+      "vars": {
+        "rewardTitle": "Reward name",
+        "rewardMessage": "Reward message (may be empty)",
+        "rewardCode": "Discount code (may be empty)",
+        "rewardUrl": "Reward link (may be empty)",
+        "tenantName": "Platform name"
+      }
+    },
     "referrals_commission_earned": {
       "name": "Referral commission earned",
       "description": "When a payment from a referred person generates a commission for the member.",

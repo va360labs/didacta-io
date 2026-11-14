@@ -114,6 +114,7 @@
   "THEMING_UNSUPPORTED_LOGO_TYPE": "Esse tipo de arquivo não é permitido para o logo.",
   "THEMING_UPDATE_FORBIDDEN": "Somente administradores podem alterar o tema.",
   "TRIAL_CONTENT_LOCKED": "Esta aula ficará disponível quando o seu período de teste terminar. Você pode pagar agora para desbloqueá-la na hora.",
+  "LEVEL_CONTENT_LOCKED": "Este conteúdo desbloqueia ao chegar a um nível mais alto. Some pontos na comunidade para liberá-lo.",
   "ZOOM_API_ERROR": "Erro na comunicação com o Zoom: {detail}",
   "ZOOM_ATTENDANCE_NOT_AVAILABLE": "Os dados de presença desta sessão ainda não estão disponíveis.",
   "ZOOM_COURSE_NOT_IN_TENANT": "O curso {detail} não pertence a este tenant.",

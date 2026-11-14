@@ -7,7 +7,8 @@
     "tabLevels": "Niveles",
     "tabPerks": "Beneficios",
     "tabRequests": "Solicitudes",
-    "tabRules": "Reglas"
+    "tabRules": "Reglas",
+    "tabRewards": "Premios y desbloqueos"
   },
   "challengeStatus": {
     "DRAFT": "Borrador",
