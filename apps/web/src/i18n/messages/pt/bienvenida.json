@@ -23,6 +23,7 @@
   "nombreEtiqueta": "Nome da escola",
   "nombrePlaceholder": "Instituto Sanz, Formação Aribau, Escola de Idiomas…",
   "nombreAviso": "No momento ela se chama “{nombre}”, que veio do seu e-mail na hora da compra. Coloque o nome de verdade.",
+  "nombreAvisoPropia": "No momento ela se chama “{nombre}”, um nome provisório. Coloque o nome de verdade.",
   "nombreVacio": "Digite um nome para continuar.",
   "marcaTitulo": "Deixe com a sua cara",
   "marcaCuerpo": "Seu logo e sua cor fazem seus alunos sentirem que estão na sua escola, e não em uma ferramenta qualquer.",
