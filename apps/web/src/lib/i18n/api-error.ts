@@ -174,6 +174,7 @@ export const CODES_WITH_PARAMS: ReadonlyMap<string, readonly string[]> = new Map
   ['AI_PROVIDER_UNAVAILABLE', ['provider', 'statusCode', 'body']],
   ['AI_TUTOR_CHAT_PROVIDER_ERROR', ['provider', 'reason']],
   ['AI_TUTOR_EMBEDDINGS_PROVIDER_ERROR', ['provider', 'reason']],
+  ['AUTH_RATE_LIMITED', ['minutes']],
 ]);
 
 /**

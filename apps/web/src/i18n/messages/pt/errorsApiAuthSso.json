@@ -57,5 +57,7 @@
   "SSO_SAML_CONFIG_MISSING": "Este tenant não tem configuração SAML.",
   "SSO_WP_ACCOUNT_INACTIVE": "Sua conta não está ativa. Entre em contato com o administrador.",
   "SSO_WP_USER_NOT_PROVISIONED": "Você não tem conta na Didacta. Peça ao administrador para criar a sua conta.",
-  "SSO_WP_SHARED_SECRET_REQUIRED": "O segredo compartilhado é obrigatório na primeira vez. Cole o valor (o mesmo do wp-config.php); ele não será exibido depois."
+  "SSO_WP_SHARED_SECRET_REQUIRED": "O segredo compartilhado é obrigatório na primeira vez. Cole o valor (o mesmo do wp-config.php); ele não será exibido depois.",
+  "AUTH_RATE_LIMITED": "Muitas tentativas. Por segurança, aguarde {minutes} min e tente novamente.",
+  "rate_limit_exceeded": "Você está indo rápido demais. Aguarde um momento e tente novamente."
 }

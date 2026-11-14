@@ -27,6 +27,8 @@ import {
 import { APP_INTERCEPTOR } from '@nestjs/core';
 import IORedis, { type Redis } from 'ioredis';
 import { AuthModule } from '../auth/auth.module';
+import { LoginLimitInterceptor } from './login-limit.interceptor';
+import { LoginLimitService } from './login-limit.service';
 import { RateLimitInfoController } from './rate-limit-info.controller';
 import { RateLimitInterceptor } from './rate-limit.interceptor';
 import {
@@ -97,14 +99,21 @@ const redisProvider: FactoryProvider<RateLimitRedisClient | null> = {
       inject: [RATE_LIMIT_REDIS_TOKEN],
     },
     RateLimitService,
+    LoginLimitService,
     {
       provide: APP_INTERCEPTOR,
       useClass: RateLimitInterceptor,
     },
+    // Limitador propio del acceso (login, alta, restablecer, MFA): solo actúa
+    // en las rutas marcadas con `@LoginRateLimit`. Va DESPUÉS del cupo general.
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: LoginLimitInterceptor,
+    },
   ],
   // El token de Redis se exporta para el límite por clave de la puerta de
   // agentes (`AgentRateLimiter`): misma conexión dedicada, otro contador.
-  exports: [RateLimitService, RATE_LIMIT_REDIS_TOKEN],
+  exports: [RateLimitService, LoginLimitService, RATE_LIMIT_REDIS_TOKEN],
 })
 export class RateLimitModule {
   static forRoot(): DynamicModule {

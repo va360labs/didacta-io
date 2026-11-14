@@ -458,6 +458,11 @@ describe('apiErrorMessage con placeholders con nombre', () => {
         'El JSON propuesto para draft tipo QUIZ no es válido: falta el campo questions.',
         { type: 'QUIZ', reason: 'falta el campo questions' },
       ],
+      [
+        'AUTH_RATE_LIMITED',
+        'Demasiados intentos. Por seguridad, espera 15 min y vuelve a probar.',
+        { minutes: '15' },
+      ],
     ];
     expect(CASOS.length, 'la tabla dejó de cubrir CODES_WITH_PARAMS').toBe(CODES_WITH_PARAMS.size);
     for (const [code, backendMessage, params] of CASOS) {
