@@ -244,6 +244,22 @@ export const HUB_TEMPLATE_DEFAULTS: Record<string, TemplateDef> = {
     subject: 'Sobre tu solicitud: {{perkTitle}}',
     body: '{{statusText}}{{#staffNote}}\n\n{{staffNote}}{{/staffNote}}',
   },
+  // Cobros de plataforma (mod.payouts): aviso de cada venta a quien administra
+  // el aula, en la campana. Una clave por tipo (curso, alta, renovación) para
+  // no anidar secciones. El correo de la misma venta lo compone el notificador
+  // de cobros (sale con el nombre del operador).
+  'payouts.sale.course': {
+    subject: 'Nueva venta: «{{product}}» ({{amount}})',
+    body: '{{#buyer}}{{buyer}}{{/buyer}}{{^buyer}}Alguien{{/buyer}} ha comprado «{{product}}» por {{amount}}. Tienes el detalle en Ventas.{{#held}}\n\nHasta que completes tus datos fiscales, el dinero de esta venta se queda retenido.{{/held}}',
+  },
+  'payouts.sale.membership': {
+    subject: 'Nueva venta: «{{product}}» ({{amount}})',
+    body: '{{#buyer}}{{buyer}}{{/buyer}}{{^buyer}}Alguien{{/buyer}} se ha unido a «{{product}}» por {{amount}}. Tienes el detalle en Ventas.{{#held}}\n\nHasta que completes tus datos fiscales, el dinero de esta venta se queda retenido.{{/held}}',
+  },
+  'payouts.sale.renewal': {
+    subject: 'Renovación: «{{product}}» ({{amount}})',
+    body: '{{#buyer}}{{buyer}}{{/buyer}}{{^buyer}}Alguien{{/buyer}} ha renovado «{{product}}»: {{amount}}. Tienes el detalle en Ventas.{{#held}}\n\nHasta que completes tus datos fiscales, el dinero de esta venta se queda retenido.{{/held}}',
+  },
   'referrals.commission.earned': {
     subject: '¡Has ganado una comisión de {{amount}}!',
     body: 'Tu recomendación ha dado fruto: has ganado {{amount}} por el pago de {{baseAmount}} de una persona que entró con tu enlace.\n\nLa comisión queda pendiente durante el periodo de garantía; puedes seguirla en tu área de Referidos.',
@@ -367,6 +383,18 @@ export const HUB_TEMPLATE_DEFAULTS_EN: Record<string, TemplateDef> = {
     subject: 'About your request: {{perkTitle}}',
     body: '{{statusText}}{{#staffNote}}\n\n{{staffNote}}{{/staffNote}}',
   },
+  'payouts.sale.course': {
+    subject: 'New sale: "{{product}}" ({{amount}})',
+    body: '{{#buyer}}{{buyer}}{{/buyer}}{{^buyer}}Someone{{/buyer}} bought "{{product}}" for {{amount}}. You have the details in Sales.{{#held}}\n\nUntil you complete your tax details, the money from this sale stays on hold.{{/held}}',
+  },
+  'payouts.sale.membership': {
+    subject: 'New sale: "{{product}}" ({{amount}})',
+    body: '{{#buyer}}{{buyer}}{{/buyer}}{{^buyer}}Someone{{/buyer}} joined "{{product}}" for {{amount}}. You have the details in Sales.{{#held}}\n\nUntil you complete your tax details, the money from this sale stays on hold.{{/held}}',
+  },
+  'payouts.sale.renewal': {
+    subject: 'Renewal: "{{product}}" ({{amount}})',
+    body: '{{#buyer}}{{buyer}}{{/buyer}}{{^buyer}}Someone{{/buyer}} renewed "{{product}}": {{amount}}. You have the details in Sales.{{#held}}\n\nUntil you complete your tax details, the money from this sale stays on hold.{{/held}}',
+  },
   'referrals.commission.earned': {
     subject: 'You earned a commission of {{amount}}!',
     body: 'Your referral paid off: you earned {{amount}} from the {{baseAmount}} payment of someone who joined through your link.\n\nThe commission stays pending during the guarantee period; you can track it in your Referrals area.',
@@ -489,6 +517,18 @@ export const HUB_TEMPLATE_DEFAULTS_PT: Record<string, TemplateDef> = {
   'gamification.perk.handled': {
     subject: 'Sobre sua solicitação: {{perkTitle}}',
     body: '{{statusText}}{{#staffNote}}\n\n{{staffNote}}{{/staffNote}}',
+  },
+  'payouts.sale.course': {
+    subject: 'Nova venda: “{{product}}” ({{amount}})',
+    body: '{{#buyer}}{{buyer}}{{/buyer}}{{^buyer}}Alguém{{/buyer}} comprou “{{product}}” por {{amount}}. Os detalhes estão em Vendas.{{#held}}\n\nEnquanto você não completar seus dados fiscais, o dinheiro desta venda fica retido.{{/held}}',
+  },
+  'payouts.sale.membership': {
+    subject: 'Nova venda: “{{product}}” ({{amount}})',
+    body: '{{#buyer}}{{buyer}}{{/buyer}}{{^buyer}}Alguém{{/buyer}} entrou em “{{product}}” por {{amount}}. Os detalhes estão em Vendas.{{#held}}\n\nEnquanto você não completar seus dados fiscais, o dinheiro desta venda fica retido.{{/held}}',
+  },
+  'payouts.sale.renewal': {
+    subject: 'Renovação: “{{product}}” ({{amount}})',
+    body: '{{#buyer}}{{buyer}}{{/buyer}}{{^buyer}}Alguém{{/buyer}} renovou “{{product}}”: {{amount}}. Os detalhes estão em Vendas.{{#held}}\n\nEnquanto você não completar seus dados fiscais, o dinheiro desta venda fica retido.{{/held}}',
   },
   'referrals.commission.earned': {
     subject: 'Você ganhou uma comissão de {{amount}}!',
@@ -1083,6 +1123,48 @@ const HUB_TEMPLATE_META: Record<
       { name: 'perkTitle', description: 'Beneficio solicitado' },
       { name: 'statusText', description: 'Frase según el resultado (aprobada, hecha o rechazada)' },
       { name: 'staffNote', description: 'Respuesta del equipo (puede ir vacío)' },
+      { name: 'tenantName', description: 'Nombre de la plataforma' },
+    ],
+  },
+  'payouts.sale.course': {
+    name: 'Venta de un curso (aviso al equipo)',
+    description:
+      'Cuando un alumno compra un curso, a quien administra el aula. Solo en la campana: el correo lo envía el operador de cobros.',
+    category: 'billing',
+    channels: ['IN_APP'],
+    variables: [
+      { name: 'product', description: 'Curso o plan vendido' },
+      { name: 'amount', description: 'Lo que pagó el alumno, en su moneda' },
+      { name: 'buyer', description: 'Nombre del alumno (o su correo si aún no tiene nombre)' },
+      { name: 'held', description: 'Si el dinero queda retenido por faltar los datos fiscales' },
+      { name: 'tenantName', description: 'Nombre de la plataforma' },
+    ],
+  },
+  'payouts.sale.membership': {
+    name: 'Alta en una membresía (aviso al equipo)',
+    description:
+      'Cuando alguien se une a una membresía, a quien administra el aula. Solo en la campana: el correo lo envía el operador de cobros.',
+    category: 'billing',
+    channels: ['IN_APP'],
+    variables: [
+      { name: 'product', description: 'Curso o plan vendido' },
+      { name: 'amount', description: 'Lo que pagó el alumno, en su moneda' },
+      { name: 'buyer', description: 'Nombre del alumno (o su correo si aún no tiene nombre)' },
+      { name: 'held', description: 'Si el dinero queda retenido por faltar los datos fiscales' },
+      { name: 'tenantName', description: 'Nombre de la plataforma' },
+    ],
+  },
+  'payouts.sale.renewal': {
+    name: 'Renovación de una membresía (aviso al equipo)',
+    description:
+      'Cuando se cobra la renovación de una membresía, a quien administra el aula. Solo en la campana: el correo lo envía el operador de cobros.',
+    category: 'billing',
+    channels: ['IN_APP'],
+    variables: [
+      { name: 'product', description: 'Curso o plan vendido' },
+      { name: 'amount', description: 'Lo que pagó el alumno, en su moneda' },
+      { name: 'buyer', description: 'Nombre del alumno (o su correo si aún no tiene nombre)' },
+      { name: 'held', description: 'Si el dinero queda retenido por faltar los datos fiscales' },
       { name: 'tenantName', description: 'Nombre de la plataforma' },
     ],
   },

@@ -9,20 +9,29 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   PayoutsEmailNotifier,
+  creatorFooter,
   debtChargedTexts,
   disputeOpenedTexts,
   formatMinor,
+  refundIssuedTexts,
+  saleMadeTexts,
 } from '../src/modules/payouts/payouts-notifier';
 
 const TENANT = '11111111-1111-4111-8111-111111111111';
 
 function deps(overrides: Record<string, unknown> = {}) {
-  const sent: Array<{ to: string; subject: string; text: string }> = [];
+  const sent: Array<{ to: string; subject: string; text: string; html: string; from: string }> = [];
   const smtp = {
-    send: vi.fn(async (_config: unknown, input: { to: string; subject: string; text: string }) => {
-      sent.push(input);
-      return { ok: true };
-    }),
+    send: vi.fn(
+      async (
+        _config: unknown,
+        input: { to: string; subject: string; text: string; html: string },
+        fromName: string,
+      ) => {
+        sent.push({ ...input, from: fromName });
+        return { ok: true };
+      },
+    ),
   };
   const smtpResolver = {
     resolve: vi.fn(async () => ({
@@ -39,11 +48,24 @@ function deps(overrides: Record<string, unknown> = {}) {
   const prisma = {
     user: {
       findMany: vi.fn(async () => [
-        { email: 'creadora@aula.test', locale: 'es' },
-        { email: 'socio@aula.test', locale: 'en-GB' },
-        { email: 'socia@escola.test', locale: 'pt-BR' },
+        { id: 'u-es', email: 'creadora@aula.test', locale: 'es' },
+        { id: 'u-en', email: 'socio@aula.test', locale: 'en-GB' },
+        { id: 'u-pt', email: 'socia@escola.test', locale: 'pt-BR' },
       ]),
+      findFirst: vi.fn(
+        async (): Promise<Record<string, unknown> | null> => ({
+          name: 'Marta Ensayo',
+          email: 'marta@example.test',
+          locale: 'es-ES',
+          deletedAt: null,
+          status: 'ACTIVE',
+        }),
+      ),
     },
+    userNotificationPreference: {
+      findUnique: vi.fn(async (_args?: unknown): Promise<{ enabled: boolean } | null> => null),
+    },
+    tenantSetting: { findUnique: vi.fn(async (): Promise<unknown> => null) },
     tenant: { findUnique: vi.fn(async () => ({ name: 'Aula de Ana' })) },
     modThemingTenantTheme: { findUnique: vi.fn(async () => null) },
   };
@@ -217,7 +239,7 @@ describe('textos en portugués (pt-BR)', () => {
 });
 
 describe('envío', () => {
-  it('al creador: a cada administrador en su idioma, con el SMTP del aula', async () => {
+  it('al creador: a cada administrador en su idioma; lo firma el operador, no su propia academia', async () => {
     const { notifier, sent, smtpResolver } = deps();
     await notifier.debtCharged({
       tenantId: TENANT,
@@ -227,7 +249,18 @@ describe('envío', () => {
       currency: 'eur',
       cause: 'refund',
     });
-    expect(smtpResolver.resolve).toHaveBeenCalledWith(TENANT);
+    // Ensayo general: el correo de deuda llegaba como «Aula de Ana» a la propia
+    // dueña de «Aula de Ana». Ahora escribe Didacta, por su SMTP (el global).
+    expect(smtpResolver.resolveGlobal).toHaveBeenCalled();
+    expect(smtpResolver.resolve).not.toHaveBeenCalled();
+    expect(sent.every((m) => m.from === 'Didacta')).toBe(true);
+    expect(sent[0]!.text).toContain('— Didacta');
+    expect(sent[0]!.text).not.toContain('— Aula de Ana');
+    expect(sent[0]!.text).toContain('Te escribe Didacta porque administras «Aula de Ana».');
+    expect(sent[1]!.text).toContain('Didacta is writing to you because you run "Aula de Ana".');
+    expect(sent[2]!.text).toContain(
+      'Didacta escreve para você porque você administra “Aula de Ana”.',
+    );
     expect(sent.map((m) => [m.to, m.subject])).toEqual([
       ['creadora@aula.test', expect.stringMatching(/^Te descontaremos 1,75\s€/)],
       ['socio@aula.test', "We'll take €1.75 from your next payouts"],
@@ -253,8 +286,24 @@ describe('envío', () => {
     expect(without.sent).toEqual([]);
   });
 
+  it('sin SMTP global sale por el del aula, con el mismo remitente', async () => {
+    const { notifier, sent, smtpResolver } = deps();
+    smtpResolver.resolveGlobal.mockReturnValueOnce(null as never);
+    await notifier.debtCharged({
+      tenantId: TENANT,
+      saleId: null,
+      description: null,
+      amount: 175,
+      currency: 'eur',
+      cause: 'refund',
+    });
+    expect(smtpResolver.resolve).toHaveBeenCalledWith(TENANT);
+    expect(sent.map((m) => m.from)).toEqual(['Didacta', 'Didacta', 'Didacta']);
+  });
+
   it('sin SMTP o con un fallo, no lanza: queda en el log', async () => {
     const { notifier, smtpResolver, logger } = deps();
+    smtpResolver.resolveGlobal.mockReturnValueOnce(null as never);
     smtpResolver.resolve.mockResolvedValueOnce(null as never);
     await expect(
       notifier.disputeOpened({
@@ -279,5 +328,194 @@ describe('envío', () => {
         cause: 'refund',
       }),
     ).resolves.toBeUndefined();
+  });
+});
+
+describe('aviso de VENTA a quien administra el aula', () => {
+  const SALE = {
+    tenantId: TENANT,
+    saleId: 'venta-1',
+    kind: 'course' as const,
+    description: 'Torno para principiantes',
+    amount: 4900,
+    currency: 'eur',
+    buyerEmail: 'marta@example.test',
+    heldForTaxData: false,
+  };
+
+  it('textos: importe, producto y comprador en los tres idiomas, sin español fuera del es', () => {
+    const es = saleMadeTexts({
+      lang: 'es',
+      kind: 'course',
+      product: 'Torno para principiantes',
+      amount: formatMinor(4900, 'eur', 'es'),
+      buyer: 'Marta Ensayo',
+      heldForTaxData: false,
+    });
+    expect(es.subject).toMatch(/^Nueva venta: «Torno para principiantes» \(49,00\s€\)$/);
+    expect(es.title).toBe('Has vendido «Torno para principiantes»');
+    expect(es.body).toMatch(/^Marta Ensayo ha comprado «Torno para principiantes» por 49,00\s€\./);
+    expect(es.body).not.toContain('retenido');
+    const en = saleMadeTexts({
+      lang: 'en',
+      kind: 'renewal',
+      product: 'Monthly',
+      amount: formatMinor(2900, 'gbp', 'en'),
+      buyer: 'Olivia',
+      heldForTaxData: true,
+    });
+    expect(en.subject).toBe('Renewal: "Monthly" (£29.00)');
+    expect(en.body).toContain('Olivia renewed "Monthly": £29.00.');
+    expect(en.body).toContain(
+      'until you complete your tax details, the money from this sale stays on hold',
+    );
+    const pt = saleMadeTexts({
+      lang: 'pt',
+      kind: 'membership',
+      product: 'Mensal',
+      amount: formatMinor(2900, 'eur', 'pt'),
+      buyer: 'Beatriz',
+      heldForTaxData: true,
+    });
+    expect(pt.subject).toMatch(/^Nova venda: “Mensal” \(€\s29,00\)$/);
+    expect(pt.title).toBe('Novo membro em “Mensal”');
+    expect(pt.body).toContain('Em Vendas');
+    expect(pt.body).toContain('dados fiscais');
+    for (const t of [en, pt]) {
+      expect(`${t.subject} ${t.title} ${t.body} ${t.cta}`).not.toMatch(/venta|Ventas|cobros|«/);
+    }
+  });
+
+  it('campana + correo a cada administrador, en su idioma, con el nombre del comprador', async () => {
+    const hubSent: Array<Record<string, unknown>> = [];
+    const hub = { send: vi.fn(async (n: Record<string, unknown>) => void hubSent.push(n)) };
+    const { notifier, sent } = deps({ hub: () => hub });
+    await notifier.saleMade(SALE);
+
+    expect(hubSent.map((n) => [n['to'], n['templateKey'], n['category'], n['channel']])).toEqual([
+      ['u-es', 'payouts.sale.course', 'SYSTEM', 'in-app'],
+      ['u-en', 'payouts.sale.course', 'SYSTEM', 'in-app'],
+      ['u-pt', 'payouts.sale.course', 'SYSTEM', 'in-app'],
+    ]);
+    expect(hubSent[0]!['variables']).toMatchObject({
+      product: 'Torno para principiantes',
+      buyer: 'Marta Ensayo',
+      amount: { hubValue: 'money', cents: 4900, currency: 'eur' },
+      held: false,
+    });
+    expect(sent.map((m) => [m.to, m.from])).toEqual([
+      ['creadora@aula.test', 'Didacta'],
+      ['socio@aula.test', 'Didacta'],
+      ['socia@escola.test', 'Didacta'],
+    ]);
+    expect(sent[0]!.subject).toMatch(/^Nueva venta: «Torno para principiantes»/);
+    expect(sent[0]!.text).toContain('Marta Ensayo ha comprado');
+    expect(sent[0]!.text).toContain('Ver mis ventas: https://ana.test/admin/payments');
+    expect(sent[1]!.subject).toMatch(/^New sale: "Torno para principiantes"/);
+    expect(sent[2]!.subject).toMatch(/^Nova venda: “Torno para principiantes”/);
+  });
+
+  it('respeta las preferencias: quien apagó el correo de «Sistema» no lo recibe', async () => {
+    const { notifier, sent, prisma } = deps();
+    prisma.userNotificationPreference.findUnique.mockImplementation(async (args?: unknown) =>
+      (args as { where: { tenantId_userId_category_channel: { userId: string } } }).where
+        .tenantId_userId_category_channel.userId === 'u-en'
+        ? { enabled: false }
+        : null,
+    );
+    await notifier.saleMade(SALE);
+    expect(sent.map((m) => m.to)).toEqual(['creadora@aula.test', 'socia@escola.test']);
+  });
+
+  it('sin nombre, el correo del comprador; sin campana, solo el correo; nunca lanza', async () => {
+    const { notifier, sent, prisma } = deps();
+    prisma.user.findFirst.mockResolvedValueOnce({ name: null });
+    await expect(notifier.saleMade({ ...SALE, kind: 'membership' })).resolves.toBeUndefined();
+    expect(sent[0]!.text).toContain('marta@example.test se ha unido a «Torno para principiantes»');
+  });
+});
+
+describe('aviso al ALUMNO al reembolsarle', () => {
+  const REFUND = {
+    tenantId: TENANT,
+    saleId: 'venta-1',
+    refundId: 'reembolso-1',
+    kind: 'course' as const,
+    description: 'Torno para principiantes',
+    amount: 4900,
+    currency: 'eur',
+    buyerEmail: 'Marta@Example.test',
+    full: true,
+  };
+
+  it('textos: total pierde el acceso, parcial lo conserva; membresía no habla de acceso', () => {
+    const full = refundIssuedTexts({
+      lang: 'es',
+      academy: 'Cerámica con Lucía',
+      kind: 'course',
+      product: 'Torno',
+      amount: '49,00 €',
+      full: true,
+    });
+    expect(full.subject).toBe('Te hemos devuelto 49,00 € de «Torno»');
+    expect(full.body).toContain('Cerámica con Lucía te ha devuelto 49,00 €');
+    expect(full.body).toContain('ya no tienes acceso al curso');
+    const partial = refundIssuedTexts({
+      lang: 'en',
+      academy: 'Sourdough with Sam',
+      kind: 'course',
+      product: 'Bread',
+      amount: '£10.00',
+      full: false,
+    });
+    expect(partial.body).toContain('You still have access to the course.');
+    const membership = refundIssuedTexts({
+      lang: 'pt',
+      academy: 'Escola de Violão da Ana',
+      kind: 'membership',
+      product: 'Mensal',
+      amount: '€ 29,00',
+      full: true,
+    });
+    expect(membership.subject).toBe('Devolvemos € 29,00 de “Mensal”');
+    expect(membership.body).not.toMatch(/acesso/);
+    expect(`${membership.subject} ${membership.body}`).not.toMatch(/devuelto|tarjeta|«/);
+  });
+
+  it('va al alumno, en su idioma, con la marca y el SMTP de la academia', async () => {
+    const { notifier, sent, smtpResolver } = deps();
+    await notifier.refundIssued(REFUND);
+    expect(smtpResolver.resolve).toHaveBeenCalledWith(TENANT);
+    expect(sent).toHaveLength(1);
+    expect(sent[0]).toMatchObject({ to: 'marta@example.test', from: 'Aula de Ana' });
+    expect(sent[0]!.subject).toMatch(/^Te hemos devuelto 49,00\s€ de «Torno para principiantes»$/);
+    expect(sent[0]!.text).toContain('ya no tienes acceso al curso');
+  });
+
+  it('sin cuenta, en el idioma del aula; a una cuenta suspendida no se le escribe', async () => {
+    const noUser = deps();
+    noUser.prisma.user.findFirst.mockResolvedValueOnce(null);
+    noUser.prisma.tenantSetting.findUnique.mockResolvedValue({ valueJson: 'en' });
+    await noUser.notifier.refundIssued({ ...REFUND, full: false });
+    expect(noUser.sent[0]!.to).toBe('Marta@Example.test');
+    expect(noUser.sent[0]!.subject).toMatch(/^We've refunded you €49\.00/);
+
+    const suspended = deps();
+    suspended.prisma.user.findFirst.mockResolvedValueOnce({
+      email: 'marta@example.test',
+      locale: 'es-ES',
+      deletedAt: null,
+      status: 'SUSPENDED',
+    });
+    await suspended.notifier.refundIssued(REFUND);
+    expect(suspended.sent).toEqual([]);
+  });
+});
+
+describe('pie de los avisos del operador', () => {
+  it('dice de qué academia se trata', () => {
+    expect(creatorFooter('es', 'Didacta', 'Cerámica con Lucía')).toBe(
+      'Te escribe Didacta porque administras «Cerámica con Lucía».',
+    );
   });
 });

@@ -223,6 +223,21 @@ export class PlatformEventProcessor {
             attempts: { increment: 1 },
           },
         });
+
+        // AVISO de la venta a quien administra el aula: después del reparto,
+        // que es cuando existe la cuenta del alumno (se le nombra en el aviso).
+        // Idempotente (sello en la venta): una reentrega no lo repite. Nunca
+        // tumba el webhook; lo que no salga lo recoge el barrido.
+        if (money.saleId) {
+          try {
+            await this.runtime.saleNotices.notify(tenantId, money.saleId);
+          } catch (err) {
+            this.logger.warn(
+              { err, eventId: event.id, tenantId, saleId: money.saleId },
+              'payouts: el aviso de la venta no salió (lo recoge el barrido)',
+            );
+          }
+        }
         return {
           received: true,
           outcome: 'processed',
@@ -249,6 +264,8 @@ export class PlatformEventProcessor {
     originRef: ObjectRef | null = null,
   ): Promise<{
     sale?: PlatformWebhookResult['sale'];
+    /** La venta anotada (o que ya estaba) por este evento: para avisar de ella. */
+    saleId?: string;
     settlement?: PlatformWebhookResult['settlement'];
     refund?: string;
     dispute?: string;
@@ -303,16 +320,28 @@ export class PlatformEventProcessor {
           // E6: retenida por un reembolso o una disputa que aún no consta (sus
           // eventos llegaron antes que la venta): se ponen al día ahora.
           if (settled.outcome === 'held') await this.catchUpLosses(tenantId, recorded.chargeId);
-          return { sale: recorded.outcome, settlement: settled.outcome, error: null };
+          return {
+            sale: recorded.outcome,
+            saleId: recorded.saleId,
+            settlement: settled.outcome,
+            error: null,
+          };
         } catch (err) {
           return {
             sale: recorded.outcome,
+            saleId: recorded.saleId,
             settlement: 'pending',
             error: fail('settlement', err, { saleId: recorded.saleId }),
           };
         }
       }
-      return { sale: recorded.outcome, error: null };
+      return {
+        sale: recorded.outcome,
+        ...(recorded.outcome === 'created' || recorded.outcome === 'exists'
+          ? { saleId: recorded.saleId }
+          : {}),
+        error: null,
+      };
     }
 
     // ── E6: reembolsos y disputas (antes que `charge`: `charge.refunded` es suyo).
@@ -406,6 +435,7 @@ export class PlatformEventProcessor {
     fail: (stage: string, err: unknown, extra: Record<string, unknown>) => string,
   ): Promise<{
     sale?: PlatformWebhookResult['sale'];
+    saleId?: string;
     settlement?: PlatformWebhookResult['settlement'];
     error: string | null;
   } | null> {
@@ -444,7 +474,9 @@ export class PlatformEventProcessor {
         `${PAYOUTS_RENEWAL_ON_BLOCKED_ACCOUNT_ALERT}: renovación cobrada con la cuenta del creador ${recorded.accountStatus}; la venta queda retenida hasta que pueda recibir transferencias`,
       );
     }
-    if (!this.runtime.settleInline) return { sale: recorded.outcome, error: null };
+    if (!this.runtime.settleInline) {
+      return { sale: recorded.outcome, saleId: recorded.saleId, error: null };
+    }
     try {
       const settled = await this.runtime.settlement.settleSale(tenantId, recorded.saleId, {
         force: true,
@@ -452,10 +484,16 @@ export class PlatformEventProcessor {
       // E6, igual que en la venta de una compra: un reembolso o una disputa de
       // este cargo que llegó antes que la factura se pone al día ahora.
       if (settled.outcome === 'held') await this.catchUpLosses(tenantId, recorded.chargeId);
-      return { sale: recorded.outcome, settlement: settled.outcome, error: null };
+      return {
+        sale: recorded.outcome,
+        saleId: recorded.saleId,
+        settlement: settled.outcome,
+        error: null,
+      };
     } catch (err) {
       return {
         sale: recorded.outcome,
+        saleId: recorded.saleId,
         settlement: 'pending',
         error: fail('settlement', err, { saleId: recorded.saleId }),
       };

@@ -34,6 +34,7 @@ import {
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { BillingProvisioningService } from '../../src/modules/billing/billing-provisioning.service';
 import { ModuleRegistryService } from '../../src/modules/module-registry.service';
+import type { PayoutsEmailNotifier } from '../../src/modules/payouts/payouts-notifier';
 import { PayoutsRuntime } from '../../src/modules/payouts/payouts-runtime.service';
 import { ModulesPlatformEventDispatcher } from '../../src/modules/payouts/platform-event-dispatcher';
 import {
@@ -87,6 +88,8 @@ describeWithDb('Reembolsos, disputas y deudas — Postgres real como didacta_app
   const reversals: StripeObject[] = [];
   /** Saldo de cada cuenta conectada por divisa. Sin entrada: de sobra. */
   const balances = new Map<string, Record<string, number>>();
+  /** Mientras exista, las reversiones se quedan EN CURSO en Stripe. */
+  let reversalGate: Promise<void> | null = null;
   const logger = { error: vi.fn(), warn: vi.fn(), log: vi.fn() };
 
   const stripeError = (message: string, code?: string) =>
@@ -112,6 +115,17 @@ describeWithDb('Reembolsos, disputas y deudas — Postgres real como didacta_app
       const moduleRef = await Test.createTestingModule({ imports: [PrismaModule] }).compile();
       await moduleRef.init();
       prisma = moduleRef.get(PrismaService);
+      // Abre de antemano las conexiones que piden los tests de concurrencia (5
+      // operaciones a la vez). Una conexión NUEVA a Postgres en Docker sobre
+      // Windows tarda lo bastante como para que 5 `$transaction` simultáneas
+      // superen su espera de 2 s («Unable to start a transaction in the given
+      // time») antes de llegar a probar nada. Una consulta suelta espera al
+      // pool sin ese límite.
+      await Promise.all(
+        Array.from({ length: 8 }, () =>
+          prisma.$queryRawUnsafe('SELECT 1 AS ok FROM pg_sleep(0.2)'),
+        ),
+      );
       closeModule = () => moduleRef.close();
 
       for (const [id, slug] of [
@@ -214,7 +228,8 @@ describeWithDb('Reembolsos, disputas y deudas — Postgres real como didacta_app
         has_more: false,
         data: reversals.filter((r) => r['transfer'] === req.pathParams['id']).reverse(),
       }));
-      fake.on('POST', '/v1/transfers/:id/reversals', (req, f) => {
+      fake.on('POST', '/v1/transfers/:id/reversals', async (req, f) => {
+        if (reversalGate) await reversalGate;
         const transfer = f.get(req.pathParams['id']!)!;
         const amount = req.params['amount'] as number;
         const account = transfer['destination'] as string;
@@ -520,6 +535,136 @@ describeWithDb('Reembolsos, disputas y deudas — Postgres real como didacta_app
     const next = await soldAndTransferred(A);
     expect(await saleRow(next.saleId)).toMatchObject({ debtNetted: 175, transferAmount: 9150 });
     expect(await violationsOfOurTenants()).toEqual([]);
+  });
+
+  it('ensayo general: el botón y los webhooks del MISMO reembolso a la vez → UNA reversión y ningún payouts.refund_pending', async () => {
+    const s = await soldAndTransferred(A);
+    const transferId = (await saleRow(s.saleId)).stripeTransferId!;
+    const reversalPath = `/v1/transfers/${transferId}/reversals`;
+    const errorsBefore = logger.error.mock.calls.length;
+
+    // La reversión del botón tarda en Stripe; mientras, llegan los webhooks.
+    let release!: () => void;
+    reversalGate = new Promise<void>((resolve) => (release = resolve));
+    const panel = runtime.refunds.refund({ tenantId: A, saleId: s.saleId, initiatedBy: 'admin-a' });
+    for (let i = 0; i < 500 && fake.callsTo('POST', reversalPath).length === 0; i += 1) {
+      await new Promise((r) => setTimeout(r, 10));
+    }
+    expect(fake.callsTo('POST', reversalPath)).toHaveLength(1);
+
+    const charge = fake.get(s.chId)!;
+    const refundInStripe = refundsInStripe.find((r) => r['charge'] === s.chId)!;
+    const refunded = await platform.handle(
+      signed(
+        'charge.refunded',
+        {
+          id: s.chId,
+          object: 'charge',
+          payment_intent: s.piId,
+          amount: charge['amount'],
+          amount_refunded: charge['amount_refunded'],
+        },
+        evtId('refunded'),
+      ),
+    );
+    const created = await platform.handle(
+      signed(
+        'refund.created',
+        { id: refundInStripe['id'], object: 'refund', charge: s.chId, status: 'succeeded' },
+        evtId('refund_created'),
+      ),
+    );
+    expect(refunded).toMatchObject({ outcome: 'processed', refund: 'synced' });
+    expect(created).toMatchObject({ outcome: 'processed', refund: 'synced' });
+
+    release();
+    reversalGate = null;
+    expect((await panel).accounting).toBe('accounted');
+
+    // Una sola petición de reversión y un solo asiento; nada de errores graves.
+    expect(fake.callsTo('POST', reversalPath)).toHaveLength(1);
+    expect(reversals.filter((r) => r['transfer'] === transferId)).toHaveLength(1);
+    expect(await lossEntries(s.saleId)).toEqual({
+      REFUND: -10000,
+      PLATFORM_FEE_REFUND: 500,
+      TRANSFER_REVERSAL: 9325,
+      DEBT_CREATED: 175,
+    });
+    const newErrors = logger.error.mock.calls.slice(errorsBefore);
+    expect(newErrors.filter((call) => String(call[1] ?? '').includes('refund_pending'))).toEqual(
+      [],
+    );
+    const row = await admin.modPayoutsRefund.findFirstOrThrow({ where: { saleId: s.saleId } });
+    expect(row).toMatchObject({ reversalStatus: 'DONE', reversalLeaseUntil: null });
+    // Los dos eventos quedan procesados (no vuelven a la cola del conciliador).
+    const events = await admin.modPayoutsWebhookEvent.findMany({
+      where: { objectId: { in: [s.chId, refundInStripe['id'] as string] } },
+      select: { processedAt: true, errorMessage: true },
+    });
+    expect(events.length).toBeGreaterThanOrEqual(2);
+    expect(events.every((e) => e.processedAt !== null && e.errorMessage === null)).toBe(true);
+    expect(await violationsOfOurTenants()).toEqual([]);
+
+    // La deuda de 175 (comisión de la tarjeta) la compensa la siguiente venta,
+    // como en el test anterior: el aula queda como la encontró el siguiente.
+    const next = await soldAndTransferred(A);
+    expect(await saleRow(next.saleId)).toMatchObject({ debtNetted: 175 });
+  });
+
+  it('aviso de venta: UNO por venta aunque el webhook se reentregue o se barra (sello en Postgres como didacta_app)', async () => {
+    const saleMade = vi.spyOn(runtime.notifier as PayoutsEmailNotifier, 'saleMade');
+    saleMade.mockClear();
+    const s = await soldAndTransferred(A);
+    expect(saleMade).toHaveBeenCalledTimes(1);
+    expect(saleMade.mock.calls[0]![0]).toMatchObject({
+      tenantId: A,
+      saleId: s.saleId,
+      kind: 'course',
+      amount: 10000,
+      currency: 'eur',
+      heldForTaxData: false,
+    });
+    expect((await saleRow(s.saleId)).creatorNotifiedAt).not.toBeNull();
+
+    // Reentrega del mismo `completed` (otro id de evento): la venta ya existe y ya se avisó.
+    await platform.handle(
+      signed(
+        'checkout.session.completed',
+        {
+          id: s.sessionId,
+          object: 'checkout.session',
+          mode: 'payment',
+          payment_status: 'paid',
+          status: 'complete',
+          payment_intent: s.piId,
+          client_reference_id: s.orderId,
+          metadata: {
+            orderId: s.orderId,
+            productId: randomUUID(),
+            tenantId: A,
+            courseId: randomUUID(),
+          },
+        },
+        evtId('completed_again'),
+      ),
+    );
+    await runtime.saleNotices.sweep();
+    expect(saleMade).toHaveBeenCalledTimes(1);
+
+    // Cinco avisos a la vez de una venta sin sello: Postgres deja pasar UNO.
+    await admin.modPayoutsSale.update({
+      where: { id: s.saleId },
+      data: { creatorNotifiedAt: null },
+    });
+    saleMade.mockClear();
+    const outcomes = await Promise.all(
+      Array.from({ length: 5 }, () => runtime.saleNotices.notify(A, s.saleId)),
+    );
+    expect(outcomes.filter((o) => o === 'sent')).toHaveLength(1);
+    expect(saleMade).toHaveBeenCalledTimes(1);
+    // Otra academia no la ve (RLS) ni la sella.
+    expect(await runtime.saleNotices.notify(B, s.saleId)).toBe('not_found');
+    saleMade.mockRestore();
   });
 
   it('dos parciales (4000 + 6000) suman exactamente la venta y un tercero no pasa', async () => {

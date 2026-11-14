@@ -402,6 +402,39 @@
         "surveyUrl": "Link para a página da aula (/live/…)",
         "tenantName": "Nome da plataforma"
       }
+    },
+    "payouts_sale_course": {
+      "name": "Venda de um curso (aviso à equipe)",
+      "description": "Quando um aluno compra um curso, para quem administra a escola. Só no sino: o e-mail é enviado pelo operador dos recebimentos.",
+      "vars": {
+        "product": "Curso ou plano vendido",
+        "amount": "O que o aluno pagou, na moeda dele",
+        "buyer": "Nome do aluno (ou o e-mail, se ainda não tiver nome)",
+        "held": "Se o dinheiro fica retido por faltarem os dados fiscais",
+        "tenantName": "Nome da plataforma"
+      }
+    },
+    "payouts_sale_membership": {
+      "name": "Nova assinatura (aviso à equipe)",
+      "description": "Quando alguém entra em uma assinatura, para quem administra a escola. Só no sino: o e-mail é enviado pelo operador dos recebimentos.",
+      "vars": {
+        "product": "Curso ou plano vendido",
+        "amount": "O que o aluno pagou, na moeda dele",
+        "buyer": "Nome do aluno (ou o e-mail, se ainda não tiver nome)",
+        "held": "Se o dinheiro fica retido por faltarem os dados fiscais",
+        "tenantName": "Nome da plataforma"
+      }
+    },
+    "payouts_sale_renewal": {
+      "name": "Renovação de uma assinatura (aviso à equipe)",
+      "description": "Quando a renovação de uma assinatura é cobrada, para quem administra a escola. Só no sino: o e-mail é enviado pelo operador dos recebimentos.",
+      "vars": {
+        "product": "Curso ou plano vendido",
+        "amount": "O que o aluno pagou, na moeda dele",
+        "buyer": "Nome do aluno (ou o e-mail, se ainda não tiver nome)",
+        "held": "Se o dinheiro fica retido por faltarem os dados fiscais",
+        "tenantName": "Nome da plataforma"
+      }
     }
   }
 }
