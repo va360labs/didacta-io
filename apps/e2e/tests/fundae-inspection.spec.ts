@@ -257,8 +257,17 @@ test.describe('Fundae · Acceso de seguimiento (LMS-123)', () => {
     });
     await page.goto('/inspection');
 
-    await expect(page.getByRole('heading', { name: /Seguimiento/i })).toBeVisible();
-    await expect(page.getByText(`Acción seguimiento E2E ${stamp}`)).toBeVisible();
+    // El h1 de la página, por nivel. Con `name: /Seguimiento/i` a secas el
+    // locator casaba también con el título del expediente («Acción seguimiento
+    // E2E …», un h3) en cuanto este se pintaba: si la API contestaba antes de
+    // la primera comprobación, dos encabezados y fallo por ambigüedad; si
+    // contestaba después, verde. Una carrera del propio test.
+    await expect(
+      page.getByRole('heading', { level: 1, name: /Seguimiento de la acción/i }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole('heading', { level: 3, name: new RegExp(`Acción seguimiento E2E ${stamp}`) }),
+    ).toBeVisible();
     await expect(page.getByText('Alumna Seguimiento E2E')).toBeVisible();
 
     // El itinerario se despliega por participante y trae la lección real.
