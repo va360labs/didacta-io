@@ -6,6 +6,7 @@
   "localCurrencyNote": "Al pagar puedes verlo en tu moneda",
   "catalogo": {
     "metaTitle": "Cursos",
+    "metaDescription": "Los cursos de {name}: elige el que quieras y empieza hoy, con pago único.",
     "title": "Cursos",
     "loadError": "No se pudo cargar el catálogo. Recarga para reintentar.",
     "filterAll": "Todos",
@@ -50,6 +51,7 @@
   },
   "ficha": {
     "metaTitle": "Curso",
+    "metaDescription": "{title}, un curso de {name}.",
     "notAvailableTitle": "Curso no disponible",
     "notAvailableBody": "Este curso no está a la venta ahora mismo. Echa un vistazo al resto del catálogo.",
     "breadcrumbCourses": "Cursos",

@@ -276,6 +276,36 @@ describe('MCP — protocolo', () => {
     expect(r.instructions).toMatch(/draft/);
   });
 
+  it('initialize: la palabra con la que la interfaz llama a la academia, en su idioma («escola» en pt)', async () => {
+    // Sesión real en pt-BR: el agente habló de «ferramentas da academia»
+    // porque las instrucciones solo decían «academy».
+    const initialize = async () =>
+      (
+        await rpc(
+          { jsonrpc: '2.0', id: 'w', method: 'initialize', params: {} },
+          'Bearer lmsk_aula_a',
+        )
+      ).json().result.instructions as string;
+    const frase = (palabra: string) =>
+      `In this academy's language the academy is called "${palabra}": use that word when talking to the user`;
+    try {
+      idiomaAula = 'pt';
+      const pt = await initialize();
+      expect(pt).toContain(frase('escola'));
+      expect(pt).not.toContain('"academia"');
+      idiomaAula = 'es';
+      const es = await initialize();
+      expect(es).toContain(frase('academia'));
+      expect(es).not.toContain('"escola"');
+      idiomaAula = 'en';
+      const en = await initialize();
+      expect(en).toContain(frase('academy'));
+      expect(en).not.toMatch(/"(escola|academia)"/);
+    } finally {
+      idiomaAula = 'es';
+    }
+  });
+
   it('initialize: instrucciones en inglés, pero la pantalla con el nombre que ve el aula', async () => {
     const initialize = async () =>
       (

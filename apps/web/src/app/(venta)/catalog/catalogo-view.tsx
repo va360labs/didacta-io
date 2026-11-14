@@ -13,6 +13,10 @@
  *     % de descuento si los hay) y enlace a la ficha pública de venta.
  * Cero datos inventados: todo sale de la API del tenant. Mismo shell (venta)
  * que /join — sin gate de sesión.
+ *
+ * Los cursos (y el nombre y logo del aula) llegan pintados desde el servidor
+ * para que estén en el HTML que lee un buscador; si el servidor no pudo
+ * traerlos, se piden aquí como antes.
  */
 
 import { useEffect, useState } from 'react';
@@ -24,18 +28,26 @@ import { useTenantContext } from '@/lib/tenant-context';
 import { formatCents } from '@/lib/membership';
 import { featuredOption, getPublicCatalog, type CatalogCourse } from '@/lib/catalog';
 import { showLocalCurrencyNote } from '@/lib/checkout-hints';
-import { richHtmlToPlainText } from '@/lib/sanitize-html';
+import { htmlToText } from '@/lib/seo';
 import { captureReferralFromLocation } from '@/lib/referral-links';
 
-export function CatalogoView() {
+interface Props {
+  /** Los cursos a la venta, ya leídos en el servidor. Sin ellos, se piden aquí. */
+  initialCourses?: CatalogCourse[];
+  /** Nombre y logo del aula para la cabecera mientras llega su contexto. */
+  initialBrand?: { name: string; logoUrl: string | null };
+}
+
+export function CatalogoView({ initialCourses, initialBrand }: Props = {}) {
   const t = useTranslations('publicSite');
   const tCommon = useTranslations('common');
   // Área pública: se pinta en SSR, donde el singleton de `user-prefs` está
   // vacío. Sin `locale` explícito el importe del servidor y el del cliente no
   // coinciden → mismatch de hidratación.
   const locale = useLocale();
-  const { tenant } = useTenantContext();
-  const [courses, setCourses] = useState<CatalogCourse[] | null>(null);
+  const { tenant: tenantCtx } = useTenantContext();
+  const tenant = tenantCtx ?? initialBrand ?? null;
+  const [courses, setCourses] = useState<CatalogCourse[] | null>(initialCourses ?? null);
   const [loadError, setLoadError] = useState(false);
   const [filter, setFilter] = useState('Todos');
 
@@ -46,6 +58,8 @@ export function CatalogoView() {
   }, []);
 
   useEffect(() => {
+    // Ya vienen del servidor: no se vuelven a pedir.
+    if (initialCourses) return;
     let cancelled = false;
     getPublicCatalog()
       .then((r) => {
@@ -57,7 +71,7 @@ export function CatalogoView() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [initialCourses]);
 
   if (loadError) {
     return (
@@ -183,10 +197,12 @@ export function CatalogoView() {
                     {/* Texto plano, no HTML: la descripción viene del editor
                         rich-text y aquí va recortada a dos líneas. Renderizar
                         HTML dentro de un line-clamp descuadra la tarjeta, y
-                        pintarlo tal cual enseñaba las etiquetas al comprador. */}
+                        pintarlo tal cual enseñaba las etiquetas al comprador.
+                        `htmlToText` da lo mismo en el servidor y en el
+                        navegador (la tarjeta se pinta en los dos). */}
                     {course.description ? (
                       <p className="line-clamp-2 text-sm text-text-muted">
-                        {richHtmlToPlainText(course.description)}
+                        {htmlToText(course.description)}
                       </p>
                     ) : null}
                     <div className="mt-auto flex items-end justify-between pt-3">

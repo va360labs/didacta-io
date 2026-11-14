@@ -320,6 +320,61 @@ describe('middleware · rutas viejas en español → 308 a la nueva', () => {
   });
 });
 
+describe('middleware · noindex por cabecera (solo la portada y la venta se indexan)', () => {
+  const SITIO = 'www.aula-activa.test';
+  beforeEach(() => {
+    hosts[SITIO] = { known: true, slug: 'aula-activa', surface: 'SITE', suspended: false };
+  });
+
+  it.each([
+    '/signin',
+    '/join?ref=ANA',
+    '/member-registration',
+    '/home',
+    '/community',
+    '/courses/acuarela',
+    '/admin/settings',
+    '/studio',
+    '/catalog/checkout/success?session_id=cs_1',
+  ])('%s lleva X-Robots-Tag: noindex, nofollow', async (path) => {
+    const mw = await loadMiddleware();
+    const res = await mw(request(ACTIVA, path));
+    expect(pasa(res)).toBe(true);
+    expect(res.headers.get('x-robots-tag')).toBe('noindex, nofollow');
+  });
+
+  it.each([
+    '/',
+    '/?ref=ANA',
+    '/catalog',
+    '/catalog/acuarela?ref=ANA',
+    '/robots.txt',
+    '/sitemap.xml',
+  ])('%s no la lleva (lo decide la página con los datos del aula)', async (path) => {
+    const mw = await loadMiddleware();
+    const res = await mw(request(ACTIVA, path));
+    expect(pasa(res)).toBe(true);
+    expect(res.headers.get('x-robots-tag')).toBeNull();
+  });
+
+  it('también en localhost (un self-host sin dominio)', async () => {
+    const mw = await loadMiddleware();
+    const res = await mw(
+      new NextRequest('http://localhost:3000/admin', {
+        headers: new Headers({ host: 'localhost:3000' }),
+      }),
+    );
+    expect(res.headers.get('x-robots-tag')).toBe('noindex, nofollow');
+  });
+
+  it('el SITIO público no se toca: sus reglas son las suyas', async () => {
+    const mw = await loadMiddleware();
+    const res = await mw(request(SITIO, '/blog'));
+    expect(res.headers.get('x-middleware-rewrite')).toBe(`https://${SITIO}/site/blog`);
+    expect(res.headers.get('x-robots-tag')).toBeNull();
+  });
+});
+
 describe('textos de aula suspendida', () => {
   it('están en los dos idiomas y no son el mismo texto', () => {
     for (const key of ['metaTitle', 'title', 'body', 'owner'] as const) {
