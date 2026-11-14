@@ -12,6 +12,11 @@
 #     `python3 make g++`.
 #   - Prisma necesita el binary target `linux-musl-openssl-3.0.x`
 #     (definido en packages/database/prisma/schema.prisma).
+#   - Los motores de Prisma (cliente Y CLI de `migrate deploy`) se descargan
+#     en el BUILD y viajan dentro de la imagen. El contenedor tiene que
+#     arrancar sin acceso a binaries.prisma.sh: ver `openssl` en el stage
+#     base, los motores que el pruner aparta y restaura alrededor del
+#     `pnpm install --prod`, y la comprobación `--network=none` del runner.
 #
 # IMPORTANTE — patrón de stages:
 #
@@ -33,7 +38,16 @@
 # Stage 1: base — Node 22 LTS sobre Alpine + pnpm 10
 # ----------------------------------------------------------------------------
 FROM node:22-alpine AS base
-RUN npm install --global pnpm@10.21.0
+# `openssl` NO es opcional en el build. Prisma 5 decide qué variante de sus
+# motores bajar mirando la versión de OpenSSL del sistema; en Alpine solo la
+# reconoce por el binario `openssl` (no busca libssl.so.3 en /usr/lib). Sin
+# él cae a OpenSSL 1.1 y el `prisma generate` del builder baja los motores
+# del CLI para `linux-musl`, mientras que el runner (que SÍ lleva openssl)
+# pide los de `linux-musl-openssl-3.0.x`. Resultado hasta beta.22: el
+# `prisma migrate deploy` del entrypoint descargaba los motores de
+# binaries.prisma.sh en CADA arranque, y sin red el contenedor no levantaba.
+RUN apk add --no-cache openssl \
+ && npm install --global pnpm@10.21.0
 WORKDIR /repo
 ENV NODE_ENV=production \
     HUSKY=0
@@ -158,11 +172,31 @@ RUN rm -rf apps/web/.next/cache apps/e2e || true
 #    node_modules sin TTY (sin esto aborta silenciosamente y la imagen se
 #    queda con devDeps).
 ENV CI=true
+# Motores del CLI de Prisma (los que usa `prisma migrate deploy` al arrancar).
+# Los baja el `prisma generate` del builder para la plataforma del build
+# (`linux-musl-openssl-3.0.x`, gracias al openssl del stage base). Pero el
+# `pnpm install --prod` de abajo vuelve a enlazar @prisma/engines desde la
+# caché de pnpm, que trae los motores que hubiera guardado un build anterior
+# (hasta beta.22, `linux-musl` de OpenSSL 1.1) y pisa los buenos. Por eso los
+# apartamos antes del install y los restauramos después, quitando lo que
+# haya traído la caché. Si falta alguno, `cp` falla y el build se corta.
+# La ruta va por el patrón de pnpm (en el builder no hay hoisting a la raíz:
+# el .npmrc con shamefully-hoist no entra hasta el `COPY . .`); si casa con
+# cero o con más de un directorio, `[ -d ]` falla y el build se corta.
+RUN engines="$(echo node_modules/.pnpm/@prisma+engines@*/node_modules/@prisma/engines)" \
+ && [ -d "$engines" ] \
+ && mkdir -p /prisma-engines \
+ && cp -a "$engines"/libquery_engine-* "$engines"/schema-engine-* /prisma-engines/
 # NOTA: no usamos `--offline` ni `pnpm store prune` aquí. El `store prune`
 # corrompe el cache mount compartido de buildkit (borra paquetes que un build
 # posterior con --offline ya no encuentra → prisma CLI sin `build/`, etc.).
 RUN --mount=type=cache,id=pnpm,target=/root/.local/share/pnpm/store \
     pnpm install --frozen-lockfile --prod
+RUN engines="$(echo node_modules/.pnpm/@prisma+engines@*/node_modules/@prisma/engines)" \
+ && [ -d "$engines" ] \
+ && rm -f "$engines"/libquery_engine-* "$engines"/schema-engine-* \
+ && cp -a /prisma-engines/. "$engines"/ \
+ && ls -l "$engines"
 
 # ----------------------------------------------------------------------------
 # Stage 6: runner — imagen final desde alpine LIMPIO (no hereda del builder)
@@ -208,6 +242,9 @@ ENV NODE_ENV=production \
     API_PORT=4000 \
     WEB_PORT=3000 \
     DIDACTA_CORE_VERSION=${DIDACTA_VERSION:-0.0.0}
+# Sin el aviso de versiones del CLI de Prisma (checkpoint.prisma.io) en cada
+# `migrate deploy`: el arranque no tiene que salir a internet.
+ENV CHECKPOINT_DISABLE=1
 
 # Usuario no-root.
 RUN addgroup -S -g 1001 didacta \
@@ -223,11 +260,22 @@ COPY --from=pruner --chown=didacta:didacta /repo /repo
 # paquete (stub de 2KB que lanza "did not initialize yet" en runtime),
 # perdiendo el `prisma generate` del builder. Como regenerar tras el prune
 # falla (engines podados), copiamos el client YA GENERADO desde el builder
-# (que conserva index.js real + el query engine linux-musl). La versión del
-# path debe coincidir con la de pnpm-lock.yaml (@prisma/client 5.22.0).
+# (que conserva index.js real + el query engine linux-musl-openssl-3.0.x).
+# La versión del path debe coincidir con la de pnpm-lock.yaml
+# (@prisma/client 5.22.0).
 COPY --from=builder --chown=didacta:didacta \
   /repo/node_modules/.pnpm/@prisma+client@5.22.0_prisma@5.22.0/node_modules/.prisma \
   /repo/node_modules/.pnpm/@prisma+client@5.22.0_prisma@5.22.0/node_modules/.prisma
+
+# Guardia: la imagen tiene que poder ejecutar el CLI de Prisma SIN red. Si
+# faltase el motor de la plataforma real (`linux-musl-openssl-3.0.x`), el CLI
+# intentaría bajarlo de binaries.prisma.sh, aquí fallaría por no haber red y
+# el build se cortaría en vez de publicar una imagen que no arranca sin
+# internet. `validate` pasa por la misma comprobación de motores que el
+# `migrate deploy` del entrypoint; la URL es ficticia (no se conecta).
+RUN --network=none \
+    DATABASE_URL=postgresql://offline-check@localhost:5432/offline-check \
+    pnpm --filter @didacta/database exec prisma validate
 
 # Entrypoint: migraciones + rls + arranque.
 COPY --chown=didacta:didacta infra/docker/entrypoint.sh /usr/local/bin/entrypoint.sh
