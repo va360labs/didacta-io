@@ -302,11 +302,14 @@ test('6: un enlace caducado ofrece otro con un clic (y solo uno)', async ({ brow
   test.setTimeout(90_000);
   const email = 'pedro@acceso.test';
   await crearAlumna(email, 'Pedro Tardón');
-  const tokens = () =>
-    sql(
-      `SELECT count(*) FROM password_reset_token p JOIN "user" u ON u.id = p.user_id ` +
-        `WHERE u.email = '${email}'`,
-    );
+  // Los enlaces de ESTA cuenta (el mismo correo puede estar en el aula de una
+  // pasada anterior del spec).
+  const deLaCuenta =
+    `FROM password_reset_token p JOIN "user" u ON u.id = p.user_id ` +
+    `JOIN tenant t ON t.id = u.tenant_id WHERE u.email = '${email}' AND t.slug = '${tenant.slug}'`;
+  const tokens = () => sql(`SELECT count(*) ${deLaCuenta}`);
+  // El de la invitación que acaba de mandar `admin/users`.
+  expect(Number(tokens())).toBe(1);
   const antes = Number(tokens());
   const ctx = await contexto(browser);
   const page = await ctx.newPage();
@@ -328,8 +331,8 @@ test('6: un enlace caducado ofrece otro con un clic (y solo uno)', async ({ brow
   // (La invitación que hizo `admin/users` ya dejó uno vivo, que el nuevo invalida.)
   await expect.poll(() => Number(tokens())).toBe(antes + 2);
   const vivos = sql(
-    `SELECT round(extract(epoch FROM p.expires_at - p.created_at) / 86400) FROM password_reset_token p ` +
-      `JOIN "user" u ON u.id = p.user_id WHERE u.email = '${email}' AND p.used_at IS NULL`,
+    `SELECT round(extract(epoch FROM p.expires_at - p.created_at) / 86400) ${deLaCuenta} ` +
+      `AND p.used_at IS NULL`,
   );
   expect(vivos).toBe('7');
 
