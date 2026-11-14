@@ -196,7 +196,7 @@
   "abandoning": "Abandonando…",
   "abandonYes": "Sí, abandonar",
   "resourcesTitle": "Recursos",
-  "collectionsSummary": "{count, plural, one {# coleccion} other {# colecciones}} con todo lo que usamos en clase.",
+  "collectionsSummary": "{count, plural, one {# colección} other {# colecciones}} con todo lo que usamos en clase.",
   "resourcesSubtitle": "Todo lo que usamos en clase, organizado en colecciones.",
   "newCollection": "Nueva colección",
   "shareResource": "Compartir recurso",
