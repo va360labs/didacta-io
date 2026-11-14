@@ -318,7 +318,8 @@ export function SaleDetailDialog({
                   </a>
                 ) : null}
               </div>
-              {!payout && sale.refundState !== 'full' ? (
+              {/* Sin reparto de la plataforma la cobró la cuenta propia del aula. */}
+              {!payout && !s && sale.refundState !== 'full' ? (
                 <p className="text-xs text-text-muted">{t('detalle.reembolsoFuera')}</p>
               ) : null}
               <p className="text-xs text-text-subtle">

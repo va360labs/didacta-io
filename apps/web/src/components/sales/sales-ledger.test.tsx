@@ -212,8 +212,10 @@ describe('«Todas tus ventas»', () => {
     expect(detalle.querySelector('[data-testid="detalle-ver-alumno"]')!.getAttribute('href')).toBe(
       '/u/u-1',
     );
-    // Sin venta de la plataforma no hay botón de reembolsar (lo explica).
+    // Sin la venta de «Tus ventas» no hay botón de reembolsar; con reparto de la
+    // plataforma tampoco se le manda a «su» Stripe.
     expect(detalle.querySelector('[data-testid="detalle-reembolsar"]')).toBeNull();
+    expect(detalle.textContent).not.toContain('panel de Stripe');
   });
 
   it('filtrar por estado vuelve a pedir con el filtro, y exportar lleva los mismos filtros', async () => {
