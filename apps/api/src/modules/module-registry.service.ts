@@ -87,6 +87,12 @@ import {
   GamificationService,
   type GamificationEventPublisher,
 } from '@didacta/mod-gamification';
+import {
+  buildRetentionModule,
+  RetentionService,
+  type RetentionEventPublisher,
+  type RetentionPorts,
+} from '@didacta/mod-retention';
 import { communityModule, CommunityService } from '@didacta/mod-community';
 import { coursesModule, CoursesService } from '@didacta/mod-courses';
 import { helloWorldModule } from '@didacta/mod-hello-world';
@@ -197,6 +203,13 @@ export class ModuleRegistryService implements OnModuleInit {
   private surveys?: SurveysService;
   private resources?: ResourcesService;
   private gamification?: GamificationService;
+  private retention?: RetentionService;
+  /**
+   * Puertos de mod.retention. Los cablea `RetentionHostPorts` (RetentionModule)
+   * al arrancar: necesitan el publicador en tiempo real de la mensajería, que
+   * vive en otro módulo de Nest y no existe todavía cuando se construye esto.
+   */
+  private retentionPorts?: RetentionPorts;
   /** Cache de activación por (tenant, módulo) para consultas fuera del path HTTP. */
   private readonly moduleEnabledCache = new Map<string, { enabled: boolean; expiresAt: number }>();
 
@@ -741,6 +754,44 @@ export class ModuleRegistryService implements OnModuleInit {
     );
     const messagingModule = buildMessagingModule(this.messaging);
 
+    // mod.retention: mensajes automáticos y miembros en riesgo. Los puertos
+    // (miembros, matrículas, mensajería…) los pone el host al arrancar.
+    const retentionEventBus = this.factory.getEventBus();
+    const retentionPublisher: RetentionEventPublisher = {
+      publish: async (tenantId, actorId, name, payload) => {
+        await retentionEventBus.publish({
+          name,
+          version: 1,
+          data: payload as never,
+          metadata: {
+            tenantId,
+            userId: actorId ?? undefined,
+            timestamp: new Date().toISOString(),
+            traceId: cryptoRandom(),
+            idempotencyKey: `${name}:${(payload as { deliveryId?: string }).deliveryId ?? cryptoRandom()}`,
+          },
+        });
+      },
+    };
+    this.retention = new RetentionService(
+      prisma,
+      () => {
+        if (!this.retentionPorts) {
+          throw new Error(
+            'mod.retention: los puertos del host no están cableados (boot incompleto).',
+          );
+        }
+        return this.retentionPorts;
+      },
+      retentionPublisher,
+      {
+        info: (msg, meta) => this.pino.log(meta ?? {}, msg),
+        warn: (msg, meta) => this.pino.warn(meta ?? {}, msg),
+        error: (msg, meta) => this.pino.error(meta ?? {}, msg),
+      },
+    );
+    const retentionModule = buildRetentionModule(this.retention);
+
     // mod.payment-connections: agregador read-only multi-cuenta. NO se gatea por
     // env (las API keys son per-conexión, cifradas en tenant_setting vía el
     // config service). El SDK de Stripe se carga perezosamente la primera vez
@@ -832,6 +883,8 @@ export class ModuleRegistryService implements OnModuleInit {
       buildMemberRegistrationModule(),
       referralsModule,
       messagingModule,
+      // Depende (hard) de mod.messaging: es su canal.
+      retentionModule,
       surveysModule,
       resourcesModule,
       gamificationModule,
@@ -1223,6 +1276,18 @@ export class ModuleRegistryService implements OnModuleInit {
       throw new Error('mod.gamification no está inicializado (boot incompleto).');
     }
     return this.gamification;
+  }
+
+  getRetentionService(): RetentionService {
+    if (!this.retention) {
+      throw new Error('mod.retention no está inicializado (boot incompleto).');
+    }
+    return this.retention;
+  }
+
+  /** Lo llama `RetentionHostPorts` al arrancar (ver `retentionPorts`). */
+  attachRetentionPorts(ports: RetentionPorts): void {
+    this.retentionPorts = ports;
   }
 
   getMessagingService(): MessagingService {
