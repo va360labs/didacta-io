@@ -82,6 +82,8 @@ export class InMemoryPlatformStripeClient implements PlatformStripeClient {
   private readonly store = new Map<string, StripeObject>();
   private readonly routes: Route[] = [];
   private readonly idempotent = new Map<string, { fingerprint: string; response: StripeObject }>();
+  /** Claves cuya petición sigue en curso (Stripe responde 409 a una segunda). */
+  private readonly inFlight = new Set<string>();
   private readonly failures: PendingFailure[] = [];
   private sequence = 0;
 
@@ -224,9 +226,29 @@ export class InMemoryPlatformStripeClient implements PlatformStripeClient {
         }
         return clone(previous.response) as T;
       }
+      // Como Stripe: la misma clave mientras la primera petición no ha
+      // terminado → 409 `idempotency_key_in_use` (lo que se vio en el ensayo
+      // general cuando el botón y el webhook revertían a la vez).
+      if (this.inFlight.has(key)) {
+        throw new PlatformStripeApiError(
+          `There is currently another in-progress request using this Idempotent Key (that probably means you submitted twice, and the other request is still going through): ${key}. Please try again later.`,
+          {
+            status: 409,
+            type: 'idempotency_error',
+            stripeCode: 'idempotency_key_in_use',
+            operation,
+          },
+        );
+      }
+      this.inFlight.add(key);
     }
 
-    const response = await this.respond(call, operation);
+    let response: StripeObject;
+    try {
+      response = await this.respond(call, operation);
+    } finally {
+      if (key) this.inFlight.delete(key);
+    }
     // Como Stripe: solo se recuerda la respuesta de una operación que terminó.
     if (key) this.idempotent.set(key, { fingerprint, response: clone(response) });
     return clone(response) as T;

@@ -72,10 +72,24 @@ export interface CurrencySummary {
   readonly gross: number;
   readonly stripeFees: number;
   readonly platformFees: number;
-  /** Ya transferido a la cuenta del creador. */
+  /** Ya transferido a la cuenta del creador (lo enviado, sin restar nada). */
   readonly received: number;
-  /** Calculado y pendiente de transferir (en camino o retenido). */
+  /**
+   * Lo que de verdad le queda de lo enviado: lo transferido, menos lo que se
+   * le retiró después (reembolsos, reclamaciones, recobros de deuda), más lo
+   * que se le devolvió al ganar una reclamación. Es lo que la web enseña como
+   * «Recibido»: tras devolver una venta entera no puede seguir diciendo que
+   * se recibió su dinero.
+   */
+  readonly receivedNet: number;
+  /** Calculado y en camino: se le transfiere en la próxima pasada. */
   readonly pending: number;
+  /**
+   * Calculado y RETENIDO (faltan datos fiscales o de cobro, o se reintenta):
+   * no sale hasta que se resuelva el motivo. Aparte de `pending` para no
+   * prometer «llega en los próximos días» de un dinero que está parado.
+   */
+  readonly held: number;
   /** Lo que se descontó de las ventas para saldar deuda. */
   readonly debtNetted: number;
   /** Deuda abierta hoy en esta divisa. */
@@ -157,6 +171,11 @@ export function estimatePayoutDate(
 
 const ARRIVAL_STATUSES = new Set<PayoutsSaleStatus>(['READY', 'TRANSFERRED']);
 
+/** ¿Se le devolvió al alumno la venta entera? (en la divisa de liquidación). */
+function fullyRefunded(row: { readonly refundedAmount: number; readonly gross: number | null }) {
+  return row.gross !== null && row.refundedAmount > 0 && row.refundedAmount >= row.gross;
+}
+
 export class PayoutsReportsService {
   constructor(private readonly db: PayoutsDbPort) {}
 
@@ -216,9 +235,11 @@ export class PayoutsReportsService {
       },
     );
     const items = rows.map((row): SaleView => {
-      const arrival = ARRIVAL_STATUSES.has(row.status)
-        ? estimatePayoutDate(row.availableOn, schedule)
-        : null;
+      // Una venta devuelta entera ya no «llega» ningún día: no se estima.
+      const arrival =
+        ARRIVAL_STATUSES.has(row.status) && !fullyRefunded(row)
+          ? estimatePayoutDate(row.availableOn, schedule)
+          : null;
       return {
         id: row.id,
         chargedAt: row.chargedAt?.toISOString() ?? null,
@@ -239,12 +260,7 @@ export class PayoutsReportsService {
         transferAmount: row.transferAmount,
         refundedAmount: row.refundedAmount,
         reversedAmount: row.reversedAmount,
-        refundState:
-          row.refundedAmount <= 0
-            ? 'none'
-            : row.gross !== null && row.refundedAmount >= row.gross
-              ? 'full'
-              : 'partial',
+        refundState: row.refundedAmount <= 0 ? 'none' : fullyRefunded(row) ? 'full' : 'partial',
         disputeOpen: disputed.has(row.id),
         disputeOutcome: disputed.has(row.id)
           ? null
@@ -273,7 +289,7 @@ export class PayoutsReportsService {
 
   /** Resumen por divisa de liquidación. Nunca suma divisas distintas. */
   async summary(tenantId: string): Promise<SalesSummary> {
-    const { groups, debts, awaiting, openDebts, openDisputes, frozen, wonFee } =
+    const { groups, debts, awaiting, openDebts, openDisputes, frozen, wonFee, reinstated } =
       await this.db.inTenant(tenantId, async (tx) => {
         const open = await tx.modPayoutsDebt.findMany({
           where: { tenantId, status: 'OPEN', amountOutstanding: { gt: 0 } },
@@ -311,6 +327,18 @@ export class PayoutsReportsService {
           }),
           frozen: await frozenDisputeSaleIds(tx, tenantId),
           wonFee: await wonDisputeFeeDebtIds(tx, tenantId, open),
+          // Lo transferido de nuevo al ganar reclamaciones (asientos TRANSFER
+          // del reintegro, en negativo como toda transferencia).
+          reinstated: await tx.modPayoutsLedgerEntry.groupBy({
+            by: ['currency'],
+            where: {
+              tenantId,
+              type: 'TRANSFER',
+              idempotencyKey: { startsWith: 'payouts:reinstate:' },
+            },
+            _sum: { amount: true },
+            orderBy: { currency: 'asc' },
+          }),
         };
       });
     const saleIds = [
@@ -343,7 +371,9 @@ export class PayoutsReportsService {
           stripeFees: 0,
           platformFees: 0,
           received: 0,
+          receivedNet: 0,
           pending: 0,
+          held: 0,
           debtNetted: 0,
           debtOutstanding: 0,
           refunded: 0,
@@ -365,9 +395,17 @@ export class PayoutsReportsService {
       entry.refunded += sum.refundedAmount ?? 0;
       entry.reversed += sum.reversedAmount ?? 0;
       if (group.status === 'TRANSFERRED') entry.received += sum.transferAmount ?? 0;
-      if (group.status === 'READY' || group.status === 'HELD') {
-        entry.pending += sum.transferAmount ?? 0;
-      }
+      if (group.status === 'READY') entry.pending += sum.transferAmount ?? 0;
+      if (group.status === 'HELD') entry.held += sum.transferAmount ?? 0;
+    }
+    for (const entry of byCurrency.values()) {
+      // Lo retirado sale siempre de lo ya enviado (una venta sin transferir
+      // se compensa en su propia transferencia, sin reversión).
+      entry.receivedNet = Math.max(0, entry.received - entry.reversed);
+    }
+    for (const row of reinstated) {
+      const back = -(row._sum.amount ?? 0);
+      if (back > 0 && byCurrency.has(row.currency)) bucket(row.currency).receivedNet += back;
     }
     for (const debt of debts) {
       const amount = debt._sum.amountOutstanding ?? 0;
