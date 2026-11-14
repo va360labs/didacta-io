@@ -5,6 +5,7 @@
 
 import { expect, test, type Browser, type Page } from '@playwright/test';
 import { injectSession } from '../helpers/auth';
+import { smtpForMailpit } from '../helpers/mailpit';
 import { apiAs, freshTenant, sql, type FreshTenant } from '../helpers/simple-tenant';
 
 /**
@@ -24,7 +25,10 @@ import { apiAs, freshTenant, sql, type FreshTenant } from '../helpers/simple-ten
  *  4. Aislamiento: otra aula no ve nada de esta ni escribe a sus miembros.
  *
  * El correo se comprueba en Mailpit si `E2E_MAILPIT_URL` está definido (el
- * stack local lo tiene); si no, en la fila de `notification` que deja el hub.
+ * arnés lo define siempre, ver `scripts/e2e-env.sh`); si no, en la fila de
+ * `notification` que deja el hub. Como en los demás specs que leen correo, el
+ * SMTP de ESTA aula apunta al buzón de pruebas (`helpers/mailpit.ts`): la
+ * instancia del arnés no tiene SMTP propio.
  */
 
 interface Auth {
@@ -178,6 +182,13 @@ test.describe('mensajes automáticos y miembros en riesgo (modo sencillo)', () =
       bearer: T,
       body: {},
     }).catch(() => undefined);
+    if (MAILPIT) {
+      await apiAs(aula.host, '/api/v1/admin/tenant-settings/smtp', {
+        method: 'PUT',
+        bearer: T,
+        body: smtpForMailpit(`hola@${aula.slug}.example.com`, `Primer Sorbo ${stamp}`),
+      });
+    }
   });
 
   test('bienvenida: se activa con un clic, llega como mensaje directo y por correo, y no se repite', async ({
