@@ -181,7 +181,9 @@ describe('aviso de la PLATAFORMA (sin aula)', () => {
     const { html, text } = renderBrandedEmail(operador, { lang: 'es', ...CONTENT });
     expect(html).not.toContain('</td>\n          <td style="padding-left:12px');
     expect(html).not.toContain('didacta.io/es/start');
-    expect(html).toContain('<p style="margin:0;">Powered by Didacta</p>');
+    // El pie de la maqueta de correos: el texto solo, sin enlace al alta.
+    expect(html).toMatch(/<p style="margin:0;[^"]*">Powered by Didacta<\/p>/);
+    expect(html).not.toContain('Crea tu academia');
     expect(text.trim().endsWith('Powered by Didacta')).toBe(true);
   });
 
