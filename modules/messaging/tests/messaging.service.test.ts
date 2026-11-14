@@ -451,6 +451,55 @@ describe('MessagingService', () => {
       expect(prisma.conversations.filter((c) => c.type === 'FACULTY')).toHaveLength(1);
     });
 
+    // El canal lo nombra el servidor: va en el idioma del aula, no en español
+    // fijo. Control: el aula española sigue diciendo «Profesores».
+    it.each([
+      ['en', 'Teachers'],
+      ['pt-BR', 'Professores'],
+      ['es', 'Profesores'],
+    ])('en un aula «%s» el canal se llama «%s»', async (locale, esperado) => {
+      const localized = new MessagingService(
+        prisma as never,
+        { publish: async () => {} },
+        async () => spaces,
+        async (_tenantId, ids) => Object.values(USERS).filter((u) => ids.includes(u.id)),
+        async () => [USERS.profe!.id],
+        async (tenantId) => (tenantId === TENANT ? locale : 'es'),
+      );
+      const list = await localized.listConversations(TENANT, callerOf('alice'));
+      expect(list.find((c) => c.type === 'FACULTY')?.title).toBe(esperado);
+    });
+
+    it('sin idioma legible, el canal se llama en español (el listado no se cae)', async () => {
+      const roto = new MessagingService(
+        prisma as never,
+        { publish: async () => {} },
+        async () => spaces,
+        async (_tenantId, ids) => Object.values(USERS).filter((u) => ids.includes(u.id)),
+        async () => [USERS.profe!.id],
+        async () => {
+          throw new Error('sin ajuste');
+        },
+      );
+      const list = await roto.listConversations(TENANT, callerOf('alice'));
+      expect(list.find((c) => c.type === 'FACULTY')?.title).toBe('Profesores');
+    });
+
+    it('el staff ve al alumno sin nombre con el respaldo del idioma del aula', async () => {
+      const localized = new MessagingService(
+        prisma as never,
+        { publish: async () => {} },
+        async () => spaces,
+        async () => [],
+        async () => [USERS.profe!.id],
+        async () => 'en',
+      );
+      const { conversationId } = await localized.openFaculty(TENANT, callerOf('alice'));
+      await localized.sendMessage(TENANT, callerOf('alice'), conversationId, 'hello');
+      const list = await localized.listConversations(TENANT, callerOf('profe', ['formador']));
+      expect(list.find((c) => c.type === 'FACULTY')?.title).toBe('Student');
+    });
+
     it('el staff no tiene canal propio', async () => {
       await expect(service.openFaculty(TENANT, callerOf('profe', ['formador']))).rejects.toThrow(
         StaffFacultyError,
