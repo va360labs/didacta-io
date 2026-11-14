@@ -14,6 +14,7 @@ import {
   derivePayoutsCardView,
   feePercent,
   formatStripeAmount,
+  payoutsStepView,
   saleStatusView,
   stripeMinorToMajor,
   type PayoutsAccountDto,
@@ -161,6 +162,52 @@ describe('selector de país', () => {
     // es-419 = español de Latinoamérica: no dice qué país.
     expect(defaultCountry(['ES', 'FR'], 'es-419')).toBe('ES');
     expect(defaultCountry(['ES', 'FR'], '')).toBe('ES');
+  });
+});
+
+describe('payoutsStepView: el paso «Conecta tus cobros» del modo sencillo', () => {
+  const supported = ['ES', 'FR', 'GB', 'US'];
+
+  it('país del navegador admitido → el botón de siempre', () => {
+    expect(payoutsStepView({ ...base, supportedCountries: supported }, 'es-ES')).toEqual({
+      kind: 'connect',
+    });
+  });
+
+  it('país del navegador NO admitido y sin cuenta → el aviso, con ESE país', () => {
+    expect(payoutsStepView(base, 'pt-BR')).toEqual({ kind: 'country-unsupported', country: 'BR' });
+    expect(payoutsStepView(base, 'es-MX')).toEqual({ kind: 'country-unsupported', country: 'MX' });
+    // Aunque no esté entre los «todavía no» del selector: tampoco se le puede pagar.
+    expect(payoutsStepView(base, 'ja-JP')).toEqual({ kind: 'country-unsupported', country: 'JP' });
+  });
+
+  it('con cuenta abierta manda el país de la cuenta (el de su banco), no el del navegador', () => {
+    expect(payoutsStepView({ ...base, account: account({ country: 'ES' }) }, 'pt-BR')).toEqual({
+      kind: 'connect',
+    });
+    expect(payoutsStepView({ ...base, account: account({ country: 'MX' }) }, 'es-ES')).toEqual({
+      kind: 'country-unsupported',
+      country: 'MX',
+    });
+  });
+
+  it('la lista de admitidos manda: si el operador admite MX, el botón', () => {
+    expect(payoutsStepView({ ...base, supportedCountries: ['ES', 'MX'] }, 'es-MX')).toEqual({
+      kind: 'connect',
+    });
+    expect(payoutsStepView({ ...base, supportedCountries: ['es', 'mx'] }, 'es-MX')).toEqual({
+      kind: 'connect',
+    });
+  });
+
+  it('sin modo plataforma, petición fallida, país desconocido o lista vacía → el botón, como hoy', () => {
+    expect(payoutsStepView(null, 'pt-BR')).toEqual({ kind: 'connect' });
+    expect(payoutsStepView(undefined, 'pt-BR')).toEqual({ kind: 'connect' });
+    expect(payoutsStepView(base, 'pt')).toEqual({ kind: 'connect' });
+    expect(payoutsStepView(base, 'es-419')).toEqual({ kind: 'connect' });
+    expect(payoutsStepView({ ...base, supportedCountries: [] }, 'pt-BR')).toEqual({
+      kind: 'connect',
+    });
   });
 });
 

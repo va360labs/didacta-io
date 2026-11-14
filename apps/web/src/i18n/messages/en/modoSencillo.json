@@ -149,7 +149,9 @@
         "boton": "Connect payouts",
         "ayuda1": "Your students pay by card on a secure checkout page.",
         "ayuda2": "Didacta keeps 5% of each sale. The rest is yours and goes to your bank.",
-        "ayuda3": "You sell in your currency and each student sees the price in theirs."
+        "ayuda3": "You sell in your currency and each student sees the price in theirs.",
+        "paisNoAdmitido": "We can't pay creators whose bank is in {pais} yet. In the meantime you can set up your academy and your community; we'll let you know when you can get paid from your country.",
+        "otroPais": "Is your bank in another country?"
       },
       "publish": {
         "titulo": "Publish and copy your link",

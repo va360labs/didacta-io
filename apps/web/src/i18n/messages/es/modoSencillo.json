@@ -149,7 +149,9 @@
         "boton": "Conectar cobros",
         "ayuda1": "Tus alumnos pagan con tarjeta en una página segura de pago.",
         "ayuda2": "Didacta se queda el 5 % de cada venta. El resto es tuyo y va a tu banco.",
-        "ayuda3": "Vendes en tu moneda y cada alumno ve el precio en la suya."
+        "ayuda3": "Vendes en tu moneda y cada alumno ve el precio en la suya.",
+        "paisNoAdmitido": "Todavía no podemos pagar a creadores con el banco en {pais}. Mientras tanto puedes montar tu academia y tu comunidad; te avisaremos cuando se pueda cobrar desde tu país.",
+        "otroPais": "¿Tu banco está en otro país?"
       },
       "publish": {
         "titulo": "Publica y copia tu enlace",

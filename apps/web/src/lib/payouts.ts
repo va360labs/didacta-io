@@ -716,3 +716,28 @@ export function defaultCountry(supported: readonly string[], browserLocale: stri
   if (supported.includes('ES')) return 'ES';
   return supported[0] ?? 'ES';
 }
+
+/** Qué pinta el paso «Conecta tus cobros» del modo sencillo. */
+export type PayoutsStepView =
+  | { kind: 'connect' }
+  | { kind: 'country-unsupported'; country: string };
+
+/**
+ * Paso «Conecta tus cobros» del modo sencillo (modo plataforma, paso sin
+ * hacer): el botón de siempre o, si el país del creador no está admitido, el
+ * aviso de que todavía no se le puede pagar.
+ *
+ * El país es el de su cuenta conectada si ya la abrió (es el de su banco); si
+ * no, la región del navegador. Sin estado (sin modo plataforma o la petición
+ * falló), sin país conocido o sin lista de admitidos: el botón, como siempre.
+ */
+export function payoutsStepView(
+  status: Pick<PayoutsStatusDto, 'account' | 'supportedCountries'> | null | undefined,
+  browserLocale: string,
+): PayoutsStepView {
+  if (!status || status.supportedCountries.length === 0) return { kind: 'connect' };
+  const supported = new Set(status.supportedCountries.map((c) => c.toUpperCase()));
+  const country = status.account?.country?.toUpperCase() || localeRegion(browserLocale);
+  if (country && !supported.has(country)) return { kind: 'country-unsupported', country };
+  return { kind: 'connect' };
+}
