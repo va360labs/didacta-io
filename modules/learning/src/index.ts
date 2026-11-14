@@ -18,6 +18,8 @@ export {
   type UpdateDripScheduleInput,
   type CourseDripAvailability,
   type CourseSaleChecker,
+  type CourseLevelGateChecker,
+  type LevelLockInfo,
 } from './learning.service.js';
 export {
   computeDripAvailability,
@@ -70,6 +72,7 @@ export {
   LessonLockedError,
   LessonNotInCourseError,
   TrialContentLockedError,
+  LevelContentLockedError,
   ScormLessonTypeMismatchError,
   ScormPackageInvalidError,
   ScormPackageNotFoundError,

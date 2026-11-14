@@ -80,6 +80,22 @@ export class TrialContentLockedError extends LearningError {
   }
 }
 
+/**
+ * La lección (o su sección, o el curso entero) se desbloquea al llegar a un
+ * nivel de la gamificación del aula y la persona aún no ha llegado.
+ */
+export class LevelContentLockedError extends LearningError {
+  constructor(
+    public readonly levelNumber: number,
+    public readonly levelName: string,
+    public readonly pointsMissing: number,
+  ) {
+    // El nivel concreto lo pinta la interfaz con la disponibilidad del curso;
+    // el mensaje es genérico para que cada idioma lo traduzca por `code`.
+    super('LEVEL_CONTENT_LOCKED', 'Este contenido se desbloquea al llegar a un nivel más alto.');
+  }
+}
+
 export class ScormPackageInvalidError extends LearningError {
   constructor(reason: string) {
     super('SCORM_PACKAGE_INVALID', `Paquete SCORM inválido: ${reason}`, { detail: reason });
