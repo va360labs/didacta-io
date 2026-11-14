@@ -237,5 +237,17 @@
   "PURCHASE_CONSENT_TENANT_NOT_FOUND": "We couldn't find this academy.",
   "PAYOUTS_TAX_PROFILE_INVALID": "Check your tax details: some fields are missing or not valid.",
   "PAYOUTS_INVOICE_NOT_FOUND": "We couldn't find that invoice.",
-  "PAYOUTS_INVOICING_DISABLED": "Fee invoicing is not turned on in this installation."
+  "PAYOUTS_INVOICING_DISABLED": "Fee invoicing is not turned on in this installation.",
+  "RETENTION_ADMIN_REQUIRED": "Only whoever runs the academy can manage automated messages.",
+  "RETENTION_AUTOMATION_NOT_FOUND": "Automated message not found.",
+  "RETENTION_TEMPLATE_NOT_FOUND": "That template doesn't exist.",
+  "RETENTION_BODY_INVALID": "Write the message (between 1 and 4,000 characters).",
+  "RETENTION_UNKNOWN_VARIABLE": "Unknown variable: {detail}",
+  "RETENTION_VARIABLE_NOT_AVAILABLE": "The variable {detail} can't be used in this message.",
+  "RETENTION_DAYS_INVALID": "The number of days isn't valid for this message.",
+  "RETENTION_SUBJECT_INVALID": "The email subject can be up to 200 characters.",
+  "RETENTION_SETTINGS_INVALID": "Invalid settings: check the sending hours and the waiting time.",
+  "RETENTION_SENDER_INVALID": "Messages can only be signed by someone on the academy's team.",
+  "RETENTION_RECOVERY_NOT_CONFIGURED": "Turn on the win-back message first (“If they don't log in for X days”).",
+  "RETENTION_MEMBER_NOT_ELIGIBLE": "Automated messages aren't sent to this person."
 }

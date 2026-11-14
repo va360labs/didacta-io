@@ -23,6 +23,7 @@ import { ACADEMY_LOCALE_NAMES, ACADEMY_LOCALES, type AcademyLocale } from '@/i18
 import { academyApi, type Academy } from '@/lib/academy';
 import { authStorage } from '@/lib/auth-storage';
 import { simpleModeApi } from '@/lib/simple-mode';
+import { AutomatedMessages } from '@/modules/retention';
 import {
   publishThemeUpdate,
   themingApi,
@@ -242,6 +243,11 @@ export function SimpleSettings() {
           <PublicHomeToggle variant="plain" />
         </div>
       </section>
+
+      {/* Mensajes que el aula envía sola, firmados por quien la administra. */}
+      <div className="mt-4" id="mensajes-automaticos">
+        <AutomatedMessages />
+      </div>
 
       <Link
         href="/admin/settings?full=1"

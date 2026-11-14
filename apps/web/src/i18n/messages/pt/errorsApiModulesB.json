@@ -237,5 +237,17 @@
   "PURCHASE_CONSENT_TENANT_NOT_FOUND": "Não encontramos esta escola.",
   "PAYOUTS_TAX_PROFILE_INVALID": "Revise seus dados fiscais: há campos faltando ou inválidos.",
   "PAYOUTS_INVOICE_NOT_FOUND": "Não encontramos essa fatura.",
-  "PAYOUTS_INVOICING_DISABLED": "A emissão de faturas da comissão não está ativada nesta instalação."
+  "PAYOUTS_INVOICING_DISABLED": "A emissão de faturas da comissão não está ativada nesta instalação.",
+  "RETENTION_ADMIN_REQUIRED": "Só quem administra a escola pode gerenciar as mensagens automáticas.",
+  "RETENTION_AUTOMATION_NOT_FOUND": "Mensagem automática não encontrada.",
+  "RETENTION_TEMPLATE_NOT_FOUND": "Esse modelo não existe.",
+  "RETENTION_BODY_INVALID": "Escreva a mensagem (entre 1 e 4.000 caracteres).",
+  "RETENTION_UNKNOWN_VARIABLE": "Variável desconhecida: {detail}",
+  "RETENTION_VARIABLE_NOT_AVAILABLE": "A variável {detail} não pode ser usada nesta mensagem.",
+  "RETENTION_DAYS_INVALID": "O número de dias não é válido para esta mensagem.",
+  "RETENTION_SUBJECT_INVALID": "O assunto do e-mail pode ter até 200 caracteres.",
+  "RETENTION_SETTINGS_INVALID": "Ajustes inválidos: revise o horário de envio e o tempo de espera.",
+  "RETENTION_SENDER_INVALID": "As mensagens só podem ser assinadas por alguém da equipe da escola.",
+  "RETENTION_RECOVERY_NOT_CONFIGURED": "Ative primeiro a mensagem de recuperação («Se não entrar em X dias»).",
+  "RETENTION_MEMBER_NOT_ELIGIBLE": "Esta pessoa não recebe mensagens automáticas."
 }

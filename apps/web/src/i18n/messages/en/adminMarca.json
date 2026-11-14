@@ -149,10 +149,12 @@
     "modules": "Modules",
     "storage": "Storage",
     "raw": "Advanced",
-    "virtual-classroom": "Virtual classroom"
+    "virtual-classroom": "Virtual classroom",
+    "automated-messages": "Automated messages"
   },
   "configTabsDesc": {
-    "virtual-classroom": "Zoom Server-to-Server credentials for live sessions."
+    "virtual-classroom": "Zoom Server-to-Server credentials for live sessions.",
+    "automated-messages": "Welcome, first week, win-back and more, signed by the academy."
   },
   "modulesTab": {
     "loadError": "We could not load the modules.",
