@@ -1374,7 +1374,8 @@ export class ReferralsService {
         tenantId,
         stripeCustomerId: customerId,
         planId: { not: null },
-        status: { in: ['ACTIVE', 'TRIALING', 'PAST_DUE'] },
+        // PAUSED: en pausa a petición del alumno, sigue siendo miembro.
+        status: { in: ['ACTIVE', 'TRIALING', 'PAST_DUE', 'PAUSED'] },
       },
       select: { id: true },
     });

@@ -22,6 +22,9 @@ import { ModuleRegistryService } from '../module-registry.service';
  *     mod.learning.pauseEnrollment retira acceso a las lecciones pero NO
  *     borra el progreso — si el alumno renueva, vuelve donde se quedó.
  *
+ *   - subscriptions.subscription.paused → lo mismo: empieza una pausa que el
+ *     alumno aceptó al darse de baja. Vuelve con `activated` (recovery).
+ *
  *   - subscriptions.subscription.canceled (immediate=true) → desenrolla.
  *     Esto sí borra el enrollment activo. La cancelación at-period-end NO
  *     emite este evento hasta que el periodo expira (Stripe envía
@@ -60,6 +63,13 @@ export class SubscriptionsLearningBridge implements OnModuleInit {
 
     eventBus.subscribe<SubscriptionEventPayload>(
       'subscriptions.subscription.unpaid',
+      async (event: DomainEvent<SubscriptionEventPayload>) => {
+        await this.onUnpaid(event);
+      },
+    );
+
+    eventBus.subscribe<SubscriptionEventPayload>(
+      'subscriptions.subscription.paused',
       async (event: DomainEvent<SubscriptionEventPayload>) => {
         await this.onUnpaid(event);
       },

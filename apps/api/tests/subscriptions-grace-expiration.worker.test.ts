@@ -128,6 +128,50 @@ describe('SubscriptionsGraceExpirationWorker.triggerNow (degraded mode, sin Redi
   });
 });
 
+describe('SubscriptionsGraceExpirationWorker — pausas que empiezan (oferta al darse de baja)', () => {
+  beforeEach(() => {
+    delete process.env['REDIS_URL'];
+  });
+
+  it('arranca las pausas vencidas de cada aula bajo SU contexto, con el mismo `now`', async () => {
+    const seen: Array<[string, string | undefined]> = [];
+    const findTenantsWithDuePauses = vi.fn(async (_now: Date) => ['t1', 't2']);
+    const startDuePausesForTenant = vi.fn(async (tenantId: string, _now: Date) => {
+      seen.push([tenantId, tenantContextStorage.getStore()?.tenantId]);
+      return tenantId === 't1' ? [{ id: 's1' }] : [];
+    });
+    const registry = {
+      getSubscriptionsService: () => ({
+        findTenantsWithExpiredGrace: async () => [],
+        expireGracePeriodsForTenant: async () => [],
+      }),
+      getSubscriptionRetentionService: () => ({
+        findTenantsWithDuePauses,
+        startDuePausesForTenant,
+      }),
+    };
+    const logger = { log: vi.fn(), warn: vi.fn(), error: vi.fn() };
+    const worker = new SubscriptionsGraceExpirationWorker(registry as never, logger as never);
+    await worker.triggerNow();
+    expect(seen).toEqual([
+      ['t1', 't1'],
+      ['t2', 't2'],
+    ]);
+    const now = findTenantsWithDuePauses.mock.calls[0]![0];
+    expect(startDuePausesForTenant).toHaveBeenCalledWith('t1', now);
+    expect(JSON.stringify(logger.log.mock.calls.at(-1))).toContain('"pausesStarted":1');
+  });
+
+  it('sin servicio de retención (registro antiguo) el barrido de gracia sigue igual', async () => {
+    const { registry, expireGracePeriodsForTenant } = buildRegistryStub({
+      expiredByTenant: { t1: [] },
+    });
+    const worker = new SubscriptionsGraceExpirationWorker(registry as never, noopLogger);
+    await expect(worker.triggerNow()).resolves.toBeUndefined();
+    expect(expireGracePeriodsForTenant).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe('SubscriptionsGraceExpirationWorker.onApplicationBootstrap', () => {
   const originalRedisUrl = process.env['REDIS_URL'];
   const originalNodeEnv = process.env['NODE_ENV'];

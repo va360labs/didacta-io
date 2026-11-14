@@ -13,6 +13,7 @@ import {
   NotFoundException,
   Optional,
   Param,
+  ParseUUIDPipe,
   Post,
   Req,
   UnauthorizedException,
@@ -34,6 +35,7 @@ import {
   withdrawalWaiverSchema,
   type WithdrawalWaiverDto,
 } from '../purchase-consent/withdrawal-waiver';
+import { leaveSchema, type LeaveDto } from './retention.dto';
 import { SubscriptionsGraceExpirationWorker } from './subscriptions-grace-expiration.worker';
 
 /**
@@ -43,6 +45,8 @@ import { SubscriptionsGraceExpirationWorker } from './subscriptions-grace-expira
  *   GET  /modules/subscriptions/me/:id/invoices     → historial de facturas
  *   POST /modules/subscriptions/me/:id/cancel       → cancelar
  *   POST /modules/subscriptions/me/portal           → portal de cliente de Stripe
+ *   GET  /modules/subscriptions/me/:id/leave        → oferta al darse de baja
+ *   POST /modules/subscriptions/me/:id/leave        → motivo + pausa | descuento | baja
  *
  * El admin endpoint de gestión de productos lo dejamos para una iteración
  * posterior — en MVP el admin configura el priceId desde mod.billing-admin
@@ -181,12 +185,19 @@ export class SubscriptionsController {
     const platformCustomers = this.payoutsGate
       ? await this.payoutsGate.platformObjects(subs.map((s) => s.stripeCustomerId))
       : new Set<string>();
+    // Descuento de retención vivo (oferta al darse de baja), para que el
+    // alumno vea «30 % de descuento hasta…» en su suscripción.
+    const discounts = await this.registry.getSubscriptionRetentionService().activeDiscounts(
+      user.tenantId,
+      subs.map((s) => s.id),
+    );
     return {
       subscriptions: subs.map((s) => ({
         ...s,
         planName: s.planId ? (planName.get(s.planId) ?? null) : null,
         courseTitle: s.courseId ? (courseTitle.get(s.courseId) ?? null) : null,
         billingPortal: platformCustomers.has(s.stripeCustomerId),
+        retentionDiscount: discounts.get(s.id) ?? null,
       })),
     };
   }
@@ -257,6 +268,45 @@ export class SubscriptionsController {
       .getSubscriptionsService()
       .listInvoicesForSubscription(user.tenantId, id);
     return { invoices };
+  }
+
+  @Get('me/:id/leave')
+  @ApiOperation({
+    summary:
+      'Oferta al darse de baja: motivos, y la pausa o el descuento que el aula ofrece a ' +
+      'esta suscripción ahora (según su configuración, el estado en Stripe y lo ya usado).',
+  })
+  async leaveOffer(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @CurrentUser() user: SessionClaims | undefined,
+  ): Promise<object> {
+    if (!user) throw new UnauthorizedException();
+    return this.registry.getSubscriptionRetentionService().getOffer(user.tenantId, user.sub, id);
+  }
+
+  @Post('me/:id/leave')
+  @HttpCode(200)
+  @ApiOperation({
+    summary:
+      'Lo que decide el alumno al darse de baja, con su motivo: pausar (sin cobro ni acceso ' +
+      'hasta el primer cobro tras la pausa), quedarse con el descuento, o la baja al final ' +
+      'del periodo pagado. Se confirma por correo.',
+  })
+  async leave(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Body(new ZodValidationPipe(leaveSchema)) body: LeaveDto,
+    @CurrentUser() user: SessionClaims | undefined,
+  ): Promise<object> {
+    if (!user) throw new UnauthorizedException();
+    const result = await this.registry
+      .getSubscriptionRetentionService()
+      .leave(user.tenantId, user.sub, id, {
+        reason: body.reason,
+        reasonText: body.reasonText ?? null,
+        choice: body.choice,
+        ...(body.pauseMonths !== undefined ? { pauseMonths: body.pauseMonths } : {}),
+      });
+    return { outcome: result.outcome, subscription: result.subscription };
   }
 
   @Post('me/:id/cancel')

@@ -142,12 +142,6 @@
   "subscription": {
     "noToken": "Sesión sin token. Vuelve a iniciar sesión.",
     "invoicesError": "No se pudieron cargar las facturas.",
-    "cancelNowConfirmMembership": "¿Cancelar la suscripción AHORA? Perderás acceso a los cursos de la membresía inmediatamente.",
-    "cancelNowConfirmCourse": "¿Cancelar la suscripción AHORA? Perderás acceso al curso inmediatamente.",
-    "cancelPeriodConfirm": "¿Cancelar al final del periodo actual? Mantendrás acceso hasta esa fecha.",
-    "canceledMsg": "Suscripción cancelada.",
-    "cancelScheduledMsg": "Cancelación al final del periodo aplicada.",
-    "cancelError": "No se pudo cancelar la suscripción.",
     "payNowConfirm": "¿Terminar tu periodo de prueba y pagar ahora? Se cobrará el primer periodo inmediatamente y tendrás acceso completo a todo el contenido.",
     "payNowSuccess": "¡Pago realizado! Tu membresía está activa y todo el contenido desbloqueado.",
     "payNowFailed": "No se pudo completar el cobro con tu tarjeta. Stripe lo reintentará automáticamente; si el problema persiste, contacta con tu academia.",
@@ -168,9 +162,6 @@
     "suspendedUnpaid": "Acceso suspendido por impago",
     "processing": "Procesando…",
     "payNowCta": "Pagar ahora y activar",
-    "canceling": "Cancelando…",
-    "cancelAtPeriodEnd": "Cancelar al final del periodo",
-    "cancelNow": "Cancelar ahora",
     "viewInvoices": "Ver facturas",
     "myFallback": "Mi suscripción",
     "subscriptionWord": "Suscripción",
@@ -330,7 +321,8 @@
     "ACTIVE": "Activa",
     "PAST_DUE": "Impago",
     "UNPAID": "Sin pagar",
-    "CANCELED": "Cancelada"
+    "CANCELED": "Cancelada",
+    "PAUSED": "En pausa"
   },
   "subBadge": {
     "PENDING": "Pendiente",
@@ -338,7 +330,8 @@
     "ACTIVE": "Activa",
     "PAST_DUE": "Pago pendiente",
     "UNPAID": "Impagada",
-    "CANCELED": "Cancelada"
+    "CANCELED": "Cancelada",
+    "PAUSED": "En pausa"
   },
   "orderStatus": {
     "PENDING": "Pendiente",

@@ -9,6 +9,7 @@ import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { Icon } from '@/components/icon';
+import { RetentionSummaryCard } from '@/components/retention/retention-summary-card';
 import { adminUsersApi, type UserListItem } from '@/lib/admin-users';
 import { authStorage } from '@/lib/auth-storage';
 import { formatDate } from '@/lib/i18n/format';
@@ -32,8 +33,9 @@ function initials(u: UserListItem): string {
 
 /**
  * «Alumnos» del MODO SENCILLO: quién está dentro y cómo traer a más (invitar
- * por correo o compartir el enlace de venta). Reutiliza el listado de
- * usuarios de la administración; la ficha de cada persona es la de siempre.
+ * por correo o compartir el enlace de venta), y quién se quiso ir y por qué
+ * (oferta al darse de baja). Reutiliza el listado de usuarios de la
+ * administración; la ficha de cada persona es la de siempre.
  */
 export function SimpleStudents() {
   const t = useTranslations('modoSencilloGestion.alumnos');
@@ -241,6 +243,10 @@ export function SimpleStudents() {
           ) : null}
         </section>
       )}
+
+      <div className="mt-4">
+        <RetentionSummaryCard settingsHref="/admin/settings#retencion" />
+      </div>
 
       <Link
         href="/admin/access-groups"

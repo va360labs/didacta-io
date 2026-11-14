@@ -342,6 +342,15 @@ function stubStripe() {
     creditCustomerBalance: async () => {
       throw new Error('no usado');
     },
+    retrieveSubscription: async () => {
+      throw new Error('no usado');
+    },
+    pauseCollection: async () => {
+      throw new Error('no usado');
+    },
+    applyRetentionDiscount: async () => {
+      throw new Error('no usado');
+    },
   };
   return {
     adapter,

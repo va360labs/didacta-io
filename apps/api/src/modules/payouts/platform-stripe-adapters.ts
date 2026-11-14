@@ -22,7 +22,11 @@ import {
   type CustomerBalanceView,
   type CreateSubscriptionCheckoutParams,
   type EndTrialNowResult,
+  type PauseCollectionParams,
+  type RetentionDiscountParams,
+  type RetentionDiscountResult,
   type StripePortalSessionResult,
+  type StripeSubscriptionDetails,
   type StripePriceResult as SubscriptionsStripePriceResult,
   type StripeSubscriptionCheckoutResult,
   type StripeSubscriptionView,
@@ -391,6 +395,25 @@ export class PlatformSubscriptionsStripeAdapter implements SubscriptionsStripeAd
 
   async debitCustomerBalance(params: CreditCustomerBalanceParams): Promise<{ id: string }> {
     return (await this.route(params.customerId)).debitCustomerBalance(params);
+  }
+
+  /**
+   * Oferta al darse de baja (pausa y descuento): van a la cuenta donde vive la
+   * suscripción. De plataforma → cuenta del operador (el cupón se crea ahí, de
+   * un solo uso, y la venta de cada factura sale ya con el descuento: el 5 % y
+   * la transferencia van sobre lo cobrado; una factura anulada por la pausa no
+   * es venta). De las claves propias → esa cuenta.
+   */
+  async retrieveSubscription(subscriptionId: string): Promise<StripeSubscriptionDetails> {
+    return (await this.route(subscriptionId)).retrieveSubscription(subscriptionId);
+  }
+
+  async pauseCollection(params: PauseCollectionParams): Promise<StripeSubscriptionDetails> {
+    return (await this.route(params.subscriptionId)).pauseCollection(params);
+  }
+
+  async applyRetentionDiscount(params: RetentionDiscountParams): Promise<RetentionDiscountResult> {
+    return (await this.route(params.subscriptionId)).applyRetentionDiscount(params);
   }
 
   constructWebhookEvent(rawBody: string | Buffer, signatureHeader: string): Stripe.Event {

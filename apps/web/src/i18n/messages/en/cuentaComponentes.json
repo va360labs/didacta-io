@@ -142,12 +142,6 @@
   "subscription": {
     "noToken": "Session has no token. Please sign in again.",
     "invoicesError": "Could not load the invoices.",
-    "cancelNowConfirmMembership": "Cancel the subscription NOW? You will lose access to the membership courses immediately.",
-    "cancelNowConfirmCourse": "Cancel the subscription NOW? You will lose access to the course immediately.",
-    "cancelPeriodConfirm": "Cancel at the end of the current period? You will keep access until that date.",
-    "canceledMsg": "Subscription cancelled.",
-    "cancelScheduledMsg": "Cancellation at the end of the period applied.",
-    "cancelError": "Could not cancel the subscription.",
     "payNowConfirm": "End your trial period and pay now? The first period will be charged immediately and you will get full access to all the content.",
     "payNowSuccess": "Payment complete! Your membership is active and all the content is unlocked.",
     "payNowFailed": "We could not complete the charge with your card. Stripe will retry automatically; if the problem persists, contact your academy.",
@@ -168,9 +162,6 @@
     "suspendedUnpaid": "Access suspended for non-payment",
     "processing": "Processing…",
     "payNowCta": "Pay now and activate",
-    "canceling": "Cancelling…",
-    "cancelAtPeriodEnd": "Cancel at the end of the period",
-    "cancelNow": "Cancel now",
     "viewInvoices": "View invoices",
     "myFallback": "My subscription",
     "subscriptionWord": "Subscription",
@@ -330,7 +321,8 @@
     "ACTIVE": "Active",
     "PAST_DUE": "Past due",
     "UNPAID": "Unpaid",
-    "CANCELED": "Cancelled"
+    "CANCELED": "Cancelled",
+    "PAUSED": "Paused"
   },
   "subBadge": {
     "PENDING": "Pending",
@@ -338,7 +330,8 @@
     "ACTIVE": "Active",
     "PAST_DUE": "Payment pending",
     "UNPAID": "Unpaid",
-    "CANCELED": "Cancelled"
+    "CANCELED": "Cancelled",
+    "PAUSED": "Paused"
   },
   "orderStatus": {
     "PENDING": "Pending",

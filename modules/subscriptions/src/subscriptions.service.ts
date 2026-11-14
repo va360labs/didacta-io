@@ -29,6 +29,8 @@
  *   PAST_DUE → invoice falló, en grace period (sigue con acceso).
  *   UNPAID → grace expirado sin pago, sin acceso (bridge pausa enrollment).
  *   CANCELED → cancelada definitivamente.
+ *   PAUSED → en pausa a petición del alumno (oferta al darse de baja): sin
+ *            cobro y sin acceso hasta el primer cobro tras la pausa.
  *
  * Transiciones legales:
  *   PENDING → ACTIVE (subscription.created event)
@@ -39,6 +41,9 @@
  *   PAST_DUE → UNPAID (gracePeriodEndsAt expirado, expireGracePeriods cron)
  *   UNPAID → ACTIVE (alumno actualiza método de pago, invoice.paid recovery)
  *   UNPAID → CANCELED (Stripe declara invoice como uncollectible)
+ *   ACTIVE → PAUSED (empieza una pausa aceptada: renovación anulada o barrido)
+ *   PAUSED → ACTIVE (primer cobro tras la pausa: invoice.paid)
+ *   PAUSED → UNPAID (ese primer cobro falla: sin gracia, como un trial)
  */
 
 import type { PrismaClient } from '@didacta/database';
@@ -56,9 +61,12 @@ import {
 import type { SubscriptionsStripeAdapter } from './stripe-subscriptions.client.js';
 import {
   currentPeriodEndFromSubscription,
+  currentPeriodStartFromSubscription,
+  pauseCollectionFromSubscription,
   subscriptionIdFromInvoice,
   toDateOrNull,
 } from './stripe-shape.js';
+import { PAUSE_TIME_SLACK_MS } from './retention.js';
 
 /** Resuelve el SubscriptionsStripeAdapter a usar para un tenant concreto, por llamada. */
 export type SubscriptionsStripeAdapterResolver = (
@@ -111,6 +119,8 @@ const EVENT = {
   PAST_DUE: 'subscriptions.subscription.past_due',
   UNPAID: 'subscriptions.subscription.unpaid',
   CANCELED: 'subscriptions.subscription.canceled',
+  /** Empieza una pausa aceptada en la oferta al darse de baja: fuera acceso. */
+  PAUSED: 'subscriptions.subscription.paused',
   INVOICE_PAID: 'subscriptions.invoice.paid',
   INVOICE_FAILED: 'subscriptions.invoice.payment_failed',
   INVOICE_REFUNDED: 'subscriptions.invoice.refunded',
@@ -191,7 +201,7 @@ export class SubscriptionsService {
         tenantId: input.tenantId,
         userId: input.userId,
         courseId: input.courseId,
-        status: { in: ['PENDING', 'TRIALING', 'ACTIVE', 'PAST_DUE'] },
+        status: { in: ['PENDING', 'TRIALING', 'ACTIVE', 'PAST_DUE', 'PAUSED'] },
       },
     });
     if (existing) {
@@ -317,6 +327,10 @@ export class SubscriptionsService {
             currentPeriodEnd: stripeView.currentPeriodEnd
               ? new Date(stripeView.currentPeriodEnd * 1000)
               : sub.currentPeriodEnd,
+            // Una pausa aceptada que aún no ha empezado deja de tener sentido:
+            // la suscripción termina al acabar el periodo pagado. (Si ya está
+            // en pausa, se conserva la ventana: es lo que explica su estado.)
+            ...(sub.status !== 'PAUSED' ? { pauseStartsAt: null, pauseEndsAt: null } : {}),
           }
         : {
             status: 'CANCELED',
@@ -369,7 +383,7 @@ export class SubscriptionsService {
             tenantId,
             userId,
             planId: { not: null },
-            status: { in: ['TRIALING', 'ACTIVE', 'PAST_DUE'] },
+            status: { in: ['TRIALING', 'ACTIVE', 'PAST_DUE', 'PAUSED'] },
             ...withCustomer,
           },
           orderBy: { createdAt: 'desc' },
@@ -765,6 +779,23 @@ export class SubscriptionsService {
       if (!paidInvoice) newStatus = 'TRIALING';
     }
 
+    // PAUSA (oferta al darse de baja). Durante la pausa Stripe sigue `active`
+    // (solo anula las facturas), así que su estado no sirve: lo dice la
+    // ventana aceptada. Una fila en pausa solo sale de PAUSED con un cobro
+    // (`onInvoicePaid`), con la baja o con el impago — nunca porque Stripe diga
+    // `active`, que es lo que dice todo el rato.
+    let pauseStarted = false;
+    if (sub.status === 'PAUSED' && newStatus === 'ACTIVE') {
+      newStatus = 'PAUSED';
+    } else if (
+      sub.status === 'ACTIVE' &&
+      newStatus === 'ACTIVE' &&
+      pauseHasStarted(sub, stripeSub)
+    ) {
+      newStatus = 'PAUSED';
+      pauseStarted = true;
+    }
+
     const data: Record<string, unknown> = {
       status: newStatus,
       cancelAtPeriodEnd: stripeSub.cancel_at_period_end,
@@ -787,6 +818,19 @@ export class SubscriptionsService {
       where: { id: sub.id },
       data,
     });
+
+    if (pauseStarted) {
+      // Empieza la pausa: la renovación de Stripe ya cayó en la ventana. Los
+      // puentes retiran el acceso (sin borrar progreso). El barrido horario
+      // hace lo mismo si este evento no llega.
+      await this.publisher.publish(sub.tenantId, sub.userId, EVENT.PAUSED, {
+        subscriptionId: sub.id,
+        courseId: sub.courseId,
+        planId: sub.planId,
+        userId: sub.userId,
+        pauseEndsAt: sub.pauseEndsAt,
+      });
+    }
 
     // Llegar a ACTIVE desde un estado que no daba acceso tiene que CONCEDERLO.
     // PENDING estaba fuera de esta lista y era un agujero silencioso al revés
@@ -888,6 +932,38 @@ export class SubscriptionsService {
     }
 
     await this.upsertInvoice(sub.id, sub.tenantId, invoice, 'PAID');
+
+    // FIN DE LA PAUSA: el primer cobro con importe tras el inicio de la pausa
+    // la cierra (lo normal: Stripe reanuda y cobra la renovación; también si
+    // alguien quitó la pausa antes en Stripe). Vuelve el acceso.
+    if (sub.pauseStartsAt && invoice.amount_paid > 0 && invoiceIsAfterPauseStart(sub, invoice)) {
+      await this.prisma.modSubscriptionsSubscription.update({
+        where: { id: sub.id },
+        data: {
+          status: sub.status === 'PAUSED' ? 'ACTIVE' : sub.status,
+          pauseStartsAt: null,
+          pauseEndsAt: null,
+          gracePeriodEndsAt: null,
+        },
+      });
+      if (sub.status === 'PAUSED') {
+        await this.publisher.publish(sub.tenantId, sub.userId, EVENT.ACTIVATED, {
+          subscriptionId: sub.id,
+          courseId: sub.courseId,
+          planId: sub.planId,
+          userId: sub.userId,
+          recovery: true,
+          resumedFromPause: true,
+        });
+      }
+      await this.publisher.publish(sub.tenantId, sub.userId, EVENT.INVOICE_PAID, {
+        subscriptionId: sub.id,
+        stripeInvoiceId: invoice.id,
+        amount: invoice.amount_paid,
+        currency: invoice.currency,
+      });
+      return;
+    }
 
     // Cobro entrante sobre una sub que no daba acceso: esto la pone ACTIVE.
     // PENDING va con las otras dos por lo mismo que en `onSubscriptionUpdated`:
@@ -1030,6 +1106,33 @@ export class SubscriptionsService {
 
     await this.upsertInvoice(sub.id, sub.tenantId, invoice, 'OPEN');
 
+    // FIN DE PAUSA SIN PAGO: el primer cobro tras la pausa falla. Durante la
+    // pausa no tenía acceso; la gracia es para quien estaba al día, así que
+    // pasa directo a UNPAID (como un trial). Si un reintento cobra después,
+    // `onInvoicePaid` la recupera y vuelve el acceso.
+    if (sub.status === 'PAUSED') {
+      await this.prisma.modSubscriptionsSubscription.update({
+        where: { id: sub.id },
+        data: { status: 'UNPAID', pauseStartsAt: null, pauseEndsAt: null },
+      });
+      await this.publisher.publish(sub.tenantId, sub.userId, EVENT.UNPAID, {
+        subscriptionId: sub.id,
+        courseId: sub.courseId,
+        planId: sub.planId,
+        userId: sub.userId,
+        pauseExpired: true,
+      });
+      await this.publisher.publish(sub.tenantId, sub.userId, EVENT.INVOICE_FAILED, {
+        subscriptionId: sub.id,
+        stripeInvoiceId: invoice.id,
+        attemptCount: invoice.attempt_count,
+        nextPaymentAttempt: invoice.next_payment_attempt
+          ? new Date(invoice.next_payment_attempt * 1000)
+          : null,
+      });
+      return;
+    }
+
     // FIN DE TRIAL SIN PAGO: si el PRIMER cobro real (el que cierra la prueba)
     // falla, el acceso se pierde YA — sin grace period. La gracia existe para
     // clientes que ya pagaron alguna vez; un trial que nunca pagó no la tiene.
@@ -1144,7 +1247,7 @@ export class SubscriptionsService {
  */
 function mapStripeStatus(
   s: string,
-): 'PENDING' | 'TRIALING' | 'ACTIVE' | 'PAST_DUE' | 'UNPAID' | 'CANCELED' {
+): 'PENDING' | 'TRIALING' | 'ACTIVE' | 'PAST_DUE' | 'UNPAID' | 'CANCELED' | 'PAUSED' {
   switch (s) {
     case 'active':
       return 'ACTIVE';
@@ -1194,4 +1297,36 @@ export function invoiceCreditApplied(
   if (!Number.isInteger(ending)) return 0;
   const applied = Math.min(-starting, (ending as number) - starting);
   return applied > 0 ? applied : 0;
+}
+
+/**
+ * ¿La renovación de Stripe ya cayó dentro de la pausa aceptada? Se mira el
+ * reloj de STRIPE (inicio del periodo en curso), no el nuestro: así funciona
+ * igual con relojes de prueba. Hace falta que Stripe tenga la pausa puesta.
+ */
+function pauseHasStarted(
+  sub: { pauseStartsAt: Date | null; pauseEndsAt: Date | null },
+  stripeSub: Stripe.Subscription,
+): boolean {
+  if (!sub.pauseStartsAt) return false;
+  if (!pauseCollectionFromSubscription(stripeSub)) return false;
+  const start = currentPeriodStartFromSubscription(stripeSub);
+  if (start === null) return false;
+  const startMs = start * 1000;
+  if (startMs < sub.pauseStartsAt.getTime() - PAUSE_TIME_SLACK_MS) return false;
+  return !sub.pauseEndsAt || startMs < sub.pauseEndsAt.getTime() - PAUSE_TIME_SLACK_MS;
+}
+
+/**
+ * ¿La factura es de una renovación posterior al inicio de la pausa? Se usa
+ * `created` (la factura de la renovación nace al terminar el periodo): su
+ * `period_start` es el del periodo ANTERIOR, que no sirve.
+ */
+function invoiceIsAfterPauseStart(
+  sub: { pauseStartsAt: Date | null },
+  invoice: Stripe.Invoice,
+): boolean {
+  if (!sub.pauseStartsAt) return false;
+  const created = typeof invoice.created === 'number' ? invoice.created * 1000 : 0;
+  return created >= sub.pauseStartsAt.getTime() - PAUSE_TIME_SLACK_MS;
 }

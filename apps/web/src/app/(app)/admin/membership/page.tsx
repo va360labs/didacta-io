@@ -35,6 +35,8 @@ import { coursesApi, type Course } from '@/lib/courses';
 import { apiErrorMessage } from '@/lib/i18n/api-error';
 import { formatCents } from '@/lib/i18n/format';
 import { CurrencyNotice, MarketPricesFields } from '@/components/admin/price-fields';
+import { RetentionSettingsCard } from '@/components/retention/retention-settings-card';
+import { RetentionSummaryCard } from '@/components/retention/retention-summary-card';
 import {
   buildPrice,
   usePricePolicy,
@@ -763,6 +765,11 @@ function MembresiaCompleta() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Oferta al darse de baja: lo que se ofrece y quién se quiso ir y por
+          qué. Las mismas tarjetas que Ajustes y Alumnos del modo sencillo. */}
+      <RetentionSettingsCard id="retencion" />
+      <RetentionSummaryCard settingsHref="#retencion" />
     </div>
   );
 }

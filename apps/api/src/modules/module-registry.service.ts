@@ -29,6 +29,7 @@ import {
 } from '@didacta/mod-billing';
 import {
   MembershipService,
+  RetentionService as SubscriptionRetentionService,
   StripeConfigMissingError as SubscriptionsStripeConfigMissingError,
   SubscriptionsService,
   SubscriptionsStripeSdkAdapter,
@@ -184,6 +185,8 @@ export class ModuleRegistryService implements OnModuleInit {
   private billing?: BillingService;
   private subscriptions?: SubscriptionsService;
   private membership?: MembershipService;
+  /** Oferta al darse de baja (mod.subscriptions): motivo, pausa y descuento. */
+  private subscriptionRetention?: SubscriptionRetentionService;
   private stripeResolver?: TenantStripeResolverService;
   /**
    * Adapters de instancia (env globales), memoizados al boot — evitan
@@ -581,6 +584,20 @@ export class ModuleRegistryService implements OnModuleInit {
     // (el admin puede dejarlo todo listo antes de configurar la key); el
     // checkout lanza StripeConfigMissingError → 503 si falta.
     this.membership = new MembershipService(prisma, subscriptionsStripeFor, subsPublisher);
+
+    // Oferta al darse de baja: motivo, pausa y descuento de retención. Cancela
+    // con la baja de siempre (al final del periodo) de SubscriptionsService.
+    const subscriptionsForRetention = this.subscriptions;
+    this.subscriptionRetention = new SubscriptionRetentionService(
+      prisma,
+      subscriptionsStripeFor,
+      subsPublisher,
+      (tenantId, userId, subscriptionId) =>
+        subscriptionsForRetention.cancelSubscription(tenantId, userId, subscriptionId, {
+          immediate: false,
+          actorIsAdmin: false,
+        }),
+    );
 
     // mod.referrals: programa de referidos de la membresía. No depende de
     // Stripe (consume eventos de mod.subscriptions vía bridge); siempre se
@@ -1303,6 +1320,14 @@ export class ModuleRegistryService implements OnModuleInit {
    */
   getSubscriptionsServiceOrNull(): SubscriptionsService | null {
     return this.subscriptions ?? null;
+  }
+
+  /** Oferta al darse de baja. SIEMPRE inicializado tras el boot (como la membresía). */
+  getSubscriptionRetentionService(): SubscriptionRetentionService {
+    if (!this.subscriptionRetention) {
+      throw new Error('La oferta al darse de baja no está inicializada (boot incompleto).');
+    }
+    return this.subscriptionRetention;
   }
 
   /** Membresía (página pública /join). SIEMPRE inicializado tras el boot. */

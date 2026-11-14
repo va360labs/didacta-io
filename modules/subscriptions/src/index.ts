@@ -51,7 +51,34 @@ export type {
   MembershipPublicStats,
   UserProvisioner,
 } from './membership.service.js';
-export { SubscriptionsStripeSdkAdapter } from './stripe-subscriptions.client.js';
+export { RetentionService, RETENTION_EVENT } from './retention.service.js';
+export type {
+  CancelAtPeriodEnd,
+  DiscountOffer,
+  LeaveChoice,
+  LeaveInput,
+  LeaveOffer,
+  LeaveResult,
+  PauseOffer,
+  RetentionDiscountView,
+  RetentionSummary,
+} from './retention.service.js';
+export {
+  DEFAULT_RETENTION_CONFIG,
+  EXIT_REASONS,
+  EXIT_REASON_TEXT_MAX,
+  PAUSE_COOLDOWN_DAYS,
+  RETENTION_LIMITS,
+  addMonthsUtc,
+  discountPlan,
+  pauseMonthOptions,
+  pauseWindow,
+} from './retention.js';
+export type { ExitReason, RetentionConfigView } from './retention.js';
+export {
+  SubscriptionsStripeSdkAdapter,
+  subscriptionDetails,
+} from './stripe-subscriptions.client.js';
 export type {
   SubscriptionsStripeAdapter,
   SubscriptionsStripeAdapterOptions,
@@ -67,6 +94,10 @@ export type {
   StripePriceResult,
   StripeSubscriptionView,
   EndTrialNowResult,
+  StripeSubscriptionDetails,
+  PauseCollectionParams,
+  RetentionDiscountParams,
+  RetentionDiscountResult,
 } from './stripe-subscriptions.client.js';
 export {
   SubscriptionsError,
@@ -86,6 +117,11 @@ export {
   MembershipConfigIncompleteError,
   MembershipNotTrialingError,
   MembershipAlreadySubscribedError,
+  RetentionNotEligibleError,
+  RetentionAlreadyUsedError,
+  RetentionConfigInvalidError,
+  RetentionReasonInvalidError,
+  SubscriptionAlreadyLeavingError,
 } from './errors.js';
 
 export function buildSubscriptionsModule(_service: SubscriptionsService): DidactaModule {

@@ -45,7 +45,7 @@ import type {
 
 // ---------- Mocks ----------
 
-type SubStatus = 'PENDING' | 'TRIALING' | 'ACTIVE' | 'PAST_DUE' | 'UNPAID' | 'CANCELED';
+type SubStatus = 'PENDING' | 'TRIALING' | 'ACTIVE' | 'PAST_DUE' | 'UNPAID' | 'CANCELED' | 'PAUSED';
 type InvoiceStatus = 'OPEN' | 'PAID' | 'UNCOLLECTIBLE' | 'VOID';
 
 interface SubRow {
@@ -68,6 +68,8 @@ interface SubRow {
   canceledAt: Date | null;
   canceledReason: string | null;
   trialEndsAt?: Date | null;
+  pauseStartsAt?: Date | null;
+  pauseEndsAt?: Date | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -370,6 +372,18 @@ class StripeStub implements SubscriptionsStripeAdapter {
   }
 
   async debitCustomerBalance(): Promise<{ id: string }> {
+    throw new Error('not used in unit tests');
+  }
+
+  async retrieveSubscription(): Promise<never> {
+    throw new Error('not used in unit tests');
+  }
+
+  async pauseCollection(): Promise<never> {
+    throw new Error('not used in unit tests');
+  }
+
+  async applyRetentionDiscount(): Promise<never> {
     throw new Error('not used in unit tests');
   }
 
@@ -2275,5 +2289,195 @@ describe('invoiceCreditApplied (la línea «Pago con saldo de referidos»)', () 
     expect(invoiceCreditApplied({ starting_balance: 500, ending_balance: 0 })).toBe(0);
     // Factura aún sin cerrar (ending null): nada todavía.
     expect(invoiceCreditApplied({ starting_balance: -600, ending_balance: null } as never)).toBe(0);
+  });
+});
+
+// --- PAUSA (oferta al darse de baja) ---------------------------------------
+//
+// Durante la pausa Stripe sigue `active` (solo anula las facturas), así que el
+// estado local lo deciden la ventana aceptada y los cobros. Las fechas imitan
+// el sondeo real en Stripe de prueba (14-nov-2026): renovación el 14-dic,
+// pausa de 2 meses, facturas del 14-dic y 14-ene anuladas, cobro el 14-feb.
+describe('SubscriptionsService — pausa', () => {
+  const T1 = new Date('2026-12-14T17:29:11Z');
+  const T2 = new Date('2027-01-14T17:29:11Z');
+  const T3 = new Date('2027-02-14T17:29:11Z');
+  const sec = (d: Date) => Math.floor(d.getTime() / 1000);
+
+  function seedPausable(prisma: MockPrisma, status: SubStatus = 'ACTIVE') {
+    prisma.subs.set('s1', {
+      id: 's1',
+      tenantId: 't',
+      userId: 'u',
+      courseId: null,
+      planId: 'plan-1',
+      stripeSubscriptionId: 'sub_stripe_1',
+      stripeCustomerId: 'cus_x',
+      stripePriceId: 'price_recurring',
+      status,
+      unitAmount: 2900,
+      currency: 'eur',
+      interval: 'month',
+      currentPeriodEnd: T1,
+      cancelAtPeriodEnd: false,
+      gracePeriodEndsAt: null,
+      canceledAt: null,
+      canceledReason: null,
+      pauseStartsAt: T1,
+      pauseEndsAt: T3,
+      createdAt: new Date('2026-11-14T17:29:11Z'),
+      updatedAt: new Date(),
+    });
+  }
+
+  function updated(id: string, periodStart: Date, periodEnd: Date, paused: boolean): Stripe.Event {
+    return {
+      id,
+      type: 'customer.subscription.updated',
+      data: {
+        object: {
+          id: 'sub_stripe_1',
+          status: 'active',
+          customer: 'cus_x',
+          cancel_at_period_end: false,
+          current_period_start: sec(periodStart),
+          current_period_end: sec(periodEnd),
+          trial_end: null,
+          pause_collection: paused ? { behavior: 'void', resumes_at: sec(T3) - 86400 } : null,
+        },
+      },
+    } as unknown as Stripe.Event;
+  }
+
+  function invoiceEvent(id: string, type: string, over: Record<string, unknown>): Stripe.Event {
+    return {
+      id,
+      type,
+      data: { object: makeStripeInvoice(over as Partial<Stripe.Invoice>) },
+    } as unknown as Stripe.Event;
+  }
+
+  it('la renovación dentro de la ventana la pone PAUSED y avisa (una vez)', async () => {
+    const { service, prisma, publisher } = buildSystem();
+    seedPausable(prisma);
+    await service.handleWebhookEvent(updated('evt_p1', T1, T2, true), {}, { tenantId: 't' });
+    expect(prisma.subs.get('s1')!.status).toBe('PAUSED');
+    expect(publisher.events.map((e) => e.name)).toEqual(['subscriptions.subscription.paused']);
+    // Segunda renovación anulada: sigue en pausa y no repite el aviso.
+    await service.handleWebhookEvent(updated('evt_p2', T2, T3, true), {}, { tenantId: 't' });
+    expect(prisma.subs.get('s1')!.status).toBe('PAUSED');
+    expect(publisher.events).toHaveLength(1);
+  });
+
+  it('antes de que acabe lo pagado no pasa nada (el periodo aún no llega a la pausa)', async () => {
+    const { service, prisma, publisher } = buildSystem();
+    seedPausable(prisma);
+    await service.handleWebhookEvent(
+      updated('evt_antes', new Date('2026-11-14T17:29:11Z'), T1, true),
+      {},
+      { tenantId: 't' },
+    );
+    expect(prisma.subs.get('s1')!.status).toBe('ACTIVE');
+    expect(publisher.events).toHaveLength(0);
+  });
+
+  it('Stripe sin pausa (la quitaron en su panel): no se pausa por la ventana local', async () => {
+    const { service, prisma } = buildSystem();
+    seedPausable(prisma);
+    await service.handleWebhookEvent(updated('evt_sin', T1, T2, false), {}, { tenantId: 't' });
+    expect(prisma.subs.get('s1')!.status).toBe('ACTIVE');
+  });
+
+  it('PAUSED no vuelve a ACTIVE porque Stripe diga `active`; sí con el primer cobro', async () => {
+    const { service, prisma, publisher } = buildSystem();
+    seedPausable(prisma, 'PAUSED');
+    // Stripe reanuda (pause_collection null) un día antes del cobro: sigue en pausa.
+    await service.handleWebhookEvent(updated('evt_res', T2, T3, false), {}, { tenantId: 't' });
+    expect(prisma.subs.get('s1')!.status).toBe('PAUSED');
+    // Cobro del 14-feb: fin de la pausa, vuelve el acceso.
+    await service.handleWebhookEvent(
+      invoiceEvent('evt_paid_t3', 'invoice.paid', {
+        id: 'in_t3',
+        amount_paid: 2900,
+        created: sec(T3),
+        billing_reason: 'subscription_cycle',
+      }),
+      {},
+      { tenantId: 't' },
+    );
+    const row = prisma.subs.get('s1')!;
+    expect(row.status).toBe('ACTIVE');
+    expect(row.pauseStartsAt).toBeNull();
+    expect(row.pauseEndsAt).toBeNull();
+    const activated = publisher.events.find(
+      (e) => e.name === 'subscriptions.subscription.activated',
+    );
+    expect(activated!.payload).toMatchObject({
+      planId: 'plan-1',
+      recovery: true,
+      resumedFromPause: true,
+    });
+    expect(publisher.events.some((e) => e.name === 'subscriptions.invoice.paid')).toBe(true);
+  });
+
+  it('una factura cobrada de ANTES de la pausa no la cierra', async () => {
+    const { service, prisma } = buildSystem();
+    seedPausable(prisma);
+    await service.handleWebhookEvent(
+      invoiceEvent('evt_paid_antes', 'invoice.paid', {
+        id: 'in_nov',
+        amount_paid: 2900,
+        created: sec(new Date('2026-11-14T17:29:11Z')),
+      }),
+      {},
+      { tenantId: 't' },
+    );
+    expect(prisma.subs.get('s1')!.pauseStartsAt).toEqual(T1);
+    expect(prisma.subs.get('s1')!.status).toBe('ACTIVE');
+  });
+
+  it('si el primer cobro tras la pausa falla: UNPAID directo, sin gracia', async () => {
+    const { service, prisma, publisher } = buildSystem();
+    seedPausable(prisma, 'PAUSED');
+    await service.handleWebhookEvent(
+      invoiceEvent('evt_fail_t3', 'invoice.payment_failed', { id: 'in_t3_fail', created: sec(T3) }),
+      {},
+      { tenantId: 't' },
+    );
+    const row = prisma.subs.get('s1')!;
+    expect(row.status).toBe('UNPAID');
+    expect(row.gracePeriodEndsAt).toBeNull();
+    expect(publisher.events.map((e) => e.name)).toEqual([
+      'subscriptions.subscription.unpaid',
+      'subscriptions.invoice.payment_failed',
+    ]);
+  });
+
+  it('darse de baja con una pausa que aún no empezó la olvida; ya en pausa, la conserva', async () => {
+    const { service, prisma } = buildSystem();
+    seedPausable(prisma);
+    await service.cancelSubscription('t', 'u', 's1');
+    expect(prisma.subs.get('s1')!.pauseStartsAt).toBeNull();
+    const second = buildSystem();
+    seedPausable(second.prisma, 'PAUSED');
+    await second.service.cancelSubscription('t', 'u', 's1');
+    expect(second.prisma.subs.get('s1')!.pauseStartsAt).toEqual(T1);
+    expect(second.prisma.subs.get('s1')!.cancelAtPeriodEnd).toBe(true);
+  });
+
+  it('la baja de Stripe al final saca de la pausa a CANCELED', async () => {
+    const { service, prisma, publisher } = buildSystem();
+    seedPausable(prisma, 'PAUSED');
+    await service.handleWebhookEvent(
+      {
+        id: 'evt_del',
+        type: 'customer.subscription.deleted',
+        data: { object: makeStripeSub({ status: 'canceled' }) },
+      } as unknown as Stripe.Event,
+      {},
+      { tenantId: 't' },
+    );
+    expect(prisma.subs.get('s1')!.status).toBe('CANCELED');
+    expect(publisher.events.map((e) => e.name)).toEqual(['subscriptions.subscription.canceled']);
   });
 });

@@ -15,6 +15,7 @@ import {
   Patch,
   Post,
   Put,
+  Query,
   UnauthorizedException,
   UseGuards,
 } from '@nestjs/common';
@@ -33,6 +34,7 @@ import {
   type MembershipConfigDto,
   type UpdatePlanDto,
 } from './membership.dto';
+import { retentionConfigSchema, type RetentionConfigDto } from './retention.dto';
 
 const ADMIN_ROLES = new Set(['super_admin', 'tenant_admin']);
 
@@ -175,5 +177,45 @@ export class MembershipAdminController {
   ) {
     const user = this.requireAdmin(rawUser);
     return this.registry.getMembershipService().updateConfig(user.tenantId, dto);
+  }
+
+  // ---------------- Oferta al darse de baja ----------------
+
+  @Get('retention')
+  @ApiOperation({
+    summary:
+      '«Cuando alguien quiere irse»: qué se ofrece al darse de baja (pausa y meses ' +
+      'máximos, descuento con % y meses).',
+  })
+  async getRetention(@CurrentUser() rawUser: SessionClaims | undefined) {
+    const user = this.requireAdmin(rawUser);
+    return this.registry.getSubscriptionRetentionService().getConfig(user.tenantId);
+  }
+
+  @Put('retention')
+  @ApiOperation({ summary: 'Guarda la oferta al darse de baja.' })
+  async updateRetention(
+    @CurrentUser() rawUser: SessionClaims | undefined,
+    @Body(new ZodValidationPipe(retentionConfigSchema)) dto: RetentionConfigDto,
+  ) {
+    const user = this.requireAdmin(rawUser);
+    return this.registry.getSubscriptionRetentionService().updateConfig(user.tenantId, dto);
+  }
+
+  @Get('retention/summary')
+  @ApiOperation({
+    summary:
+      'Resumen de bajas: cuántos pulsaron «Darme de baja», cuántos se quedaron (pausa o ' +
+      'descuento), los motivos y las últimas salidas. `days` = ventana (90 por defecto).',
+  })
+  async retentionSummary(
+    @CurrentUser() rawUser: SessionClaims | undefined,
+    @Query('days') days?: string,
+  ) {
+    const user = this.requireAdmin(rawUser);
+    const parsed = days ? Number.parseInt(days, 10) : undefined;
+    return this.registry.getSubscriptionRetentionService().summary(user.tenantId, {
+      ...(parsed !== undefined && Number.isFinite(parsed) ? { sinceDays: parsed } : {}),
+    });
   }
 }

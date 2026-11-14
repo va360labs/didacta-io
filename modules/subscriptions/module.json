@@ -28,6 +28,9 @@
       "name": "subscriptions.subscription.canceled"
     },
     {
+      "name": "subscriptions.subscription.paused"
+    },
+    {
       "name": "subscriptions.invoice.paid"
     },
     {
@@ -44,6 +47,15 @@
     },
     {
       "name": "subscriptions.membership.revoked"
+    },
+    {
+      "name": "subscriptions.retention.paused"
+    },
+    {
+      "name": "subscriptions.retention.discounted"
+    },
+    {
+      "name": "subscriptions.retention.canceled"
     }
   ],
   "hooks": [],

@@ -19,6 +19,7 @@ import {
 } from '@/components/academy-profile-fields';
 import { PublicHomeToggle } from '@/components/admin/public-home-card';
 import { Icon } from '@/components/icon';
+import { RetentionSettingsCard } from '@/components/retention/retention-settings-card';
 import { ACADEMY_LOCALE_NAMES, ACADEMY_LOCALES, type AcademyLocale } from '@/i18n/config';
 import { academyApi, type Academy } from '@/lib/academy';
 import { authStorage } from '@/lib/auth-storage';
@@ -40,8 +41,9 @@ const DIDACTA_SAT = 70;
 /**
  * «Ajustes» del MODO SENCILLO: tu academia (nombre, idioma, logo y color, con
  * vista previa en vivo; y cómo se presenta en la comunidad: portada,
- * descripción y enlaces), los correos que reciben los alumnos al comprar y el
- * interruptor para pasar al modo completo. Lo técnico
+ * descripción y enlaces), los correos que reciben los alumnos al comprar,
+ * premios y niveles, los mensajes automáticos, «Cuando alguien quiere irse»
+ * (la oferta al darse de baja) y el interruptor para pasar al modo completo. Lo técnico
  * (correo propio, cobros con claves, Zoom, idioma…) sigue en la misma página
  * con `?full=1`, sin rutas duplicadas.
  */
@@ -272,6 +274,10 @@ export function SimpleSettings() {
       {/* Mensajes que el aula envía sola, firmados por quien la administra. */}
       <div className="mt-4" id="mensajes-automaticos">
         <AutomatedMessages />
+      </div>
+
+      <div className="mt-4">
+        <RetentionSettingsCard id="retencion" />
       </div>
 
       <Link

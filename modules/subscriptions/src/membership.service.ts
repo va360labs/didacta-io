@@ -99,8 +99,11 @@ function withCustomHeadline<T extends { headline: string }>(row: T): T {
  * `PAST_DUE` sí entra: está en periodo de gracia, conserva el acceso y lo que
  * necesita es arreglar su método de pago, no una segunda suscripción que le
  * cobraría dos veces por lo mismo.
+ *
+ * `PAUSED` también: es una pausa que pidió el propio alumno y que se reanuda
+ * sola. Venderle otra membresía le cobraría dos veces cuando vuelva.
  */
-export const MEMBERSHIP_LIVE_STATUSES = ['TRIALING', 'ACTIVE', 'PAST_DUE'] as const;
+export const MEMBERSHIP_LIVE_STATUSES = ['TRIALING', 'ACTIVE', 'PAST_DUE', 'PAUSED'] as const;
 
 /** El DTO del host también valida, pero el módulo no depende de su llamador. */
 function assertPlanInterval(intervalMonths: number): void {

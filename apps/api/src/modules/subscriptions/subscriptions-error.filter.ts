@@ -38,6 +38,12 @@ const STATUS_BY_CODE: Record<string, number> = {
   MEMBERSHIP_NOT_TRIALING: HttpStatus.CONFLICT,
   // Ya tiene una membresía viva: no se le abre un segundo checkout.
   MEMBERSHIP_ALREADY_SUBSCRIBED: HttpStatus.CONFLICT,
+  // Oferta al darse de baja.
+  SUBSCRIPTIONS_RETENTION_NOT_ELIGIBLE: HttpStatus.CONFLICT,
+  SUBSCRIPTIONS_RETENTION_ALREADY_USED: HttpStatus.CONFLICT,
+  SUBSCRIPTIONS_RETENTION_CONFIG_INVALID: HttpStatus.BAD_REQUEST,
+  SUBSCRIPTIONS_RETENTION_REASON_INVALID: HttpStatus.BAD_REQUEST,
+  SUBSCRIPTIONS_ALREADY_LEAVING: HttpStatus.CONFLICT,
 };
 
 @Catch(SubscriptionsError)

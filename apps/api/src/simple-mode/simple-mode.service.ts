@@ -1045,7 +1045,11 @@ export class SimpleModeService {
     const [orders, subscriptions, firstOrder] = await Promise.all([
       this.prisma.modBillingOrder.count({ where: { tenantId, status: 'COMPLETED' } }),
       this.prisma.modSubscriptionsSubscription.count({
-        where: { tenantId, status: { in: ['ACTIVE', 'TRIALING', 'PAST_DUE', 'CANCELED'] } },
+        where: {
+          tenantId,
+          // PAUSED: vendida y en pausa a petición del alumno (sigue siendo una venta).
+          status: { in: ['ACTIVE', 'TRIALING', 'PAST_DUE', 'CANCELED', 'PAUSED'] },
+        },
       }),
       this.prisma.modBillingOrder.findFirst({
         where: { tenantId, status: 'COMPLETED' },

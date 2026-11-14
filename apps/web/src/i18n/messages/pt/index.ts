@@ -69,6 +69,7 @@ import modoSencilloGestion from './modoSencilloGestion.json';
 import modoSencilloAprender from './modoSencilloAprender.json';
 import shell from './shell.json';
 import agenteIa from './agenteIa.json';
+import bajaRetencion from './bajaRetencion.json';
 
 export default {
   adminApi,
@@ -126,4 +127,5 @@ export default {
   modoSencilloAprender,
   shell,
   agenteIa,
+  bajaRetencion,
 } as const;

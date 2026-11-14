@@ -21,6 +21,9 @@ import { ModuleRegistryService } from '../module-registry.service';
  *   - `subscriptions.subscription.canceled` (immediate) con planId → revoke.
  *   - `subscriptions.subscription.unpaid` con planId → revoke (refcount-safe:
  *     unenrolls solo lo que concedió el grupo).
+ *   - `subscriptions.subscription.paused` con planId → revoke: empieza una pausa
+ *     aceptada al darse de baja (sin cobro, sin acceso). Al volver a cobrar,
+ *     `subscription.activated` (recovery) la vuelve a conceder.
  *
  * Este bridge solo crea/retira membresías `MEMBERSHIP` (patrón del bridge de
  * tiers): la revocación pasa `onlySource`, así el fin de una membresía de pago
@@ -77,6 +80,13 @@ export class MembershipAccessGroupsBridge implements OnModuleInit {
     );
     eventBus.subscribe<MembershipEventPayload>(
       'subscriptions.subscription.unpaid',
+      async (event: DomainEvent<MembershipEventPayload>) => {
+        if (!event.data.planId) return;
+        await this.revoke(event);
+      },
+    );
+    eventBus.subscribe<MembershipEventPayload>(
+      'subscriptions.subscription.paused',
       async (event: DomainEvent<MembershipEventPayload>) => {
         if (!event.data.planId) return;
         await this.revoke(event);

@@ -34,6 +34,8 @@ export const manifest: ModuleManifest = parseModuleManifest({
     'subscriptions.subscription.past_due',
     'subscriptions.subscription.unpaid',
     'subscriptions.subscription.canceled',
+    // Empieza una pausa aceptada en la oferta al darse de baja (fuera acceso).
+    'subscriptions.subscription.paused',
     'subscriptions.invoice.paid',
     'subscriptions.invoice.payment_failed',
     'subscriptions.invoice.refunded',
@@ -41,6 +43,10 @@ export const manifest: ModuleManifest = parseModuleManifest({
     // Membresía (página pública /join): concede/revoca un grupo de acceso.
     'subscriptions.membership.activated',
     'subscriptions.membership.revoked',
+    // Oferta al darse de baja: lo que eligió el alumno (correos de confirmación).
+    'subscriptions.retention.paused',
+    'subscriptions.retention.discounted',
+    'subscriptions.retention.canceled',
   ],
   eventsConsumed: [],
   apiNamespace: '/modules/subscriptions',
