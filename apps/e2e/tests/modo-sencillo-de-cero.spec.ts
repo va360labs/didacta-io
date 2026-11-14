@@ -111,8 +111,11 @@ test('modo sencillo: de cero a enlace de venta con precio', async ({ browser }) 
   await c.click(page.getByRole('button', { name: 'Crear mi academia' }));
   await page.waitForURL(/\/start/, { timeout: 30_000 });
   await expect(page.getByTestId('empieza-aqui')).toBeVisible();
-  // Lo que dejó el alta: academia con nombre, precio y enlace aún apagado.
-  await expect(page.locator('[data-step="price"][data-done="1"]')).toContainText('49');
+  // Lo que dejó el alta: academia con nombre, precio DE PARTIDA y enlace aún
+  // apagado. El precio del alta queda «por confirmar» (venta real: se publicó
+  // a un precio que nadie volvió a mirar); publicar lo enseña y lo confirma,
+  // sin un clic más.
+  await expect(page.getByTestId('precio-por-confirmar')).toContainText('49');
   await expect(page.getByTestId('copiar-enlace')).toBeDisabled();
   // El curso aún no tiene portada: la tarjeta del enlace pinta el degradado.
   await expect(page.getByTestId('enlace-portada-reserva')).toBeVisible();
@@ -143,8 +146,12 @@ test('modo sencillo: de cero a enlace de venta con precio', async ({ browser }) 
       .getByRole('link', { name: /Empieza aquí/ }),
   );
   await page.waitForURL(/\/start/);
+  await expect(page.getByTestId('publicar')).toHaveText(/Publicar a 49\s€/);
+  await expect(page.getByTestId('publicar-precio')).toContainText(/Con 49\s€ te llegan/);
   await c.click(page.getByTestId('publicar'));
   await expect(page.getByTestId('copiar-enlace')).toBeEnabled({ timeout: 20_000 });
+  // Publicar a ese precio lo dio por confirmado.
+  await expect(page.locator('[data-step="price"][data-done="1"]')).toContainText('49');
   await c.click(page.getByTestId('copiar-enlace'));
   const enlace = await page.evaluate(() => navigator.clipboard.readText());
   expect(enlace).toContain('/catalog/acuarela-desde-cero');
