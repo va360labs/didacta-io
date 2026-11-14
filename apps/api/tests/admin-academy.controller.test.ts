@@ -20,7 +20,9 @@ interface Setting {
   updatedById: string | null;
 }
 
-function fakePrisma(opts: { adminLocale?: string; simpleLocale?: string } = {}) {
+function fakePrisma(
+  opts: { adminLocale?: string; simpleLocale?: string; simpleMode?: boolean } = {},
+) {
   const settings: Setting[] = [];
   let name = 'Taller';
   const find = (tenantId: string, moduleName: string, key: string) =>
@@ -28,7 +30,7 @@ function fakePrisma(opts: { adminLocale?: string; simpleLocale?: string } = {}) 
   const prisma = {
     settings,
     tenant: {
-      findUnique: async () => ({ name, slug: 'taller' }),
+      findUnique: async () => ({ name, slug: 'taller', simpleMode: opts.simpleMode ?? false }),
       update: async (args: { data: { name: string } }) => {
         name = args.data.name;
         return { name };
@@ -121,5 +123,57 @@ describe('AdminAcademyController — idioma del aula', () => {
     expect(AcademyUpdateSchema.safeParse({ locale: 'en-US' }).success).toBe(false);
     expect(AcademyUpdateSchema.safeParse({}).success).toBe(false);
     expect(AcademyUpdateSchema.safeParse({ name: 'X' }).success).toBe(true);
+    expect(AcademyUpdateSchema.safeParse({ publicHome: false }).success).toBe(true);
+    expect(AcademyUpdateSchema.safeParse({ publicHome: 'si' }).success).toBe(false);
+  });
+});
+
+describe('AdminAcademyController — página pública de la academia', () => {
+  it('sin ajuste: activada en el modo sencillo y desactivada en el completo', async () => {
+    const sencilla = new AdminAcademyController(fakePrisma({ simpleMode: true }) as never);
+    expect(await sencilla.getMine(admin)).toMatchObject({
+      publicHome: true,
+      publicHomeSource: 'default',
+    });
+    const completa = new AdminAcademyController(fakePrisma({ simpleMode: false }) as never);
+    expect(await completa.getMine(admin)).toMatchObject({
+      publicHome: false,
+      publicHomeSource: 'default',
+    });
+  });
+
+  it('apagarla en un aula sencilla la guarda como ajuste y manda sobre el modo', async () => {
+    const prisma = fakePrisma({ simpleMode: true });
+    const ctl = new AdminAcademyController(prisma as never);
+    const dto = await ctl.rename(admin, { publicHome: false });
+    expect(dto).toMatchObject({ publicHome: false, publicHomeSource: 'setting' });
+    expect(prisma.settings).toEqual([
+      {
+        tenantId: 't1',
+        moduleName: 'academy',
+        key: 'public-home',
+        valueJson: { enabled: false },
+        isSecret: false,
+        updatedById: 'u-admin',
+      },
+    ]);
+    // Encenderla de nuevo actualiza la misma fila.
+    expect((await ctl.rename(admin, { publicHome: true })).publicHome).toBe(true);
+    expect(prisma.settings).toHaveLength(1);
+  });
+
+  it('cambiar el nombre o el idioma no toca la página pública', async () => {
+    const prisma = fakePrisma({ simpleMode: false });
+    const ctl = new AdminAcademyController(prisma as never);
+    await ctl.rename(admin, { name: 'Otra', locale: 'en' });
+    expect(prisma.settings.map((s) => s.key)).toEqual(['locale']);
+    expect((await ctl.getMine(admin)).publicHomeSource).toBe('default');
+  });
+
+  it('solo quien administra puede cambiarla', async () => {
+    const ctl = new AdminAcademyController(fakePrisma() as never);
+    await expect(ctl.rename(alumno, { publicHome: true })).rejects.toBeInstanceOf(
+      ForbiddenException,
+    );
   });
 });
