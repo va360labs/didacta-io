@@ -308,10 +308,15 @@ export function buildPurchaseReceiptEmail(
   if (data.tax > 0) {
     rows.push({ label: copy.tax, value: money(data.tax, data.currency, lang) });
   }
-  rows.push({ label: data.trial ? copy.totalToday : copy.totalPaid, value: total, total: true });
+  // Con impuestos en Stripe, el desglose y «Total pagado»; sin ellos, «Precio
+  // final», sin decir nada del IVA (puede no cobrarse).
+  rows.push({
+    label: data.trial ? copy.totalToday : data.tax > 0 ? copy.totalPaid : copy.finalPrice,
+    value: total,
+    total: true,
+  });
 
   const notes: string[] = [];
-  if (data.tax <= 0) notes.push(copy.taxIncluded);
   if (data.trial?.endsAt && data.trial.amount !== null && data.trial.amount !== undefined) {
     notes.push(
       fill(copy.trialFirstCharge, {
@@ -466,7 +471,7 @@ export function buildRenewalReceiptEmail(
     rows.push({ label: copy.discount, value: `−${money(data.discount, data.currency, lang)}` });
   }
   if (data.tax > 0) rows.push({ label: copy.tax, value: money(data.tax, data.currency, lang) });
-  rows.push({ label: copy.totalPaid, value: total, total: true });
+  rows.push({ label: data.tax > 0 ? copy.totalPaid : copy.finalPrice, value: total, total: true });
 
   const sections: EmailSection[] = [];
   const manage = safeUrl(data.manageUrl);
@@ -518,7 +523,6 @@ export function buildRenewalReceiptEmail(
         amount: money(subtotal, data.currency, lang),
       },
       rows,
-      notes: data.tax <= 0 ? [copy.taxIncluded] : [],
     },
     sections,
     signature: false,

@@ -40,7 +40,9 @@ export const SALE_EMAIL_COPY = {
     tax: 'Impuestos',
     totalPaid: 'Total pagado',
     totalToday: 'Total hoy',
-    taxIncluded: 'Precio final, impuestos incluidos.',
+    // Sin línea de impuestos de Stripe no se afirma nada sobre el IVA (hay
+    // creadores que no lo cobran): el total se llama «Precio final».
+    finalPrice: 'Precio final',
     nextRenewal:
       'Se renueva el {date} por {amount}. Puedes darte de baja cuando quieras desde tu cuenta.',
     trialFirstCharge:
@@ -109,7 +111,7 @@ export const SALE_EMAIL_COPY = {
     tax: 'Tax',
     totalPaid: 'Total paid',
     totalToday: 'Total today',
-    taxIncluded: 'Final price, taxes included.',
+    finalPrice: 'Final price',
     nextRenewal: 'Renews on {date} for {amount}. You can cancel at any time from your account.',
     trialFirstCharge:
       'Your free trial lasts until {date}. On that day you will be charged {amount} unless you cancel before.',
@@ -178,7 +180,7 @@ export const SALE_EMAIL_COPY = {
     tax: 'Impostos',
     totalPaid: 'Total pago',
     totalToday: 'Total hoje',
-    taxIncluded: 'Preço final, impostos incluídos.',
+    finalPrice: 'Preço final',
     nextRenewal: 'Renova em {date} por {amount}. Você pode cancelar quando quiser na sua conta.',
     trialFirstCharge:
       'Seu teste grátis vai até {date}. Nesse dia serão cobrados {amount}, a menos que você cancele antes.',

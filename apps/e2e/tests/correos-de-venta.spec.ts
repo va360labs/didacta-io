@@ -215,7 +215,6 @@ test('correos de venta: recibo al comprar, la creadora lo personaliza en Ajustes
     'Hola, Ana:',
     `Ya tienes acceso a «${COURSE}».`,
     'Curso · pago único',
-    'Precio final, impuestos incluidos.',
     'VENDIDO POR',
     `Contacto: hola@${tenant.slug}.example.com`,
     'Quiero acceder al curso ahora mismo.',
@@ -224,7 +223,9 @@ test('correos de venta: recibo al comprar, la creadora lo personaliza en Ajustes
   ]) {
     expect(recibo.Text, dato).toContain(dato);
   }
-  expect(recibo.Text).toMatch(/Total pagado: 49,00\s€/);
+  // Sin línea de impuestos en Stripe: «Precio final», sin afirmar nada del IVA.
+  expect(recibo.Text).toMatch(/Precio final: 49,00\s€/);
+  expect(recibo.Text).not.toMatch(/impuesto/i);
   expect(recibo.HTML).toContain('<html lang="es">');
   expect(recibo.HTML).toContain('Elige tu contraseña y entra');
   const enlace = /Elige tu contraseña y entra: (\S+)/.exec(recibo.Text)?.[1];
@@ -348,7 +349,7 @@ test('correos de venta: recibo al comprar, la creadora lo personaliza en Ajustes
   ]) {
     expect(segundo.Text, dato).toContain(dato);
   }
-  expect(segundo.Text).toMatch(/Total pagado: 49,00\s€/);
+  expect(segundo.Text).toMatch(/Precio final: 49,00\s€/);
   await beaCtx.close();
 
   // ── 4. «Volver al original» ────────────────────────────────────────────

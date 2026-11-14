@@ -51,8 +51,8 @@ const BRAND: EmailBranding = {
 
 /** Palabras que en un correo inglés o portugués delatan español (y al revés). */
 const SPANISH =
-  /\b(Pedido nº|Fecha|Método de pago|Resumen del pedido|Vendido por:|Pagado el|Recibes este correo|impuestos incluidos|tu compra)\b|«|»/;
-const ENGLISH = /\b(Order summary|Payment method|Paid on|Sold by|Total paid|You are receiving)\b/;
+  /\b(Pedido nº|Fecha|Método de pago|Resumen del pedido|Vendido por:|Pagado el|Recibes este correo|Precio final|impuestos incluidos|tu compra)\b|«|»/;
+const ENGLISH = /\b(Order summary|Payment method|Paid on|Sold by|Final price|You are receiving)\b/;
 
 const RECEIPT: PurchaseReceiptData = {
   lang: 'es',
@@ -200,8 +200,9 @@ describe('recibo de una compra', () => {
     expect(text).toContain('El botón vale 7 días. Tu usuario es ana@example.com.');
     // Resumen.
     expect(text).toContain('Curso · pago único');
-    expect(text).toMatch(/Total pagado: 49,00\s€/);
-    expect(text).toContain('Precio final, impuestos incluidos.');
+    // Sin línea de impuestos en Stripe: «Precio final» y ni una palabra del IVA.
+    expect(text).toMatch(/Precio final: 49,00\s€/);
+    expect(text).not.toMatch(/impuesto|IVA/i);
     // Vendedor y legal.
     expect(text).toContain('Nombre fiscal: Lucía Martín');
     expect(text).toContain('Contacto: hola@primersorbo.example.com');
@@ -231,14 +232,16 @@ describe('recibo de una compra', () => {
     if (lang === 'en') {
       expect(subject).toBe('Your receipt from Primer Sorbo (order 3F2A9C1B)');
       expect(text).toContain('Paid on 14 November 2026');
-      expect(text).toMatch(/Total paid: €49\.00/);
+      expect(text).toMatch(/Final price: €49\.00/);
+      expect(text).not.toMatch(/tax/i);
       expect(text).toContain('Course · one-off payment');
       expect(text).toContain('Choose your password and get in');
     }
     if (lang === 'pt') {
       expect(subject).toBe('Recibo da sua compra em Primer Sorbo (pedido 3F2A9C1B)');
       expect(text).toContain('Pago em 14 de novembro de 2026');
-      expect(text).toMatch(/Total pago: €\s49,00/);
+      expect(text).toMatch(/Preço final: €\s49,00/);
+      expect(text).not.toMatch(/imposto/i);
       expect(text).toContain('Curso · pagamento único');
       expect(text).toContain('Crie sua senha e entre');
       expect(text).toContain('nota fiscal');
@@ -256,8 +259,9 @@ describe('recibo de una compra', () => {
     expect(text).toMatch(/Subtotal: 50,00\s€/);
     expect(text).toMatch(/Descuento: −10,00\s€/);
     expect(text).toMatch(/Impuestos: 8,40\s€/);
+    // Con la línea de impuestos de Stripe, el desglose de siempre y «Total pagado».
     expect(text).toMatch(/Total pagado: 48,40\s€/);
-    expect(text).not.toContain('impuestos incluidos');
+    expect(text).not.toContain('Precio final');
   });
 
   it('prueba gratis: 0 € hoy y cuándo es el primer cobro, sin método de pago', () => {
@@ -315,7 +319,7 @@ describe('el creador personaliza el texto, el recibo se queda', () => {
     for (const must of [
       '3F2A9C1B',
       'Visa ···· 4242',
-      'Total pagado',
+      'Precio final',
       'Vendido por'.toUpperCase(),
       'Nombre fiscal: Lucía Martín',
       'Quiero acceder al curso ahora mismo',
@@ -866,7 +870,7 @@ describe('SaleEmailsService', () => {
     expect(sent[0]!.subject).toBe('Ya eres de Primer Sorbo, Ana');
     expect(sent[0]!.text).toContain('Gracias por apoyar Primer Sorbo.');
     expect(sent[0]!.text).toContain('3F2A9C1B');
-    expect(sent[0]!.text).toMatch(/Total pagado: 49,00\s€/);
+    expect(sent[0]!.text).toMatch(/Precio final: 49,00\s€/);
   });
 
   const invoiceEvent = (type: string, billing_reason: string, attempt = 1) =>
