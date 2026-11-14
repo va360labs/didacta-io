@@ -85,6 +85,27 @@ export type TenantResolution =
 /** `acct_1Abc`, `cs_test_a1B2`, `pi_3Xyz`… */
 const STRIPE_OBJECT_ID = /^[a-z][a-z0-9]*_[A-Za-z0-9_]{1,250}$/;
 
+/** Clases que se registraban como de prueba aunque fueran reales (ver `register`). */
+const MISLABELLED_KINDS: ReadonlySet<string> = new Set(['refund', 'transfer']);
+
+/**
+ * ¿Es la fila de un objeto REAL que quedó registrado como de prueba por el
+ * fallo de `livemode`? Mismo tenant, misma clase, y solo prueba → real.
+ */
+function isMislabelledAsTest(
+  existing: { tenantId: string; kind: string; livemode: boolean } | null,
+  input: RegisterObjectRefInput,
+): boolean {
+  return (
+    !!existing &&
+    existing.tenantId === input.tenantId &&
+    existing.kind === input.kind &&
+    MISLABELLED_KINDS.has(input.kind) &&
+    existing.livemode === false &&
+    input.livemode === true
+  );
+}
+
 export class RefsService {
   constructor(private readonly prisma: PrismaClient) {}
 
@@ -126,6 +147,18 @@ export class RefsService {
     const existing = await this.prisma.modPayoutsObjectRef.findUnique({
       where: { stripeObjectId: input.stripeObjectId },
     });
+    if (isMislabelledAsTest(existing, input)) {
+      // Reembolsos y transferencias de disputas se registraban como de prueba
+      // aunque fueran reales (el Refund de Stripe no trae `livemode` y se leía
+      // `refund.livemode === true`). Se corrige al volver a verlos, en vez de
+      // tumbar cada sincronización de ese cargo con un conflicto. Solo en ese
+      // sentido (prueba → real), mismo tenant y misma clase.
+      await this.prisma.modPayoutsObjectRef.updateMany({
+        where: { stripeObjectId: input.stripeObjectId, tenantId: input.tenantId, livemode: false },
+        data: { livemode: true },
+      });
+      return { created: false };
+    }
     if (
       !existing ||
       existing.tenantId !== input.tenantId ||

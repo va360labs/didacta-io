@@ -55,6 +55,14 @@ class MockPrisma {
         .sort((a, b) => a.stripeObjectId.localeCompare(b.stripeObjectId)),
     findFirst: async ({ where }: never) =>
       this.visible().find((r) => matchesWhere(r, where)) ?? null,
+    updateMany: async ({ where, data }: never) => {
+      const w = where as Partial<Row>;
+      const hits = this.visible().filter((r) =>
+        (Object.keys(w) as Array<keyof Row>).every((k) => r[k] === w[k]),
+      );
+      for (const r of hits) Object.assign(r, data as Partial<Row>);
+      return { count: hits.length };
+    },
   };
 }
 
@@ -151,6 +159,33 @@ describe('RefsService.register', () => {
     await expect(refs.register(sesion({ livemode: true }))).rejects.toBeInstanceOf(
       PayoutsObjectRefConflictError,
     );
+  });
+
+  it('un reembolso REAL que quedó registrado como de prueba se corrige (fallo del 14-nov), sin conflicto', async () => {
+    const reembolso = sesion({ stripeObjectId: 're_3Real', kind: 'refund', livemode: false });
+    await refs.register(reembolso);
+
+    await expect(refs.register({ ...reembolso, livemode: true })).resolves.toEqual({
+      created: false,
+    });
+    expect(prisma.rows).toHaveLength(1);
+    expect(prisma.rows[0]!.livemode).toBe(true);
+  });
+
+  it('la corrección solo va de prueba a real, y nunca entre aulas', async () => {
+    const reembolso = sesion({ stripeObjectId: 're_3Real', kind: 'refund', livemode: true });
+    await refs.register(reembolso);
+    // real → prueba: sigue siendo conflicto.
+    await expect(refs.register({ ...reembolso, livemode: false })).rejects.toBeInstanceOf(
+      PayoutsObjectRefConflictError,
+    );
+    // Otra aula con un reembolso de A guardado como prueba: conflicto, no se toca.
+    const otro = sesion({ stripeObjectId: 're_3Otro', kind: 'refund', livemode: false });
+    await refs.register(otro);
+    await expect(
+      refs.register({ ...otro, tenantId: TENANT_B, livemode: true }),
+    ).rejects.toBeInstanceOf(PayoutsObjectRefConflictError);
+    expect(prisma.rows.find((r) => r.stripeObjectId === 're_3Otro')!.livemode).toBe(false);
   });
 
   it.each([
