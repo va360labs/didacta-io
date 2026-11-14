@@ -20,7 +20,7 @@ import {
   offerPrice,
   ogLocale,
   robotsHeaderFor,
-  ROBOTS_DISALLOW_ALL,
+  ROBOTS_NOT_INDEXABLE,
   serializeJsonLd,
   sitemapEntries,
   truncate,
@@ -159,10 +159,28 @@ describe('og:locale', () => {
 });
 
 describe('robots.txt', () => {
-  it('portada apagada: todo Disallow, sin sitemap', () => {
+  it('portada apagada: se deja rastrear (manda el noindex de cada página), salvo la API; sin sitemap', () => {
     const txt = buildRobotsTxt({ indexable: false }, ORIGIN);
-    expect(txt).toBe(ROBOTS_DISALLOW_ALL);
-    for (const url of ['/', '/catalog', '/catalog/latte-art', '/signin']) {
+    expect(txt).toBe(ROBOTS_NOT_INDEXABLE);
+    expect(txt).not.toContain('Sitemap:');
+    // Rastreables: así Google LEE el noindex y X/LinkedIn sacan la vista previa.
+    for (const url of [
+      '/',
+      '/?ref=x',
+      '/catalog',
+      '/catalog/latte-art',
+      '/signin',
+      '/join?ref=x',
+      '/home',
+      '/_next/static/chunks/app.js',
+      // og:image del aula para las vistas previas.
+      '/api/v1/modules/theming/tenants/a/cover?v=1',
+      '/api/v1/storage/file/tenants/a/uploads/x.png',
+    ]) {
+      expect(allowed(txt, url), url).toBe(true);
+    }
+    // Control: la API (JSON) sigue cerrada.
+    for (const url of ['/api/v1/auth/signin', '/api/v1/public/seo', '/api/docs']) {
       expect(allowed(txt, url), url).toBe(false);
     }
   });

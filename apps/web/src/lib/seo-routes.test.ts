@@ -4,7 +4,7 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { PublicSeo } from './seo';
+import { ROBOTS_NOT_INDEXABLE, type PublicSeo } from './seo';
 
 /**
  * `robots.txt` y `sitemap.xml` POR AULA, con la API doblada en `fetch` (que es
@@ -105,12 +105,15 @@ describe('robots.txt por aula', () => {
     expect(txt).toContain(`Sitemap: https://${AULA_A}/sitemap.xml`);
   });
 
-  it('portada apagada o dominio sin aula: Disallow: / entero', async () => {
+  it('portada apagada o dominio sin aula: rastreable salvo la API, sin sitemap (manda el noindex)', async () => {
     const { robots } = await routes();
     for (const host of [APAGADA, 'nadie.example.com']) {
       const res = await robots(req(host, '/robots.txt'));
       expect(res.status).toBe(200);
-      expect(await res.text()).toBe('User-agent: *\nDisallow: /\n');
+      const txt = await res.text();
+      expect(txt).toBe(ROBOTS_NOT_INDEXABLE);
+      expect(txt).not.toMatch(/^Disallow: \/$/m);
+      expect(txt).not.toContain('Sitemap:');
     }
   });
 

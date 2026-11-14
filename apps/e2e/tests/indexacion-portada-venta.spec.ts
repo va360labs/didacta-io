@@ -23,7 +23,8 @@ import { apiAs, freshTenant, sql, type FreshTenant } from '../helpers/simple-ten
  *     JSON-LD `Course` con su oferta real; un curso que no se vende, 404.
  *  3. Catálogo: los cursos en el HTML, `index` e `ItemList`.
  *  4. Lo privado: `noindex` en la meta y en la cabecera `X-Robots-Tag`.
- *  5. `robots.txt` y `sitemap.xml` por aula; con la portada apagada, nada.
+ *  5. `robots.txt` y `sitemap.xml` por aula; con la portada apagada se rastrea
+ *     (manda el `noindex`) y no hay sitemap.
  *  6. Idioma del aula en inglés y portugués.
  */
 
@@ -306,7 +307,7 @@ test.describe('Indexación: la portada y las fichas de venta, sí; el resto, no'
     }
   });
 
-  test('robots.txt y sitemap.xml por aula, sin mezclar; con la portada apagada, nada', async () => {
+  test('robots.txt y sitemap.xml por aula, sin mezclar; con la portada apagada, noindex y sin sitemap', async () => {
     const robotsA = await crawl(a.host, '/robots.txt');
     expect(robotsA.status).toBe(200);
     expect(robotsA.headers['content-type']).toContain('text/plain');
@@ -333,11 +334,21 @@ test.describe('Indexación: la portada y las fichas de venta, sí; el resto, no'
     expect(mapB.body).not.toContain('latte-art');
     expect(mapB.body).not.toContain(a.host);
 
-    // Portada apagada: robots cerrado, sin sitemap y la ficha (que se sigue
-    // pudiendo comprar con el enlace) con noindex.
+    // Portada apagada: rastreable (salvo la API) para que el buscador LEA el
+    // noindex de cada página y X/LinkedIn sigan sacando la vista previa; sin
+    // sitemap, y la ficha (que se sigue pudiendo comprar con el enlace) noindex.
     const robotsOff = await crawl(apagada.host, '/robots.txt');
     expect(robotsOff.status).toBe(200);
-    expect(robotsOff.body).toBe('User-agent: *\nDisallow: /\n');
+    expect(robotsOff.body).toBe(
+      [
+        'User-agent: *',
+        'Allow: /api/v1/modules/theming/tenants/',
+        'Allow: /api/v1/storage/file/tenants/',
+        'Disallow: /api/',
+        '',
+      ].join('\n'),
+    );
+    expect(robotsOff.body).not.toMatch(/^Disallow: \/$/m);
     expect((await crawl(apagada.host, '/sitemap.xml')).status).toBe(404);
     const fichaOff = await crawl(apagada.host, '/catalog/curso-cerrado');
     expect(fichaOff.status).toBe(200);

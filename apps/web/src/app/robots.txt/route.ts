@@ -14,7 +14,9 @@ import { fetchPublicSeo, requestOrigin } from '@/lib/seo-server';
  *
  *  - Portada pública encendida: solo la portada, el catálogo y las fichas, y
  *    el sitemap del aula (`buildRobotsTxt`).
- *  - Apagada: `Disallow: /`.
+ *  - Apagada: se deja rastrear (salvo la API) y manda el `noindex` de cada
+ *    página, como antes de que existiera este fichero (ver
+ *    `ROBOTS_NOT_INDEXABLE`).
  *  - La API no contesta: 503. Un buscador lo lee como «de momento no rastrees,
  *    vuelve luego», que es justo lo que es; un `Disallow` o un `Allow` por un
  *    fallo pasajero sería mentirle durante el día que lo guarda en caché.

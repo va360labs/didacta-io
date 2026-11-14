@@ -179,8 +179,22 @@ export function ogLocale(locale: string | null | undefined): string {
 
 // ── robots.txt ───────────────────────────────────────────────────────────────
 
-/** Aula sin portada pública (o dominio sin aula que indexar): nada. */
-export const ROBOTS_DISALLOW_ALL = 'User-agent: *\nDisallow: /\n';
+/**
+ * `robots.txt` de un aula que NO se indexa (portada apagada, o dominio sin aula
+ * que indexar). Se deja rastrear y manda el `noindex` de cada página (meta y
+ * `X-Robots-Tag`), que es lo que había antes en la práctica (no existía el
+ * fichero): con `Disallow: /` Google ya no podría leer ese `noindex`, y X o
+ * LinkedIn, que respetan `robots.txt`, dejarían de sacar la vista previa de los
+ * enlaces del aula. Solo se cierra la API (JSON, no páginas), salvo las
+ * imágenes públicas del aula, que son el `og:image` de esas vistas previas.
+ */
+export const ROBOTS_NOT_INDEXABLE = [
+  'User-agent: *',
+  'Allow: /api/v1/modules/theming/tenants/',
+  'Allow: /api/v1/storage/file/tenants/',
+  'Disallow: /api/',
+  '',
+].join('\n');
 
 /**
  * `robots.txt` de un aula indexable: SOLO la portada (con o sin query: los
@@ -194,7 +208,7 @@ export const ROBOTS_DISALLOW_ALL = 'User-agent: *\nDisallow: /\n';
  * abierto. `$` ancla el final: `/$` es la portada y nada más.
  */
 export function buildRobotsTxt(seo: PublicSeo, origin: string): string {
-  if (!seo.indexable) return ROBOTS_DISALLOW_ALL;
+  if (!seo.indexable) return ROBOTS_NOT_INDEXABLE;
   return [
     'User-agent: *',
     'Allow: /$',
