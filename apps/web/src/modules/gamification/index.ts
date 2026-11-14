@@ -65,3 +65,33 @@ export {
   type SubmissionStatus,
   type SubmissionView,
 } from './client';
+// Retención estilo Skool: desbloqueo por nivel, rachas, insignias, premios y celebraciones.
+export { RetentionSettings } from './retention-settings';
+export { MyRetentionSections } from './my-retention';
+export {
+  MemberAchievements,
+  MemberCardAchievements,
+  useMemberSummaries,
+} from './member-achievements';
+export {
+  LevelLockLine,
+  LevelLockedCard,
+  useCourseLevelLocks,
+  type LevelLockLike,
+} from './level-lock';
+export { badgeLabel, BADGE_ICON } from './retention-labels';
+export {
+  retentionApi,
+  retentionAdminApi,
+  type BadgeView,
+  type ContentLock,
+  type EarnedBadge,
+  type MemberSummary,
+  type MyLock,
+  type MyRetention,
+  type Reward,
+  type RewardGrant,
+  type RetentionSettings as RetentionSettingsView,
+  type StreakView,
+  type UpcomingReward,
+} from './retention-client';

@@ -12,6 +12,7 @@ import { UserChip } from '@/components/user-chip';
 import { labelOr, type TranslatorLike } from '@/lib/i18n/labels';
 import { authStorage } from '@/lib/auth-storage';
 import { adminUsersApi, type UserListItem } from '@/lib/admin-users';
+import { MemberCardAchievements, useMemberSummaries } from '@/modules/gamification';
 
 const ROLE_STYLE: Record<string, string> = {
   tenant_admin: 'bg-(--didacta-coral)/10 text-(--didacta-coral)',
@@ -63,6 +64,8 @@ export default function MiembrosPage() {
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(isAdmin);
   const [error, setError] = useState<string | null>(null);
+  // Nivel e insignias de cada tarjeta, en una sola llamada para toda la página.
+  const summaries = useMemberSummaries(users.map((u) => u.id));
 
   useEffect(() => {
     if (!isAdmin) return;
@@ -163,14 +166,17 @@ export default function MiembrosPage() {
                   key={u.id}
                   className="flex items-center gap-2 rounded-xl border border-border bg-surface p-4 transition-shadow hover:border-border-strong hover:shadow-sm"
                 >
-                  <UserChip
-                    userId={u.id}
-                    name={u.name}
-                    email={u.email}
-                    size={40}
-                    className="min-w-0 flex-1"
-                    nameClassName="truncate text-sm font-semibold text-text"
-                  />
+                  <div className="min-w-0 flex-1">
+                    <UserChip
+                      userId={u.id}
+                      name={u.name}
+                      email={u.email}
+                      size={40}
+                      className="min-w-0"
+                      nameClassName="truncate text-sm font-semibold text-text"
+                    />
+                    <MemberCardAchievements summary={summaries.get(u.id)} />
+                  </div>
                   <span
                     className={`shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-semibold ${ROLE_STYLE[role] ?? 'bg-bg-subtle text-text-muted'}`}
                   >

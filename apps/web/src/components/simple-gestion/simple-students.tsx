@@ -14,6 +14,7 @@ import { authStorage } from '@/lib/auth-storage';
 import { formatDate } from '@/lib/i18n/format';
 import { simpleModeApi } from '@/lib/simple-mode';
 import { cn } from '@/lib/utils';
+import { MemberCardAchievements, useMemberSummaries } from '@/modules/gamification';
 import { onlyStudents, shareUrl } from './helpers';
 
 const PAGE = 50;
@@ -36,6 +37,8 @@ function initials(u: UserListItem): string {
 export function SimpleStudents() {
   const t = useTranslations('modoSencilloGestion.alumnos');
   const [items, setItems] = useState<UserListItem[] | null>(null);
+  // Nivel e insignias de cada alumno (si el aula usa puntos), en una llamada.
+  const summaries = useMemberSummaries((items ?? []).map((u) => u.id));
   const [hasMore, setHasMore] = useState(false);
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
@@ -197,6 +200,7 @@ export function SimpleStudents() {
                         ? t('entro', { fecha: formatDate(u.createdAt, { dateStyle: 'medium' }) })
                         : t('nuncaEntro')}
                     </div>
+                    <MemberCardAchievements summary={summaries.get(u.id)} />
                   </div>
                   <span
                     className={cn(

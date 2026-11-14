@@ -19,6 +19,7 @@ import { authStorage } from '@/lib/auth-storage';
 import { fetchPublicProfile, type PublicProfile } from '@/lib/public-users';
 import { useModernUrl } from '@/lib/use-modern-url';
 import { communityApi, useCommunityTags, type Post } from '@/modules/community';
+import { MemberAchievements } from '@/modules/gamification';
 
 /**
  * Ficha de un usuario del tenant (`/u/[id]`). Se llega pulsando su nombre desde
@@ -127,6 +128,8 @@ export default function PublicProfilePage({ params }: { params: Promise<{ id: st
                   {profile.bio}
                 </p>
               ) : null}
+              {/* Nivel, insignias y racha (si el aula usa puntos). */}
+              <MemberAchievements userId={id} />
             </div>
           </div>
         </CardContent>

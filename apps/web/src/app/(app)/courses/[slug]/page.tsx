@@ -34,7 +34,13 @@ import { coursesApi, type CourseDetail, type CourseLesson } from '@/lib/courses'
 import { apiErrorMessage } from '@/lib/i18n/api-error';
 import { formatDate, formatDateTime, formatDuration } from '@/lib/i18n/format';
 import { labelOr, type TranslatorLike } from '@/lib/i18n/labels';
-import { learningApi, type Enrollment } from '@/lib/learning';
+import {
+  learningApi,
+  type Enrollment,
+  type LessonAvailability,
+  type LevelLockInfo,
+} from '@/lib/learning';
+import { LevelLockedCard, useCourseLevelLocks } from '@/modules/gamification';
 import { sanitizeRichHtml } from '@/lib/sanitize-html';
 import { useSimpleMode } from '@/lib/simple-mode';
 import { captureReferralFromLocation } from '@/lib/referral-links';
@@ -51,6 +57,7 @@ export default function CourseAlumnoPage() {
   const params = useParams<{ slug: string }>();
   const router = useRouter();
   const t = useTranslations('alumnoAprendizaje');
+  const tLevel = useTranslations('modGamification.retencion.candado');
   const tErrors = useTranslations('errors');
   const tCommon = useTranslations('common');
   // Editor (profesor/admin): puede abrir cursos DRAFT/ARCHIVED y ver el contenido
@@ -81,11 +88,14 @@ export default function CourseAlumnoPage() {
   // Disponibilidad por drip/trial: lessonId → { availableAt ISO|null, available,
   // reason? }. Las lecciones que NO aparecen están libres (sin gating).
   // reason 'TRIAL' = bloqueada por el periodo de prueba (se desbloquea pagando).
-  const [availability, setAvailability] = useState<
-    Record<string, { availableAt: string | null; available: boolean; reason?: 'DRIP' | 'TRIAL' }>
-  >({});
+  // reason 'LEVEL' = se desbloquea al llegar a un nivel de la gamificación.
+  const [availability, setAvailability] = useState<Record<string, LessonAvailability>>({});
+  // Cursos que se abren por nivel y aún no tienes (para quien no está dentro).
+  const levelLocks = useCourseLevelLocks();
   // Límite de lecciones del trial de la membresía para este curso (si aplica).
   const [trialInfo, setTrialInfo] = useState<{ lessonLimit: number } | null>(null);
+  // El curso ENTERO se abre en un nivel que aún no tienes (y estás dentro).
+  const [courseLevel, setCourseLevel] = useState<LevelLockInfo | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const [certificate, setCertificate] = useState<Certificate | null>(null);
@@ -164,6 +174,7 @@ export default function CourseAlumnoPage() {
 
       setAvailability(avail?.drip ? avail.lessons : {});
       setTrialInfo(avail?.trial ?? null);
+      setCourseLevel(avail?.level ?? null);
 
       setCertificate(certsList?.find((c) => c.courseId === detail.id) ?? null);
       setZoomSessions(zoomList ?? []);
@@ -537,6 +548,11 @@ export default function CourseAlumnoPage() {
 
       {!enrollment && !isPreview ? (
         <div className="space-y-6">
+          {/* Se desbloquea por nivel: primero lo que la persona puede hacer
+              (sumar puntos); la venta, si la hay, sigue debajo. */}
+          {levelLocks.has(course.id) ? (
+            <LevelLockedCard lock={levelLocks.get(course.id)!} scope="course" />
+          ) : null}
           {/* Ficha de venta: beneficios, precio real del curso y acceso total.
               Todos los importes salen de la BD; si no existen, no se pintan. */}
           {!course.externalPurchaseUrl ? <CourseSalesPanel courseId={course.id} /> : null}
@@ -650,7 +666,12 @@ export default function CourseAlumnoPage() {
                               >
                                 {l.title}
                               </span>
-                              {locked && lock.reason === 'TRIAL' ? (
+                              {locked && lock.reason === 'LEVEL' && lock.level ? (
+                                <Badge variant="warning" className="shrink-0 text-[10px]">
+                                  <Icon name="lock" size={10} />
+                                  {tLevel('badge', { number: lock.level.levelNumber })}
+                                </Badge>
+                              ) : locked && lock.reason === 'TRIAL' ? (
                                 <Badge variant="warning" className="shrink-0 text-[10px]">
                                   {t('trialLockBadge')}
                                 </Badge>
@@ -716,6 +737,14 @@ export default function CourseAlumnoPage() {
                 <LockedContentActions courseId={course.id} />
               </CardContent>
             </Card>
+          ) : activeLesson &&
+            availability[activeLesson.id]?.available === false &&
+            availability[activeLesson.id]?.reason === 'LEVEL' &&
+            availability[activeLesson.id]?.level ? (
+            <LevelLockedCard
+              lock={availability[activeLesson.id]!.level!}
+              scope={courseLevel ? 'course' : 'lesson'}
+            />
           ) : activeLesson &&
             availability[activeLesson.id]?.available === false &&
             availability[activeLesson.id]?.reason === 'TRIAL' ? (

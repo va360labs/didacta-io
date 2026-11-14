@@ -11,6 +11,7 @@ import { Icon, type IconName } from '@/components/icon';
 import { formatDate, formatNumber } from '@/lib/i18n/format';
 import { labelOr, type TranslatorLike } from '@/lib/i18n/labels';
 import {
+  MyRetentionSections,
   RankingTabs,
   RequestPerkModal,
   SubmitChallengeModal,
@@ -166,6 +167,9 @@ export default function RetosPage() {
           </div>
         </Section>
       ) : null}
+
+      {/* Racha, insignias, premios y privacidad (retención). */}
+      <MyRetentionSections Section={Section} />
 
       <Section title={t('retos.abiertosTitulo')} note={t('retos.abiertosNota')}>
         {loading ? (

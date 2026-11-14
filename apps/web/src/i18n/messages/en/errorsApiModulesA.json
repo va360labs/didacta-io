@@ -114,6 +114,7 @@
   "THEMING_UNSUPPORTED_LOGO_TYPE": "That file type is not allowed for the logo.",
   "THEMING_UPDATE_FORBIDDEN": "Only administrators can modify the theme.",
   "TRIAL_CONTENT_LOCKED": "This lesson will be available when your trial period ends. You can pay now to unlock it right away.",
+  "LEVEL_CONTENT_LOCKED": "This content unlocks when you reach a higher level. Earn points in the community to open it.",
   "ZOOM_API_ERROR": "Error talking to Zoom: {detail}",
   "ZOOM_ATTENDANCE_NOT_AVAILABLE": "Attendance is not available for this session yet.",
   "ZOOM_COURSE_NOT_IN_TENANT": "Course {detail} does not belong to this tenant.",

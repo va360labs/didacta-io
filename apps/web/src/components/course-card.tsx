@@ -7,6 +7,7 @@
 
 import { useTranslations } from 'next-intl';
 import Link from 'next/link';
+import type { ReactNode } from 'react';
 import { Icon, type IconName } from '@/components/icon';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
@@ -35,6 +36,12 @@ interface Props {
   course: CourseCardData;
   /** Si quieres un href custom (ej. detalle de formador). Default: /courses/{slug}. */
   href?: string;
+  /**
+   * Candado que pinta quien conoce el motivo (p. ej. «Se desbloquea en el
+   * nivel N», de la gamificación). La tarjeta no sabe de módulos: solo
+   * oscurece la portada, pone el candado y deja el texto bajo el título.
+   */
+  lock?: ReactNode;
 }
 
 // Portada de reserva (curso sin imagen): degradados del color del aula.
@@ -61,7 +68,7 @@ function pickGradient(seed: string): string {
  *    progress bar 8px, footer con % completado + CTA contextual
  *    (Continuar / Certificado / Empezar).
  */
-export function CourseCard({ course, href }: Props) {
+export function CourseCard({ course, href, lock }: Props) {
   const t = useTranslations('playersContenido');
   const tCommon = useTranslations('common');
   const target = href ?? (`/courses/${course.slug}` as const);
@@ -114,6 +121,13 @@ export function CourseCard({ course, href }: Props) {
               </svg>
             </div>
           )}
+          {lock ? (
+            <div className="absolute inset-0 grid place-items-center bg-black/45">
+              <span className="grid h-11 w-11 place-items-center rounded-full bg-white/95 text-text shadow">
+                <Icon name="lock" size={20} />
+              </span>
+            </div>
+          ) : null}
         </div>
 
         {/* Body */}
@@ -159,6 +173,8 @@ export function CourseCard({ course, href }: Props) {
           >
             {course.title}
           </h3>
+
+          {lock}
 
           {course.description ? (
             <p className="line-clamp-2 text-sm leading-snug text-text-muted">

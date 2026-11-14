@@ -103,6 +103,7 @@
   "THEMING_UNSUPPORTED_COVER_TYPE": "Ese tipo de archivo no está permitido para la portada.",
   "THEMING_UPDATE_FORBIDDEN": "Solo administradores pueden modificar el theme.",
   "TRIAL_CONTENT_LOCKED": "Esta lección estará disponible cuando termine tu periodo de prueba. Puedes pagar ahora para desbloquearla ya.",
+  "LEVEL_CONTENT_LOCKED": "Este contenido se desbloquea al llegar a un nivel más alto. Suma puntos en la comunidad para abrirlo.",
   "ZOOM_API_ERROR": "Error hablando con Zoom: {detail}",
   "ZOOM_COURSE_NOT_IN_TENANT": "El curso {detail} no pertenece a este tenant.",
   "ZOOM_HOST_NOT_FOUND": "El email del host ({detail}) no es un usuario de vuestra cuenta de Zoom, así que Zoom no deja crear la reunión a su nombre. Usa el email de alguien que tenga usuario en la cuenta de Zoom, o añádelo primero desde zoom.us → Gestión de usuarios.",

@@ -67,6 +67,20 @@ export function notificationLink(
         actionLabel: view,
       };
     }
+    case 'gamification.content.unlocked': {
+      // Se ha abierto un curso al subir de nivel → directo al curso.
+      const slug = str(meta.courseSlug);
+      return slug
+        ? { href: `/courses/${encodeURIComponent(slug)}`, actionLabel: view }
+        : { href: '/courses', actionLabel: view };
+    }
+    case 'gamification.level.reached':
+    case 'gamification.badge.earned':
+      // Nivel o insignia nuevos → la escalera, las insignias y los premios.
+      return { href: '/challenges', actionLabel: view };
+    case 'gamification.reward.granted':
+      // El premio (código, enlace) queda guardado en «Tus premios».
+      return { href: '/challenges#rewards', actionLabel: view };
     case 'payouts.sale.course':
     case 'payouts.sale.membership':
     case 'payouts.sale.renewal':

@@ -23,6 +23,7 @@ import { ACADEMY_LOCALE_NAMES, ACADEMY_LOCALES, type AcademyLocale } from '@/i18
 import { academyApi, type Academy } from '@/lib/academy';
 import { authStorage } from '@/lib/auth-storage';
 import { simpleModeApi } from '@/lib/simple-mode';
+import { RetentionSettings } from '@/modules/gamification';
 import {
   publishThemeUpdate,
   themingApi,
@@ -54,6 +55,7 @@ export function SimpleSettings() {
   const [links, setLinks] = useState<LinkDraft[]>([]);
   const [linksChecked, setLinksChecked] = useState(false);
   const tMarca = useTranslations('adminMarca');
+  const tPremios = useTranslations('modGamification.retencion');
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -240,6 +242,21 @@ export function SimpleSettings() {
         </p>
         <div className="mt-4">
           <PublicHomeToggle variant="plain" />
+        </div>
+      </section>
+
+      {/* Retención estilo Skool: niveles, contenido que se abre al subir de
+          nivel, premios que se entregan solos, insignias, rachas y
+          celebraciones. Sencillo: un bloque por cosa, sin pestañas. */}
+      <section
+        id="rewards"
+        className="mt-4 rounded-2xl border border-border bg-surface p-4 sm:p-6"
+        data-testid="ajustes-premios"
+      >
+        <h2 className="text-lg font-bold text-text">{tPremios('seccion.titulo')}</h2>
+        <p className="mt-1 max-w-[60ch] text-sm text-text-muted">{tPremios('seccion.sub')}</p>
+        <div className="mt-4">
+          <RetentionSettings />
         </div>
       </section>
 

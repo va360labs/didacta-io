@@ -452,12 +452,30 @@ export interface UpdateDripInput {
  */
 export interface CourseAvailability {
   drip: boolean;
-  lessons: Record<
-    string,
-    { availableAt: string | null; available: boolean; reason?: 'DRIP' | 'TRIAL' }
-  >;
+  lessons: Record<string, LessonAvailability>;
   /** Presente si la membresía en prueba limita este curso a N lecciones. */
   trial?: { lessonLimit: number };
+  /** Presente si el curso ENTERO se desbloquea en un nivel que aún no tienes. */
+  level?: LevelLockInfo;
+}
+
+/** Nivel de la gamificación que abre contenido, visto por el alumno. */
+export interface LevelLockInfo {
+  levelNumber: number;
+  levelName: string;
+  minPoints: number;
+  pointsMissing: number;
+}
+
+/**
+ * Estado de una lección con gating: fecha (DRIP), periodo de prueba (TRIAL) o
+ * nivel de la gamificación (LEVEL, con el nivel en `level`).
+ */
+export interface LessonAvailability {
+  availableAt: string | null;
+  available: boolean;
+  reason?: 'DRIP' | 'TRIAL' | 'LEVEL';
+  level?: LevelLockInfo;
 }
 
 /** Progreso de una lección concreta dentro del detalle de un alumno (vista formador). */

@@ -24,6 +24,7 @@ import { apiErrorMessage } from '@/lib/i18n/api-error';
 import { labelOr } from '@/lib/i18n/labels';
 import { learningApi, type Enrollment } from '@/lib/learning';
 import { useTenantDisplayName } from '@/lib/tenant-context';
+import { LevelLockLine, useCourseLevelLocks } from '@/modules/gamification';
 
 const ALL_CATEGORIES = '__all__';
 const ALL_LANGUAGES = '__all__';
@@ -34,6 +35,9 @@ export function CatalogView() {
   const tenantName = useTenantDisplayName();
   const t = useTranslations('alumnoAprendizaje');
   const tErrors = useTranslations('errors');
+  // Cursos que se desbloquean al subir de nivel (mod.gamification). Vacío si
+  // el aula no usa puntos o si la persona ya tiene el nivel o el curso comprado.
+  const levelLocks = useCourseLevelLocks();
 
   const initialQ = params.get('q') ?? '';
   const initialCategory = params.get('category') ?? ALL_CATEGORIES;
@@ -303,7 +307,13 @@ export function CatalogView() {
             emptyText={hasActiveFilters ? t('myCoursesEmptyFiltered') : t('myCoursesEmpty')}
           >
             {mine.map((c) => (
-              <CourseCard key={c.id} course={toCardData(c)} />
+              <CourseCard
+                key={c.id}
+                course={toCardData(c)}
+                lock={
+                  levelLocks.has(c.id) ? <LevelLockLine lock={levelLocks.get(c.id)!} /> : undefined
+                }
+              />
             ))}
           </CatalogSection>
 
@@ -313,7 +323,13 @@ export function CatalogView() {
             emptyText={hasActiveFilters ? t('otherCoursesEmptyFiltered') : t('otherCoursesEmpty')}
           >
             {others.map((c) => (
-              <CourseCard key={c.id} course={toCardData(c)} />
+              <CourseCard
+                key={c.id}
+                course={toCardData(c)}
+                lock={
+                  levelLocks.has(c.id) ? <LevelLockLine lock={levelLocks.get(c.id)!} /> : undefined
+                }
+              />
             ))}
           </CatalogSection>
         </div>
