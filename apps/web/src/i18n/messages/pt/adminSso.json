@@ -311,17 +311,17 @@
     "deleteConfirmButton": "Excluir",
     "bannerVerified": "<strong>Verificado</strong> em {date}.",
     "bannerUnverified": "Configurado, mas não verificado — use o botão <em>Enviar e-mail de teste</em> para confirmar que ele chega.",
-    "bannerFallback": "Seus e-mails são enviados pelo serviço de e-mail da plataforma, com o nome da sua academia. Se preferir enviá-los pelo seu próprio serviço de e-mail, conecte-o abaixo.",
-    "bannerNone": "Os e-mails da sua academia ainda não podem ser enviados (avisos, redefinição de senha, notificações): falta conectar o seu serviço de e-mail. Faça isso abaixo."
+    "bannerFallback": "Seus e-mails são enviados pelo serviço de e-mail da plataforma, com o nome da sua escola. Se preferir enviá-los pelo seu próprio serviço de e-mail, conecte-o abaixo.",
+    "bannerNone": "Os e-mails da sua escola ainda não podem ser enviados (avisos, redefinição de senha, notificações): falta conectar o seu serviço de e-mail. Faça isso abaixo."
   },
   "replyTo": {
     "title": "E-mail para respostas",
-    "description": "Os e-mails que seus alunos recebem saem com o nome da sua academia. Se alguém responder a um deles, a resposta chega neste endereço.",
+    "description": "Os e-mails que seus alunos recebem saem com o nome da sua escola. Se alguém responder a um deles, a resposta chega neste endereço.",
     "label": "E-mail para respostas",
-    "placeholder": "contato@suaacademia.com.br",
+    "placeholder": "contato@suaescola.com.br",
     "effective": "No momento, as respostas chegam em {email}.",
     "effectiveNone": "No momento, as respostas não chegam a ninguém. Digite seu e-mail aqui.",
-    "invalid": "Digite um único endereço de e-mail, por exemplo contato@suaacademia.com.br.",
+    "invalid": "Digite um único endereço de e-mail, por exemplo contato@suaescola.com.br.",
     "save": "Salvar e-mail",
     "saving": "Salvando…",
     "saved": "Salvo. As respostas dos seus alunos vão chegar neste endereço.",

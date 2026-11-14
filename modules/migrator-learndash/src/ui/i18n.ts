@@ -441,7 +441,7 @@ const pt: Record<MessageKey, string> = {
   'wizard.stepper.sample': 'Teste',
   'wizard.stepper.complete': 'Completa',
 
-  'wizard.welcome.title': 'Pronto para trazer sua academia para a Didacta?',
+  'wizard.welcome.title': 'Pronto para trazer sua escola para a Didacta?',
   'wizard.welcome.description':
     'Vamos guiar você passo a passo. Você precisa de uma senha de aplicativo (Application Password) do seu WordPress (mostramos como criar) e de alguns minutos. Seu site atual não é alterado.',
   'wizard.welcome.reqAdmin': 'Acesso de administrador ao seu WordPress com LearnDash.',
@@ -452,7 +452,7 @@ const pt: Record<MessageKey, string> = {
   'wizard.connect.title': 'Conectar ao seu WordPress',
   'wizard.connect.description': 'URL do site + senha de aplicativo.',
   'wizard.connect.urlLabel': 'URL do seu WordPress',
-  'wizard.connect.urlPlaceholder': 'https://minhaacademia.com.br',
+  'wizard.connect.urlPlaceholder': 'https://minhaescola.com.br',
   'wizard.connect.userLabel': 'Usuário administrador',
   'wizard.connect.appPasswordLabel': 'Senha de aplicativo',
   'wizard.connect.checking': 'Verificando...',
@@ -480,7 +480,7 @@ const pt: Record<MessageKey, string> = {
   'wizard.options.copyImages': 'Copiar imagens para a Didacta (recomendado)',
   'wizard.options.howTitle': 'Como vai funcionar',
   'wizard.options.howBody':
-    'Primeiro fazemos um <b>teste</b>: importamos um curso da sua academia com até {users} alunos para você conferir se está tudo certo na Didacta. Se gostar do resultado, perguntamos se você quer seguir com a <b>integração completa</b>; o curso do teste não é importado de novo (reaproveitamos o que já foi carregado), só adicionamos o que falta.',
+    'Primeiro fazemos um <b>teste</b>: importamos um curso da sua escola com até {users} alunos para você conferir se está tudo certo na Didacta. Se gostar do resultado, perguntamos se você quer seguir com a <b>integração completa</b>; o curso do teste não é importado de novo (reaproveitamos o que já foi carregado), só adicionamos o que falta.',
   'wizard.options.starting': 'Iniciando...',
   'wizard.options.startSample': 'Começar o teste',
 
@@ -493,7 +493,7 @@ const pt: Record<MessageKey, string> = {
   'wizard.sampleDone.byEntityTitle': 'Detalhe por entidade',
   'wizard.sampleDone.proceedTitle': 'Quer seguir com a integração completa?',
   'wizard.sampleDone.proceedBody':
-    'Vamos importar o restante dos cursos, alunos e conteúdos. O curso e os alunos da amostra <b>não são duplicados</b>: ficam como estão e só é adicionado o que falta. Esta operação pode levar vários minutos, dependendo do tamanho da sua academia.',
+    'Vamos importar o restante dos cursos, alunos e conteúdos. O curso e os alunos da amostra <b>não são duplicados</b>: ficam como estão e só é adicionado o que falta. Esta operação pode levar vários minutos, dependendo do tamanho da sua escola.',
   'wizard.sampleDone.stopHere': 'Parar aqui (fico só com a amostra)',
   'wizard.sampleDone.starting': 'Iniciando…',
   'wizard.sampleDone.proceed': 'Sim, fazer a integração completa',
@@ -505,7 +505,7 @@ const pt: Record<MessageKey, string> = {
 
   'wizard.completeRun.title': 'Importando a integração completa…',
   'wizard.completeRun.description':
-    'Estamos trazendo o restante da sua academia. Pode levar vários minutos.',
+    'Estamos trazendo o restante da sua escola. Pode levar vários minutos.',
 
   'wizard.done.title': 'Migração concluída',
   'wizard.done.fullReport': 'Relatório completo (job {jobId})',

@@ -58,7 +58,7 @@
     "fallbackLabel": "Dialog"
   },
   "smtpBanner": {
-    "title": "Os e-mails da sua academia ainda não podem ser enviados:",
+    "title": "Os e-mails da sua escola ainda não podem ser enviados:",
     "body": "falta conectar seu serviço de e-mail.",
     "cta": "Conectar o e-mail"
   },
@@ -92,18 +92,18 @@
     "lock": {
       "brandLine": "Tudo continua aí.",
       "adminTitle": "Seu teste grátis terminou",
-      "adminBody": "Sua academia está pausada, não excluída. Escolha um plano e ela volta a abrir exatamente como você deixou.",
+      "adminBody": "Sua escola está pausada, não excluída. Escolha um plano e ela volta a abrir exatamente como você deixou.",
       "keptTitle": "O que fica guardado",
       "keptCourses": "Seus cursos e aulas",
       "keptStudents": "Seus alunos e o progresso deles",
       "keptBrand": "Sua marca, sua comunidade e suas configurações",
       "choosePlan": "Escolher plano",
-      "reopenNote": "Assim que o pagamento for concluído, sua academia abre de novo.",
+      "reopenNote": "Assim que o pagamento for concluído, sua escola abre de novo.",
       "signOut": "Sair",
       "otherTitle": "O acesso a {name} está pausado",
       "otherBody": "Os responsáveis já estão sabendo. Nada foi perdido: quando ela reabrir, tudo vai estar onde estava.",
       "adminSignIn": "Você é administrador? Entre na sua conta",
-      "fallbackName": "esta academia"
+      "fallbackName": "esta escola"
     }
   }
 }

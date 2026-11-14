@@ -14,7 +14,7 @@
   },
   "shell": {
     "navAria": "Seções",
-    "buscar": "Buscar na academia",
+    "buscar": "Buscar na escola",
     "buscarCorto": "Buscar",
     "mensajes": "Mensagens",
     "mensajesSinLeer": "Mensagens, {count} não lidas",
@@ -27,7 +27,7 @@
     "invitaYGana": "Convide e ganhe",
     "cerrarSesion": "Sair",
     "masTitulo": "Mais opções",
-    "masAyuda": "Todo o resto da sua academia",
+    "masAyuda": "Todo o resto da sua escola",
     "cerrar": "Fechar",
     "pasosHechos": "{done} de {total}"
   },
@@ -69,9 +69,9 @@
   },
   "alta": {
     "pregunta": "Pergunta {n} de 3",
-    "q1": "Qual é o nome da sua academia?",
+    "q1": "Qual é o nome da sua escola?",
     "q1Ayuda": "É a primeira coisa que seus alunos vão ver. Você pode mudar quando quiser.",
-    "q1Label": "Nome da academia",
+    "q1Label": "Nome da escola",
     "q1Placeholder": "Por exemplo: Ateliê de Aquarela",
     "direccion": "Seu endereço: {host}",
     "q2": "O que você vai vender?",
@@ -94,8 +94,8 @@
     "cuantoQuedaTexto": "A Didacta fica com 5% de cada venda. O processador de pagamento cobra uma pequena taxa pelo cartão. O resto vai para sua conta bancária.",
     "siguiente": "Próximo",
     "atras": "Voltar",
-    "crear": "Criar minha academia",
-    "creando": "Criando sua academia…",
+    "crear": "Criar minha escola",
+    "creando": "Criando sua escola…",
     "vista": "Assim seus alunos vão ver",
     "tuCurso": "Seu primeiro curso",
     "tuMembresia": "Sua assinatura",
@@ -104,26 +104,26 @@
     "comprar": "Comprar",
     "unirme": "Assinar",
     "error": "Não foi possível criar. Revise os dados e tente novamente.",
-    "faltaNombre": "Digite o nome da sua academia.",
+    "faltaNombre": "Digite o nome da sua escola.",
     "faltaPrecio": "Digite um preço maior que zero.",
     "portadaAnadir": "Adicionar uma capa (opcional)",
     "portadaCambiar": "Trocar a capa",
     "portadaQuitar": "Remover",
     "portadaSubiendo": "Enviando a capa…",
     "portadaError": "Não foi possível enviar a capa. Você pode seguir sem ela e colocar depois.",
-    "idiomaLabel": "Idioma da academia",
-    "idiomaAyuda": "É assim que seus alunos e visitantes vão ver sua academia. Você pode mudar em Configurações."
+    "idiomaLabel": "Idioma da escola",
+    "idiomaAyuda": "É assim que seus alunos e visitantes vão ver sua escola. Você pode mudar em Configurações."
   },
   "empieza": {
-    "titulo": "Sua academia está quase pronta para vender",
-    "tituloListo": "Sua academia já está à venda",
+    "titulo": "Sua escola está quase pronta para vender",
+    "tituloListo": "Sua escola já está à venda",
     "sub": "{n, plural, one {Falta # passo.} other {Faltam # passos.}}",
     "progresoAria": "{done} de {total} passos concluídos",
     "cambiar": "Alterar",
     "editar": "Editar",
     "pasos": {
       "academy": {
-        "titulo": "Sua academia",
+        "titulo": "Sua escola",
         "que": "Coloque seu logo e sua cor: é o que seus alunos veem lá no alto.",
         "hecho": "{nombre}. O logo e a cor, quando quiser",
         "boton": "Colocar logo e cor",
@@ -254,7 +254,7 @@
       "listoDetalle": "{duration} · qualidade de até {resolution}",
       "guardadoProcesando": "Já está salvo na aula. Seus alunos vão poder assistir assim que estiver pronto.",
       "guardadoListo": "Salvo na aula. Seus alunos já podem assistir.",
-      "sinSubidaTitulo": "Nesta academia não é possível enviar vídeos",
+      "sinSubidaTitulo": "Nesta escola não é possível enviar vídeos",
       "sinSubidaTexto": "Você pode adicionar o vídeo mesmo assim: envie para o YouTube ou o Vimeo e cole o link aqui. Seus alunos vão assistir aqui mesmo, na aula.",
       "errorEspacioTitulo": "Não conseguimos verificar seu espaço de vídeo",
       "errorEspacioTexto": "Verifique sua conexão e tente novamente. Enquanto isso, você pode colar um link do YouTube ou do Vimeo.",
@@ -303,15 +303,15 @@
   "perfil": {
     "fotoOpcional": "Opcional. Se você não enviar nenhuma, usamos suas iniciais.",
     "creador": {
-      "antes": "Antes de montar sua academia",
+      "antes": "Antes de montar sua escola",
       "titulo": "Apresente-se aos seus alunos",
       "subtitulo": "Sua foto e seu nome acompanham tudo o que você publicar na sua comunidade. Você pode mudá-los quando quiser.",
       "fotoTexto": "Seus alunos vão vê-la ao lado das suas publicações. Você pode deixar para depois: enquanto não enviar, usamos suas iniciais.",
       "saltar": "Deixar para depois",
       "datosTexto": "É assim que seus alunos vão ver você na sua comunidade.",
       "bioPlaceholder": "Conte aos seus alunos quem você é e o que ensina (máx. 280 caracteres)",
-      "listoTexto": "É assim que seus alunos vão ver você. Agora, sua academia.",
-      "seguir": "Continuar para minha academia"
+      "listoTexto": "É assim que seus alunos vão ver você. Agora, sua escola.",
+      "seguir": "Continuar para minha escola"
     }
   }
 }

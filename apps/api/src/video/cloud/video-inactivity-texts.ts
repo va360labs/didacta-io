@@ -38,17 +38,17 @@ export function inactivityTexts(input: {
 }): InactivityTexts {
   const day = formatDay(input.deleteOn, input.lang);
   if (input.lang === 'pt') {
-    // «Academia» se queda «academia» porque el español de estos avisos dice
-    // «academia» (glosario pt-BR); solo el «aula» española pasa a «escola».
+    // En pt-BR «academia» suena a gimnasio: la academia y el «aula» española
+    // son «escola» (glosario pt-BR).
     if (input.stage === 10) {
       return {
         subject: `${input.academy} está há 10 dias sem atividade`,
-        title: 'Sua academia está há 10 dias sem atividade',
+        title: 'Sua escola está há 10 dias sem atividade',
         body:
           `Faz 10 dias que ninguém usa ${input.academy}: nem você, nem seus alunos, e não houve vendas.\n\n` +
-          `Se continuar assim, em ${day} vamos excluir os vídeos que você enviou e arquivar a academia.\n\n` +
+          `Se continuar assim, em ${day} vamos excluir os vídeos que você enviou e arquivar a escola.\n\n` +
           `Para que tudo continue como está, basta entrar antes disso. Se você não precisa mais dela, não precisa fazer nada.`,
-        cta: 'Entrar na minha academia',
+        cta: 'Entrar na minha escola',
       };
     }
     return {
@@ -56,9 +56,9 @@ export function inactivityTexts(input: {
       title: `Em ${day} vamos excluir seus vídeos`,
       body:
         `${input.academy} está há 20 dias sem atividade.\n\n` +
-        `Se ninguém entrar antes de ${day}, vamos excluir os vídeos que você enviou e arquivar a academia.\n\n` +
+        `Se ninguém entrar antes de ${day}, vamos excluir os vídeos que você enviou e arquivar a escola.\n\n` +
         `Para mantê-los, entre antes dessa data.`,
-      cta: 'Entrar na minha academia',
+      cta: 'Entrar na minha escola',
     };
   }
   if (input.lang === 'en') {

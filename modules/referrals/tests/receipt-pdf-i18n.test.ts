@@ -89,7 +89,7 @@ describe('idiomas del justificante de referidos', () => {
       'Concepto / Descrição',
       'Comissão de 30 % sobre 49,00 EUR',
       'Total pagado / Total pago',
-      'pelo programa de indicações da sua academia. A Didacta não intervém no pagamento',
+      'pelo programa de indicações da sua escola. A Didacta não intervém no pagamento',
     ]) {
       expect(text, esperado).toContain(esperado);
     }
