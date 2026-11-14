@@ -160,7 +160,8 @@
         "hecho": "On sale",
         "boton": "Publish and create my link",
         "publicando": "Publishing…",
-        "faltaAntes": "Finish the steps above first."
+        "faltaAntes": "Finish the steps above first.",
+        "avisoRetenido": "You can publish now: students will be able to buy, but the money from your sales will stay on hold until you complete your tax details."
       },
       "invite": {
         "titulo": "Invite your first students",
@@ -180,7 +181,8 @@
       "notaAntes": "This is what your students will see. The link switches on when you publish.",
       "notaDespues": "Share it on social media, your website or WhatsApp.",
       "noComprable": "Cannot be bought yet",
-      "notaNoComprable": "Connect your payouts (step 4) so people can buy."
+      "notaNoComprable": "Connect your payouts (step 4) so people can buy.",
+      "retenido": "It's on sale, but the money from your sales stays on hold until you complete your tax details."
     },
     "ayudaTitulo": "Stuck on a step?",
     "ayudaTexto": "Write to us and we will help you get it ready.",
@@ -202,7 +204,6 @@
     "error": "Could not load. Try again.",
     "errores": {
       "SIMPLE_MODE_PAYMENTS_NOT_READY": "Connect your payouts before publishing: without them nobody could pay you.",
-      "SIMPLE_MODE_TAX_PROFILE_MISSING": "Complete your tax details before publishing: without them the money from your sales would stay on hold.",
       "SIMPLE_MODE_NO_LESSONS": "Add at least one lesson before publishing.",
       "SIMPLE_MODE_NO_PRICE": "Set a price before publishing.",
       "generico": "Could not publish. Try again."

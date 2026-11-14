@@ -152,13 +152,40 @@ export interface StartHereView {
  */
 export type SaleState = 'on-sale' | 'not-purchasable' | 'unpublished';
 
+type StepsView = Pick<StartHereView, 'steps' | 'taxProfilePending'>;
+
+/**
+ * ¿Puede cobrar ya la cuenta? Con el paso de cobros hecho, o con la cuenta
+ * lista y solo los datos fiscales pendientes: se vende igual y el dinero se
+ * retiene hasta completarlos (decisión de producto, web #39).
+ */
+export function paymentsCanSell(view: StepsView): boolean {
+  return (
+    view.steps.find((s) => s.id === 'payments')?.done === true || view.taxProfilePending === true
+  );
+}
+
+/**
+ * Primer paso pendiente: el único que se abre. `null` = todos hechos. Con solo
+ * los datos fiscales pendientes, «Conecta tus cobros» no bloquea el camino:
+ * se salta (queda marcado aparte con su botón) y se abre el siguiente.
+ */
+export function currentStep(view: StepsView): StepId | null {
+  const skipPayments = view.taxProfilePending === true;
+  return view.steps.find((s) => !s.done && !(skipPayments && s.id === 'payments'))?.id ?? null;
+}
+
+/** ¿Se puede publicar ya? Curso con lección, precio y una cuenta que pueda cobrar. */
+export function canPublish(view: StepsView): boolean {
+  const done = new Set(view.steps.filter((s) => s.done).map((s) => s.id));
+  return done.has('course') && done.has('price') && paymentsCanSell(view);
+}
+
 export function saleState(
   view: Pick<StartHereView, 'salePath' | 'steps' | 'taxProfilePending'>,
 ): SaleState {
   if (!view.salePath) return 'unpublished';
-  const canSell =
-    view.steps.find((s) => s.id === 'payments')?.done === true || view.taxProfilePending === true;
-  return canSell ? 'on-sale' : 'not-purchasable';
+  return paymentsCanSell(view) ? 'on-sale' : 'not-purchasable';
 }
 
 /**

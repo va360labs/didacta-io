@@ -4,7 +4,13 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { saleState, startHereHeadline, type StartHereView } from './simple-mode';
+import {
+  canPublish,
+  currentStep,
+  saleState,
+  startHereHeadline,
+  type StartHereView,
+} from './simple-mode';
 
 type Vista = Pick<StartHereView, 'salePath' | 'steps' | 'sales'>;
 
@@ -79,5 +85,24 @@ describe('cobros conectados sin datos fiscales (ensayo general)', () => {
     expect(
       saleState({ salePath: '/catalog/x', steps: pasos(['academy', 'course', 'price']) }),
     ).toBe('not-purchasable');
+  });
+
+  it('se puede publicar ya (web #39): el paso abierto es «Publica», no «Conecta tus cobros»', () => {
+    const vista = { steps: pasos(['academy', 'course', 'price']), taxProfilePending: true };
+    expect(currentStep(vista)).toBe('publish');
+    expect(canPublish(vista)).toBe(true);
+    // Control: sin cuenta de cobros lista, ni se abre «Publica» ni se puede publicar.
+    const sinCuenta = { steps: pasos(['academy', 'course', 'price']) };
+    expect(currentStep(sinCuenta)).toBe('payments');
+    expect(canPublish(sinCuenta)).toBe(false);
+    // Publicado con los fiscales pendientes: lo siguiente es invitar.
+    expect(
+      currentStep({
+        steps: pasos(['academy', 'course', 'price', 'publish']),
+        taxProfilePending: true,
+      }),
+    ).toBe('invite');
+    // Y sin curso con lección no se publica aunque la cuenta pueda cobrar.
+    expect(canPublish({ steps: pasos(['academy', 'price']), taxProfilePending: true })).toBe(false);
   });
 });

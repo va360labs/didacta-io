@@ -160,7 +160,8 @@
         "hecho": "A la venta",
         "boton": "Publicar y crear mi enlace",
         "publicando": "Publicando…",
-        "faltaAntes": "Primero completa los pasos de arriba."
+        "faltaAntes": "Primero completa los pasos de arriba.",
+        "avisoRetenido": "Puedes publicar ya: tus alumnos podrán comprar, pero el dinero de tus ventas se quedará retenido hasta que completes tus datos fiscales."
       },
       "invite": {
         "titulo": "Invita a tus primeros alumnos",
@@ -180,7 +181,8 @@
       "notaAntes": "Así lo verán tus alumnos. El enlace se enciende al publicar.",
       "notaDespues": "Compártelo en tus redes, tu web o por WhatsApp.",
       "noComprable": "Aún no se puede comprar",
-      "notaNoComprable": "Conecta tus cobros (paso 4) para que se pueda comprar."
+      "notaNoComprable": "Conecta tus cobros (paso 4) para que se pueda comprar.",
+      "retenido": "Ya está a la venta, pero el dinero de tus ventas se queda retenido hasta que completes tus datos fiscales."
     },
     "ayudaTitulo": "¿Te atascas en algún paso?",
     "ayudaTexto": "Escríbenos y te ayudamos a dejarlo listo.",
@@ -202,7 +204,6 @@
     "error": "No se ha podido cargar. Inténtalo de nuevo.",
     "errores": {
       "SIMPLE_MODE_PAYMENTS_NOT_READY": "Conecta tus cobros antes de publicar: sin ellos nadie podría pagarte.",
-      "SIMPLE_MODE_TAX_PROFILE_MISSING": "Completa tus datos fiscales antes de publicar: sin ellos el dinero de tus ventas se quedaría retenido.",
       "SIMPLE_MODE_NO_LESSONS": "Añade al menos una lección antes de publicar.",
       "SIMPLE_MODE_NO_PRICE": "Pon un precio antes de publicar.",
       "generico": "No se ha podido publicar. Inténtalo de nuevo."
