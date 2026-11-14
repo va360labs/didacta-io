@@ -4,8 +4,8 @@ import { injectSession } from '../helpers/auth';
 
 /**
  * Bloque 4 — Biblioteca de recursos por colecciones (mod.resources):
- *  - El primer listado siembra las 6 colecciones por defecto con badge
- *    "Pronto" (vacías).
+ *  - El primer listado siembra la colección por defecto (una, neutra y en el
+ *    idioma del aula: «General» en el aula española de la suite).
  *  - El staff crea una colección nueva desde la UI.
  *  - Un ALUMNO comparte un recurso (enlace) desde el detalle de una colección
  *    — compartir es de todos, no solo del staff.
@@ -45,9 +45,12 @@ test.describe('Biblioteca de recursos por colecciones (mod.resources)', () => {
     const { collections } = (await colsRes.json()) as {
       collections: Array<{ id: string; title: string; resourceCount: number }>;
     };
-    expect(collections.length).toBeGreaterThanOrEqual(6);
-    const workflows = collections.find((c) => c.title === 'Workflows de clase');
-    expect(workflows, 'existe "Workflows de clase"').toBeTruthy();
+    expect(collections.length).toBeGreaterThanOrEqual(1);
+    const workflows = collections.find((c) => c.title === 'General');
+    expect(workflows, 'existe la colección por defecto «General»').toBeTruthy();
+    // Nada de las colecciones de una academia concreta (las seis de IA de antes).
+    expect(collections.map((c) => c.title)).not.toContain('Workflows de clase');
+    expect(collections.map((c) => c.title)).not.toContain('Skills y agentes');
 
     // 2. Staff crea una colección desde la UI.
     const adminAuthRes = await fetch(`${API_URL}/api/v1/auth/signin`, {
@@ -80,7 +83,7 @@ test.describe('Biblioteca de recursos por colecciones (mod.resources)', () => {
     });
     await fullSession(page, alumno as never);
     await page.goto(`/resources/${workflows!.id}`);
-    await expect(page.getByRole('heading', { name: 'Workflows de clase' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'General', exact: true })).toBeVisible();
 
     await page.getByRole('button', { name: 'Compartir recurso' }).click();
     const shareModal = page.getByRole('dialog', { name: 'Compartir recurso' });

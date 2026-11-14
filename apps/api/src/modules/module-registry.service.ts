@@ -641,7 +641,8 @@ export class ModuleRegistryService implements OnModuleInit {
         });
       },
     };
-    this.resources = new ResourcesService(prisma, resourcesPublisher);
+    // La colección que se siembra en una biblioteca vacía, en el idioma del aula.
+    this.resources = new ResourcesService(prisma, resourcesPublisher, academyLocaleOf);
     const resourcesModule = buildResourcesModule();
 
     // mod.gamification: puntos, niveles y retos (bloque 1).
