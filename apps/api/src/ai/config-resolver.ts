@@ -30,6 +30,25 @@ export class AiConfigResolver {
     private readonly logger: Logger,
   ) {}
 
+  /**
+   * ¿Tiene el aula de dónde sacar un proveedor para `purpose`? Mismo orden
+   * que `resolve` (fila propia activa → default global del entorno), pero sin
+   * descifrar nada ni lanzar: es la pregunta que se hace ANTES de intentar
+   * algo que, sin proveedor, solo puede fallar (indexar para el tutor) o
+   * enseñar una herramienta que no responde (el tutor al alumno).
+   */
+  async isConfigured(tenantId: string, purpose: Purpose): Promise<boolean> {
+    const row = await this.prisma.tenantAiProviderConfig.findFirst({
+      where: { tenantId, purpose, enabled: true },
+      select: { id: true },
+    });
+    if (row) return true;
+    const upper = purpose.toUpperCase();
+    return Boolean(
+      process.env[`DEFAULT_AI_${upper}_PROVIDER`] && process.env[`DEFAULT_AI_${upper}_API_KEY`],
+    );
+  }
+
   async resolve(tenantId: string, purpose: Purpose): Promise<ResolvedProviderConfig> {
     // 1. Tenant config
     const row = await this.prisma.tenantAiProviderConfig.findFirst({

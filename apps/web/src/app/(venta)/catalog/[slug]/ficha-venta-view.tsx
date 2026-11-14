@@ -206,6 +206,8 @@ export function FichaVentaView({ initialCourse, description, initialBrand }: Pro
           ) : null}
         </div>
 
+        <Temario syllabus={course.syllabus ?? []} />
+
         <div className="rounded-xl border border-border bg-surface-2 px-4 py-3 text-sm text-text-muted">
           {t.rich('ficha.afterPayment', {
             strong: (chunks) => <strong>{chunks}</strong>,
@@ -358,5 +360,52 @@ export function FichaVentaView({ initialCourse, description, initialBrand }: Pro
         </p>
       </aside>
     </div>
+  );
+}
+
+/**
+ * Lo que se lleva quien compra: los títulos de las lecciones, en orden. Sin
+ * descripción, era lo único que faltaba para saber qué es el curso (ensayo
+ * general del 14-nov). Con varias secciones, cada una con su título; la
+ * numeración de las lecciones sigue de corrido.
+ */
+function Temario({ syllabus }: { syllabus: Array<{ title: string; lessons: string[] }> }) {
+  const t = useTranslations('publicSite');
+  const total = syllabus.reduce((n, s) => n + s.lessons.length, 0);
+  if (total === 0) return null;
+  let n = 0;
+  return (
+    <section
+      className="rounded-2xl border border-border bg-surface p-5"
+      aria-labelledby="ficha-temario"
+      data-testid="ficha-temario"
+    >
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <h2 id="ficha-temario" className="text-lg font-bold text-text">
+          {t('ficha.syllabusTitle')}
+        </h2>
+        <span className="text-sm text-text-muted">
+          {t('ficha.syllabusCount', { count: total })}
+        </span>
+      </div>
+      {syllabus.map((section, i) => (
+        <div key={`${i}-${section.title}`} className="mt-3">
+          {syllabus.length > 1 ? (
+            <h3 className="mb-1.5 text-sm font-semibold text-text-muted">{section.title}</h3>
+          ) : null}
+          <ol className="space-y-1.5">
+            {section.lessons.map((lesson, j) => {
+              n += 1;
+              return (
+                <li key={`${j}-${lesson}`} className="flex gap-3 text-[15px] text-text">
+                  <span className="w-6 shrink-0 text-right tabular-nums text-text-subtle">{n}</span>
+                  <span className="min-w-0 break-words">{lesson}</span>
+                </li>
+              );
+            })}
+          </ol>
+        </div>
+      ))}
+    </section>
   );
 }

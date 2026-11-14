@@ -17,6 +17,7 @@ import type { CourseLesson } from '@/lib/courses';
 import { apiErrorMessage } from '@/lib/i18n/api-error';
 import { labelOr } from '@/lib/i18n/labels';
 import { learningApi } from '@/lib/learning';
+import { RichBody } from '@/components/rich-body';
 import { safeExternalUrl, sanitizeLessonHtml, sanitizeRichHtml } from '@/lib/sanitize-html';
 import { parseBunny } from '@/lib/video';
 import type { WatchReport } from '@/lib/use-bunny-watch';
@@ -325,9 +326,12 @@ function LessonContent({
   if (lesson.type === 'TEXT') {
     const text = typeof content['text'] === 'string' ? content['text'] : '';
     if (!text) return <Empty hint={t('lesson.emptyText')} />;
+    // Formato básico (negrita, listas, enlaces, títulos) con el mismo
+    // intérprete seguro de la comunidad: construye elementos de React, nunca
+    // HTML, y solo enlaza http(s). Antes salía tal cual: «**Material:**».
     return (
-      <div className="prose prose-slate max-w-none">
-        <p className="whitespace-pre-wrap leading-relaxed text-text">{text}</p>
+      <div className="max-w-none leading-relaxed text-text" data-testid="leccion-texto">
+        <RichBody body={text} mentions={false} />
       </div>
     );
   }

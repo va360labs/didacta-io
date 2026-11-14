@@ -233,8 +233,11 @@ test('alta en 3 preguntas: la creadora elige el idioma de la academia, y lo camb
     .getByRole('button', { name: /contraseña|password/i })
     .last()
     .click();
-  await page.waitForURL(/\/signin/, { timeout: 20_000 });
-  await signIn(page, t.creatorEmail);
+  // Al guardar la contraseña se entra sola (ensayo general, 14-nov): ya no
+  // pasa por «Bienvenido de nuevo» con el correo en blanco.
+  await page.waitForURL((u) => !u.pathname.startsWith('/reset-password'), {
+    timeout: 30_000,
+  });
   await page.waitForURL(/\/onboarding/, { timeout: 30_000 });
   await page.getByRole('button', { name: 'Dejar para luego' }).click();
   await page.getByLabel(/Nombre de perfil/).fill('Clara Barista');

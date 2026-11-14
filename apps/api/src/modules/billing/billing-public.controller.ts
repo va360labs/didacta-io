@@ -108,6 +108,13 @@ interface PublicCatalogCourse {
   category: string | null;
   estimatedMinutes: number | null;
   /**
+   * Temario: las secciones del curso con los TÍTULOS de sus lecciones, en
+   * orden. Solo títulos (nunca el contenido): es lo que la ficha pública enseña
+   * para que quien compra sepa qué se lleva, aunque el curso no tenga
+   * descripción. Sin secciones con lecciones, lista vacía.
+   */
+  syllabus: Array<{ title: string; lessons: string[] }>;
+  /**
    * Solo con el modo plataforma encendido, cada opción lleva además
    * `localCurrencyAtCheckout` (¿la verá el alumno en su moneda al pagar?).
    * Sin él (Community), las opciones son las del módulo tal cual.
@@ -164,6 +171,10 @@ export class BillingPublicController {
         },
         tenantId,
       );
+      const syllabus = await this.syllabusOf(
+        tenantId,
+        courses.map(({ course }) => course.id),
+      );
       return {
         courses: courses.map(({ course: c, options }) => ({
           id: c.id,
@@ -177,10 +188,49 @@ export class BillingPublicController {
           thumbnailUrl: c.thumbnailUrl,
           category: c.category,
           estimatedMinutes: c.estimatedMinutes,
+          syllabus: syllabus.get(c.id) ?? [],
           options: checkoutInfo ? withLocalCurrencyHint(options, checkoutInfo) : options,
         })),
       };
     });
+  }
+
+  /**
+   * Temario de los cursos a la venta: secciones y títulos de lección, sin
+   * borradas, en orden. Dos consultas de primer nivel (no un `include`) para
+   * que las dos pasen por el filtro de aula de RLS.
+   */
+  private async syllabusOf(
+    tenantId: string,
+    courseIds: string[],
+  ): Promise<Map<string, Array<{ title: string; lessons: string[] }>>> {
+    const out = new Map<string, Array<{ title: string; lessons: string[] }>>();
+    if (courseIds.length === 0) return out;
+    const sections = await this.prisma.modCoursesModule.findMany({
+      where: { tenantId, courseId: { in: courseIds }, deletedAt: null },
+      orderBy: [{ courseId: 'asc' }, { position: 'asc' }],
+      select: { id: true, courseId: true, title: true },
+    });
+    if (sections.length === 0) return out;
+    const lessons = await this.prisma.modCoursesLesson.findMany({
+      where: { tenantId, moduleId: { in: sections.map((m) => m.id) }, deletedAt: null },
+      orderBy: [{ moduleId: 'asc' }, { position: 'asc' }],
+      select: { moduleId: true, title: true },
+    });
+    const bySection = new Map<string, string[]>();
+    for (const l of lessons) {
+      const list = bySection.get(l.moduleId) ?? [];
+      list.push(l.title);
+      bySection.set(l.moduleId, list);
+    }
+    for (const m of sections) {
+      const titles = bySection.get(m.id) ?? [];
+      if (titles.length === 0) continue;
+      const list = out.get(m.courseId) ?? [];
+      list.push({ title: m.title, lessons: titles });
+      out.set(m.courseId, list);
+    }
+    return out;
   }
 
   @Get('offer/:courseId')

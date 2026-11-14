@@ -74,8 +74,11 @@ async function setPasswordAndSignIn(page: Page, url: string, email: string) {
     .getByRole('button', { name: /password/i })
     .last()
     .click();
-  await page.waitForURL(/\/signin/, { timeout: 20_000 });
-  await signIn(page, email);
+  // Al guardar la contraseña se entra sola (ensayo general, 14-nov): ya no
+  // pasa por «Bienvenido de nuevo» con el correo en blanco.
+  await page.waitForURL((u) => !u.pathname.startsWith('/reset-password'), {
+    timeout: 30_000,
+  });
 }
 
 async function signIn(page: Page, email: string) {

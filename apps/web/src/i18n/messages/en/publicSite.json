@@ -64,7 +64,9 @@
     "openingPayment": "Opening secure payment…",
     "buyNow": "Buy now",
     "securePayment": "Secure payment with Stripe. VAT included.",
-    "haveAccountToBuy": "Already have an account? <link>Sign in</link> to buy from your course page."
+    "haveAccountToBuy": "Already have an account? <link>Sign in</link> to buy from your course page.",
+    "syllabusTitle": "What's in the course",
+    "syllabusCount": "{count, plural, one {# lesson} other {# lessons}}"
   },
   "inscripcion": {
     "metaTitle": "Member sign-up",

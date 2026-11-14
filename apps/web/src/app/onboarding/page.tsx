@@ -354,7 +354,10 @@ export default function OnboardingPage() {
                   </Select>
                 </div>
               </div>
-              {asksSpanishDocument(uiLocale) ? (
+              {/* El DNI/NIE es para que un ALUMNO pueda pedir factura de lo que
+                  paga: a quien lleva la academia no se le pide (sus datos
+                  fiscales van en Cobros). */}
+              {asksSpanishDocument(uiLocale) && !creador ? (
                 <div className="space-y-1.5">
                   <Label htmlFor="ob-doc">
                     {t('onboarding.documentLabel')}{' '}

@@ -15,6 +15,9 @@ import { getCourseOffer, type CourseOffer, type CourseOfferOption } from '@/modu
 import { formatCents } from '@/lib/i18n/format';
 import type { TranslatorLike } from '@/lib/i18n/labels';
 import { getMembershipPage, type MembershipPage } from '@/lib/membership';
+import { authStorage } from '@/lib/auth-storage';
+import { meApi } from '@/lib/me';
+import { courseBenefits, type CourseBenefit } from './course-benefits';
 
 /**
  * Panel de venta de un curso que el alumno todavía no tiene.
@@ -26,9 +29,35 @@ import { getMembershipPage, type MembershipPage } from '@/lib/membership';
  * de mod.subscriptions. Si un dato no existe, su sección no se pinta: nunca se
  * inventa un precio.
  */
+const BENEFIT_KEY = {
+  lifetime: 'sales.benefitLifetime',
+  certificate: 'sales.benefitCertificate',
+  pace: 'sales.benefitPace',
+  community: 'sales.benefitCommunity',
+} as const satisfies Record<CourseBenefit, string>;
+
+/** Módulos activos del aula (`null` mientras no se sabe o si falla). */
+function useActiveModules(): ReadonlySet<string> | null {
+  const [mods, setMods] = useState<ReadonlySet<string> | null>(null);
+  useEffect(() => {
+    const token = authStorage.getAccessToken();
+    if (!token) return;
+    let cancelled = false;
+    meApi
+      .getMyModules(token)
+      .then((r) => !cancelled && setMods(new Set(r.activeModules)))
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+  return mods;
+}
+
 export function CourseSalesPanel({ courseId }: { courseId: string }) {
   const t = useTranslations('modBilling');
   const { offer, membership } = useOfertaYMembresia(courseId);
+  const activeModules = useActiveModules();
   const opciones = offer?.options ?? [];
   const plan = destacado(membership);
   const variasOpciones = opciones.length > 1;
@@ -48,11 +77,13 @@ export function CourseSalesPanel({ courseId }: { courseId: string }) {
                   : t('sales.startSubtitleMembership')}
               </p>
             </div>
-            <ul className="grid gap-2.5 sm:grid-cols-2">
-              <Beneficio texto={t('sales.benefitLifetime')} />
-              <Beneficio texto={t('sales.benefitCertificate')} />
-              <Beneficio texto={t('sales.benefitPace')} />
-              <Beneficio texto={t('sales.benefitCommunity')} />
+            {/* Solo lo que es verdad en ESTE curso y ESTA aula: ver
+                `course-benefits.ts`. Mientras la oferta no ha llegado no se
+                promete el pago único. */}
+            <ul className="grid gap-2.5 sm:grid-cols-2" data-testid="beneficios-curso">
+              {courseBenefits({ oneTimePurchase: opciones.length > 0, activeModules }).map((b) => (
+                <Beneficio key={b} texto={t(BENEFIT_KEY[b])} />
+              ))}
             </ul>
           </CardContent>
         </Card>

@@ -9,6 +9,7 @@ import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslations } from 'next-intl';
+import { AiTutorOffNotice } from '@/components/ai-tutor-off-notice';
 import { AiTutorPanel } from '@/components/ai-tutor-panel';
 import {
   CourseCertificateCard,
@@ -37,11 +38,14 @@ import { learningApi, type Enrollment } from '@/lib/learning';
 import { sanitizeRichHtml } from '@/lib/sanitize-html';
 import { useSimpleMode } from '@/lib/simple-mode';
 import { captureReferralFromLocation } from '@/lib/referral-links';
+import { aiTutorApi, type AiTutorStatusView } from '@/modules/ai-tutor';
 import { subscriptionsApi } from '@/modules/subscriptions';
 import { zoomLiveApi, type ZoomSession } from '@/modules/zoom-live';
 
 // Roles que pueden PREVISUALIZAR un curso no publicado (sin matricularse).
 const PREVIEW_ROLES = ['super_admin', 'tenant_admin', 'formador'];
+// Quien puede configurar el proveedor de IA del aula (ve el aviso del tutor apagado).
+const AI_ADMIN_ROLES = ['super_admin', 'tenant_admin'];
 
 export default function CourseAlumnoPage() {
   const params = useParams<{ slug: string }>();
@@ -89,6 +93,20 @@ export default function CourseAlumnoPage() {
   const [downloadingCert, setDownloadingCert] = useState(false);
   // Modo sencillo: el certificado se ve dentro del curso al terminarlo.
   const simple = useSimpleMode() === true;
+  // Tutor IA: solo se enseña si el aula puede contestar (tiene proveedor de
+  // IA). `null` mientras no se sabe: no se pinta nada, ni el tutor ni el aviso.
+  const [tutor, setTutor] = useState<AiTutorStatusView | null>(null);
+  const isAiAdmin = useMemo(() => {
+    const roles = authStorage.getSession()?.user.roles ?? [];
+    return roles.some((r) => AI_ADMIN_ROLES.includes(r));
+  }, []);
+  useEffect(() => {
+    let cancelled = false;
+    void aiTutorApi.status().then((s) => !cancelled && setTutor(s));
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const reload = useCallback(async () => {
     if (!params?.slug) return;
@@ -395,11 +413,14 @@ export default function CourseAlumnoPage() {
                   className="prose prose-slate max-w-2xl prose-p:text-text-muted prose-headings:font-display prose-a:text-brand-700"
                   dangerouslySetInnerHTML={{ __html: sanitizeRichHtml(course.description) }}
                 />
-              ) : (
+              ) : isEditor ? (
+                // «Aún no tiene descripción» es un recordatorio para quien la
+                // escribe; al alumno no le dice nada (y antes convivía con las
+                // promesas del panel de venta).
                 <p className="max-w-2xl text-base leading-relaxed text-text-muted">
                   {t('noDescription')}
                 </p>
-              )}
+              ) : null}
               <div className="flex flex-wrap gap-x-7 gap-y-2 text-sm text-text-muted">
                 <div>
                   {t.rich('moduleCount', {
@@ -658,16 +679,21 @@ export default function CourseAlumnoPage() {
           {isPreview ? (
             activeLesson ? (
               // Vista previa de editor: contenido completo, sin tracking de progreso.
-              <LessonPlayer
-                key={activeLesson.id}
-                lesson={{
-                  ...activeLesson,
-                  content:
-                    (activeLesson as CourseLesson & { content?: Record<string, unknown> })
-                      .content ?? {},
-                }}
-                preview
-              />
+              <div className="space-y-6">
+                <LessonPlayer
+                  key={activeLesson.id}
+                  lesson={{
+                    ...activeLesson,
+                    content:
+                      (activeLesson as CourseLesson & { content?: Record<string, unknown> })
+                        .content ?? {},
+                  }}
+                  preview
+                />
+                {/* Quien prepara el curso ve aquí, donde sus alumnos verían el
+                    tutor, que está apagado y dónde se enciende. */}
+                {tutor?.reason === 'NO_PROVIDER' && isAiAdmin ? <AiTutorOffNotice /> : null}
+              </div>
             ) : (
               <Card>
                 <CardContent className="py-12 text-center text-sm text-text-subtle">
@@ -745,12 +771,16 @@ export default function CourseAlumnoPage() {
                 lessonId={activeLesson.id}
                 courseId={course.id}
               />
-              <AiTutorPanel
-                courseId={course.id}
-                lessonId={activeLesson.id}
-                lessonTitle={activeLesson.title}
-                positionSeconds={lessonPosition}
-              />
+              {tutor?.available ? (
+                <AiTutorPanel
+                  courseId={course.id}
+                  lessonId={activeLesson.id}
+                  lessonTitle={activeLesson.title}
+                  positionSeconds={lessonPosition}
+                />
+              ) : tutor?.reason === 'NO_PROVIDER' && isAiAdmin ? (
+                <AiTutorOffNotice />
+              ) : null}
             </div>
           ) : (
             <Card>

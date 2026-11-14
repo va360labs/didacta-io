@@ -38,6 +38,7 @@ export {
   aiTutorReviewApi,
   type CitationView,
   type AskResponseView,
+  type AiTutorStatusView,
   type CorrectionView,
   type IndexCourseResultView,
   type ListAnswersFilters,

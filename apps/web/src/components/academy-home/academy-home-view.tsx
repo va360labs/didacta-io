@@ -121,7 +121,7 @@ export async function AcademyHomeView({ home, refCode, preview }: Props) {
             <Cover academy={academy} />
             <h1
               id="portada-nombre"
-              className="mt-6 text-[30px] font-extrabold leading-[1.1] tracking-[-0.02em] text-text sm:text-[40px]"
+              className={`${academy.coverUrl || academy.logoUrl ? 'mt-6' : ''} text-[30px] font-extrabold leading-[1.1] tracking-[-0.02em] text-text sm:text-[40px]`}
             >
               {academy.name}
             </h1>
@@ -294,7 +294,12 @@ function Brand({ academy }: { academy: AcademyHome['academy'] }) {
   );
 }
 
-/** Portada propia o, sin ella, la banda con el color y el logo del aula. */
+/**
+ * Portada propia o, sin ella, una banda baja con el logo del aula. Sin portada
+ * NI logo no hay banda: el hueco enorme con las iniciales («CL») parecía una
+ * imagen rota (ensayo general, 14-nov). Las iniciales ya van, en pequeño, en la
+ * marca de la cabecera.
+ */
 function Cover({ academy }: { academy: AcademyHome['academy'] }) {
   if (academy.coverUrl) {
     return (
@@ -307,23 +312,18 @@ function Cover({ academy }: { academy: AcademyHome['academy'] }) {
       />
     );
   }
+  if (!academy.logoUrl) return null;
   return (
     <div
-      className="grid aspect-[16/9] w-full place-items-center rounded-2xl border border-border"
+      className="grid aspect-[3/1] w-full place-items-center rounded-2xl border border-border"
       style={{
         background:
           'linear-gradient(135deg, var(--color-brand-100) 0%, var(--color-brand-50) 60%, var(--color-surface) 100%)',
       }}
       data-testid="portada-banda"
     >
-      {academy.logoUrl ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={academy.logoUrl} alt="" className="max-h-[38%] max-w-[60%] object-contain" />
-      ) : (
-        <span className="text-[clamp(40px,8vw,72px)] font-extrabold tracking-tight text-brand-700">
-          {initialsOf(academy.name)}
-        </span>
-      )}
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src={academy.logoUrl} alt="" className="max-h-[52%] max-w-[60%] object-contain" />
     </div>
   );
 }

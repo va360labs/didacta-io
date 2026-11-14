@@ -143,7 +143,10 @@
       "AI_PROVIDER_RATE_LIMIT": "O provedor de IA está sobrecarregado no momento. Tente em alguns segundos.",
       "AI_PROVIDER_AUTH": "As credenciais do provedor de IA não são válidas. Avise o admin.",
       "AI_PROVIDER_UNAVAILABLE": "O provedor de IA não respondeu. Tente de novo em instantes."
-    }
+    },
+    "offTitle": "O tutor de IA está desligado",
+    "offBody": "Seus alunos não o veem porque sua escola não tem um provedor de IA. Quando você configurar um, ele vai aparecer em cada aula.",
+    "offCta": "Configurar o provedor de IA"
   },
   "claseEmbed": {
     "countdownTomorrow": "Amanhã",

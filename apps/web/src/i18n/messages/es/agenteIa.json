@@ -53,5 +53,11 @@
   },
   "puede": "Crea y edita cursos y lecciones, programa directos y publica en la comunidad. Los cursos nuevos quedan en borrador hasta que los publicas tú; los directos, las publicaciones de la comunidad y las lecciones de un curso ya publicado se ven al momento.",
   "noPuede": "No pone precios, no publica a la venta, no borra nada ni invita a nadie.",
-  "chatgpt": "ChatGPT todavía no permite conectarse con una clave."
+  "chatgpt": "ChatGPT todavía no permite conectarse con una clave.",
+  "errorRevocar": "No se ha podido revocar la clave. Inténtalo otra vez.",
+  "revocando": "Revocando…",
+  "ocultarClaves": "Ocultar claves",
+  "claveCreada": "Creada el {fecha}",
+  "claveUsada": "último uso: {fecha}",
+  "claveSinUso": "sin usar todavía"
 }

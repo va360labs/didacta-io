@@ -3,8 +3,10 @@
  * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
  */
 
-import { Injectable, type OnModuleInit } from '@nestjs/common';
+import { Injectable, Optional, type OnModuleInit } from '@nestjs/common';
 import { Logger as PinoLogger } from 'nestjs-pino';
+import { AiGatewayService } from '../../ai/ai-gateway.service';
+import { runAsTenant } from '../../tenancy/tenant-context.storage';
 import { ModuleContextFactory } from '../module-context.factory';
 import { ModuleRegistryService } from '../module-registry.service';
 
@@ -29,10 +31,12 @@ interface LessonEvent {
  *   - `courses.course.unpublished` → borra los chunks del curso.
  *
  * El indexer usa el `AiGatewayService` para generar embeddings via el
- * provider configurado para el tenant. Si el tenant no tiene provider de
- * embeddings configurado, se loga warning y se omite — el curso queda sin
- * índice y el chat tutor responderá con "curso no indexado" hasta que el
- * admin lo configure.
+ * provider configurado para el tenant. Si el aula NO tiene proveedor de
+ * embeddings (ni propio ni default global), ni se intenta: es el estado normal
+ * de un aula que no usa IA (todas las de Didacta Cloud al nacer), no un
+ * fallo, así que no deja un `error` en el log en cada publicación. El tutor
+ * tampoco se le enseña al alumno (`GET /modules/ai-tutor/status`) y el admin
+ * reindexa a mano cuando configure el proveedor.
  *
  * Idempotencia: el indexer borra chunks previos antes de insertar, así que
  * re-publicar el curso (o el outbox reentregando el evento) no genera
@@ -44,7 +48,28 @@ export class AiTutorBridge implements OnModuleInit {
     private readonly factory: ModuleContextFactory,
     private readonly registry: ModuleRegistryService,
     private readonly logger: PinoLogger,
+    // Opcional para los arranques de test que no montan el AiModule: sin él se
+    // intenta indexar como antes.
+    @Optional() private readonly ai?: AiGatewayService,
   ) {}
+
+  /**
+   * ¿Merece la pena indexar en este aula? Sin proveedor de embeddings la
+   * respuesta es no, y se dice en `debug`: es lo esperado, no una avería.
+   */
+  private async canEmbed(tenantId: string, what: Record<string, string>): Promise<boolean> {
+    if (!this.ai) return true;
+    const ok = await runAsTenant(tenantId, () => this.ai!.isConfigured(tenantId, 'embed'), {
+      traceLabel: 'ai-tutor-provider',
+    });
+    if (!ok) {
+      this.logger.debug(
+        { ...what, tenantId },
+        'mod.ai-tutor: el aula no tiene proveedor de IA, no se indexa',
+      );
+    }
+    return ok;
+  }
 
   onModuleInit() {
     const eventBus = this.factory.getEventBus();
@@ -57,6 +82,7 @@ export class AiTutorBridge implements OnModuleInit {
         this.logger.debug({ courseId, tenantId }, 'mod.ai-tutor: no activo, salto indexación');
         return;
       }
+      if (!(await this.canEmbed(tenantId, { courseId }))) return;
       try {
         await indexer.indexCourse(tenantId, courseId);
       } catch (err) {
@@ -105,6 +131,7 @@ export class AiTutorBridge implements OnModuleInit {
       const { lessonId } = event.data;
       const indexer = this.registry.getAiTutorIndexerServiceOrNull();
       if (!indexer) return;
+      if (!(await this.canEmbed(tenantId, { lessonId }))) return;
       try {
         const r = await indexer.indexLesson(tenantId, lessonId);
         if (r.skipped) {

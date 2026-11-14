@@ -45,6 +45,11 @@ export interface CatalogCourse {
   thumbnailUrl: string | null;
   category: string | null;
   estimatedMinutes: number | null;
+  /**
+   * Temario: secciones con los títulos de sus lecciones, en orden. Opcional
+   * para convivir con una API anterior que no lo manda.
+   */
+  syllabus?: Array<{ title: string; lessons: string[] }>;
   options: CatalogOption[];
 }
 

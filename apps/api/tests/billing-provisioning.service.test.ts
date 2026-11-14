@@ -45,6 +45,14 @@ function makeMocks(opts?: {
     $transaction: vi.fn(async (fn: (t: typeof tx) => Promise<unknown>) => fn(tx)),
     // resolveEmailBranding y fetchEmailOverride (ambos best-effort): mock mínimo.
     tenant: { findUnique: vi.fn().mockResolvedValue({ name: 'Academia Demo' }) },
+    // El curso comprado (para el destino tras el primer acceso).
+    modCoursesCourse: {
+      findFirst: vi.fn(async (q: { where: { id: string; tenantId: string } }) =>
+        q.where.id === 'curso-torno' && q.where.tenantId === TENANT
+          ? { slug: 'torno-para-principiantes' }
+          : null,
+      ),
+    },
     modThemingTenantTheme: { findUnique: vi.fn().mockResolvedValue(null) },
     notificationTemplate: { findUnique: vi.fn().mockResolvedValue(null) },
     tenantSetting: {
@@ -280,5 +288,32 @@ describe('BillingProvisioningService · idioma del comprador', () => {
     );
     // Misma precedencia que `renderForTenant` del hub: no es una regla nueva.
     expect(locales).toEqual(['en-US', 'es-ES']);
+  });
+});
+
+describe('BillingProvisioningService · destino tras el primer acceso (ensayo general)', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  function enviado(smtp: unknown) {
+    return (smtp as { send: ReturnType<typeof vi.fn> }).send.mock.calls[0]![1] as {
+      text: string;
+      html: string;
+    };
+  }
+
+  it('el enlace de la bienvenida lleva al curso COMPRADO, no a la comunidad', async () => {
+    const { svc, smtp } = makeMocks();
+    await svc.provision({ ...args, courseId: 'curso-torno' });
+    const m = enviado(smtp);
+    expect(m.text).toContain(
+      'https://academia.example.com/reset-password?token=tok-123&next=%2Fcourses%2Ftorno-para-principiantes',
+    );
+    expect(m.html).toContain('next=%2Fcourses%2Ftorno-para-principiantes');
+  });
+
+  it('CONTROL: sin curso (o uno de otra aula) el enlace es el de siempre', async () => {
+    const { svc, smtp } = makeMocks();
+    await svc.provision({ ...args, courseId: 'curso-de-otra-aula' });
+    expect(enviado(smtp).text).not.toContain('next=');
   });
 });

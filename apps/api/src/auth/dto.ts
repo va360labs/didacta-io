@@ -50,3 +50,11 @@ export const resetPasswordSchema = z.object({
   newPassword: z.string().min(12).max(128),
 });
 export type ResetPasswordDto = z.infer<typeof resetPasswordSchema>;
+
+/** `POST /auth/reset-password/status` y `/resend`: solo el token del enlace. */
+export const resetTokenSchema = z.object({
+  token: z.string().min(40).max(200),
+  /** Adónde llevar tras el primer acceso; se sanea en el servidor. */
+  next: z.string().max(300).optional(),
+});
+export type ResetTokenDto = z.infer<typeof resetTokenSchema>;

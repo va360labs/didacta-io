@@ -279,12 +279,11 @@ async function primerAccesoCreadora(page: Page, tenant: FreshTenant, r: Hallazgo
   await pw.nth(0).fill(tenant.password);
   await pw.nth(1).fill(tenant.password);
   await page.locator('button[type="submit"]').last().click();
-  await page.waitForURL(/\/signin/, { timeout: 20_000 });
-  await asentar(page);
-  await revisar(page, r, '/signin', contenido);
-  await page.locator('input[autocomplete="email"]').fill(tenant.creatorEmail);
-  await page.locator('input[autocomplete="current-password"]').fill(tenant.password);
-  await page.locator('button[type="submit"]').click();
+  // Al guardar la contraseña se entra sola (ensayo general, 14-nov): ya no
+  // pasa por «Bienvenido de nuevo» con el correo en blanco.
+  await page.waitForURL((u) => !u.pathname.startsWith('/reset-password'), {
+    timeout: 30_000,
+  });
   await page.waitForURL(/\/onboarding/, { timeout: 30_000 });
   await asentar(page);
   await revisar(page, r, '/onboarding', contenido);

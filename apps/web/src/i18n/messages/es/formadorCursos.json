@@ -248,7 +248,7 @@
   "filterCompleted": "Completados",
   "filterCancelled": "Cancelados",
   "emptyEnrollmentsTitle": "No hay matriculaciones",
-  "emptyEnrollmentsBody": "Cuando alguien se matricule en este curso, aparecerá acá. Puedes generar invitaciones desde la pestaña Invitaciones.",
+  "emptyEnrollmentsBody": "Cuando alguien se matricule en este curso, aparecerá aquí. Puedes generar invitaciones desde la pestaña Invitaciones.",
   "colStudent": "Alumno",
   "colStatus": "Estado",
   "colProgress": "Progreso",

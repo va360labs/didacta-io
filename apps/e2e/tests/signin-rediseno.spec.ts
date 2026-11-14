@@ -110,8 +110,11 @@ test.describe('/signin — rediseño con panel de marca', () => {
       // Cifras: exactamente las que devuelve la API para este tenant.
       if (tenant.stats.activeMembers > 0) {
         const label = tenant.stats.activeMembers === 1 ? 'alumno activo' : 'alumnos activos';
+        // `.first()`: cuando el aula tiene tantos alumnos como cursos (4 y 4
+        // tras una tanda larga), la misma cifra sale dos veces y el modo
+        // estricto fallaba sin que hubiera nada mal en el panel.
         await expect(
-          page.getByText(String(tenant.stats.activeMembers), { exact: true }),
+          page.getByText(String(tenant.stats.activeMembers), { exact: true }).first(),
         ).toBeVisible();
         await expect(page.getByText(label, { exact: true })).toBeVisible();
       }
