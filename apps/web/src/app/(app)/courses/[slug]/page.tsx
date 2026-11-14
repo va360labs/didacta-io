@@ -679,16 +679,21 @@ export default function CourseAlumnoPage() {
           {isPreview ? (
             activeLesson ? (
               // Vista previa de editor: contenido completo, sin tracking de progreso.
-              <LessonPlayer
-                key={activeLesson.id}
-                lesson={{
-                  ...activeLesson,
-                  content:
-                    (activeLesson as CourseLesson & { content?: Record<string, unknown> })
-                      .content ?? {},
-                }}
-                preview
-              />
+              <div className="space-y-6">
+                <LessonPlayer
+                  key={activeLesson.id}
+                  lesson={{
+                    ...activeLesson,
+                    content:
+                      (activeLesson as CourseLesson & { content?: Record<string, unknown> })
+                        .content ?? {},
+                  }}
+                  preview
+                />
+                {/* Quien prepara el curso ve aquí, donde sus alumnos verían el
+                    tutor, que está apagado y dónde se enciende. */}
+                {tutor?.reason === 'NO_PROVIDER' && isAiAdmin ? <AiTutorOffNotice /> : null}
+              </div>
             ) : (
               <Card>
                 <CardContent className="py-12 text-center text-sm text-text-subtle">
