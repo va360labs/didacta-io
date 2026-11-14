@@ -102,6 +102,8 @@ export interface AcademyHomeFree {
 export interface AcademyHomeData {
   academy: {
     name: string;
+    /** Slug del aula: la campaña del pie «Powered by Didacta» (`utm_campaign`). */
+    slug: string;
     logoUrl: string | null;
     logoDisplayMode: 'logo_only' | 'logo_and_name';
     coverUrl: string | null;
@@ -207,7 +209,10 @@ export class AcademyHomeService {
 
   private async academy(tenantId: string): Promise<AcademyHomeData['academy']> {
     const [tenant, theme, domain] = await Promise.all([
-      this.prisma.tenant.findUnique({ where: { id: tenantId }, select: { name: true } }),
+      this.prisma.tenant.findUnique({
+        where: { id: tenantId },
+        select: { name: true, slug: true },
+      }),
       this.prisma.modThemingTenantTheme.findUnique({
         where: { tenantId },
         select: {
@@ -228,6 +233,7 @@ export class AcademyHomeService {
     ]);
     return {
       name: tenant?.name ?? '',
+      slug: tenant?.slug ?? '',
       logoUrl: theme?.logoUrl ?? null,
       logoDisplayMode: theme?.logoDisplayMode === 'logo_and_name' ? 'logo_and_name' : 'logo_only',
       coverUrl: theme?.coverUrl ?? null,

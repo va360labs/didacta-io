@@ -12,7 +12,7 @@ import { apiAs, freshTenant, sql, type FreshTenant } from '../helpers/simple-ten
  *
  * Mezcla de Skool y del aula de VA360: tarjeta de la academia (titular,
  * miembros · en línea · admins, caras), próximas citas, ranking del mes, últimos
- * comentarios y el pie «Powered by Didacta». Todo con datos reales sembrados por
+ * comentarios y el pie «Powered by Didacta — …». Todo con datos reales sembrados por
  * la API (los puntos salen del bus de verdad: publicar y comentar puntúan).
  *
  * Controles: el botón de ajustes solo lo ve quien administra; un aula sin
@@ -209,9 +209,15 @@ test.describe('comunidad · barra lateral (modo sencillo)', () => {
     await expect(comentarios).toContainText('A hand burr grinder beats any cheap blade grinder.');
     await expect(comentarios).toContainText('on “Which grinder for a small budget?”');
 
+    // Pie unificado con el del resto del aula: al alta de didacta.io en el
+    // idioma del aula, con la campaña del aula.
     const pie = page.getByTestId('powered-by-didacta');
-    await expect(pie).toHaveText('Powered by Didacta');
-    await expect(pie).toHaveAttribute('href', 'https://didacta.io/en');
+    await expect(pie).toHaveText('Powered by Didacta — Create your own academy free');
+    await expect(pie).toHaveAttribute(
+      'href',
+      `https://didacta.io/en/start?utm_source=aula&utm_medium=powered_by&utm_campaign=${aula.slug}`,
+    );
+    await expect(pie).toHaveAttribute('rel', 'noopener');
 
     // El comentario abre el post en el modal del feed (sin navegar) con ese
     // comentario enfocado: su caja de respuesta abierta.

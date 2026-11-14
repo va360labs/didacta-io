@@ -5,10 +5,10 @@
  * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
  */
 
-import Image from 'next/image';
 import Link from 'next/link';
 import { useEffect, useState, type CSSProperties } from 'react';
 import { useTranslations } from 'next-intl';
+import { AcademyMark } from '@/components/academy-mark';
 import { Icon, type IconName } from '@/components/icon';
 import { labelOr, type TranslatorLike } from '@/lib/i18n/labels';
 import { useTenantTheme } from '@/components/tenant-theme-provider';
@@ -173,6 +173,9 @@ export function SidebarContent({
   // resolvió el tenant por host.
   const { tenant: hostTenant } = useTenantContext();
   const orgName = hostTenant?.name?.trim() || formatTenantName(session.user.tenantSlug);
+  // Sin logo, sus iniciales sobre su color (nunca el logo de Didacta).
+  const brandHue = theme?.brandHue ?? hostTenant?.brandHue;
+  const brandSaturation = theme?.brandSaturation ?? hostTenant?.brandSaturation;
 
   const name = session.user.name ?? session.user.email;
   const initials = name
@@ -205,9 +208,13 @@ export function SidebarContent({
               className="h-9 w-9 rounded-xl object-contain"
             />
           ) : (
-            <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-[#1E5AA8]">
-              <Image src="/brand/anagrama.png" alt="" width={22} height={22} priority />
-            </div>
+            <AcademyMark
+              name={orgName}
+              hue={brandHue}
+              saturation={brandSaturation}
+              size={36}
+              className="rounded-xl"
+            />
           )}
           {onToggleCollapsed ? (
             <button
@@ -456,9 +463,13 @@ export function SidebarContent({
           />
         ) : (
           <div className="flex min-w-0 flex-1 items-center gap-3 text-left">
-            <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-[#1E5AA8]">
-              <Image src="/brand/anagrama.png" alt="" width={22} height={22} priority />
-            </div>
+            <AcademyMark
+              name={orgName}
+              hue={brandHue}
+              saturation={brandSaturation}
+              size={36}
+              className="rounded-xl"
+            />
             <div className="min-w-0 flex-1">
               <div className="truncate text-[14px] font-bold leading-tight text-white">
                 {orgName}

@@ -176,6 +176,9 @@ describe('robots.txt', () => {
       // og:image del aula para las vistas previas.
       '/api/v1/modules/theming/tenants/a/cover?v=1',
       '/api/v1/storage/file/tenants/a/uploads/x.png',
+      // Favicon y vista previa generados con sus iniciales.
+      '/academy-brand/og',
+      '/academy-brand/icon?size=180',
     ]) {
       expect(allowed(txt, url), url).toBe(true);
     }
@@ -199,6 +202,8 @@ describe('robots.txt', () => {
       '/_next/image?url=x',
       '/api/v1/modules/theming/tenants/a/cover?v=1',
       '/api/v1/storage/file/tenants/a/uploads/x.png',
+      '/academy-brand/og',
+      '/academy-brand/icon?size=180',
     ]) {
       expect(allowed(txt, url), url).toBe(true);
     }

@@ -5,6 +5,7 @@
 
 import { NextResponse, type NextRequest } from 'next/server';
 import { LOCALE_COOKIE } from './i18n/config';
+import { ACADEMY_BRAND_PATH } from './lib/academy-mark';
 import { legacyRedirectPath } from './lib/legacy-routes';
 import { robotsHeaderFor } from './lib/seo';
 import { SITE_PATH_PREFIX } from './lib/site-routing';
@@ -239,7 +240,9 @@ export async function middleware(req: NextRequest) {
   if (known) {
     // Reparto por dominio: el mismo despliegue sirve el aula y el sitio
     // público, y lo único que los distingue es por dónde entró la petición.
-    if (surface === 'SITE') {
+    // El favicon y la imagen para redes del aula (`app/academy-brand`) son los
+    // mismos en su sitio público: no se reescriben a su árbol.
+    if (surface === 'SITE' && !req.nextUrl.pathname.startsWith(`${ACADEMY_BRAND_PATH}/`)) {
       const url = req.nextUrl.clone();
       url.pathname = `${SITE_PATH_PREFIX}${
         req.nextUrl.pathname === '/' ? '' : req.nextUrl.pathname

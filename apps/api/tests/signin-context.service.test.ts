@@ -24,10 +24,12 @@ function makeLogger(): Ctor[1] {
 
 function makePrisma(opts: {
   theme?: {
-    signinHeadline: string | null;
-    signinSubheadline: string | null;
+    signinHeadline?: string | null;
+    signinSubheadline?: string | null;
     brandHue: number;
     brandSaturation: number;
+    faviconUrl?: string | null;
+    coverUrl?: string | null;
   } | null;
   users?: number;
   courses?: number;
@@ -111,6 +113,9 @@ describe('SigninContextService', () => {
     expect(ctx.brandHue).toBe(213);
     expect(ctx.brandSaturation).toBe(70);
     expect(ctx.stats).toEqual({ activeMembers: 30, publishedCourses: 0 });
+    // Sin favicon ni portada propios: el web genera los de sus iniciales.
+    expect(ctx.faviconUrl).toBeNull();
+    expect(ctx.coverUrl).toBeNull();
   });
 
   // Primera venta real de Didacta Cloud (14-nov): la entrada presumía de
@@ -127,6 +132,20 @@ describe('SigninContextService', () => {
     const { prisma } = makePrisma({ theme: null, users: 10, courses: 1 });
     const ctx = await new SigninContextService(prisma, makeLogger()).get(TENANT);
     expect(ctx.stats).toEqual({ activeMembers: 10, publishedCourses: 1 });
+  });
+
+  it('pasa el favicon y la portada propios (el web los usa antes que las iniciales)', async () => {
+    const { prisma } = makePrisma({
+      theme: {
+        brandHue: 24,
+        brandSaturation: 90,
+        faviconUrl: '/api/v1/modules/theming/tenants/t/favicon?v=1',
+        coverUrl: '/api/v1/modules/theming/tenants/t/cover?v=2',
+      },
+    });
+    const ctx = await new SigninContextService(prisma, makeLogger()).get(TENANT);
+    expect(ctx.faviconUrl).toBe('/api/v1/modules/theming/tenants/t/favicon?v=1');
+    expect(ctx.coverUrl).toBe('/api/v1/modules/theming/tenants/t/cover?v=2');
   });
 
   it('sin membresía configurada, el login no enlaza /join', async () => {
@@ -149,6 +168,8 @@ describe('SigninContextService', () => {
       brandHue: 213,
       brandSaturation: 70,
       logoDisplayMode: 'logo_only',
+      faviconUrl: null,
+      coverUrl: null,
       stats: { activeMembers: 0, publishedCourses: 0 },
       membershipPageActive: false,
     });

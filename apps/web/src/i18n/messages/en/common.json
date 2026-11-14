@@ -21,5 +21,15 @@
     "latam": "Latin America",
     "argentina": "Argentina",
     "utc": "UTC"
+  },
+  "academyBrand": {
+    "poweredBy": "Powered by Didacta — Create your own academy free",
+    "unnamed": "Your academy"
+  },
+  "notFound": {
+    "metaTitle": "Page not found",
+    "title": "This page doesn’t exist",
+    "body": "The link may be mistyped, or the page may no longer be available.",
+    "backHome": "Back to home"
   }
 }

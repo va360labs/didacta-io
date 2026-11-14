@@ -57,6 +57,8 @@ export interface AcademyHome {
   enabled: true;
   academy: {
     name: string;
+    /** Slug del aula (campaña del pie «Powered by»). Ausente en una API anterior. */
+    slug?: string;
     logoUrl: string | null;
     logoDisplayMode: 'logo_only' | 'logo_and_name';
     coverUrl: string | null;
