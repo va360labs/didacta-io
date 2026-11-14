@@ -94,6 +94,12 @@
 # que en producción — sólo con un techo que no estrangula al arnés.
 : "${RATE_LIMIT_COMMUNITY_AUTH_PER_MIN:=100000}"
 : "${RATE_LIMIT_COMMUNITY_PUBLIC_PER_MIN:=100000}"
+# El limitador del ACCESO (login, alta, restablecer, MFA) cuenta por IP y por
+# cuenta. Todo el arnés sale de la misma IP, así que el cupo por IP se sube
+# igual que los de arriba; el de por CUENTA se queda en su default (10 fallos
+# en 15 min por correo): cada spec usa sus propias cuentas, y
+# `acceso-limite-intentos.spec.ts` lo prueba de verdad.
+: "${RATE_LIMIT_LOGIN_IP_MAX:=100000}"
 
 # ── Bootstrap del tenant principal ──────────────────────────────────────────
 : "${BOOTSTRAP_TENANT_SLUG:=demo}"
@@ -197,7 +203,7 @@ E2E_PG_CONTAINER E2E_PG_USER E2E_PG_DB E2E_PG_PORT
 JWT_SECRET JWT_REFRESH_SECRET AUTH_SECRET AUTH_URL TENANT_SETTINGS_ENC_KEY
 NODE_ENV AUTH_SIGNUP_ENABLED PORT API_PORT API_INTERNAL_URL
 DIDACTA_REQUIRE_MFA_ADMIN
-RATE_LIMIT_COMMUNITY_AUTH_PER_MIN RATE_LIMIT_COMMUNITY_PUBLIC_PER_MIN
+RATE_LIMIT_COMMUNITY_AUTH_PER_MIN RATE_LIMIT_COMMUNITY_PUBLIC_PER_MIN RATE_LIMIT_LOGIN_IP_MAX
 BOOTSTRAP_TENANT_SLUG BOOTSTRAP_EMAIL BOOTSTRAP_PASSWORD
 E2E_SMOKE_TENANT_SLUG E2E_SMOKE_TENANT_DOMAIN E2E_SMOKE_ADMIN_EMAIL E2E_SMOKE_API_URL
 E2E_BASE_URL E2E_API_URL E2E_API_DIRECT_URL

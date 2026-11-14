@@ -277,3 +277,65 @@ jobs:
           name: playwright-report-mfa-enforcement
           path: apps/e2e/playwright-report/
           retention-days: 14
+
+  limites-cloud:
+    name: Playwright límites de Didacta Cloud (una clase sin 429)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    # Job separado del golden path, como el de MFA: la tanda general sube todos
+    # los límites a 100.000 (el arnés entero sale de una misma IP) y con eso
+    # `limites-clase-en-directo.spec.ts` no probaría nada. Aquí la API arranca
+    # con los límites de Cloud (600/min por usuario, 12.000/min por aula) desde
+    # el propio arnés (`enable_cloud_limits` en scripts/e2e-stack.sh). Local:
+    #
+    #   bash scripts/e2e-stack.sh limits
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
+        with:
+          version: 10.21.0
+          run_install: false
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Cargar el entorno canónico del arnés
+        run: bash scripts/e2e-env.sh --github-env >> "$GITHUB_ENV"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma client
+        run: pnpm --filter @didacta/database db:generate
+
+      - name: Levantar la infra de test (postgres + redis)
+        run: bash scripts/e2e-stack.sh up
+
+      - name: Preparar la base (esquema + RLS + grants + seeds + espacios)
+        run: bash scripts/e2e-stack.sh db
+
+      - name: Build workspace
+        run: pnpm build
+
+      - name: Arrancar api y web con los límites de Cloud
+        run: bash scripts/e2e-stack.sh limits-start
+
+      - name: Install Playwright browsers
+        run: pnpm --filter @didacta/e2e exec playwright install --with-deps chromium
+
+      - name: Run E2E — una clase con sesión navegando a la vez
+        run: bash scripts/e2e-stack.sh limits-run
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: playwright-report-limites-cloud
+          path: apps/e2e/playwright-report/
+          retention-days: 14

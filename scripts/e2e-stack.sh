@@ -88,6 +88,12 @@ PLAYWRIGHT_CLI="$REPO_ROOT/node_modules/@playwright/test/cli.js"
 # invertido, los 2 de MFA con el filtro directo.
 readonly MFA_GREP='Auth . MFA'
 
+# La tanda de los límites de Didacta Cloud (`limites-clase-en-directo.spec.ts`):
+# una clase con sesión navegando a la vez, contra una API con 600/min por
+# usuario y 12.000/min por aula. Con los 100.000 de la tanda general no probaría
+# nada, así que va aparte, igual que MFA, y la general la excluye.
+readonly LIMITS_GREP='Limites en clase'
+
 log() { printf '\033[36m[e2e-stack]\033[0m %s\n' "$*"; }
 die() { printf '\033[31m[e2e-stack] ERROR:\033[0m %s\n' "$*" >&2; exit 1; }
 
@@ -436,7 +442,7 @@ run_playwright() { ( cd apps/e2e && "$NODE_BIN" "$PLAYWRIGHT_CLI" test "$@" ); }
 # La tanda general, sobre el stack que ya esté en pie. Excluye los 2 specs de
 # MFA (ver MFA_GREP): con el stack del golden path fallarían siempre, porque su
 # premisa es justo la política que este stack no tiene.
-cmd_run() { run_playwright --grep-invert "$MFA_GREP" "$@"; }
+cmd_run() { run_playwright --grep-invert "$MFA_GREP|$LIMITS_GREP" "$@"; }
 
 cmd_test() { cmd_reset; cmd_run "$@"; }
 
@@ -461,6 +467,18 @@ cmd_mfa_run() { enable_mfa_policy; run_playwright --grep "$MFA_GREP" "$@"; }
 # política: sólo la consulta al arrancar.
 cmd_mfa() { enable_mfa_policy; cmd_reset; cmd_mfa_run; }
 
+# Los límites de Cloud los lee la API al arrancar: se ponen ANTES de levantarla.
+# El público se queda alto (el arnés entero sale de una IP); lo que se prueba es
+# el tráfico CON sesión.
+enable_cloud_limits() {
+  export RATE_LIMIT_COMMUNITY_USER_PER_MIN=600
+  export RATE_LIMIT_COMMUNITY_AUTH_PER_MIN=12000
+}
+
+cmd_limits_start() { enable_cloud_limits; cmd_start; }
+cmd_limits_run() { run_playwright --grep "$LIMITS_GREP" "$@"; }
+cmd_limits() { enable_cloud_limits; cmd_reset; cmd_limits_run; }
+
 case "${1:-}" in
   up)     cmd_up ;;
   down)   cmd_down ;;
@@ -476,6 +494,9 @@ case "${1:-}" in
   mfa)       cmd_mfa ;;
   mfa-start) cmd_mfa_start ;;
   mfa-run)   shift; cmd_mfa_run "$@" ;;
+  limits)       cmd_limits ;;
+  limits-start) cmd_limits_start ;;
+  limits-run)   shift; cmd_limits_run "$@" ;;
   test)  shift; cmd_test "$@" ;;
-  *)     die "uso: e2e-stack.sh {up|down|schema|db|build|start|stop|reset|check|all|test|run|mfa|mfa-start|mfa-run}" ;;
+  *)     die "uso: e2e-stack.sh {up|down|schema|db|build|start|stop|reset|check|all|test|run|mfa|mfa-start|mfa-run|limits|limits-start|limits-run}" ;;
 esac
