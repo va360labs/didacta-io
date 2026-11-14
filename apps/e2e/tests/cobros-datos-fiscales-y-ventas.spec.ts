@@ -18,7 +18,9 @@ import { startStripeDouble, type StripeDouble } from '../helpers/stripe-double';
  * avisaba tras «Ver detalles». Ahora:
  *
  *  1. El paso de cobros sigue PENDIENTE («Falta: datos fiscales»), lo explica
- *     y lleva directo a completarlos; publicar espera a que estén.
+ *     y lleva directo a completarlos. Publicar NO espera (web #39: se cobra
+ *     igual y se retiene): se avisa junto al botón y, ya publicado, en la
+ *     tarjeta del enlace.
  *  2. «Ventas» lo avisa arriba, con las ventas retenidas y su importe, y el
  *     formulario ahí mismo; lo retenido no se cuenta «en camino».
  *  3. Un NIF mal escrito dice «El NIF no es válido…», no «faltan campos».
@@ -207,6 +209,8 @@ async function aulaCloud(
   opts: {
     fiscales: 'faltan' | 'completos';
     ui?: 'es-ES' | 'pt-BR';
+    /** Añade de verdad una lección de texto (para poder publicar). */
+    leccion?: boolean;
     resumen?: object;
     ventas?: object[];
   },
@@ -216,6 +220,15 @@ async function aulaCloud(
   await ctx.addCookies([{ name: 'didacta_locale', value: 'es-ES', url: tenant.base }]);
   const page = await ctx.newPage();
   await creadoraConCurso(page, tenant);
+  if (opts.leccion) {
+    await page.getByRole('link', { name: 'Añadir mi primera lección' }).click();
+    await expect(page.getByTestId('editor-sencillo')).toBeVisible({ timeout: 20_000 });
+    await page.getByTestId('tipo-TEXT').click();
+    await page.getByLabel('Título de la lección').fill('Bienvenida al torno');
+    await page.getByLabel('Texto de la lección').fill('Hoy centramos el barro en el torno.');
+    await page.getByTestId('guardar-leccion').click();
+    await expect(page.getByText('1. Bienvenida al torno')).toBeVisible({ timeout: 20_000 });
+  }
   const faltan = opts.fiscales === 'faltan';
   const posts: Array<Record<string, unknown>> = [];
 
@@ -229,8 +242,12 @@ async function aulaCloud(
     }>(tenant.host, '/api/v1/admin/simple-mode/start-here', { bearer });
     // Como lo calcula Cloud: academia, curso y precio hechos; la cuenta de
     // cobros lista y, si faltan los datos fiscales, el paso SIN hacer.
+    // Publicar e invitar, los de verdad del aula.
     const done = new Set(['academy', 'course', 'price', ...(faltan ? [] : ['payments'])]);
-    view.steps = view.steps.map((s) => ({ ...s, done: done.has(s.id) }));
+    view.steps = view.steps.map((s) => ({
+      ...s,
+      done: done.has(s.id) || ((s.id === 'publish' || s.id === 'invite') && s.done),
+    }));
     view.paymentsSetupPath = '/admin/payments';
     view.taxProfilePending = faltan;
     view.taxProfilePath = '/admin/payments#tax-profile';
@@ -293,20 +310,34 @@ test('ensayo general: sin datos fiscales «Conecta tus cobros» sigue pendiente 
   browser,
 }) => {
   test.setTimeout(180_000);
-  const { ctx, page, posts } = await aulaCloud(browser, { fiscales: 'faltan' });
+  const { ctx, page, posts } = await aulaCloud(browser, { fiscales: 'faltan', leccion: true });
 
   // ── «Empieza aquí» ──────────────────────────────────────────────────────
   const paso = page.locator('[data-step="payments"]');
-  await expect(paso).toHaveAttribute('aria-current', 'step');
   await expect(paso).not.toHaveAttribute('data-done', '1');
   await expect(paso.getByTestId('cobros-pendiente-fiscales')).toHaveText('Falta: datos fiscales');
   await expect(paso).toContainText(
     'Tu cuenta de cobros ya está conectada. Te falta un paso: tus datos fiscales (tu NIF y tu dirección). Sin ellos, el dinero de tus ventas se queda retenido y no te llega.',
   );
   await expect(page.getByText('Listo para cobrar')).toHaveCount(0);
-  // Publicar espera a los datos fiscales: el paso no está abierto ni tiene botón.
-  await expect(page.getByTestId('publicar')).toHaveCount(0);
+  await expect(paso.getByTestId('completar-fiscales')).toHaveText('Completar mis datos fiscales');
+
+  // ── Publicar NO espera a los datos fiscales (web #39), pero lo avisa ─────
+  await expect(page.locator('[data-step="publish"]')).toHaveAttribute('aria-current', 'step');
+  await expect(page.getByTestId('publicar')).toBeEnabled();
+  await expect(page.getByTestId('publicar-aviso-retenido')).toHaveText(
+    'Puedes publicar ya: tus alumnos podrán comprar, pero el dinero de tus ventas se quedará retenido hasta que completes tus datos fiscales.',
+  );
   await captura(page, 'despues-empieza-aqui-faltan-fiscales.png');
+  await page.getByTestId('publicar').click();
+  await expect(page.getByTestId('copiar-enlace')).toBeEnabled({ timeout: 20_000 });
+  await expect(page.locator('[data-step="publish"][data-done="1"]')).toBeVisible();
+  await expect(page.getByTestId('enlace-aviso-retenido')).toContainText(
+    'Ya está a la venta, pero el dinero de tus ventas se queda retenido hasta que completes tus datos fiscales.',
+  );
+  // El paso de cobros sigue marcado, con su botón.
+  await expect(paso.getByTestId('cobros-pendiente-fiscales')).toBeVisible();
+  await captura(page, 'despues-empieza-aqui-publicado-sin-fiscales.png');
 
   // ── El botón lleva DIRECTO al formulario, en «Ventas» ───────────────────
   await paso.getByTestId('completar-fiscales').click();
@@ -378,6 +409,10 @@ test('pt-BR: o mesmo aviso em português, sem espanhol, e o NIF inválido com o 
   const paso = page.locator('[data-step="payments"]');
   await expect(paso.getByTestId('cobros-pendiente-fiscales')).toHaveText('Falta: dados fiscais');
   await expect(paso.getByTestId('completar-fiscales')).toHaveText('Completar meus dados fiscais');
+  await expect(page.getByTestId('publicar-aviso-retenido')).toHaveText(
+    'Você já pode publicar: seus alunos poderão comprar, mas o dinheiro das suas vendas ficará retido até você completar seus dados fiscais.',
+  );
+  await captura(page, 'despues-comece-aqui-pt-br.png');
   await paso.getByTestId('completar-fiscales').click();
   const aviso = page.getByTestId('ventas-faltan-fiscales');
   await expect(aviso.getByRole('heading', { level: 2 })).toHaveText(
