@@ -132,6 +132,19 @@ export interface AcademyHomeData {
   };
 }
 
+/**
+ * La descripción pública del aula. Igual que la tarjeta de la comunidad: la
+ * descripción propia y, si no la hay, el titular con el que el aula ya se
+ * presenta en su acceso. La comparte la portada con lo que se da a los
+ * buscadores (`public-seo.service.ts`): una sola regla para las dos.
+ */
+export function academyDescription(
+  theme: { about?: string | null; signinHeadline?: string | null } | null | undefined,
+): string | null {
+  const description = theme?.about?.trim() || theme?.signinHeadline?.trim();
+  return description ? description : null;
+}
+
 /** Lo del aula que se cachea (todo menos la marca). */
 type CachedPart = Omit<AcademyHomeData, 'academy'>;
 
@@ -220,15 +233,12 @@ export class AcademyHomeService {
         select: { hostname: true },
       }),
     ]);
-    // Igual que la tarjeta de la comunidad: la descripción propia y, si no la
-    // hay, el titular con el que el aula ya se presenta en su acceso.
-    const description = theme?.about?.trim() || theme?.signinHeadline?.trim();
     return {
       name: tenant?.name ?? '',
       logoUrl: theme?.logoUrl ?? null,
       logoDisplayMode: theme?.logoDisplayMode === 'logo_and_name' ? 'logo_and_name' : 'logo_only',
       coverUrl: theme?.coverUrl ?? null,
-      description: description ? description : null,
+      description: academyDescription(theme),
       host: domain && isShareableHost(domain.hostname) ? domain.hostname : null,
       links: parseSocialLinks(theme?.socialLinks),
       brandHue: theme?.brandHue ?? null,

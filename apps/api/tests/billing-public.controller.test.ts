@@ -124,6 +124,46 @@ describe('BillingPublicController — catálogo público', () => {
   });
 });
 
+describe('BillingPublicController — catálogo público · descripción para pintar en el servidor', () => {
+  it('descriptionHtml sale saneado por la frontera del servidor (sin scripts ni manejadores)', async () => {
+    const { controller } = makeController({
+      billing: {
+        getCatalog: vi
+          .fn()
+          .mockResolvedValue([{ courseId: COURSE, options: [{ id: 'o', unitAmount: 100 }] }]),
+      },
+      courses: [
+        {
+          id: COURSE,
+          slug: 'curso-uno',
+          title: 'Curso Uno',
+          description:
+            '<p>Hola <strong>mundo</strong></p><img src="x" onerror="alert(1)"><script>robar()</script>',
+          thumbnailUrl: null,
+          category: null,
+          estimatedMinutes: null,
+        },
+        {
+          id: '33333333-3333-4333-8333-333333333333',
+          slug: 'sin-descripcion',
+          title: 'Sin descripción',
+          description: null,
+          thumbnailUrl: null,
+          category: null,
+          estimatedMinutes: null,
+        },
+      ],
+    });
+    const { courses } = await controller.catalog(req());
+    const html = courses[0]!.descriptionHtml!;
+    expect(html).toContain('<p>Hola <strong>mundo</strong></p>');
+    expect(html).not.toMatch(/onerror|<script|robar/);
+    // El original se sigue sirviendo tal cual (el navegador lo sanea al pintarlo).
+    expect(courses[0]!.description).toContain('<script>');
+    expect(courses[1]!.descriptionHtml).toBeNull();
+  });
+});
+
 describe('BillingPublicController — oferta pública', () => {
   it('un courseId que no es UUID es un curso que no existe (404, no 500 de Prisma)', async () => {
     const { controller } = makeController();
