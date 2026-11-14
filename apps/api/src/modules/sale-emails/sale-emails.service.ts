@@ -318,7 +318,9 @@ export class SaleEmailsService {
       const branding = await this.branding(tenantId, base);
       const timeZone = await this.timeZone(tenantId);
       const product = await this.productOfSubscription(tenantId, sub, base);
-      const platform = !!this.payouts && (await this.isPlatformInvoice(tenantId, invoice.id));
+      const platform =
+        !!this.payouts &&
+        (await this.isPlatformInvoice(tenantId, invoice.id, subscriptionIdOf(invoice)));
       const method = await this.paymentMethod(tenantId, {
         paymentIntentId: idOf((invoice as { payment_intent?: unknown }).payment_intent),
         invoiceId: invoice.id,
@@ -1004,8 +1006,25 @@ export class SaleEmailsService {
     return { kind: 'academy', url: `${root}/signin` };
   }
 
-  /** ¿La factura la cobró la plataforma? (hay una venta anotada con ella). */
-  private async isPlatformInvoice(tenantId: string, invoiceId: string): Promise<boolean> {
+  /**
+   * ¿La factura es de una suscripción cobrada por la plataforma? Por el
+   * registro de objetos (la suscripción o la factura) y, si no, por la venta
+   * anotada. Un cobro FALLIDO no deja venta: sin el registro se tomaría por
+   * claves propias y el botón llevaría a la página de pago de la plataforma.
+   */
+  private async isPlatformInvoice(
+    tenantId: string,
+    invoiceId: string,
+    subscriptionId: string | null,
+  ): Promise<boolean> {
+    try {
+      const refs = this.payouts?.platformRefs();
+      for (const id of [subscriptionId, invoiceId]) {
+        if (id && refs && (await refs.isPlatformObject(id))) return true;
+      }
+    } catch {
+      // Sin registro legible, se mira la venta.
+    }
     try {
       const sale = await runAsTenant(tenantId, () =>
         this.prisma.modPayoutsSale.findFirst({

@@ -679,7 +679,7 @@ describe('piezas', () => {
 
 const TENANT = '11111111-1111-4111-8111-111111111111';
 
-function fakeWorld(opts: { lastLoginAt?: Date | null } = {}) {
+function fakeWorld(opts: { lastLoginAt?: Date | null; platform?: boolean } = {}) {
   const sent: Array<{ to: string; subject: string; text: string; html: string }> = [];
   const claims = new Set<string>();
   const prisma = {
@@ -772,6 +772,16 @@ function fakeWorld(opts: { lastLoginAt?: Date | null } = {}) {
     } as never,
     smtp as never,
     passwordReset as never,
+    undefined,
+    undefined,
+    opts.platform
+      ? ({
+          taxProfiles: null,
+          stripe: { v1: vi.fn(async () => ({})) },
+          // La suscripción está en el registro de objetos de la plataforma.
+          platformRefs: () => ({ isPlatformObject: async (id: string) => id === 'sub_1' }),
+        } as never)
+      : undefined,
   );
   return { service, sent, prisma, passwordReset };
 }
@@ -926,6 +936,19 @@ describe('SaleEmailsService', () => {
     expect(sent[0]!.text).toContain(
       'Actualizar mi método de pago: https://invoice.stripe.com/i/acct_x/test',
     );
+  });
+
+  it('cobro fallido de una suscripción de la PLATAFORMA (sin venta anotada): el botón va a su cuenta del aula', async () => {
+    const { service, sent } = fakeWorld({ platform: true });
+    await service.onInvoiceEvent(
+      TENANT,
+      invoiceEvent('invoice.payment_failed', 'subscription_cycle', 1),
+    );
+    expect(sent).toHaveLength(1);
+    expect(sent[0]!.text).toContain(
+      'Actualizar mi método de pago: https://primersorbo.example.com/account?tab=subscription',
+    );
+    expect(sent[0]!.text).not.toContain('invoice.stripe.com');
   });
 
   it('vista previa con datos de ejemplo y el borrador del editor', async () => {
