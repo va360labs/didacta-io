@@ -208,7 +208,8 @@ export class PrismaNotificationHubService implements NotificationHubService {
         notificationId: created.id,
         tenantId: notification.tenantId,
         userId: notification.to,
-        subject: rendered.subject ?? '(sin asunto)',
+        // Relleno en el idioma del destinatario (un override puede no traer asunto).
+        subject: rendered.subject ?? resolveFixedEmailCopy('value.no_subject', locale),
         body: rendered.body,
         branding,
         webBaseUrl,

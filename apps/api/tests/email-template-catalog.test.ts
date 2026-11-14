@@ -186,6 +186,33 @@ describe('catálogo del hub por idioma', () => {
     }
   });
 
+  it('el resumen semanal lleva el pie de baja también en portugués (venía sin él)', () => {
+    // El `pt` llegó de una rama anterior a que develop añadiera el enlace de
+    // baja al resumen: el brasileño recibía el correo sin forma de darse de baja.
+    const vars = {
+      mentionsCount: 2,
+      repliesCount: 1,
+      sinceIso: '2026-11-07',
+      unsubUrl: 'https://u/unsub',
+    };
+    const render = (def: TemplateDef | undefined, v: Record<string, unknown>) =>
+      interpolate(def!.body, v);
+    expect(render(HUB_TEMPLATE_DEFAULTS_PT['community.digest.weekly'], vars)).toContain(
+      'Você recebe este resumo por ser membro da comunidade. Para deixar de receber os e-mails da comunidade (resumo semanal e avisos), acesse: https://u/unsub',
+    );
+    // Control: el español, byte a byte el de develop.
+    expect(render(HUB_TEMPLATE_DEFAULTS['community.digest.weekly'], vars)).toContain(
+      'Recibes este resumen como miembro de la comunidad. Para dejar de recibir los correos de la comunidad (resumen semanal y avisos), entra aquí: https://u/unsub',
+    );
+    // Sin dirección de baja (aula sin URL pública) el pie desaparece entero.
+    const sinBaja = render(HUB_TEMPLATE_DEFAULTS_PT['community.digest.weekly'], {
+      ...vars,
+      unsubUrl: '',
+    });
+    expect(sinBaja).not.toContain('———');
+    expect(sinBaja).not.toContain('{{');
+  });
+
   it('el portugués no hereda frases del inglés ni del español', () => {
     const pt = HUB_TEMPLATE_DEFAULTS_PT['enrollment.created'];
     expect(pt?.subject).toBe('Você se matriculou em {{course}}');
@@ -606,6 +633,13 @@ describe('copy fijo de emails (CTA, títulos, rellenos)', () => {
       expect(translated.startsWith(' '), `${key}: espacio inicial`).toBe(es.startsWith(' '));
       expect(translated.endsWith(' '), `${key}: espacio final`).toBe(es.endsWith(' '));
     }
+  });
+
+  it('el asunto de relleno del hub sale en el idioma del destinatario', () => {
+    expect(resolveFixedEmailCopy('value.no_subject', 'es-ES')).toBe('(sin asunto)');
+    expect(resolveFixedEmailCopy('value.no_subject', 'en-US')).toBe('(no subject)');
+    expect(resolveFixedEmailCopy('value.no_subject', 'pt-BR')).toBe('(sem assunto)');
+    expect(resolveFixedEmailCopy('value.no_subject', 'fr-FR')).toBe('(sin asunto)');
   });
 
   it('resolveFixedEmailCopy devuelve el idioma pedido y degrada al español', () => {
@@ -1094,7 +1128,11 @@ describe('builders de inscripción · idioma del destinatario', () => {
     expect(out.text).toContain('⚠ CONSTA COMO INADIMPLENTE');
     expect(out.text).toContain('  Nome: Ana');
     expect(out.text).toContain('  E-mail: ana@example.test');
-    expect(out.text).toContain('Assinatura ativa:');
+    // Suscripción en impago (`past_due`): «no vigente», igual que en el test
+    // inglés. Este test esperaba «Assinatura ativa:» —el fallo que develop
+    // corrigió después: decir «vigente» en el mismo correo que avisa del impago—.
+    expect(out.text).toContain('⚠ Assinatura NÃO ativa (cancelada ou inadimplente):');
+    expect(out.text).not.toContain('Assinatura ativa:');
     // La etiqueta de estado sale de `modules/payment-connections`, en portugués.
     expect(out.text).toContain('Pagamento em atraso (inadimplente)');
     expect(out.text).toContain('Compras detectadas (1)');

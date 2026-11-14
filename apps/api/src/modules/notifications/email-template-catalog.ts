@@ -455,13 +455,15 @@ export const HUB_TEMPLATE_DEFAULTS_PT: Record<string, TemplateDef> = {
   'community.digest.weekly': {
     subject:
       'Seu resumo semanal da comunidade ({{mentionsCount}} menções · {{repliesCount}} respostas)',
-    body: 'Esta semana na comunidade:\n\n· {{mentionsCount}} menção(ões) nova(s)\n· {{repliesCount}} resposta(s) em tópicos dos quais você participou\n\nVeja todas na sua seção de menções. Desde o resumo anterior: {{sinceIso}}.',
+    // Mismo pie de baja que el español: la baja corta los DOS correos de la
+    // comunidad y el texto nombra los dos (aquí, el resumen primero).
+    body: 'Esta semana na comunidade:\n\n· {{mentionsCount}} menção(ões) nova(s)\n· {{repliesCount}} resposta(s) em tópicos dos quais você participou\n\nVeja todas na sua seção de menções. Desde o resumo anterior: {{sinceIso}}.{{#unsubUrl}}\n\n———\nVocê recebe este resumo por ser membro da comunidade. Para deixar de receber os e-mails da comunidade (resumo semanal e avisos), acesse: {{unsubUrl}}{{/unsubUrl}}',
   },
   // Passthrough del asunto y del cuerpo (los escribe el admin); se traduce lo
   // que es copy del producto: el enlace a la publicación y el pie de baja.
   'community.broadcast': {
     subject: '{{subject}}',
-    body: '{{body}}{{#postUrl}}\n\nVer a publicação: {{postUrl}}{{/postUrl}}{{#unsubUrl}}\n\n———\nVocê recebe este aviso por ser membro da comunidade. Para deixar de receber avisos, acesse: {{unsubUrl}}{{/unsubUrl}}',
+    body: '{{body}}{{#postUrl}}\n\nVer a publicação: {{postUrl}}{{/postUrl}}{{#unsubUrl}}\n\n———\nVocê recebe este aviso por ser membro da comunidade. Para deixar de receber os e-mails da comunidade (avisos e resumo semanal), acesse: {{unsubUrl}}{{/unsubUrl}}',
   },
   'lesson.unlocked': {
     subject: 'Já está disponível: {{lessonTitle}}',
@@ -601,6 +603,8 @@ export const FIXED_EMAIL_COPY = {
     'title.smtp_test': 'Prueba de SMTP',
     'title.subscriptions_digest': 'Resumen de suscripciones',
     'value.no_upcoming_renewals': 'Ninguna en los próximos {{windowDays}} días.',
+    // Asunto de relleno del hub cuando la plantilla (un override sin asunto) no trae.
+    'value.no_subject': '(sin asunto)',
     'value.subscription': 'Suscripción',
     'value.unknown_tenant_slug': '(desconocido)',
     'value.your_access': 'tu acceso',
@@ -646,6 +650,7 @@ export const FIXED_EMAIL_COPY = {
     'title.smtp_test': 'SMTP test',
     'title.subscriptions_digest': 'Subscriptions digest',
     'value.no_upcoming_renewals': 'None in the next {{windowDays}} days.',
+    'value.no_subject': '(no subject)',
     'value.subscription': 'Subscription',
     'value.unknown_tenant_slug': '(unknown)',
     'value.your_access': 'your access',
@@ -692,6 +697,7 @@ export const FIXED_EMAIL_COPY = {
     'title.smtp_test': 'Teste de SMTP',
     'title.subscriptions_digest': 'Resumo de assinaturas',
     'value.no_upcoming_renewals': 'Nenhuma nos próximos {{windowDays}} dias.',
+    'value.no_subject': '(sem assunto)',
     'value.subscription': 'Assinatura',
     'value.unknown_tenant_slug': '(desconhecido)',
     'value.your_access': 'seu acesso',
@@ -829,25 +835,26 @@ export const INVITATION_EMAIL_COPY = {
     dayOne: 'day',
     dayMany: 'days',
   },
-  // «sala de aula» y no «aula»: en portugués «aula» es la lección/clase, no el
-  // lugar. Sin posesivo («su aula»): «sua sala de aula» se leería como la del
-  // invitado, no la de la academia.
+  // El «aula» española (la academia entera) es «escola»: en portugués «aula» es
+  // la lección y «sala de aula» suena a la clase de Zoom (glosario pt-BR, mismo
+  // término que la web). Sin posesivo («su aula»): «sua escola» se leería como
+  // la del invitado, no la de la academia.
   pt: {
-    subject: '{{tenantName}} convidou você para a sala de aula',
+    subject: '{{tenantName}} convidou você para a escola',
     title: 'Sua conta já está pronta',
     introHtml:
-      '<strong>{{tenantName}}</strong> convidou você para a sala de aula e <strong>sua conta já está criada</strong>. Você não precisa se cadastrar: basta escolher uma senha para entrar pela primeira vez.',
+      '<strong>{{tenantName}}</strong> convidou você para a escola e <strong>sua conta já está criada</strong>. Você não precisa se cadastrar: basta escolher uma senha para entrar pela primeira vez.',
     introText:
-      '{{tenantName}} convidou você para a sala de aula e sua conta já está criada. Você não precisa se cadastrar: basta escolher uma senha para entrar pela primeira vez.',
+      '{{tenantName}} convidou você para a escola e sua conta já está criada. Você não precisa se cadastrar: basta escolher uma senha para entrar pela primeira vez.',
     step1: 'Clique no botão abaixo: ele leva você direto para escolher sua senha.',
     step2: 'Complete seu perfil em poucos passos.',
-    step3: 'Pronto: você já pode entrar na sala de aula quando quiser.',
+    step3: 'Pronto: você já pode entrar na escola quando quiser.',
     validityNote: 'Leva menos de um minuto · o link é pessoal e vale por {{validez}}.',
     validityText: 'O link é pessoal e vale por {{validez}}.',
     linkFallback: 'O botão não funciona? Copie este link no seu navegador:',
     help: 'Se você travar em algum passo, responda a este e-mail e nós ajudamos.',
     cta: 'Criar minha senha e entrar',
-    footerNote: 'Você recebe este e-mail porque {{tenantName}} cadastrou você na sala de aula.',
+    footerNote: 'Você recebe este e-mail porque {{tenantName}} cadastrou você na escola.',
     dayOne: 'dia',
     dayMany: 'dias',
   },
