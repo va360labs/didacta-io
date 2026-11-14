@@ -68,7 +68,8 @@ export interface MembershipStats {
 }
 
 export interface MembershipPage {
-  headline: string;
+  /** `null`: sin titular propio → el de por defecto del catálogo, en el idioma del aula. */
+  headline: string | null;
   subheadline: string | null;
   plans: MembershipPlan[];
   courses: MembershipCourse[];
@@ -87,6 +88,7 @@ export interface MembershipPage {
 export interface MembershipConfig {
   tenantId: string;
   active: boolean;
+  /** Vacío: el titular por defecto (lo pone la página pública en el idioma del aula). */
   headline: string;
   subheadline: string | null;
   accessGroupId: string | null;

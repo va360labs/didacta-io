@@ -54,12 +54,6 @@ export const ACADEMY_HOME_MAX_COURSES = 6;
 /** Cursos gratuitos que se nombran en la opción gratuita. */
 export const ACADEMY_HOME_MAX_FREE_COURSES = 3;
 
-/**
- * El titular por defecto de la membresía (default de la columna). No lo ha
- * escrito nadie y está en español: en un aula en inglés sería un texto ajeno.
- */
-const MEMBERSHIP_DEFAULT_HEADLINE = 'Hazte miembro';
-
 /** Equipo del aula: no cuentan para decidir si hay comunidad que enseñar. */
 const STAFF_ROLES = ['super_admin', 'tenant_admin', 'formador'];
 
@@ -402,9 +396,10 @@ export class AcademyHomeService {
     }
     const plan = page.plans.find((p) => p.isFeatured) ?? page.plans[0];
     if (!plan) return null;
-    const headline = page.headline?.trim();
     return {
-      headline: headline && headline !== MEMBERSHIP_DEFAULT_HEADLINE ? headline : null,
+      // `null` si es el de por defecto (vacío o el «Hazte miembro» de antes):
+      // la portada pone entonces el nombre del plan.
+      headline: page.headline,
       subheadline: page.subheadline?.trim() || null,
       plan: {
         name: plan.name,

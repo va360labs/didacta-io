@@ -81,7 +81,8 @@ export type UpdatePlanDto = z.infer<typeof updatePlanSchema>;
 export const membershipConfigSchema = z
   .object({
     active: z.boolean(),
-    headline: z.string().trim().min(1).max(120),
+    /** Vacío = el titular por defecto, que la web pone en el idioma del aula. */
+    headline: z.string().trim().max(120),
     subheadline: z.string().trim().max(300).nullable(),
     accessGroupId: z.string().uuid().nullable(),
     showCourses: z.boolean(),

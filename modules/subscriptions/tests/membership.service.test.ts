@@ -597,6 +597,29 @@ describe('MembershipService · página pública', () => {
     ];
   });
 
+  // El titular por defecto ya no se guarda en español: lo pone la web desde su
+  // catálogo en el idioma del aula. Las filas viejas con «Hazte miembro» (el
+  // default de la columna de antes) se leen igual como «sin titular propio».
+  it('sin titular propio, la página pública lo deja en null (la web pone el del idioma del aula)', async () => {
+    await ctx.service.updateConfig(TENANT, { active: true });
+    expect(ctx.prisma.configs.get(TENANT)?.headline).toBe('Hazte miembro');
+    expect((await ctx.service.getPublicPage(TENANT)).headline).toBeNull();
+    await ctx.service.updateConfig(TENANT, { headline: '' });
+    expect((await ctx.service.getPublicPage(TENANT)).headline).toBeNull();
+  });
+
+  it('el titular que escribe el aula se respeta tal cual', async () => {
+    await ctx.service.updateConfig(TENANT, { active: true, headline: '  Join the studio  ' });
+    expect((await ctx.service.getPublicPage(TENANT)).headline).toBe('Join the studio');
+  });
+
+  it('el admin ve el titular por defecto como vacío (y su catálogo de placeholder)', async () => {
+    expect((await ctx.service.getConfig(TENANT)).headline).toBe('');
+    const saved = await ctx.service.updateConfig(TENANT, { headline: 'Únete al taller' });
+    expect(saved.headline).toBe('Únete al taller');
+    expect((await ctx.service.getConfig(TENANT)).headline).toBe('Únete al taller');
+  });
+
   it('página inactiva → MembershipPageInactiveError', async () => {
     await expect(ctx.service.getPublicPage(TENANT)).rejects.toBeInstanceOf(
       MembershipPageInactiveError,
