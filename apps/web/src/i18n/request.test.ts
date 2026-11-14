@@ -18,6 +18,8 @@ import es from './messages/es';
 import pt from './messages/pt';
 
 const cookie: { value: string | undefined } = { value: undefined };
+/** Idioma del aula del host (lo que respondería `GET /tenancy/locale`). */
+const academy: { value: 'es' | 'en' | 'pt' | null } = { value: null };
 
 vi.mock('next/headers', () => ({
   cookies: async () => ({
@@ -26,6 +28,12 @@ vi.mock('next/headers', () => ({
         ? { name, value: cookie.value }
         : undefined,
   }),
+  headers: async () => new Headers({ host: 'aula.example.test' }),
+}));
+
+vi.mock('@/lib/academy-locale', () => ({
+  publicHost: () => 'aula.example.test',
+  getAcademyLocale: async () => academy.value,
 }));
 
 // `getRequestConfig` solo envuelve la función para que el plugin la descubra.
@@ -45,6 +53,7 @@ async function resolveWithCookie(value: string | undefined): Promise<RequestConf
 describe('i18n/request · cookie → catálogo servido', () => {
   beforeEach(() => {
     cookie.value = undefined;
+    academy.value = null;
   });
 
   it('cookie pt-BR → locale pt-BR y el catálogo PORTUGUÉS', async () => {
@@ -85,7 +94,18 @@ describe('i18n/request · cookie → catálogo servido', () => {
     }
   });
 
-  it('CAMINO DEGRADADO: sin cookie, o con un idioma sin catálogo → es-ES', async () => {
+  it('sin cookie, un aula en portugués pinta en pt-BR (visitantes de la venta, el acceso…)', async () => {
+    academy.value = 'pt';
+    for (const value of [undefined, 'fr-FR']) {
+      const cfg = await resolveWithCookie(value);
+      expect(cfg.locale, String(value)).toBe('pt-BR');
+      expect(cfg.messages, String(value)).toBe(pt);
+    }
+    // La cookie del visitante sigue mandando sobre el idioma del aula.
+    expect((await resolveWithCookie('es-ES')).messages).toBe(es);
+  });
+
+  it('CAMINO DEGRADADO: sin cookie ni idioma del aula, o con un idioma sin catálogo → es-ES', async () => {
     for (const value of [undefined, '', 'fr-FR', 'zz', '; DROP TABLE']) {
       const cfg = await resolveWithCookie(value);
       expect(cfg.locale, String(value)).toBe('es-ES');

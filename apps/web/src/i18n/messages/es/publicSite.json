@@ -205,5 +205,9 @@
     "loadError": "No hemos podido cargar las condiciones de la compra y sin ellas no se puede pagar.",
     "retry": "Reintentar",
     "mustTick": "Marca la casilla para continuar"
+  },
+  "siteNotFound": {
+    "title": "Página no encontrada",
+    "body": "La dirección que has pedido no existe en este sitio."
   }
 }

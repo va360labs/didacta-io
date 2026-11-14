@@ -205,5 +205,9 @@
     "loadError": "We couldn't load the purchase terms, and you can't pay without them.",
     "retry": "Try again",
     "mustTick": "Tick the box to continue"
+  },
+  "siteNotFound": {
+    "title": "Page not found",
+    "body": "The address you requested does not exist on this site."
   }
 }
