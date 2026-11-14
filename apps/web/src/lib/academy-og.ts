@@ -10,16 +10,17 @@ import { ACADEMY_OG_PATH } from './academy-mark';
 import { requestOrigin } from './seo-server';
 
 /**
- * Vista previa POR DEFECTO al compartir una página del aula que no trae imagen
- * propia (/join, el acceso, la solicitud de acceso): la que sirve
- * `app/academy-brand/og` —su portada, su logo o sus iniciales sobre su color—,
- * nunca la marca de Didacta.
+ * Vista previa POR DEFECTO al compartir una página de venta del aula que no
+ * trae imagen propia (/join): la que sirve `app/academy-brand/og` —su portada,
+ * su logo o sus iniciales sobre su color—, nunca la marca de Didacta. La
+ * portada, el catálogo y las fichas ponen la suya con el mismo destino.
  *
- * Va en el `generateMetadata` de cada página y NO en el layout raíz a
- * propósito: un `generateMetadata` en la raíz hace dinámicos (en streaming) los
- * metadatos de TODAS las páginas, y el `<title>` de pantallas como /calendar
- * se quedaba pintado en el `<body>` (lo cazó `redesign-smoke`). El favicon sí va
- * en la raíz: es una ruta relativa, no necesita el dominio.
+ * Lleva el dominio de la petición (`headers()`), así que los metadatos de la
+ * página pasan a calcularse por petición y Next los envía en streaming (el
+ * `<title>` puede llegar en el `<body>`, como ya pasaba en la portada y las
+ * fichas). Por eso NO va en el layout raíz ni en pantallas que no se comparten
+ * (acceso, cuenta, la app): allí el `<title>` sigue en el `<head>`, donde lo
+ * vigila `TenantTitle`. El favicon sí va en la raíz: es una ruta relativa.
  */
 export async function academyOgDefaults(): Promise<Metadata> {
   const h = await headers();

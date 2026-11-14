@@ -6,13 +6,11 @@
 import { getTranslations } from 'next-intl/server';
 import { SignInForm } from './signin-form';
 import { AuthHeading } from '../auth-heading';
-import { academyOgDefaults } from '@/lib/academy-og';
 
 export async function generateMetadata() {
   const t = await getTranslations('auth');
   return {
     title: t('signin.metaTitle'),
-    ...(await academyOgDefaults()),
   };
 }
 

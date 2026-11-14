@@ -6,11 +6,10 @@
 import type { Metadata } from 'next';
 import { getTranslations } from 'next-intl/server';
 import { InscripcionForm } from './inscripcion-form';
-import { academyOgDefaults } from '@/lib/academy-og';
 
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getTranslations('publicSite');
-  return { title: t('inscripcion.metaTitle'), ...(await academyOgDefaults()) };
+  return { title: t('inscripcion.metaTitle') };
 }
 
 /**

@@ -55,8 +55,8 @@ const figtree = Figtree({
  * color) — nunca el logo de Didacta. Es una ruta relativa: no necesita conocer
  * el dominio, así que los metadatos de la raíz siguen siendo estáticos (un
  * `generateMetadata` aquí los haría dinámicos en todas las páginas: ver
- * `lib/academy-og.ts`). La vista previa en redes por defecto la pone cada
- * página compartible (`academyOgDefaults`).
+ * `lib/academy-og.ts`). La vista previa en redes por defecto la ponen las
+ * páginas de venta (portada, catálogo, fichas y /join).
  */
 export const metadata: Metadata = {
   title: {
