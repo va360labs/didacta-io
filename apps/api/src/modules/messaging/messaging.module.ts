@@ -32,7 +32,9 @@ import { MessagingStreamService } from './messaging-stream.service';
     { provide: APP_FILTER, useClass: MessagingErrorFilter },
   ],
   // La presencia es del aula entera (ADR-019): la barra lateral de la comunidad
-  // lee la MISMA instancia (su espejo local es el único dato sin Redis).
-  exports: [MessagingPresenceService],
+  // lee la MISMA instancia (su espejo local es el único dato sin Redis). El
+  // publicador en tiempo real lo usa mod.retention para que un mensaje
+  // automático aparezca al momento, igual que uno escrito a mano.
+  exports: [MessagingPresenceService, MessagingRealtimePublisher],
 })
 export class MessagingModule {}

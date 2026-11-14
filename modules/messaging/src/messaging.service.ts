@@ -783,6 +783,97 @@ export class MessagingService {
     }
   }
 
+  // ── Lecturas para otros módulos ────────────────────────────────────────────
+
+  /**
+   * Mensajes directos que alguien de `authorIds` le ha escrito a `toUserId`
+   * desde `since` (solo directos: las salas y el canal de profesores no
+   * cuentan). Lo usa mod.retention para no mandar un mensaje automático justo
+   * después de uno que el equipo escribió a mano.
+   */
+  async recentDirectMessagesTo(
+    tenantId: string,
+    authorIds: string[],
+    toUserId: string,
+    since: Date,
+  ): Promise<Array<{ messageId: string; createdAt: Date }>> {
+    const authors = authorIds.filter((a) => a !== toUserId);
+    if (authors.length === 0) return [];
+    const convs = (await this.prisma.modMessagingConversation.findMany({
+      where: { tenantId, type: 'DM', dmKey: { in: authors.map((a) => dmKeyOf(a, toUserId)) } },
+      select: { id: true },
+    })) as Array<{ id: string }>;
+    if (convs.length === 0) return [];
+    const rows = (await this.prisma.modMessagingMessage.findMany({
+      where: {
+        tenantId,
+        conversationId: { in: convs.map((c) => c.id) },
+        authorId: { in: authors },
+        createdAt: { gte: since },
+        deletedAt: null,
+      },
+      select: { id: true, createdAt: true },
+      orderBy: { createdAt: 'desc' },
+      take: 50,
+    })) as Array<{ id: string; createdAt: Date }>;
+    return rows.map((r) => ({ messageId: r.id, createdAt: r.createdAt }));
+  }
+
+  /**
+   * Lectura y respuesta de una persona en varias conversaciones: hasta dónde
+   * ha leído (`lastReadAt`) y su primer mensaje desde `since`. Devuelve uno por
+   * elemento y en el mismo orden. Lo usa mod.retention para medir si un
+   * mensaje automático se leyó y se contestó.
+   */
+  async readReceipts(
+    tenantId: string,
+    items: Array<{ conversationId: string; userId: string; since: Date }>,
+  ): Promise<
+    Array<{
+      conversationId: string;
+      userId: string;
+      lastReadAt: Date | null;
+      repliedAt: Date | null;
+    }>
+  > {
+    if (items.length === 0) return [];
+    const conversationIds = [...new Set(items.map((i) => i.conversationId))];
+    const userIds = [...new Set(items.map((i) => i.userId))];
+    const minSince = new Date(Math.min(...items.map((i) => i.since.getTime())));
+    const [participants, replies] = await Promise.all([
+      this.prisma.modMessagingParticipant.findMany({
+        where: { tenantId, conversationId: { in: conversationIds }, userId: { in: userIds } },
+        select: { conversationId: true, userId: true, lastReadAt: true },
+      }) as Promise<Array<{ conversationId: string; userId: string; lastReadAt: Date | null }>>,
+      this.prisma.modMessagingMessage.findMany({
+        where: {
+          tenantId,
+          conversationId: { in: conversationIds },
+          authorId: { in: userIds },
+          createdAt: { gte: minSince },
+          deletedAt: null,
+        },
+        select: { conversationId: true, authorId: true, createdAt: true },
+        orderBy: { createdAt: 'asc' },
+        take: 5000,
+      }) as Promise<Array<{ conversationId: string; authorId: string; createdAt: Date }>>,
+    ]);
+    return items.map((it) => ({
+      conversationId: it.conversationId,
+      userId: it.userId,
+      lastReadAt:
+        participants.find((p) => p.conversationId === it.conversationId && p.userId === it.userId)
+          ?.lastReadAt ?? null,
+      repliedAt:
+        replies.find(
+          (r) =>
+            r.conversationId === it.conversationId &&
+            r.authorId === it.userId &&
+            r.createdAt.getTime() >= it.since.getTime(),
+        )?.createdAt ?? null,
+    }));
+  }
+
   /**
    * Destinatarios del indicador «está escribiendo» (ADR-019): los mismos que
    * los de un mensaje, tras verificar que el llamante participa. El evento no

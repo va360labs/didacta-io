@@ -9,6 +9,7 @@ import { useTranslations } from 'next-intl';
 import { AuthorNameLink, CommunityAvatar } from '@/components/community-avatar';
 import type { MessageView } from './client';
 import { dayLabel, timeLabel } from './shared';
+import { splitLinks } from './linkify';
 
 /**
  * Timeline de burbujas de una conversación, compartido por `/messages` y por el
@@ -110,7 +111,23 @@ export function MessageBubble({
         {msg.deletedAt ? (
           <p className="text-sm italic opacity-70">{t('messageDeleted')}</p>
         ) : (
-          <p className="whitespace-pre-wrap break-words text-sm leading-relaxed">{msg.body}</p>
+          <p className="whitespace-pre-wrap break-words text-sm leading-relaxed">
+            {splitLinks(msg.body).map((part, i) =>
+              part.type === 'link' ? (
+                <a
+                  key={i}
+                  href={part.href}
+                  target="_blank"
+                  rel="noopener noreferrer nofollow"
+                  className="underline underline-offset-2 [overflow-wrap:anywhere]"
+                >
+                  {part.href}
+                </a>
+              ) : (
+                <span key={i}>{part.value}</span>
+              ),
+            )}
+          </p>
         )}
         <p
           className={`mt-0.5 text-right text-[10px] ${own ? 'text-text-on-brand/70' : 'text-text-subtle'}`}
