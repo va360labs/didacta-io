@@ -5,9 +5,9 @@
  * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
  */
 
-import Image from 'next/image';
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
+import { AcademyMark } from '@/components/academy-mark';
 import { Icon } from '@/components/icon';
 import {
   ACADEMY_LOCALE_NAMES,
@@ -35,6 +35,7 @@ type Offer = 'course' | 'membership';
  */
 export function AltaSencilla() {
   const t = useTranslations('modoSencillo.alta');
+  const tCommon = useTranslations('common');
   const locale = useLocale();
   const { tenant } = useTenantContext();
   const [host, setHost] = useState('');
@@ -145,11 +146,17 @@ export function AltaSencilla() {
         className="flex min-h-dvh flex-col px-5 pt-5 pb-8 lg:min-h-0 lg:px-16 lg:pt-8"
       >
         <div className="flex items-center justify-between">
-          <span className="flex items-center gap-2 text-[15px] font-extrabold text-text-muted">
-            <span className="grid h-6 w-6 place-items-center rounded-md bg-[#1E5AA8]">
-              <Image src="/brand/anagrama.png" alt="" width={14} height={14} />
-            </span>
-            Didacta
+          {/* La marca del aula según la escribe (nunca la de Didacta): neutra
+              hasta que tenga nombre, sus iniciales en cuanto lo tiene. */}
+          <span className="flex min-w-0 items-center gap-2 text-[15px] font-extrabold text-text-muted">
+            <AcademyMark
+              name={nombre}
+              hue={tenant?.brandHue}
+              saturation={tenant?.brandSaturation}
+              size={24}
+              className="rounded-md"
+            />
+            <span className="truncate">{nombre.trim() || tCommon('academyBrand.unnamed')}</span>
           </span>
           <span className="text-sm font-semibold text-text-subtle">
             {t('pregunta', { n: paso })}
@@ -403,9 +410,12 @@ export function AltaSencilla() {
           </p>
           <div className="overflow-hidden rounded-2xl border border-border bg-surface shadow-lg">
             <div className="flex items-center gap-2.5 border-b border-border px-4 py-3">
-              <span className="grid h-8 w-8 place-items-center rounded-lg bg-[#1E5AA8]">
-                <Image src="/brand/anagrama.png" alt="" width={16} height={16} />
-              </span>
+              <AcademyMark
+                name={nombre}
+                hue={tenant?.brandHue}
+                saturation={tenant?.brandSaturation}
+                size={32}
+              />
               <strong className="truncate text-[15px] text-text">
                 {nombre.trim() || t('q1Label')}
               </strong>

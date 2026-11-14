@@ -7,6 +7,7 @@
 
 import { useRef, useState, type DragEvent } from 'react';
 import { useTranslations } from 'next-intl';
+import { AcademyMark } from '@/components/academy-mark';
 import { Icon } from '@/components/icon';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -148,8 +149,6 @@ export function PasoMarca({
     const file = e.dataTransfer.files?.[0];
     if (file) void subir(file);
   }
-
-  const inicial = (academia?.name ?? 'A').slice(0, 1).toUpperCase();
 
   return (
     <div className="space-y-6">
@@ -380,12 +379,14 @@ export function PasoMarca({
                 }
               />
             ) : (
-              <span
-                className="grid h-6 w-6 place-items-center rounded text-xs font-bold text-white"
-                style={{ backgroundColor: `hsl(${hue} ${sat}% 45%)` }}
-              >
-                {inicial}
-              </span>
+              // Sin logo, sus iniciales sobre su color: lo mismo que verá el aula.
+              <AcademyMark
+                name={academia?.name}
+                hue={hue}
+                saturation={sat}
+                size={24}
+                className="rounded"
+              />
             )}
             {(!logoUrl || modo === 'logo_and_name') && (
               <span className="text-sm font-semibold">{academia?.name}</span>

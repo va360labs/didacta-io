@@ -24,6 +24,7 @@
 import { usePathname } from 'next/navigation';
 import { useCallback, useEffect, useState, type CSSProperties, type ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
+import { AcademyMark } from '@/components/academy-mark';
 import { Icon, type IconName } from '@/components/icon';
 import { authStorage, type StoredSession } from '@/lib/auth-storage';
 import { clearIntendedPath } from '@/lib/post-login-redirect';
@@ -202,6 +203,15 @@ export function SubscriptionLockScreen({
                     ? 'h-10 w-auto max-w-[96px] object-contain object-left lg:h-12'
                     : 'h-10 w-auto max-w-[220px] object-contain object-left lg:h-14'
                 }
+              />
+            ) : tenant && !tenantLoading ? (
+              // Sin logo, sus iniciales sobre su color (nunca el de Didacta).
+              <AcademyMark
+                name={tenant.name}
+                hue={tenant.brandHue}
+                saturation={tenant.brandSaturation}
+                size={44}
+                className="rounded-[12px]"
               />
             ) : null}
             {/* Sin el contexto todavía, un hueco del mismo tamaño: aquí nunca

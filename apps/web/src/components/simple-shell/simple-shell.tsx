@@ -5,7 +5,6 @@
  * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
  */
 
-import Image from 'next/image';
 import Link from 'next/link';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
@@ -15,6 +14,7 @@ import {
   AgentPanelTab,
   useAgentPanel,
 } from '@/components/agent-panel/agent-panel';
+import { AcademyMark } from '@/components/academy-mark';
 import type { SidebarGroup } from '@/components/app-sidebar';
 import { CommandPalette } from '@/components/command-palette';
 import { Icon } from '@/components/icon';
@@ -59,8 +59,8 @@ interface Props {
  * a la barra lateral solo en las aulas en modo sencillo; las páginas son las
  * mismas.
  *
- * Marca por defecto: la de Didacta (anagrama sobre su azul y el tema por
- * defecto). Cuando el creador sube su logo o cambia el color, mandan los suyos.
+ * Marca por defecto: las iniciales del aula sobre su color (`AcademyMark`),
+ * nunca el logo de Didacta. Cuando el creador sube su logo, manda el suyo.
  */
 export function SimpleShell({
   session,
@@ -360,10 +360,14 @@ function BrandLink({ href, session }: { href: string; session: StoredSession }) 
           )}
         />
       ) : (
-        // Por defecto, la marca de Didacta: su anagrama sobre su azul.
-        <span className="grid h-9 w-9 shrink-0 place-items-center rounded-[10px] bg-[#1E5AA8]">
-          <Image src="/brand/anagrama.png" alt="" width={20} height={20} priority />
-        </span>
+        // Sin logo: sus iniciales sobre su color, nunca el logo de Didacta.
+        <AcademyMark
+          name={name}
+          hue={theme?.brandHue ?? tenant?.brandHue}
+          saturation={theme?.brandSaturation ?? tenant?.brandSaturation}
+          size={36}
+          className="rounded-[10px]"
+        />
       )}
       {onlyLogo ? null : <span className="truncate text-[16px] font-bold text-text">{name}</span>}
     </Link>

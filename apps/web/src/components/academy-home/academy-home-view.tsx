@@ -5,7 +5,9 @@
 
 import { getLocale, getTranslations } from 'next-intl/server';
 import type { ReactNode } from 'react';
+import { AcademyMark } from '@/components/academy-mark';
 import { Icon } from '@/components/icon';
+import { PoweredByDidacta } from '@/components/powered-by-didacta';
 import { SocialIcon } from '@/components/social-icon';
 import {
   brandStyle,
@@ -252,15 +254,8 @@ export async function AcademyHomeView({ home, refCode, preview }: Props) {
           </section>
         ) : null}
 
-        <footer className="mt-16 border-t border-border pt-6 text-center text-xs text-text-subtle">
-          <a
-            href={`https://didacta.io/${locale.toLowerCase().startsWith('es') ? 'es' : 'en'}`}
-            target="_blank"
-            rel="noopener"
-            className="hover:text-text-muted hover:underline"
-          >
-            {t('portada.poweredBy')}
-          </a>
+        <footer className="mt-16 border-t border-border pt-6">
+          <PoweredByDidacta slug={academy.slug ?? null} className="text-xs" />
         </footer>
       </main>
     </div>
@@ -281,9 +276,12 @@ function Brand({ academy }: { academy: AcademyHome['academy'] }) {
           }
         />
       ) : (
-        <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-brand-600 text-sm font-extrabold text-white">
-          {initialsOf(academy.name)}
-        </span>
+        <AcademyMark
+          name={academy.name}
+          hue={academy.brandHue}
+          saturation={academy.brandSaturation}
+          size={36}
+        />
       )}
       {wordmark ? null : (
         <span className="hidden truncate text-[17px] font-bold text-text min-[420px]:inline">

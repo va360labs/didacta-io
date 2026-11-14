@@ -7,6 +7,8 @@
 
 import type { CSSProperties, ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
+import { AcademyMark } from '@/components/academy-mark';
+import { PoweredByDidacta } from '@/components/powered-by-didacta';
 import { formatNumber } from '@/lib/i18n/format';
 import { useTenantContext } from '@/lib/tenant-context';
 
@@ -22,8 +24,11 @@ import { useTenantContext } from '@/lib/tenant-context';
  *  - Las dos cifras son COUNT reales del tenant (miembros activos, cursos
  *    publicados). Si un contador viene a 0, ese tile no se pinta.
  *
- * Sin tenant resuelto (dominio no mapeado, API caída) el panel sigue en pie con
- * la marca Didacta y sin cifras — el formulario nunca depende de esto.
+ * Sin logo, las iniciales del aula sobre su color (`AcademyMark`). Sin tenant
+ * resuelto (dominio no mapeado, API caída) el panel sigue en pie con una marca
+ * neutra y sin cifras — el formulario nunca depende de esto. Didacta solo sale
+ * en el pie («Powered by Didacta — Crea tu academia gratis»), nunca como marca
+ * del aula (decisión de Valentín, 14-nov-2026).
  */
 
 /** Mismo azul noche + tinte del sidebar: el panel es la misma superficie de marca. */
@@ -35,7 +40,9 @@ const BRAND_PANEL_STYLE: CSSProperties = {
 
 export default function AuthLayout({ children }: { children: ReactNode }) {
   const t = useTranslations('auth');
-  const { tenant } = useTenantContext();
+  const tCommon = useTranslations('common');
+  const { tenant, loading: tenantLoading } = useTenantContext();
+  const academyName = tenant?.name?.trim() || tCommon('academyBrand.unnamed');
   const stats = tenant?.stats;
   // Copy por defecto cuando el tenant no configuró el suyo. Deliberadamente
   // neutro: no promete módulos que ese tenant puede no tener contratados.
@@ -80,12 +87,27 @@ export default function AuthLayout({ children }: { children: ReactNode }) {
                     : 'h-10 w-auto max-w-[220px] object-contain object-left lg:h-14'
                 }
               />
-            ) : null}
+            ) : tenantLoading ? (
+              // Sin el contexto todavía, un hueco del tamaño de la marca: aquí
+              // nunca se enseña una marca que no es la del aula.
+              <span aria-hidden="true" className="block h-11 w-11 rounded-[12px] bg-white/10" />
+            ) : (
+              <AcademyMark
+                name={tenant?.name}
+                neutral={!tenant}
+                hue={tenant?.brandHue}
+                saturation={tenant?.brandSaturation}
+                size={44}
+                className="rounded-[12px]"
+              />
+            )}
             {/* El nombre en texto acompaña al logo solo en modo «logo y
                 nombre»; en «solo el logo» el wordmark ya va dentro. */}
-            {!tenant?.logoUrl || tenant.logoDisplayMode === 'logo_and_name' ? (
+            {tenantLoading ? (
+              <span aria-hidden="true" className="block h-7 w-40 rounded bg-white/10 lg:h-9" />
+            ) : !tenant?.logoUrl || tenant.logoDisplayMode === 'logo_and_name' ? (
               <span className="font-display text-2xl font-extrabold tracking-tight lg:text-3xl">
-                {tenant?.name ?? 'Didacta'}
+                {academyName}
               </span>
             ) : null}
           </div>
@@ -137,13 +159,16 @@ export default function AuthLayout({ children }: { children: ReactNode }) {
           </div>
 
           <p className="hidden text-sm text-white/45 lg:block">
-            {t('layout.privateAccess', { name: tenant?.name ?? 'Didacta' })}
+            {t('layout.privateAccess', { name: academyName })}
           </p>
         </aside>
 
         {/* ---------------- Formulario ---------------- */}
         <section className="flex flex-1 items-center justify-center px-6 py-10 sm:px-10 lg:w-1/2 lg:px-14 lg:py-14">
-          <div className="w-full max-w-[26rem]">{children}</div>
+          <div className="w-full max-w-[26rem]">
+            {children}
+            <PoweredByDidacta className="mt-10" />
+          </div>
         </section>
       </div>
     </main>

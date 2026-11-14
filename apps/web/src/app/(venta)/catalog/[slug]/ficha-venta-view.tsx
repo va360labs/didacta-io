@@ -22,6 +22,7 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useLocale, useTranslations } from 'next-intl';
+import { AcademyMark } from '@/components/academy-mark';
 import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/icon';
 import {
@@ -54,7 +55,12 @@ interface Props {
    */
   description?: ReactNode;
   /** Nombre y logo del aula para la caja de compra mientras llega su contexto. */
-  initialBrand?: { name: string; logoUrl: string | null };
+  initialBrand?: {
+    name: string;
+    logoUrl: string | null;
+    brandHue?: number | null;
+    brandSaturation?: number | null;
+  };
 }
 
 export function FichaVentaView({ initialCourse, description, initialBrand }: Props = {}) {
@@ -230,7 +236,18 @@ export function FichaVentaView({ initialCourse, description, initialBrand }: Pro
                 className="mx-auto h-9 w-auto rounded-lg bg-white/95 p-1"
               />
             ) : (
-              <span className="text-lg font-extrabold text-white">{tenant?.name ?? ''}</span>
+              // Sin logo, sus iniciales sobre su color (nunca el de Didacta).
+              <span className="inline-flex items-center gap-2.5 text-lg font-extrabold text-white">
+                {tenant?.name ? (
+                  <AcademyMark
+                    name={tenant.name}
+                    hue={tenant.brandHue}
+                    saturation={tenant.brandSaturation}
+                    size={36}
+                  />
+                ) : null}
+                {tenant?.name ?? ''}
+              </span>
             )}
             <p className="mt-2 text-sm text-white/70">{t('ficha.oneTimePayment')}</p>
           </div>

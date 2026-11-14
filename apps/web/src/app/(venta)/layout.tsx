@@ -4,12 +4,16 @@
  */
 
 import type { ReactNode } from 'react';
+import { PoweredByDidacta } from '@/components/powered-by-didacta';
 
 /**
  * Layout del route group `(venta)`: páginas públicas de COMPRA (p. ej. /join).
  * Es hermano de `(public)` pero ANCHO (aquel es max-w-lg para wizards): la
  * página de membresía es un layout de dos columnas estilo checkout. Sin gate
  * de sesión — el visitante aún no tiene cuenta.
+ *
+ * Al pie, el único rastro de Didacta en las páginas de venta del aula:
+ * «Powered by Didacta — Crea tu academia gratis» (catálogo, fichas, /join).
  */
 export default function VentaLayout({ children }: { children: ReactNode }) {
   return (
@@ -31,6 +35,7 @@ export default function VentaLayout({ children }: { children: ReactNode }) {
       </div>
       <div className="relative z-10 mx-auto w-full max-w-[1340px] px-4 py-8 md:py-12">
         {children}
+        <PoweredByDidacta className="mt-12" />
       </div>
     </main>
   );

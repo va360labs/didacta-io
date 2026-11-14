@@ -8,13 +8,15 @@
 import { useTranslations } from 'next-intl';
 import Link from 'next/link';
 import { useEffect, useId, useState, type ReactNode } from 'react';
+import { AcademyMark } from '@/components/academy-mark';
 import { CommunityAvatar } from '@/components/community-avatar';
-import { CommunityPoweredBy } from '@/components/community-powered-by';
 import { relTime } from '@/components/community-thread-card';
 import { CommunityUpcomingCard } from '@/components/community-upcoming-card';
 import { Icon } from '@/components/icon';
 import { InviteAndEarnCard } from '@/components/invite-and-earn-card';
+import { PoweredByDidacta } from '@/components/powered-by-didacta';
 import { SocialIcon } from '@/components/social-icon';
+import { useTenantTheme } from '@/components/tenant-theme-provider';
 import { Card, CardContent } from '@/components/ui/card';
 import { formatNumber } from '@/lib/i18n/format';
 import { postPath } from '@/lib/post-link';
@@ -35,7 +37,7 @@ import { useCommunitySidebar } from '@/modules/community/sidebar-client';
  *   3. Próximas citas (directos y eventos).
  *   4. Ranking del mes, top 5.
  *   5. Últimos comentarios.
- *   6. Pie «Powered by Didacta».
+ *   6. Pie «Powered by Didacta — Crea tu academia gratis» (`PoweredByDidacta`).
  *
  * Todo sale de `GET /modules/community/sidebar` (una llamada, cacheada) salvo
  * los bloques que ya tenían la suya (citas, referidos). Un bloque sin datos no
@@ -158,14 +160,15 @@ function SidebarBlocks({
         <RecentCommentsCard comments={data.recentComments} onOpenComment={onOpenComment} />
       ) : null}
       {extra}
-      <CommunityPoweredBy />
+      <PoweredByDidacta className="px-1" />
     </>
   );
 }
 
 // ── Tarjeta de la academia ───────────────────────────────────────────────────
 
-function AcademyMark({ academy, size }: { academy: SidebarData['academy']; size: number }) {
+function AcademyLogo({ academy, size }: { academy: SidebarData['academy']; size: number }) {
+  const theme = useTenantTheme();
   const dim = { width: size, height: size };
   if (academy.logoUrl) {
     return (
@@ -178,15 +181,15 @@ function AcademyMark({ academy, size }: { academy: SidebarData['academy']; size:
       </span>
     );
   }
-  // Sin logo: la inicial del nombre sobre el color del aula (nada inventado).
+  // Sin logo: sus iniciales sobre su color (nada inventado, nada de Didacta).
   return (
-    <span
-      aria-hidden="true"
-      className="grid shrink-0 place-items-center rounded-xl bg-brand-600 font-display font-bold text-white"
-      style={{ ...dim, fontSize: Math.round(size * 0.42) }}
-    >
-      {(academy.name.trim()[0] ?? '·').toUpperCase()}
-    </span>
+    <AcademyMark
+      name={academy.name}
+      hue={theme?.brandHue}
+      saturation={theme?.brandSaturation}
+      size={size}
+      className="rounded-xl font-display"
+    />
   );
 }
 
@@ -214,7 +217,7 @@ export function AcademyCard({ data }: { data: SidebarData }) {
                 <img src={academy.logoUrl!} alt="" className="max-h-10 max-w-full object-contain" />
               </span>
             ) : (
-              <AcademyMark academy={academy} size={56} />
+              <AcademyLogo academy={academy} size={56} />
             )}
           </span>
         </div>
@@ -232,7 +235,7 @@ export function AcademyCard({ data }: { data: SidebarData }) {
             <img src={academy.logoUrl!} alt="" className="max-h-14 max-w-full object-contain" />
           ) : (
             <span className="rounded-2xl shadow-sm">
-              <AcademyMark academy={academy} size={60} />
+              <AcademyLogo academy={academy} size={60} />
             </span>
           )}
         </div>

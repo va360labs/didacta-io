@@ -23,6 +23,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { useLocale, useTranslations } from 'next-intl';
+import { AcademyMark } from '@/components/academy-mark';
 import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/icon';
 import { ApiHttpError } from '@/lib/api-client';
@@ -279,7 +280,14 @@ export function UneteView() {
                   className="mx-auto h-11 w-auto rounded-lg bg-white/95 p-1"
                 />
               ) : tenant?.name ? (
-                <span className="inline-flex items-center rounded-lg border border-white/15 bg-black/25 px-4 py-2 text-xl font-extrabold text-white">
+                // Sin logo, sus iniciales sobre su color (nunca el de Didacta).
+                <span className="inline-flex items-center gap-2.5 rounded-lg border border-white/15 bg-black/25 px-3 py-2 text-xl font-extrabold text-white">
+                  <AcademyMark
+                    name={tenant.name}
+                    hue={tenant.brandHue}
+                    saturation={tenant.brandSaturation}
+                    size={32}
+                  />
                   {tenant.name}
                 </span>
               ) : null}

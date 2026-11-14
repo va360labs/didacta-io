@@ -24,13 +24,14 @@ import { describe, expect, it } from 'vitest';
 const WEB_SRC = path.resolve(__dirname, '..');
 
 const FILES = [
+  'components/academy-mark.tsx',
+  'components/powered-by-didacta.tsx',
   'app/(app)/community/page.tsx',
   'app/(app)/community/[id]/page.tsx',
   'app/(app)/community/mentions/page.tsx',
   'components/community-avatar.tsx',
   'components/community-feed.tsx',
   'components/community-gallery-modal.tsx',
-  'components/community-powered-by.tsx',
   'components/community-sidebar.tsx',
   'components/community-tag-chip.tsx',
   'components/community-thread-card.tsx',

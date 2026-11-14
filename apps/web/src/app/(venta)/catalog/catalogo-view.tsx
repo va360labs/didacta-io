@@ -22,6 +22,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useLocale, useTranslations } from 'next-intl';
+import { AcademyMark } from '@/components/academy-mark';
 import { Icon } from '@/components/icon';
 import { formatDuration } from '@/lib/i18n/format';
 import { useTenantContext } from '@/lib/tenant-context';
@@ -35,7 +36,12 @@ interface Props {
   /** Los cursos a la venta, ya leídos en el servidor. Sin ellos, se piden aquí. */
   initialCourses?: CatalogCourse[];
   /** Nombre y logo del aula para la cabecera mientras llega su contexto. */
-  initialBrand?: { name: string; logoUrl: string | null };
+  initialBrand?: {
+    name: string;
+    logoUrl: string | null;
+    brandHue?: number | null;
+    brandSaturation?: number | null;
+  };
 }
 
 export function CatalogoView({ initialCourses, initialBrand }: Props = {}) {
@@ -105,9 +111,17 @@ export function CatalogoView({ initialCourses, initialBrand }: Props = {}) {
             className="mx-auto h-12 w-auto rounded-lg bg-white/95 p-1"
           />
         ) : tenant?.name ? (
-          <span className="inline-flex items-center rounded-lg border border-border bg-surface px-4 py-2 text-xl font-extrabold text-text">
-            {tenant.name}
-          </span>
+          // Sin logo, sus iniciales sobre su color en el hueco del logo
+          // (nunca el de Didacta) y el nombre debajo.
+          <div className="flex flex-col items-center gap-2">
+            <AcademyMark
+              name={tenant.name}
+              hue={tenant.brandHue}
+              saturation={tenant.brandSaturation}
+              size={48}
+            />
+            <span className="text-xl font-extrabold text-text">{tenant.name}</span>
+          </div>
         ) : null}
         <h1 className="font-display text-3xl font-bold tracking-tight text-text">
           {t('catalogo.title')}

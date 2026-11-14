@@ -4,6 +4,7 @@
  */
 
 import type { ReactNode } from 'react';
+import { PoweredByDidacta } from '@/components/powered-by-didacta';
 
 /**
  * Layout del route group `(public)`. Para pantallas accesibles SIN sesión y
@@ -33,7 +34,10 @@ export default function PublicLayout({ children }: { children: ReactNode }) {
         />
       </div>
 
-      <div className="relative z-10 w-full max-w-lg py-8">{children}</div>
+      <div className="relative z-10 w-full max-w-lg py-8">
+        {children}
+        <PoweredByDidacta className="mt-8" />
+      </div>
     </main>
   );
 }
