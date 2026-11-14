@@ -111,7 +111,10 @@ export class CertificatesController {
     @Res() reply: FastifyReply,
   ) {
     const u = requireTemplateEditor(user);
-    const pdf = await this.registry.getCertificatesService().renderTemplatePreview(u.tenantId, dto);
+    // La vista previa sale en el idioma de quien la mira.
+    const pdf = await this.registry
+      .getCertificatesService()
+      .renderTemplatePreview(u.tenantId, dto, u.sub);
     void reply
       .header('Content-Type', 'application/pdf')
       .header('Content-Disposition', 'inline; filename="preview.pdf"')
