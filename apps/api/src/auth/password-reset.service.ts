@@ -12,6 +12,7 @@ import { SmtpAdapterService } from '../modules/smtp-adapter.service';
 import { TenantSmtpResolverService } from '../modules/tenant-smtp-resolver.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { runAsTenant, runSanctionedGlobalAccess } from '../tenancy/tenant-context.storage';
+import { academyOwnerWelcomeEmail, newAccessLinkEmail } from '../common/academy-access-email';
 import { invitationEmailHtml } from '../common/invitation-email';
 import {
   renderBrandedEmail,
@@ -40,6 +41,37 @@ import { PasswordService } from './password.service';
 
 const TOKEN_TTL_MINUTES = 60;
 const TOKEN_RAW_BYTES = 32;
+
+/**
+ * Validez de los enlaces de PRIMER acceso (bienvenida de la creadora, alta tras
+ * compra, invitación): quien los recibe puede abrirlos días después. El
+ * restablecimiento que uno mismo acaba de pedir sigue en 60 minutos.
+ */
+export const FIRST_ACCESS_TTL_MINUTES = 7 * 24 * 60;
+
+/** Qué correo acompaña al enlace. El token es el mismo en todos. */
+export type AccessEmailKind = 'reset' | 'invitation' | 'academy_owner' | 'new_link';
+
+/** Estado de un enlace de acceso, para que la pantalla diga lo que pasa ANTES de teclear. */
+export type ResetTokenStatus = 'valid' | 'expired' | 'used' | 'invalid';
+
+/**
+ * Ruta interna a la que llevar tras el primer acceso (`?next=`): solo rutas
+ * propias, sin protocolo ni `//`. La web la vuelve a sanear al usarla.
+ */
+const NEXT_PATH_RE = /^\/(?!\/)[A-Za-z0-9/_\-.%]*$/;
+
+export function safeNextPath(next: string | null | undefined): string | null {
+  if (!next || next.length > 300 || !NEXT_PATH_RE.test(next)) return null;
+  return next;
+}
+
+/** Enlace de «define tu contraseña», con el destino tras entrar si lo hay. */
+export function accessLink(webBaseUrl: string, rawToken: string, next?: string | null): string {
+  const base = `${webBaseUrl.replace(/\/$/, '')}/reset-password?token=${encodeURIComponent(rawToken)}`;
+  const safe = safeNextPath(next);
+  return safe ? `${base}&next=${encodeURIComponent(safe)}` : base;
+}
 
 /** Key del catálogo de plantillas que corresponde a este email. */
 const RESET_TEMPLATE_KEY = 'auth.password_reset';
@@ -214,7 +246,7 @@ export class PasswordResetService {
     rawToken: string,
     newPassword: string,
     ctx: ClientContext = NO_CLIENT_CONTEXT,
-  ): Promise<void> {
+  ): Promise<{ email: string; tenantSlug: string | null }> {
     const tokenHash = this.hashToken(rawToken);
     // RLS F2: lookup por hash del token ANTES de conocer el tenant —
     // sancionado (inventario del flip F3). El consumo corre bajo el tenant
@@ -254,12 +286,12 @@ export class PasswordResetService {
     record: { id: string; userId: string; tenantId: string },
     newPassword: string,
     ctx: ClientContext,
-  ): Promise<void> {
+  ): Promise<{ email: string; tenantSlug: string | null }> {
     const passwordHash = await this.passwords.hash(newPassword);
 
     const owner = await this.prisma.user.findUnique({
       where: { id: record.userId },
-      select: { status: true, passwordHash: true },
+      select: { status: true, passwordHash: true, email: true },
     });
     const activarInvitado = owner?.status === 'PENDING' && owner.passwordHash === null;
 
@@ -284,6 +316,86 @@ export class PasswordResetService {
       ip: ctx.ip ?? undefined,
       userAgent: ctx.userAgent ?? undefined,
     });
+
+    // Lo que necesita la web para entrar YA con la contraseña recién elegida
+    // (sin volver a pedir el correo). Quien tiene el token acaba de demostrar
+    // que es el dueño del buzón: devolverle su propio correo no revela nada.
+    const tenant = await this.prisma.tenant.findUnique({
+      where: { id: record.tenantId },
+      select: { slug: true },
+    });
+    return { email: owner?.email ?? '', tenantSlug: tenant?.slug ?? null };
+  }
+
+  /**
+   * Qué le pasa a un enlace, sin consumirlo. La pantalla lo pregunta al abrirse
+   * para no hacer teclear una contraseña con un enlace que ya no sirve.
+   */
+  async inspect(rawToken: string): Promise<ResetTokenStatus> {
+    const record = await runSanctionedGlobalAccess(() =>
+      this.prisma.passwordResetToken.findUnique({
+        where: { tokenHash: this.hashToken(rawToken) },
+      }),
+    );
+    if (!record) return 'invalid';
+    if (record.usedAt) return 'used';
+    if (record.expiresAt.getTime() < Date.now()) return 'expired';
+    return 'valid';
+  }
+
+  /**
+   * Un clic desde un enlace CADUCADO y sin usar: se manda uno nuevo al buzón de
+   * esa cuenta (nunca a otro: el correo sale de la fila, no de la petición) con
+   * la misma validez que tenía el caducado (7 días el de primer acceso, 60
+   * minutos el de restablecer).
+   *
+   * Un enlace caducado solo sirve para UN reenvío: se marca usado al reenviar,
+   * así que no se puede usar para bombardear un buzón. Con un enlace vigente,
+   * usado o inexistente no hace nada. La respuesta al llamante es siempre la
+   * misma.
+   */
+  async resendExpired(
+    rawToken: string,
+    webBaseUrl: (tenantId: string) => Promise<string> | string,
+    ctx: ClientContext = NO_CLIENT_CONTEXT,
+    next?: string | null,
+  ): Promise<void> {
+    const record = await runSanctionedGlobalAccess(() =>
+      this.prisma.passwordResetToken.findUnique({
+        where: { tokenHash: this.hashToken(rawToken) },
+      }),
+    );
+    if (!record || record.usedAt || record.expiresAt.getTime() >= Date.now()) return;
+
+    const originalTtl = Math.round(
+      (record.expiresAt.getTime() - record.createdAt.getTime()) / 60_000,
+    );
+    const ttlMinutes = Math.min(FIRST_ACCESS_TTL_MINUTES, Math.max(TOKEN_TTL_MINUTES, originalTtl));
+
+    const owner = await runAsTenant(
+      record.tenantId,
+      async () => {
+        // Primero se quema el caducado: aunque el envío falle, no se reintenta
+        // con el mismo enlace.
+        await this.prisma.passwordResetToken.update({
+          where: { id: record.id },
+          data: { usedAt: new Date() },
+        });
+        return this.prisma.user.findUnique({
+          where: { id: record.userId },
+          select: { email: true },
+        });
+      },
+      { traceLabel: 'pwd-resend' },
+    );
+    if (!owner) return;
+
+    await this.requestAndSendEmail(
+      { email: owner.email, resolvedTenantId: record.tenantId },
+      webBaseUrl,
+      ctx,
+      { allowPending: true, ttlMinutes, kind: 'new_link', next },
+    );
   }
 
   /**
@@ -308,7 +420,16 @@ export class PasswordResetService {
     // su propio copy (bienvenida, pasos para entrar) porque no es lo mismo que
     // un "olvidé mi contraseña" que el usuario acaba de pedir. Compartir el
     // copy obligaba a que un reset sonara a bienvenida.
-    opts: { allowPending?: boolean; ttlMinutes?: number; asInvitation?: boolean } = {},
+    // `kind` dice qué correo va (bienvenida de la creadora, enlace nuevo…);
+    // `asInvitation` es su nombre antiguo y equivale a `kind: 'invitation'`.
+    // `next` es adónde llevar tras el primer acceso (el curso que se compró).
+    opts: {
+      allowPending?: boolean;
+      ttlMinutes?: number;
+      asInvitation?: boolean;
+      kind?: AccessEmailKind;
+      next?: string | null;
+    } = {},
   ): Promise<void> {
     const result = await this.request(args, ctx, opts);
     if (!result) return;
@@ -336,7 +457,13 @@ export class PasswordResetService {
     },
     toEmail: string,
     webBaseUrl: string,
-    opts: { allowPending?: boolean; ttlMinutes?: number; asInvitation?: boolean },
+    opts: {
+      allowPending?: boolean;
+      ttlMinutes?: number;
+      asInvitation?: boolean;
+      kind?: AccessEmailKind;
+      next?: string | null;
+    },
   ): Promise<void> {
     // alpha.75 — pasamos por el TenantSmtpResolverService cuando está
     // disponible. Eso permite que el reset funcione aunque el tenant aún
@@ -404,21 +531,34 @@ export class PasswordResetService {
       RESET_TEMPLATE_KEY,
       result.locale,
     );
-    const { subject, html, text } = opts.asInvitation
-      ? invitationEmailHtml(branding, {
-          greeting: emailGreeting(result.userName, result.locale),
-          resetUrl: `${webBaseUrl.replace(/\/$/, '')}/reset-password?token=${encodeURIComponent(result.rawToken)}`,
-          validezDias: Math.max(1, Math.round((opts.ttlMinutes ?? 60) / (60 * 24))),
-          locale: result.locale,
-        })
-      : this.buildResetEmail(
-          result.rawToken,
-          result.userName,
-          webBaseUrl,
-          branding,
-          result.locale,
-          override,
-        );
+    const kind: AccessEmailKind = opts.kind ?? (opts.asInvitation ? 'invitation' : 'reset');
+    const resetUrl = accessLink(webBaseUrl, result.rawToken, opts.next);
+    const accessContent = {
+      greeting: emailGreeting(result.userName, result.locale),
+      resetUrl,
+      ttlMinutes: opts.ttlMinutes ?? TOKEN_TTL_MINUTES,
+      locale: result.locale,
+    };
+    const { subject, html, text } =
+      kind === 'invitation'
+        ? invitationEmailHtml(branding, {
+            greeting: accessContent.greeting,
+            resetUrl,
+            validezDias: Math.max(1, Math.round((opts.ttlMinutes ?? 60) / (60 * 24))),
+            locale: result.locale,
+          })
+        : kind === 'academy_owner'
+          ? academyOwnerWelcomeEmail(branding, accessContent)
+          : kind === 'new_link'
+            ? newAccessLinkEmail(branding, accessContent)
+            : this.buildResetEmail(
+                result.rawToken,
+                result.userName,
+                webBaseUrl,
+                branding,
+                result.locale,
+                override,
+              );
     const sendResult = await this.smtp.send(
       config,
       { to: toEmail, subject, text, html },

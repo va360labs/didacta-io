@@ -868,6 +868,147 @@ export function resolveInvitationEmailCopy(locale?: string | null): InvitationEm
   return INVITATION_EMAIL_COPY[toHubTemplateLang(locale)];
 }
 
+/**
+ * Bienvenida de quien ACABA DE CREAR su academia (`academy-access-email.ts`):
+ * el correo con el que la creadora define su contraseña y entra por primera
+ * vez. Lo manda el alta de un aula (`POST /admin/tenants`).
+ *
+ * Antes salía con la plantilla de «Restablecer tu contraseña» («si no fuiste
+ * tú, ignóralo, tu contraseña actual sigue intacta», válida 60 minutos): a una
+ * persona que no tiene contraseña y acaba de crear su academia. Mismo
+ * criterio que la invitación: sin entrada en `/admin/emails` (no es un correo
+ * que el aula personalice; lo manda la plataforma al darla de alta).
+ *
+ * Sin «responde a este correo»: sale con el remitente de la PROPIA academia,
+ * así que la respuesta le llegaría a ella misma.
+ */
+export const ACADEMY_OWNER_WELCOME_COPY = {
+  es: {
+    subject: 'Tu academia {{tenantName}} está lista',
+    title: 'Tu academia está lista',
+    introHtml:
+      'Tu academia <strong>{{tenantName}}</strong> ya está creada. Solo te falta elegir tu contraseña para entrar y empezar a prepararla.',
+    introText:
+      'Tu academia {{tenantName}} ya está creada. Solo te falta elegir tu contraseña para entrar y empezar a prepararla.',
+    step1: 'Pulsa el botón: te lleva directo a elegir tu contraseña.',
+    step2: 'Al guardarla entras en tu academia, sin volver a escribir tu correo.',
+    step3: 'Dentro te guiamos paso a paso para prepararla.',
+    validityNote: 'El enlace es personal y vale {{validez}}.',
+    expiredHelp: '¿Ha caducado? Ábrelo igualmente: desde ahí pides uno nuevo con un clic.',
+    linkFallback: '¿No funciona el botón? Copia este enlace en tu navegador:',
+    cta: 'Elegir mi contraseña y entrar',
+    footerNote:
+      'Recibes este correo porque se ha creado la academia {{tenantName}} con esta dirección.',
+  },
+  en: {
+    subject: 'Your academy {{tenantName}} is ready',
+    title: 'Your academy is ready',
+    introHtml:
+      'Your academy <strong>{{tenantName}}</strong> has been created. All that is left is to choose your password to get in and start setting it up.',
+    introText:
+      'Your academy {{tenantName}} has been created. All that is left is to choose your password to get in and start setting it up.',
+    step1: 'Press the button: it takes you straight to choosing your password.',
+    step2: 'Once you save it you are inside your academy, without typing your email again.',
+    step3: 'Inside, we guide you step by step to set it up.',
+    validityNote: 'The link is personal and valid for {{validez}}.',
+    expiredHelp: 'Has it expired? Open it anyway: from there you can get a new one in one click.',
+    linkFallback: 'Button not working? Copy this link into your browser:',
+    cta: 'Choose my password and get in',
+    footerNote:
+      'You are receiving this email because the academy {{tenantName}} was created with this address.',
+  },
+  // «Escola», no «aula» (glosario pt-BR). Aquí SÍ va el posesivo («sua
+  // escola»): la escola es de quien lee, al revés que en la invitación.
+  pt: {
+    subject: 'Sua escola {{tenantName}} está pronta',
+    title: 'Sua escola está pronta',
+    introHtml:
+      'Sua escola <strong>{{tenantName}}</strong> já foi criada. Só falta escolher sua senha para entrar e começar a prepará-la.',
+    introText:
+      'Sua escola {{tenantName}} já foi criada. Só falta escolher sua senha para entrar e começar a prepará-la.',
+    step1: 'Clique no botão: ele leva você direto para escolher sua senha.',
+    step2: 'Ao salvar, você já entra na sua escola, sem digitar seu e-mail de novo.',
+    step3: 'Lá dentro, guiamos você passo a passo para prepará-la.',
+    validityNote: 'O link é pessoal e vale por {{validez}}.',
+    expiredHelp: 'Expirou? Abra mesmo assim: de lá você pede um novo com um clique.',
+    linkFallback: 'O botão não funciona? Copie este link no seu navegador:',
+    cta: 'Escolher minha senha e entrar',
+    footerNote:
+      'Você recebe este e-mail porque a escola {{tenantName}} foi criada com este endereço.',
+  },
+} as const satisfies Record<HubTemplateLang, Record<string, string>>;
+
+export type AcademyOwnerWelcomeCopy = Record<
+  keyof (typeof ACADEMY_OWNER_WELCOME_COPY)['es'],
+  string
+>;
+
+/** Bienvenida de la creadora en su idioma (el del aula que acaba de crear). */
+export function resolveAcademyOwnerWelcomeCopy(locale?: string | null): AcademyOwnerWelcomeCopy {
+  return ACADEMY_OWNER_WELCOME_COPY[toHubTemplateLang(locale)];
+}
+
+/**
+ * Enlace NUEVO pedido desde la pantalla de un enlace de acceso caducado
+ * (`POST /auth/reset-password/resend`). Vale para cualquier enlace de «define
+ * tu contraseña» (bienvenida de la creadora, invitación, alta tras compra o
+ * restablecimiento): por eso no presume de cuál venía.
+ */
+export const NEW_ACCESS_LINK_COPY = {
+  es: {
+    subject: 'Tu nuevo enlace para entrar en {{tenantName}}',
+    title: 'Aquí tienes tu enlace nuevo',
+    body: 'Has pedido un enlace nuevo porque el anterior había caducado. Con este botón eliges tu contraseña y entras en {{tenantName}}.',
+    validityNote: 'El enlace es personal y vale {{validez}}.',
+    linkFallback: '¿No funciona el botón? Copia este enlace en tu navegador:',
+    cta: 'Elegir mi contraseña y entrar',
+    footerNote:
+      'Recibes este correo porque se pidió un enlace nuevo para esta cuenta. Si no fuiste tú, ignóralo: tu cuenta sigue igual.',
+  },
+  en: {
+    subject: 'Your new link to get into {{tenantName}}',
+    title: 'Here is your new link',
+    body: 'You asked for a new link because the previous one had expired. With this button you choose your password and get into {{tenantName}}.',
+    validityNote: 'The link is personal and valid for {{validez}}.',
+    linkFallback: 'Button not working? Copy this link into your browser:',
+    cta: 'Choose my password and get in',
+    footerNote:
+      'You are receiving this email because a new link was requested for this account. If it was not you, ignore it: your account stays as it is.',
+  },
+  pt: {
+    subject: 'Seu novo link para entrar em {{tenantName}}',
+    title: 'Aqui está seu novo link',
+    body: 'Você pediu um novo link porque o anterior tinha expirado. Com este botão você escolhe sua senha e entra em {{tenantName}}.',
+    validityNote: 'O link é pessoal e vale por {{validez}}.',
+    linkFallback: 'O botão não funciona? Copie este link no seu navegador:',
+    cta: 'Escolher minha senha e entrar',
+    footerNote:
+      'Você recebe este e-mail porque um novo link foi solicitado para esta conta. Se não foi você, ignore: sua conta continua igual.',
+  },
+} as const satisfies Record<HubTemplateLang, Record<string, string>>;
+
+export type NewAccessLinkCopy = Record<keyof (typeof NEW_ACCESS_LINK_COPY)['es'], string>;
+
+export function resolveNewAccessLinkCopy(locale?: string | null): NewAccessLinkCopy {
+  return NEW_ACCESS_LINK_COPY[toHubTemplateLang(locale)];
+}
+
+/**
+ * Validez de un enlace dicha en el idioma de quien lo lee: «7 días», «1 día»,
+ * «60 minutos». Por debajo de un día, en minutos (el restablecimiento normal
+ * dura 60).
+ */
+export function linkValidityLabel(ttlMinutes: number, locale?: string | null): string {
+  const words = {
+    es: { day: 'día', days: 'días', minutes: 'minutos' },
+    en: { day: 'day', days: 'days', minutes: 'minutes' },
+    pt: { day: 'dia', days: 'dias', minutes: 'minutos' },
+  }[toHubTemplateLang(locale)];
+  if (ttlMinutes < 24 * 60) return `${Math.max(1, Math.round(ttlMinutes))} ${words.minutes}`;
+  const days = Math.max(1, Math.round(ttlMinutes / (24 * 60)));
+  return `${days} ${days === 1 ? words.day : words.days}`;
+}
+
 /** Metadatos de los templates del hub para la UI (nombre humano, trigger, vars). */
 const HUB_TEMPLATE_META: Record<
   string,
