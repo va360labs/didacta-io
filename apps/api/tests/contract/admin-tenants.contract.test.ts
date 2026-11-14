@@ -27,7 +27,7 @@
  */
 
 import { LicenseService } from '@didacta/license-sdk';
-import { RequestMethod, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, RequestMethod, UnauthorizedException } from '@nestjs/common';
 import { METHOD_METADATA, PATH_METADATA } from '@nestjs/common/constants';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
@@ -48,6 +48,7 @@ import { SIGNUPS_FROZEN_CODE } from '../../src/tenancy/signup-freeze';
 import { SUPPORT_ACCESS_CODES } from '../../src/tenancy/support-access';
 import { SUBSCRIPTION_LOCKED_CODE } from '../../src/tenancy/subscription-gate';
 import { AdminTenantsService } from '../../src/admin/admin-tenants.service';
+import { ZodValidationPipe } from '../../src/auth/zod-validation.pipe';
 import { ALLOW_PROVISIONING_KEY } from '../../src/auth/jwt-or-provisioning.guard';
 import { PayoutsModule } from '../../src/modules/payouts/payouts.module';
 import { loadPlatformPaymentsConfig } from '../../src/modules/payouts/platform-payments.config';
@@ -111,7 +112,17 @@ const TENANT_ROW = {
 };
 
 function makePrisma() {
+  // La transacción del alta: se guarda para poder mirar qué ajustes escribió.
+  const tx = {
+    tenant: { create: vi.fn().mockResolvedValue({ id: TENANT_ID }), update: vi.fn() },
+    tenantDomain: { create: vi.fn().mockResolvedValue({}) },
+    user: { create: vi.fn().mockResolvedValue({ id: 'user-admin-1' }) },
+    userRole: { create: vi.fn().mockResolvedValue({}) },
+    session: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
+    tenantSetting: { upsert: vi.fn().mockResolvedValue({}) },
+  };
   return {
+    tx,
     tenant: {
       count: vi.fn().mockResolvedValue(0),
       findUnique: vi.fn().mockResolvedValue(null),
@@ -131,15 +142,9 @@ function makePrisma() {
       count: vi.fn().mockResolvedValue(3),
       groupBy: vi.fn().mockResolvedValue([{ tenantId: TENANT_ID, _count: { id: 3 } }]),
     },
-    $transaction: vi.fn().mockImplementation(async (fn: (tx: unknown) => Promise<unknown>) =>
-      fn({
-        tenant: { create: vi.fn().mockResolvedValue({ id: TENANT_ID }), update: vi.fn() },
-        tenantDomain: { create: vi.fn().mockResolvedValue({}) },
-        user: { create: vi.fn().mockResolvedValue({ id: 'user-admin-1' }) },
-        userRole: { create: vi.fn().mockResolvedValue({}) },
-        session: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
-      }),
-    ),
+    $transaction: vi
+      .fn()
+      .mockImplementation(async (fn: (t: unknown) => Promise<unknown>) => fn(tx)),
   };
 }
 
@@ -210,8 +215,103 @@ describe('CONTRATO · admin/tenants ↔ didacta-cloud', () => {
           'primaryHostname',
           'simpleMode',
           'locale',
+          'payoutsCountry',
         ].sort(),
       );
+    });
+
+    // ── País del banco DECLARADO en el alta de Cloud (`payoutsCountry`) ─────
+
+    const alta = {
+      slug: 'acme',
+      name: 'Acme Corp',
+      adminEmail: 'admin@acme.io',
+      primaryHostname: 'acme.didacta.io',
+    };
+
+    it('`payoutsCountry` es opcional: ISO alfa-2 (cualquiera, en mayúsculas) u `OTHER`', () => {
+      expect(createTenantSchema.parse(alta)).not.toHaveProperty('payoutsCountry');
+      expect(createTenantSchema.parse({ ...alta, payoutsCountry: 'BR' }).payoutsCountry).toBe('BR');
+      // Cualquier país, también los que no se admiten para cobrar.
+      expect(createTenantSchema.parse({ ...alta, payoutsCountry: 'jp' }).payoutsCountry).toBe('JP');
+      expect(createTenantSchema.parse({ ...alta, payoutsCountry: 'ES' }).payoutsCountry).toBe('ES');
+      expect(createTenantSchema.parse({ ...alta, payoutsCountry: 'OTHER' }).payoutsCountry).toBe(
+        'OTHER',
+      );
+    });
+
+    it('`payoutsCountry` que no es un país de dos letras ni `OTHER` → 400 con mensaje claro', () => {
+      const pipe = new ZodValidationPipe(createTenantSchema);
+      for (const bad of ['ESP', 'XX1', 'E', '', 'OTRO', 'B R', 76]) {
+        let err: unknown;
+        try {
+          pipe.transform({ ...alta, payoutsCountry: bad });
+        } catch (e) {
+          err = e;
+        }
+        expect(err, `«${String(bad)}» debería ser un 400`).toBeInstanceOf(BadRequestException);
+      }
+      let err: BadRequestException | undefined;
+      try {
+        pipe.transform({ ...alta, payoutsCountry: 'ESP' });
+      } catch (e) {
+        err = e as BadRequestException;
+      }
+      expect((err?.getResponse() as { message: string }).message).toBe(
+        'payoutsCountry debe ser un código de país ISO 3166-1 alfa-2 (p. ej. ES, BR) o OTHER.',
+      );
+    });
+
+    it('con `payoutsCountry`: se guarda como ajuste del aula (payouts/declared_country)', async () => {
+      await service.create(
+        ACTOR,
+        createTenantSchema.parse({ ...alta, payoutsCountry: 'br' }),
+        'http://x',
+      );
+      expect(prisma.tx.tenantSetting.upsert).toHaveBeenCalledTimes(1);
+      expect(prisma.tx.tenantSetting.upsert).toHaveBeenCalledWith({
+        where: {
+          tenantId_moduleName_key: {
+            tenantId: TENANT_ID,
+            moduleName: 'payouts',
+            key: 'declared_country',
+          },
+        },
+        create: {
+          tenantId: TENANT_ID,
+          moduleName: 'payouts',
+          key: 'declared_country',
+          valueJson: 'BR',
+          isSecret: false,
+          updatedById: 'user-admin-1',
+        },
+        update: { valueJson: 'BR', updatedById: 'user-admin-1' },
+      });
+    });
+
+    it('`OTHER` también se guarda, tal cual', async () => {
+      await service.create(
+        ACTOR,
+        createTenantSchema.parse({ ...alta, payoutsCountry: 'OTHER' }),
+        'http://x',
+      );
+      expect(prisma.tx.tenantSetting.upsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          create: expect.objectContaining({ key: 'declared_country', valueJson: 'OTHER' }),
+        }),
+      );
+    });
+
+    it('sin `payoutsCountry`: no se guarda nada (un pool o un Cloud de antes, lo de siempre)', async () => {
+      await service.create(ACTOR, createTenantSchema.parse(alta), 'http://x');
+      expect(prisma.tx.tenantSetting.upsert).not.toHaveBeenCalled();
+    });
+
+    it('el esquema NO es estricto: un campo que el pool no conoce se descarta, no da 400', () => {
+      // Así Cloud puede mandar `payoutsCountry` a un pool que aún no lo tiene
+      // (y mañana otro campo nuevo a este) sin romper el alta.
+      const parsed = createTenantSchema.parse({ ...alta, campoDelFuturo: 'x' });
+      expect(parsed).not.toHaveProperty('campoDelFuturo');
     });
 
     it('`simpleMode` es opcional y booleano: Cloud puede no enviarlo', () => {
@@ -241,7 +341,7 @@ describe('CONTRATO · admin/tenants ↔ didacta-cloud', () => {
       expect(createTenantSchema.safeParse({ ...base, locale: 'fr-FR' }).success).toBe(false);
     });
 
-    it('`adminName`, `simpleMode` y `locale` son los únicos opcionales al crear', () => {
+    it('`adminName`, `simpleMode`, `locale` y `payoutsCountry` son los únicos opcionales al crear', () => {
       const sinAdminName = {
         slug: 'acme',
         name: 'Acme Corp',
@@ -564,13 +664,15 @@ describe('CONTRATO · admin/tenants ↔ didacta-cloud', () => {
 });
 
 // ============================================================================
-// Cobros de plataforma (E2): dos rutas más del contrato, SOLO con el modo
+// Cobros de plataforma (E2): rutas del contrato que existen SOLO con el modo
 // plataforma encendido. Las consume `didacta-cloud` (`pool-contract.ts`) para
-// empujar la comisión de cada aula y leer su estado de cobro.
+// empujar la comisión de cada aula, leer su estado de cobro, el volumen
+// cobrado y los países donde se puede pagar a creadores.
 // ============================================================================
 
 const PAYOUTS_ROUTES: Array<{ handler: string; method: number; path: string }> = [
   { handler: 'getPayoutsVolume', method: RequestMethod.GET, path: 'payouts/volume' },
+  { handler: 'getPayoutsCountries', method: RequestMethod.GET, path: 'payouts/countries' },
   { handler: 'setPayoutsSettings', method: RequestMethod.PUT, path: ':id/payouts-settings' },
   { handler: 'getPayouts', method: RequestMethod.GET, path: ':id/payouts' },
 ];
@@ -583,7 +685,9 @@ describe('CONTRATO · admin/tenants (cobros de plataforma) ↔ didacta-cloud', (
     ip: '127.0.0.1',
   };
 
-  function buildController(overrides: { tenantExists?: boolean } = {}) {
+  function buildController(
+    overrides: { tenantExists?: boolean; supportedCountries?: readonly string[] } = {},
+  ) {
     const settings = {
       setFeeBps: vi.fn(async (tenantId: string, feeBps: number) => ({
         tenantId,
@@ -620,6 +724,7 @@ describe('CONTRATO · admin/tenants (cobros de plataforma) ↔ didacta-cloud', (
       settings,
       accounts: {
         getAccount: vi.fn(async () => ({ status: 'ONBOARDING', country: 'ES' })),
+        supportedCountries: overrides.supportedCountries ?? ['ES', 'FR', 'GB', 'US'],
       },
       mode: {
         resolve: vi.fn(async () => ({
@@ -794,5 +899,59 @@ describe('CONTRATO · admin/tenants (cobros de plataforma) ↔ didacta-cloud', (
       ),
     ).resolves.toBe('ADMIN_FORBIDDEN_SUPER_ADMIN_REQUIRED');
     expect(reports.volume).not.toHaveBeenCalled();
+  });
+
+  // ── GET payouts/countries: Cloud lee de aquí la lista de países ──────────
+
+  it('payouts/countries se declara ANTES que las rutas con `:id`', () => {
+    const names = Object.getOwnPropertyNames(AdminTenantsPayoutsController.prototype);
+    expect(names.indexOf('getPayoutsCountries')).toBeGreaterThan(-1);
+    expect(names.indexOf('getPayoutsCountries')).toBeLessThan(names.indexOf('setPayoutsSettings'));
+    expect(names.indexOf('getPayoutsCountries')).toBeLessThan(names.indexOf('getPayouts'));
+  });
+
+  it('payouts/countries responde exactamente `{ supportedCountries }`, ISO alfa-2 en mayúsculas', () => {
+    const { controller } = buildController({ supportedCountries: ['ES', 'FR', 'GB', 'US'] });
+    const res = controller.getPayoutsCountries(machineReq as never, undefined);
+    expect(Object.keys(res)).toEqual(['supportedCountries']);
+    expect(res).toEqual({ supportedCountries: ['ES', 'FR', 'GB', 'US'] });
+    for (const country of res.supportedCountries) expect(country).toMatch(/^[A-Z]{2}$/);
+  });
+
+  it('payouts/countries da la lista que aplica el alta, tal cual la configura el operador', () => {
+    // La misma que `PAYMENTS_PLATFORM_SUPPORTED_COUNTRIES` (o la de por
+    // defecto): Cloud no puede tener una copia distinta.
+    const config = loadPlatformPaymentsConfig({
+      PAYMENTS_PLATFORM_STRIPE_SECRET_KEY: 'sk_test_inventada',
+      PAYMENTS_PLATFORM_STRIPE_WEBHOOK_SECRETS: 'whsec_inventado1',
+      PAYMENTS_PLATFORM_SUPPORTED_COUNTRIES: 'es, mx ,BR',
+    });
+    expect(config.enabled).toBe(true);
+    const configured = (config as { supportedCountries: readonly string[] }).supportedCountries;
+    const { controller } = buildController({ supportedCountries: configured });
+    const res = controller.getPayoutsCountries(machineReq as never, undefined);
+    expect(res).toEqual({ supportedCountries: ['ES', 'MX', 'BR'] });
+  });
+
+  it('payouts/countries exige credencial de aprovisionamiento (o super_admin): sin ella 401, tenant_admin 403', async () => {
+    const { controller } = buildController();
+    expect(() => controller.getPayoutsCountries({ headers: {} } as never, undefined)).toThrow(
+      UnauthorizedException,
+    );
+    await expect(
+      errorCodeOf(async () =>
+        controller.getPayoutsCountries(
+          { headers: {} } as never,
+          { sub: 'u', tenantId: PAYOUTS_TENANT, roles: ['tenant_admin'] } as never,
+        ),
+      ),
+    ).resolves.toBe('ADMIN_FORBIDDEN_SUPER_ADMIN_REQUIRED');
+    // Un super_admin (sin credencial) sí la lee.
+    expect(
+      controller.getPayoutsCountries(
+        { headers: {} } as never,
+        { sub: 'root', tenantId: PAYOUTS_TENANT, roles: ['super_admin'] } as never,
+      ),
+    ).toEqual({ supportedCountries: ['ES', 'FR', 'GB', 'US'] });
   });
 });

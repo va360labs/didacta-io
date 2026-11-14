@@ -12,6 +12,7 @@ import {
   formatDuration,
   formatNumber,
   formatTime,
+  localeRegion,
   regionNameFormatter,
 } from './format';
 import { resetUserFormatPrefs, setUserFormatPrefs } from './user-prefs';
@@ -283,5 +284,25 @@ describe('regionNameFormatter', () => {
     expect(regionNameFormatter('es')('ES')).toBe('España');
     expect(regionNameFormatter('en')('es')).toBe('Spain');
     expect(regionNameFormatter('es')('ZZ9')).toBe('ZZ9');
+  });
+});
+
+describe('localeRegion', () => {
+  it('saca el país de dos letras de la etiqueta de idioma', () => {
+    expect(localeRegion('pt-BR')).toBe('BR');
+    expect(localeRegion('en-us')).toBe('US');
+    expect(localeRegion('pt_BR')).toBe('BR');
+    expect(localeRegion('zh-Hant-TW')).toBe('TW');
+  });
+
+  it('sin país o con una región que no es un país: null', () => {
+    expect(localeRegion('es')).toBeNull();
+    expect(localeRegion('es-419')).toBeNull();
+    expect(localeRegion('')).toBeNull();
+    expect(localeRegion('--')).toBeNull();
+  });
+
+  it('etiqueta que `Intl.Locale` rechaza: la segunda parte, si es un país', () => {
+    expect(localeRegion('xx-YY-zz')).toBe('YY');
   });
 });

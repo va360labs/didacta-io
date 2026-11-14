@@ -138,12 +138,19 @@ describe('UC-C103 AC2 · superficie de la credencial de provisioning', () => {
     }
   });
 
-  it('abre exactamente las 3 rutas de cobros de plataforma en AdminTenantsPayoutsController, y no hay más', () => {
+  it('abre exactamente las 4 rutas de cobros de plataforma en AdminTenantsPayoutsController, y no hay más', () => {
     // Solo existen con el modo plataforma (las registra PayoutsModule). Fijar
-    // la comisión de un aula, leer su estado de cobro y el volumen cobrado de
-    // todas las aulas (E4): el contrato con Cloud.
+    // la comisión de un aula, leer su estado de cobro, el volumen cobrado de
+    // todas las aulas (E4) y los países donde se puede pagar a creadores
+    // (2026-11-14; de solo lectura, una lista de la configuración, sin datos
+    // de ningún aula): el contrato con Cloud.
     const todas = routeHandlersOf(AdminTenantsPayoutsController).sort();
-    expect(todas).toEqual(['getPayouts', 'getPayoutsVolume', 'setPayoutsSettings']);
+    expect(todas).toEqual([
+      'getPayouts',
+      'getPayoutsCountries',
+      'getPayoutsVolume',
+      'setPayoutsSettings',
+    ]);
     for (const handler of todas) {
       expect(isAllowed(AdminTenantsPayoutsController, handler)).toBe(true);
     }

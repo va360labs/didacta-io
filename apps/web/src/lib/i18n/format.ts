@@ -276,3 +276,20 @@ export function regionNameFormatter(locale: string): (code: string) => string {
     }
   };
 }
+
+/**
+ * País (ISO 3166-1 alfa-2, mayúsculas) de una etiqueta de idioma:
+ * `pt-BR` → `BR`, `zh-Hant-TW` → `TW`, `pt_BR` → `BR`. `null` si no trae país
+ * (`es`) o si su región no es un país de dos letras (`es-419`, español de
+ * Latinoamérica: no dice cuál).
+ */
+export function localeRegion(locale: string): string | null {
+  let region: string | undefined;
+  try {
+    region = new Intl.Locale(locale.replace(/_/g, '-')).region;
+  } catch {
+    region = locale.split(/[-_]/)[1];
+  }
+  const code = region?.toUpperCase();
+  return code && /^[A-Z]{2}$/.test(code) ? code : null;
+}
