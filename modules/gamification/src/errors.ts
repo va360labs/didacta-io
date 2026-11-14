@@ -73,3 +73,18 @@ export class GamificationConflictError extends GamificationError {
     this.name = 'GamificationConflictError';
   }
 }
+
+/**
+ * El aula cobra en el modo plataforma de Didacta: el checkout rechaza los
+ * códigos promocionales (para que uno no valga en todas las aulas), así que un
+ * premio «código de descuento» no serviría. Queda «mensaje con enlace».
+ */
+export class GamificationCodesUnavailableError extends GamificationError {
+  constructor() {
+    super(
+      'Tu academia cobra con los pagos de Didacta, que no admiten códigos de descuento: usa un premio con mensaje o enlace.',
+      'GAMIFICATION_CODES_UNAVAILABLE',
+    );
+    this.name = 'GamificationCodesUnavailableError';
+  }
+}

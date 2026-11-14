@@ -495,6 +495,8 @@ function LocksBlock({ levels, onError }: { levels: LevelView[]; onError: (e: unk
 function RewardsBlock({ levels, onError }: { levels: LevelView[]; onError: (e: unknown) => void }) {
   const t = useTranslations('modGamification.retencion');
   const [rewards, setRewards] = useState<Reward[]>([]);
+  // null mientras no se sabe: no se ofrece el código hasta confirmar que sirve.
+  const [codesAllowed, setCodesAllowed] = useState<boolean | null>(null);
   const [grants, setGrants] = useState<RewardGrant[]>([]);
   const [title, setTitle] = useState('');
   const [trigger, setTrigger] = useState<'LEVEL' | 'POINTS'>('LEVEL');
@@ -511,7 +513,9 @@ function RewardsBlock({ levels, onError }: { levels: LevelView[]; onError: (e: u
       retentionAdminApi.listRewards(),
       retentionAdminApi.listGrants(),
     ]);
-    setRewards(r);
+    setRewards(r.rewards);
+    setCodesAllowed(r.codesAllowed);
+    if (!r.codesAllowed) setKind('MESSAGE');
     setGrants(g);
   }, []);
 
@@ -678,10 +682,19 @@ function RewardsBlock({ levels, onError }: { levels: LevelView[]; onError: (e: u
             onChange={(e) => setKind(e.target.value as 'MESSAGE' | 'CODE')}
           >
             <option value="MESSAGE">{t('premios.tipoMensaje')}</option>
-            <option value="CODE">{t('premios.tipoCodigo')}</option>
+            {codesAllowed ? <option value="CODE">{t('premios.tipoCodigo')}</option> : null}
           </select>
         </label>
-        {kind === 'CODE' ? (
+        {codesAllowed === false ? (
+          <p
+            className="flex gap-2 rounded-xl bg-bg-subtle p-3 text-sm text-text-muted sm:col-span-2"
+            data-testid="premios-sin-codigos"
+          >
+            <Icon name="alert" size={16} className="mt-0.5 shrink-0" />
+            <span>{t('premios.codigosNoDisponibles')}</span>
+          </p>
+        ) : null}
+        {kind === 'CODE' && codesAllowed ? (
           <>
             <p className="flex gap-2 rounded-xl bg-bg-subtle p-3 text-sm text-text-muted sm:col-span-2">
               <Icon name="alert" size={16} className="mt-0.5 shrink-0" />

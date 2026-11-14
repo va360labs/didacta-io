@@ -84,6 +84,7 @@
       "titulo": "Automatic rewards",
       "ayuda": "Delivered automatically when someone reaches a level or a number of points, with a notification and an email, and logged.",
       "codigoAviso": "You create the discount code in your payments account (for example, a Stripe promotion code). Here it is only delivered: Didacta does not create coupons.",
+      "codigosNoDisponibles": "Your academy is paid through Didacta payments: rewards are a message or a link (discount codes cannot be used at checkout).",
       "vacio": "No rewards yet.",
       "nombre": "Reward name",
       "nombrePh": "For example, Private live session",

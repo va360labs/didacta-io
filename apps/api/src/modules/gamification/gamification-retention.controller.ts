@@ -346,7 +346,12 @@ export class GamificationRetentionController {
   @ApiBearerAuth()
   async listRewards(@CurrentUser() user: SessionClaims | undefined) {
     const u = this.requireAdmin(user);
-    return { rewards: await this.retention.listRewards(u.tenantId) };
+    const [rewards, codesAllowed] = await Promise.all([
+      this.retention.listRewards(u.tenantId),
+      this.retention.codesAllowed(u.tenantId),
+    ]);
+    // `codesAllowed`: en el modo plataforma la interfaz no ofrece códigos.
+    return { rewards, codesAllowed };
   }
 
   @Post('admin/rewards')

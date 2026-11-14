@@ -22,6 +22,8 @@ const STATUS_BY_CODE: Record<string, number> = {
   GAMIFICATION_ALREADY_SUBMITTED: HttpStatus.CONFLICT,
   GAMIFICATION_ALREADY_REVIEWED: HttpStatus.CONFLICT,
   GAMIFICATION_CONFLICT: HttpStatus.CONFLICT,
+  // El aula cobra en el modo plataforma: el checkout no admite códigos.
+  GAMIFICATION_CODES_UNAVAILABLE: HttpStatus.UNPROCESSABLE_ENTITY,
 };
 
 @Catch(GamificationError)

@@ -94,6 +94,7 @@
   "GAMIF_STAFF_REQUIRED": "Solo el equipo puede gestionar los retos.",
   "GAMIFICATION_ALREADY_REVIEWED": "Esta entrega ya fue revisada.",
   "GAMIFICATION_ALREADY_SUBMITTED": "Ya has entregado este reto.",
+  "GAMIFICATION_CODES_UNAVAILABLE": "Tu academia cobra con los pagos de Didacta, que no admiten códigos de descuento: usa un premio con mensaje o enlace.",
   "MAX_ATTEMPTS_REACHED": "El alumno ha alcanzado el máximo de intentos permitidos ({detail})",
   "MEMBERSHIP_CONFIG_INCOMPLETE": "Membresía mal configurada: {detail}",
   "MEMBERSHIP_NOT_TRIALING": "No tienes una membresía en periodo de prueba que activar.",

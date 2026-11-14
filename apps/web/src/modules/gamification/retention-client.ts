@@ -217,8 +217,13 @@ export const retentionAdminApi = {
     grantPaid?: boolean;
   }) => send<ContentLock>('PUT', '/admin/locks', body),
   removeLock: (id: string) => send<void>('DELETE', `/admin/locks/${id}`),
-  async listRewards(): Promise<Reward[]> {
-    return (await get<{ rewards: Reward[] }>('/admin/rewards')).rewards;
+  /**
+   * Premios del aula y si admite códigos de descuento: en el modo plataforma
+   * (Didacta Cloud) el checkout los rechaza y la interfaz no los ofrece.
+   */
+  async listRewards(): Promise<{ rewards: Reward[]; codesAllowed: boolean }> {
+    const res = await get<{ rewards: Reward[]; codesAllowed?: boolean }>('/admin/rewards');
+    return { rewards: res.rewards, codesAllowed: res.codesAllowed !== false };
   },
   createReward: (body: RewardInput) => send<Reward>('POST', '/admin/rewards', body),
   updateReward: (id: string, patch: Partial<RewardInput>) =>

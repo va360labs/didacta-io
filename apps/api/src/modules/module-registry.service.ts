@@ -128,6 +128,7 @@ import { academyLocale, type AcademyDefaultsPrisma } from '../common/academy-def
 import { runSanctionedGlobalAccess } from '../tenancy/tenant-context.storage';
 import { resolveCoreContractVersion } from '../core-version';
 import { buildCourseSaleChecker } from './course-sale-checker';
+import { discountCodesAllowedFor } from './gamification/discount-codes-allowed';
 import { PayoutsRuntime } from './payouts/payouts-runtime.service';
 import { getPlatformPaymentsConfig } from './payouts/platform-payments.config';
 import { PlatformStripeAdapters } from './payouts/platform-stripe-adapters';
@@ -699,7 +700,10 @@ export class ModuleRegistryService implements OnModuleInit {
     this.gamification = new GamificationService(prisma, gamificationPublisher);
     // Retención estilo Skool sobre el mismo libro de puntos: desbloqueo por
     // nivel, rachas, insignias, premios automáticos y celebraciones.
-    this.retention = new RetentionService(prisma, gamificationPublisher);
+    this.retention = new RetentionService(prisma, gamificationPublisher, async (tenantId) =>
+      // Sin modo plataforma en la instalación, siempre son claves propias.
+      this.payouts ? discountCodesAllowedFor(await this.payouts.mode.resolve(tenantId)) : true,
+    );
     const gamificationModule = buildGamificationModule();
 
     // mod.messaging: salas por espacio, DMs y canal alumno↔profesores.

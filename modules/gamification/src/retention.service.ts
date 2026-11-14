@@ -5,6 +5,7 @@
 
 import type { PrismaClient } from '@didacta/database';
 import {
+  GamificationCodesUnavailableError,
   GamificationConflictError,
   GamificationNotFoundError,
   GamificationValidationError,
@@ -283,11 +284,23 @@ function dateDay(d: Date | null): string | null {
   return d ? d.toISOString().slice(0, 10) : null;
 }
 
+/**
+ * ¿Sirve en esta aula un código de descuento? Lo resuelve el host con el modo
+ * de cobro: en el modo plataforma el checkout los rechaza. Sin cablear, sí.
+ */
+export type DiscountCodesCheck = (tenantId: string) => Promise<boolean>;
+
 export class RetentionService {
   constructor(
     private readonly prisma: PrismaClient,
     private readonly publisher: GamificationEventPublisher,
+    private readonly discountCodesAllowed: DiscountCodesCheck = async () => true,
   ) {}
+
+  /** ¿Puede el creador dar códigos de descuento como premio en esta aula? */
+  async codesAllowed(tenantId: string): Promise<boolean> {
+    return this.discountCodesAllowed(tenantId);
+  }
 
   // ── Ajustes y preferencias ─────────────────────────────────────────────────
 
@@ -895,6 +908,9 @@ export class RetentionService {
 
   async createReward(tenantId: string, input: RewardInput): Promise<RewardView> {
     const data = this.validateReward(input);
+    if (data.kind === 'CODE' && !(await this.discountCodesAllowed(tenantId))) {
+      throw new GamificationCodesUnavailableError();
+    }
     if (data.levelId) await this.requireLevel(tenantId, data.levelId);
     const row = await this.prisma.modGamificationReward.create({
       data: { tenantId, ...data, active: input.active ?? true },
@@ -920,6 +936,14 @@ export class RetentionService {
       code: patch.code !== undefined ? patch.code : current.code,
     };
     const data = this.validateReward(merged);
+    // Solo al pasar A código: pausar o reactivar uno ya existente no se bloquea.
+    if (
+      data.kind === 'CODE' &&
+      current.kind !== 'CODE' &&
+      !(await this.discountCodesAllowed(tenantId))
+    ) {
+      throw new GamificationCodesUnavailableError();
+    }
     if (data.levelId) await this.requireLevel(tenantId, data.levelId);
     await this.prisma.modGamificationReward.updateMany({
       where: { id, tenantId },
@@ -960,11 +984,17 @@ export class RetentionService {
    * masivos el día que el creador lo da de alta.
    */
   async grantDueRewards(tenantId: string, userId: string): Promise<RewardGrantView[]> {
-    const rewards = await this.prisma.modGamificationReward.findMany({
+    let rewards = await this.prisma.modGamificationReward.findMany({
       where: { tenantId, active: true },
       take: LIST_LIMIT,
     });
     if (rewards.length === 0) return [];
+    // Un código creado cuando el aula cobraba con sus claves no se entrega si
+    // ahora cobra en el modo plataforma: el checkout lo rechazaría.
+    if (rewards.some((r) => r.kind === 'CODE') && !(await this.discountCodesAllowed(tenantId))) {
+      rewards = rewards.filter((r) => r.kind !== 'CODE');
+      if (rewards.length === 0) return [];
+    }
     const levels = await this.numberedLevels(tenantId);
     const progress = await this.progressOf(tenantId, userId, levels);
     const owned = new Set(
@@ -1039,9 +1069,14 @@ export class RetentionService {
     ]);
     const progress = await this.progressOf(tenantId, userId, levels);
     const owned = new Set(grants.map((g) => g.rewardId));
+    // Un código que no se va a entregar (modo plataforma) no se anuncia.
+    const codesOk = rewards.some((r) => r.kind === 'CODE')
+      ? await this.discountCodesAllowed(tenantId)
+      : true;
     const upcoming: UpcomingReward[] = [];
     for (const r of rewards) {
       if (owned.has(r.id)) continue;
+      if (r.kind === 'CODE' && !codesOk) continue;
       const level = r.levelId ? levels.find((l) => l.id === r.levelId) : undefined;
       const target = r.triggerKind === 'LEVEL' ? (level?.minPoints ?? null) : r.points;
       if (target === null) continue;

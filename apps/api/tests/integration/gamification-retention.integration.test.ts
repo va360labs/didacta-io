@@ -340,6 +340,65 @@ describeWithDb(
       expect(await inB(() => retention.listGrants(t.b))).toEqual([]);
     });
 
+    it('modo plataforma: no se crean ni se entregan códigos de descuento; con claves propias, sí', async () => {
+      // Mismo aula y misma BD; solo cambia la respuesta del modo de cobro.
+      const plataforma = new RetentionService(
+        prisma as never,
+        { publish: async () => undefined },
+        async () => false,
+      );
+      expect(await inA(() => plataforma.codesAllowed(t.a))).toBe(false);
+      expect(await inA(() => retention.codesAllowed(t.a))).toBe(true);
+      await expect(
+        inA(() =>
+          plataforma.createReward(t.a, {
+            title: 'Código imposible',
+            triggerKind: 'POINTS',
+            points: 10,
+            kind: 'CODE',
+            code: 'NOVALE10',
+          }),
+        ),
+      ).rejects.toMatchObject({ code: 'GAMIFICATION_CODES_UNAVAILABLE' });
+      // El mensaje con enlace sí se crea en el modo plataforma.
+      await inA(() =>
+        plataforma.createReward(t.a, {
+          title: 'Directo privado',
+          triggerKind: 'POINTS',
+          points: 10,
+          kind: 'MESSAGE',
+          url: 'https://meet.example.com/privado',
+        }),
+      );
+      // Un código creado cuando el aula cobraba con sus claves…
+      await inA(() =>
+        retention.createReward(t.a, {
+          title: 'Código de antes',
+          triggerKind: 'POINTS',
+          points: 10,
+          kind: 'CODE',
+          code: 'ANTES10',
+        }),
+      );
+      await inA(() =>
+        points.award({
+          tenantId: t.a,
+          userId: u['bruno']!,
+          ruleKey: 'challenge',
+          sourceKey: `z:${stamp}`,
+          points: 20,
+        }),
+      );
+      // …en el modo plataforma ni se anuncia ni se entrega; el mensaje, sí.
+      const pendientes = await inA(() => plataforma.myRewards(t.a, u['bruno']!));
+      expect(pendientes.upcoming.map((r) => r.title)).not.toContain('Código de antes');
+      const entregados = await inA(() => plataforma.grantDueRewards(t.a, u['bruno']!));
+      expect(entregados.map((g) => g.delivered.title)).toEqual(['Directo privado']);
+      // Control: con claves propias el mismo código se entrega.
+      const conClaves = await inA(() => retention.grantDueRewards(t.a, u['bruno']!));
+      expect(conClaves.map((g) => g.delivered.code)).toEqual(['ANTES10']);
+    });
+
     it('insignias desde lo que ya consta (libro de puntos, nivel) y racha en la zona de la persona', async () => {
       await inA(() =>
         admin.modGamificationLedgerEntry.create({

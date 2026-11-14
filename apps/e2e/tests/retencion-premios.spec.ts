@@ -64,6 +64,8 @@ test.describe('Premios automáticos', () => {
     await s.getByLabel('Qué recibe').selectOption('CODE');
     // Se avisa donde se decide: el código lo crea el creador en su pasarela.
     await expect(s.getByText('Didacta no crea cupones')).toBeVisible();
+    // Con claves propias no hay aviso de «sin códigos» (control del modo plataforma).
+    await expect(s.getByTestId('premios-sin-codigos')).toHaveCount(0);
     await s.getByLabel('Código', { exact: true }).fill('SORBO20');
     await s.getByLabel('Mensaje', { exact: true }).fill('Úsalo al pagar cualquier curso.');
     await s.getByRole('button', { name: 'Crear premio' }).click();
@@ -158,6 +160,38 @@ test.describe('Premios automáticos', () => {
         bearer: creador.tokens.accessToken,
       }),
     ).rejects.toThrow(/409/);
+  });
+
+  test('modo plataforma (Didacta Cloud): no se ofrece el código de descuento, solo mensaje o enlace', async ({
+    browser,
+  }) => {
+    // El arnés no corre en modo plataforma: se fuerza la respuesta del servidor
+    // (`codesAllowed`, que sale del modo de cobro del aula). Que el servidor
+    // rechace crear el código en ese modo lo cubre la integración.
+    const { page, close } = await abrir(browser, aula, creador, '/admin/settings', {
+      width: 1280,
+      height: 900,
+    });
+    await page.route('**/api/v1/modules/gamification/admin/rewards', async (route) => {
+      if (route.request().method() !== 'GET') return route.continue();
+      // La respuesta real (por la API directa: Node no resuelve *.localhost),
+      // con el modo plataforma encima.
+      const real = await apiAs<Record<string, unknown>>(aula.host, `${GAMIF}/admin/rewards`, {
+        bearer: creador.tokens.accessToken,
+      });
+      await route.fulfill({ json: { ...real, codesAllowed: false } });
+    });
+    await page.reload();
+    const s = page.getByTestId('ajustes-premios');
+    const tipo = s.getByLabel('Qué recibe');
+    await expect(tipo.locator('option')).toHaveText(['Un mensaje o un enlace']);
+    await expect(s.getByTestId('premios-sin-codigos')).toContainText(
+      'los códigos de descuento no se pueden usar al pagar',
+    );
+    await expect(s.getByLabel('Código', { exact: true })).toHaveCount(0);
+    // Los premios ya creados siguen listados (el creador los ve y los pausa).
+    await expect(s.getByTestId('premios-lista')).toContainText('20 % en tu próximo curso');
+    await close();
   });
 
   test('modo completo: el mismo panel en Puntos y retos → «Premios y desbloqueos»', async ({

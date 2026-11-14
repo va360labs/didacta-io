@@ -84,6 +84,7 @@
       "titulo": "Prêmios automáticos",
       "ayuda": "São entregues automaticamente ao chegar a um nível ou a certos pontos, com aviso no sino e por e-mail, e ficam registrados.",
       "codigoAviso": "O código de desconto é você quem cria na sua conta de pagamentos (por exemplo, um código promocional do Stripe). Aqui ele só é entregue: a Didacta não cria cupons.",
+      "codigosNoDisponibles": "Sua escola recebe pelos pagamentos da Didacta: os prêmios são uma mensagem ou um link (os códigos de desconto não podem ser usados no pagamento).",
       "vacio": "Ainda não há prêmios.",
       "nombre": "Nome do prêmio",
       "nombrePh": "Por exemplo, Ao vivo exclusivo",

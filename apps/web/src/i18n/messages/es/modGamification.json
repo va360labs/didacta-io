@@ -84,6 +84,7 @@
       "titulo": "Premios automáticos",
       "ayuda": "Se entregan solos al llegar a un nivel o a unos puntos, con aviso en la campana y por correo, y quedan registrados.",
       "codigoAviso": "El código de descuento lo creas tú en tu cuenta de pagos (por ejemplo, un código promocional de Stripe). Aquí solo se entrega: Didacta no crea cupones.",
+      "codigosNoDisponibles": "Tu academia cobra con los pagos de Didacta: los premios son un mensaje o un enlace (los códigos de descuento no se pueden usar al pagar).",
       "vacio": "Aún no hay premios.",
       "nombre": "Nombre del premio",
       "nombrePh": "Por ejemplo, Directo privado",
