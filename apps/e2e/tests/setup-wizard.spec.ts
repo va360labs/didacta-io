@@ -48,14 +48,18 @@ test.describe('Wizard de setup — token de un solo uso', () => {
       timeout: 15_000,
     });
 
-    // El admin recién creado nunca pasó por onboarding — post-login-redirect
-    // lo manda ahí primero, no a /courses directamente.
+    // El admin recién creado tiene por delante los dos asistentes de primer
+    // acceso, y en un aula en modo completo —la que deja el wizard— va
+    // PRIMERO el de la academia (`/welcome`) y después el de perfil
+    // (`lib/first-access.ts`, regla 3). Antes iba al de perfil y este spec
+    // seguía esperando `/onboarding`.
     await page.getByRole('button', { name: 'Empezar' }).click();
-    await expect(page).toHaveURL(/\/onboarding$/);
+    await expect(page).toHaveURL(/\/welcome$/);
 
-    // La sesión persiste tras un reload real (no es solo estado de React).
+    // La sesión persiste tras un reload real (no es solo estado de React):
+    // sin sesión, /welcome rebotaría a /signin.
     await page.reload();
-    await expect(page).toHaveURL(/\/onboarding$/);
+    await expect(page).toHaveURL(/\/welcome$/);
   });
 
   test('reintentar con el mismo token tras el éxito no vuelve a emitir sesión', async () => {
