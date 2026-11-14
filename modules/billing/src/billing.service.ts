@@ -181,6 +181,12 @@ export type BillingUserProvisioner = (args: {
    * módulo: lo valida y lo persiste el host, y SOLO si crea la fila.
    */
   locale?: string;
+  /**
+   * Curso que se acaba de comprar. El host lo usa para que el enlace de la
+   * bienvenida lleve al alumno a ESE curso tras su primer acceso (el correo se
+   * lo promete), no a la comunidad.
+   */
+  courseId?: string;
 }) => Promise<{ userId: string; created: boolean }>;
 
 /**
@@ -990,6 +996,7 @@ export class BillingService {
         // a propósito: quien escribe la fila de `user` es el host y es él quien
         // decide qué locales acepta.
         locale: metadata.locale,
+        courseId,
       });
       userId = provisioned.userId;
       userCreated = provisioned.created;

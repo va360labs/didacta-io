@@ -41,6 +41,8 @@ export type StripeBuyerProvisioner = (args: {
   email: string;
   name: string | null;
   locale?: string;
+  /** Curso comprado (solo mod.billing): adónde lleva la bienvenida tras entrar. */
+  courseId?: string;
   webBaseUrl: string;
   ctx: ClientContext;
 }) => Promise<{ userId: string; created: boolean }>;
@@ -92,7 +94,7 @@ export async function dispatchStripeEventToBilling(
     () =>
       args.billing.handleWebhookEvent(event, parsedBody, {
         tenantId,
-        provisionUser: ({ email, name, locale }) =>
+        provisionUser: ({ email, name, locale, courseId }) =>
           args.provisionBuyer({
             // El tenant decidido, no el que devuelva el módulo.
             tenantId,
@@ -102,6 +104,7 @@ export async function dispatchStripeEventToBilling(
             // transportado en la metadata de la session. El provisioner lo
             // valida y solo lo escribe si CREA la fila.
             locale,
+            courseId,
             webBaseUrl,
             ctx,
           }),
