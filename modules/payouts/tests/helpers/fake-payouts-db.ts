@@ -61,6 +61,7 @@ const MODELS: Record<string, ModelSpec> = {
       nextAttemptAt: null,
       chargedAt: null,
       transferredAt: null,
+      creatorNotifiedAt: null,
     }),
   },
   modPayoutsAccount: {
@@ -131,6 +132,7 @@ const MODELS: Record<string, ModelSpec> = {
       reversalTarget: null,
       stripeReversalId: null,
       reversalStatus: null,
+      reversalLeaseUntil: null,
       initiatedBy: null,
       reason: null,
     }),
@@ -290,6 +292,13 @@ export class FakePayoutsDb {
 
   rows(model: keyof typeof MODELS & string, where?: Where): Row[] {
     return this.tables[model]!.filter((row) => matches(row, where)).map((r) => ({ ...r }));
+  }
+
+  /** Cambia filas a mano (para fabricar un estado), sin pasar por una transacción. */
+  update(model: keyof typeof MODELS & string, where: Where, patch: Row): number {
+    const hit = this.tables[model]!.filter((row) => matches(row, where));
+    for (const row of hit) Object.assign(row, patch);
+    return hit.length;
   }
 
   /** Cliente visto desde un tenant (`null` = acceso global). */

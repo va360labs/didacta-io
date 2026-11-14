@@ -146,7 +146,10 @@
         "titulo": "Conecta tus cobros",
         "que": "Para que el dinero de cada venta llegue a tu cuenta bancaria. Te pediremos tus datos y tu número de cuenta; no necesitas claves ni nada técnico.",
         "hecho": "Listo para cobrar",
+        "faltanFiscales": "Tu cuenta de cobros ya está conectada. Te falta un paso: tus datos fiscales (tu NIF y tu dirección). Sin ellos, el dinero de tus ventas se queda retenido y no te llega.",
+        "pendienteFiscales": "Falta: datos fiscales",
         "boton": "Conectar cobros",
+        "botonFiscales": "Completar mis datos fiscales",
         "ayuda1": "Tus alumnos pagan con tarjeta en una página segura de pago.",
         "ayuda2": "Didacta se queda el 5 % de cada venta. El resto es tuyo y va a tu banco.",
         "ayuda3": "Vendes en tu moneda y cada alumno ve el precio en la suya."
@@ -157,7 +160,8 @@
         "hecho": "A la venta",
         "boton": "Publicar y crear mi enlace",
         "publicando": "Publicando…",
-        "faltaAntes": "Primero completa los pasos de arriba."
+        "faltaAntes": "Primero completa los pasos de arriba.",
+        "avisoRetenido": "Puedes publicar ya: tus alumnos podrán comprar, pero el dinero de tus ventas se quedará retenido hasta que completes tus datos fiscales."
       },
       "invite": {
         "titulo": "Invita a tus primeros alumnos",
@@ -177,7 +181,8 @@
       "notaAntes": "Así lo verán tus alumnos. El enlace se enciende al publicar.",
       "notaDespues": "Compártelo en tus redes, tu web o por WhatsApp.",
       "noComprable": "Aún no se puede comprar",
-      "notaNoComprable": "Conecta tus cobros (paso 4) para que se pueda comprar."
+      "notaNoComprable": "Conecta tus cobros (paso 4) para que se pueda comprar.",
+      "retenido": "Ya está a la venta, pero el dinero de tus ventas se queda retenido hasta que completes tus datos fiscales."
     },
     "ayudaTitulo": "¿Te atascas en algún paso?",
     "ayudaTexto": "Escríbenos y te ayudamos a dejarlo listo.",

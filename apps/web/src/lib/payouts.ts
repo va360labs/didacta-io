@@ -412,8 +412,19 @@ export interface PayoutsCurrencySummaryDto {
   gross: number;
   stripeFees: number;
   platformFees: number;
+  /** Transferido al creador (lo enviado, sin restar nada). */
   received: number;
+  /**
+   * Lo que de verdad le queda de lo enviado: lo transferido menos lo retirado
+   * después (reembolsos, reclamaciones) más lo devuelto al ganar una
+   * reclamación. Es lo que se enseña como «Recibido». Ausente en una API
+   * anterior: se usa `received`.
+   */
+  receivedNet?: number;
+  /** En camino: se transfiere en la próxima pasada. */
   pending: number;
+  /** Retenido (faltan datos fiscales o de cobro): no sale hasta resolverlo. */
+  held?: number;
   debtNetted: number;
   debtOutstanding: number;
   refunded: number;

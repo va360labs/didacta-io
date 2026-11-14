@@ -57,4 +57,14 @@ describe('notificationLink', () => {
     expect(notificationLink('community.mention', meta, tEs)?.actionLabel).toBe('Ver');
     expect(notificationLink('community.mention', meta, tEn)?.actionLabel).toBe('View');
   });
+
+  it('venta nueva (aviso al equipo) → «Ventas»', () => {
+    for (const key of ['payouts.sale.course', 'payouts.sale.membership', 'payouts.sale.renewal']) {
+      expect(notificationLink(key, { saleId: 's1' }, tEs)).toEqual({
+        href: '/admin/payments',
+        actionLabel: 'Ver',
+      });
+    }
+    expect(notificationLink('payouts.sale.course', {}, tEn)?.actionLabel).toBe('View');
+  });
 });

@@ -8,6 +8,9 @@
     "conectarTitulo": "Connect your payouts to start selling",
     "conectarTexto": "Without payouts connected nobody can pay you. We will ask for your details and your account number.",
     "listos": "Payouts connected: the money from each sale reaches your bank.",
+    "faltanFiscales": "One step left for the money to reach you: your tax details.",
+    "retenidas": "{n, plural, one {You have # sale on hold} other {You have # sales on hold}} ({importe}) because your tax details are missing. The money is safe: we send it as soon as you complete them below.",
+    "sinRetenidas": "Until you complete them, your sales are collected but the money doesn't reach you. It takes a minute: what Stripe already knew is filled in.",
     "propios": "You get paid with your own payment account.",
     "detalles": "See details"
   },
@@ -16,7 +19,10 @@
     "ventas": "{n, plural, one {# sale} other {# sales}}",
     "enBanco": "Already in your bank",
     "enCamino": "On its way",
-    "enCaminoNota": "Arrives in the next few days"
+    "enCaminoNota": "Arrives in the next few days",
+    "retenido": "On hold",
+    "retenidoNotaFiscal": "Until you complete your tax details",
+    "retenidoNota": "Not sent until it's resolved: see “See details”"
   },
   "vacio": {
     "titulo": "Your sales will show up here",

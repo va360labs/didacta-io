@@ -129,6 +129,21 @@ export class PlatformCheckoutGate {
     };
   }
 
+  /**
+   * ¿Cobra por la plataforma y le faltan los datos fiscales? Con el requisito
+   * encendido (`PAYMENTS_PLATFORM_TAX_PROFILE_REQUIRED`), sin ellos las ventas
+   * se cobran pero su dinero NO se le transfiere: «Conecta tus cobros» no está
+   * hecho hasta que los complete (ensayo general: «Listo para cobrar» con el
+   * dinero retenido). Con claves propias o sin el requisito, `false`.
+   */
+  async taxProfilePending(tenantId: string): Promise<boolean> {
+    const taxProfiles = this.runtime.taxProfiles;
+    if (!taxProfiles?.required) return false;
+    const mode = await runAsTenant(tenantId, () => this.runtime.mode.resolve(tenantId));
+    if (mode.mode !== 'platform') return false;
+    return (await taxProfiles.transferBlockReason(tenantId)) !== null;
+  }
+
   /** `null` si puede vender (o no cobra por la plataforma); si no, por qué. */
   async saleBlockedReason(tenantId: string): Promise<PaymentModeNotReadyReason | null> {
     const mode = await runAsTenant(tenantId, () => this.runtime.mode.resolve(tenantId));

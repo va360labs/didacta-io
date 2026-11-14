@@ -11,8 +11,12 @@ export interface SalesHeadline {
   currency: string;
   salesCount: number;
   gross: number;
+  /** Lo que de verdad le queda de lo enviado (tras reembolsos y reclamaciones). */
   received: number;
+  /** En camino: llega en los próximos días. */
   pending: number;
+  /** Retenido: no sale hasta que se resuelva el motivo (p. ej. los datos fiscales). */
+  held: number;
 }
 
 /**
@@ -27,8 +31,10 @@ export function primaryCurrency(summary: PayoutsSummaryDto | null): SalesHeadlin
     currency: best.currency,
     salesCount: best.salesCount,
     gross: best.gross,
-    received: best.received,
+    // Tras devolver una venta entera no se puede seguir diciendo que llegó.
+    received: best.receivedNet ?? best.received,
     pending: best.pending,
+    held: best.held ?? 0,
   };
 }
 

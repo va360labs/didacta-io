@@ -178,7 +178,9 @@ describe('ventas y resumen', () => {
         stripeFees: 690,
         platformFees: 1500,
         received: 18485,
+        receivedNet: 18485,
         pending: 6985,
+        held: 0,
         debtNetted: 2340,
         debtOutstanding: 0,
         refunded: 0,
@@ -191,7 +193,9 @@ describe('ventas y resumen', () => {
         stripeFees: 0,
         platformFees: 0,
         received: 0,
+        receivedNet: 0,
         pending: 0,
+        held: 0,
         debtNetted: 0,
         debtOutstanding: 500,
         refunded: 0,
@@ -204,13 +208,79 @@ describe('ventas y resumen', () => {
         stripeFees: 320,
         platformFees: 500,
         received: 9180,
+        receivedNet: 9180,
         pending: 0,
+        held: 0,
         debtNetted: 0,
         debtOutstanding: 0,
         refunded: 0,
         reversed: 0,
       },
     ]);
+  });
+});
+
+describe('ensayo general: lo que ya no es verdad tras un reembolso o una retención', () => {
+  it('reembolso total de una venta ya enviada: «Recibido» neto a 0 y sin «hacia el …»', async () => {
+    // Lo del ensayo: 49 € → 44,76 € enviados; reembolso total → 44,76 € retirados.
+    sale(A, {
+      ...transferred(4900, 179, 245, 'eur'),
+      refundedAmount: 4900,
+      reversedAmount: 4476,
+    });
+    const page = await reports.listSales(A);
+    expect(page.items[0]).toMatchObject({ refundState: 'full', estimatedArrival: null });
+
+    const [eur] = (await reports.summary(A)).currencies;
+    expect(eur).toMatchObject({ received: 4476, reversed: 4476, receivedNet: 0, refunded: 4900 });
+  });
+
+  it('reembolso parcial: la venta sigue llegando y «Recibido» resta solo lo retirado', async () => {
+    sale(A, {
+      ...transferred(10000, 175, 500, 'eur'),
+      refundedAmount: 4000,
+      reversedAmount: 3730,
+    });
+    const page = await reports.listSales(A);
+    expect(page.items[0]).toMatchObject({
+      refundState: 'partial',
+      estimatedArrival: '2026-11-23',
+    });
+    const [eur] = (await reports.summary(A)).currencies;
+    expect(eur).toMatchObject({ received: 9325, receivedNet: 5595 });
+  });
+
+  it('venta retenida (faltan los datos fiscales): va a «held», no a «en camino»', async () => {
+    sale(A, {
+      ...transferred(4900, 179, 245, 'eur'),
+      status: 'HELD',
+      lastError: 'tax_profile_incomplete: faltan los datos fiscales',
+    });
+    sale(A, { ...transferred(10000, 175, 500, 'eur'), status: 'READY' });
+    const page = await reports.listSales(A);
+    const held = page.items.find((s) => s.status === 'HELD');
+    expect(held).toMatchObject({ reason: 'tax_profile_incomplete', estimatedArrival: null });
+    const [eur] = (await reports.summary(A)).currencies;
+    expect(eur).toMatchObject({ pending: 9325, held: 4476, received: 0, receivedNet: 0 });
+  });
+
+  it('reclamación ganada: lo devuelto vuelve a contar en «Recibido»', async () => {
+    const won = sale(A, {
+      ...transferred(10000, 175, 500, 'eur'),
+      reversedAmount: 9325,
+    });
+    db.insert('modPayoutsLedgerEntry', {
+      tenantId: A,
+      accountId: account[A],
+      saleId: won['id'],
+      type: 'TRANSFER',
+      amount: -9325,
+      currency: 'eur',
+      idempotencyKey: 'payouts:reinstate:dispute:dp_1',
+      occurredAt: new Date('2026-11-20T00:00:00Z'),
+    });
+    const [eur] = (await reports.summary(A)).currencies;
+    expect(eur).toMatchObject({ received: 9325, reversed: 9325, receivedNet: 9325 });
   });
 });
 

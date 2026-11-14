@@ -146,7 +146,10 @@
         "titulo": "Conecte seus recebimentos",
         "que": "Para o dinheiro de cada venda chegar à sua conta bancária. Vamos pedir seus dados e o número da sua conta; você não precisa de chaves nem de nada técnico.",
         "hecho": "Pronto para receber",
+        "faltanFiscales": "Sua conta de recebimentos já está conectada. Falta um passo: seus dados fiscais (seu NIF e seu endereço). Sem eles, o dinheiro das suas vendas fica retido e não chega até você.",
+        "pendienteFiscales": "Falta: dados fiscais",
         "boton": "Conectar recebimentos",
+        "botonFiscales": "Completar meus dados fiscais",
         "ayuda1": "Seus alunos pagam com cartão em uma página de pagamento segura.",
         "ayuda2": "A Didacta fica com 5% de cada venda. O resto é seu e vai para o seu banco.",
         "ayuda3": "Você vende na sua moeda e cada aluno vê o preço na dele."
@@ -157,7 +160,8 @@
         "hecho": "À venda",
         "boton": "Publicar e criar meu link",
         "publicando": "Publicando…",
-        "faltaAntes": "Primeiro conclua os passos acima."
+        "faltaAntes": "Primeiro conclua os passos acima.",
+        "avisoRetenido": "Você já pode publicar: seus alunos poderão comprar, mas o dinheiro das suas vendas ficará retido até você completar seus dados fiscais."
       },
       "invite": {
         "titulo": "Convide seus primeiros alunos",
@@ -177,7 +181,8 @@
       "notaAntes": "Assim seus alunos vão ver. O link é ativado quando você publicar.",
       "notaDespues": "Compartilhe nas suas redes, no seu site ou pelo WhatsApp.",
       "noComprable": "Ainda não dá para comprar",
-      "notaNoComprable": "Conecte seus recebimentos (passo 4) para liberar a compra."
+      "notaNoComprable": "Conecte seus recebimentos (passo 4) para liberar a compra.",
+      "retenido": "Já está à venda, mas o dinheiro das suas vendas fica retido até você completar seus dados fiscais."
     },
     "ayudaTitulo": "Travou em algum passo?",
     "ayudaTexto": "Escreva para a gente e ajudamos você a deixar tudo pronto.",

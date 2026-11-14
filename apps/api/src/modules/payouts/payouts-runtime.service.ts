@@ -4,6 +4,7 @@
  */
 
 import { Inject, Injectable, Optional } from '@nestjs/common';
+import { ModuleRef } from '@nestjs/core';
 import type { PrismaClient } from '@didacta/database';
 import {
   FetchViesClient,
@@ -16,6 +17,7 @@ import {
   PayoutsPortalService,
   PayoutsRefundsService,
   PayoutsReportsService,
+  PayoutsSaleNoticesService,
   PayoutsSettingsService,
   RefsService,
   SettlementService,
@@ -33,6 +35,7 @@ import { Logger as PinoLogger } from 'nestjs-pino';
 import { PrismaService } from '../../prisma/prisma.service';
 import { runAsTenant, runGlobalWithoutTenant } from '../../tenancy/tenant-context.storage';
 import { TenantResolverService } from '../../tenancy/tenant-resolver.service';
+import { ModuleContextFactory } from '../module-context.factory';
 import { PaymentModeResolver } from '../payment-mode.resolver';
 import { SmtpAdapterService } from '../smtp-adapter.service';
 import { TenantSmtpResolverService } from '../tenant-smtp-resolver.service';
@@ -83,6 +86,10 @@ export class PayoutsRuntime {
     // etapas anteriores que montan el runtime a mano) no existen.
     @Optional() @Inject(PAYOUTS_CIPHER) cipher?: PayoutsCipher,
     @Optional() @Inject(PAYOUTS_VIES_CLIENT) vies?: ViesClient,
+    // La campana (aviso de cada venta). El hub vive en `ModulesModule`, que
+    // importa a este módulo: se busca en el contenedor al usarlo, como el
+    // reparto a módulos (`platform-event-dispatcher.ts`).
+    @Optional() moduleRef?: ModuleRef,
   ) {
     const db: PayoutsDbPort = (this.db = {
       // La extensión RLS del cliente inyecta el `set_config` del tenant como
@@ -178,6 +185,15 @@ export class PayoutsRuntime {
       smtpResolver,
       smtp,
       tenantResolver,
+      hub: () => {
+        try {
+          return (
+            moduleRef?.get(ModuleContextFactory, { strict: false })?.getNotificationHub() ?? null
+          );
+        } catch {
+          return null;
+        }
+      },
     });
     // Tras anotar un reembolso o una disputa de una venta aún sin transferir,
     // que la venta siga su camino (con su importe ya rebajado).
@@ -197,6 +213,12 @@ export class PayoutsRuntime {
       alertThresholdMinor: config.debtAlertMinor,
     });
     this.offboarding = new PayoutsOffboardingService(db, stripe, this.accounts, {
+      logger: moneyLogger,
+    });
+    // Aviso de cada venta a quien administra el aula (correo y campana).
+    this.saleNotices = new PayoutsSaleNoticesService(db, {
+      notifier: this.notifier,
+      taxGate: this.taxProfiles && config.taxProfileRequired === true ? this.taxProfiles : null,
       logger: moneyLogger,
     });
     // Sin Redis no hay barrido cada minuto: la compra y `charge.updated` se
@@ -242,6 +264,8 @@ export class PayoutsRuntime {
   readonly debts: PayoutsDebtsService;
   /** Desconexión de cobros y baja del aula (E6). */
   readonly offboarding: PayoutsOffboardingService;
+  /** Aviso de cada venta a quien administra el aula (una vez por venta). */
+  readonly saleNotices: PayoutsSaleNoticesService;
 
   /**
    * Registro de objetos para los adaptadores de Stripe de los módulos

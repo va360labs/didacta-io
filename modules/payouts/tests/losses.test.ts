@@ -70,6 +70,7 @@ function build(policy: PayoutsLossPolicy = DEFAULT_LOSS_POLICY): void {
     debtCharged: async (input) => void notices.push({ kind: 'debtCharged', ...input }),
     operatorAlert: async (alert, detail) =>
       void notices.push({ kind: 'operator', alert, ...detail }),
+    refundIssued: async (input) => void notices.push({ ...input, notice: 'refundIssued' }),
   };
   const now = () => new Date(clock);
   settlement = new SettlementService(port, fake, new PayoutsSettingsService(port, 500), {
@@ -204,6 +205,147 @@ function ledgerTotal(currency = 'eur'): number {
 }
 
 // ────────────────────────────────────────────────────────────────────────────
+
+describe('Ensayo general: el botón y los webhooks del MISMO reembolso a la vez', () => {
+  /** Espera a que el botón esté a mitad de la reversión (en Stripe). */
+  async function untilReversalInFlight() {
+    for (let i = 0; i < 200; i += 1) {
+      if (fake.callsTo('POST', /\/reversals$/).length > 0) return;
+      await new Promise((r) => setImmediate(r));
+    }
+    throw new Error('la reversión no llegó a pedirse');
+  }
+
+  it('UNA sola petición de reversión; los webhooks se van con «busy» y sin error', async () => {
+    const s = await transferredSale({});
+    const release = world.holdReversals();
+    const panel = refunds.refund({ tenantId: A, saleId: s.saleId, initiatedBy: 'user-1' });
+    await untilReversalInFlight();
+
+    // `charge.refunded` y `refund.created` llegan mientras el botón revierte.
+    for (const eventType of ['charge.refunded', 'refund.created']) {
+      const object = eventType === 'charge.refunded' ? { id: s.chargeId } : { charge: s.chargeId };
+      await expect(
+        handleRefundEvent({ refunds }, { tenantId: A, eventType, object }),
+      ).resolves.toEqual({ outcome: 'synced', refunds: 1, accounted: 0 });
+    }
+    release();
+    expect((await panel).accounting).toBe('accounted');
+
+    expect(fake.callsTo('POST', /\/reversals$/)).toHaveLength(1);
+    expect(world.reversals.map((r) => r['amount'])).toEqual([9325]);
+    expect(alerts).toEqual([]);
+    expect(refundRows(s.saleId)[0]).toMatchObject({
+      reversalStatus: 'DONE',
+      reversalLeaseUntil: null,
+    });
+    // Un webhook tardío ya no hace nada.
+    await handleRefundEvent(
+      { refunds },
+      { tenantId: A, eventType: 'refund.updated', object: { charge: s.chargeId } },
+    );
+    expect(fake.callsTo('POST', /\/reversals$/)).toHaveLength(1);
+    expect(await invariantViolations()).toEqual([]);
+  });
+
+  it('control: sin turno, el doble de Stripe rechaza la segunda petición con 409 como en el ensayo', async () => {
+    const s = await transferredSale({});
+    const transferId = sale(s.saleId)['stripeTransferId'] as string;
+    const path = `/v1/transfers/${transferId}/reversals`;
+    const release = world.holdReversals();
+    const first = fake.v1('POST', path, { amount: 100 }, { idempotencyKey: 'clave-1' });
+    await untilReversalInFlight();
+    await expect(
+      fake.v1('POST', path, { amount: 100 }, { idempotencyKey: 'clave-1' }),
+    ).rejects.toMatchObject({ status: 409, stripeCode: 'idempotency_key_in_use' });
+    release();
+    await first;
+  });
+
+  it('si aun así Stripe dice «clave en curso», se va con «busy», suelta el turno y el reintento anota', async () => {
+    const s = await transferredSale({});
+    fake.failNext(/\/reversals$/, {
+      method: 'POST',
+      status: 409,
+      type: 'idempotency_error',
+      stripeCode: 'idempotency_key_in_use',
+      message: 'There is currently another in-progress request using this Idempotent Key',
+    });
+    const result = await refunds.refund({ tenantId: A, saleId: s.saleId, initiatedBy: 'u' });
+    expect(result.accounting).toBe('busy');
+    expect(refundRows(s.saleId)[0]).toMatchObject({
+      reversalStatus: null,
+      reversalLeaseUntil: null,
+    });
+
+    const retried = await refunds.retryPending();
+    expect(retried).toMatchObject({ accounted: 1, errors: 0 });
+    expect(world.reversals.map((r) => r['amount'])).toEqual([9325]);
+    expect(await invariantViolations()).toEqual([]);
+  });
+
+  it('un turno de otro proceso que caducó (murió a mitad) no bloquea: el conciliador lo termina', async () => {
+    const s = await transferredSale({});
+    fake.failNext(/\/reversals$/, { method: 'POST', status: 500, message: 'boom' });
+    await refunds.refund({ tenantId: A, saleId: s.saleId, initiatedBy: 'u' });
+    // Simula un proceso que cogió el turno y murió sin soltarlo.
+    const row = refundRows(s.saleId)[0]!;
+    db.update(
+      'modPayoutsRefund',
+      { id: row['id'] },
+      {
+        reversalLeaseUntil: new Date(clock + 60_000),
+      },
+    );
+    expect((await refunds.retryPending()).accounted).toBe(0);
+    clock += 6 * 60_000; // caduca (5 min)
+    expect((await refunds.retryPending()).accounted).toBe(1);
+    expect(world.reversals).toHaveLength(1);
+  });
+});
+
+describe('Aviso al alumno al reembolsarle', () => {
+  it('total: una vez, con su importe y «todo» (pierde el acceso al curso)', async () => {
+    const s = await transferredSale({ description: 'Torno para principiantes' });
+    db.update('modPayoutsSale', { id: s.saleId }, { buyerEmail: 'marta@example.test' });
+    await refunds.refund({ tenantId: A, saleId: s.saleId, initiatedBy: 'u' });
+    // Los webhooks del mismo reembolso no lo repiten.
+    await refunds.syncCharge(A, s.chargeId);
+    await refunds.syncCharge(A, s.chargeId);
+    const sent = notices.filter((n) => n['notice'] === 'refundIssued');
+    expect(sent).toEqual([
+      expect.objectContaining({
+        tenantId: A,
+        saleId: s.saleId,
+        kind: 'course',
+        description: 'Torno para principiantes',
+        amount: 10000,
+        currency: 'eur',
+        buyerEmail: 'marta@example.test',
+        full: true,
+      }),
+    ]);
+  });
+
+  it('parcial: «no todo» (conserva el acceso); el segundo parcial que completa, «todo»', async () => {
+    const s = await transferredSale({});
+    await refunds.refund({ tenantId: A, saleId: s.saleId, amount: 4000, initiatedBy: 'u' });
+    await refunds.refund({ tenantId: A, saleId: s.saleId, amount: 6000, initiatedBy: 'u' });
+    const sent = notices.filter((n) => n['notice'] === 'refundIssued');
+    expect(sent.map((n) => [n['amount'], n['full']])).toEqual([
+      [4000, false],
+      [6000, true],
+    ]);
+  });
+
+  it('un reembolso hecho a mano en el panel de Stripe también avisa al alumno', async () => {
+    const s = await transferredSale({});
+    await fake.v1('POST', '/v1/refunds', { charge: s.chargeId, amount: 2500 });
+    await refunds.syncCharge(A, s.chargeId);
+    const sent = notices.filter((n) => n['notice'] === 'refundIssued');
+    expect(sent).toEqual([expect.objectContaining({ amount: 2500, full: false })]);
+  });
+});
 
 describe('Reembolso desde Didacta', () => {
   it('total de 10000 con comisión 175: reembolso 10000, reversión 9325, comisión devuelta 500 y deuda REFUND_FEE 175', async () => {

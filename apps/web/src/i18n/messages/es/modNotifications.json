@@ -402,6 +402,39 @@
         "surveyUrl": "Enlace a la página de la clase (/live/…)",
         "tenantName": "Nombre de la plataforma"
       }
+    },
+    "payouts_sale_course": {
+      "name": "Venta de un curso (aviso al equipo)",
+      "description": "Cuando un alumno compra un curso, a quien administra el aula. Solo en la campana: el correo lo envía el operador de cobros.",
+      "vars": {
+        "product": "Curso o plan vendido",
+        "amount": "Lo que pagó el alumno, en su moneda",
+        "buyer": "Nombre del alumno (o su correo si aún no tiene nombre)",
+        "held": "Si el dinero queda retenido por faltar los datos fiscales",
+        "tenantName": "Nombre de la plataforma"
+      }
+    },
+    "payouts_sale_membership": {
+      "name": "Alta en una membresía (aviso al equipo)",
+      "description": "Cuando alguien se une a una membresía, a quien administra el aula. Solo en la campana: el correo lo envía el operador de cobros.",
+      "vars": {
+        "product": "Curso o plan vendido",
+        "amount": "Lo que pagó el alumno, en su moneda",
+        "buyer": "Nombre del alumno (o su correo si aún no tiene nombre)",
+        "held": "Si el dinero queda retenido por faltar los datos fiscales",
+        "tenantName": "Nombre de la plataforma"
+      }
+    },
+    "payouts_sale_renewal": {
+      "name": "Renovación de una membresía (aviso al equipo)",
+      "description": "Cuando se cobra la renovación de una membresía, a quien administra el aula. Solo en la campana: el correo lo envía el operador de cobros.",
+      "vars": {
+        "product": "Curso o plan vendido",
+        "amount": "Lo que pagó el alumno, en su moneda",
+        "buyer": "Nombre del alumno (o su correo si aún no tiene nombre)",
+        "held": "Si el dinero queda retenido por faltar los datos fiscales",
+        "tenantName": "Nombre de la plataforma"
+      }
     }
   }
 }

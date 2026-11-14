@@ -215,9 +215,16 @@ export {
 export type {
   PayoutsLossPolicy,
   PayoutsNotifier,
+  RefundIssuedNotice,
   ReversalResult,
   ReversalStatus,
+  SaleMadeNotice,
+  SaleNoticeKind,
 } from './losses.js';
+
+// Aviso de cada venta a quien administra el aula (una vez por venta).
+export { PayoutsSaleNoticesService } from './sale-notices.service.js';
+export type { SaleNoticeOutcome, SaleNoticesServiceOptions } from './sale-notices.service.js';
 
 export {
   PayoutsDebtsService,
@@ -235,7 +242,7 @@ export type {
   DebtsServiceOptions,
 } from './debts.service.js';
 
-export { PayoutsRefundsService } from './refunds.service.js';
+export { PayoutsRefundsService, isIdempotencyInUse } from './refunds.service.js';
 export type {
   RefundAccountingOutcome,
   RefundPreview,

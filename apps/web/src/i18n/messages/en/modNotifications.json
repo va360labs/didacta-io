@@ -402,6 +402,39 @@
         "surveyUrl": "Link to the class page (/live/…)",
         "tenantName": "Platform name"
       }
+    },
+    "payouts_sale_course": {
+      "name": "Course sale (notice to the team)",
+      "description": "When a student buys a course, to whoever runs the academy. Only in the bell: the email is sent by the payments operator.",
+      "vars": {
+        "product": "Course or plan sold",
+        "amount": "What the student paid, in their currency",
+        "buyer": "Student's name (or their email if they have no name yet)",
+        "held": "Whether the money is on hold because the tax details are missing",
+        "tenantName": "Platform name"
+      }
+    },
+    "payouts_sale_membership": {
+      "name": "New membership (notice to the team)",
+      "description": "When someone joins a membership, to whoever runs the academy. Only in the bell: the email is sent by the payments operator.",
+      "vars": {
+        "product": "Course or plan sold",
+        "amount": "What the student paid, in their currency",
+        "buyer": "Student's name (or their email if they have no name yet)",
+        "held": "Whether the money is on hold because the tax details are missing",
+        "tenantName": "Platform name"
+      }
+    },
+    "payouts_sale_renewal": {
+      "name": "Membership renewal (notice to the team)",
+      "description": "When a membership renewal is charged, to whoever runs the academy. Only in the bell: the email is sent by the payments operator.",
+      "vars": {
+        "product": "Course or plan sold",
+        "amount": "What the student paid, in their currency",
+        "buyer": "Student's name (or their email if they have no name yet)",
+        "held": "Whether the money is on hold because the tax details are missing",
+        "tenantName": "Platform name"
+      }
     }
   }
 }

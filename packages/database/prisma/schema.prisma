@@ -5016,6 +5016,9 @@ model ModPayoutsSale {
   nextAttemptAt              DateTime?             @map("next_attempt_at")
   chargedAt                  DateTime?             @map("charged_at")
   transferredAt              DateTime?             @map("transferred_at")
+  /// Cuándo se avisó de la venta a quien administra el aula (correo y
+  /// campana). Sello de idempotencia: se reclama con `WHERE … IS NULL`.
+  creatorNotifiedAt          DateTime?             @map("creator_notified_at")
   createdAt                  DateTime              @default(now()) @map("created_at")
   updatedAt                  DateTime              @updatedAt @map("updated_at")
 
@@ -5032,6 +5035,7 @@ model ModPayoutsSale {
   @@index([accountId])
   @@index([stripePaymentIntentId])
   @@index([stripeInvoiceId])
+  @@index([creatorNotifiedAt])
   @@map("mod_payouts_sale")
 }
 
@@ -5100,6 +5104,9 @@ model ModPayoutsRefund {
   reversalTarget   Int?                         @map("reversal_target")
   stripeReversalId String?                      @map("stripe_reversal_id")
   reversalStatus   PayoutsRefundReversalStatus? @map("reversal_status")
+  /// Turno para pedir la reversión a Stripe: quien lo tiene (hasta esta hora)
+  /// es el único que la pide; el resto lo deja estar. Null = libre.
+  reversalLeaseUntil DateTime?                  @map("reversal_lease_until")
   /// Id del usuario que lo pidió, o el origen si no fue desde el panel.
   initiatedBy      String?                      @map("initiated_by")
   reason           String?

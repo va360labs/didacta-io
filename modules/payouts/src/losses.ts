@@ -74,6 +74,49 @@ export interface PayoutsNotifier {
   }): Promise<void>;
   /** Algo que un humano del operador debe mirar. */
   operatorAlert(alert: string, detail: Record<string, unknown>): Promise<void>;
+  /**
+   * Venta nueva: aviso a quien administra el aula (correo y campana). Sale UNA
+   * vez por venta: lo garantiza `PayoutsSaleNoticesService` con el sello
+   * `creator_notified_at`. Opcional: un notificador sin él no avisa.
+   */
+  saleMade?(input: SaleMadeNotice): Promise<void>;
+  /**
+   * Reembolso hecho: aviso al ALUMNO (lo que se le devuelve y si pierde el
+   * acceso). Sale una vez por reembolso: al anotarlo. Opcional.
+   */
+  refundIssued?(input: RefundIssuedNotice): Promise<void>;
+}
+
+/** Qué se vendió: un curso, el alta en una membresía o una renovación. */
+export type SaleNoticeKind = 'course' | 'membership' | 'renewal';
+
+export interface SaleMadeNotice {
+  readonly tenantId: string;
+  readonly saleId: string;
+  readonly kind: SaleNoticeKind;
+  /** Nombre del curso o del plan, tal como lo vio el alumno al pagar. */
+  readonly description: string | null;
+  /** Lo que pagó el alumno, en SU moneda (unidad mínima de Stripe). */
+  readonly amount: number;
+  readonly currency: string;
+  readonly buyerEmail: string | null;
+  /** El dinero de la venta se queda retenido porque faltan los datos fiscales. */
+  readonly heldForTaxData: boolean;
+}
+
+export interface RefundIssuedNotice {
+  readonly tenantId: string;
+  readonly saleId: string;
+  readonly refundId: string;
+  /** Curso (pago único) o membresía: de eso depende qué pasa con el acceso. */
+  readonly kind: 'course' | 'membership';
+  readonly description: string | null;
+  /** Lo devuelto, en la moneda en la que pagó el alumno (unidad mínima). */
+  readonly amount: number;
+  readonly currency: string;
+  readonly buyerEmail: string | null;
+  /** Con este reembolso el pago queda devuelto entero (un curso pierde el acceso). */
+  readonly full: boolean;
 }
 
 export const SILENT_NOTIFIER: PayoutsNotifier = {

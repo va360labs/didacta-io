@@ -146,7 +146,10 @@
         "titulo": "Connect your payouts",
         "que": "So the money from each sale reaches your bank account. We will ask for your details and your account number; no keys or anything technical.",
         "hecho": "Ready to get paid",
+        "faltanFiscales": "Your payout account is connected. One step left: your tax details (your tax ID and your address). Without them, the money from your sales stays on hold and doesn't reach you.",
+        "pendienteFiscales": "Missing: tax details",
         "boton": "Connect payouts",
+        "botonFiscales": "Complete my tax details",
         "ayuda1": "Your students pay by card on a secure checkout page.",
         "ayuda2": "Didacta keeps 5% of each sale. The rest is yours and goes to your bank.",
         "ayuda3": "You sell in your currency and each student sees the price in theirs."
@@ -157,7 +160,8 @@
         "hecho": "On sale",
         "boton": "Publish and create my link",
         "publicando": "Publishing…",
-        "faltaAntes": "Finish the steps above first."
+        "faltaAntes": "Finish the steps above first.",
+        "avisoRetenido": "You can publish now: students will be able to buy, but the money from your sales will stay on hold until you complete your tax details."
       },
       "invite": {
         "titulo": "Invite your first students",
@@ -177,7 +181,8 @@
       "notaAntes": "This is what your students will see. The link switches on when you publish.",
       "notaDespues": "Share it on social media, your website or WhatsApp.",
       "noComprable": "Cannot be bought yet",
-      "notaNoComprable": "Connect your payouts (step 4) so people can buy."
+      "notaNoComprable": "Connect your payouts (step 4) so people can buy.",
+      "retenido": "It's on sale, but the money from your sales stays on hold until you complete your tax details."
     },
     "ayudaTitulo": "Stuck on a step?",
     "ayudaTexto": "Write to us and we will help you get it ready.",
