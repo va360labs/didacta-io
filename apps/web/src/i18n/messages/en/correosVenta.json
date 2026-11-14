@@ -1,0 +1,64 @@
+{
+  "titulo": "Emails",
+  "tituloCompleto": "Sales and access emails",
+  "sub": "What your students receive when they buy. Change the subject and the message as you like: the receipt with the purchase details always goes below.",
+  "errorCargar": "We could not load the emails. Reload the page.",
+  "original": "Original",
+  "personalizado": "Customised",
+  "plantillas": {
+    "purchase_receipt": {
+      "nombre": "Purchase receipt",
+      "cuando": "When someone pays for a course or starts a membership. It carries the button to get in."
+    },
+    "purchase_renewal_receipt": {
+      "nombre": "Renewal receipt",
+      "cuando": "Every time a subscription is charged."
+    },
+    "purchase_payment_failed": {
+      "nombre": "Failed payment",
+      "cuando": "When the bank declines a renewal charge."
+    },
+    "purchase_refund": {
+      "nombre": "Refund",
+      "cuando": "When you give back the money of a sale."
+    }
+  },
+  "idioma": "Email language",
+  "idiomaAyuda": "Each student gets it in their language. If you sell in several languages, check the text of each one.",
+  "asunto": "Subject",
+  "mensaje": "Message",
+  "datos": "Add a purchase detail",
+  "datosAyuda": "It is replaced by each student's real detail when sent.",
+  "vars": {
+    "name": "Student's name",
+    "product": "Course or membership",
+    "amount": "Amount",
+    "order": "Order number",
+    "date": "Date",
+    "academy": "Your academy",
+    "email": "Student's email",
+    "nextDate": "Next renewal",
+    "deadline": "Deadline to pay"
+  },
+  "reciboFijo": "The receipt (order, amount, payment method, who sells and the withdrawal waiver) always goes below your message and cannot be removed.",
+  "guardar": "Save",
+  "guardando": "Saving…",
+  "guardado": "Saved. The next emails will go out like this.",
+  "probar": "Send me a test",
+  "enviando": "Sending…",
+  "pruebaEnviada": "We have sent a test to {email}. If it does not arrive, check your spam folder.",
+  "volverOriginal": "Back to the original",
+  "originalConfirmar": "Go back to the original text of “{nombre}” in {idioma}? What you wrote will be lost.",
+  "originalHecho": "The original text is back.",
+  "vistaPrevia": "Preview with sample data",
+  "ordenador": "Computer",
+  "movil": "Phone",
+  "errorVista": "We could not prepare the preview.",
+  "errorGuardar": "We could not save it. Please try again.",
+  "errorPrueba": "We could not send the test.",
+  "politica": "Refund policy",
+  "politicaAyuda": "If you have a page with your refund policy, paste the link here and it will appear on every receipt.",
+  "politicaGuardar": "Save link",
+  "politicaGuardada": "Link saved.",
+  "politicaInvalida": "Paste a link that starts with https://"
+}

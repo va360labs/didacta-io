@@ -28,3 +28,4 @@ export {
   type NotificationTemplateOverride,
 } from './admin-client';
 export { EmailTemplatesManager, NotificationTemplatesTab } from './admin-templates-card';
+export { SaleEmailsEditor } from './sale-emails-editor';

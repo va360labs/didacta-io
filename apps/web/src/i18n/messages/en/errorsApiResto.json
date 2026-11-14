@@ -68,5 +68,10 @@
   "VIDEO_FILE_TOO_LONG": "This video is longer than allowed (2 h).",
   "VIDEO_STORAGE_QUOTA": "This video doesn't fit in your video space.",
   "VIDEO_NOT_A_VIDEO": "This doesn't look like a video.",
-  "ADMIN_VIDEO_PROTECTION_PLATFORM_LIBRARY": "Videos uploaded to the academy are already protected: no key is needed."
+  "ADMIN_VIDEO_PROTECTION_PLATFORM_LIBRARY": "Videos uploaded to the academy are already protected: no key is needed.",
+  "SALE_EMAILS_ADMIN_REQUIRED": "Only whoever runs the academy can change its emails.",
+  "SALE_EMAIL_NOT_FOUND": "That email does not exist.",
+  "SALE_EMAIL_TEST_NO_ADDRESS": "We do not know which address to send the test to.",
+  "SALE_EMAIL_TEST_NO_SMTP": "Your academy cannot send emails yet.",
+  "SALE_EMAIL_TEST_FAILED": "The mail server did not accept the test: {detail}"
 }

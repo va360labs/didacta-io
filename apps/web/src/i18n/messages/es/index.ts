@@ -27,6 +27,7 @@ import auth from './auth.json';
 import bienvenida from './bienvenida.json';
 import common from './common.json';
 import comunidadComponentes from './comunidadComponentes.json';
+import correosVenta from './correosVenta.json';
 import cuentaComponentes from './cuentaComponentes.json';
 import errors from './errors.json';
 import errorsApiAdmin from './errorsApiAdmin.json';
@@ -80,6 +81,7 @@ export default {
   bienvenida,
   common,
   comunidadComponentes,
+  correosVenta,
   cuentaComponentes,
   errors: {
     ...errors,

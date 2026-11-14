@@ -23,6 +23,7 @@ import { ACADEMY_LOCALE_NAMES, ACADEMY_LOCALES, type AcademyLocale } from '@/i18
 import { academyApi, type Academy } from '@/lib/academy';
 import { authStorage } from '@/lib/auth-storage';
 import { simpleModeApi } from '@/lib/simple-mode';
+import { SaleEmailsEditor } from '@/modules/notifications';
 import {
   publishThemeUpdate,
   themingApi,
@@ -37,7 +38,8 @@ const DIDACTA_SAT = 70;
 /**
  * «Ajustes» del MODO SENCILLO: tu academia (nombre, idioma, logo y color, con
  * vista previa en vivo; y cómo se presenta en la comunidad: portada,
- * descripción y enlaces) y el interruptor para pasar al modo completo. Lo técnico
+ * descripción y enlaces), los correos que reciben los alumnos al comprar y el
+ * interruptor para pasar al modo completo. Lo técnico
  * (correo propio, cobros con claves, Zoom, idioma…) sigue en la misma página
  * con `?full=1`, sin rutas duplicadas.
  */
@@ -232,6 +234,12 @@ export function SimpleSettings() {
           ) : null}
         </div>
       </form>
+
+      {/* Lo que reciben los alumnos al comprar: asunto y mensaje a su gusto,
+          con el recibo de la compra siempre debajo. */}
+      <div className="mt-4">
+        <SaleEmailsEditor />
+      </div>
 
       <section className="mt-4 rounded-2xl border border-border bg-surface p-4 sm:p-6">
         <h2 className="text-lg font-bold text-text">{tMarca('paginaPublica.title')}</h2>

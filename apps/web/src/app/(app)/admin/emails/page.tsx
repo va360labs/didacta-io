@@ -17,7 +17,7 @@
 
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
-import { EmailTemplatesManager } from '@/modules/notifications';
+import { EmailTemplatesManager, SaleEmailsEditor } from '@/modules/notifications';
 
 export default function AdminEmailsPage() {
   const t = useTranslations('adminSso');
@@ -35,6 +35,10 @@ export default function AdminEmailsPage() {
           })}
         </p>
       </div>
+      {/* Los correos de venta y acceso (recibo de compra, renovación, pago
+          fallido y reembolso): el mismo editor que «Correos» en el modo
+          sencillo, con vista previa y recibo fijo. */}
+      <SaleEmailsEditor variant="full" />
       <EmailTemplatesManager />
     </div>
   );
