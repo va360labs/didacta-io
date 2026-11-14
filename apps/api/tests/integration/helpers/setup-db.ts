@@ -16,9 +16,34 @@ import { resolve } from 'node:path';
 // `pg` o `@prisma/client` como devDeps de apps/api.
 import { PrismaClient } from '@didacta/database';
 
-const TEST_DATABASE_URL =
+/**
+ * `localhost` → `127.0.0.1`, y no es cosmético.
+ *
+ * En Windows `localhost` resuelve PRIMERO a `::1`. Si el Postgres de pruebas
+ * está publicado solo en IPv4 (`-p 127.0.0.1:5479:5432`, que es como se
+ * levantan los contenedores por sesión), cada conexión NUEVA espera ~2 s a que
+ * Windows dé por rechazado el intento por IPv6 antes de probar 127.0.0.1. Y el
+ * `maxWait` de una transacción interactiva de Prisma es justo 2 s: los tests
+ * de concurrencia de cobros (5 o 12 transacciones a la vez sobre un pool aún
+ * frío) morían con «Unable to start a transaction in the given time» y
+ * parecían inestables «bajo carga». Medido: 2080 ms por conexión con
+ * `localhost`, 34 ms con `127.0.0.1`.
+ *
+ * Se normaliza aquí, en el único sitio por el que pasa la URL antes de que
+ * los workers la hereden, para que dé igual qué escriba el entorno de quien
+ * lanza la suite. Es la misma máquina; solo se ahorra el intento por IPv6.
+ */
+export function preferIpv4Loopback(rawUrl: string): string {
+  const url = new URL(rawUrl);
+  if (url.hostname !== 'localhost') return rawUrl;
+  url.hostname = '127.0.0.1';
+  return url.toString();
+}
+
+const TEST_DATABASE_URL = preferIpv4Loopback(
   process.env.TEST_DATABASE_URL ??
-  'postgresql://didacta_test:didacta_test@localhost:5433/didacta_test?schema=public';
+    'postgresql://didacta_test:didacta_test@127.0.0.1:5433/didacta_test?schema=public',
+);
 
 const PRISMA_SCHEMA_PATH = resolve(
   __dirname,
@@ -109,6 +134,9 @@ export async function setup(): Promise<void> {
   // que se importe el cliente. Los tests usan `createTestApp` que instancia
   // PrismaClient — éste lee DATABASE_URL del entorno en el constructor.
   process.env.DATABASE_URL = TEST_DATABASE_URL;
+  // Los tests que leen TEST_DATABASE_URL por su cuenta (outbox, auditoría,
+  // venta de cursos) heredan la URL ya normalizada.
+  process.env.TEST_DATABASE_URL = TEST_DATABASE_URL;
 
   // Las pruebas no tocan auth, pero PrismaService respeta NODE_ENV en el
   // logger. Forzamos test para silenciar logs verbosos.

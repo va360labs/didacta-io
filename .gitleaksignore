@@ -53,3 +53,8 @@ c862d476db1fc67f7a19d9aebed613695876619f:apps/api/tests/payment-mode.resolver.te
 c862d476db1fc67f7a19d9aebed613695876619f:apps/api/tests/platform-payments.config.test.ts:generic-api-key:31
 c862d476db1fc67f7a19d9aebed613695876619f:apps/api/tests/platform-payments.config.test.ts:stripe-access-token:133
 c862d476db1fc67f7a19d9aebed613695876619f:apps/api/tests/platform-payments.config.test.ts:stripe-access-token:29
+#
+# apps/api/tests/contract/admin-tenants.contract.test.ts — configuración de cobros de plataforma de
+# prueba para GET /admin/tenants/payouts/countries: un secreto de webhook inventado de 16 caracteres
+# (empieza por «whsec_invent»). No es una credencial.
+c608243750098cdb39c33e914bda3aa223319164:apps/api/tests/contract/admin-tenants.contract.test.ts:generic-api-key:826

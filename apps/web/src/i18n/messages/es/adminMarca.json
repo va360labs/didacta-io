@@ -376,5 +376,17 @@
     "saved": "Idioma guardado.",
     "error": "No se ha podido guardar el idioma. Inténtalo de nuevo.",
     "loadError": "No se ha podido cargar el idioma de la academia."
+  },
+  "paginaPublica": {
+    "title": "Página pública de la academia",
+    "description": "Lo que ve quien llega a la dirección de tu academia sin cuenta: tu portada, quién eres y cómo entrar (lo que tienes a la venta). Si la desactivas, va directo a la pantalla de acceso.",
+    "on": "Activada: se ve tu página pública",
+    "off": "Desactivada: se va directo al acceso",
+    "onHelp": "Quien entra sin cuenta ve tu portada con las opciones de acceso.",
+    "offHelp": "Quien entra sin cuenta ve la pantalla de acceso.",
+    "preview": "Ver tu página pública",
+    "saved": "Guardado",
+    "error": "No se ha podido guardar. Inténtalo de nuevo.",
+    "loadError": "No se ha podido cargar este ajuste."
   }
 }

@@ -24,6 +24,8 @@ function makeController(opts?: {
   tenant?: { id: string } | null;
   signupsFrozenAt?: Date | null;
   gate?: PlatformCheckoutGate;
+  sections?: Array<{ id: string; courseId: string; title: string }>;
+  lessons?: Array<{ moduleId: string; title: string }>;
 }) {
   const billing = opts?.billing ?? {
     getCatalog: vi.fn().mockResolvedValue([]),
@@ -61,6 +63,8 @@ function makeController(opts?: {
         .fn()
         .mockResolvedValue(opts?.courseFirst === undefined ? null : opts.courseFirst),
     },
+    modCoursesModule: { findMany: vi.fn().mockResolvedValue(opts?.sections ?? []) },
+    modCoursesLesson: { findMany: vi.fn().mockResolvedValue(opts?.lessons ?? []) },
   } as never;
   return {
     controller: new BillingPublicController(
@@ -121,6 +125,104 @@ describe('BillingPublicController — catálogo público', () => {
     const where = (prisma as never as { modCoursesCourse: { findMany: ReturnType<typeof vi.fn> } })
       .modCoursesCourse.findMany.mock.calls[0]![0].where;
     expect(where).toMatchObject({ tenantId: TENANT, status: 'PUBLISHED', deletedAt: null });
+  });
+});
+
+describe('BillingPublicController — catálogo público · descripción para pintar en el servidor', () => {
+  it('descriptionHtml sale saneado por la frontera del servidor (sin scripts ni manejadores)', async () => {
+    const { controller } = makeController({
+      billing: {
+        getCatalog: vi
+          .fn()
+          .mockResolvedValue([{ courseId: COURSE, options: [{ id: 'o', unitAmount: 100 }] }]),
+      },
+      courses: [
+        {
+          id: COURSE,
+          slug: 'curso-uno',
+          title: 'Curso Uno',
+          description:
+            '<p>Hola <strong>mundo</strong></p><img src="x" onerror="alert(1)"><script>robar()</script>',
+          thumbnailUrl: null,
+          category: null,
+          estimatedMinutes: null,
+        },
+        {
+          id: '33333333-3333-4333-8333-333333333333',
+          slug: 'sin-descripcion',
+          title: 'Sin descripción',
+          description: null,
+          thumbnailUrl: null,
+          category: null,
+          estimatedMinutes: null,
+        },
+      ],
+    });
+    const { courses } = await controller.catalog(req());
+    const html = courses[0]!.descriptionHtml!;
+    expect(html).toContain('<p>Hola <strong>mundo</strong></p>');
+    expect(html).not.toMatch(/onerror|<script|robar/);
+    // El original se sigue sirviendo tal cual (el navegador lo sanea al pintarlo).
+    expect(courses[0]!.description).toContain('<script>');
+    expect(courses[1]!.descriptionHtml).toBeNull();
+  });
+});
+
+describe('BillingPublicController — temario en la ficha pública (ensayo general)', () => {
+  const curso = {
+    id: COURSE,
+    slug: 'torno',
+    title: 'Torno para principiantes',
+    description: null,
+    thumbnailUrl: null,
+    category: null,
+    estimatedMinutes: null,
+  };
+  const billing = {
+    getCatalog: vi.fn().mockResolvedValue([{ courseId: COURSE, options: [] }]),
+  };
+
+  it('cada curso lleva sus secciones con los TÍTULOS de las lecciones, en orden', async () => {
+    const { controller, prisma } = makeController({
+      billing,
+      courses: [curso],
+      sections: [
+        { id: 'm1', courseId: COURSE, title: 'Lecciones' },
+        { id: 'm-vacia', courseId: COURSE, title: 'Sin nada dentro' },
+      ],
+      lessons: [
+        { moduleId: 'm1', title: 'Bienvenida al torno' },
+        { moduleId: 'm1', title: 'Centrar el barro' },
+      ],
+    });
+    const result = await controller.catalog(req());
+    // Una sección sin lecciones no se enseña.
+    expect(result.courses[0]!.syllabus).toEqual([
+      { title: 'Lecciones', lessons: ['Bienvenida al torno', 'Centrar el barro'] },
+    ]);
+    // Acotado al aula y sin borradas, en las DOS consultas.
+    const p = prisma as never as {
+      modCoursesModule: { findMany: ReturnType<typeof vi.fn> };
+      modCoursesLesson: { findMany: ReturnType<typeof vi.fn> };
+    };
+    expect(p.modCoursesModule.findMany.mock.calls[0]![0].where).toMatchObject({
+      tenantId: TENANT,
+      deletedAt: null,
+    });
+    expect(p.modCoursesLesson.findMany.mock.calls[0]![0].where).toMatchObject({
+      tenantId: TENANT,
+      deletedAt: null,
+    });
+    // Solo títulos: el contenido de la lección no sale del aula.
+    expect(p.modCoursesLesson.findMany.mock.calls[0]![0].select).toEqual({
+      moduleId: true,
+      title: true,
+    });
+  });
+
+  it('CONTROL: un curso sin lecciones lleva el temario vacío', async () => {
+    const { controller } = makeController({ billing, courses: [curso] });
+    expect((await controller.catalog(req())).courses[0]!.syllabus).toEqual([]);
   });
 });
 

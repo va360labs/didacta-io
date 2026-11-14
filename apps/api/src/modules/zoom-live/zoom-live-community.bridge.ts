@@ -57,7 +57,7 @@ function claseMarker(sessionId: string): string {
   return `<!--didacta-clase:${sessionId}-->`;
 }
 
-/** Textos del anuncio en cada idioma del aula (es/en: no hay más catálogos). */
+/** Textos del anuncio en cada idioma del aula (es/en/pt). */
 const ANNOUNCEMENT_TEXTS: Record<
   AcademyLocale,
   { headline: (topic: string) => string; cta: string; tag: string; minutes: string }
@@ -72,6 +72,12 @@ const ANNOUNCEMENT_TEXTS: Record<
     headline: (topic) => `Live class: **${topic}**.`,
     cta: 'Sign up here to get the link to the class.',
     tag: 'Live classes',
+    minutes: 'min',
+  },
+  pt: {
+    headline: (topic) => `Aula ao vivo: **${topic}**.`,
+    cta: 'Inscreva-se aqui para receber o link da aula.',
+    tag: 'Aulas ao vivo',
     minutes: 'min',
   },
 };

@@ -9,7 +9,13 @@ import Image from 'next/image';
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 import { Icon } from '@/components/icon';
-import { ACADEMY_LOCALE_NAMES, ACADEMY_LOCALES, type AcademyLocale } from '@/i18n/config';
+import {
+  ACADEMY_LOCALE_NAMES,
+  ACADEMY_LOCALES,
+  catalogOf,
+  toSupportedLocale,
+  type AcademyLocale,
+} from '@/i18n/config';
 import { authStorage } from '@/lib/auth-storage';
 import { formatCents } from '@/lib/i18n/format';
 import { parseAmount, simpleModeApi, suggestCurrency } from '@/lib/simple-mode';
@@ -38,7 +44,7 @@ export function AltaSencilla() {
   // Idioma de la academia: preseleccionado con el de la interfaz (el de la
   // creadora, o el que fijó Cloud al crear el aula). No suma clics: solo se
   // toca si se quiere otro.
-  const [idioma, setIdioma] = useState<AcademyLocale>(locale.startsWith('en') ? 'en' : 'es');
+  const [idioma, setIdioma] = useState<AcademyLocale>(catalogOf(toSupportedLocale(locale)));
   const [oferta, setOferta] = useState<Offer>('course');
   const [titulo, setTitulo] = useState('');
   const [importe, setImporte] = useState('');

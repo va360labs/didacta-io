@@ -29,16 +29,17 @@
  *
  * Las lecturas son de mejor esfuerzo: ante cualquier fallo devuelven el valor
  * por defecto. Una alta o un anuncio nunca se caen por no saber el idioma.
- * El portugués no tiene catálogo en el aula: solo hay `es` y `en`.
  */
 
 /**
- * Idiomas que puede tener un aula: los que tienen catálogo en la web y en los
- * correos. Para sumar `pt-BR` basta con añadirlo aquí cuando exista su
- * catálogo (web `messages/pt`, plantillas del hub): el ajuste, el endpoint, el
- * aprovisionamiento y el script de migración leen esta lista.
+ * Idiomas que puede tener un aula: los que tienen catálogo en la web
+ * (`messages/<código>`) y en los correos (plantillas del hub). Se guarda el
+ * código del catálogo, no el tag completo: un aula en portugués de Brasil
+ * guarda `pt` (`toAcademyLocale('pt-BR')` → `'pt'`) y formatea sus fechas con
+ * `pt-BR` (`academyDateLocale`). El ajuste, el endpoint, el aprovisionamiento y
+ * el script de migración leen esta lista.
  */
-export const ACADEMY_LOCALES = ['es', 'en'] as const;
+export const ACADEMY_LOCALES = ['es', 'en', 'pt'] as const;
 
 export type AcademyLocale = (typeof ACADEMY_LOCALES)[number];
 
@@ -85,9 +86,44 @@ export function toAcademyLocale(raw: unknown): AcademyLocale | null {
     : null;
 }
 
-/** Tag completo para formatear fechas en el idioma del aula. */
+/**
+ * El primer idioma de una cabecera `Accept-Language` que tiene catálogo en el
+ * aula (`en-GB,en;q=0.9` → `en`), o `null`. Respeta el orden de preferencia
+ * por `q`; lo que no se puede leer no cuenta.
+ */
+export function localeFromAcceptLanguage(header: unknown): AcademyLocale | null {
+  const raw = Array.isArray(header) ? header[0] : header;
+  if (typeof raw !== 'string') return null;
+  const tags = raw
+    .split(',')
+    .map((part, i) => {
+      const [tag = '', ...params] = part.trim().split(';');
+      const q = params.map((p) => p.trim()).find((p) => p.startsWith('q='));
+      const weight = q ? Number(q.slice(2)) : 1;
+      return { tag: tag.trim(), weight: Number.isFinite(weight) ? weight : 0, i };
+    })
+    .filter((t) => t.tag && t.weight > 0)
+    .sort((a, b) => b.weight - a.weight || a.i - b.i);
+  for (const t of tags) {
+    const l = toAcademyLocale(t.tag);
+    if (l) return l;
+  }
+  return null;
+}
+
+/**
+ * Tag completo para formatear fechas en el idioma del aula. Es también el tag
+ * de perfil con el que nace un usuario del aula (`newUserLocale`), así que tiene
+ * que ser uno de `PROFILE_LOCALES`.
+ */
+const ACADEMY_DATE_LOCALE: Record<AcademyLocale, string> = {
+  es: 'es-ES',
+  en: 'en-US',
+  pt: 'pt-BR',
+};
+
 export function academyDateLocale(locale: AcademyLocale): string {
-  return locale === 'en' ? 'en-US' : 'es-ES';
+  return ACADEMY_DATE_LOCALE[locale] ?? 'es-ES';
 }
 
 /** ¿Es una zona IANA que `Intl` reconoce? (UTC incluida). */
@@ -240,7 +276,7 @@ export async function writeAcademyLocale(
 }
 
 /** Tags de perfil que la API persiste (`ALLOWED_LOCALES` de `me.controller.ts`). */
-const PROFILE_LOCALES: readonly string[] = ['es-ES', 'es-AR', 'en-US'];
+const PROFILE_LOCALES: readonly string[] = ['es-ES', 'es-AR', 'en-US', 'pt-BR'];
 
 /**
  * Idioma con el que nace un usuario creado por el servidor: el del navegador si

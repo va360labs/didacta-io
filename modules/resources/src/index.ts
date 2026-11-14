@@ -9,13 +9,17 @@ import { manifest } from './manifest.js';
 export { manifest };
 export {
   DEFAULT_COLLECTIONS,
+  DEFAULT_COLLECTIONS_BY_LOCALE,
   RESOURCES_EVENT,
   ResourcesService,
+  resourcesLocale,
   type CollectionView,
   type CreateResourceInput,
   type ResourceKindValue,
   type ResourceView,
   type ResourcesEventPublisher,
+  type ResourcesLocale,
+  type ResourcesLocaleLookup,
 } from './resources.service.js';
 export { ResourcesError, ResourcesNotFoundError, ResourcesValidationError } from './errors.js';
 

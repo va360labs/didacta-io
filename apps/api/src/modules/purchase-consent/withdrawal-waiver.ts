@@ -28,19 +28,26 @@ import { z } from 'zod';
  */
 
 export const WITHDRAWAL_WAIVER_KIND = 'withdrawal_waiver';
-export const WITHDRAWAL_WAIVER_VERSION = '2026-11-13';
+/**
+ * 2026-11-14: entra el portugués. El español y el inglés no cambian, pero un
+ * comprador `pt-BR` pasaba de leer el texto inglés al portugués: con la versión
+ * de antes, una pestaña abierta con el inglés habría guardado como prueba un
+ * texto portugués que nunca vio. Subiéndola, esa pestaña recibe 409 y lo pide
+ * de nuevo.
+ */
+export const WITHDRAWAL_WAIVER_VERSION = '2026-11-14';
 
 export const PURCHASE_KINDS = ['course', 'membership', 'course_subscription'] as const;
 export type PurchaseKind = (typeof PURCHASE_KINDS)[number];
 
-export type WaiverLang = 'es' | 'en';
+export type WaiverLang = 'es' | 'en' | 'pt';
 
 /** Lo que manda la web con el checkout. */
 export const withdrawalWaiverSchema = z
   .object({
     accepted: z.literal(true),
     version: z.string().min(1).max(40),
-    /** Idioma en el que la web enseñó el texto (`es`, `en`…). */
+    /** Idioma en el que la web enseñó el texto (`es`, `en`, `pt-BR`…). */
     locale: z.string().max(16).optional(),
   })
   .strict();
@@ -63,21 +70,36 @@ const STATEMENTS: Readonly<Record<WaiverLang, Readonly<Record<PurchaseKind, stri
     course_subscription:
       'I want to access the course right now. I understand that, by starting now, I lose my right to withdraw from this subscription within 14 days. I can cancel at any time for future payments.',
   },
+  // Portugués de Brasil. «Assinatura» es la membresía y la suscripción (como en
+  // el panel) y «cobranças» los cargos al comprador; el plazo y el derecho son
+  // los mismos de la versión española, que es la que manda.
+  pt: {
+    course:
+      'Quero acessar o curso agora mesmo. Entendo que, ao começar agora, perco o direito de desistir da compra em até 14 dias.',
+    membership:
+      'Quero acessar a assinatura agora mesmo. Entendo que, ao começar agora, perco o direito de desistir da assinatura em até 14 dias. Posso cancelar quando quiser para as próximas cobranças.',
+    course_subscription:
+      'Quero acessar o curso agora mesmo. Entendo que, ao começar agora, perco o direito de desistir da assinatura em até 14 dias. Posso cancelar quando quiser para as próximas cobranças.',
+  },
 };
 
 const SELLER: Readonly<Record<WaiverLang, (seller: string) => string>> = {
   es: (seller) => `Vende: ${seller}.`,
   en: (seller) => `Sold by ${seller}.`,
+  pt: (seller) => `Vendido por ${seller}.`,
 };
 
 /**
- * `es`, `es-ES`, `es-419` → español; otro idioma → inglés. Sin idioma (ni la
- * web lo dijo ni hay cookie), español: es el idioma por defecto de la web.
+ * `es`, `es-ES`, `es-419` → español; `pt`, `pt-BR` → portugués; otro idioma →
+ * inglés. Sin idioma (ni la web lo dijo ni hay cookie), español: es el idioma
+ * por defecto de la web.
  */
 export function waiverLang(locale: string | null | undefined): WaiverLang {
   const value = (locale ?? '').trim().toLowerCase();
   if (!value) return 'es';
-  return value.startsWith('es') ? 'es' : 'en';
+  if (value.startsWith('es')) return 'es';
+  if (value.startsWith('pt')) return 'pt';
+  return 'en';
 }
 
 export interface RenderedWaiver {

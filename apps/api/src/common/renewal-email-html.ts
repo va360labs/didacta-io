@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
  */
 
-import { renderBrandedEmail, type EmailBranding } from './branded-email';
+import { renderBrandedEmail, type EmailBranding, type EmailLang } from './branded-email';
 
 /**
  * Envuelve el cuerpo (texto plano editado por el admin) en HTML para el email de
@@ -18,20 +18,27 @@ import { renderBrandedEmail, type EmailBranding } from './branded-email';
  *
  * Compartido por el dashboard de control de suscripciones (mod.payment-connections)
  * y el panel de solicitudes de inscripción (core), que envían el MISMO email.
+ *
+ * El texto lo escribe el admin; `lang` es el idioma en que se le propuso (el
+ * del aula) y solo va al `lang` del `<html>`. Sin él, español, como antes.
  */
-export function renewalEmailHtml(body: string, branding?: EmailBranding, title?: string): string {
+export function renewalEmailHtml(
+  body: string,
+  branding?: EmailBranding,
+  title?: string,
+  lang: EmailLang = 'es',
+): string {
   const linked = linkifyPlainText(body);
   if (branding) {
     return renderBrandedEmail(branding, {
-      // Monolingüe: este emisor todavía solo redacta español.
-      lang: 'es',
+      lang,
       title: title ?? '',
       bodyHtml: linked,
       bodyText: body,
     }).html;
   }
   return (
-    `<!DOCTYPE html><html lang="es"><body style="font-family:'Inter',system-ui,sans-serif;color:#0D1B2A;line-height:1.6;">` +
+    `<!DOCTYPE html><html lang="${lang}"><body style="font-family:'Inter',system-ui,sans-serif;color:#0D1B2A;line-height:1.6;">` +
     `${linked}` +
     `<hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0 12px;" />` +
     `<p style="font-size:12px;color:#999;margin:0;">Powered by Didacta</p>` +

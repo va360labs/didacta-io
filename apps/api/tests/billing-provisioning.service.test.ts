@@ -45,6 +45,14 @@ function makeMocks(opts?: {
     $transaction: vi.fn(async (fn: (t: typeof tx) => Promise<unknown>) => fn(tx)),
     // resolveEmailBranding y fetchEmailOverride (ambos best-effort): mock mínimo.
     tenant: { findUnique: vi.fn().mockResolvedValue({ name: 'Academia Demo' }) },
+    // El curso comprado (para el destino tras el primer acceso).
+    modCoursesCourse: {
+      findFirst: vi.fn(async (q: { where: { id: string; tenantId: string } }) =>
+        q.where.id === 'curso-torno' && q.where.tenantId === TENANT
+          ? { slug: 'torno-para-principiantes' }
+          : null,
+      ),
+    },
     modThemingTenantTheme: { findUnique: vi.fn().mockResolvedValue(null) },
     notificationTemplate: { findUnique: vi.fn().mockResolvedValue(null) },
     tenantSetting: {
@@ -227,11 +235,34 @@ describe('BillingProvisioningService · idioma del comprador', () => {
     expect(conCheckout.tx.user.create.mock.calls[0]![0].data.locale).toBe('es-AR');
   });
 
+  it('comprador pt-BR: asunto, cuerpo, botón y pie en portugués', async () => {
+    // Era parte del camino degradado de abajo mientras `pt-BR` no tuvo
+    // catálogo: el comprador brasileño recibía la bienvenida en español.
+    const { svc, smtp } = makeMocks({ createdLocale: 'pt-BR' });
+    await svc.provision(args);
+
+    const mail = sent(smtp);
+    expect(mail.subject).toBe('Seu curso em Academia Demo');
+    expect(mail.html).toContain('<html lang="pt">');
+    expect(mail.text).toContain('Olá, Ana!');
+    expect(mail.text).toContain('Sua compra em Academia Demo está confirmada!');
+    // Las dos piezas estructurales, en portugués.
+    expect(mail.html).toContain('Definir minha senha');
+    expect(mail.html).toContain(
+      'Depois, você poderá entrar em https://academia.example.com/signin com seu e-mail.',
+    );
+    // Ni español ni inglés dentro del email portugués.
+    expect(mail.html).not.toContain('Definir mi contraseña');
+    expect(mail.html).not.toContain('Después podrás iniciar sesión');
+    expect(mail.html).not.toContain('Set my password');
+    expect(mail.text).not.toContain('Hola Ana,');
+  });
+
   it('CAMINO DEGRADADO: fila sin locale o con uno sin catálogo → español, nunca un hueco', async () => {
-    // `undefined` es el caso real de HOY: el checkout todavía no captura el
-    // idioma del comprador, así que la columna toma su default. `pt-BR` es
-    // alcanzable en cuanto alguien lo guarde en su perfil.
-    for (const createdLocale of [undefined, '', '   ', 'pt-BR']) {
+    // `undefined` es el caso de un comprador que nunca tocó el selector: la
+    // columna toma su default. `fr-FR` es alcanzable por SCIM, que copia el
+    // locale del IdP sin validar.
+    for (const createdLocale of [undefined, '', '   ', 'fr-FR']) {
       vi.clearAllMocks();
       const { svc, smtp } = makeMocks({ createdLocale });
       await svc.provision(args);
@@ -257,5 +288,32 @@ describe('BillingProvisioningService · idioma del comprador', () => {
     );
     // Misma precedencia que `renderForTenant` del hub: no es una regla nueva.
     expect(locales).toEqual(['en-US', 'es-ES']);
+  });
+});
+
+describe('BillingProvisioningService · destino tras el primer acceso (ensayo general)', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  function enviado(smtp: unknown) {
+    return (smtp as { send: ReturnType<typeof vi.fn> }).send.mock.calls[0]![1] as {
+      text: string;
+      html: string;
+    };
+  }
+
+  it('el enlace de la bienvenida lleva al curso COMPRADO, no a la comunidad', async () => {
+    const { svc, smtp } = makeMocks();
+    await svc.provision({ ...args, courseId: 'curso-torno' });
+    const m = enviado(smtp);
+    expect(m.text).toContain(
+      'https://academia.example.com/reset-password?token=tok-123&next=%2Fcourses%2Ftorno-para-principiantes',
+    );
+    expect(m.html).toContain('next=%2Fcourses%2Ftorno-para-principiantes');
+  });
+
+  it('CONTROL: sin curso (o uno de otra aula) el enlace es el de siempre', async () => {
+    const { svc, smtp } = makeMocks();
+    await svc.provision({ ...args, courseId: 'curso-de-otra-aula' });
+    expect(enviado(smtp).text).not.toContain('next=');
   });
 });

@@ -26,6 +26,7 @@ import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { normalizeEmail } from '@didacta/mod-payment-connections';
+import { academyLocale, type AcademyDefaultsPrisma } from '../../common/academy-defaults';
 import { renewalEmailHtml } from '../../common/renewal-email-html';
 import { resolveEmailBranding, type BrandingPrisma } from '../../common/branded-email';
 import { extractClientContext } from '../../auth/client-context';
@@ -785,13 +786,18 @@ export class PaymentConnectionsController {
       // Best-effort, como el resto del branding: sin ella el correo sale sin logo.
       await this.tenantResolver.resolveTenantWebBaseUrlForBackground(user.tenantId).catch(() => ''),
     );
+    // El cuerpo lo escribió el admin sobre la plantilla del idioma del aula.
+    const lang = await academyLocale(
+      this.prisma as unknown as AcademyDefaultsPrisma,
+      user.tenantId,
+    );
     const result = await this.smtp.send(
       resolved.config,
       {
         to,
         subject: dto.subject,
         text: dto.body,
-        html: renewalEmailHtml(dto.body, branding, dto.subject),
+        html: renewalEmailHtml(dto.body, branding, dto.subject, lang),
       },
       branding.tenantName,
     );
@@ -813,7 +819,13 @@ export class PaymentConnectionsController {
   })
   async getRenewalTemplate(@CurrentUser() rawUser: SessionClaims | undefined) {
     const user = this.assertSuperAdmin(rawUser);
-    return this.registry.getPaymentConnectionsService().getRenewalTemplate(user.tenantId);
+    // La plantilla es una para todos los suscriptores: la por defecto sale en
+    // el idioma del aula.
+    const lang = await academyLocale(
+      this.prisma as unknown as AcademyDefaultsPrisma,
+      user.tenantId,
+    );
+    return this.registry.getPaymentConnectionsService().getRenewalTemplate(user.tenantId, lang);
   }
 
   @Put('subscriptions-dashboard/renewal-template')

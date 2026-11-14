@@ -341,7 +341,9 @@
     "entityCompany": "Empresa",
     "connectCta": "Conectar cobros",
     "connectingCta": "Abriendo Stripe…",
-    "countryUnsupported": "Todavía no podemos pagar a cuentas de {country}. Te avisamos cuando se pueda.",
+    "countryUnsupported": "Todavía no podemos pagar a cuentas de {country}. Mientras tanto puedes montar tu academia y tu comunidad.",
+    "countryUnsupportedOther": "Al darte de alta nos dijiste que tu banco está en otro país. Todavía no podemos pagar a creadores con el banco fuera de los países admitidos; si ahora lo tienes en uno de ellos, elígelo en la lista. Mientras tanto puedes montar tu academia y tu comunidad.",
+    "countryOther": "Otro país",
     "missing": "Falta un dato para poder pagarte: {requirement}. Hasta entonces no puedes vender.",
     "finishCta": "Completar",
     "review": "Stripe está revisando tus datos. Cuando termine podrás vender; no tienes que hacer nada más.",
@@ -434,6 +436,7 @@
       "summaryOperatorFees": "{percent} % {operator}",
       "summaryReceived": "Recibido",
       "summaryPending": "En camino",
+      "summaryHeld": "Retenido",
       "summaryDebtNetted": "Descontado para saldar deudas",
       "summaryDebt": "Por descontar de próximas ventas",
       "summarySalesCount": "{count, plural, one {# venta} other {# ventas}}",
@@ -454,7 +457,7 @@
         "notPaidOutHow": "Como aún no te lo habíamos enviado, se resta de lo que te íbamos a enviar.",
         "cardFeeCreator": "El banco no devuelve la comisión de la tarjeta ({amount}): la pagas tú y se descuenta de tus próximos cobros.",
         "cardFeePlatform": "El banco no devuelve la comisión de la tarjeta ({amount}): la asume {operator}.",
-        "operatorFeeReturned": "{operator} te devuelve su parte ({amount}).",
+        "operatorFeeReturned": "{operator} devuelve al alumno su comisión proporcional ({amount}): esa parte no se te descuenta a ti.",
         "operatorFeeKept": "La parte de {operator} ({amount}) no se devuelve: se descuenta de tus próximos cobros.",
         "total": "En total se te descuentan {amount}.",
         "accessFull": "Al devolverlo todo, el alumno pierde el acceso al curso.",
@@ -537,6 +540,45 @@
         "not_eu": "Solo para países de la UE.",
         "country_mismatch": "No es de tu país.",
         "underage": "Tienes que ser mayor de edad."
+      },
+      "problemsIntro": "No hemos guardado tus datos fiscales.",
+      "problems": {
+        "entityType": {
+          "required": "Elige cómo vendes (particular o empresa).",
+          "invalid": "Elige cómo vendes (particular o empresa)."
+        },
+        "legalName": {
+          "required": "Falta tu nombre o razón social.",
+          "invalid": "El nombre o la razón social no es válido."
+        },
+        "country": {
+          "required": "Falta el país.",
+          "invalid": "El país no es válido."
+        },
+        "taxId": {
+          "required": "Falta el NIF.",
+          "invalid": "El NIF no es válido."
+        },
+        "vatId": {
+          "required": "Falta el NIF-IVA.",
+          "invalid": "El NIF-IVA no es válido."
+        },
+        "addressLine1": {
+          "required": "Falta la dirección.",
+          "invalid": "La dirección no es válida."
+        },
+        "addressPostalCode": {
+          "required": "Falta el código postal.",
+          "invalid": "El código postal no es válido."
+        },
+        "addressCity": {
+          "required": "Falta la ciudad.",
+          "invalid": "La ciudad no es válida."
+        },
+        "birthDate": {
+          "required": "Falta la fecha de nacimiento.",
+          "invalid": "La fecha de nacimiento no es válida."
+        }
       },
       "save": "Guardar datos fiscales",
       "saving": "Guardando…",

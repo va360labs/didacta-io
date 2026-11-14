@@ -236,14 +236,16 @@ const LOCALE_LABELS: Record<SupportedLocale, string> = {
   'es-AR': 'Español (Argentina)',
   'es-ES': 'Español (España)',
   'en-US': 'English (US)',
+  'pt-BR': 'Português (Brasil)',
 };
 
 /**
  * Opciones del selector de idioma de `/account` y `/onboarding`.
  *
  * DERIVADO de `SUPPORTED_LOCALES`, no una lista aparte. Cuando era una lista
- * suelta ofrecía `pt-BR`, que no tiene catálogo: se elegía portugués, la API lo
- * guardaba y la UI seguía en español. Retirado — el producto sirve `es` y `en`.
+ * suelta ofrecía `pt-BR` sin que existiera su catálogo: se elegía portugués, la
+ * API lo guardaba y la UI seguía en español. Hoy `pt-BR` se ofrece porque está
+ * en `SUPPORTED_LOCALES`, y está ahí porque tiene catálogo (`messages/pt`).
  */
 export const LOCALE_OPTIONS: Array<{ value: SupportedLocale; label: string }> =
   SUPPORTED_LOCALES.map((value) => ({ value, label: LOCALE_LABELS[value] }));

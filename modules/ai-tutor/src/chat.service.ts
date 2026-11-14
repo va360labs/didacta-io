@@ -18,6 +18,7 @@ import {
 import {
   buildPrompt,
   extractCitations,
+  citationSnippet,
   parseStartSeconds,
   trimHistoryToBudget,
   type LessonContext,
@@ -593,7 +594,7 @@ export class AiTutorChatService {
         lessonId: p.lessonId ?? '',
         lessonTitle: p.lessonId ? (lessonTitles.get(p.lessonId) ?? null) : null,
         chunkOrdinal: p.index,
-        snippet: content.slice(0, 200),
+        snippet: citationSnippet(content),
         startSeconds: parseStartSeconds(content),
       };
     });

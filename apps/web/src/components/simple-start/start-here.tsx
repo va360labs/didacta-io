@@ -7,12 +7,15 @@
 
 import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import { Icon } from '@/components/icon';
 import { START_HERE_CHANGED_EVENT } from '@/components/simple-shell/simple-shell';
 import { ApiHttpError } from '@/lib/api-client';
-import { formatCents, formatDateTime } from '@/lib/i18n/format';
+import { formatCents, formatDateTime, regionNameFormatter } from '@/lib/i18n/format';
+import { OTHER_COUNTRY, payoutsApi, payoutsStepView, type PayoutsStatusDto } from '@/lib/payouts';
 import {
+  canPublish,
+  currentStep,
   parseAmount,
   saleState,
   simpleModeApi,
@@ -22,17 +25,6 @@ import {
 } from '@/lib/simple-mode';
 import { referralsAdminApi } from '@/lib/referrals';
 import { cn } from '@/lib/utils';
-
-/** Primer paso pendiente: el único que se abre. `null` = todos hechos. */
-export function currentStep(steps: StartHereView['steps']): StepId | null {
-  return steps.find((s) => !s.done)?.id ?? null;
-}
-
-/** ¿Se puede publicar ya? Hace falta curso con lección, precio y cobros. */
-export function canPublish(steps: StartHereView['steps']): boolean {
-  const done = new Set(steps.filter((s) => s.done).map((s) => s.id));
-  return done.has('course') && done.has('price') && done.has('payments');
-}
 
 /**
  * «Empieza aquí»: la pantalla de inicio del creador hasta su primera venta.
@@ -72,7 +64,7 @@ export function StartHere() {
   const sold = view.sales.count > 0;
   const pending = view.steps.filter((s) => !s.done).length;
   const doneCount = view.steps.length - pending;
-  const current = currentStep(view.steps);
+  const current = currentStep(view);
   const headline = startHereHeadline(view);
 
   return (
@@ -211,18 +203,59 @@ function Step({
     );
   }
 
+  // Cobros conectados pero sin datos fiscales: el dinero no llegaría. El paso
+  // sigue pendiente y lo dice con todas las letras (ensayo general: marcaba
+  // «Listo para cobrar» y el dinero se quedaba retenido).
+  const taxPending = id === 'payments' && view.taxProfilePending === true;
+  const que = taxPending ? t('pasos.payments.faltanFiscales') : t(`pasos.${id}.que`);
+  const pendingBadge = taxPending ? (
+    <span
+      className="ml-2 rounded-full bg-warning-50 px-2 py-0.5 text-[11px] font-bold text-warning-700"
+      data-testid="cobros-pendiente-fiscales"
+    >
+      {t('pasos.payments.pendienteFiscales')}
+    </span>
+  ) : null;
+
   if (!open && !editing) {
     return (
       <li
         className="grid grid-cols-[32px_minmax(0,1fr)] gap-3 border-t border-border py-4 first:border-t-0"
         data-step={id}
       >
-        <span className="grid h-8 w-8 place-items-center rounded-full border-[1.5px] border-border bg-surface text-sm font-bold text-text-subtle tabular-nums">
+        <span
+          className={cn(
+            'grid h-8 w-8 place-items-center rounded-full border-[1.5px] bg-surface text-sm font-bold tabular-nums',
+            taxPending ? 'border-warning-500 text-warning-700' : 'border-border text-text-subtle',
+          )}
+        >
           {n}
         </span>
         <div>
-          <h3 className="text-base font-semibold text-text-subtle">{t(`pasos.${id}.titulo`)}</h3>
-          <p className="text-sm text-text-subtle">{t(`pasos.${id}.que`)}</p>
+          <h3
+            className={cn(
+              'flex items-center text-base font-semibold',
+              taxPending ? 'text-text' : 'text-text-subtle',
+            )}
+          >
+            {t(`pasos.${id}.titulo`)}
+            {pendingBadge}
+          </h3>
+          <p className={cn('text-sm', taxPending ? 'text-text-muted' : 'text-text-subtle')}>
+            {que}
+          </p>
+          {/* Con solo los datos fiscales pendientes, el paso no bloquea el
+              camino (se puede publicar) pero su botón sigue a mano. */}
+          {taxPending ? (
+            <Link
+              href={view.taxProfilePath ?? view.paymentsSetupPath}
+              data-testid="completar-fiscales"
+              className="mt-2 inline-flex h-9 items-center gap-1.5 rounded-lg border border-warning-200 bg-warning-50 px-3 text-sm font-semibold text-warning-700 hover:border-warning-400"
+            >
+              <Icon name="briefcase" size={15} />
+              {t('pasos.payments.botonFiscales')}
+            </Link>
+          ) : null}
         </div>
       </li>
     );
@@ -240,9 +273,10 @@ function Step({
       <div className="min-w-0">
         <h3 className="flex min-h-8 items-center text-base font-bold text-text">
           {t(`pasos.${id}.titulo`)}
+          {pendingBadge}
         </h3>
         <div className="mt-1.5 rounded-2xl border border-border bg-surface p-4 shadow-sm">
-          <p className="max-w-[60ch] text-text-muted">{t(`pasos.${id}.que`)}</p>
+          <p className="max-w-[60ch] text-text-muted">{que}</p>
           <StepAction
             id={id}
             view={view}
@@ -250,7 +284,7 @@ function Step({
             onChange={onChange}
             onDone={() => setEditing(false)}
           />
-          {id === 'payments' ? (
+          {id === 'payments' && !taxPending ? (
             <HowItWorks
               items={[
                 t('pasos.payments.ayuda1'),
@@ -297,13 +331,18 @@ function StepAction({
         {t('pasos.course.boton')}
       </Link>
     );
-  if (id === 'payments')
+  if (id === 'payments' && view.taxProfilePending)
     return (
-      <Link href={view.paymentsSetupPath} className={primary}>
+      <Link
+        href={view.taxProfilePath ?? view.paymentsSetupPath}
+        className={primary}
+        data-testid="completar-fiscales"
+      >
         <Icon name="briefcase" size={18} />
-        {t('pasos.payments.boton')}
+        {t('pasos.payments.botonFiscales')}
       </Link>
     );
+  if (id === 'payments') return <PaymentsAction view={view} primary={primary} />;
   if (id === 'price')
     return (
       <PriceForm
@@ -319,6 +358,72 @@ function StepAction({
     <Link href="/admin/users/invite" className={primary}>
       <Icon name="mail" size={18} />
       {t('pasos.invite.boton')}
+    </Link>
+  );
+}
+
+/**
+ * Acción del paso «Conecta tus cobros». Con cobros de plataforma, la cuenta
+ * del creador tiene que estar en un país donde se le pueda pagar: si el suyo
+ * (el de su cuenta, el que declaró en el alta de Cloud o el del navegador) no
+ * lo está, en vez de mandarlo a un alta que va a fallar se le dice aquí, con
+ * un enlace a la tarjeta por si su banco está en otro país. Si declaró «otro
+ * país» (`OTHER`), el texto lo dice así, sin nombre de país. La decisión es
+ * `payoutsStepView`; esto solo pinta.
+ * Sin modo plataforma (`status` → `null`) o si la petición falla, el botón de
+ * siempre.
+ */
+function PaymentsAction({ view, primary }: { view: StartHereView; primary: string }) {
+  const t = useTranslations('modoSencillo.empieza');
+  const locale = useLocale();
+  const [status, setStatus] = useState<PayoutsStatusDto | null | undefined>(undefined);
+  useEffect(() => {
+    let alive = true;
+    payoutsApi
+      .status()
+      .then((s) => alive && setStatus(s))
+      .catch(() => alive && setStatus(null));
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  // Hasta saberlo, el hueco del botón: un botón que luego se cambia por el
+  // aviso invitaría a pulsarlo.
+  if (status === undefined) {
+    return <div className="skeleton mt-4 h-11 w-52 rounded-xl" aria-hidden="true" />;
+  }
+
+  const browser = typeof navigator !== 'undefined' ? navigator.language : locale;
+  const step = payoutsStepView(status, browser);
+  if (step.kind === 'country-unsupported') {
+    const other = step.country === OTHER_COUNTRY;
+    return (
+      <div data-testid="cobros-pais-no-admitido" data-country={step.country}>
+        <p
+          role="status"
+          className="mt-4 max-w-[60ch] rounded-xl border border-warning-200 bg-warning-50 p-3.5 text-[15px] leading-relaxed text-warning-700"
+        >
+          {other
+            ? t('pasos.payments.paisNoAdmitidoOtro')
+            : t('pasos.payments.paisNoAdmitido', {
+                pais: regionNameFormatter(locale)(step.country),
+              })}
+        </p>
+        <Link
+          href={view.paymentsSetupPath}
+          className="mt-3 inline-block text-sm font-semibold text-brand-600 hover:underline"
+        >
+          {other ? t('pasos.payments.elegirPais') : t('pasos.payments.otroPais')}
+        </Link>
+      </div>
+    );
+  }
+
+  return (
+    <Link href={view.paymentsSetupPath} className={primary}>
+      <Icon name="briefcase" size={18} />
+      {t('pasos.payments.boton')}
     </Link>
   );
 }
@@ -412,7 +517,10 @@ function PublishButton({ view, onChange }: { view: StartHereView; onChange: () =
   const t = useTranslations('modoSencillo.empieza');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const ready = canPublish(view.steps);
+  const ready = canPublish(view);
+  // Sin datos fiscales se publica igual (web #39), pero se dice ANTES de
+  // pulsar: el dinero de las ventas se queda retenido hasta completarlos.
+  const heldWarning = ready && view.taxProfilePending === true;
   async function publish() {
     setBusy(true);
     setError(null);
@@ -449,6 +557,15 @@ function PublishButton({ view, onChange }: { view: StartHereView; onChange: () =
       </button>
       {!ready ? (
         <p className="mt-2 text-sm text-text-subtle">{t('pasos.publish.faltaAntes')}</p>
+      ) : null}
+      {heldWarning ? (
+        <p
+          role="note"
+          className="mt-2 max-w-[60ch] text-sm font-medium text-warning-700"
+          data-testid="publicar-aviso-retenido"
+        >
+          {t('pasos.publish.avisoRetenido')}
+        </p>
       ) : null}
       {error ? (
         <p role="alert" className="mt-2 text-sm font-semibold text-danger-700">
@@ -595,6 +712,22 @@ function SaleLinkCard({ view, origin }: { view: StartHereView; origin: string })
             ? t('empieza.enlace.notaNoComprable')
             : t('empieza.enlace.notaAntes')}
       </p>
+      {/* Publicado sin datos fiscales: se vende, pero el dinero no sale. */}
+      {onSale && view.taxProfilePending ? (
+        <div
+          role="status"
+          className="mt-3 rounded-xl border border-warning-200 bg-warning-50 p-3 text-[13px] text-warning-700"
+          data-testid="enlace-aviso-retenido"
+        >
+          <p>{t('empieza.enlace.retenido')}</p>
+          <Link
+            href={view.taxProfilePath ?? view.paymentsSetupPath}
+            className="mt-1 inline-block font-semibold underline"
+          >
+            {t('empieza.pasos.payments.botonFiscales')}
+          </Link>
+        </div>
+      ) : null}
     </section>
   );
 }

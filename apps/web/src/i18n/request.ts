@@ -20,11 +20,24 @@
 import { cookies, headers } from 'next/headers';
 import { getRequestConfig } from 'next-intl/server';
 import { getAcademyLocale, publicHost } from '@/lib/academy-locale';
-import { catalogOf, isUsableLocaleCookie, LOCALE_COOKIE, resolveRequestLocale } from './config';
+import {
+  catalogOf,
+  isUsableLocaleCookie,
+  LOCALE_COOKIE,
+  resolveRequestLocale,
+  type MessageCatalog,
+} from './config';
 import en from './messages/en';
 import es from './messages/es';
+import pt from './messages/pt';
 
-const CATALOGS = { es, en } as const;
+/**
+ * Un catálogo por cada entrada de `MESSAGE_CATALOGS`. El `satisfies` es lo que
+ * impide declarar un catálogo en `config.ts` y olvidarse de cargarlo aquí: sin
+ * él, `CATALOGS[catalogOf(locale)]` daría `undefined` en runtime y next-intl
+ * pintaría las keys crudas.
+ */
+const CATALOGS = { es, en, pt } as const satisfies Record<MessageCatalog, unknown>;
 
 export default getRequestConfig(async () => {
   const store = await cookies();

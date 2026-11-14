@@ -42,14 +42,15 @@ import { ZodValidationPipe } from './zod-validation.pipe';
  *
  * `pt-BR` estuvo aquí sin tener catálogo de mensajes: se elegía portugués,
  * esto lo persistía, `/account` confirmaba «Português (Brasil)» y la interfaz
- * seguía en español. Retirado — se responde 400.
+ * seguía en español. Se retiró entonces y vuelve ahora que la web tiene su
+ * catálogo (`apps/web/src/i18n/messages/pt`) y los correos el suyo
+ * (`HUB_TEMPLATE_LANGS` en modules/notifications/email-template-catalog.ts).
  *
- * Los perfiles que YA lo tienen guardado no se tocan: el degradado a español
- * de `toSupportedLocale()` (web) y de `resolveRecipientLocale()`
- * (apps/api/src/modules/notifications/email-template-catalog.ts) sigue
- * cubriéndolos, y siguen pudiendo cambiar de idioma a cualquiera de éstos.
+ * Un tag que no esté aquí se responde con 400. Los que ya estén guardados por
+ * otra vía (SCIM copia el locale del IdP sin validar) no se tocan: los cubre el
+ * degradado de `toSupportedLocale()` (web) y de `toHubTemplateLang()` (correos).
  */
-export const ALLOWED_LOCALES = ['es-ES', 'es-AR', 'en-US'] as const;
+export const ALLOWED_LOCALES = ['es-ES', 'es-AR', 'en-US', 'pt-BR'] as const;
 
 export const updateProfileSchema = z.object({
   name: z.string().min(1).max(120).optional(),

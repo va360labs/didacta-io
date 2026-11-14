@@ -4,7 +4,8 @@
  */
 
 /**
- * Guarda de paridad es ↔ en de TODOS los namespaces del catálogo.
+ * Guarda de paridad del español con CADA catálogo traducido (es ↔ en y
+ * es ↔ pt) de TODOS los namespaces.
  *
  * Antes de este test solo `nav.json` tenía guarda (`lib/i18n/nav-catalog.test.ts`):
  * renombrar una key en `es/` y olvidarla en `en/` pasaba la CI sin que nadie se
@@ -13,16 +14,24 @@
  *
  * Los ficheros se leen del DISCO, no del `index.ts`: así un namespace nuevo
  * entra en la guarda el día que se crea el JSON, sin acordarse de registrarlo
- * en ningún sitio.
+ * en ningún sitio. Y los catálogos traducidos salen de `MESSAGE_CATALOGS`
+ * (`i18n/config.ts`), que `config.test.ts` ata a las carpetas del disco: un
+ * idioma nuevo entra en esta guarda el día que se declara, con las MISMAS
+ * reglas que el inglés. Así entró el portugués.
  *
- * ── Las dos reglas ────────────────────────────────────────────────────────────
+ * ── Las dos reglas (valen igual para `en` y para `pt`) ───────────────────────
  *
- *  1. Una key en ES sin gemela en EN es SIEMPRE un fallo. No hay excepciones y
- *     no hay lista: el catálogo español es el canónico y todo lo que dice se
- *     tiene que poder decir en inglés.
+ *  1. Una key en ES sin gemela en el catálogo traducido es SIEMPRE un fallo. No
+ *     hay excepciones y no hay lista: el catálogo español es el canónico y todo
+ *     lo que dice se tiene que poder decir en los demás idiomas.
  *
- *  2. Una key en EN sin gemela en ES es un fallo SALVO que esté declarada abajo,
- *     en `EN_ONLY_BY_DESIGN`, y solo en los namespaces `errorsApi*`.
+ *  2. Una key en el catálogo traducido sin gemela en ES es un fallo SALVO que
+ *     esté declarada abajo, en `TRANSLATED_ONLY_BY_DESIGN`, y solo en los
+ *     namespaces `errorsApi*`.
+ *
+ * De las dos se sigue la que más importa para un idioma nuevo: los `errorsApi*`
+ * de `pt` tienen EXACTAMENTE las keys de los de `en`. Una key declarada que
+ * falte en portugués rompe el test de «la lista no se pudre».
  *
  * ── Por qué la asimetría de `errorsApi*` es deliberada ────────────────────────
  *
@@ -37,13 +46,15 @@
  *     nombre del curso, el error del MTA, la respuesta de Stripe…) → el ES NO
  *     lleva key a propósito, para que `apiErrorMessage` degrade al `message`
  *     crudo y el admin español conserve el detalle. El EN sí lleva una redacción
- *     genérica, porque sin key el anglófono vería el mensaje en español.
+ *     genérica, porque sin key el anglófono vería el mensaje en español. El PT
+ *     también, por la misma razón: el lusófono tampoco puede acabar leyendo el
+ *     `message` crudo en español.
  *
  * Son los 68 codes declarados abajo. Van uno a uno y no como un `skip`
- * sobre `errorsApi*`: un code nuevo que aparezca solo en EN por descuido rompe
- * la CI igual que cualquier otra huérfana, y un code que se declare aquí y luego
- * se arregle (o se borre) también, porque la lista se valida contra los
- * catálogos en los dos sentidos.
+ * sobre `errorsApi*`: un code nuevo que aparezca solo en una traducción por
+ * descuido rompe la CI igual que cualquier otra huérfana, y un code que se
+ * declare aquí y luego se arregle (o se borre) también, porque la lista se
+ * valida contra los catálogos en los dos sentidos.
  *
  * ── Por qué esa regla ERA un bug y qué la sustituye ───────────────────────────
  *
@@ -56,14 +67,17 @@
  * que el backend ya mandaba.
  *
  * Ese es el patrón `CODES_WITH_DETAIL` (`lib/i18n/api-error.ts`). Los codes que
- * ya lo usan NO están en la lista de abajo: tienen key en los dos idiomas y este
- * test los trata como cualquier par simétrico. Si alguien vuelve a borrar la
+ * ya lo usan NO están en la lista de abajo: tienen key en todos los idiomas y
+ * este test los trata como cualquier par simétrico. Si alguien vuelve a borrar la
  * key ES de uno de ellos, el test de «entrada declarada» no lo tapa: se cae por
  * la regla 1.
  *
  * ── Lo que este test NO valida (y sigue pendiente) ────────────────────────────
  *
- * La CALIDAD de la redacción genérica inglesa de los 68 que quedan.
+ * La CALIDAD de la redacción genérica (inglesa y portuguesa) de los 68 que
+ * quedan, ni la de ninguna traducción: aquí se comparan KEYS. Que un valor
+ * conserve los marcadores ICU y las etiquetas de rich text del español NO lo
+ * comprueba este test en ningún idioma.
  *
  * Historia de los dos barridos, porque la lista solo se entiende con ella:
  *
@@ -98,7 +112,7 @@
  *    **Los 5 con diagnóstico EXTERNO ya NO están aquí**: son los que cerró la
  *    ampliación del contrato a placeholders CON NOMBRE (`params`), que es la
  *    decisión de arquitectura que los PR #39 y #42 dejaron declarada. Viven en
- *    `CODES_WITH_PARAMS` (`lib/i18n/api-error.ts`) con key en los DOS idiomas, y
+ *    `CODES_WITH_PARAMS` (`lib/i18n/api-error.ts`) con key en TODOS los idiomas, y
  *    este test los trata como cualquier par simétrico:
  *      `AI_GRADER_PROVIDER_ERROR`, `AI_TUTOR_CHAT_PROVIDER_ERROR`,
  *      `AI_TUTOR_EMBEDDINGS_PROVIDER_ERROR`, `AI_PROVIDER_UNAVAILABLE` (TRES
@@ -149,26 +163,36 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { CODES_WITH_DETAIL, CODES_WITH_PARAMS } from '@/lib/i18n/api-error';
+import { MESSAGE_CATALOGS, type MessageCatalog } from './config';
 
 const MESSAGES_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), 'messages');
-const LOCALES = ['es', 'en'] as const;
 
-/** Namespaces con permiso para declarar keys solo-EN (ver cabecera). */
+/** El catálogo canónico: todo lo demás se compara contra él. */
+const CANONICAL: MessageCatalog = 'es';
+const LOCALES: readonly MessageCatalog[] = MESSAGE_CATALOGS;
+/** Los catálogos traducidos. Cada uno pasa por las MISMAS reglas. */
+const TRANSLATED: readonly MessageCatalog[] = MESSAGE_CATALOGS.filter((c) => c !== CANONICAL);
+
+/** Namespaces con permiso para declarar keys solo-traducidas (ver cabecera). */
 const ASYMMETRY_ALLOWED_PREFIX = 'errorsApi';
 
 /**
- * Codes con key SOLO en EN a propósito: el backend manda un `message` español
- * interpolado y el catálogo ES se calla para que `apiErrorMessage` lo deje
- * pasar entero. Ordenados alfabéticamente por namespace para que el diff de un
- * PR que añada o quite uno sea de una línea.
+ * Codes con key SOLO en los catálogos traducidos (`en`, `pt`) a propósito: el
+ * backend manda un `message` español interpolado y el catálogo ES se calla para
+ * que `apiErrorMessage` lo deje pasar entero. Ordenados alfabéticamente por
+ * namespace para que el diff de un PR que añada o quite uno sea de una línea.
+ *
+ * La lista es UNA para todos los idiomas traducidos, no una por idioma: la
+ * razón de la asimetría está en el backend (el `message` va en español), no en
+ * la lengua de destino. Un code que el inglés necesita, el portugués también.
  *
  * Esta lista, `CODES_WITH_DETAIL` y `CODES_WITH_PARAMS` son DISJUNTAS entre sí
  * por construcción (hay test): un code o degrada al `message` crudo (aquí), o
- * interpola `{detail}` en los dos idiomas, o interpola placeholders con nombre.
+ * interpola `{detail}` en todos los idiomas, o interpola placeholders con nombre.
  * Estar en dos de ellas significa que alguien arregló el code y se olvidó de
  * sacarlo de aquí.
  */
-const EN_ONLY_BY_DESIGN: Readonly<Record<string, readonly string[]>> = {
+const TRANSLATED_ONLY_BY_DESIGN: Readonly<Record<string, readonly string[]>> = {
   errorsApiAdmin: ['ADMIN_ROLE_NOT_FOUND', 'ADMIN_TENANT_HOSTNAME_EXISTS'],
   errorsApiModulesA: [
     'AI_PROVIDERS_PURPOSE_NOT_SUPPORTED',
@@ -273,71 +297,112 @@ function keysOf(locale: string, ns: string): Set<string> {
   return new Set(entriesOf(locale, ns).map(([k]) => k));
 }
 
-const NAMESPACES = namespacesOf('es');
+const NAMESPACES = namespacesOf(CANONICAL);
 
-function declaredEnOnly(ns: string): ReadonlySet<string> {
-  return new Set(EN_ONLY_BY_DESIGN[ns] ?? []);
+function declaredTranslatedOnly(ns: string): ReadonlySet<string> {
+  return new Set(TRANSLATED_ONLY_BY_DESIGN[ns] ?? []);
 }
 
-describe('catálogo i18n · paridad es ↔ en', () => {
-  it('los dos idiomas declaran exactamente los mismos namespaces', () => {
-    expect(namespacesOf('en')).toEqual(NAMESPACES);
-  });
-
-  it('el barrido cubre todos los namespaces del disco (no está vacío)', () => {
+describe('catálogo i18n · el barrido no está vacío', () => {
+  it('cubre todos los namespaces del disco', () => {
     // Si alguien mueve la carpeta, el resto de tests pasaría en verde sobre
     // una lista vacía. Esto lo convierte en fallo.
     expect(NAMESPACES.length).toBeGreaterThan(30);
   });
 
+  it('hay catálogos traducidos que comparar, y el portugués es uno de ellos', () => {
+    // Los bloques de paridad de abajo se generan con `describe.each(TRANSLATED)`:
+    // con la lista vacía no se generaría ninguno y la suite saldría en verde.
+    expect([...TRANSLATED].sort()).toEqual(['en', 'pt']);
+  });
+});
+
+describe.each(TRANSLATED)('catálogo i18n · paridad es ↔ %s', (locale) => {
+  it('declara exactamente los mismos namespaces que el español', () => {
+    expect(namespacesOf(locale)).toEqual(NAMESPACES);
+  });
+
   it('ninguna key existe solo en ES (regla sin excepciones)', () => {
     const huerfanas: string[] = [];
     for (const ns of NAMESPACES) {
-      const en = keysOf('en', ns);
-      for (const k of keysOf('es', ns)) if (!en.has(k)) huerfanas.push(`${ns}.${k}`);
+      const translated = keysOf(locale, ns);
+      for (const k of keysOf(CANONICAL, ns)) {
+        if (!translated.has(k)) huerfanas.push(`${ns}.${k}`);
+      }
     }
     expect(
       huerfanas,
-      `keys en es/ sin gemela en en/ (traducir o borrar):\n  ${huerfanas.join('\n  ')}`,
+      `keys en es/ sin gemela en ${locale}/ (traducir o borrar):\n  ${huerfanas.join('\n  ')}`,
     ).toEqual([]);
   });
 
-  it('toda key solo-EN está declarada como deliberada', () => {
+  it('toda key que solo existe en la traducción está declarada como deliberada', () => {
     const inesperadas: string[] = [];
     for (const ns of NAMESPACES) {
-      const es = keysOf('es', ns);
-      const declared = declaredEnOnly(ns);
-      for (const k of keysOf('en', ns)) {
+      const es = keysOf(CANONICAL, ns);
+      const declared = declaredTranslatedOnly(ns);
+      for (const k of keysOf(locale, ns)) {
         if (!es.has(k) && !declared.has(k)) inesperadas.push(`${ns}.${k}`);
       }
     }
     expect(
       inesperadas,
-      `keys en en/ sin gemela en es/ y SIN declarar en EN_ONLY_BY_DESIGN.\n` +
+      `keys en ${locale}/ sin gemela en es/ y SIN declarar en TRANSLATED_ONLY_BY_DESIGN.\n` +
         `Si es deliberado (mensaje del backend interpolado) decláralo con motivo;\n` +
         `si no, falta la traducción española:\n  ${inesperadas.join('\n  ')}`,
     ).toEqual([]);
   });
 
   it('toda entrada declarada sigue siendo realmente asimétrica (la lista no se pudre)', () => {
+    // Para el portugués esta es la regla que hace cumplir «los errorsApi* llevan
+    // las keys del inglés»: un code declarado que falte en `pt/` haría que el
+    // lusófono viera el `message` crudo del backend, en español.
     const obsoletas: string[] = [];
     for (const ns of NAMESPACES) {
-      const es = keysOf('es', ns);
-      const en = keysOf('en', ns);
-      for (const k of declaredEnOnly(ns)) {
-        if (!en.has(k)) obsoletas.push(`${ns}.${k} (ya no existe en en/)`);
+      const es = keysOf(CANONICAL, ns);
+      const translated = keysOf(locale, ns);
+      for (const k of declaredTranslatedOnly(ns)) {
+        if (!translated.has(k)) obsoletas.push(`${ns}.${k} (no existe en ${locale}/)`);
         else if (es.has(k)) obsoletas.push(`${ns}.${k} (ya tiene gemela en es/)`);
       }
     }
     expect(
       obsoletas,
-      `entradas de EN_ONLY_BY_DESIGN que ya no son asimétricas.\n` +
-        `La declaración se pudrió: bórralas de la lista:\n  ${obsoletas.join('\n  ')}`,
+      `entradas de TRANSLATED_ONLY_BY_DESIGN que no cuadran con ${locale}/.\n` +
+        `Si falta en ${locale}/, tradúcela; si ya tiene gemela en es/, la declaración\n` +
+        `se pudrió y hay que borrarla de la lista:\n  ${obsoletas.join('\n  ')}`,
     ).toEqual([]);
   });
+});
 
+describe('catálogo i18n · todas las traducciones cubren los mismos errores', () => {
+  it('los errorsApi* de cada traducción tienen exactamente las mismas keys', () => {
+    // Consecuencia de las reglas de arriba, afirmada directamente: es la forma
+    // más corta de leer en un fallo «al portugués le falta este code».
+    const errorNs = NAMESPACES.filter((ns) => ns.startsWith(ASYMMETRY_ALLOWED_PREFIX));
+    expect(errorNs.length).toBeGreaterThan(0);
+    const [reference, ...rest] = TRANSLATED;
+    expect(rest.length).toBeGreaterThan(0);
+    const diferencias: string[] = [];
+    for (const locale of rest) {
+      for (const ns of errorNs) {
+        const a = keysOf(reference!, ns);
+        const b = keysOf(locale, ns);
+        for (const k of a) {
+          if (!b.has(k)) diferencias.push(`${ns}.${k} está en ${reference} y no en ${locale}`);
+        }
+        for (const k of b) {
+          if (!a.has(k)) diferencias.push(`${ns}.${k} está en ${locale} y no en ${reference}`);
+        }
+      }
+    }
+    expect(diferencias, `codes de error descuadrados:\n  ${diferencias.join('\n  ')}`).toEqual([]);
+  });
+});
+
+describe('catálogo i18n · la lista de asimetrías y el contrato de errores', () => {
   it('solo los namespaces errorsApi* pueden declarar asimetría', () => {
-    const fuera = Object.keys(EN_ONLY_BY_DESIGN).filter(
+    const fuera = Object.keys(TRANSLATED_ONLY_BY_DESIGN).filter(
       (ns) => !ns.startsWith(ASYMMETRY_ALLOWED_PREFIX),
     );
     expect(
@@ -347,35 +412,37 @@ describe('catálogo i18n · paridad es ↔ en', () => {
   });
 
   it('todo namespace declarado existe en el disco', () => {
-    const fantasma = Object.keys(EN_ONLY_BY_DESIGN).filter((ns) => !NAMESPACES.includes(ns));
+    const fantasma = Object.keys(TRANSLATED_ONLY_BY_DESIGN).filter(
+      (ns) => !NAMESPACES.includes(ns),
+    );
     expect(fantasma, `namespaces declarados que ya no existen: ${fantasma.join(', ')}`).toEqual([]);
   });
 
   it('ningún code está a la vez declarado asimétrico y en CODES_WITH_DETAIL', () => {
     // Los dos mecanismos se excluyen: o el ES se calla y degrada al `message`
-    // crudo, o los dos catálogos interpolan `{detail}`. Un code en ambos sitios
+    // crudo, o todos los catálogos interpolan `{detail}`. Un code en ambos sitios
     // es un arreglo a medias que este test no debe dejar pasar.
-    const enLasDos = Object.entries(EN_ONLY_BY_DESIGN).flatMap(([ns, codes]) =>
+    const enLasDos = Object.entries(TRANSLATED_ONLY_BY_DESIGN).flatMap(([ns, codes]) =>
       codes.filter((c) => CODES_WITH_DETAIL.has(c)).map((c) => `${ns}.${c}`),
     );
     expect(
       enLasDos,
       `codes que ya interpolan {detail} pero siguen declarados como asimétricos.\n` +
-        `Bórralos de EN_ONLY_BY_DESIGN:\n  ${enLasDos.join('\n  ')}`,
+        `Bórralos de TRANSLATED_ONLY_BY_DESIGN:\n  ${enLasDos.join('\n  ')}`,
     ).toEqual([]);
   });
 
   it('ningún code está a la vez declarado asimétrico y en CODES_WITH_PARAMS', () => {
     // Mismo razonamiento con la ampliación a placeholders con nombre: un code
-    // que ya escribe su frase en los dos idiomas no puede seguir declarado como
+    // que ya escribe su frase en todos los idiomas no puede seguir declarado como
     // «el ES se calla a propósito».
-    const enLasDos = Object.entries(EN_ONLY_BY_DESIGN).flatMap(([ns, codes]) =>
+    const enLasDos = Object.entries(TRANSLATED_ONLY_BY_DESIGN).flatMap(([ns, codes]) =>
       codes.filter((c) => CODES_WITH_PARAMS.has(c)).map((c) => `${ns}.${c}`),
     );
     expect(
       enLasDos,
       `codes que ya interpolan placeholders con nombre pero siguen declarados\n` +
-        `como asimétricos. Bórralos de EN_ONLY_BY_DESIGN:\n  ${enLasDos.join('\n  ')}`,
+        `como asimétricos. Bórralos de TRANSLATED_ONLY_BY_DESIGN:\n  ${enLasDos.join('\n  ')}`,
     ).toEqual([]);
   });
 
@@ -390,10 +457,10 @@ describe('catálogo i18n · paridad es ↔ en', () => {
     ).toEqual([]);
   });
 
-  it('cada code de CODES_WITH_PARAMS interpola SUS placeholders en los DOS idiomas', () => {
-    // La mitad de catálogo del contrato. Si el ES escribe `{provider}` y el EN
-    // se olvida (o lo llama de otra forma), el anglófono ve la frase con el
-    // hueco crudo — y a ojo no se ve.
+  it('cada code de CODES_WITH_PARAMS interpola SUS placeholders en TODOS los idiomas', () => {
+    // La mitad de catálogo del contrato. Si el ES escribe `{provider}` y una
+    // traducción se olvida (o lo llama de otra forma), su lector ve la frase
+    // con el hueco crudo — y a ojo no se ve.
     const fallos: string[] = [];
     for (const locale of LOCALES) {
       const porCode = new Map<string, string>();
@@ -421,7 +488,7 @@ describe('catálogo i18n · paridad es ↔ en', () => {
 });
 
 describe('catálogo i18n · integridad', () => {
-  it('ningún valor está vacío en ninguno de los dos idiomas', () => {
+  it('ningún valor está vacío en ningún idioma', () => {
     const vacias: string[] = [];
     for (const locale of LOCALES) {
       for (const ns of NAMESPACES) {

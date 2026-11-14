@@ -122,6 +122,7 @@ import {
 } from '@didacta/mod-ai-grader';
 import { Logger as PinoLogger } from 'nestjs-pino';
 import { AiGatewayService } from '../ai/ai-gateway.service';
+import { academyLocale, type AcademyDefaultsPrisma } from '../common/academy-defaults';
 import { runSanctionedGlobalAccess } from '../tenancy/tenant-context.storage';
 import { resolveCoreContractVersion } from '../core-version';
 import { buildCourseSaleChecker } from './course-sale-checker';
@@ -212,6 +213,12 @@ export class ModuleRegistryService implements OnModuleInit {
     this.registry = new ModuleRegistry({ coreVersion: resolveCoreContractVersion(), context });
 
     const prisma = this.factory.getPrisma() as never;
+    // Idioma del aula para lo que los módulos escriben para todos (títulos por
+    // defecto, preguntas de la encuesta, colecciones…): la misma regla que el
+    // resto del servidor (`academyLocale`). Los módulos no leen el core: se lo
+    // pasa el host.
+    const academyLocaleOf = (tenantId: string) =>
+      academyLocale(this.factory.getPrisma() as unknown as AcademyDefaultsPrisma, tenantId);
     this.courses = new CoursesService(prisma, context);
     // ¿El tenant cobra por este curso? Un curso por el que se cobra no admite
     // automatrícula: sin esto, el CTA de compra se saltaba con una llamada a
@@ -250,7 +257,8 @@ export class ModuleRegistryService implements OnModuleInit {
         dimension: result.dimension,
       };
     };
-    this.aiTutorIndexer = new AiTutorIndexerService(prisma, context, embedFn);
+    // El idioma del aula pone la cabecera de módulo («Module 1» en inglés).
+    this.aiTutorIndexer = new AiTutorIndexerService(prisma, context, embedFn, academyLocaleOf);
     this.aiTutorChat = new AiTutorChatService(prisma, context, embedFn, async (args) => {
       const result = await this.aiGateway.chat({
         tenantId: args.tenantId,
@@ -611,7 +619,7 @@ export class ModuleRegistryService implements OnModuleInit {
     };
     const surveysHashSecret =
       process.env['SURVEYS_HASH_SECRET']?.trim() || process.env['AUTH_SECRET']?.trim() || '';
-    this.surveys = new SurveysService(prisma, surveysPublisher, surveysHashSecret);
+    this.surveys = new SurveysService(prisma, surveysPublisher, surveysHashSecret, academyLocaleOf);
     const surveysModule = buildSurveysModule();
 
     // mod.resources: biblioteca de recursos (bloque 4).
@@ -633,7 +641,8 @@ export class ModuleRegistryService implements OnModuleInit {
         });
       },
     };
-    this.resources = new ResourcesService(prisma, resourcesPublisher);
+    // La colección que se siembra en una biblioteca vacía, en el idioma del aula.
+    this.resources = new ResourcesService(prisma, resourcesPublisher, academyLocaleOf);
     const resourcesModule = buildResourcesModule();
 
     // mod.gamification: puntos, niveles y retos (bloque 1).
@@ -727,6 +736,8 @@ export class ModuleRegistryService implements OnModuleInit {
         });
         return rows.map((r) => r.id);
       },
+      // Idioma del aula para el canal de profesores y los títulos de respaldo.
+      academyLocaleOf,
     );
     const messagingModule = buildMessagingModule(this.messaging);
 

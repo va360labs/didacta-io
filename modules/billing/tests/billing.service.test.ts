@@ -1347,6 +1347,8 @@ describe('BillingService — checkout PÚBLICO (viaje 2: visitante sin cuenta)',
       tenantId: 't1',
       email: 'compradora@example.com',
       name: 'Ana',
+      // El curso comprado: la bienvenida lleva al alumno a él tras entrar.
+      courseId: 'course-1',
     });
     const updated = prisma.orders.get(checkout.orderId)!;
     expect(updated.status).toBe('COMPLETED');

@@ -12,11 +12,10 @@ import {
 
 /**
  * mod.resources — dominio puro (sin NestJS). Biblioteca de recursos del tenant
- * organizada en COLECCIONES con portada propia ("Workflows de clase", "Skills
- * y agentes"…). Cualquier miembro comparte recursos; el staff gestiona las
- * colecciones. Las 6 colecciones por defecto se siembran perezosamente en el
- * primer listado del tenant (runtime — el flujo de despliegue es db push y las
- * migraciones de datos no se ejecutan solas).
+ * organizada en COLECCIONES con portada propia. Cualquier miembro comparte
+ * recursos; el staff gestiona las colecciones. La colección por defecto se
+ * siembra perezosamente en el primer listado del tenant (runtime — el flujo de
+ * despliegue es db push y las migraciones de datos no se ejecutan solas).
  */
 
 export interface ResourcesEventPublisher {
@@ -36,33 +35,45 @@ export const RESOURCES_EVENT = {
 
 export type ResourceKindValue = 'FILE' | 'LINK';
 
-/** Colecciones sembradas por defecto para cada tenant (editables). */
-export const DEFAULT_COLLECTIONS: ReadonlyArray<{ title: string; description: string }> = [
-  {
-    title: 'Workflows de clase',
-    description: 'Los flujos completos que montamos en directo, listos para importar.',
-  },
-  {
-    title: 'Skills y agentes',
-    description: 'Habilidades listas para instalar en tu asistente y ponerlo a trabajar.',
-  },
-  {
-    title: 'Herramientas de IA',
-    description: 'Directorio de herramientas útiles, clasificadas por para qué sirven.',
-  },
-  {
-    title: 'Plantillas y sistemas',
-    description: 'Plantillas de Notion, hojas y documentos listos para duplicar.',
-  },
-  {
-    title: 'Guías y contratos',
-    description: 'Guías prácticas y modelos de contrato listos para usar con clientes.',
-  },
-  {
-    title: 'Casos y resultados',
-    description: 'Casos reales de la comunidad con el antes, el después y los números.',
-  },
-];
+/** Idiomas en los que se siembra la colección por defecto: los del aula. */
+export type ResourcesLocale = 'es' | 'en' | 'pt';
+
+/**
+ * Idioma del aula (`es`, `en`, `pt` o un tag como `pt-BR`). Lo resuelve el
+ * host con la regla de siempre (`academyLocale`). Sin él, español.
+ */
+export type ResourcesLocaleLookup = (tenantId: string) => Promise<string>;
+
+/** Normaliza el idioma del aula (`pt-BR` → `pt`); lo que no se conoce, español. */
+export function resourcesLocale(raw: unknown): ResourcesLocale {
+  if (typeof raw !== 'string') return 'es';
+  const base = raw.trim().toLowerCase().split(/[-_]/)[0];
+  return base === 'en' || base === 'pt' ? base : 'es';
+}
+
+/**
+ * La colección que se siembra en un aula que no tiene ninguna (editable).
+ *
+ * UNA y neutra, en el idioma del aula. Antes eran seis en español y hablaban
+ * de IA («Workflows de clase», «Skills y agentes»…): eran las de una academia
+ * concreta, no las de cualquier aula. No se siembra NADA más porque la
+ * taxonomía es cosa de quien lleva el aula; y no se deja la biblioteca vacía
+ * porque compartir un recurso exige elegir colección: sin ninguna, el botón
+ * «Compartir recurso» de un alumno era un callejón sin salida hasta que el
+ * equipo creara la primera. Las aulas que ya tienen colecciones no se tocan:
+ * solo se siembra con la biblioteca a cero.
+ */
+export const DEFAULT_COLLECTIONS_BY_LOCALE: Readonly<
+  Record<ResourcesLocale, ReadonlyArray<{ title: string; description: string }>>
+> = {
+  es: [{ title: 'General', description: 'Materiales que comparte la comunidad.' }],
+  en: [{ title: 'General', description: 'Materials shared by the community.' }],
+  pt: [{ title: 'Geral', description: 'Materiais compartilhados pela comunidade.' }],
+};
+
+/** La colección por defecto en español; se conserva por compatibilidad. */
+export const DEFAULT_COLLECTIONS: ReadonlyArray<{ title: string; description: string }> =
+  DEFAULT_COLLECTIONS_BY_LOCALE.es;
 
 const TITLE_MIN = 3;
 const TITLE_MAX = 160;
@@ -162,14 +173,17 @@ export class ResourcesService {
   constructor(
     private readonly prisma: PrismaClient,
     private readonly publisher: ResourcesEventPublisher,
+    /** Idioma del aula para la colección por defecto. Sin él, español. */
+    private readonly localeLookup?: ResourcesLocaleLookup,
   ) {}
 
   // ── Colecciones ────────────────────────────────────────────────────────────
 
   /**
    * Colecciones del tenant con nº de recursos. Si el tenant aún no tiene
-   * ninguna, siembra las 6 por defecto (idempotente: la unique tenant+title
-   * absorbe la carrera entre dos primeros listados simultáneos).
+   * ninguna, siembra la de por defecto en el idioma del aula (idempotente: la
+   * unique tenant+title absorbe la carrera entre dos primeros listados
+   * simultáneos).
    */
   async listCollections(tenantId: string): Promise<CollectionView[]> {
     let collections = await this.fetchCollections(tenantId);
@@ -197,7 +211,7 @@ export class ResourcesService {
           title,
           description,
           coverUrl,
-          // Al final de la parrilla: detrás de las sembradas (0-5).
+          // Al final de la parrilla: detrás de la sembrada (0).
           sortOrder: 100,
         },
       });
@@ -440,8 +454,18 @@ export class ResourcesService {
     }));
   }
 
+  /** Idioma del aula. De mejor esfuerzo: un listado nunca se cae por no saberlo. */
+  private async localeOf(tenantId: string): Promise<ResourcesLocale> {
+    try {
+      return this.localeLookup ? resourcesLocale(await this.localeLookup(tenantId)) : 'es';
+    } catch {
+      return 'es';
+    }
+  }
+
   private async seedDefaults(tenantId: string): Promise<void> {
-    for (const [i, def] of DEFAULT_COLLECTIONS.entries()) {
+    const defaults = DEFAULT_COLLECTIONS_BY_LOCALE[await this.localeOf(tenantId)];
+    for (const [i, def] of defaults.entries()) {
       try {
         await this.prisma.modResourcesCollection.create({
           data: {

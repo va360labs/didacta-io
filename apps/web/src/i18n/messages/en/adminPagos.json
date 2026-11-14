@@ -341,7 +341,9 @@
     "entityCompany": "Company",
     "connectCta": "Connect payouts",
     "connectingCta": "Opening Stripe…",
-    "countryUnsupported": "We can't pay out to accounts in {country} yet. We'll let you know when we can.",
+    "countryUnsupported": "We can't pay out to accounts in {country} yet. In the meantime you can set up your academy and your community.",
+    "countryUnsupportedOther": "When you signed up you told us your bank is in another country. We can't pay creators whose bank is outside the supported countries yet; if it's now in one of them, choose it from the list. In the meantime you can set up your academy and your community.",
+    "countryOther": "Another country",
     "missing": "We need one more thing before we can pay you: {requirement}.",
     "finishCta": "Finish",
     "review": "Stripe is reviewing your details. Once it's done you can start selling; there's nothing else you need to do.",
@@ -434,6 +436,7 @@
       "summaryOperatorFees": "{percent}% {operator}",
       "summaryReceived": "Received",
       "summaryPending": "On its way",
+      "summaryHeld": "On hold",
       "summaryDebtNetted": "Taken to settle what you owed",
       "summaryDebt": "To be taken from your next sales",
       "summarySalesCount": "{count, plural, one {# sale} other {# sales}}",
@@ -454,7 +457,7 @@
         "notPaidOutHow": "We hadn't sent it to you yet, so it comes off what we were going to send.",
         "cardFeeCreator": "The bank doesn't return the card fee ({amount}): you pay it and it comes off your next payouts.",
         "cardFeePlatform": "The bank doesn't return the card fee ({amount}): {operator} covers it.",
-        "operatorFeeReturned": "{operator} gives you back its share ({amount}).",
+        "operatorFeeReturned": "{operator} returns its proportional fee ({amount}) to the student: that part isn't taken from you.",
         "operatorFeeKept": "{operator}'s share ({amount}) isn't returned: it comes off your next payouts.",
         "total": "In total, {amount} comes off your money.",
         "accessFull": "With a full refund, the student loses access to the course.",
@@ -537,6 +540,45 @@
         "not_eu": "Only for EU countries.",
         "country_mismatch": "It isn't from your country.",
         "underage": "You must be of legal age."
+      },
+      "problemsIntro": "We haven't saved your tax details.",
+      "problems": {
+        "entityType": {
+          "required": "Choose how you sell (individual or company).",
+          "invalid": "Choose how you sell (individual or company)."
+        },
+        "legalName": {
+          "required": "Your name or company name is missing.",
+          "invalid": "The name or company name isn't valid."
+        },
+        "country": {
+          "required": "The country is missing.",
+          "invalid": "The country isn't valid."
+        },
+        "taxId": {
+          "required": "The tax ID is missing.",
+          "invalid": "The tax ID isn't valid."
+        },
+        "vatId": {
+          "required": "The VAT number is missing.",
+          "invalid": "The VAT number isn't valid."
+        },
+        "addressLine1": {
+          "required": "The address is missing.",
+          "invalid": "The address isn't valid."
+        },
+        "addressPostalCode": {
+          "required": "The postal code is missing.",
+          "invalid": "The postal code isn't valid."
+        },
+        "addressCity": {
+          "required": "The city is missing.",
+          "invalid": "The city isn't valid."
+        },
+        "birthDate": {
+          "required": "The date of birth is missing.",
+          "invalid": "The date of birth isn't valid."
+        }
       },
       "save": "Save tax details",
       "saving": "Saving…",

@@ -44,6 +44,8 @@ import {
   type PreflightSample,
   type SourceCredentials,
 } from './client';
+import { formatDay, formatNumber, t, type MessageKey } from './i18n';
+import { tRich } from './i18n-rich';
 
 function Alert({
   children,
@@ -103,14 +105,15 @@ const DEFAULT_OPTIONS: ImportOptions = {
 /// Presets de "qué migrar" (v1.1.0+). Al elegir un modo, seteamos a la vez el
 /// `mode` (que el backend lee directo) y los booleanos de `scope` coherentes,
 /// para que ambos caminos de lectura del backend (mode explícito o derivar de
-/// scope) den el mismo resultado.
+/// scope) den el mismo resultado. Rótulo y ayuda son CLAVES del diccionario
+/// (`i18n.ts`): se traducen al pintar, no al cargar el bundle.
 const SCOPE_PRESETS: Record<
   ImportOptions['mode'],
-  { label: string; help: string; scope: ImportOptions['scope'] }
+  { label: MessageKey; help: MessageKey; scope: ImportOptions['scope'] }
 > = {
   courses: {
-    label: 'Solo cursos',
-    help: 'Importa el contenido: cursos, lecciones, temas y quizzes. No crea usuarios ni matrículas.',
+    label: 'wizard.scope.courses.label',
+    help: 'wizard.scope.courses.help',
     scope: {
       courses: true,
       quizzes: true,
@@ -122,8 +125,8 @@ const SCOPE_PRESETS: Record<
     },
   },
   'enrolled-students': {
-    label: 'Solo alumnos matriculados en cursos',
-    help: 'Importa los alumnos con al menos una matrícula y sus inscripciones. Requiere que los cursos ya estén migrados (modo diferido).',
+    label: 'wizard.scope.enrolledStudents.label',
+    help: 'wizard.scope.enrolledStudents.help',
     scope: {
       courses: false,
       quizzes: false,
@@ -135,8 +138,8 @@ const SCOPE_PRESETS: Record<
     },
   },
   all: {
-    label: 'Todo',
-    help: 'Importa contenido + usuarios + matrículas. Es la opción completa.',
+    label: 'wizard.scope.all.label',
+    help: 'wizard.scope.all.help',
     scope: {
       courses: true,
       quizzes: true,
@@ -199,7 +202,9 @@ export function MigratorWizard(): React.ReactElement {
               code: updated.error?.code,
               message:
                 updated.error?.message ??
-                (updated.status === 'cancelled' ? 'Job cancelado' : 'Job falló'),
+                (updated.status === 'cancelled'
+                  ? t('wizard.error.jobCancelled')
+                  : t('wizard.error.jobFailed')),
             });
           }
         }
@@ -237,13 +242,16 @@ export function MigratorWizard(): React.ReactElement {
     try {
       const result = await migratorLearndashApi.preflight(creds);
       if (!result.ok) {
-        setError({ code: result.error?.code, message: result.error?.message ?? 'Preflight falló' });
+        setError({
+          code: result.error?.code,
+          message: result.error?.message ?? t('wizard.error.preflightFailed'),
+        });
         return;
       }
       setPreflight(result);
       setStep('preflight');
     } catch (e: any) {
-      setError({ code: e?.code, message: e?.message ?? 'Error de conexión' });
+      setError({ code: e?.code, message: e?.message ?? t('wizard.error.connection') });
     } finally {
       setBusy(false);
     }
@@ -269,7 +277,7 @@ export function MigratorWizard(): React.ReactElement {
       setJobNotice(resp.notice ?? null);
       setStep(sampleMode ? 'sample-run' : 'complete-run');
     } catch (e: any) {
-      setError({ code: e?.code, message: e?.message ?? 'No se pudo crear el job' });
+      setError({ code: e?.code, message: e?.message ?? t('wizard.error.createJob') });
     } finally {
       setBusy(false);
     }
@@ -281,7 +289,7 @@ export function MigratorWizard(): React.ReactElement {
 
       {error && (
         <Alert variant="destructive">
-          <AlertTitle>{error.code ?? 'Error'}</AlertTitle>
+          <AlertTitle>{error.code ?? t('common.error')}</AlertTitle>
           <AlertDescription>{error.message}</AlertDescription>
         </Alert>
       )}
@@ -289,19 +297,16 @@ export function MigratorWizard(): React.ReactElement {
       {step === 'welcome' && (
         <Card>
           <CardHeader>
-            <CardTitle>¿Listo para traer tu academia a Didacta?</CardTitle>
-            <CardDescription>
-              Te guiamos paso a paso. Necesitas un Application Password de tu WordPress (te
-              enseñamos cómo crearlo) y unos minutos. Tu sitio actual no se modifica.
-            </CardDescription>
+            <CardTitle>{t('wizard.welcome.title')}</CardTitle>
+            <CardDescription>{t('wizard.welcome.description')}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <ul className="list-disc pl-6 text-sm">
-              <li>Acceso de administrador a tu WordPress con LearnDash.</li>
-              <li>Application Password (no la contraseña normal).</li>
-              <li>Sitio accesible públicamente (HTTPS).</li>
+              <li>{t('wizard.welcome.reqAdmin')}</li>
+              <li>{t('wizard.welcome.reqAppPassword')}</li>
+              <li>{t('wizard.welcome.reqPublic')}</li>
             </ul>
-            <Button onClick={goNext}>Comenzar</Button>
+            <Button onClick={goNext}>{t('wizard.welcome.start')}</Button>
           </CardContent>
         </Card>
       )}
@@ -309,16 +314,16 @@ export function MigratorWizard(): React.ReactElement {
       {step === 'connect' && (
         <Card>
           <CardHeader>
-            <CardTitle>Conectar con tu WordPress</CardTitle>
-            <CardDescription>URL del sitio + Application Password.</CardDescription>
+            <CardTitle>{t('wizard.connect.title')}</CardTitle>
+            <CardDescription>{t('wizard.connect.description')}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div>
-              <Label htmlFor="ld-url">URL de tu WordPress</Label>
+              <Label htmlFor="ld-url">{t('wizard.connect.urlLabel')}</Label>
               <Input
                 id="ld-url"
                 type="url"
-                placeholder="https://miacademia.com"
+                placeholder={t('wizard.connect.urlPlaceholder')}
                 value={creds.baseUrl}
                 onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
                   setCreds({ ...creds, baseUrl: e.target.value })
@@ -326,7 +331,7 @@ export function MigratorWizard(): React.ReactElement {
               />
             </div>
             <div>
-              <Label htmlFor="ld-user">Usuario administrador</Label>
+              <Label htmlFor="ld-user">{t('wizard.connect.userLabel')}</Label>
               <Input
                 id="ld-user"
                 placeholder="admin"
@@ -337,7 +342,7 @@ export function MigratorWizard(): React.ReactElement {
               />
             </div>
             <div>
-              <Label htmlFor="ld-app">Application Password</Label>
+              <Label htmlFor="ld-app">{t('wizard.connect.appPasswordLabel')}</Label>
               <Input
                 id="ld-app"
                 type="password"
@@ -351,10 +356,10 @@ export function MigratorWizard(): React.ReactElement {
             </div>
             <div className="flex gap-2">
               <Button variant="outline" onClick={goBack}>
-                Volver
+                {t('common.back')}
               </Button>
               <Button onClick={() => void onConnect()} disabled={busy}>
-                {busy ? 'Comprobando...' : 'Comprobar y continuar'}
+                {busy ? t('wizard.connect.checking') : t('wizard.connect.submit')}
               </Button>
             </div>
           </CardContent>
@@ -364,66 +369,41 @@ export function MigratorWizard(): React.ReactElement {
       {step === 'preflight' && preflight && (
         <Card>
           <CardHeader>
-            <CardTitle>Esto es lo que vamos a migrar</CardTitle>
+            <CardTitle>{t('wizard.preflight.title')}</CardTitle>
             <CardDescription>
-              {preflight.siteName ?? 'Origen'}
+              {preflight.siteName ?? t('wizard.preflight.sourceFallback')}
               {preflight.wpVersion ? ` · WP ${preflight.wpVersion}` : ''}
-              {' · '}latencia {preflight.latencyMs} ms
+              {' · '}
+              {t('wizard.preflight.latency', { ms: preflight.latencyMs })}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <table className="w-full text-sm">
               <tbody>
-                <tr>
-                  <td>Cursos</td>
-                  <td className="text-right font-mono">{String(preflight.counts.courses)}</td>
-                </tr>
-                <tr>
-                  <td>Lecciones</td>
-                  <td className="text-right font-mono">{String(preflight.counts.lessons)}</td>
-                </tr>
-                <tr>
-                  <td>Temas</td>
-                  <td className="text-right font-mono">{String(preflight.counts.topics)}</td>
-                </tr>
-                <tr>
-                  <td>Quizzes</td>
-                  <td className="text-right font-mono">{String(preflight.counts.quizzes)}</td>
-                </tr>
-                <tr>
-                  <td>Grupos</td>
-                  <td className="text-right font-mono">{String(preflight.counts.groups)}</td>
-                </tr>
-                <tr>
-                  <td>Alumnos</td>
-                  <td className="text-right font-mono">{String(preflight.counts.users)}</td>
-                </tr>
+                {ENTITY_KEYS.map((key) => (
+                  <tr key={key}>
+                    <td>{t(LABELS[key])}</td>
+                    <td className="text-right font-mono">{formatCount(preflight.counts[key])}</td>
+                  </tr>
+                ))}
               </tbody>
             </table>
 
             {preflight.samples && (
               <div className="space-y-3">
-                <h3 className="text-sm font-semibold">
-                  Muestras de las últimas 5 entidades por tipo
-                </h3>
-                {(['courses', 'lessons', 'topics', 'quizzes', 'groups', 'users'] as const).map(
-                  (key) => {
-                    const items = preflight.samples?.[key] ?? [];
-                    if (items.length === 0) return null;
-                    return <SampleList key={key} label={LABELS[key]} items={items} />;
-                  },
-                )}
-                <p className="text-xs text-muted-foreground">
-                  Mostramos las 5 más recientes por tipo (incluye drafts, privadas y futuras
-                  programadas). Para revisar todo en detalle, abre tu WordPress origen — la
-                  migración traerá lo que coincida con las opciones que elijas en el siguiente paso.
-                </p>
+                <h3 className="text-sm font-semibold">{t('wizard.preflight.samplesTitle')}</h3>
+                {ENTITY_KEYS.map((key) => {
+                  const items = preflight.samples?.[key] ?? [];
+                  if (items.length === 0) return null;
+                  return <SampleList key={key} label={t(LABELS[key])} items={items} />;
+                })}
+                <p className="text-xs text-muted-foreground">{t('wizard.preflight.samplesNote')}</p>
               </div>
             )}
 
             {preflight.warnings.length > 0 && (
               <Alert>
-                <AlertTitle>Avisos del origen</AlertTitle>
+                <AlertTitle>{t('wizard.preflight.warningsTitle')}</AlertTitle>
                 <AlertDescription>
                   <ul className="list-disc pl-6">
                     {preflight.warnings.map((w, i) => (
@@ -437,9 +417,9 @@ export function MigratorWizard(): React.ReactElement {
             )}
             <div className="flex gap-2">
               <Button variant="outline" onClick={goBack}>
-                Volver
+                {t('common.back')}
               </Button>
-              <Button onClick={goNext}>Continuar</Button>
+              <Button onClick={goNext}>{t('common.continue')}</Button>
             </div>
           </CardContent>
         </Card>
@@ -448,12 +428,12 @@ export function MigratorWizard(): React.ReactElement {
       {step === 'options' && (
         <Card>
           <CardHeader>
-            <CardTitle>¿Cómo quieres hacer la migración?</CardTitle>
-            <CardDescription>Los valores por defecto son los más seguros.</CardDescription>
+            <CardTitle>{t('wizard.options.title')}</CardTitle>
+            <CardDescription>{t('wizard.options.description')}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div>
-              <Label>¿Qué quieres migrar?</Label>
+              <Label>{t('wizard.options.whatLabel')}</Label>
               <div className="space-y-1">
                 {(['courses', 'enrolled-students', 'all'] as const).map((m) => (
                   <label key={m} className="flex items-start gap-2 text-sm">
@@ -467,8 +447,10 @@ export function MigratorWizard(): React.ReactElement {
                       }
                     />
                     <span>
-                      <span className="font-medium">{SCOPE_PRESETS[m].label}</span>
-                      <span className="block text-muted-foreground">{SCOPE_PRESETS[m].help}</span>
+                      <span className="font-medium">{t(SCOPE_PRESETS[m].label)}</span>
+                      <span className="block text-muted-foreground">
+                        {t(SCOPE_PRESETS[m].help)}
+                      </span>
                     </span>
                   </label>
                 ))}
@@ -476,19 +458,19 @@ export function MigratorWizard(): React.ReactElement {
               {options.mode === 'enrolled-students' && (
                 <div className="mt-2">
                   <Alert>
-                    <AlertTitle>Migra los cursos primero</AlertTitle>
+                    <AlertTitle>{t('wizard.options.coursesFirstTitle')}</AlertTitle>
                     <AlertDescription>
-                      Este modo solo trae alumnos y matrículas. Las inscripciones se vinculan a los
-                      cursos que ya existan en Didacta: si un curso aún no se ha migrado, esa
-                      matrícula quedará registrada como incidencia en el informe. Lanza antes una
-                      migración de “Solo cursos” (o “Todo”).
+                      {t('wizard.options.coursesFirstBody', {
+                        coursesOnly: t(SCOPE_PRESETS.courses.label),
+                        everything: t(SCOPE_PRESETS.all.label),
+                      })}
                     </AlertDescription>
                   </Alert>
                 </div>
               )}
             </div>
             <div>
-              <Label>Contraseñas</Label>
+              <Label>{t('wizard.options.passwordsLabel')}</Label>
               <div className="space-y-1">
                 <label className="flex items-center gap-2 text-sm">
                   <input
@@ -498,7 +480,7 @@ export function MigratorWizard(): React.ReactElement {
                       setOptions({ ...options, passwordStrategy: 'activation_reset' })
                     }
                   />
-                  Enviar email de activación (recomendado)
+                  {t('wizard.options.passwordActivation')}
                 </label>
                 <label className="flex items-center gap-2 text-sm">
                   <input
@@ -506,37 +488,33 @@ export function MigratorWizard(): React.ReactElement {
                     checked={options.passwordStrategy === 'preserve_hash'}
                     onChange={() => setOptions({ ...options, passwordStrategy: 'preserve_hash' })}
                   />
-                  Conservar contraseña original (avanzado)
+                  {t('wizard.options.passwordPreserve')}
                 </label>
               </div>
             </div>
             <div>
-              <Label>Imágenes</Label>
+              <Label>{t('wizard.options.imagesLabel')}</Label>
               <label className="flex items-center gap-2 text-sm">
                 <input
                   type="checkbox"
                   checked={options.copyMediaBinaries}
                   onChange={(e) => setOptions({ ...options, copyMediaBinaries: e.target.checked })}
                 />
-                Copiar imágenes a Didacta (recomendado)
+                {t('wizard.options.copyImages')}
               </label>
             </div>
             <Alert>
-              <AlertTitle>Cómo va a funcionar</AlertTitle>
+              <AlertTitle>{t('wizard.options.howTitle')}</AlertTitle>
               <AlertDescription>
-                Primero hacemos una <b>prueba</b>: importamos un curso de tu academia con hasta{' '}
-                {SAMPLE_DEFAULTS.usersPerCourse} alumnos para que verifiques que todo se ve bien en
-                Didacta. Si te convence, te preguntamos si seguir con la
-                <b> integración completa</b>; el curso de la prueba no se vuelve a importar (se
-                reutiliza lo ya cargado), solo añadimos lo que falta.
+                {tRich('wizard.options.howBody', { users: SAMPLE_DEFAULTS.usersPerCourse })}
               </AlertDescription>
             </Alert>
             <div className="flex gap-2">
               <Button variant="outline" onClick={goBack}>
-                Volver
+                {t('common.back')}
               </Button>
               <Button onClick={() => void onStartJob(true)} disabled={busy}>
-                {busy ? 'Iniciando...' : 'Empezar la prueba'}
+                {busy ? t('wizard.options.starting') : t('wizard.options.startSample')}
               </Button>
             </div>
           </CardContent>
@@ -545,8 +523,11 @@ export function MigratorWizard(): React.ReactElement {
 
       {step === 'sample-run' && job && (
         <RunningCard
-          title="Importando muestra…"
-          description="Estamos trayendo 1 curso aleatorio y hasta 5 alumnos para que verifiques el resultado."
+          title={t('wizard.sampleRun.title')}
+          description={t('wizard.sampleRun.description', {
+            courses: SAMPLE_DEFAULTS.courses,
+            users: SAMPLE_DEFAULTS.usersPerCourse,
+          })}
           job={job}
           jobNotice={jobNotice}
         />
@@ -555,37 +536,34 @@ export function MigratorWizard(): React.ReactElement {
       {step === 'sample-done' && sampleReport && (
         <Card>
           <CardHeader>
-            <CardTitle>Prueba completada</CardTitle>
-            <CardDescription>Estos son los resultados de la muestra:</CardDescription>
+            <CardTitle>{t('wizard.sampleDone.title')}</CardTitle>
+            <CardDescription>{t('wizard.sampleDone.description')}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="grid grid-cols-4 gap-4 text-center">
-              <Stat label="Origen" value={sampleReport.totals.sourceCount} />
-              <Stat label="Cargados" value={sampleReport.totals.loadedCount} />
-              <Stat label="Saltados" value={sampleReport.totals.skippedCount} />
-              <Stat label="Fallidos" value={sampleReport.totals.failedCount} />
-            </div>
+            <ReportTotals report={sampleReport} />
             {sampleReport.byEntity.length > 0 && (
               <div>
-                <h3 className="mb-1 text-sm font-semibold">Detalle por entidad</h3>
+                <h3 className="mb-1 text-sm font-semibold">
+                  {t('wizard.sampleDone.byEntityTitle')}
+                </h3>
                 <table className="w-full text-xs">
                   <thead>
                     <tr className="text-left text-muted-foreground">
-                      <th>Entidad</th>
-                      <th className="text-right">Origen</th>
-                      <th className="text-right">Cargados</th>
-                      <th className="text-right">Saltados</th>
-                      <th className="text-right">Fallidos</th>
+                      <th>{t('common.entity')}</th>
+                      <th className="text-right">{t('wizard.stats.source')}</th>
+                      <th className="text-right">{t('wizard.stats.loaded')}</th>
+                      <th className="text-right">{t('wizard.stats.skipped')}</th>
+                      <th className="text-right">{t('wizard.stats.failed')}</th>
                     </tr>
                   </thead>
                   <tbody>
                     {sampleReport.byEntity.map((b) => (
                       <tr key={b.entityType}>
                         <td>{b.entityType}</td>
-                        <td className="text-right font-mono">{b.sourceCount}</td>
-                        <td className="text-right font-mono">{b.loadedCount}</td>
-                        <td className="text-right font-mono">{b.skippedCount}</td>
-                        <td className="text-right font-mono">{b.failedCount}</td>
+                        <td className="text-right font-mono">{formatNumber(b.sourceCount)}</td>
+                        <td className="text-right font-mono">{formatNumber(b.loadedCount)}</td>
+                        <td className="text-right font-mono">{formatNumber(b.skippedCount)}</td>
+                        <td className="text-right font-mono">{formatNumber(b.failedCount)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -593,19 +571,15 @@ export function MigratorWizard(): React.ReactElement {
               </div>
             )}
             <Alert>
-              <AlertTitle>¿Quieres proceder con la integración completa?</AlertTitle>
-              <AlertDescription>
-                Importaremos el resto de cursos, alumnos y contenidos. El curso y alumnos de la
-                muestra <b>no se duplican</b>: se conservan tal como están y solo se añade lo que
-                falta. Esta operación puede tardar varios minutos según el tamaño de tu academia.
-              </AlertDescription>
+              <AlertTitle>{t('wizard.sampleDone.proceedTitle')}</AlertTitle>
+              <AlertDescription>{tRich('wizard.sampleDone.proceedBody')}</AlertDescription>
             </Alert>
             <div className="flex gap-2">
               <Button variant="outline" onClick={() => setStep('done')}>
-                Terminar aquí (conservo solo la muestra)
+                {t('wizard.sampleDone.stopHere')}
               </Button>
               <Button onClick={() => void onStartJob(false)} disabled={busy}>
-                {busy ? 'Iniciando…' : 'Sí, hacer integración completa'}
+                {busy ? t('wizard.sampleDone.starting') : t('wizard.sampleDone.proceed')}
               </Button>
             </div>
           </CardContent>
@@ -614,8 +588,8 @@ export function MigratorWizard(): React.ReactElement {
 
       {step === 'complete-run' && job && (
         <RunningCard
-          title="Importando integración completa…"
-          description="Estamos trayendo el resto de tu academia. Puede tardar varios minutos."
+          title={t('wizard.completeRun.title')}
+          description={t('wizard.completeRun.description')}
           job={job}
           jobNotice={jobNotice}
         />
@@ -624,46 +598,44 @@ export function MigratorWizard(): React.ReactElement {
       {step === 'done' && (
         <Card>
           <CardHeader>
-            <CardTitle>Migración finalizada</CardTitle>
+            <CardTitle>{t('wizard.done.title')}</CardTitle>
             <CardDescription>
               {finalReport
-                ? `Reporte completo (job ${finalReport.jobId})`
+                ? t('wizard.done.fullReport', { jobId: finalReport.jobId })
                 : sampleReport
-                  ? `Solo se importó la muestra (job ${sampleReport.jobId}). Puedes lanzar la integración completa más tarde desde el dashboard del módulo.`
-                  : 'Sin reporte disponible.'}
+                  ? t('wizard.done.sampleOnly', { jobId: sampleReport.jobId })
+                  : t('wizard.done.noReport')}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             {(finalReport ?? sampleReport) && (
               <>
-                <div className="grid grid-cols-4 gap-4 text-center">
-                  <Stat label="Origen" value={(finalReport ?? sampleReport)!.totals.sourceCount} />
-                  <Stat
-                    label="Cargados"
-                    value={(finalReport ?? sampleReport)!.totals.loadedCount}
-                  />
-                  <Stat
-                    label="Saltados"
-                    value={(finalReport ?? sampleReport)!.totals.skippedCount}
-                  />
-                  <Stat
-                    label="Fallidos"
-                    value={(finalReport ?? sampleReport)!.totals.failedCount}
-                  />
-                </div>
+                <ReportTotals report={(finalReport ?? sampleReport)!} />
                 <p className="text-xs text-muted-foreground">
-                  Cadena de auditoría: {(finalReport ?? sampleReport)!.auditChain.eventsCount}{' '}
-                  eventos
-                  {(finalReport ?? sampleReport)!.auditChain.verified
-                    ? ' (✓ verificada)'
-                    : ' (⚠ alterada)'}
-                  .
+                  {t(
+                    (finalReport ?? sampleReport)!.auditChain.verified
+                      ? 'wizard.done.auditVerified'
+                      : 'wizard.done.auditAltered',
+                    { count: (finalReport ?? sampleReport)!.auditChain.eventsCount },
+                  )}
                 </p>
               </>
             )}
           </CardContent>
         </Card>
       )}
+    </div>
+  );
+}
+
+/// Las cuatro cifras de un reporte (origen / cargados / saltados / fallidos).
+function ReportTotals({ report }: { report: JobReport }): React.ReactElement {
+  return (
+    <div className="grid grid-cols-4 gap-4 text-center">
+      <Stat label={t('wizard.stats.source')} value={report.totals.sourceCount} />
+      <Stat label={t('wizard.stats.loaded')} value={report.totals.loadedCount} />
+      <Stat label={t('wizard.stats.skipped')} value={report.totals.skippedCount} />
+      <Stat label={t('wizard.stats.failed')} value={report.totals.failedCount} />
     </div>
   );
 }
@@ -688,35 +660,41 @@ function RunningCard({
       </CardHeader>
       <CardContent className="space-y-4">
         <Alert>
-          <AlertTitle>Estado actual</AlertTitle>
+          <AlertTitle>{t('wizard.running.statusTitle')}</AlertTitle>
           <AlertDescription>
-            Job <code>{job.id}</code> · {job.status}
-            {job.phase && (
-              <>
-                {' '}
-                · fase <code>{phase}</code>
-              </>
-            )}
+            {job.phase
+              ? tRich('wizard.running.statusWithPhase', {
+                  jobId: job.id,
+                  status: job.status,
+                  phase,
+                })
+              : tRich('wizard.running.status', { jobId: job.id, status: job.status })}
           </AlertDescription>
         </Alert>
         {jobNotice && <NoticeAlert notice={jobNotice} />}
         <p className="text-xs text-muted-foreground">
-          Esta pantalla se actualiza automáticamente cada 3 segundos. Puedes cerrar el navegador: el
-          job continúa en segundo plano y al volver verás el reporte en el dashboard del módulo.
+          {t('wizard.running.autoRefresh', { seconds: POLL_INTERVAL_MS / 1000 })}
         </p>
       </CardContent>
     </Card>
   );
 }
 
-const LABELS: Record<'courses' | 'lessons' | 'topics' | 'quizzes' | 'groups' | 'users', string> = {
-  courses: 'Cursos',
-  lessons: 'Lecciones',
-  topics: 'Temas',
-  quizzes: 'Quizzes',
-  groups: 'Grupos',
-  users: 'Alumnos',
+const ENTITY_KEYS = ['courses', 'lessons', 'topics', 'quizzes', 'groups', 'users'] as const;
+
+const LABELS: Record<(typeof ENTITY_KEYS)[number], MessageKey> = {
+  courses: 'entity.courses',
+  lessons: 'entity.lessons',
+  topics: 'entity.topics',
+  quizzes: 'entity.quizzes',
+  groups: 'entity.groups',
+  users: 'entity.users',
 };
+
+/// Cifra del preflight: `'unknown'` (WP no mandó `X-WP-Total`) se pinta tal cual.
+function formatCount(value: number | 'unknown'): string {
+  return typeof value === 'number' ? formatNumber(value) : value;
+}
 
 const STATUS_BADGE: Record<string, string> = {
   publish: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400',
@@ -748,11 +726,11 @@ function SampleList({
               {it.status}
             </span>
             <span className="flex-1 truncate" title={it.slug}>
-              {it.title || `(sin título · id=${it.id})`}
+              {it.title || t('wizard.preflight.untitled', { id: it.id })}
             </span>
             {it.modified && (
               <span className="text-xs text-muted-foreground" title={it.modified}>
-                {it.modified.slice(0, 10)}
+                {formatDay(it.modified)}
               </span>
             )}
           </li>
@@ -771,10 +749,10 @@ function NoticeAlert({ notice }: { notice: JobNotice }): React.ReactElement {
       <AlertTitle>
         {icon}{' '}
         {notice.severity === 'warning'
-          ? 'Importante'
+          ? t('wizard.notice.warning')
           : notice.severity === 'error'
-            ? 'Error'
-            : 'Info'}
+            ? t('wizard.notice.error')
+            : t('wizard.notice.info')}
       </AlertTitle>
       <AlertDescription>{notice.message}</AlertDescription>
     </Alert>
@@ -784,7 +762,7 @@ function NoticeAlert({ notice }: { notice: JobNotice }): React.ReactElement {
 function Stat({ label, value }: { label: string; value: number }): React.ReactElement {
   return (
     <div className="rounded-md border p-3">
-      <div className="text-2xl font-semibold">{value}</div>
+      <div className="text-2xl font-semibold">{formatNumber(value)}</div>
       <div className="text-xs text-muted-foreground">{label}</div>
     </div>
   );
@@ -794,13 +772,13 @@ function Stepper({ current }: { current: Step }): React.ReactElement {
   // Stepper visible: agrupamos sample-run/sample-done en "Prueba" y
   // complete-run/done en "Migración completa" para que el usuario vea
   // solo 6 hitos en lugar de los 8 internos.
-  const visible: { keys: Step[]; label: string }[] = [
-    { keys: ['welcome'], label: 'Inicio' },
-    { keys: ['connect'], label: 'Conectar' },
-    { keys: ['preflight'], label: 'Resumen' },
-    { keys: ['options'], label: 'Opciones' },
-    { keys: ['sample-run', 'sample-done'], label: 'Prueba' },
-    { keys: ['complete-run', 'done'], label: 'Completa' },
+  const visible: { keys: Step[]; label: MessageKey }[] = [
+    { keys: ['welcome'], label: 'wizard.stepper.welcome' },
+    { keys: ['connect'], label: 'wizard.stepper.connect' },
+    { keys: ['preflight'], label: 'wizard.stepper.preflight' },
+    { keys: ['options'], label: 'wizard.stepper.options' },
+    { keys: ['sample-run', 'sample-done'], label: 'wizard.stepper.sample' },
+    { keys: ['complete-run', 'done'], label: 'wizard.stepper.complete' },
   ];
   const idx = visible.findIndex((s) => s.keys.includes(current));
   return (
@@ -816,7 +794,7 @@ function Stepper({ current }: { current: Step }): React.ReactElement {
                 : 'rounded-full border px-2 py-1 text-muted-foreground'
           }
         >
-          {i + 1}. {s.label}
+          {i + 1}. {t(s.label)}
         </li>
       ))}
     </ol>

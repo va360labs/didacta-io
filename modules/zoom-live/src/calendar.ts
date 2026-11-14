@@ -17,7 +17,75 @@
  * server-side, ADR-017). Un `.ics` se reenvía, se sincroniza a móviles y se
  * comparte entre calendarios: meter el joinUrl dentro sería regalar el acceso
  * a la clase a cualquiera que reciba el evento.
+ *
+ * Idioma: el texto que escribimos nosotros (la descripción del evento y el
+ * nombre del fichero) va en el idioma que pase quien llama (`locale`): el de
+ * quien lo descarga si se sabe; si no, el del aula. Sin idioma, español, que
+ * es lo de siempre y no cambia ni un byte. El título es el de la clase, tal
+ * cual lo escribió el formador.
  */
+
+/** Idiomas con texto propio en el evento (los del aula). */
+export const CALENDAR_LOCALES = ['es', 'en', 'pt'] as const;
+export type CalendarLocale = (typeof CALENDAR_LOCALES)[number];
+
+/** Normaliza un idioma cualquiera (`pt-BR`, `en_US`, `fr`…) a uno con texto; si no, español. */
+export function toCalendarLocale(raw: unknown): CalendarLocale {
+  if (typeof raw !== 'string') return 'es';
+  const base = raw.trim().toLowerCase().split(/[-_]/)[0] ?? '';
+  return (CALENDAR_LOCALES as readonly string[]).includes(base) ? (base as CalendarLocale) : 'es';
+}
+
+const CALENDAR_TEXTS: Record<
+  CalendarLocale,
+  {
+    /** Primera frase de la descripción: qué es y de quién. */
+    what: (organizer: string) => string;
+    /** Cómo se entra (descripción del `.ics` y de Google Calendar). */
+    joinFrom: (url: string) => string;
+    /** Versión corta para el cuerpo de Outlook (una sola línea). */
+    joinFromShort: (url: string) => string;
+    /** Prefijo del nombre del fichero `.ics` que se descarga. */
+    fileName: string;
+  }
+> = {
+  es: {
+    what: (org) => `Clase en directo de ${org}.`,
+    joinFrom: (url) => `Entra desde la página de la clase: ${url}`,
+    joinFromShort: (url) => `Entra desde: ${url}`,
+    fileName: 'clase',
+  },
+  en: {
+    what: (org) => `Live class by ${org}.`,
+    joinFrom: (url) => `Join from the class page: ${url}`,
+    joinFromShort: (url) => `Join from: ${url}`,
+    fileName: 'class',
+  },
+  pt: {
+    // Sin «de»/«da»/«do» delante del nombre: no se sabe su género.
+    what: (org) => `Aula ao vivo — ${org}.`,
+    joinFrom: (url) => `Entre pela página da aula: ${url}`,
+    joinFromShort: (url) => `Entre por: ${url}`,
+    fileName: 'aula',
+  },
+};
+
+function texts(input: { locale?: CalendarLocale }) {
+  return CALENDAR_TEXTS[input.locale ?? 'es'] ?? CALENDAR_TEXTS.es;
+}
+
+/** Descripción larga del evento (`.ics` y Google Calendar). */
+function longDescription(input: CalendarEventInput): string {
+  const tx = texts(input);
+  return input.classUrl
+    ? `${tx.what(input.organizerName)}\n\n${tx.joinFrom(input.classUrl)}`
+    : tx.what(input.organizerName);
+}
+
+/** Nombre del fichero `.ics` que se descarga: `clase-<id>.ics` en español. */
+export function icsFileName(sessionId: string, locale?: CalendarLocale): string {
+  return `${texts({ locale }).fileName}-${sessionId}.ics`;
+}
 
 export interface CalendarEventInput {
   /** UUID de la sesión — es también el UID estable del evento. */
@@ -36,6 +104,8 @@ export interface CalendarEventInput {
   now?: Date;
   /** Minutos de aviso del VALARM. 0 o negativo lo omite. */
   reminderMinutesBefore?: number;
+  /** Idioma del texto que escribimos nosotros. Sin él, español. */
+  locale?: CalendarLocale;
 }
 
 /** `20261201T160000Z` — forma UTC "basic" que exige RFC 5545 e ICS de Google. */
@@ -99,9 +169,7 @@ function foldLine(line: string): string {
 /** Documento iCalendar completo con un único VEVENT. */
 export function buildIcsEvent(input: CalendarEventInput): string {
   const now = input.now ?? new Date();
-  const description = input.classUrl
-    ? `Clase en directo de ${input.organizerName}.\n\nEntra desde la página de la clase: ${input.classUrl}`
-    : `Clase en directo de ${input.organizerName}.`;
+  const description = longDescription(input);
 
   const lines = [
     'BEGIN:VCALENDAR',
@@ -150,9 +218,7 @@ export function buildGoogleCalendarUrl(input: CalendarEventInput): string {
     action: 'TEMPLATE',
     text: input.topic,
     dates: `${toIcsUtc(input.startTime)}/${toIcsUtc(endOf(input))}`,
-    details: input.classUrl
-      ? `Clase en directo de ${input.organizerName}.\n\nEntra desde la página de la clase: ${input.classUrl}`
-      : `Clase en directo de ${input.organizerName}.`,
+    details: longDescription(input),
     ...(input.classUrl ? { location: input.classUrl } : {}),
   });
   return `https://calendar.google.com/calendar/render?${params.toString()}`;
@@ -169,6 +235,7 @@ export function buildOutlookCalendarUrl(
   variant: 'personal' | 'work' = 'personal',
 ): string {
   const host = variant === 'work' ? 'outlook.office.com' : 'outlook.live.com';
+  const tx = texts(input);
   const params = new URLSearchParams({
     path: '/calendar/action/compose',
     rru: 'addevent',
@@ -176,8 +243,8 @@ export function buildOutlookCalendarUrl(
     startdt: toIsoSeconds(input.startTime),
     enddt: toIsoSeconds(endOf(input)),
     body: input.classUrl
-      ? `Clase en directo de ${input.organizerName}. Entra desde: ${input.classUrl}`
-      : `Clase en directo de ${input.organizerName}.`,
+      ? `${tx.what(input.organizerName)} ${tx.joinFromShort(input.classUrl)}`
+      : tx.what(input.organizerName),
     ...(input.classUrl ? { location: input.classUrl } : {}),
   });
   return `https://${host}/calendar/0/deeplink/compose?${params.toString()}`;

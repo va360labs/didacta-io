@@ -27,7 +27,22 @@ const TENANT_B = '22222222-2222-4222-8222-222222222222';
 
 function buildRuntime(refs: Record<string, string> = {}) {
   const events = new Map<string, { processedAt: Date | null; tenantId: string | null }>();
+  /** País del banco DECLARADO en el alta de Cloud, por aula (`tenant_setting`). */
+  const declared = new Map<string, unknown>();
   const prisma = {
+    tenantSetting: {
+      findUnique: vi.fn(
+        async ({
+          where,
+        }: {
+          where: { tenantId_moduleName_key: { tenantId: string; moduleName: string; key: string } };
+        }) => {
+          const { tenantId, moduleName, key } = where.tenantId_moduleName_key;
+          if (moduleName !== 'payouts' || key !== 'declared_country') return null;
+          return declared.has(tenantId) ? { valueJson: declared.get(tenantId) } : null;
+        },
+      ),
+    },
     modPayoutsWebhookEvent: {
       findUnique: vi.fn(
         async ({ where }: { where: { stripeEventId: string } }) =>
@@ -82,7 +97,7 @@ function buildRuntime(refs: Record<string, string> = {}) {
       resolve: vi.fn(async () => ({ mode: 'platform', ready: false, reason: 'not_connected' })),
     },
   };
-  return { runtime, events };
+  return { runtime, events, declared };
 }
 
 const logger = { warn: vi.fn(), log: vi.fn(), error: vi.fn() };
@@ -223,7 +238,7 @@ describe('PayoutsController', () => {
   });
 
   function controller() {
-    const { runtime } = buildRuntime();
+    const { runtime, declared } = buildRuntime();
     const tenantResolver = {
       resolvePrimaryDomain: vi.fn(async () => null),
       resolveTenantWebBaseUrl: vi.fn(async () => 'http://localhost:3000'),
@@ -232,9 +247,32 @@ describe('PayoutsController', () => {
     return {
       runtime,
       audit,
+      declared,
       payouts: new PayoutsController(runtime as never, tenantResolver as never, audit as never),
     };
   }
+
+  it('el estado trae el país DECLARADO en el alta del aula del token (o null sin él)', async () => {
+    const { payouts, declared } = controller();
+    expect((await payouts.status(claims())).declaredCountry).toBeNull();
+    declared.set(TENANT_A, 'BR');
+    declared.set(TENANT_B, 'OTHER');
+    expect((await payouts.status(claims())).declaredCountry).toBe('BR');
+    expect((await payouts.status(claims({ tenantId: TENANT_B }))).declaredCountry).toBe('OTHER');
+    // Un valor guardado que no es válido no llega a la web.
+    declared.set(TENANT_A, 'ESPAÑA');
+    expect((await payouts.status(claims())).declaredCountry).toBeNull();
+  });
+
+  it('si no se puede leer el país declarado, el estado sale igual (sin él)', async () => {
+    const { payouts, runtime } = controller();
+    (runtime.prisma.tenantSetting.findUnique as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
+      new Error('caída'),
+    );
+    const res = await payouts.status(claims());
+    expect(res.declaredCountry).toBeNull();
+    expect(res.account).toMatchObject({ stripeAccountId: 'acct_DeAaaaaa1' });
+  });
 
   it('desconectar (E6): solo el admin del aula, nunca una sesión de soporte; queda auditado', async () => {
     const { payouts, runtime, audit } = controller();

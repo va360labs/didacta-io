@@ -3,6 +3,8 @@ import {
   buildGoogleCalendarUrl,
   buildIcsEvent,
   buildOutlookCalendarUrl,
+  icsFileName,
+  toCalendarLocale,
   toIcsUtc,
   type CalendarEventInput,
 } from '../src/calendar.js';
@@ -108,5 +110,73 @@ describe('buildOutlookCalendarUrl', () => {
 
   it('usa outlook.office.com para cuentas de Microsoft 365', () => {
     expect(new URL(buildOutlookCalendarUrl(base, 'work')).host).toBe('outlook.office.com');
+  });
+});
+
+describe('idioma del evento', () => {
+  /** La DESCRIPTION del `.ics`, ya desplegada y sin escapar. */
+  function icsDescription(input: CalendarEventInput): string {
+    const line = unfold(buildIcsEvent(input)).find((l) => l.startsWith('DESCRIPTION:'))!;
+    return line
+      .slice('DESCRIPTION:'.length)
+      .replace(/\\n/g, '\n')
+      .replace(/\\([,;\\])/g, '$1');
+  }
+
+  it('sin idioma, el español de siempre (texto exacto en los tres formatos)', () => {
+    expect(icsDescription(base)).toBe(
+      `Clase en directo de Demo.\n\nEntra desde la página de la clase: ${base.classUrl}`,
+    );
+    expect(icsDescription({ ...base, classUrl: '' })).toBe('Clase en directo de Demo.');
+    expect(new URL(buildGoogleCalendarUrl(base)).searchParams.get('details')).toBe(
+      `Clase en directo de Demo.\n\nEntra desde la página de la clase: ${base.classUrl}`,
+    );
+    expect(new URL(buildOutlookCalendarUrl(base)).searchParams.get('body')).toBe(
+      `Clase en directo de Demo. Entra desde: ${base.classUrl}`,
+    );
+    expect(icsFileName(base.sessionId)).toBe(`clase-${base.sessionId}.ics`);
+    // Pedir español explícitamente da exactamente lo mismo.
+    expect(buildIcsEvent({ ...base, locale: 'es' })).toBe(buildIcsEvent(base));
+    expect(buildGoogleCalendarUrl({ ...base, locale: 'es' })).toBe(buildGoogleCalendarUrl(base));
+    expect(buildOutlookCalendarUrl({ ...base, locale: 'es' })).toBe(buildOutlookCalendarUrl(base));
+  });
+
+  it('en portugués de Brasil', () => {
+    const pt = { ...base, locale: 'pt' as const };
+    expect(icsDescription(pt)).toBe(
+      `Aula ao vivo — Demo.\n\nEntre pela página da aula: ${base.classUrl}`,
+    );
+    expect(icsDescription({ ...pt, classUrl: '' })).toBe('Aula ao vivo — Demo.');
+    expect(new URL(buildGoogleCalendarUrl(pt)).searchParams.get('details')).toBe(
+      `Aula ao vivo — Demo.\n\nEntre pela página da aula: ${base.classUrl}`,
+    );
+    expect(new URL(buildOutlookCalendarUrl(pt)).searchParams.get('body')).toBe(
+      `Aula ao vivo — Demo. Entre por: ${base.classUrl}`,
+    );
+    expect(icsFileName(base.sessionId, 'pt')).toBe(`aula-${base.sessionId}.ics`);
+    // El título es el de la clase: no se traduce.
+    expect(unfold(buildIcsEvent(pt))).toContain('SUMMARY:Clase de prospección');
+  });
+
+  it('en inglés', () => {
+    const en = { ...base, locale: 'en' as const };
+    expect(icsDescription(en)).toBe(
+      `Live class by Demo.\n\nJoin from the class page: ${base.classUrl}`,
+    );
+    expect(new URL(buildOutlookCalendarUrl(en)).searchParams.get('body')).toBe(
+      `Live class by Demo. Join from: ${base.classUrl}`,
+    );
+    expect(icsFileName(base.sessionId, 'en')).toBe(`class-${base.sessionId}.ics`);
+  });
+
+  it('cualquier tag se reduce a un idioma con texto; sin texto propio, español', () => {
+    expect(toCalendarLocale('pt-BR')).toBe('pt');
+    expect(toCalendarLocale('en_US')).toBe('en');
+    expect(toCalendarLocale('es-AR')).toBe('es');
+    expect(toCalendarLocale('fr-FR')).toBe('es');
+    expect(toCalendarLocale(undefined)).toBe('es');
+    expect(icsDescription({ ...base, locale: toCalendarLocale('fr-FR') })).toBe(
+      icsDescription(base),
+    );
   });
 });

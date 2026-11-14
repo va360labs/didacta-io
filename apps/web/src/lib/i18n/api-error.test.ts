@@ -2,12 +2,14 @@ import { describe, expect, it } from 'vitest';
 import { createTranslator } from 'next-intl';
 import es from '@/i18n/messages/es';
 import en from '@/i18n/messages/en';
+import pt from '@/i18n/messages/pt';
 import { ApiHttpError } from '@/lib/api-client';
 import { apiErrorMessage, CODES_WITH_DETAIL, CODES_WITH_PARAMS } from './api-error';
 import { labelOr, type TranslatorLike } from './labels';
 
 const tEs = createTranslator({ locale: 'es-ES', messages: es, namespace: 'errors' });
 const tEn = createTranslator({ locale: 'en-US', messages: en, namespace: 'errors' });
+const tPt = createTranslator({ locale: 'pt-BR', messages: pt, namespace: 'errors' });
 
 function httpError(message: string, code?: string, detail?: string): ApiHttpError {
   return new ApiHttpError({ message, status: 400, code, detail });
@@ -18,6 +20,21 @@ describe('apiErrorMessage', () => {
     const e = httpError('Se requiere verificación MFA.', 'mfa_required');
     expect(apiErrorMessage(e, tEn)).toBe('Two-step verification is required to continue.');
     expect(apiErrorMessage(e, tEs)).toBe('Se requiere verificación en dos pasos para continuar.');
+    expect(apiErrorMessage(e, tPt)).toBe(
+      'É necessária a verificação em duas etapas para continuar.',
+    );
+  });
+
+  it('un code que el ES calla a propósito: el lusófono NO ve el message crudo en español', () => {
+    // `ADMIN_ROLE_NOT_FOUND` es uno de los codes solo-traducidos
+    // (`TRANSLATED_ONLY_BY_DESIGN` en messages-parity.test.ts): el backend manda
+    // dos frases españolas distintas para él y el catálogo ES no lleva key.
+    const e = httpError('Rol no encontrado: editor', 'ADMIN_ROLE_NOT_FOUND');
+    // Control: en español sí se deja pasar el message del backend, entero.
+    expect(apiErrorMessage(e, tEs)).toBe('Rol no encontrado: editor');
+    // En inglés y en portugués NO: cada uno lee su redacción.
+    expect(apiErrorMessage(e, tEn)).toBe('That role does not exist.');
+    expect(apiErrorMessage(e, tPt)).toBe('Essa função não existe.');
   });
 
   it('code desconocido → fallback honesto al message del backend', () => {
@@ -62,13 +79,14 @@ describe('apiErrorMessage', () => {
 describe('apiErrorMessage con detalle estructurado', () => {
   const STRIPE_DETAIL = 'Invalid API Key provided: sk_test_***1234';
 
-  it('el detalle de Stripe llega ENTERO en los dos idiomas', () => {
+  it('el detalle de Stripe llega ENTERO en todos los idiomas', () => {
     const e = httpError(
       `Stripe rechazó la clave: ${STRIPE_DETAIL}`,
       'ADMIN_STRIPE_KEY_REJECTED',
       STRIPE_DETAIL,
     );
     expect(apiErrorMessage(e, tEn)).toBe(`Stripe rejected the key: ${STRIPE_DETAIL}`);
+    expect(apiErrorMessage(e, tPt)).toBe(`A Stripe rejeitou a chave: ${STRIPE_DETAIL}`);
     expect(apiErrorMessage(e, tEs)).toBe(`Stripe rechazó la clave: ${STRIPE_DETAIL}`);
     // El español es byte a byte el mensaje crudo del backend (no cambia nada
     // de lo que ve hoy el admin español).
@@ -145,15 +163,16 @@ describe('apiErrorMessage con detalle estructurado', () => {
     expect(apiErrorMessage(e, tEn)).toBe('The file must be between 1 byte and 5242880 bytes.');
   });
 
-  it('los dos catálogos declaran {detail} en TODOS los codes que lo interpolan', () => {
+  it('todos los catálogos declaran {detail} en TODOS los codes que lo interpolan', () => {
     // Recorre la lista REAL, no una copia: añadir un code a CODES_WITH_DETAIL y
-    // olvidar una de las dos traducciones rompe aquí, no en producción.
+    // olvidar una de las traducciones rompe aquí, no en producción.
     // `TranslatorLike` (la misma forma que consume `apiErrorMessage`) porque
-    // los dos translators tienen tipos distintos —uno por catálogo— y la unión
-    // de sus overloads no es invocable con una key dinámica.
+    // los translators tienen tipos distintos —uno por catálogo— y la unión de
+    // sus overloads no es invocable con una key dinámica.
     const CATALOGOS: ReadonlyArray<readonly [string, TranslatorLike]> = [
       ['es', tEs],
       ['en', tEn],
+      ['pt', tPt],
     ];
     for (const code of CODES_WITH_DETAIL) {
       for (const [locale, t] of CATALOGOS) {
@@ -446,17 +465,29 @@ describe('apiErrorMessage con placeholders con nombre', () => {
       expect(apiErrorMessage(e, tEs), `${code}: el ES dejó de ser el message crudo`).toBe(
         backendMessage,
       );
-      const english = apiErrorMessage(e, tEn);
-      for (const value of Object.values(params)) {
-        expect(english, `${code}: el EN se traga ${value}`).toContain(value);
+      // Las DOS traducciones pasan por las mismas aserciones: el portugués se
+      // parece lo bastante al español como para heredar el conector sin que a
+      // nadie le chirríe («O provedor openai falló: timeout»).
+      for (const [lang, t] of [
+        ['EN', tEn],
+        ['PT', tPt],
+      ] as const) {
+        const translated = apiErrorMessage(e, t);
+        for (const value of Object.values(params)) {
+          expect(translated, `${code}: el ${lang} se traga ${value}`).toContain(value);
+        }
+        // El bug que MOVERÍA un `detail` único: el conector español dentro de
+        // la traducción. Ninguno de los tres aparece en la frase traducida.
+        for (const conector of [' falló:', ' respondió ', ' no es válido:']) {
+          expect(translated, `${code}: el ${lang} hereda el conector español`).not.toContain(
+            conector,
+          );
+        }
+        expect(translated, `${code}: el ${lang} sigue pintando el español`).not.toBe(
+          backendMessage,
+        );
+        expect(translated, `${code}: pinta la key`).not.toContain(code);
       }
-      // El bug que MOVERÍA un `detail` único: el conector español dentro del
-      // inglés. Ninguno de los tres aparece en la frase inglesa.
-      for (const conector of [' falló:', ' respondió ', ' no es válido:']) {
-        expect(english, `${code}: el EN hereda el conector español`).not.toContain(conector);
-      }
-      expect(english, `${code}: el EN sigue pintando el español`).not.toBe(backendMessage);
-      expect(english, `${code}: pinta la key`).not.toContain(code);
     }
   });
 
@@ -490,12 +521,13 @@ describe('apiErrorMessage con placeholders con nombre', () => {
     }
   });
 
-  it('los dos catálogos interpolan TODOS los placeholders declarados', () => {
+  it('todos los catálogos interpolan TODOS los placeholders declarados', () => {
     // Recorre la lista REAL: añadir un code y olvidar una traducción (o
     // escribir otro nombre de placeholder) rompe aquí, no en producción.
     const CATALOGOS: ReadonlyArray<readonly [string, TranslatorLike]> = [
       ['es', tEs],
       ['en', tEn],
+      ['pt', tPt],
     ];
     for (const [code, names] of CODES_WITH_PARAMS) {
       for (const [locale, t] of CATALOGOS) {

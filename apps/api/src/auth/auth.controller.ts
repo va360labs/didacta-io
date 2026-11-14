@@ -25,11 +25,13 @@ import {
   forgotPasswordSchema,
   refreshSchema,
   resetPasswordSchema,
+  resetTokenSchema,
   signinSchema,
   signupSchema,
   type ForgotPasswordDto,
   type RefreshDto,
   type ResetPasswordDto,
+  type ResetTokenDto,
   type SigninDto,
   type SignupDto,
 } from './dto';
@@ -180,8 +182,51 @@ export class AuthController {
     @Req() req: FastifyRequest,
     @Body(new ZodValidationPipe(resetPasswordSchema)) dto: ResetPasswordDto,
   ) {
-    await this.passwordReset.reset(dto.token, dto.newPassword, extractClientContext(req));
-    return { ok: true, message: 'Tu contraseña fue actualizada. Ya puedes iniciar sesión.' };
+    const account = await this.passwordReset.reset(
+      dto.token,
+      dto.newPassword,
+      extractClientContext(req),
+    );
+    // `email` y `tenantSlug` dejan a la web entrar al momento con la contraseña
+    // recién elegida, sin la pantalla de «Bienvenido de nuevo» con el correo
+    // en blanco. El inicio de sesión pasa igual por /auth/signin (MFA incluido).
+    return {
+      ok: true,
+      message: 'Tu contraseña fue actualizada. Ya puedes iniciar sesión.',
+      email: account.email,
+      tenantSlug: account.tenantSlug,
+    };
+  }
+
+  @Post('reset-password/status')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary:
+      'Estado de un enlace de acceso SIN consumirlo: valid | expired | used | invalid. La pantalla lo pregunta al abrirse.',
+  })
+  async resetPasswordStatus(@Body(new ZodValidationPipe(resetTokenSchema)) dto: ResetTokenDto) {
+    return { status: await this.passwordReset.inspect(dto.token) };
+  }
+
+  @Post('reset-password/resend')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary:
+      'Con un enlace CADUCADO y sin usar, manda uno nuevo al correo de esa cuenta (una sola vez por enlace). Responde 200 siempre.',
+  })
+  async resendResetLink(
+    @Req() req: FastifyRequest,
+    @Body(new ZodValidationPipe(resetTokenSchema)) dto: ResetTokenDto,
+  ) {
+    const hostTenantId = await this.resolveTenantIdFromHost(req);
+    await this.passwordReset.resendExpired(
+      dto.token,
+      // Misma base endurecida que «olvidé mi contraseña»: el enlace lleva token.
+      (accountTenantId) => this.resetLinkBase(accountTenantId, hostTenantId, req),
+      extractClientContext(req),
+      dto.next,
+    );
+    return { ok: true };
   }
 
   // -------------------- helpers --------------------

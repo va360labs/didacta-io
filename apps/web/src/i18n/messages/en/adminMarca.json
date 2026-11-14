@@ -376,5 +376,17 @@
     "saved": "Language saved.",
     "error": "The language couldn't be saved. Please try again.",
     "loadError": "The academy language couldn't be loaded."
+  },
+  "paginaPublica": {
+    "title": "Academy public page",
+    "description": "What people see when they open your academy's address without an account: your cover, who you are and how to join (what you have for sale). If you turn it off, they go straight to the login screen.",
+    "on": "On: your public page is shown",
+    "off": "Off: visitors go straight to log in",
+    "onHelp": "People without an account see your cover with the ways to join.",
+    "offHelp": "People without an account see the login screen.",
+    "preview": "View your public page",
+    "saved": "Saved",
+    "error": "Couldn't save. Please try again.",
+    "loadError": "Couldn't load this setting."
   }
 }

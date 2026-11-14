@@ -213,11 +213,11 @@ describe('ResourcesService', () => {
     idSeq = 0;
   });
 
-  it('siembra las 6 colecciones default en el primer listado y no las duplica', async () => {
+  it('siembra la colección default en el primer listado y no la duplica', async () => {
     const { service } = makeService(mock);
     const first = await service.listCollections(TENANT);
     expect(first).toHaveLength(DEFAULT_COLLECTIONS.length);
-    expect(first[0]!.title).toBe('Workflows de clase');
+    expect(first.map((c) => c.title)).toEqual(['General']);
     expect(first.every((c) => c.isDefault)).toBe(true);
     expect(first.every((c) => c.resourceCount === 0)).toBe(true);
 
@@ -226,6 +226,44 @@ describe('ResourcesService', () => {
     // Otro tenant siembra las suyas propias, aisladas.
     expect(await service.listCollections('tenant-2')).toHaveLength(DEFAULT_COLLECTIONS.length);
     expect(mock.collections).toHaveLength(DEFAULT_COLLECTIONS.length * 2);
+  });
+
+  // Lo sembrado es del producto, no de una academia: ni las seis colecciones
+  // de IA en español de antes, y la que queda va en el idioma del aula.
+  it.each([
+    ['en', 'General', 'Materials shared by the community.'],
+    ['pt-BR', 'Geral', 'Materiais compartilhados pela comunidade.'],
+    ['es', 'General', 'Materiales que comparte la comunidad.'],
+  ])('en un aula «%s» siembra «%s» en su idioma', async (locale, title, description) => {
+    const service = new ResourcesService(mock as never, { publish: async () => {} }, async (t) =>
+      t === TENANT ? locale : 'es',
+    );
+    const list = await service.listCollections(TENANT);
+    expect(list.map((c) => [c.title, c.description])).toEqual([[title, description]]);
+    const todo = JSON.stringify(mock.collections);
+    for (const vieja of ['Workflows de clase', 'Skills y agentes', 'Herramientas de IA']) {
+      expect(todo).not.toContain(vieja);
+    }
+  });
+
+  it('un aula que ya tiene colecciones no recibe ninguna sembrada', async () => {
+    const service = new ResourcesService(mock as never, { publish: async () => {} }, async () =>
+      Promise.resolve('en'),
+    );
+    await service.createCollection({
+      tenantId: TENANT,
+      createdById: 'staff-1',
+      title: 'Workflows de clase',
+    });
+    const list = await service.listCollections(TENANT);
+    expect(list.map((c) => c.title)).toEqual(['Workflows de clase']);
+  });
+
+  it('sin idioma legible siembra en español y el listado no se cae', async () => {
+    const service = new ResourcesService(mock as never, { publish: async () => {} }, () =>
+      Promise.reject(new Error('sin ajuste')),
+    );
+    expect((await service.listCollections(TENANT)).map((c) => c.title)).toEqual(['General']);
   });
 
   it('crea colecciones (título único por tenant) y las coloca tras las default', async () => {
@@ -316,7 +354,12 @@ describe('ResourcesService', () => {
   it('getCollection busca dentro de la colección sin mezclar otras', async () => {
     const { service } = makeService(mock);
     const collections = await service.listCollections(TENANT);
-    const [a, b] = [collections[0]!.id, collections[1]!.id];
+    const otra = await service.createCollection({
+      tenantId: TENANT,
+      createdById: 'staff-1',
+      title: 'Herramientas',
+    });
+    const [a, b] = [collections[0]!.id, otra.id];
 
     await service.create(resourceInput(a));
     await service.create({

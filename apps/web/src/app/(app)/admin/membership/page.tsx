@@ -371,12 +371,10 @@ function MembresiaCompleta() {
         .filter((x): x is { courseId: string; amountCents: number } => x.amountCents !== null);
       const updated = await membershipAdminApi.updateConfig(bearer, {
         active,
-        // Literal, NO traducido: este valor se PERSISTE y lo leen los visitantes
-        // de la página pública, no el admin. Traducirlo guardaría el titular en
-        // el idioma de la UI de quien guardó (un admin en inglés dejaría
-        // «Become a member» a un público español). Coincide con el default de la
-        // columna en el schema (`MembershipConfig.headline`).
-        headline: headline.trim() || 'Hazte miembro',
+        // Vacío = el titular por defecto, que NO se guarda: la página pública lo
+        // pone en el idioma del AULA (no en el de quien guarda, ni en español
+        // para todas como antes). El placeholder enseña cuál será.
+        headline: headline.trim(),
         subheadline: subheadline.trim() || null,
         accessGroupId: accessGroupId || null,
         showCourses,

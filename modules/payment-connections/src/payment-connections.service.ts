@@ -102,7 +102,7 @@ export interface SubscriptionStatusInfo {
  * del catálogo de emails del host; se redeclara aquí porque un módulo no puede
  * importar de `apps/api` (contrato de módulos). Hay test de que coinciden.
  */
-export type SubscriptionStatusLang = 'es' | 'en';
+export type SubscriptionStatusLang = 'es' | 'en' | 'pt';
 
 /** Identificador interno de etiqueta. NO es el `status` crudo del proveedor. */
 type StatusLabelKey =
@@ -151,6 +151,22 @@ const SUBSCRIPTION_STATUS_LABELS: Record<SubscriptionStatusLang, Record<StatusLa
     incomplete: 'Payment not completed',
     pending: 'Awaiting payment',
     unknown: 'Unknown',
+  },
+  // Portugués de Brasil. En femenino, como el español: califican a «a
+  // assinatura». «Inadimplente» es el término brasileño para el impago.
+  pt: {
+    active: 'Ativa',
+    trialing: 'Em teste',
+    past_due: 'Pagamento em atraso (inadimplente)',
+    unpaid: 'Inadimplente — suspensa',
+    on_hold: 'Em espera (inadimplente)',
+    paused: 'Pausada',
+    pending_cancel: 'Cancelamento agendado',
+    canceled: 'Cancelada',
+    expired: 'Expirada',
+    incomplete: 'Pagamento não concluído',
+    pending: 'Aguardando pagamento',
+    unknown: 'Desconhecido',
   },
 };
 
@@ -560,15 +576,42 @@ export interface RenewalTemplate {
   body: string;
 }
 
-/** Plantilla por defecto si el tenant no ha personalizado ninguna. */
-export const DEFAULT_RENEWAL_TEMPLATE: RenewalTemplate = {
-  subject: 'Renueva tu suscripción',
-  body:
-    'Hola,\n\n' +
-    'Hemos visto que tu suscripción ({plan}) está pendiente de pago. ' +
-    'Puedes renovarla desde este enlace:\n\n{enlace}\n\n' +
-    'Si ya lo has resuelto, ignora este mensaje. Gracias.',
-};
+/**
+ * Plantilla por defecto si el tenant no ha personalizado ninguna, en el idioma
+ * del aula (es la misma para todos los suscriptores). Las variables `{plan}` y
+ * `{enlace}` son las que sustituye la web al abrir el correo: se escriben IGUAL
+ * en los tres idiomas. El español es exactamente el de siempre.
+ */
+export const DEFAULT_RENEWAL_TEMPLATES: Readonly<Record<SubscriptionStatusLang, RenewalTemplate>> =
+  {
+    es: {
+      subject: 'Renueva tu suscripción',
+      body:
+        'Hola,\n\n' +
+        'Hemos visto que tu suscripción ({plan}) está pendiente de pago. ' +
+        'Puedes renovarla desde este enlace:\n\n{enlace}\n\n' +
+        'Si ya lo has resuelto, ignora este mensaje. Gracias.',
+    },
+    en: {
+      subject: 'Renew your subscription',
+      body:
+        'Hi,\n\n' +
+        'We noticed that your subscription ({plan}) has a pending payment. ' +
+        'You can renew it from this link:\n\n{enlace}\n\n' +
+        'If you have already sorted it out, please ignore this message. Thank you.',
+    },
+    pt: {
+      subject: 'Renove sua assinatura',
+      body:
+        'Olá!\n\n' +
+        'Vimos que o pagamento da sua assinatura ({plan}) está pendente. ' +
+        'Você pode renová-la por este link:\n\n{enlace}\n\n' +
+        'Se você já resolveu, ignore esta mensagem. Obrigado.',
+    },
+  };
+
+/** La plantilla por defecto en español (la de siempre). */
+export const DEFAULT_RENEWAL_TEMPLATE: RenewalTemplate = DEFAULT_RENEWAL_TEMPLATES.es;
 
 /** Suscripción próxima a renovarse/caducar (para el resumen diario del admin). */
 export interface UpcomingRenewal {
@@ -1405,8 +1448,15 @@ export class PaymentConnectionsService {
     return url ?? r.renewalUrl ?? null;
   }
 
-  /** Plantilla del email de renovación del tenant (o la por defecto). */
-  async getRenewalTemplate(tenantId: string): Promise<RenewalTemplate> {
+  /**
+   * Plantilla del email de renovación del tenant o, si no la personalizó, la
+   * por defecto en `lang` (el idioma del aula; sin él, español). La que guardó
+   * el tenant se devuelve tal cual: es suya, no se traduce.
+   */
+  async getRenewalTemplate(
+    tenantId: string,
+    lang: SubscriptionStatusLang = 'es',
+  ): Promise<RenewalTemplate> {
     const stored = await this.config.get<RenewalTemplate>(
       tenantId,
       PAYMENT_CONNECTIONS_MODULE,
@@ -1415,7 +1465,7 @@ export class PaymentConnectionsService {
     if (stored && typeof stored.subject === 'string' && typeof stored.body === 'string') {
       return stored;
     }
-    return DEFAULT_RENEWAL_TEMPLATE;
+    return DEFAULT_RENEWAL_TEMPLATES[lang] ?? DEFAULT_RENEWAL_TEMPLATE;
   }
 
   /** Personaliza la plantilla del email de renovación del tenant. */

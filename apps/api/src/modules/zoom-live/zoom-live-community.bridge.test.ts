@@ -41,6 +41,29 @@ describe('anuncio del directo en la comunidad', () => {
     expect(post.title).toBe('Dialing in espresso');
   });
 
+  it('en un aula en portugués, en portugués de Brasil (texto, fecha y etiqueta)', () => {
+    const post = announcementPost(SESSION, 's-1', 'pt');
+    expect(post.tag).toBe('Aulas ao vivo');
+    expect(post.body).toContain('Aula ao vivo: **Dialing in espresso**.');
+    expect(post.body).toContain('quinta-feira, 19 de novembro');
+    expect(post.body).toMatch(/19:00 GMT\+1/);
+    expect(post.body).toContain('Inscreva-se aqui para receber o link da aula.');
+    expect(post.body).toContain('<!--didacta-clase:s-1-->');
+    expect(post.body).not.toMatch(/Clase en directo|Inscríbete|noviembre|jueves|Live class/i);
+  });
+
+  it('el español no cambia ni un byte', () => {
+    expect(announcementPost(SESSION, 's-1', 'es').body).toBe(
+      [
+        'Clase en directo: **Dialing in espresso**.',
+        `🗓️ ${formatWhen(SESSION.startTime, SESSION.timezone, 'es')} · 60 min.`,
+        '\nBring your grinder.',
+        '\nInscríbete desde aquí para recibir el enlace de la clase.',
+        '\n<!--didacta-clase:s-1-->',
+      ].join('\n'),
+    );
+  });
+
   it('una zona que Intl no conoce no tumba el anuncio', () => {
     expect(formatWhen(SESSION.startTime, 'Mars/Olympus', 'en')).toMatch(/2026/);
   });

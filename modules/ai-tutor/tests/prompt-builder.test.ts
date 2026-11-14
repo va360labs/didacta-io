@@ -44,6 +44,26 @@ describe('buildPrompt (LMS-90.D)', () => {
     expect(r.system).toContain('English');
   });
 
+  it('locale pt-BR: portugués de Brasil (con «você»); sin catálogo, español', () => {
+    const pt = buildPrompt({
+      courseTitle: 'X',
+      locale: 'pt-BR',
+      retrieved: [],
+      history: [],
+      question: 'Oi',
+    });
+    expect(pt.system).toContain('Responda sempre em português do Brasil');
+    expect(pt.system).toContain('"você"');
+    const de = buildPrompt({
+      courseTitle: 'X',
+      locale: 'de-DE',
+      retrieved: [],
+      history: [],
+      question: 'Hallo',
+    });
+    expect(de.system).toContain('Responde SIEMPRE en español neutro.');
+  });
+
   it('chunks recuperados se numeran [1], [2], ...', () => {
     const r = buildPrompt({
       courseTitle: 'X',

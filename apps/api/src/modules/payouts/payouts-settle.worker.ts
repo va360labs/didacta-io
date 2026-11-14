@@ -88,6 +88,20 @@ export class PayoutsSettleWorker implements OnApplicationBootstrap, OnModuleDest
     if (result.due > 0) {
       this.logger.log({ ...result }, 'payouts settle: barrido completado');
     }
+    // De paso, el aviso de las ventas que nadie avisó (las anotó el
+    // conciliador, o el webhook murió entre anotar y avisar). Un fallo aquí no
+    // tumba el barrido de liquidación.
+    try {
+      const notices = await this.runtime.saleNotices.sweep();
+      if (notices.sent > 0 || notices.errors > 0) {
+        this.logger.log({ ...notices }, 'payouts: avisos de venta pendientes enviados');
+      }
+    } catch (err) {
+      this.logger.warn(
+        { err: err instanceof Error ? err.message : String(err) },
+        'payouts: el barrido de avisos de venta falló (se reintenta en el siguiente)',
+      );
+    }
     return result;
   }
 

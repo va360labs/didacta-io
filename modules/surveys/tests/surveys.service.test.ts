@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import {
   POST_CLASS_QUESTIONS,
+  POST_CLASS_QUESTIONS_BY_LOCALE,
   SurveysService,
   type SurveysEventPublisher,
 } from '../src/surveys.service.js';
@@ -254,6 +255,53 @@ describe('SurveysService', () => {
     expect(published).toHaveLength(1);
     expect(published[0]!.name).toBe('surveys.survey.created');
     expect(published[0]!.actorId).toBeNull();
+  });
+
+  // Las preguntas son filas que leen todos los alumnos: van en el idioma del
+  // aula. Control: el aula española (y la que no tiene idioma) sigue en español.
+  it.each([
+    ['en', 'From 0 to 10, would you recommend this class to another member?', 'The class content'],
+    ['pt-BR', 'De 0 a 10, você recomendaria esta aula a outro membro?', 'O conteúdo da aula'],
+    ['es', 'Del 0 al 10, ¿recomendarías esta clase a otro miembro?', 'El contenido de la clase'],
+  ])('en un aula «%s» las preguntas salen en su idioma', async (locale, nps, contenido) => {
+    const service = new SurveysService(
+      mock as never,
+      { publish: async () => {} },
+      SECRET,
+      async (tenantId) => (tenantId === TENANT ? locale : 'es'),
+    );
+    const { surveyId } = await service.createForZoomSession({
+      tenantId: TENANT,
+      sessionId: `sess-${locale}`,
+      topic: 'Clase',
+    });
+    const labels = mock.questions
+      .filter((q) => q['surveyId'] === surveyId)
+      .sort((a, b) => (a['position'] as number) - (b['position'] as number))
+      .map((q) => q['label']);
+    expect(labels).toHaveLength(4);
+    expect(labels[0]).toBe(nps);
+    expect(labels[1]).toBe(contenido);
+  });
+
+  it('sin idioma legible, las preguntas salen en español y la encuesta se crea', async () => {
+    const service = new SurveysService(mock as never, { publish: async () => {} }, SECRET, () =>
+      Promise.reject(new Error('sin ajuste')),
+    );
+    const { surveyId, created } = await service.createForZoomSession({
+      tenantId: TENANT,
+      sessionId: 'sess-roto',
+      topic: 'Clase',
+    });
+    expect(created).toBe(true);
+    const labels = mock.questions.filter((q) => q['surveyId'] === surveyId).map((q) => q['label']);
+    expect(labels).toEqual(POST_CLASS_QUESTIONS.map((q) => q.label));
+  });
+
+  it('las tres versiones tienen las mismas preguntas en el mismo orden', () => {
+    const tipos = (l: 'es' | 'en' | 'pt') => POST_CLASS_QUESTIONS_BY_LOCALE[l].map((q) => q.type);
+    expect(tipos('en')).toEqual(tipos('es'));
+    expect(tipos('pt')).toEqual(tipos('es'));
   });
 
   it('es idempotente por sesión: la segunda llamada no crea ni re-emite', async () => {

@@ -18,7 +18,7 @@
  * dinero queda a salvo y sale solo al completarlos).
  */
 
-import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -28,7 +28,7 @@ import { Label } from '@/components/ui/label';
 import { NativeSelect } from '@/components/ui/select';
 import { ApiHttpError } from '@/lib/api-client';
 import { apiErrorMessage } from '@/lib/i18n/api-error';
-import { labelOr } from '@/lib/i18n/labels';
+import { labelOr, type TranslatorLike } from '@/lib/i18n/labels';
 import {
   countryOptions,
   payoutsApi,
@@ -141,11 +141,61 @@ export interface PayoutsTaxProfileCardProps {
   api?: Pick<typeof payoutsApi, 'taxProfile' | 'saveTaxProfile'>;
   /** Avisa cuando se guardan (para recargar «Tus ventas»). */
   onSaved?: () => void;
+  /**
+   * Sin el aviso «Hasta que los completes…» / «Tienes N ventas retenidas…»:
+   * para cuando quien la enseña ya lo dice encima («Ventas» del modo sencillo).
+   */
+  hideStatusNotice?: boolean;
+}
+
+/** Ancla de la tarjeta: «Empieza aquí» lleva directo a ella. */
+export const TAX_PROFILE_ANCHOR = 'tax-profile';
+
+/** Campo del 422 → clave de `problems.*` (next-intl anida con el punto). */
+const PROBLEM_FIELD: Readonly<Record<string, string>> = {
+  entityType: 'entityType',
+  legalName: 'legalName',
+  country: 'country',
+  taxId: 'taxId',
+  vatId: 'vatId',
+  'address.line1': 'addressLine1',
+  'address.postalCode': 'addressPostalCode',
+  'address.city': 'addressCity',
+  birthDate: 'birthDate',
+};
+
+/** Orden en que se enumeran (el del formulario). */
+const PROBLEM_ORDER = Object.keys(PROBLEM_FIELD);
+
+/**
+ * El error CONCRETO de un guardado rechazado («El NIF no es válido. La letra o
+ * el dígito de control no cuadra.») en vez del genérico «faltan campos».
+ * Puro: `fieldErrors` es el `detail` del 422 ya partido (campo → motivo).
+ * `null` si no hay ningún campo conocido (se queda el mensaje de la API).
+ */
+export function taxProblemsMessage(
+  fieldErrors: Record<string, string>,
+  t: TranslatorLike,
+): string | null {
+  const sentences: string[] = [];
+  for (const field of PROBLEM_ORDER) {
+    const reason = fieldErrors[field];
+    if (!reason) continue;
+    const key = PROBLEM_FIELD[field]!;
+    const what = reason === 'required' ? 'required' : 'invalid';
+    sentences.push(t(`problems.${key}.${what}`));
+    // El porqué, si dice algo más que «falta» o «no vale»: «Revisa el formato.»
+    if (what === 'invalid' && reason !== 'invalid' && t.has(`fieldErrors.${reason}`)) {
+      sentences.push(t(`fieldErrors.${reason}`));
+    }
+  }
+  return sentences.length > 0 ? sentences.join(' ') : null;
 }
 
 export function PayoutsTaxProfileCard({
   api = payoutsApi,
   onSaved,
+  hideStatusNotice = false,
 }: PayoutsTaxProfileCardProps): React.JSX.Element | null {
   const t = useTranslations('adminPagos.payouts.tax');
   const tErrors = useTranslations('errors');
@@ -175,6 +225,16 @@ export function PayoutsTaxProfileCard({
   useEffect(() => {
     void load();
   }, [load]);
+
+  // «Empieza aquí» enlaza a `#tax-profile`: la tarjeta se pinta tras cargar,
+  // así que el navegador no llega a bajar solo hasta ella.
+  const scrolled = useRef(false);
+  useEffect(() => {
+    if (!dto || scrolled.current) return;
+    if (typeof window === 'undefined' || window.location.hash !== `#${TAX_PROFILE_ANCHOR}`) return;
+    scrolled.current = true;
+    document.getElementById(TAX_PROFILE_ANCHOR)?.scrollIntoView({ block: 'start' });
+  }, [dto]);
 
   const countries = useMemo(
     () => countryOptions([...TAX_COUNTRIES], locale).filter((c) => c.supported),
@@ -227,10 +287,17 @@ export function PayoutsTaxProfileCard({
       setSaved(true);
       onSaved?.();
     } catch (err) {
-      if (err instanceof ApiHttpError && err.code === 'PAYOUTS_TAX_PROFILE_INVALID') {
-        setFieldErrors(taxProfileFieldErrors(err.detail));
-      }
-      setError(err instanceof ApiHttpError ? apiErrorMessage(err, tErrors) : t('saveError'));
+      // El motivo CONCRETO (ensayo general: «Revise seus dados fiscais: há
+      // campos faltando ou inválidos» con un NIF mal escrito).
+      const fields =
+        err instanceof ApiHttpError && err.code === 'PAYOUTS_TAX_PROFILE_INVALID'
+          ? taxProfileFieldErrors(err.detail)
+          : {};
+      setFieldErrors(fields);
+      setError(
+        taxProblemsMessage(fields, t) ??
+          (err instanceof ApiHttpError ? apiErrorMessage(err, tErrors) : t('saveError')),
+      );
     } finally {
       setSaving(false);
     }
@@ -240,7 +307,12 @@ export function PayoutsTaxProfileCard({
   const profile = dto.profile;
 
   return (
-    <Card data-testid="payouts-tax-profile" data-status={status}>
+    <Card
+      id={TAX_PROFILE_ANCHOR}
+      className="scroll-mt-28"
+      data-testid="payouts-tax-profile"
+      data-status={status}
+    >
       <CardHeader>
         <div className="flex flex-wrap items-center gap-2">
           <CardTitle className="text-lg">{t('title')}</CardTitle>
@@ -251,7 +323,7 @@ export function PayoutsTaxProfileCard({
         <CardDescription className="max-w-2xl">{t('intro')}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        {status !== 'complete' && dto.required ? (
+        {status !== 'complete' && dto.required && !hideStatusNotice ? (
           <p
             role="status"
             className="rounded-lg border border-warning-200 bg-warning-50 p-3.5 text-[0.9375rem] leading-relaxed text-warning-700"

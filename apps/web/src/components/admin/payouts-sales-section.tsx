@@ -450,6 +450,9 @@ export function describeSale(
         : money(sale.transferAmount + reinstated, sale.currency)!;
   let arrives: string;
   if (sale.status === 'AWAITING_FEE') arrives = t('arrivesPending');
+  // Devuelta entera: ya no llega ningún día (ensayo general: «hacia el 23 nov»
+  // en una venta reembolsada).
+  else if (sale.refundState === 'full') arrives = t('arrivesNone');
   else if ((sale.status === 'TRANSFERRED' || sale.status === 'READY') && sale.estimatedArrival) {
     arrives = t('arrivesOn', {
       date: formatDate(`${sale.estimatedArrival}T12:00:00Z`, {
@@ -507,9 +510,13 @@ function CurrencySummaryCard({
     [t('summarySold'), summary.gross],
     [t('summaryCardFees'), summary.stripeFees],
     [operatorFeeLabel, summary.platformFees],
-    [t('summaryReceived'), summary.received, true],
+    // Lo que de verdad le queda: tras devolver una venta entera, no lo que se
+    // le envió en su día (ensayo general: «Recibido 44,76 €» tras reembolsarla).
+    [t('summaryReceived'), summary.receivedNet ?? summary.received, true],
     [t('summaryPending'), summary.pending],
   ];
+  // Lo retenido, aparte: no está «en camino».
+  if ((summary.held ?? 0) > 0) rows.push([t('summaryHeld'), summary.held ?? 0]);
   if ((summary.refunded ?? 0) > 0) rows.push([t('summaryRefunded'), summary.refunded]);
   if ((summary.reversed ?? 0) > 0) rows.push([t('summaryReversed'), summary.reversed]);
   if (summary.debtNetted > 0) rows.push([t('summaryDebtNetted'), summary.debtNetted]);

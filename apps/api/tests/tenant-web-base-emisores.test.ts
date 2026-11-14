@@ -392,7 +392,9 @@ describe('ZoomCalendarController · el .ics guarda el enlace del aula del tenant
       }),
     };
     const registry = { getZoomLiveService: () => zoom } as never;
-    return new ZoomCalendarController(registry, makeTenantResolver().resolver);
+    // Prisma vacío: el idioma del aula no se puede leer y el evento sale en
+    // español (lo cubre `zoom-calendar-locale.test.ts`).
+    return new ZoomCalendarController(registry, makeTenantResolver().resolver, {} as never);
   }
 
   function makeReply() {

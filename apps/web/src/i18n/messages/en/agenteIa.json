@@ -53,5 +53,11 @@
   },
   "puede": "It creates and edits courses and lessons, schedules live classes and posts in the community. New courses stay as drafts until you publish them; live classes, community posts and lessons added to a published course are visible right away.",
   "noPuede": "It doesn’t set prices, put anything on sale, delete anything or invite anyone.",
-  "chatgpt": "ChatGPT can’t connect with a key yet."
+  "chatgpt": "ChatGPT can’t connect with a key yet.",
+  "errorRevocar": "The key could not be revoked. Please try again.",
+  "revocando": "Revoking…",
+  "ocultarClaves": "Hide keys",
+  "claveCreada": "Created {fecha}",
+  "claveUsada": "last used {fecha}",
+  "claveSinUso": "not used yet"
 }

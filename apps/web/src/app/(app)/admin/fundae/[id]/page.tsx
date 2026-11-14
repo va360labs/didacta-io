@@ -142,7 +142,7 @@ export default function FundaeActionDetailPage() {
           </p>
           <h1 className="mt-1 font-display text-2xl font-bold tracking-tight">{action.nombre}</h1>
           <div className="mt-2 flex flex-wrap gap-1.5 text-sm text-text-muted">
-            <Badge>{action.modalidad}</Badge>
+            <Badge>{labelOr(t, `modalidad.${action.modalidad}`, action.modalidad)}</Badge>
             <span>· {t('actionDetail.hoursTotal', { horas: action.horasFormacion })}</span>
             <span>
               · {action.fechaInicio} → {action.fechaFin}
@@ -296,7 +296,8 @@ function BlockRow({
       <div className="min-w-0 flex-1">
         <p className="font-medium text-text">{block.title}</p>
         <p className="text-xs text-text-muted">
-          {t('actionDetail.blockHours', { hours: block.hours })} · {block.modalidad}
+          {t('actionDetail.blockHours', { hours: block.hours })} ·{' '}
+          {labelOr(t, `modalidad.${block.modalidad}`, block.modalidad)}
         </p>
         {block.contenidos ? (
           <p className="mt-1 whitespace-pre-line text-xs text-text-subtle">{block.contenidos}</p>
@@ -392,7 +393,7 @@ function CreateBlockForm({
         >
           {MODALIDAD_OPTIONS.map((m) => (
             <option key={m} value={m}>
-              {m}
+              {t(`modalidad.${m}`)}
             </option>
           ))}
         </Select>

@@ -191,6 +191,38 @@ describe('E6: reembolsos y reclamaciones en las filas', () => {
     expect(plain(row.refundNote)).toBe('Devuelto al alumno: 40,00 €');
   });
 
+  it('ensayo general: reembolsada entera ya no dice «hacia el 23 nov»', () => {
+    const full = describeSale(
+      sale({ refundState: 'full', refundedAmount: 10000, reversedAmount: 9325 }),
+      money,
+      'es',
+      t,
+    );
+    expect(full.arrives).toBe('—');
+    // Control: la misma venta sin reembolsar sí tiene fecha.
+    expect(describeSale(sale({}), money, 'es', t).arrives).toBe('hacia el 23 nov');
+    // Y con un reembolso parcial lo que queda sigue llegando.
+    expect(
+      describeSale(
+        sale({ refundState: 'partial', refundedAmount: 4000, reversedAmount: 3730 }),
+        money,
+        'es',
+        t,
+      ).arrives,
+    ).toBe('hacia el 23 nov');
+  });
+
+  it('retenida por los datos fiscales: sin fecha de llegada y lo dice el estado', () => {
+    const held = describeSale(
+      sale({ status: 'HELD', reason: 'tax_profile_incomplete', transferredAt: null }),
+      money,
+      'es',
+      t,
+    );
+    expect(held.arrives).toBe('—');
+    expect(t(`status.${held.status.key}`)).toBe('Retenida hasta que completes tus datos fiscales');
+  });
+
   it('reembolsada entera y reclamada al banco mandan sobre el envío', () => {
     expect(
       describeSale(sale({ refundState: 'full', refundedAmount: 10000 }), money, 'es', t).status,
@@ -266,7 +298,9 @@ describe('E6: explicación del reembolso', () => {
       'Se te descuentan 37,30 € de lo que recibiste por esta venta.',
       'Como ya te lo habíamos enviado, lo retiramos de tu saldo en Stripe. Si no hay bastante, lo descontamos de tus próximos cobros.',
       'El banco no devuelve la comisión de la tarjeta (0,70 €): la pagas tú y se descuenta de tus próximos cobros.',
-      'Didacta te devuelve su parte (2,00 €).',
+      // Ensayo general: «Didacta te devuelve su parte» se leía como que el
+      // dinero volvía a la creadora. Lo pone Didacta en la devolución al alumno.
+      'Didacta devuelve al alumno su comisión proporcional (2,00 €): esa parte no se te descuenta a ti.',
       'En total se te descuentan 38,00 €.',
       'Con un reembolso parcial, el alumno conserva el acceso al curso.',
     ]);

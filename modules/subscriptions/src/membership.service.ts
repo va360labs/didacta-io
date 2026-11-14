@@ -65,6 +65,26 @@ export const PLAN_INTERVAL_MAX_MONTHS = 12;
 export const PLAN_DEFAULT_CURRENCY = 'eur';
 
 /**
+ * El titular que la columna ponía por defecto antes, en español para todas las
+ * aulas. Hoy la columna nace vacía: el titular por defecto no se guarda, lo
+ * pone la web desde su catálogo en el idioma del aula («Become a member»). Las
+ * filas que ya lo tienen guardado se leen como «sin titular propio» — nadie lo
+ * escribió, y en un aula inglesa era un texto ajeno.
+ */
+export const MEMBERSHIP_LEGACY_DEFAULT_HEADLINE = 'Hazte miembro';
+
+/** El titular que escribió el aula, o `null` si es el de por defecto (vacío o el de antes). */
+export function customMembershipHeadline(raw: string | null | undefined): string | null {
+  const headline = raw?.trim();
+  return headline && headline !== MEMBERSHIP_LEGACY_DEFAULT_HEADLINE ? headline : null;
+}
+
+/** La fila de configuración con el titular por defecto como vacío (lo que ve el admin). */
+function withCustomHeadline<T extends { headline: string }>(row: T): T {
+  return { ...row, headline: customMembershipHeadline(row.headline) ?? '' };
+}
+
+/**
  * Estados en los que una membresía **ya existe para su dueño** y no procede
  * venderle otra. Una sola definición porque la usan dos sitios que tienen que
  * responder lo mismo: el guard del checkout y `/integrations/learners/state`,
@@ -152,7 +172,8 @@ export interface MembershipPublicStats {
 }
 
 export interface MembershipPublicPage {
-  headline: string;
+  /** El titular del aula, o `null` para que la web ponga el suyo en el idioma del aula. */
+  headline: string | null;
   subheadline: string | null;
   plans: Array<{
     id: string;
@@ -305,20 +326,29 @@ export class MembershipService {
 
   // ---------------- Configuración de la página (admin) ----------------
 
+  /**
+   * Configuración de la página. El titular por defecto sale VACÍO (`''`): el
+   * admin ve el de su idioma como placeholder y, si no escribe nada, la página
+   * pública pone el del idioma del aula. Guardar `''` vuelve al de por defecto.
+   */
   async getConfig(tenantId: string): Promise<ConfigRow> {
-    return this.prisma.modSubscriptionsMembershipConfig.upsert({
-      where: { tenantId },
-      create: { tenantId },
-      update: {},
-    });
+    return withCustomHeadline(
+      await this.prisma.modSubscriptionsMembershipConfig.upsert({
+        where: { tenantId },
+        create: { tenantId },
+        update: {},
+      }),
+    );
   }
 
   async updateConfig(tenantId: string, input: MembershipConfigInput): Promise<ConfigRow> {
-    return this.prisma.modSubscriptionsMembershipConfig.upsert({
-      where: { tenantId },
-      create: { tenantId, ...configData(input) },
-      update: configData(input),
-    });
+    return withCustomHeadline(
+      await this.prisma.modSubscriptionsMembershipConfig.upsert({
+        where: { tenantId },
+        create: { tenantId, ...configData(input) },
+        update: configData(input),
+      }),
+    );
   }
 
   // ---------------- Página pública ----------------
@@ -416,7 +446,7 @@ export class MembershipService {
         : null;
 
     return {
-      headline: config.headline,
+      headline: customMembershipHeadline(config.headline),
       subheadline: config.subheadline,
       plans: plans.map((p) => ({
         id: p.id,

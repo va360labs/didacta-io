@@ -35,6 +35,7 @@ import {
   interpolate,
   resolveFixedEmailCopy,
   resolveRecipientLocale,
+  rendersFromCatalog,
   resolveTransactionalDefault,
   toHubTemplateLang,
   type RawEmailOverride,
@@ -474,16 +475,15 @@ export class SubscriptionsDailyWorker implements OnApplicationBootstrap, OnModul
 
       let subject = interpolate(def.subject ?? '', vars);
       // El español conserva su texto propio byte a byte (saluda por nombre, que
-      // el default del catálogo no hace); el inglés se renderiza DESDE el
+      // el default del catálogo no hace); las traducciones se renderizan DESDE el
       // catálogo para que composer y catálogo no puedan divergir.
-      let bodyText =
-        toHubTemplateLang(locale) === 'en'
-          ? interpolate(def.body, vars)
-          : `Hola${a.customerName ? ` ${a.customerName}` : ''},\n\n` +
-            `Tu acceso a ${producto} termina el ${fecha}.\n\n` +
-            `A diferencia de una suscripción, este acceso no se renueva solo: ` +
-            `si quieres seguir, tendrás que renovarlo antes de esa fecha.\n\n` +
-            `Si ya lo has renovado, puedes ignorar este mensaje.`;
+      let bodyText = rendersFromCatalog(locale)
+        ? interpolate(def.body, vars)
+        : `Hola${a.customerName ? ` ${a.customerName}` : ''},\n\n` +
+          `Tu acceso a ${producto} termina el ${fecha}.\n\n` +
+          `A diferencia de una suscripción, este acceso no se renueva solo: ` +
+          `si quieres seguir, tendrás que renovarlo antes de esa fecha.\n\n` +
+          `Si ya lo has renovado, puedes ignorar este mensaje.`;
 
       if (override) {
         const applied = applyEmailOverride(override, vars, subject);

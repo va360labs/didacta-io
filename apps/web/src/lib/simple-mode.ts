@@ -6,6 +6,7 @@
  */
 
 import { useEffect, useState } from 'react';
+import type { AcademyLocale } from '@/i18n/config';
 import { ApiHttpError, apiFetch } from './api-client';
 import { authStorage } from './auth-storage';
 import { meApi } from './me';
@@ -133,17 +134,58 @@ export interface StartHereView {
   students: number;
   nextLive: { id: string; topic: string; startTime: string } | null;
   paymentsSetupPath: string;
+  /**
+   * La cuenta de cobros ya puede vender pero faltan los datos fiscales: el
+   * dinero de las ventas se quedaría retenido. El paso de cobros sigue
+   * pendiente y lleva a completarlos. Ausente en una API anterior: `false`.
+   */
+  taxProfilePending?: boolean;
+  /** Dónde se completan los datos fiscales. */
+  taxProfilePath?: string;
 }
 
 /**
  * ¿Se puede comprar ya? Un curso publicado con los cobros sin conectar NO se
- * puede comprar: el enlace existe pero nadie podría pagar.
+ * puede comprar: el enlace existe pero nadie podría pagar. Con la cuenta
+ * conectada y los datos fiscales pendientes SÍ se puede comprar (el dinero se
+ * retiene hasta completarlos, y eso lo avisa el paso de cobros).
  */
 export type SaleState = 'on-sale' | 'not-purchasable' | 'unpublished';
 
-export function saleState(view: Pick<StartHereView, 'salePath' | 'steps'>): SaleState {
+type StepsView = Pick<StartHereView, 'steps' | 'taxProfilePending'>;
+
+/**
+ * ¿Puede cobrar ya la cuenta? Con el paso de cobros hecho, o con la cuenta
+ * lista y solo los datos fiscales pendientes: se vende igual y el dinero se
+ * retiene hasta completarlos (decisión de producto, web #39).
+ */
+export function paymentsCanSell(view: StepsView): boolean {
+  return (
+    view.steps.find((s) => s.id === 'payments')?.done === true || view.taxProfilePending === true
+  );
+}
+
+/**
+ * Primer paso pendiente: el único que se abre. `null` = todos hechos. Con solo
+ * los datos fiscales pendientes, «Conecta tus cobros» no bloquea el camino:
+ * se salta (queda marcado aparte con su botón) y se abre el siguiente.
+ */
+export function currentStep(view: StepsView): StepId | null {
+  const skipPayments = view.taxProfilePending === true;
+  return view.steps.find((s) => !s.done && !(skipPayments && s.id === 'payments'))?.id ?? null;
+}
+
+/** ¿Se puede publicar ya? Curso con lección, precio y una cuenta que pueda cobrar. */
+export function canPublish(view: StepsView): boolean {
+  const done = new Set(view.steps.filter((s) => s.done).map((s) => s.id));
+  return done.has('course') && done.has('price') && paymentsCanSell(view);
+}
+
+export function saleState(
+  view: Pick<StartHereView, 'salePath' | 'steps' | 'taxProfilePending'>,
+): SaleState {
   if (!view.salePath) return 'unpublished';
-  return view.steps.find((s) => s.id === 'payments')?.done ? 'on-sale' : 'not-purchasable';
+  return paymentsCanSell(view) ? 'on-sale' : 'not-purchasable';
 }
 
 /**
@@ -154,7 +196,7 @@ export function saleState(view: Pick<StartHereView, 'salePath' | 'steps'>): Sale
 export type StartHereHeadline = 'celebra' | 'listo' | 'casi';
 
 export function startHereHeadline(
-  view: Pick<StartHereView, 'salePath' | 'steps' | 'sales'>,
+  view: Pick<StartHereView, 'salePath' | 'steps' | 'sales' | 'taxProfilePending'>,
 ): StartHereHeadline {
   if (view.sales.count > 0) return 'celebra';
   if (view.steps.every((s) => s.done) || saleState(view) === 'on-sale') return 'listo';
@@ -188,6 +230,7 @@ export function suggestCurrency(locale: string, allowed: readonly string[]): str
     HU: 'huf',
     RO: 'ron',
     MX: 'mxn',
+    BR: 'brl',
   };
   const guess = byRegion[region] ?? 'eur';
   return allowed.includes(guess) ? guess : (allowed[0] ?? 'eur');
@@ -199,7 +242,7 @@ export interface QuickStartInput {
   title?: string;
   amountCents: number;
   currency: string;
-  locale: 'es' | 'en';
+  locale: AcademyLocale;
   /** Portada del curso, opcional (URL que devuelve la subida de imágenes). */
   coverUrl?: string;
 }

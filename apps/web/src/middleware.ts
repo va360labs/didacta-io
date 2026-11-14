@@ -6,6 +6,7 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { LOCALE_COOKIE } from './i18n/config';
 import { legacyRedirectPath } from './lib/legacy-routes';
+import { robotsHeaderFor } from './lib/seo';
 import { SITE_PATH_PREFIX } from './lib/site-routing';
 import {
   pickSuspendedCatalog,
@@ -129,7 +130,16 @@ function esHostSiempreValido(hostname: string): boolean {
  */
 function servirAula(req: NextRequest): NextResponse {
   const nueva = legacyRedirectPath(req.nextUrl.pathname);
-  if (!nueva) return NextResponse.next();
+  if (!nueva) {
+    const res = NextResponse.next();
+    // Buscadores: del aula solo se indexan la portada, el catálogo y las
+    // fichas de venta (y eso lo decide cada página con sus datos). Todo lo
+    // demás lleva, además de la `<meta name="robots">` del layout, la
+    // cabecera, que también cubre lo que no es HTML. Ver `lib/seo.ts`.
+    const robots = robotsHeaderFor(req.nextUrl.pathname);
+    if (robots) res.headers.set('x-robots-tag', robots);
+    return res;
+  }
   const url = req.nextUrl.clone();
   url.pathname = nueva;
   return NextResponse.redirect(url, 308);

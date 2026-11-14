@@ -47,3 +47,36 @@ describe('SetupController.init — extracción de X-Setup-Token', () => {
     expect(service.init).toHaveBeenCalledWith(validDto, null, expect.any(Object), 'first');
   });
 });
+
+describe('SetupController.init — idioma de la academia', () => {
+  const orgOf = (service: SetupService) =>
+    (
+      vi.mocked(service.init).mock.calls[0]![0] as typeof validDto & {
+        organization: { locale?: string };
+      }
+    ).organization;
+
+  it('sin idioma en el cuerpo, toma el del navegador (Accept-Language)', async () => {
+    const service = { init: vi.fn(async () => ({}) as never) } as unknown as SetupService;
+    await new SetupController(service).init(
+      makeReq({ 'accept-language': 'en-GB,en;q=0.9,es;q=0.5' }),
+      validDto,
+    );
+    expect(orgOf(service).locale).toBe('en');
+  });
+
+  it('el elegido en el asistente gana al del navegador', async () => {
+    const service = { init: vi.fn(async () => ({}) as never) } as unknown as SetupService;
+    await new SetupController(service).init(makeReq({ 'accept-language': 'en-US' }), {
+      ...validDto,
+      organization: { ...validDto.organization, locale: 'pt' as const },
+    });
+    expect(orgOf(service).locale).toBe('pt');
+  });
+
+  it('un navegador en un idioma sin catálogo no fija idioma', async () => {
+    const service = { init: vi.fn(async () => ({}) as never) } as unknown as SetupService;
+    await new SetupController(service).init(makeReq({ 'accept-language': 'fr-FR,de' }), validDto);
+    expect(orgOf(service).locale).toBeUndefined();
+  });
+});

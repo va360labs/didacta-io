@@ -14,7 +14,11 @@ import { Logger as PinoLogger } from 'nestjs-pino';
 import { LICENSE_CAPABILITIES, LicenseService } from '@didacta/license-sdk';
 import { type AdminActor, auditActorId, auditActorTrace } from '../auth/admin-actor';
 import type { ClientContext } from '../auth/client-context';
-import { PasswordResetService } from '../auth/password-reset.service';
+import { FIRST_ACCESS_TTL_MINUTES, PasswordResetService } from '../auth/password-reset.service';
+import {
+  type DeclaredCountryWriter,
+  writeDeclaredCountry,
+} from '../modules/payouts/declared-country';
 import { PayoutsRuntime } from '../modules/payouts/payouts-runtime.service';
 import { TenantStripeResolverService } from '../modules/tenant-stripe-resolver.service';
 import { PrismaAuditLogService } from '../modules/prisma-audit-log.service';
@@ -323,6 +327,8 @@ export class AdminTenantsService {
       primaryHostname: string;
       simpleMode?: boolean;
       locale?: AcademyLocale;
+      /** País del banco DECLARADO en el alta de Cloud (ISO alfa-2 u `OTHER`), ya normalizado. */
+      payoutsCountry?: string;
     },
     webBaseUrl: WelcomeLinkBase,
     ctx: ClientContext = NO_CTX,
@@ -347,6 +353,8 @@ export class AdminTenantsService {
       primaryHostname: string;
       simpleMode?: boolean;
       locale?: AcademyLocale;
+      /** País del banco DECLARADO en el alta de Cloud (ISO alfa-2 u `OTHER`), ya normalizado. */
+      payoutsCountry?: string;
     },
     webBaseUrl: WelcomeLinkBase,
     ctx: ClientContext,
@@ -426,7 +434,10 @@ export class AdminTenantsService {
         data: {
           tenantId: tenant.id,
           email: dto.adminEmail,
-          name: dto.adminName ?? null,
+          // El nombre que la creadora escribió en el alta (Didacta Cloud lo
+          // manda como `adminName`): es el que sale en su perfil, en el saludo
+          // del correo de bienvenida y en sus publicaciones.
+          name: dto.adminName?.trim() || null,
           status: 'ACTIVE',
           // Con idioma del aula, la administradora nace en ese idioma: el correo
           // de bienvenida y su interfaz salen así desde el primer momento.
@@ -444,6 +455,16 @@ export class AdminTenantsService {
           admin.id,
         );
       }
+      // Dato DECLARADO por el creador, no verificado: solo orienta la tarjeta
+      // de cobros (preselección y aviso). El país que cuenta es el de su cuenta.
+      if (dto.payoutsCountry) {
+        await writeDeclaredCountry(
+          tx as unknown as DeclaredCountryWriter,
+          tenant.id,
+          dto.payoutsCountry,
+          admin.id,
+        );
+      }
       return { tenant, admin };
     });
 
@@ -458,6 +479,7 @@ export class AdminTenantsService {
         primaryHostname: hostname,
         adminEmail: dto.adminEmail,
         ...(dto.locale ? { locale: dto.locale } : {}),
+        ...(dto.payoutsCountry ? { payoutsCountry: dto.payoutsCountry } : {}),
         ...auditActorTrace(actor),
       },
       ip: ctx.ip ?? undefined,
@@ -469,12 +491,16 @@ export class AdminTenantsService {
     // momento en que pasa, no cuando un alumno no pueda pagar.
     await this.stripeResolver?.reportGlobalFallback('tenant-created').catch(() => undefined);
 
-    // Email de bienvenida al tenant_admin para definir su contraseña.
+    // Bienvenida de quien acaba de crear su academia: su propio correo («Tu
+    // academia X está lista»), no el de «restablecer tu contraseña», y con la
+    // validez de un primer acceso (7 días): lo puede abrir días después. Si
+    // caduca, la pantalla del enlace le deja pedir otro con un clic.
     try {
       await this.passwordReset.requestAndSendEmail(
         { email: dto.adminEmail, resolvedTenantId: created.tenant.id },
         webBaseUrl,
         ctx,
+        { ttlMinutes: FIRST_ACCESS_TTL_MINUTES, kind: 'academy_owner' },
       );
     } catch (err) {
       this.logger.warn(

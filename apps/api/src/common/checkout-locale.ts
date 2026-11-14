@@ -40,7 +40,7 @@
  * redeclara aquí para no importar un controlador desde `common/`, y hay test de
  * que coinciden.
  */
-const CHECKOUT_ALLOWED_LOCALES: readonly string[] = ['es-ES', 'es-AR', 'en-US'];
+const CHECKOUT_ALLOWED_LOCALES: readonly string[] = ['es-ES', 'es-AR', 'en-US', 'pt-BR'];
 
 /** Nombre de la cookie que escribe la web (`apps/web/src/i18n/config.ts`). */
 export const LOCALE_COOKIE = 'didacta_locale';
@@ -74,8 +74,8 @@ function readCookie(header: string | undefined, name: string): string | undefine
  *
  * CAMINO DEGRADADO NOMBRADO: devuelve `undefined` —no un locale inventado—
  * cuando (a) no hay cookie (visitante que nunca tocó el selector, que es el
- * caso NORMAL), (b) la cookie trae un tag que la API no persiste (`pt-BR`
- * guardado por un perfil antiguo, o basura). Quien lo consume decide, y todos
+ * caso NORMAL), (b) la cookie trae un tag que la API no persiste (un idioma
+ * sin catálogo como `fr-FR`, o basura). Quien lo consume decide, y todos
  * acaban en `HUB_DEFAULT_LOCALE` por la vía de siempre: omitirlo deja que la
  * columna `user.locale` tome su default de BD, que es exactamente ese valor.
  *

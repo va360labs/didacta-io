@@ -26,6 +26,7 @@
   "nombreEtiqueta": "School name",
   "nombrePlaceholder": "Sanz Academy, Aribau Training, Language School…",
   "nombreAviso": "Right now it's called “{nombre}”, which came from your email at purchase. Give it its real name.",
+  "nombreAvisoPropia": "Right now it is called “{nombre}”, a placeholder name. Give it its real name.",
   "nombreVacio": "Write a name to continue.",
 
   "marcaTitulo": "Make it yours",

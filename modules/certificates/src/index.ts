@@ -9,7 +9,13 @@ import { CertificatesService } from './certificates.service.js';
 
 export { manifest };
 export { CertificatesService };
-export { renderCertificatePdf } from './pdf-renderer.js';
+export {
+  CERTIFICATE_COPY,
+  CERTIFICATE_LANGS,
+  renderCertificatePdf,
+  toCertificateLang,
+  type CertificateLang,
+} from './pdf-renderer.js';
 export {
   CertificatesError,
   CertificateNotFoundError,

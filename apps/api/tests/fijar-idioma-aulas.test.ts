@@ -4,7 +4,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { decidir, linea, type AulaRevisada } from '../scripts/fijar-idioma-aulas';
+import { decidir, linea, recuento, type AulaRevisada } from '../scripts/fijar-idioma-aulas';
 
 const aula = (o: Partial<AulaRevisada>): AulaRevisada => ({
   id: '00000000-0000-4000-8000-000000000001',
@@ -41,5 +41,23 @@ describe('fijar-idioma-aulas: qué idioma pone a cada aula', () => {
     expect(linea(aula({ deducido: 'en', origen: 'simple-mode' }))).toContain('alta en 3 preguntas');
     expect(linea(aula({ origen: 'admin' }))).toContain('perfil de quien administra');
     expect(linea(aula({ actual: 'en' }))).toContain('ya fijado');
+  });
+
+  it('un aula en portugués se fija como `pt` y el recuento la cuenta', () => {
+    expect(decidir(aula({ deducido: 'pt', origen: 'admin' }))).toEqual({
+      accion: 'fijar',
+      locale: 'pt',
+    });
+    expect(linea(aula({ slug: 'escola', deducido: 'pt', origen: 'admin' }))).toContain(
+      'fijar     pt  escola',
+    );
+    expect(
+      recuento([
+        aula({ deducido: 'es' }),
+        aula({ deducido: 'es' }),
+        aula({ deducido: 'en' }),
+        aula({ deducido: 'pt' }),
+      ]),
+    ).toBe('es: 2, en: 1, pt: 1');
   });
 });

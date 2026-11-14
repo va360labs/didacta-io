@@ -22,7 +22,7 @@ import { injectSession } from '../helpers/auth';
  * nadie vuelva a diagnosticarlo como un bug de traducción.
  *
  * DE DÓNDE SALEN LAS ASERCIONES.
- * De los ficheros reales de `apps/web/src/i18n/messages/{es,en}/`, leídos en
+ * De los ficheros reales de `apps/web/src/i18n/messages/{es,en,pt}/`, leídos en
  * caliente por `msg()`. No hay literales ingleses escritos a mano: si alguien
  * renombra una key, el spec falla diciendo que la key ya no existe, y si alguien
  * cambia una traducción, el spec sigue verde con el texto nuevo — que es lo
@@ -47,7 +47,14 @@ import { injectSession } from '../helpers/auth';
  */
 const MESSAGES_DIR = join(__dirname, '..', '..', 'web', 'src', 'i18n', 'messages');
 
-type CatalogName = 'es' | 'en';
+/**
+ * `pt` (portugués de Brasil) entró después de escribirse este spec. Los helpers
+ * de sidebar (`pair`, `assertShellInCatalog`) siguen siendo es ↔ en; el
+ * portugués se afirma con `distinctIn()` en su propio test, porque es lengua
+ * hermana del español y muchos rótulos se escriben igual («Cursos», «Agenda»):
+ * la guarda de «difieren» hay que aplicarla contra los OTROS DOS catálogos.
+ */
+type CatalogName = 'es' | 'en' | 'pt';
 
 const catalogCache = new Map<string, unknown>();
 
@@ -116,6 +123,24 @@ function pair(read: (catalog: CatalogName) => string): { es: string; en: string 
   return { es, en };
 }
 
+/**
+ * Un mensaje en `catalog`, con la garantía de que NO se escribe igual en
+ * ninguno de los otros catálogos. Misma guarda que `pair()`, generalizada: sin
+ * ella, afirmar «Cursos» en portugués pasaría en verde con la página en
+ * español.
+ */
+function distinctIn(catalog: CatalogName, read: (catalog: CatalogName) => string): string {
+  const wanted = read(catalog);
+  for (const other of ['es', 'en', 'pt'] as const) {
+    if (other === catalog) continue;
+    expect(
+      read(other),
+      `"${wanted}" se escribe igual en ${catalog} y en ${other}: no sirve para distinguir idioma`,
+    ).not.toBe(wanted);
+  }
+  return wanted;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Mensajes que se afirman en pantalla
 // ─────────────────────────────────────────────────────────────────────────────
@@ -143,8 +168,9 @@ const SIDEBAR_SEARCH = (c: CatalogName) => msg(c, 'shell', 'sidebar', 'search');
  * Endpoint real de cambio de idioma: el MISMO que usa el formulario de
  * `/account` (`meApi.updateProfile`, apps/web/src/app/(app)/account/page.tsx:198).
  * Acepta `es-ES | es-AR | en-US | pt-BR` (`ALLOWED_LOCALES`,
- * apps/api/src/auth/me.controller.ts:38) — o sea que es MÁS permisivo que el
- * catálogo, que sólo tiene `es` y `en`.
+ * apps/api/src/auth/me.controller.ts), que son exactamente los idiomas con
+ * catálogo (`es`, `en`, `pt`). Cuando se escribió este spec `pt-BR` se aceptaba
+ * SIN catálogo; se retiró por eso y volvió con el suyo.
  */
 async function setProfileLocale(accessToken: string, locale: string): Promise<void> {
   const res = await fetch(`${API_URL}/api/v1/me/profile`, {
@@ -348,6 +374,45 @@ test.describe('Cambio de idioma (i18n es-ES ↔ en-US)', () => {
     await expect(page.getByRole('heading', { name: title.en })).toBeVisible();
     await expect(page.getByText(description.en, { exact: true })).toBeVisible();
     await expect(page.getByRole('heading', { name: title.es })).toHaveCount(0);
+  });
+
+  test('sin sesión manda la cookie: /signin se sirve en portugués con pt-BR', async ({
+    page,
+    context,
+  }) => {
+    // El test que le faltaba al bug histórico de `pt-BR`: entonces se podía
+    // elegir portugués y la pantalla seguía en español. Aquí se afirma por las
+    // dos puntas —`<html lang>` y el texto— y contra los otros dos catálogos.
+    const title = distinctIn('pt', (c) => msg(c, 'auth', 'signin', 'title'));
+    const description = distinctIn('pt', (c) => msg(c, 'auth', 'signin', 'description'));
+
+    await context.addCookies([{ name: 'didacta_locale', value: 'pt-BR', url: BASE_URL }]);
+    await page.goto('/signin');
+
+    await expect(page.locator('html')).toHaveAttribute('lang', 'pt-BR');
+    await expect(page.getByRole('heading', { name: title })).toBeVisible();
+    await expect(page.getByText(description, { exact: true })).toBeVisible();
+    for (const other of ['es', 'en'] as const) {
+      await expect(
+        page.getByRole('heading', { name: msg(other, 'auth', 'signin', 'title') }),
+        `el título de /signin sigue en ${other}`,
+      ).toHaveCount(0);
+    }
+  });
+
+  test('CONTROL: una cookie con un idioma sin catálogo deja /signin en español', async ({
+    page,
+    context,
+  }) => {
+    // Lo que demuestra que el test de arriba discrimina: con `fr-FR` (sin
+    // catálogo) la misma página sale en el idioma de referencia.
+    const title = pair((c) => msg(c, 'auth', 'signin', 'title'));
+
+    await context.addCookies([{ name: 'didacta_locale', value: 'fr-FR', url: BASE_URL }]);
+    await page.goto('/signin');
+
+    await expect(page.locator('html')).toHaveAttribute('lang', 'es-ES');
+    await expect(page.getByRole('heading', { name: title.es })).toBeVisible();
   });
 
   test('con sesión, el perfil PISA la cookie (el gotcha que costó un barrido)', async ({

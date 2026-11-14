@@ -14,6 +14,7 @@ import { Logger as PinoLogger } from 'nestjs-pino';
 import type Stripe from 'stripe';
 import { extractClientContext } from '../../auth/client-context';
 import {
+  PLAIN_EMAIL_INTL_LOCALE,
   renderBrandedEmail,
   resolveEmailBranding,
   textToHtmlParagraphs,
@@ -54,7 +55,7 @@ export function purchaseConfirmationTexts(input: {
    */
   readonly sellerLegal?: string | null;
 }): { subject: string; title: string; body: string } {
-  const when = new Intl.DateTimeFormat(input.lang === 'en' ? 'en-GB' : 'es-ES', {
+  const when = new Intl.DateTimeFormat(PLAIN_EMAIL_INTL_LOCALE[input.lang], {
     day: 'numeric',
     month: 'long',
     year: 'numeric',
@@ -63,6 +64,22 @@ export function purchaseConfirmationTexts(input: {
     timeZone: 'Europe/Madrid',
     timeZoneName: 'short',
   }).format(input.acceptedAt);
+  if (input.lang === 'pt') {
+    const item = input.itemName ? `“${input.itemName}”` : 'sua compra';
+    const lead = input.trial
+      ? `Sua assinatura de ${item} em ${input.tenantName} começou.`
+      : `Seu pagamento de ${item} em ${input.tenantName} está confirmado.`;
+    return {
+      subject: `Sua compra em ${input.tenantName} está confirmada`,
+      title: 'Compra confirmada',
+      body:
+        `${lead}\n\n` +
+        `Antes de pagar, em ${when}, você marcou esta caixa:\n\n“${input.text}”\n\n` +
+        `Por isso você tem acesso desde já e não há prazo de 14 dias para desistir desta compra.\n\n` +
+        (input.sellerLegal ? `Nome legal do vendedor: ${input.sellerLegal}. ` : '') +
+        `Guarde este e-mail: ele é a confirmação da sua compra (versão do texto ${input.version}).`,
+    };
+  }
   if (input.lang === 'en') {
     const item = input.itemName ? `"${input.itemName}"` : 'your purchase';
     const lead = input.trial
@@ -93,6 +110,14 @@ export function purchaseConfirmationTexts(input: {
       (input.sellerLegal ? `Nombre fiscal del vendedor: ${input.sellerLegal}. ` : '') +
       `Guarda este correo: es la confirmación de tu compra (versión del texto ${input.version}).`,
   };
+}
+
+/**
+ * Idioma guardado con la prueba (`WaiverLang`) → idioma del correo. Lo que no
+ * sea un idioma con copy (una fila escrita a mano) sale en español, como antes.
+ */
+export function storedWaiverLang(stored: string | null | undefined): EmailLang {
+  return stored === 'en' || stored === 'pt' ? stored : 'es';
 }
 
 /**
@@ -241,7 +266,7 @@ export class PurchaseConsentService {
       if (!consent?.buyerEmail) return;
       const sent = await this.sendConfirmation(tenantId, {
         to: consent.buyerEmail,
-        lang: consent.locale === 'en' ? 'en' : 'es',
+        lang: storedWaiverLang(consent.locale),
         purchaseKind: consent.purchaseKind as PurchaseKind,
         itemName: consent.itemName,
         trial: session.payment_status === 'no_payment_required',

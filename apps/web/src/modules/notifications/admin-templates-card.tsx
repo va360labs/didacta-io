@@ -29,7 +29,7 @@ import { Select } from '@/components/ui/select';
 import { adminSmtpApi } from '@/lib/admin-smtp';
 import { ApiHttpError } from '@/lib/api-client';
 import { apiErrorMessage } from '@/lib/i18n/api-error';
-import { labelOr } from '@/lib/i18n/labels';
+import { labelOr, type TranslatorLike } from '@/lib/i18n/labels';
 import {
   adminNotificationsApi,
   type EmailTemplateCatalogEntry,
@@ -39,13 +39,57 @@ import {
 } from './admin-client';
 
 /**
+ * Prefijo de las claves de catálogo con los textos de UI de una plantilla:
+ * `templates.<key>` con los puntos de la key cambiados por `_`
+ * (`enrollment.created` → `templates.enrollment_created`). next-intl usa el
+ * punto para anidar, así que una key con puntos no se puede declarar tal cual
+ * en el JSON; mismo patrón que `ruleLabels` de gamificación.
+ */
+function templateLabelKey(key: string): string {
+  return `templates.${key.replace(/\./g, '_')}`;
+}
+
+/**
+ * Nombre, descripción, nota estructural y descripción de cada variable de una
+ * plantilla, en el idioma de la pantalla.
+ *
+ * La API los manda solo en español (decisión D6: la API no traduce textos de
+ * UI) y la web los traduce por clave ESTABLE (`templateLabelKey`). El catálogo
+ * `es` repite byte a byte el texto de la API y
+ * `apps/api/tests/email-template-catalog-web-labels.test.ts` exige que CADA
+ * entrada y variable del catálogo de la API tenga su clave en los tres idiomas.
+ *
+ * CAMINO DEGRADADO: una plantilla o variable sin clave (la añadió la API y
+ * nadie tocó el catálogo de la web) se pinta con el texto que manda la API, en
+ * español: nunca una key cruda en pantalla.
+ */
+function templateLabels(t: TranslatorLike, entry: EmailTemplateCatalogEntry) {
+  const base = templateLabelKey(entry.key);
+  return {
+    name: labelOr(t, `${base}.name`, entry.name),
+    description: labelOr(t, `${base}.description`, entry.description),
+    structuralNote: entry.structuralNote
+      ? labelOr(t, `${base}.structuralNote`, entry.structuralNote)
+      : null,
+    variable: (v: { name: string; description: string }) =>
+      labelOr(t, `${base}.vars.${v.name}`, v.description),
+  };
+}
+
+/**
  * Idiomas que el tenant puede personalizar. Los nombres son ENDÓNIMOS (cada
  * idioma en el suyo), así que no pasan por el catálogo: «Español» se escribe
  * igual mire quien mire.
+ *
+ * Uno por IDIOMA con plantillas propias en la API (`HUB_TEMPLATE_LANGS`: es, en,
+ * pt), con el locale que guarda el perfil de quien lo lee. `es-AR` no está a
+ * propósito: comparte plantillas con `es-ES` y la API busca el override del
+ * idioma de referencia cuando no hay uno del locale exacto.
  */
 const SUPPORTED_LOCALES = [
   { code: 'es-ES', label: 'Español' },
   { code: 'en-US', label: 'English' },
+  { code: 'pt-BR', label: 'Português' },
 ] as const;
 
 /**
@@ -200,7 +244,7 @@ export function EmailTemplatesManager() {
         body: editor.body,
       });
       setEditor(null);
-      setNotice(t('noticeSaved', { name: editor.entry.name }));
+      setNotice(t('noticeSaved', { name: templateLabels(t, editor.entry).name }));
       await reload();
     } catch (e) {
       setError(e instanceof ApiHttpError ? apiErrorMessage(e, tErrors) : t('errorSave'));
@@ -217,7 +261,10 @@ export function EmailTemplatesManager() {
    */
   async function handleSendTest() {
     if (!editor) return;
-    const to = window.prompt(t('promptTestAddress', { name: editor.entry.name }), lastTestEmail);
+    const to = window.prompt(
+      t('promptTestAddress', { name: templateLabels(t, editor.entry).name }),
+      lastTestEmail,
+    );
     if (!to?.trim()) return;
 
     setPending(true);
@@ -241,10 +288,11 @@ export function EmailTemplatesManager() {
   }
 
   async function handleRestore(entry: EmailTemplateCatalogEntry, o: NotificationTemplateOverride) {
+    const name = templateLabels(t, entry).name;
     if (
       !window.confirm(
         t('confirmRestore', {
-          name: entry.name,
+          name,
           channel: labelOr(t, `channel.${o.channel}`, o.channel),
           locale: o.locale,
         }),
@@ -256,7 +304,7 @@ export function EmailTemplatesManager() {
     try {
       await adminNotificationsApi.deleteOverride(o.key, { channel: o.channel, locale: o.locale });
       setEditor(null);
-      setNotice(t('noticeRestored', { name: entry.name }));
+      setNotice(t('noticeRestored', { name }));
       await reload();
     } catch (e) {
       setError(e instanceof ApiHttpError ? apiErrorMessage(e, tErrors) : t('errorRestore'));
@@ -264,6 +312,8 @@ export function EmailTemplatesManager() {
       setPending(false);
     }
   }
+
+  const editorLabels = editor ? templateLabels(t, editor.entry) : null;
 
   if (catalog === null) {
     return (
@@ -293,14 +343,14 @@ export function EmailTemplatesManager() {
         </div>
       ) : null}
 
-      {editor ? (
+      {editor && editorLabels ? (
         <Card data-testid="email-template-editor">
           <CardHeader>
             <CardTitle>
-              {t('editorTitle', { name: editor.entry.name })}{' '}
+              {t('editorTitle', { name: editorLabels.name })}{' '}
               <span className="font-mono text-sm text-text-subtle">{editor.entry.key}</span>
             </CardTitle>
-            <CardDescription>{editor.entry.description}</CardDescription>
+            <CardDescription>{editorLabels.description}</CardDescription>
           </CardHeader>
           <CardContent>
             {editor.entry.variables.length > 0 ? (
@@ -312,15 +362,15 @@ export function EmailTemplatesManager() {
                   {editor.entry.variables.map((v) => (
                     <li key={v.name} className="text-xs text-text-muted">
                       <code className="rounded bg-surface px-1 py-0.5">{`{{${v.name}}}`}</code>{' '}
-                      {v.description}
+                      {editorLabels.variable(v)}
                     </li>
                   ))}
                 </ul>
               </div>
             ) : null}
-            {editor.entry.structuralNote ? (
+            {editorLabels.structuralNote ? (
               <p className="mb-3 rounded-lg border border-info-100 bg-info-50 p-3 text-xs text-info-700">
-                ℹ️ {editor.entry.structuralNote}
+                ℹ️ {editorLabels.structuralNote}
               </p>
             ) : null}
 
@@ -429,6 +479,7 @@ export function EmailTemplatesManager() {
               {group.entries.map((entry) => {
                 const entryOverrides = overrides.filter((o) => o.key === entry.key);
                 const customized = entryOverrides.length > 0;
+                const labels = templateLabels(t, entry);
                 return (
                   <li
                     key={entry.key}
@@ -437,7 +488,7 @@ export function EmailTemplatesManager() {
                   >
                     <div className="min-w-0 flex-1">
                       <p className="flex flex-wrap items-center gap-2 text-sm font-semibold text-text">
-                        {entry.name}
+                        {labels.name}
                         {entry.channels.map((c) => (
                           <Badge key={c} variant="muted">
                             {labelOr(t, `channel.${c}`, c)}
@@ -445,7 +496,7 @@ export function EmailTemplatesManager() {
                         ))}
                         {customized ? <Badge variant="info">{t('customized')}</Badge> : null}
                       </p>
-                      <p className="mt-0.5 text-xs text-text-subtle">{entry.description}</p>
+                      <p className="mt-0.5 text-xs text-text-subtle">{labels.description}</p>
                       <p className="mt-1 truncate text-xs text-text-muted">
                         <span className="font-medium">{t('subjectPrefix')}</span>{' '}
                         {findOverride(overrides, entry.key, 'EMAIL', 'es-ES')?.subject ??

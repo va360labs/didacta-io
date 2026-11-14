@@ -7,6 +7,7 @@
 
 import * as React from 'react';
 import Link from 'next/link';
+import { useTranslations } from 'next-intl';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { authStorage } from '@/lib/auth-storage';
@@ -33,8 +34,14 @@ import { loadModuleUI, ModuleUINotFoundError, type LoadedModuleUI } from '@/lib/
  * TODO Sprint 5: convertir esta page en `[slug]/page.tsx` parametrizada, una
  * sola ruta genérica que sirva para cualquier módulo con surface 'admin'.
  * Esto cierra el último hilo de hardcode módulo-en-host.
+ *
+ * Textos: los de ESTA página (marco, cargando, error de carga) en el catálogo
+ * `modMigratorLearndash` del host; los del wizard viajan en el bundle del
+ * módulo (`modules/migrator-learndash/src/ui/i18n.ts`), que toma el idioma del
+ * runtime (`hooks.useLocale`).
  */
 export default function MigratorLearndashPage(): React.ReactElement | null {
+  const t = useTranslations('modMigratorLearndash');
   const [allowed, setAllowed] = React.useState<boolean | null>(null);
   const [loaded, setLoaded] = React.useState<LoadedModuleUI | null>(null);
   const [loadError, setLoadError] = React.useState<string | null>(null);
@@ -74,23 +81,17 @@ export default function MigratorLearndashPage(): React.ReactElement | null {
     return (
       <section className="space-y-6">
         <header>
-          <h1 className="font-display text-2xl font-bold tracking-tight">
-            Migrar desde WordPress + LearnDash
-          </h1>
+          <h1 className="font-display text-2xl font-bold tracking-tight">{t('page.title')}</h1>
         </header>
         <Card>
           <CardContent className="p-6 space-y-3">
             <p className="text-sm">
-              Esta acción solo está disponible para administradores con rol{' '}
-              <strong>super_admin</strong>.
+              {t.rich('page.forbidden', { strong: (chunks) => <strong>{chunks}</strong> })}
             </p>
-            <p className="text-sm text-text-muted">
-              Si necesitas migrar tu academia LearnDash, contacta con el administrador de la
-              instancia.
-            </p>
+            <p className="text-sm text-text-muted">{t('page.forbiddenHint')}</p>
             <div>
               <Button asChild variant="secondary">
-                <Link href="/admin">Volver al panel</Link>
+                <Link href="/admin">{t('page.backToAdmin')}</Link>
               </Button>
             </div>
           </CardContent>
@@ -102,30 +103,22 @@ export default function MigratorLearndashPage(): React.ReactElement | null {
   return (
     <section className="space-y-6">
       <header>
-        <h1 className="font-display text-2xl font-bold tracking-tight">
-          Migrar desde WordPress + LearnDash
-        </h1>
-        <p className="mt-1 text-text-muted">
-          Asistente paso a paso para administradores. Tu sitio actual no se modifica.
-        </p>
+        <h1 className="font-display text-2xl font-bold tracking-tight">{t('page.title')}</h1>
+        <p className="mt-1 text-text-muted">{t('page.subtitle')}</p>
       </header>
       {loadError && (
         <Card>
           <CardContent className="p-6 space-y-3">
-            <p className="text-sm text-destructive">
-              No se pudo cargar la UI del módulo: {loadError}
-            </p>
+            <p className="text-sm text-destructive">{t('page.loadError', { error: loadError })}</p>
             <p className="text-xs text-text-muted">
-              Verifica que el módulo <code>mod.migrator-learndash</code> esté instalado en una
-              versión que incluya el surface admin (1.0.15+). Sube el ZIP actualizado desde el
-              marketplace.
+              {t.rich('page.loadErrorHint', { code: (chunks) => <code>{chunks}</code> })}
             </p>
           </CardContent>
         </Card>
       )}
       {!loadError && !loaded && (
         <Card>
-          <CardContent className="p-6 text-sm text-text-muted">Cargando módulo…</CardContent>
+          <CardContent className="p-6 text-sm text-text-muted">{t('page.loading')}</CardContent>
         </Card>
       )}
       {loaded && (

@@ -7,6 +7,7 @@ import { createHash, randomBytes } from 'node:crypto';
 import { expect, test, type Browser, type Page } from '@playwright/test';
 import { API_URL, E2E_USER_PASSWORD, signupOnboarded, TENANT_SLUG } from '../helpers/api';
 import { injectSession } from '../helpers/auth';
+import { aulaCompletaSembrada, SEMBRADO_EN_ESPANOL } from '../helpers/aula-sembrada';
 import { apiAs, freshTenant, sql, type FreshTenant } from '../helpers/simple-tenant';
 
 /**
@@ -200,10 +201,11 @@ async function primerAccesoCreadora(page: Page, tenant: FreshTenant) {
     .getByRole('button', { name: /contraseña|password/i })
     .last()
     .click();
-  await page.waitForURL(/\/signin/, { timeout: 20_000 });
-  await page.locator('input[autocomplete="email"]').fill(tenant.creatorEmail);
-  await page.locator('input[autocomplete="current-password"]').fill(tenant.password);
-  await page.locator('button[type="submit"]').click();
+  // Al guardar la contraseña se entra sola (ensayo general, 14-nov): ya no
+  // pasa por «Bienvenido de nuevo» con el correo en blanco.
+  await page.waitForURL((u) => !u.pathname.startsWith('/reset-password'), {
+    timeout: 30_000,
+  });
   await page.waitForURL(/\/onboarding/, { timeout: 30_000 });
   await page.getByRole('button', { name: 'Dejar para luego' }).click();
   await page.getByLabel(/Nombre de perfil/).fill('Clara Acuarela');
@@ -401,6 +403,114 @@ test('modo completo: ninguna pestaña deja un valor en español en la URL', asyn
     '/calendar?view=events',
   ]) {
     expect(r.visitadas, `no pasó por ${esperada}`).toContain(esperada);
+  }
+  expect(r.malas, r.malas.join('\n')).toEqual([]);
+});
+
+/** Texto visible de la pantalla, con lo que se ve sin ser texto (placeholder, aria-label, title). */
+async function textoVisible(page: Page): Promise<string> {
+  return page.evaluate(() => {
+    const partes = [document.body.innerText];
+    for (const el of Array.from(
+      document.querySelectorAll('[placeholder], [aria-label], [title]'),
+    )) {
+      const h = el as HTMLElement;
+      if (!h.offsetParent && h.tagName !== 'BODY') continue;
+      for (const a of ['placeholder', 'aria-label', 'title']) {
+        const v = h.getAttribute(a);
+        if (v) partes.push(v);
+      }
+    }
+    return partes.join('\n');
+  });
+}
+
+/**
+ * Un aula en INGLÉS en modo completo: ni las URL ni lo que el servidor siembra
+ * para todos van en español. El canal de profesores se llamaba «Profesores»,
+ * los espacios se pintaban por su slug («preguntas»), las preguntas de la
+ * encuesta tras un directo, la biblioteca (seis colecciones de IA en español),
+ * el aviso de «avisar a todos» y el título por defecto de /join («Hazte
+ * miembro») salían en español en un aula inglesa.
+ */
+test('aula en inglés, modo completo: ni las URL ni lo sembrado van en español', async ({
+  browser,
+}) => {
+  test.setTimeout(300_000);
+  const aula = await aulaCompletaSembrada(`ensem${Date.now().toString(36)}`, 'en', {
+    post: 'Espresso grind size',
+    cuerpo: 'Which grind do you use at home?',
+    directo: 'Latte art live',
+  });
+  const { tenant } = aula;
+  const origin = tenant.base;
+
+  // ── La API ──────────────────────────────────────────────────────────────
+  const { conversations } = await apiAs<{ conversations: Array<{ type: string; title: string }> }>(
+    tenant.host,
+    '/api/v1/modules/messaging/conversations',
+    { bearer: aula.alumnaToken },
+  );
+  expect(conversations.find((c) => c.type === 'FACULTY')?.title).toBe('Teachers');
+  const { survey } = await apiAs<{ survey: { questions: Array<{ label: string }> } | null }>(
+    tenant.host,
+    `/api/v1/modules/surveys/sessions/${aula.sessionId}`,
+    { bearer: aula.alumnaToken },
+  );
+  expect(survey?.questions.map((q) => q.label)).toEqual([
+    'From 0 to 10, would you recommend this class to another member?',
+    'The class content',
+    'The pace and clarity',
+    'What would you improve? (optional)',
+  ]);
+  const { collections } = await apiAs<{ collections: Array<{ title: string }> }>(
+    tenant.host,
+    '/api/v1/modules/resources/collections',
+    { bearer: aula.alumnaToken },
+  );
+  expect(collections.map((c) => c.title)).toEqual(['General']);
+  expect(
+    (await apiAs<{ headline: string | null }>(tenant.host, '/api/v1/membership/page')).headline,
+  ).toBeNull();
+  expect(
+    sql(
+      `SELECT b.body_text FROM mod_community_broadcast b JOIN tenant t ON t.id = b.tenant_id WHERE t.slug = '${tenant.slug}'`,
+    ),
+  ).toMatch(/posted in the community:/);
+
+  // ── La alumna, sin cookie: URL y textos ────────────────────────────────
+  const ctx = await browser.newContext({ locale: 'en-US', viewport: { width: 1440, height: 900 } });
+  const a = await ctx.newPage();
+  const r = vigilar(a, origin);
+  await a.goto(`${origin}/signin`);
+  await a.locator('input[autocomplete="email"]').fill(aula.alumnaEmail);
+  await a.locator('input[autocomplete="current-password"]').fill(tenant.password);
+  await a.locator('button[type="submit"]').click();
+  await a.waitForURL((u) => !u.pathname.startsWith('/signin'), { timeout: 30_000 });
+  const vistos: string[] = [];
+  for (const ruta of ['/community', '/messages', '/resources']) {
+    await a.goto(`${origin}${ruta}`);
+    await asentar(a);
+    await enlaces(a, origin, r, ruta);
+    vistos.push(await textoVisible(a));
+  }
+  await a.goto(`${origin}/community`);
+  await expect(a.getByText('Questions', { exact: true }).first()).toBeVisible();
+  await a.goto(`${origin}/messages`);
+  await expect(a.getByText('Teachers').first()).toBeVisible();
+  await ctx.close();
+
+  // ── Un visitante en /join ───────────────────────────────────────────────
+  const vctx = await browser.newContext({ locale: 'en-US' });
+  const v = await vctx.newPage();
+  await v.goto(`${origin}/join`);
+  await asentar(v);
+  await expect(v.getByRole('heading', { level: 1 })).toHaveText('Become a member');
+  vistos.push(await textoVisible(v));
+  await vctx.close();
+
+  for (const viejo of SEMBRADO_EN_ESPANOL) {
+    expect(vistos.join('\n'), `«${viejo}» sigue en pantalla`).not.toContain(viejo);
   }
   expect(r.malas, r.malas.join('\n')).toEqual([]);
 });

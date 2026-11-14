@@ -5,6 +5,106 @@
 
 import PDFDocument from 'pdfkit';
 
+/**
+ * Idiomas del certificado. Es la MISMA lista cerrada que los catálogos de la
+ * web y de los correos (`es`, `en`, `pt`); se redeclara aquí porque un módulo
+ * no importa de `apps/*`.
+ */
+export const CERTIFICATE_LANGS = ['es', 'en', 'pt'] as const;
+export type CertificateLang = (typeof CERTIFICATE_LANGS)[number];
+
+/**
+ * Locale (`pt-BR`, `en-US`, `es-AR`…) → idioma del certificado. Lo que no sea
+ * inglés ni portugués, español: es el idioma de referencia y el de todos los
+ * certificados emitidos antes de que existiera esta función.
+ */
+export function toCertificateLang(locale: string | null | undefined): CertificateLang {
+  const base = (typeof locale === 'string' ? locale : '').trim().toLowerCase().split(/[-_]/)[0];
+  return base === 'en' || base === 'pt' ? base : 'es';
+}
+
+/**
+ * Textos fijos del certificado por idioma. El español es EXACTAMENTE el que
+ * estaba escrito en el renderer; el cuerpo por defecto en inglés y portugués es
+ * el mismo que propone el editor de plantillas de la web (`certTemplates.
+ * defaultBody`). Helvetica (WinAnsi) pinta todos los acentos del portugués
+ * (ã, õ, ç, ê): lo comprueba el test extrayendo el texto del PDF.
+ */
+export const CERTIFICATE_COPY: Readonly<
+  Record<
+    CertificateLang,
+    {
+      /** Metadato `Title` del PDF; `{n}` es el número. */
+      readonly docTitle: string;
+      readonly title: string;
+      readonly subtitle: string;
+      readonly awardedTo: string;
+      readonly defaultBody: string;
+      readonly course: string;
+      readonly issueDate: string;
+      /** Pie de verificación; `{n}` es el número. */
+      readonly verifiable: string;
+      /** Locale de `Intl` de la fecha de emisión. */
+      readonly dateLocale: string;
+      /** Datos de muestra de la vista previa de una plantilla. */
+      readonly sampleStudent: string;
+      readonly sampleCourse: string;
+      /** Relleno si al re-renderizar falta el dato en el snapshot. */
+      readonly unknownStudent: string;
+      readonly unknownCourse: string;
+    }
+  >
+> = {
+  es: {
+    docTitle: 'Certificado #{n}',
+    title: 'CERTIFICADO',
+    subtitle: 'DE FINALIZACIÓN',
+    awardedTo: 'Se otorga el presente certificado a',
+    defaultBody:
+      'Certifica que ha completado satisfactoriamente el curso indicado, cumpliendo con los criterios de finalización establecidos.',
+    course: 'CURSO',
+    issueDate: 'FECHA DE EMISIÓN',
+    verifiable: 'Certificado verificable · Nº {n}',
+    dateLocale: 'es-ES',
+    sampleStudent: 'Alumna de Ejemplo',
+    sampleCourse: 'Curso de Ejemplo',
+    unknownStudent: 'Alumno',
+    unknownCourse: 'Curso',
+  },
+  en: {
+    docTitle: 'Certificate #{n}',
+    title: 'CERTIFICATE',
+    subtitle: 'OF COMPLETION',
+    awardedTo: 'This certificate is awarded to',
+    defaultBody:
+      'Certifies the satisfactory completion of the indicated course, meeting the established completion criteria.',
+    course: 'COURSE',
+    issueDate: 'ISSUE DATE',
+    verifiable: 'Verifiable certificate · No. {n}',
+    dateLocale: 'en-US',
+    sampleStudent: 'Sample Student',
+    sampleCourse: 'Sample Course',
+    unknownStudent: 'Student',
+    unknownCourse: 'Course',
+  },
+  pt: {
+    docTitle: 'Certificado #{n}',
+    title: 'CERTIFICADO',
+    subtitle: 'DE CONCLUSÃO',
+    awardedTo: 'Este certificado é concedido a',
+    defaultBody:
+      'Certifica que concluiu satisfatoriamente o curso indicado, cumprindo os critérios de conclusão estabelecidos.',
+    course: 'CURSO',
+    issueDate: 'DATA DE EMISSÃO',
+    verifiable: 'Certificado verificável · Nº {n}',
+    dateLocale: 'pt-BR',
+    sampleStudent: 'Aluna de Exemplo',
+    sampleCourse: 'Curso de Exemplo',
+    unknownStudent: 'Aluno',
+    unknownCourse: 'Curso',
+  },
+};
+
 export interface CertificateRenderInput {
   number: string;
   studentName: string;
@@ -22,10 +122,13 @@ export interface CertificateRenderInput {
    * embebe en la cabecera del certificado.
    */
   logoData?: Buffer;
+  /**
+   * Idioma de los textos fijos (título, rótulos, fecha y cuerpo por defecto).
+   * Sin él, español: así salen byte a byte los certificados de siempre. El
+   * cuerpo de una plantilla es del aula y NO se traduce.
+   */
+  lang?: CertificateLang;
 }
-
-const DEFAULT_BODY =
-  'Certifica que ha completado satisfactoriamente el curso indicado, cumpliendo con los criterios de finalización establecidos.';
 
 /**
  * Renderiza un certificado PDF en formato A4 horizontal.
@@ -34,6 +137,7 @@ const DEFAULT_BODY =
  * Devuelve un Buffer con el PDF listo para guardar/servir.
  */
 export async function renderCertificatePdf(input: CertificateRenderInput): Promise<Buffer> {
+  const copy = CERTIFICATE_COPY[input.lang ?? 'es'] ?? CERTIFICATE_COPY.es;
   return new Promise((resolve, reject) => {
     try {
       const doc = new PDFDocument({
@@ -41,7 +145,7 @@ export async function renderCertificatePdf(input: CertificateRenderInput): Promi
         layout: 'landscape',
         margins: { top: 60, bottom: 60, left: 80, right: 80 },
         info: {
-          Title: `Certificado #${input.number}`,
+          Title: copy.docTitle.replace('{n}', input.number),
           Author: input.tenantName ?? 'Didacta',
           Subject: input.courseTitle,
         },
@@ -113,20 +217,16 @@ export async function renderCertificatePdf(input: CertificateRenderInput): Promi
         .fillColor(color)
         .font('Helvetica-Bold')
         .fontSize(44)
-        .text('CERTIFICADO', 0, cursorY, { align: 'center', characterSpacing: 6 });
+        .text(copy.title, 0, cursorY, { align: 'center', characterSpacing: 6 });
       doc
         .font('Helvetica')
         .fontSize(12)
         .fillColor(faint)
-        .text('DE FINALIZACIÓN', { align: 'center', characterSpacing: 4 });
+        .text(copy.subtitle, { align: 'center', characterSpacing: 4 });
 
       // ── Alumno ──────────────────────────────────────────────────────────────
       doc.moveDown(1.6);
-      doc
-        .font('Helvetica')
-        .fontSize(12)
-        .fillColor(muted)
-        .text('Se otorga el presente certificado a', { align: 'center' });
+      doc.font('Helvetica').fontSize(12).fillColor(muted).text(copy.awardedTo, { align: 'center' });
       doc.moveDown(0.5);
       doc
         .font('Helvetica-Bold')
@@ -149,7 +249,7 @@ export async function renderCertificatePdf(input: CertificateRenderInput): Promi
         .font('Helvetica')
         .fontSize(12.5)
         .fillColor('#374151')
-        .text(input.body ?? DEFAULT_BODY, contentX, doc.y, { ...centered, lineGap: 2 });
+        .text(input.body ?? copy.defaultBody, contentX, doc.y, { ...centered, lineGap: 2 });
 
       // ── Curso ───────────────────────────────────────────────────────────────
       doc.moveDown(1.1);
@@ -157,7 +257,7 @@ export async function renderCertificatePdf(input: CertificateRenderInput): Promi
         .font('Helvetica')
         .fontSize(11)
         .fillColor(faint)
-        .text('CURSO', { align: 'center', characterSpacing: 3 });
+        .text(copy.course, { align: 'center', characterSpacing: 3 });
       doc.moveDown(0.25);
       doc
         .font('Helvetica-Bold')
@@ -171,13 +271,13 @@ export async function renderCertificatePdf(input: CertificateRenderInput): Promi
         .font('Helvetica-Bold')
         .fontSize(10.5)
         .fillColor(ink)
-        .text('FECHA DE EMISIÓN', contentX, footerY, { characterSpacing: 1 });
+        .text(copy.issueDate, contentX, footerY, { characterSpacing: 1 });
       doc
         .font('Helvetica')
         .fontSize(11)
         .fillColor(muted)
         .text(
-          input.issuedAt.toLocaleDateString('es-ES', {
+          input.issuedAt.toLocaleDateString(copy.dateLocale, {
             day: '2-digit',
             month: 'long',
             year: 'numeric',
@@ -189,7 +289,7 @@ export async function renderCertificatePdf(input: CertificateRenderInput): Promi
         .font('Helvetica')
         .fontSize(9)
         .fillColor(faint)
-        .text(`Certificado verificable · Nº ${input.number}`, contentX, footerY + 33);
+        .text(copy.verifiable.replace('{n}', input.number), contentX, footerY + 33);
 
       if (input.signerName) {
         const signW = 220;

@@ -109,6 +109,23 @@ describe('aprovisionamiento con idioma del aula', () => {
     expect(audit.record.mock.calls[0]?.[0].metadata.locale).toBe('en');
   });
 
+  it('con `locale: pt-BR`: el aula guarda `pt` y la administradora nace en pt-BR', async () => {
+    const dto = createTenantSchema.parse({ ...base, locale: 'pt-BR' });
+    expect(dto.locale).toBe('pt');
+    await service.create(CLOUD, dto, 'http://x');
+
+    expect(prisma.tx.user.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ email: base.adminEmail, locale: 'pt-BR' }),
+    });
+    expect(prisma.tx.tenantSetting.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        create: expect.objectContaining({ key: 'locale', valueJson: 'pt' }),
+        update: { valueJson: 'pt', updatedById: 'user-admin-1' },
+      }),
+    );
+    expect(audit.record.mock.calls[0]?.[0].metadata.locale).toBe('pt');
+  });
+
   it('sin `locale`: ni ajuste ni idioma en la administradora (lo de siempre)', async () => {
     await service.create(CLOUD, createTenantSchema.parse(base), 'http://x');
     expect(prisma.tx.tenantSetting.upsert).not.toHaveBeenCalled();
@@ -120,11 +137,14 @@ describe('aprovisionamiento con idioma del aula', () => {
     expect(createTenantSchema.parse({ ...base, locale: 'es' }).locale).toBe('es');
     expect(createTenantSchema.parse({ ...base, locale: 'en-US' }).locale).toBe('en');
     expect(createTenantSchema.parse({ ...base, locale: ' ES_ar ' }).locale).toBe('es');
+    expect(createTenantSchema.parse({ ...base, locale: 'pt' }).locale).toBe('pt');
+    expect(createTenantSchema.parse({ ...base, locale: 'pt-BR' }).locale).toBe('pt');
+    expect(createTenantSchema.parse({ ...base, locale: 'pt-PT' }).locale).toBe('pt');
     expect(createTenantSchema.parse(base).locale).toBeUndefined();
   });
 
   it('un idioma sin catálogo en el aula es un 400, no un aula en otro idioma', () => {
-    for (const locale of ['pt-BR', 'fr', '', 42]) {
+    for (const locale of ['fr-FR', 'fr', 'de', '', 42]) {
       expect(createTenantSchema.safeParse({ ...base, locale }).success, String(locale)).toBe(false);
     }
   });

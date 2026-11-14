@@ -160,11 +160,14 @@ export class McpController {
         const name = await this.agent.academyName(user.tenantId);
         // Instrucciones en inglés (son para el modelo), pero los nombres de
         // pantalla que cita, en el idioma del aula: el agente se los repite a
-        // la persona y tienen que ser los que ve.
+        // la persona y tienen que ser los que ve. También la palabra con la
+        // que la interfaz llama a la academia («escola» en pt-BR): sin ella el
+        // modelo traducía «academy» a su aire («ferramentas da academia»).
         const instructions = await this.agent.localize(
           user.tenantId,
           [
             `You are connected to the online academy "${name ?? 'Didacta'}".`,
+            `In this academy's language the academy is called "${uiName('academyWord')}": use that word when talking to the user, never a translation of "academy".`,
             'You can create and edit courses and lessons, schedule live classes and post in the community, on behalf of the academy owner.',
             `New courses are created as drafts: the owner publishes them (with their price) from "${uiName('startHere')}".`,
             'Live classes, community posts and lessons added to a course that is already published are visible to members right away: confirm with the owner before creating them.',

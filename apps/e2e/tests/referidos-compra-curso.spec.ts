@@ -77,10 +77,11 @@ async function entrar(page: Page, url: string, email: string, password: string) 
     .getByRole('button', { name: /contraseña|password/i })
     .last()
     .click();
-  await page.waitForURL(/\/signin/, { timeout: 20_000 });
-  await page.locator('input[autocomplete="email"]').fill(email);
-  await page.locator('input[autocomplete="current-password"]').fill(password);
-  await page.locator('button[type="submit"]').click();
+  // Al guardar la contraseña se entra sola (ensayo general, 14-nov): ya no
+  // pasa por «Bienvenido de nuevo» con el correo en blanco.
+  await page.waitForURL((u) => !u.pathname.startsWith('/reset-password'), {
+    timeout: 30_000,
+  });
 }
 
 async function signinPage(page: Page, email: string, password: string) {

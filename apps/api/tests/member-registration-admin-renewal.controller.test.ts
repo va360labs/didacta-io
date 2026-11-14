@@ -207,6 +207,39 @@ describe('MemberRegistrationAdminController · renewal-email', () => {
     // Se envuelve en la plantilla de marca y se firma con el nombre del tenant.
     expect(message.html).toContain('Powered by Didacta');
     expect(fromName).toBe('Academia X');
+    // Sin ajuste de idioma legible, el aula es española: el `lang` de siempre.
+    expect(message.html).toContain('<html lang="es">');
+  });
+});
+
+describe('MemberRegistrationAdminController · aula en portugués', () => {
+  /** El ajuste `academy/locale` del aula, como lo guarda Ajustes. */
+  function enAulaPortuguesa() {
+    const h = build();
+    Object.assign(h.prisma, {
+      tenantSetting: {
+        findUnique: vi.fn(async (args: { where: { tenantId_moduleName_key: { key: string } } }) =>
+          args.where.tenantId_moduleName_key.key === 'locale' ? { valueJson: 'pt' } : null,
+        ),
+      },
+    });
+    return h;
+  }
+
+  it('pide la plantilla por defecto en el idioma del aula', async () => {
+    const h = enAulaPortuguesa();
+    await h.controller.renewalContext(ADMIN as never, USER_ID, undefined);
+    expect(h.paymentSvc.getRenewalTemplate).toHaveBeenCalledWith(TENANT, 'pt');
+  });
+
+  it('el correo que escribe el admin sale con `lang="pt"`', async () => {
+    const h = enAulaPortuguesa();
+    await h.controller.sendRenewalEmail(ADMIN as never, USER_ID, {
+      subject: 'Renove sua assinatura',
+      body: 'Pague aqui: https://invoice.stripe.com/i/sub_1',
+    });
+    const [, message] = h.smtp.send.mock.calls[0] as [unknown, Record<string, string>];
+    expect(message.html).toContain('<html lang="pt">');
   });
 });
 

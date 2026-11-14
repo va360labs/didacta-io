@@ -90,7 +90,8 @@ const LOCALE_INSTRUCTIONS: Record<string, string> = {
   es: 'Responde SIEMPRE en español neutro. Tono profesional y cercano.',
   en: 'Always respond in English. Professional and friendly tone.',
   ca: 'Respon sempre en català. To professional i proper.',
-  pt: 'Responda sempre em português. Tom profissional e próximo.',
+  // El portugués de los catálogos del aula es el de Brasil (`pt-BR`).
+  pt: 'Responda sempre em português do Brasil, tratando o aluno por "você". Tom profissional e próximo.',
   fr: 'Réponds toujours en français. Ton professionnel et proche.',
 };
 
@@ -175,6 +176,54 @@ export function parseStartSeconds(content: string): number | null {
   const c = m[3] !== undefined ? Number(m[3]) : null;
   // [h:mm:ss] cuando hay tercer grupo; [mm:ss] cuando no.
   return c === null ? a * 60 + b : a * 3600 + b * 60 + c;
+}
+
+/** Idiomas de la cabecera de módulo: los del aula. */
+export type TutorLocale = 'es' | 'en' | 'pt';
+
+/**
+ * Idioma del aula (`es`, `en`, `pt` o un tag como `pt-BR`). Lo resuelve el
+ * host con la regla de siempre (`academyLocale`). Sin él, español.
+ */
+export type TutorLocaleLookup = (tenantId: string) => Promise<string>;
+
+/** Normaliza el idioma del aula (`pt-BR` → `pt`); lo que no se conoce, español. */
+export function tutorLocale(raw: unknown): TutorLocale {
+  if (typeof raw !== 'string') return 'es';
+  const base = raw.trim().toLowerCase().split(/[-_]/)[0];
+  return base === 'en' || base === 'pt' ? base : 'es';
+}
+
+const MODULE_WORD: Readonly<Record<TutorLocale, string>> = {
+  es: 'Módulo',
+  en: 'Module',
+  pt: 'Módulo',
+};
+
+/**
+ * Cabecera que el indexador antepone al texto de cada lección para que el
+ * fragmento lleve el contexto de su módulo: `[Module 1: Intro]` en un aula
+ * inglesa. Antes decía «Módulo» en todas, y el tutor lo repetía en sus citas.
+ */
+export function moduleHeader(locale: TutorLocale, position: number, title: string): string {
+  return `[${MODULE_WORD[locale]} ${position + 1}: ${title}]`;
+}
+
+/**
+ * La cabecera de módulo al principio de un fragmento, en cualquiera de los
+ * idiomas (también las de los índices hechos antes, que siempre decían
+ * «Módulo»).
+ */
+const CABECERA_MODULO = /^\s*\[(?:Módulo|Module) \d+:[^\n]*\]\s*/u;
+
+/**
+ * El extracto que se enseña en una cita, sin la cabecera de módulo: el alumno
+ * ya ve el título de la lección, y la cabecera es contexto para el modelo, no
+ * texto de la clase. Así un índice viejo tampoco enseña «Módulo 1» en un aula
+ * inglesa.
+ */
+export function citationSnippet(content: string, max = 200): string {
+  return content.replace(CABECERA_MODULO, '').slice(0, max);
 }
 
 export function formatMmSs(total: number): string {

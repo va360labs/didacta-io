@@ -65,7 +65,8 @@ import type { PlatformStripeClient } from './stripe/platform-stripe.client.js';
  * (`netAgainstPendingSale`), y si se queda en 0 la venta acaba `SETTLED_NETTED`.
  *
  * La retirada del acceso del alumno NO es de aquí: sigue por `charge.refunded`
- * hacia `mod.billing` (reembolso total), como siempre.
+ * hacia `mod.billing` (reembolso total), como siempre. El AVISO al alumno sí:
+ * sale al anotar el reembolso (`notifier.refundIssued`), una vez por reembolso.
  */
 
 export interface RefundPreview {
@@ -108,7 +109,11 @@ export type RefundAccountingOutcome =
   | { readonly outcome: 'not_succeeded'; readonly refundId: string; readonly status: string }
   /** La venta aún no tiene reparto sellado: se anota cuando lo tenga. */
   | { readonly outcome: 'awaiting_split'; readonly refundId: string }
-  /** La liquidación está transfiriendo la venta ahora mismo: se reintenta. */
+  /**
+   * La liquidación está transfiriendo la venta ahora mismo, u otro proceso
+   * tiene el turno para revertir este reembolso: lo termina él (o, si muere,
+   * el conciliador). No es un error.
+   */
   | { readonly outcome: 'busy'; readonly refundId: string }
   | { readonly outcome: 'not_found'; readonly refundId: string };
 
@@ -484,57 +489,87 @@ export class PayoutsRefundsService {
 
     // 1. Objetivo de la reversión, fijado UNA vez en la fila (bajo el cerrojo
     //    de la venta): un reintento pide a Stripe exactamente lo mismo.
+    //
+    //    Y el TURNO para pedirla. El botón «Reembolsar» y los webhooks del
+    //    mismo reembolso (`charge.refunded`, `refund.created`…) llegan casi a
+    //    la vez: sin turno, los dos pedían la reversión con la misma clave de
+    //    idempotencia y Stripe rechazaba el segundo («another in-progress
+    //    request»), que acababa como error grave en el log. Ahora quien llega y
+    //    ve el turno cogido se va con `busy`, sin error: lo termina quien lo
+    //    tiene y, si ese muere, el conciliador cuando el turno caduca.
     let target = 0;
+    let lease: Date | null = null;
     if (transferred) {
-      target = await this.db.inTenant(tenantId, async (tx) => {
+      const claim = await this.db.inTenant(tenantId, async (tx) => {
         await lock(tx, saleLockKey(sale.id));
         const fresh = await tx.modPayoutsRefund.findFirstOrThrow({
           where: { id: refundId, tenantId },
         });
-        if (fresh.reversalTarget !== null) return fresh.reversalTarget;
-        const s = await tx.modPayoutsSale.findFirstOrThrow({ where: { id: sale.id, tenantId } });
-        const before = await sumAccounted(tx, tenantId, sale.id);
-        const settle = chargeToSettlement({
-          chargeAmount,
-          gross: s.gross!,
-          refundedBefore: Math.min(before, chargeAmount - row.amount),
-          amount: row.amount,
-        });
-        const shares = sharesOfGross(
-          this.settled(s),
-          Math.min(s.refundedAmount, s.gross! - settle),
-          settle,
-        );
-        const value = Math.max(
-          0,
-          Math.min(shares.creator, (s.transferAmount ?? 0) - s.reversedAmount),
-        );
+        if (fresh.reversalStatus !== null) return { kind: 'already' as const };
+        const now = this.now();
+        if (fresh.reversalLeaseUntil && fresh.reversalLeaseUntil.getTime() > now.getTime()) {
+          return { kind: 'busy' as const };
+        }
+        let value = fresh.reversalTarget;
+        if (value === null) {
+          const s = await tx.modPayoutsSale.findFirstOrThrow({ where: { id: sale.id, tenantId } });
+          const before = await sumAccounted(tx, tenantId, sale.id);
+          const settle = chargeToSettlement({
+            chargeAmount,
+            gross: s.gross!,
+            refundedBefore: Math.min(before, chargeAmount - row.amount),
+            amount: row.amount,
+          });
+          const shares = sharesOfGross(
+            this.settled(s),
+            Math.min(s.refundedAmount, s.gross! - settle),
+            settle,
+          );
+          value = Math.max(0, Math.min(shares.creator, (s.transferAmount ?? 0) - s.reversedAmount));
+        }
+        const until = new Date(now.getTime() + this.leaseMs);
         await tx.modPayoutsRefund.updateMany({
-          where: { id: refundId, tenantId, reversalTarget: null },
-          data: { reversalTarget: value },
+          where: { id: refundId, tenantId, reversalStatus: null },
+          data: {
+            reversalLeaseUntil: until,
+            ...(fresh.reversalTarget === null ? { reversalTarget: value } : {}),
+          },
         });
-        return value;
+        return { kind: 'target' as const, value, until };
       });
+      if (claim.kind === 'already') return { outcome: 'already', refundId };
+      if (claim.kind === 'busy') return { outcome: 'busy', refundId };
+      target = claim.value;
+      lease = claim.until;
     }
 
     // 2. Reversión en Stripe (fuera de toda transacción).
     let reversal: ReversalResult = { reversed: 0, reversalId: null, status: 'DONE', detail: null };
     if (transferred && target > 0) {
       if (!loaded.stripeAccountId) throw new PayoutsSaleNotFoundError();
-      reversal = await reverseTransfer(this.stripe, {
-        transferId: sale.stripeTransferId!,
-        stripeAccountId: loaded.stripeAccountId,
-        currency: sale.currency!,
-        target,
-        idempotencyKey: IDEMPOTENCY_KEYS.reversal(refundId),
-        metadata: {
-          didacta_refund_id: refundId,
-          didacta_sale_id: sale.id,
-          didacta_tenant_id: tenantId,
-        },
-        metaKey: 'didacta_refund_id',
-        description: 'Didacta: reembolso al alumno',
-      });
+      try {
+        reversal = await reverseTransfer(this.stripe, {
+          transferId: sale.stripeTransferId!,
+          stripeAccountId: loaded.stripeAccountId,
+          currency: sale.currency!,
+          target,
+          idempotencyKey: IDEMPOTENCY_KEYS.reversal(refundId),
+          metadata: {
+            didacta_refund_id: refundId,
+            didacta_sale_id: sale.id,
+            didacta_tenant_id: tenantId,
+          },
+          metaKey: 'didacta_refund_id',
+          description: 'Didacta: reembolso al alumno',
+        });
+      } catch (err) {
+        // Suelta el turno para que el siguiente intento no espere a que caduque.
+        await this.releaseLease(tenantId, refundId, lease).catch(() => undefined);
+        // Otra petición con la misma clave sigue en curso en Stripe: es el
+        // mismo reembolso en otro proceso, no un fallo.
+        if (isIdempotencyInUse(err)) return { outcome: 'busy', refundId };
+        throw err;
+      }
     }
 
     // 3. El grupo de asientos, la deuda y las columnas de la venta: todo o nada.
@@ -693,6 +728,7 @@ export class PayoutsRefundsService {
             reversalStatus:
               recovered >= shares.creator ? 'DONE' : recovered > 0 ? 'PARTIAL' : 'FAILED_TO_DEBT',
             stripeReversalId: reversal.reversalId,
+            reversalLeaseUntil: null,
             ...(fresh.reversalTarget === null ? { reversalTarget: transferred ? target : 0 } : {}),
           },
         });
@@ -703,6 +739,17 @@ export class PayoutsRefundsService {
           shortfall: transferred ? shortfall : 0,
           description: s.description,
           stillPending: !transferred && s.status !== 'SETTLED_NETTED',
+          // Para el aviso al alumno: lo devuelto en SU moneda y si ya es todo.
+          student: {
+            amount: fresh.amount,
+            currency: fresh.currency,
+            full: before + fresh.amount >= chargeAmount,
+            kind:
+              s.sourceKind === 'SUBSCRIPTION_INVOICE'
+                ? ('membership' as const)
+                : ('course' as const),
+            buyerEmail: s.buyerEmail,
+          },
         };
       })
       .catch((err: unknown) => {
@@ -747,6 +794,23 @@ export class PayoutsRefundsService {
         })
         .catch(() => undefined);
     }
+    // Al alumno: lo que se le devuelve y, si es todo un curso, que pierde el
+    // acceso. Aquí y no antes: este bloque corre UNA vez por reembolso (lo
+    // sella `reversal_status`), venga del botón, del panel de Stripe o del
+    // conciliador.
+    await this.notifier
+      .refundIssued?.({
+        tenantId,
+        saleId: sale.id,
+        refundId,
+        kind: written.student.kind,
+        description: written.description,
+        amount: written.student.amount,
+        currency: written.student.currency,
+        buyerEmail: written.student.buyerEmail,
+        full: written.student.full,
+      })
+      .catch(() => undefined);
     await this.checkFx(tenantId, sale, row, written.settle, charge).catch(() => undefined);
     if (written.stillPending && this.onSaleChanged) {
       await this.onSaleChanged(tenantId, sale.id).catch(() => undefined);
@@ -1001,9 +1065,33 @@ export class PayoutsRefundsService {
     (this.logger.error ?? this.logger.warn).call(this.logger, { alert, ...detail }, `${alert}`);
     await this.notifier.operatorAlert(alert, detail).catch(() => undefined);
   }
+
+  /** Suelta el turno de reversión, solo si sigue siendo el nuestro. */
+  private async releaseLease(tenantId: string, refundId: string, lease: Date | null) {
+    if (!lease) return;
+    await this.db.inTenant(tenantId, (tx) =>
+      tx.modPayoutsRefund.updateMany({
+        where: { id: refundId, tenantId, reversalStatus: null, reversalLeaseUntil: lease },
+        data: { reversalLeaseUntil: null },
+      }),
+    );
+  }
 }
 
 class RefundBusyError extends Error {}
+
+/**
+ * ¿Rechazó Stripe la petición porque otra con la misma clave de idempotencia
+ * sigue en curso? (409 `idempotency_key_in_use`: «There is currently another
+ * in-progress request using this Idempotent Key».)
+ */
+export function isIdempotencyInUse(err: unknown): boolean {
+  if (!(err instanceof PlatformStripeApiError)) return false;
+  return (
+    err.stripeCode === 'idempotency_key_in_use' ||
+    (err.status === 409 && /another in-progress request/i.test(err.detail ?? err.message))
+  );
+}
 
 async function lock(tx: PayoutsTx, key: string): Promise<void> {
   await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${key}::text, 0))`;

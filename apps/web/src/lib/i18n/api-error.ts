@@ -21,9 +21,9 @@ import type { TranslatorLike } from './labels';
  * propio (`ApiError.detail`).
  *
  * La lista es EXPLÍCITA a propósito: es el contrato entre el body de la API y
- * las DOS traducciones. Añadir un code aquí obliga a que el catálogo `es` y el
- * `en` tengan la key con `{detail}` (lo comprueba `api-error.test.ts`
- * recorriendo esta misma lista) y a que el throw del backend rellene el campo.
+ * TODOS los catálogos. Añadir un code aquí obliga a que `es`, `en` y `pt`
+ * tengan la key con `{detail}` (lo comprueba `api-error.test.ts` recorriendo
+ * esta misma lista) y a que el throw del backend rellene el campo.
  * Sin la lista habría que adivinar en runtime si un mensaje lleva placeholder,
  * y un `t(code)` sobre un mensaje con `{detail}` sin valor pinta la key cruda
  * en pantalla.
@@ -154,10 +154,10 @@ export const CODES_WITH_DETAIL: ReadonlySet<string> = new Set([
  * provider failed: openai *falló*: timeout»).
  *
  * El valor de cada entrada son los nombres EXACTOS que el backend manda en
- * `ApiError.params` y que los dos catálogos tienen que interpolar. La lista es
- * explícita por la misma razón que `CODES_WITH_DETAIL` —es el contrato entre el
- * body de la API y las dos traducciones— y además fija los nombres, que es lo
- * único que impide que el ES escriba `{provider}` y el EN `{proveedor}`.
+ * `ApiError.params` y que todos los catálogos tienen que interpolar. La lista
+ * es explícita por la misma razón que `CODES_WITH_DETAIL` —es el contrato entre
+ * el body de la API y los catálogos— y además fija los nombres, que es lo único
+ * que impide que el ES escriba `{provider}` y otro idioma `{proveedor}`.
  *
  * ⚠️ Los valores viajan como STRING incluso cuando son números (el
  * `statusCode` de `AI_PROVIDER_UNAVAILABLE`): con un número, ICU aplicaría el

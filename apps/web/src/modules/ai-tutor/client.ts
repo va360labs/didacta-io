@@ -66,7 +66,30 @@ function bearer(): string {
   return token;
 }
 
+/** `GET /modules/ai-tutor/status`: ¿puede el tutor contestar en este aula? */
+export interface AiTutorStatusView {
+  available: boolean;
+  reason: 'NO_PROVIDER' | 'MODULE_INACTIVE' | null;
+}
+
 export const aiTutorApi = {
+  /**
+   * ¿Se le enseña el tutor al alumno? Sin proveedor de IA en el aula, no: solo
+   * diría «no está indexado». Con el módulo apagado la API responde 403, que
+   * aquí es «no disponible». Nunca lanza.
+   */
+  async status(): Promise<AiTutorStatusView> {
+    try {
+      return await apiFetch<AiTutorStatusView>(
+        '/api/v1/modules/ai-tutor/status',
+        { method: 'GET' },
+        bearer(),
+      );
+    } catch {
+      return { available: false, reason: 'MODULE_INACTIVE' };
+    }
+  },
+
   /** El alumno (o cualquier usuario autenticado) pregunta al tutor del curso. */
   async ask(
     courseId: string,

@@ -6,6 +6,7 @@
   "localCurrencyNote": "Al pagar puedes verlo en tu moneda",
   "catalogo": {
     "metaTitle": "Cursos",
+    "metaDescription": "Los cursos de {name}: elige el que quieras y empieza hoy, con pago único.",
     "title": "Cursos",
     "loadError": "No se pudo cargar el catálogo. Recarga para reintentar.",
     "filterAll": "Todos",
@@ -50,6 +51,7 @@
   },
   "ficha": {
     "metaTitle": "Curso",
+    "metaDescription": "{title}, un curso de {name}.",
     "notAvailableTitle": "Curso no disponible",
     "notAvailableBody": "Este curso no está a la venta ahora mismo. Echa un vistazo al resto del catálogo.",
     "breadcrumbCourses": "Cursos",
@@ -62,7 +64,9 @@
     "openingPayment": "Abriendo pago seguro…",
     "buyNow": "Comprar ahora",
     "securePayment": "Pago seguro con Stripe. IVA incluido.",
-    "haveAccountToBuy": "¿Ya tienes cuenta? <link>Inicia sesión</link> para comprar desde tu ficha del curso."
+    "haveAccountToBuy": "¿Ya tienes cuenta? <link>Inicia sesión</link> para comprar desde tu ficha del curso.",
+    "syllabusTitle": "Qué incluye el curso",
+    "syllabusCount": "{count, plural, one {# lección} other {# lecciones}}"
   },
   "inscripcion": {
     "metaTitle": "Inscripción de miembros",
@@ -121,6 +125,7 @@
   },
   "unete": {
     "metaTitle": "Únete",
+    "defaultHeadline": "Hazte miembro",
     "paymentReceived": "¡Pago recibido!",
     "activatingMembership": "Tu membresía se está activando. En unos segundos tendrás acceso a todos los cursos.",
     "goToCourses": "Ir a mis cursos",
@@ -205,5 +210,47 @@
     "loadError": "No hemos podido cargar las condiciones de la compra y sin ellas no se puede pagar.",
     "retry": "Reintentar",
     "mustTick": "Marca la casilla para continuar"
+  },
+  "siteNotFound": {
+    "title": "Página no encontrada",
+    "body": "La dirección que has pedido no existe en este sitio."
+  },
+  "portada": {
+    "metaFallbackTitle": "Academia",
+    "metaDescription": "Entra en {name}: cursos, comunidad y clases en directo.",
+    "navAria": "Acceso",
+    "signIn": "Entrar",
+    "ctaJoin": "Únete",
+    "ctaCourse": "Ver el curso",
+    "ctaCourses": "Ver cursos",
+    "ctaFree": "Empezar gratis",
+    "members": "{count, plural, one {miembro} other {miembros}}",
+    "createdBy": "Creada por <strong>{name}</strong>",
+    "linksAria": "Enlaces de la academia",
+    "website": "Web",
+    "nextLive": "Próxima clase en directo",
+    "accessTitle": "Cómo entrar",
+    "accessTitleNone": "Entrar en la academia",
+    "nothingForSale": "{name} no tiene nada a la venta ahora mismo. Si ya eres miembro, entra con tu cuenta.",
+    "membershipLabel": "Membresía",
+    "from": "desde",
+    "membershipCourses": "{count, plural, one {# curso incluido} other {# cursos incluidos}}",
+    "membershipCommunity": "Comunidad y clases en directo",
+    "membershipCta": "Hazte miembro",
+    "membershipTrialCta": "Empieza la prueba gratis",
+    "singleCourseLabel": "Curso",
+    "coursesLabel": "Cursos sueltos",
+    "coursesCount": "{count, plural, one {# curso a la venta} other {# cursos a la venta}}",
+    "oneTimePayment": "pago único",
+    "viewCourse": "Ver curso",
+    "viewCourses": "Ver los cursos",
+    "freeLabel": "Gratis",
+    "freeWithCourses": "Pide tu acceso gratuito y empieza por: {courses}.",
+    "freeCommunity": "Pide tu acceso gratuito a la comunidad.",
+    "alreadyMember": "¿Ya eres miembro?",
+    "coursesTitle": "Cursos",
+    "coursesSubtitle": "Compra solo el curso que quieras, con pago único.",
+    "allCourses": "Ver los {count} cursos",
+    "poweredBy": "Powered by Didacta"
   }
 }

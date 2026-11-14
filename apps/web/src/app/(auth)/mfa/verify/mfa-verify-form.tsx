@@ -44,7 +44,7 @@ export function MfaVerifyForm() {
       );
       authStorage.saveTokens(response.tokens.accessToken, response.tokens.refreshToken);
       // Deep link pendiente de antes del login (enlace compartido) → volvemos ahí.
-      router.push(consumeIntendedPath() ?? '/');
+      router.push(consumeIntendedPath() ?? '/home');
     } catch (e) {
       setError(
         e instanceof ApiHttpError ? apiErrorMessage(e, tErrors) : t('mfaVerify.invalidCode'),

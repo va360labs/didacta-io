@@ -250,7 +250,9 @@ describe('pickSuspendedCatalog', () => {
     [null, 'en;q=0.2,es;q=0.9', 'es'],
     [null, 'en;q=0,es;q=0.1', 'es'],
     [null, 'fr-FR,de;q=0.8', 'es'],
-    ['pt-BR', 'en', 'es'],
+    ['pt-BR', 'en', 'pt'],
+    [null, 'pt-BR,pt;q=0.9,en;q=0.8', 'pt'],
+    ['fr-FR', 'en', 'es'],
   ] as const)('cookie=%s, Accept-Language=%s → %s', (cookie, accept, expected) => {
     expect(pickSuspendedCatalog(cookie, accept)).toBe(expected);
   });
@@ -315,6 +317,61 @@ describe('middleware · rutas viejas en español → 308 a la nueva', () => {
     const mw = await loadMiddleware();
     const res = await mw(request(LIBRE, '/catalogo/x'));
     expect(res.status).toBe(404);
+  });
+});
+
+describe('middleware · noindex por cabecera (solo la portada y la venta se indexan)', () => {
+  const SITIO = 'www.aula-activa.test';
+  beforeEach(() => {
+    hosts[SITIO] = { known: true, slug: 'aula-activa', surface: 'SITE', suspended: false };
+  });
+
+  it.each([
+    '/signin',
+    '/join?ref=ANA',
+    '/member-registration',
+    '/home',
+    '/community',
+    '/courses/acuarela',
+    '/admin/settings',
+    '/studio',
+    '/catalog/checkout/success?session_id=cs_1',
+  ])('%s lleva X-Robots-Tag: noindex, nofollow', async (path) => {
+    const mw = await loadMiddleware();
+    const res = await mw(request(ACTIVA, path));
+    expect(pasa(res)).toBe(true);
+    expect(res.headers.get('x-robots-tag')).toBe('noindex, nofollow');
+  });
+
+  it.each([
+    '/',
+    '/?ref=ANA',
+    '/catalog',
+    '/catalog/acuarela?ref=ANA',
+    '/robots.txt',
+    '/sitemap.xml',
+  ])('%s no la lleva (lo decide la página con los datos del aula)', async (path) => {
+    const mw = await loadMiddleware();
+    const res = await mw(request(ACTIVA, path));
+    expect(pasa(res)).toBe(true);
+    expect(res.headers.get('x-robots-tag')).toBeNull();
+  });
+
+  it('también en localhost (un self-host sin dominio)', async () => {
+    const mw = await loadMiddleware();
+    const res = await mw(
+      new NextRequest('http://localhost:3000/admin', {
+        headers: new Headers({ host: 'localhost:3000' }),
+      }),
+    );
+    expect(res.headers.get('x-robots-tag')).toBe('noindex, nofollow');
+  });
+
+  it('el SITIO público no se toca: sus reglas son las suyas', async () => {
+    const mw = await loadMiddleware();
+    const res = await mw(request(SITIO, '/blog'));
+    expect(res.headers.get('x-middleware-rewrite')).toBe(`https://${SITIO}/site/blog`);
+    expect(res.headers.get('x-robots-tag')).toBeNull();
   });
 });
 

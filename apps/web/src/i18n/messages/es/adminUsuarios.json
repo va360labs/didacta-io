@@ -16,7 +16,7 @@
     "filterDeactivated": "Desactivados",
     "apply": "Aplicar",
     "emptyTitle": "No hay usuarios todavía",
-    "emptyBody": "Invita a tu primer usuario o ajusta los filtros si esperabas ver a alguien acá.",
+    "emptyBody": "Invita a tu primer usuario o ajusta los filtros si esperabas ver a alguien aquí.",
     "countZero": "0 usuarios",
     "countRange": "Mostrando {start}–{end} de {total} usuarios",
     "tableHint": "Click sobre un usuario para ver el detalle y gestionar su acceso.",

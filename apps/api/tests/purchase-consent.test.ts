@@ -15,6 +15,7 @@ import { BillingPublicController } from '../src/modules/billing/billing-public.c
 import {
   PurchaseConsentService,
   purchaseConfirmationTexts,
+  storedWaiverLang,
 } from '../src/modules/purchase-consent/purchase-consent.service';
 import {
   WITHDRAWAL_WAIVER_VERSION,
@@ -107,7 +108,89 @@ describe('texto de la casilla', () => {
     expect(en.sellerLine).toBe('Sold by Luz.');
     expect(waiverLang(undefined)).toBe('es');
     expect(waiverLang('es-419')).toBe('es');
-    expect(waiverLang('pt-BR')).toBe('en');
+    // pt-BR tiene texto propio desde 2026-11-14; un idioma sin texto sigue
+    // cayendo al inglés, como antes.
+    expect(waiverLang('pt-BR')).toBe('pt');
+    expect(waiverLang('pt')).toBe('pt');
+    expect(waiverLang('fr-FR')).toBe('en');
+  });
+
+  it('portugués: las tres casillas y el vendedor, sin una palabra en español', () => {
+    const pt = renderWithdrawalWaiver({
+      purchaseKind: 'course',
+      locale: 'pt-BR',
+      sellerName: 'Escola Luz',
+    });
+    expect(pt).toMatchObject({
+      version: WITHDRAWAL_WAIVER_VERSION,
+      locale: 'pt',
+      statement:
+        'Quero acessar o curso agora mesmo. Entendo que, ao começar agora, perco o direito de desistir da compra em até 14 dias.',
+      sellerLine: 'Vendido por Escola Luz.',
+    });
+    expect(pt.text).toBe(`${pt.statement} Vendido por Escola Luz.`);
+    for (const kind of ['membership', 'course_subscription'] as const) {
+      const r = renderWithdrawalWaiver({ purchaseKind: kind, locale: 'pt-BR', sellerName: 'L' });
+      expect(r.statement, kind).toContain(
+        'perco o direito de desistir da assinatura em até 14 dias',
+      );
+      expect(r.statement, kind).toContain(
+        'Posso cancelar quando quiser para as próximas cobranças.',
+      );
+      for (const espanol of ['Quiero', 'pierdo', 'Vende:', 'darme de baja']) {
+        expect(`${r.statement} ${r.sellerLine}`, `${kind}: ${espanol}`).not.toContain(espanol);
+      }
+    }
+    // Control: el español no cambia ni un byte por existir el portugués.
+    expect(
+      renderWithdrawalWaiver({ purchaseKind: 'course', locale: 'es-ES', sellerName: 'L' }).text,
+    ).toBe(
+      'Quiero acceder al curso ahora mismo. Entiendo que, al empezar ya, pierdo el derecho a desistir de la compra en 14 días. Vende: L.',
+    );
+  });
+
+  it('el correo de confirmación en portugués: fecha pt-BR, comillas curvas y nombre legal', () => {
+    const texts = purchaseConfirmationTexts({
+      lang: 'pt',
+      tenantName: 'Escola Luz',
+      itemName: 'Fotografia noturna',
+      purchaseKind: 'course',
+      trial: false,
+      acceptedAt: new Date('2026-11-12T16:05:00Z'),
+      text: 'TEXTO ACEITO',
+      version: WITHDRAWAL_WAIVER_VERSION,
+      sellerLegal: 'Ana Pereira',
+    });
+    expect(texts.subject).toBe('Sua compra em Escola Luz está confirmada');
+    expect(texts.title).toBe('Compra confirmada');
+    expect(texts.body).toContain(
+      'Seu pagamento de “Fotografia noturna” em Escola Luz está confirmado.',
+    );
+    expect(texts.body).toContain('“TEXTO ACEITO”');
+    expect(texts.body).toContain('12 de novembro de 2026');
+    expect(texts.body).toContain('17:05');
+    expect(texts.body).toContain('Nome legal do vendedor: Ana Pereira.');
+    expect(texts.body).toContain('não há prazo de 14 dias para desistir desta compra');
+    expect(texts.body).not.toMatch(/noviembre|Guarda este correo|«/);
+    const trial = purchaseConfirmationTexts({
+      lang: 'pt',
+      tenantName: 'Escola Luz',
+      itemName: null,
+      purchaseKind: 'membership',
+      trial: true,
+      acceptedAt: new Date('2026-11-12T16:05:00Z'),
+      text: 'T',
+      version: WITHDRAWAL_WAIVER_VERSION,
+    });
+    expect(trial.body).toMatch(/^Sua assinatura de .+ em Escola Luz começou\./);
+  });
+
+  it('el idioma guardado con la prueba elige el del correo; lo desconocido, español', () => {
+    expect(storedWaiverLang('pt')).toBe('pt');
+    expect(storedWaiverLang('en')).toBe('en');
+    expect(storedWaiverLang('es')).toBe('es');
+    expect(storedWaiverLang('fr')).toBe('es');
+    expect(storedWaiverLang(null)).toBe('es');
   });
 
   it('el correo de confirmación repite el texto aceptado, la fecha y el vendedor', () => {

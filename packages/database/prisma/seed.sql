@@ -24,7 +24,7 @@
 -- con el bloque y no contamina la sesión de psql.
 --
 -- ── En el idioma del aula ───────────────────────────────────────────────────
--- Los espacios se crean en el idioma del aula (es/en) con la MISMA regla que
+-- Los espacios se crean en el idioma del aula (es/en/pt) con la MISMA regla que
 -- `academyLocale()` (apps/api/src/common/academy-defaults.ts): el ajuste del
 -- aula (`tenant_setting academy/locale`); si no lo tiene, la deducción de
 -- respaldo: el idioma que eligió la creadora en el alta de 3 preguntas
@@ -42,7 +42,7 @@
 -- ── Nunca se duplica ni se toca lo que ya existe ────────────────────────────
 -- Solo se INSERTA: un espacio que ya existe no se renombra ni se traduce, esté
 -- en el idioma que esté. Además de por slug, «Recursos compartidos» se salta si
--- el aula ya tiene un espacio con ese título en cualquiera de los dos idiomas
+-- el aula ya tiene un espacio con ese título en cualquiera de los tres idiomas
 -- (es el que la gente crea a mano: el formulario lo propone como ejemplo). Los
 -- otros tres solo se comparan por slug porque el código depende de él (el
 -- espacio `general` es el destino por defecto de la API y del agente).
@@ -69,6 +69,7 @@ BEGIN
       SELECT CASE split_part(translate(lower(btrim(s.value_json #>> '{}')), '_', '-'), '-', 1)
                WHEN 'en' THEN 'en'
                WHEN 'es' THEN 'es'
+               WHEN 'pt' THEN 'pt'
              END
         INTO idioma
         FROM "tenant_setting" s
@@ -82,6 +83,7 @@ BEGIN
         SELECT CASE split_part(translate(lower(btrim(s.value_json ->> 'locale')), '_', '-'), '-', 1)
                  WHEN 'en' THEN 'en'
                  WHEN 'es' THEN 'es'
+                 WHEN 'pt' THEN 'pt'
                END
           INTO idioma
           FROM "tenant_setting" s
@@ -100,6 +102,7 @@ BEGIN
             SELECT CASE split_part(translate(lower(btrim(u.locale)), '_', '-'), '-', 1)
                      WHEN 'en' THEN 'en'
                      WHEN 'es' THEN 'es'
+                     WHEN 'pt' THEN 'pt'
                    END AS l,
                    u.created_at
               FROM "user" u
@@ -132,8 +135,8 @@ BEGIN
       gen_random_uuid(),
       t.id,
       s.slug,
-      CASE WHEN idioma = 'en' THEN s.title_en ELSE s.title_es END,
-      CASE WHEN idioma = 'en' THEN s.description_en ELSE s.description_es END,
+      CASE idioma WHEN 'en' THEN s.title_en WHEN 'pt' THEN s.title_pt ELSE s.title_es END,
+      CASE idioma WHEN 'en' THEN s.description_en WHEN 'pt' THEN s.description_pt ELSE s.description_es END,
       s.icon,
       s.color,
       s.sort_order,
@@ -143,25 +146,30 @@ BEGIN
       ('general',
          'General',              'Conversaciones abiertas para toda la comunidad.',
          'General',              'Open conversations for the whole community.',
+         'Geral',                'Conversas abertas para toda a comunidade.',
          '#',  'var(--didacta-trust)',   1, false),
       ('anuncios',
          'Anuncios',             'Comunicaciones oficiales del equipo de formación.',
          'Announcements',        'Official updates from the teaching team.',
+         'Avisos',               'Comunicados oficiais da equipe de ensino.',
          '📣', 'var(--didacta-coral)',   2, false),
       ('preguntas',
          'Preguntas y dudas',    'Resuelve tus dudas con la ayuda de la comunidad.',
          'Questions',            'Get answers to your questions with help from the community.',
+         'Perguntas e dúvidas',  'Tire suas dúvidas com a ajuda da comunidade.',
          '❓', 'var(--didacta-growth)',  3, false),
       ('recursos',
          'Recursos compartidos', 'Plantillas, apuntes y materiales de apoyo.',
          'Shared resources',     'Templates, notes and supporting materials.',
+         'Materiais compartilhados', 'Modelos, anotações e materiais de apoio.',
          '📁', 'var(--didacta-balance)', 4, true)
-    ) AS s(slug, title_es, description_es, title_en, description_en, icon, color, sort_order, por_titulo)
+    ) AS s(slug, title_es, description_es, title_en, description_en, title_pt, description_pt,
+           icon, color, sort_order, por_titulo)
     WHERE NOT (
       s.por_titulo AND EXISTS (
         SELECT 1 FROM "mod_community_space" e
          WHERE e.tenant_id = t.id
-           AND lower(btrim(e.title)) IN (lower(s.title_es), lower(s.title_en))
+           AND lower(btrim(e.title)) IN (lower(s.title_es), lower(s.title_en), lower(s.title_pt))
       )
     )
     ON CONFLICT ("tenant_id", "slug") DO NOTHING;

@@ -3,10 +3,10 @@
  * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
  */
 
-import type { EmailLang } from '../../common/branded-email';
+import { PLAIN_EMAIL_INTL_LOCALE, type EmailLang } from '../../common/branded-email';
 
 /**
- * Textos de los avisos de inactividad al creador (es/en). En llano, sin jerga
+ * Textos de los avisos de inactividad al creador (es/en/pt). En llano, sin jerga
  * y SIN mencionar la copia de seguridad: el compromiso con el creador es el
  * borrado; la copia es una red del operador, no una promesa.
  *
@@ -21,7 +21,7 @@ export interface InactivityTexts {
 }
 
 export function formatDay(date: Date, lang: EmailLang): string {
-  return new Intl.DateTimeFormat(lang === 'en' ? 'en-GB' : 'es-ES', {
+  return new Intl.DateTimeFormat(PLAIN_EMAIL_INTL_LOCALE[lang], {
     day: 'numeric',
     month: 'long',
     year: 'numeric',
@@ -37,6 +37,30 @@ export function inactivityTexts(input: {
   deleteOn: Date;
 }): InactivityTexts {
   const day = formatDay(input.deleteOn, input.lang);
+  if (input.lang === 'pt') {
+    // En pt-BR «academia» suena a gimnasio: la academia y el «aula» española
+    // son «escola» (glosario pt-BR).
+    if (input.stage === 10) {
+      return {
+        subject: `${input.academy} está há 10 dias sem atividade`,
+        title: 'Sua escola está há 10 dias sem atividade',
+        body:
+          `Faz 10 dias que ninguém usa ${input.academy}: nem você, nem seus alunos, e não houve vendas.\n\n` +
+          `Se continuar assim, em ${day} vamos excluir os vídeos que você enviou e arquivar a escola.\n\n` +
+          `Para que tudo continue como está, basta entrar antes disso. Se você não precisa mais dela, não precisa fazer nada.`,
+        cta: 'Entrar na minha escola',
+      };
+    }
+    return {
+      subject: `Em ${day} vamos excluir os vídeos de ${input.academy}`,
+      title: `Em ${day} vamos excluir seus vídeos`,
+      body:
+        `${input.academy} está há 20 dias sem atividade.\n\n` +
+        `Se ninguém entrar antes de ${day}, vamos excluir os vídeos que você enviou e arquivar a escola.\n\n` +
+        `Para mantê-los, entre antes dessa data.`,
+      cta: 'Entrar na minha escola',
+    };
+  }
   if (input.lang === 'en') {
     if (input.stage === 10) {
       return {

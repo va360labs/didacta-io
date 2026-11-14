@@ -4,7 +4,9 @@
  */
 
 import { describe, expect, it } from 'vitest';
+import { ALLOWED_LOCALES } from '../auth/me.controller';
 import {
+  ACADEMY_LOCALES,
   ACADEMY_LOCALE_SETTING,
   academyDateLocale,
   academyLocale,
@@ -12,6 +14,7 @@ import {
   deducedAcademyLocale,
   explicitAcademyLocale,
   isValidTimeZone,
+  localeFromAcceptLanguage,
   newUserLocale,
   newUserTimeZone,
   resolveAcademyLocale,
@@ -50,13 +53,48 @@ function fakePrisma(opts: {
 }
 
 describe('toAcademyLocale', () => {
-  it('reduce cualquier tag a es/en y descarta lo que no tiene catálogo', () => {
+  it('reduce cualquier tag a es/en/pt y descarta lo que no tiene catálogo', () => {
+    expect(ACADEMY_LOCALES).toEqual(['es', 'en', 'pt']);
     expect(toAcademyLocale('en-US')).toBe('en');
     expect(toAcademyLocale('es_AR')).toBe('es');
-    expect(toAcademyLocale('pt-BR')).toBeNull();
     expect(toAcademyLocale(undefined)).toBeNull();
+    expect(toAcademyLocale('fr-FR')).toBeNull();
     expect(academyDateLocale('en')).toBe('en-US');
     expect(academyDateLocale('es')).toBe('es-ES');
+  });
+
+  it('portugués: se guarda el código del catálogo (pt) y las fechas van en pt-BR', () => {
+    expect(toAcademyLocale('pt-BR')).toBe('pt');
+    expect(toAcademyLocale('pt')).toBe('pt');
+    expect(toAcademyLocale('PT_pt')).toBe('pt');
+    expect(academyDateLocale('pt')).toBe('pt-BR');
+  });
+
+  it('el tag de fecha de cada idioma del aula es un idioma de perfil válido', () => {
+    for (const l of ACADEMY_LOCALES) {
+      expect(ALLOWED_LOCALES as readonly string[]).toContain(academyDateLocale(l));
+    }
+  });
+});
+
+describe('localeFromAcceptLanguage', () => {
+  it('el primer idioma del navegador que tiene catálogo, por preferencia', () => {
+    expect(localeFromAcceptLanguage('en-GB,en;q=0.9,es;q=0.8')).toBe('en');
+    expect(localeFromAcceptLanguage('pt-BR,pt;q=0.9')).toBe('pt');
+    // Uno sin catálogo delante no cuenta: se pasa al siguiente.
+    expect(localeFromAcceptLanguage('fr-FR,fr;q=0.9,es;q=0.5')).toBe('es');
+    // El orden lo marca `q`, no la posición.
+    expect(localeFromAcceptLanguage('es;q=0.3,en;q=0.9')).toBe('en');
+    // q=0 es «no lo quiero».
+    expect(localeFromAcceptLanguage('en;q=0,pt')).toBe('pt');
+    expect(localeFromAcceptLanguage(['en-US'])).toBe('en');
+  });
+
+  it('sin cabecera, o sin ningún idioma con catálogo: null', () => {
+    expect(localeFromAcceptLanguage(undefined)).toBeNull();
+    expect(localeFromAcceptLanguage('')).toBeNull();
+    expect(localeFromAcceptLanguage('*')).toBeNull();
+    expect(localeFromAcceptLanguage('fr,de;q=0.8')).toBeNull();
   });
 });
 
@@ -80,11 +118,22 @@ describe('academyLocale', () => {
   it('salta perfiles con un idioma sin catálogo', async () => {
     const p = fakePrisma({
       admins: [
-        { locale: 'pt-BR', timezone: 'UTC' },
+        { locale: 'fr-FR', timezone: 'UTC' },
         { locale: 'en-US', timezone: 'UTC' },
       ],
     });
     expect(await academyLocale(p, 't')).toBe('en');
+  });
+
+  it('un aula en portugués: ajuste, alta sencilla o perfil pt-BR dan pt', async () => {
+    expect(await resolveAcademyLocale(fakePrisma({ setting: 'pt' }), 't')).toEqual({
+      locale: 'pt',
+      source: 'setting',
+    });
+    expect(await academyLocale(fakePrisma({ state: { locale: 'pt' } }), 't')).toBe('pt');
+    expect(
+      await academyLocale(fakePrisma({ admins: [{ locale: 'pt-BR', timezone: 'UTC' }] }), 't'),
+    ).toBe('pt');
   });
 
   it('camino degradado: español si no puede leer nada', async () => {
@@ -103,7 +152,7 @@ describe('academyLocale', () => {
   });
 
   it('un ajuste ilegible o sin catálogo no cuenta: queda la deducción', async () => {
-    for (const setting of ['pt-BR', 42, { locale: 'en' }, null, '']) {
+    for (const setting of ['fr-FR', 42, { locale: 'en' }, null, '']) {
       const p = fakePrisma({ setting, admins: [{ locale: 'en-US', timezone: 'UTC' }] });
       expect(await explicitAcademyLocale(p, 't')).toBeNull();
       expect(await resolveAcademyLocale(p, 't')).toEqual({ locale: 'en', source: 'admin' });
@@ -162,9 +211,16 @@ describe('ajuste del idioma del aula', () => {
   it('usuario nuevo: idioma del navegador si es de los del perfil; si no, el del aula', async () => {
     const aulaEn = fakePrisma({ setting: 'en' });
     expect(await newUserLocale(aulaEn, 't', 'es-AR')).toBe('es-AR');
-    expect(await newUserLocale(aulaEn, 't', 'pt-BR')).toBe('en-US');
+    expect(await newUserLocale(aulaEn, 't', 'pt-BR')).toBe('pt-BR');
+    expect(await newUserLocale(aulaEn, 't', 'fr-FR')).toBe('en-US');
     expect(await newUserLocale(aulaEn, 't', undefined)).toBe('en-US');
     expect(await newUserLocale(fakePrisma({}), 't', null)).toBe('es-ES');
+    expect(await newUserLocale(fakePrisma({ setting: 'pt' }), 't', undefined)).toBe('pt-BR');
+  });
+
+  it('los idiomas de perfil que acepta un usuario nuevo son los de ALLOWED_LOCALES', async () => {
+    const aulaEn = fakePrisma({ setting: 'en' });
+    for (const l of ALLOWED_LOCALES) expect(await newUserLocale(aulaEn, 't', l)).toBe(l);
   });
 });
 

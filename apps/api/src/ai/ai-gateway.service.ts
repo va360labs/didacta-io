@@ -38,6 +38,14 @@ export class AiGatewayService {
     private readonly logger: Logger,
   ) {}
 
+  /**
+   * ¿Puede el aula usar la IA para `purpose` (fila propia activa o default
+   * global)? No lanza. Ver `AiConfigResolver.isConfigured`.
+   */
+  isConfigured(tenantId: string, purpose: 'chat' | 'embed'): Promise<boolean> {
+    return this.resolver.isConfigured(tenantId, purpose);
+  }
+
   async chat(args: {
     tenantId: string;
     input: ChatCompletionInput;

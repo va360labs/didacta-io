@@ -18,6 +18,13 @@ export interface Academy {
   locale: AcademyLocale;
   /** `setting` si alguien lo eligió; si no, de dónde se dedujo. */
   localeSource: 'setting' | 'simple-mode' | 'admin' | 'default';
+  /**
+   * «Página pública de la academia»: quien entra sin sesión en la raíz del
+   * aula ve su portada (true) o va directo al acceso (false).
+   */
+  publicHome: boolean;
+  /** `setting` si alguien lo eligió; `default` si sale del modo del aula. */
+  publicHomeSource: 'setting' | 'default';
 }
 
 export const academyApi = {
@@ -27,10 +34,10 @@ export const academyApi = {
   async rename(bearer: string, name: string): Promise<Academy> {
     return academyApi.update(bearer, { name });
   },
-  /** Cambia el nombre y/o el idioma de la academia (lo que llegue). */
+  /** Cambia el nombre, el idioma y/o la página pública de la academia (lo que llegue). */
   async update(
     bearer: string,
-    changes: { name?: string; locale?: AcademyLocale },
+    changes: { name?: string; locale?: AcademyLocale; publicHome?: boolean },
   ): Promise<Academy> {
     return apiFetch<Academy>(
       '/api/v1/admin/tenant-settings/academy',
@@ -140,6 +147,17 @@ export function destinos(setup: PaymentsSetup): Partial<Record<OnboardingStep, s
  */
 export function tarjetaDeCobros(setup: PaymentsSetup): 'conectar' | 'claves' {
   return setup === 'platform' ? 'conectar' : 'claves';
+}
+
+/**
+ * Qué aviso lleva el paso del nombre cuando el aula aún tiene un nombre
+ * autogenerado. «Salió de tu correo al comprar» solo es cierto en Didacta
+ * Cloud (modo plataforma), donde el aula se aprovisiona al pagar con el correo
+ * de quien compra; en una instalación propia el nombre lo puso quien instaló y
+ * no hubo compra: aviso neutro.
+ */
+export function avisoDeNombre(setup: PaymentsSetup): 'nombreAviso' | 'nombreAvisoPropia' {
+  return setup === 'platform' ? 'nombreAviso' : 'nombreAvisoPropia';
 }
 
 /**

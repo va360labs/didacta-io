@@ -738,9 +738,20 @@ describe('PrismaNotificationHubService', () => {
       ).toContain(ES_ENROLLMENT);
     });
 
-    it('degradado (c): locale sin catálogo (pt-BR) → copy español', async () => {
+    it('camino feliz: el usuario en pt-BR recibe la notificación en portugués', async () => {
+      // Era el degradado (c) mientras `pt-BR` fue guardable sin catálogo.
       const n = await sendWithoutLocale([
         { id: 'u1', tenantId: 't1', email: 'a@example.com', locale: 'pt-BR' },
+      ]);
+      expect(n!.body).toContain('Você acabou de se matricular no curso "NodeJS"');
+      expect(n!.body).not.toContain(ES_ENROLLMENT);
+      expect(n!.body).not.toContain(EN_ENROLLMENT);
+      expect(n!.body).not.toContain('{{');
+    });
+
+    it('degradado (c): locale sin catálogo (fr-FR) → copy español', async () => {
+      const n = await sendWithoutLocale([
+        { id: 'u1', tenantId: 't1', email: 'a@example.com', locale: 'fr-FR' },
       ]);
       expect(n!.body).toContain(ES_ENROLLMENT);
       expect(n!.body).not.toContain('{{');
@@ -808,6 +819,73 @@ describe('PrismaNotificationHubService', () => {
       });
       expect(seen).toEqual(['en-US']);
       expect(prisma._rows[0]!.subject).toBe('Custom NodeJS');
+    });
+  });
+
+  describe('correo en portugués (pt-BR)', () => {
+    /** Envía `templateKey` por email a un usuario con `locale` y devuelve lo que salió. */
+    async function sendEmail(
+      locale: string,
+      opts: { templateKey?: string; override?: { subject: string | null; body: string } } = {},
+    ) {
+      const prisma = makeFakePrisma([{ id: 'u1', tenantId: 't1', email: 'a@x.com', locale }]);
+      // Marca del aula: el nombre firma el botón y el pie.
+      Object.assign(prisma, {
+        tenant: { findUnique: async () => ({ name: 'Escola Luz' }) },
+        modThemingTenantTheme: { findUnique: async () => null },
+      });
+      if (opts.override) {
+        const override = opts.override;
+        prisma.notificationTemplate.findUnique = () => Promise.resolve(override) as never;
+      }
+      const tenantConfig = makeFakeTenantConfig({ 'notifications:smtp': VALID_SMTP });
+      const smtp = {
+        parseConfig: (raw: unknown) => raw as SmtpConfig,
+        isConfigValid: () => true,
+        send: vi.fn(async () => ({ ok: true, messageId: '<id@x>' })),
+        verify: vi.fn(),
+      } as unknown as SmtpAdapterService;
+      const svc = new PrismaNotificationHubService(
+        prisma as never,
+        noopLogger,
+        tenantConfig,
+        smtp,
+        undefined,
+        undefined,
+        { resolveTenantWebBaseUrlForBackground: async () => 'https://escola.test' },
+      );
+      await svc.send({
+        tenantId: 't1',
+        channel: 'email',
+        templateKey: opts.templateKey ?? 'certificate.issued',
+        to: 'u1',
+        variables: { course: 'TS', number: 'LS-1' },
+      });
+      const call = (smtp.send as unknown as ReturnType<typeof vi.fn>).mock.calls[0]!;
+      return call[1] as { subject: string; html: string; text: string };
+    }
+
+    it('asunto, cuerpo, botón, pie y `lang` del HTML en portugués, sin restos en español', async () => {
+      const mail = await sendEmail('pt-BR');
+      expect(mail.subject).toBe('Seu certificado de "TS" está pronto');
+      expect(mail.html).toContain('<html lang="pt">');
+      expect(mail.text).toContain(
+        'Você já pode baixar o certificado número LS-1 em Meus certificados.',
+      );
+      // Botón y pie: el copy ESTRUCTURAL del hub, que un override no quita.
+      expect(mail.text).toContain('Acessar Escola Luz: https://escola.test');
+      expect(mail.text).toContain('Você recebeu este e-mail por ser membro de Escola Luz.');
+      for (const espanol of ['Tu certificado', 'Entrar a ', 'Recibiste este correo']) {
+        expect(mail.text, espanol).not.toContain(espanol);
+      }
+    });
+
+    it('un override sin asunto sale con el relleno en el idioma del destinatario', async () => {
+      const override = { subject: null, body: 'Cuerpo del aula' };
+      expect((await sendEmail('pt-BR', { override })).subject).toBe('(sem assunto)');
+      expect((await sendEmail('en-US', { override })).subject).toBe('(no subject)');
+      // Control: el español, el de siempre.
+      expect((await sendEmail('es-ES', { override })).subject).toBe('(sin asunto)');
     });
   });
 });

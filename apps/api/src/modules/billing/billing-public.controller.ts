@@ -17,6 +17,7 @@ import {
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { z } from 'zod';
 import type { FastifyRequest } from 'fastify';
+import { sanitizeRichText } from '@didacta/core-kernel';
 import type { CourseOfferOption } from '@didacta/mod-billing';
 import { extractClientContext } from '../../auth/client-context';
 import { readRequestLocale } from '../../common/checkout-locale';
@@ -37,6 +38,7 @@ import {
   withLocalCurrencyHint,
 } from '../payouts/platform-checkout-gate';
 import { resolvePublicHost } from '../../common/resolve-public-host';
+import { listCoursesForSale, type CoursesForSaleDb } from './public-catalog';
 
 const uuidSchema = z.string().uuid();
 
@@ -97,9 +99,21 @@ interface PublicCatalogCourse {
   slug: string;
   title: string;
   description: string | null;
+  /**
+   * La descripción saneada por el servidor (`sanitizeRichText`, la frontera
+   * autoritativa). La usa la ficha cuando se pinta en el servidor del web.
+   */
+  descriptionHtml: string | null;
   thumbnailUrl: string | null;
   category: string | null;
   estimatedMinutes: number | null;
+  /**
+   * Temario: las secciones del curso con los TÍTULOS de sus lecciones, en
+   * orden. Solo títulos (nunca el contenido): es lo que la ficha pública enseña
+   * para que quien compra sepa qué se lleva, aunque el curso no tenga
+   * descripción. Sin secciones con lecciones, lista vacía.
+   */
+  syllabus: Array<{ title: string; lessons: string[] }>;
   /**
    * Solo con el modo plataforma encendido, cada opción lleva además
    * `localCurrencyAtCheckout` (¿la verá el alumno en su moneda al pagar?).
@@ -147,50 +161,76 @@ export class BillingPublicController {
     // RLS F2: ruta pública sin middleware de tenant — el cuerpo corre bajo el
     // ALS del tenant resuelto por Host para que cada query quede escopada.
     return runAsTenant(tenantId, async () => {
-      // Cobros de plataforma sin terminar de conectar: no se ofrece nada.
-      const checkoutInfo = await this.payoutsGate?.publicCheckoutInfo(tenantId);
-      if (checkoutInfo?.blockedReason) return { courses: [] };
-      const billing = this.registry.getBillingService();
-      const ofertas = await billing.getCatalog(tenantId);
-      if (ofertas.length === 0) return { courses: [] };
-
-      // Cruce con mod.courses en el HOST (lectura first-party con tenant_id;
-      // el paquete de billing no toca tablas de otros módulos). Solo cursos
-      // publicados y no borrados llegan al catálogo público.
-      const optionsByCourse = new Map(ofertas.map((o) => [o.courseId, o.options]));
-      const cursos = await this.prisma.modCoursesCourse.findMany({
-        where: {
-          id: { in: [...optionsByCourse.keys()] },
-          tenantId,
-          status: 'PUBLISHED',
-          deletedAt: null,
+      // La regla de «qué está a la venta» es UNA (`listCoursesForSale`): la
+      // misma que decide qué fichas van al sitemap del aula (`public/seo`).
+      const { checkoutInfo, courses } = await listCoursesForSale(
+        {
+          prisma: this.prisma as unknown as CoursesForSaleDb,
+          billing: this.registry.getBillingService(),
+          payoutsGate: this.payoutsGate,
         },
-        orderBy: { publishedAt: 'desc' },
-        select: {
-          id: true,
-          slug: true,
-          title: true,
-          description: true,
-          thumbnailUrl: true,
-          category: true,
-          estimatedMinutes: true,
-        },
-      });
+        tenantId,
+      );
+      const syllabus = await this.syllabusOf(
+        tenantId,
+        courses.map(({ course }) => course.id),
+      );
       return {
-        courses: cursos.map((c) => ({
+        courses: courses.map(({ course: c, options }) => ({
           id: c.id,
           slug: c.slug,
           title: c.title,
           description: c.description,
+          // Saneado AQUÍ, en la frontera del servidor: la ficha se pinta en el
+          // servidor del web para que su texto esté en el HTML (buscadores), y
+          // allí no hay DOM para el DOMPurify del navegador.
+          descriptionHtml: c.description ? sanitizeRichText(c.description) : null,
           thumbnailUrl: c.thumbnailUrl,
           category: c.category,
           estimatedMinutes: c.estimatedMinutes,
-          options: checkoutInfo
-            ? withLocalCurrencyHint(optionsByCourse.get(c.id) ?? [], checkoutInfo)
-            : (optionsByCourse.get(c.id) ?? []),
+          syllabus: syllabus.get(c.id) ?? [],
+          options: checkoutInfo ? withLocalCurrencyHint(options, checkoutInfo) : options,
         })),
       };
     });
+  }
+
+  /**
+   * Temario de los cursos a la venta: secciones y títulos de lección, sin
+   * borradas, en orden. Dos consultas de primer nivel (no un `include`) para
+   * que las dos pasen por el filtro de aula de RLS.
+   */
+  private async syllabusOf(
+    tenantId: string,
+    courseIds: string[],
+  ): Promise<Map<string, Array<{ title: string; lessons: string[] }>>> {
+    const out = new Map<string, Array<{ title: string; lessons: string[] }>>();
+    if (courseIds.length === 0) return out;
+    const sections = await this.prisma.modCoursesModule.findMany({
+      where: { tenantId, courseId: { in: courseIds }, deletedAt: null },
+      orderBy: [{ courseId: 'asc' }, { position: 'asc' }],
+      select: { id: true, courseId: true, title: true },
+    });
+    if (sections.length === 0) return out;
+    const lessons = await this.prisma.modCoursesLesson.findMany({
+      where: { tenantId, moduleId: { in: sections.map((m) => m.id) }, deletedAt: null },
+      orderBy: [{ moduleId: 'asc' }, { position: 'asc' }],
+      select: { moduleId: true, title: true },
+    });
+    const bySection = new Map<string, string[]>();
+    for (const l of lessons) {
+      const list = bySection.get(l.moduleId) ?? [];
+      list.push(l.title);
+      bySection.set(l.moduleId, list);
+    }
+    for (const m of sections) {
+      const titles = bySection.get(m.id) ?? [];
+      if (titles.length === 0) continue;
+      const list = out.get(m.courseId) ?? [];
+      list.push({ title: m.title, lessons: titles });
+      out.set(m.courseId, list);
+    }
+    return out;
   }
 
   @Get('offer/:courseId')

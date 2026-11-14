@@ -1,0 +1,44 @@
+{
+  "file": {
+    "change": "Trocar arquivo",
+    "pick": "Escolher arquivo",
+    "remove": "remover",
+    "none": "Nenhum arquivo selecionado"
+  },
+  "perk": {
+    "eyebrow": "Solicitar benefício",
+    "unlockedWith": "Desbloqueado com o nível {level}.",
+    "noteLabel": "Algo que devemos saber antes? (opcional)",
+    "notePlaceholder": "Por exemplo, o que você gostaria de trabalhar ou sua disponibilidade.",
+    "pendingNotice": "Ao enviar, fica como solicitação pendente: vamos entrar em contato para combinar.",
+    "pendingNoticeWithQuota": "Ao enviar, fica como solicitação pendente: vamos entrar em contato para combinar. Você ainda tem {count, plural, one {# disponível} other {# disponíveis}}.",
+    "cancel": "Cancelar",
+    "sending": "Enviando…",
+    "send": "Enviar solicitação"
+  },
+  "submit": {
+    "eyebrow": "Entregar desafio",
+    "worth": "Vale {points} pontos. A equipe revisa a entrega antes de creditá-los.",
+    "noteLabel": "Conte o que você fez",
+    "notePlaceholder": "Algumas linhas sobre o resultado.",
+    "proofLabel": "Envie a comprovação",
+    "proofLabelOptional": "Envie a comprovação (opcional)",
+    "linkLabel": "…ou cole um link",
+    "linkPlaceholder": "https://…",
+    "uploadError": "Não foi possível enviar o arquivo. Tente outro formato ou tamanho.",
+    "proofRequired": "Este desafio exige anexar a comprovação: envie o arquivo ou cole o link.",
+    "cancel": "Cancelar",
+    "uploading": "Enviando…",
+    "continue": "Continuar",
+    "confirmEyebrow": "Confirmar entrega",
+    "confirmIntro": "Isto é o que você vai enviar:",
+    "confirmProofTerm": "Comprovação:",
+    "confirmNoProof": "sem anexo",
+    "confirmNoteTerm": "Comentário:",
+    "confirmNoNote": "sem comentário",
+    "confirmWarning": "Você só pode entregar este desafio uma vez, então revise antes de enviar.",
+    "back": "Voltar",
+    "sending": "Enviando…",
+    "confirmSend": "Confirmar e enviar"
+  }
+}

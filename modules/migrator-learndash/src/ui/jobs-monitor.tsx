@@ -39,6 +39,8 @@ import {
   type JobReport,
   type JobStatus,
 } from './client';
+import { formatDateTime, formatNumber, t, type MessageKey } from './i18n';
+import { tRich } from './i18n-rich';
 
 const ACTIVE_STATES: ReadonlySet<JobStatus['status']> = new Set([
   'pending',
@@ -52,22 +54,23 @@ const ACTIVE_STATES: ReadonlySet<JobStatus['status']> = new Set([
 const POLL_INTERVAL_MS = 3000;
 
 /// Mapa status → variante de badge (alineado con badge.tsx primitives del host).
+/// `label` es la CLAVE del diccionario (`i18n.ts`), que se traduce al pintar.
 const STATUS_BADGE: Record<
   JobStatus['status'],
   {
     variant: 'primary' | 'info' | 'warning' | 'success' | 'danger' | 'muted' | 'outline';
-    label: string;
+    label: MessageKey;
   }
 > = {
-  pending: { variant: 'muted', label: 'Pendiente' },
-  preflight: { variant: 'info', label: 'Preflight' },
-  extracting: { variant: 'info', label: 'Extrayendo' },
-  transforming: { variant: 'info', label: 'Transformando' },
-  loading: { variant: 'info', label: 'Cargando' },
-  reconciling: { variant: 'info', label: 'Reconciliando' },
-  completed: { variant: 'success', label: 'Completado' },
-  failed: { variant: 'danger', label: 'Fallido' },
-  cancelled: { variant: 'outline', label: 'Cancelado' },
+  pending: { variant: 'muted', label: 'monitor.status.pending' },
+  preflight: { variant: 'info', label: 'monitor.status.preflight' },
+  extracting: { variant: 'info', label: 'monitor.status.extracting' },
+  transforming: { variant: 'info', label: 'monitor.status.transforming' },
+  loading: { variant: 'info', label: 'monitor.status.loading' },
+  reconciling: { variant: 'info', label: 'monitor.status.reconciling' },
+  completed: { variant: 'success', label: 'monitor.status.completed' },
+  failed: { variant: 'danger', label: 'monitor.status.failed' },
+  cancelled: { variant: 'outline', label: 'monitor.status.cancelled' },
 };
 
 function shortId(id: string): string {
@@ -120,15 +123,17 @@ function formatCursor(job: JobStatus): string {
           .map(([k, v]) => `${k}=${v}`)
           .join(', ')
       : '';
-    return `Extract: ${c.current} página ${c.page}${totals ? ` (totales: ${totals})` : ''}`;
+    return totals
+      ? t('monitor.cursor.extractWithTotals', { current: c.current, page: c.page, totals })
+      : t('monitor.cursor.extract', { current: c.current, page: c.page });
   }
   if (c.phase === 'transform') {
     const done = c.completed?.length ?? 0;
-    return `Transform: ${c.current} (${done} entidades completadas)`;
+    return t('monitor.cursor.transform', { current: c.current, done });
   }
   if (c.phase === 'load') {
     const done = c.completed?.length ?? 0;
-    return `Load: ${c.current} (${done} entidades completadas)`;
+    return t('monitor.cursor.load', { current: c.current, done });
   }
   return job.status;
 }
@@ -154,7 +159,7 @@ export function JobsMonitor(): React.ReactElement {
       jobsRef.current = result.items;
       setLoadError(null);
     } catch (e: any) {
-      setLoadError(e?.message ?? 'Error cargando jobs');
+      setLoadError(e?.message ?? t('monitor.error.loadJobs'));
     }
   }, []);
 
@@ -214,14 +219,14 @@ export function JobsMonitor(): React.ReactElement {
       await fetchJobs();
       if (expandedId === jobId) await fetchDetail(jobId);
     } catch (e: any) {
-      setLoadError(e?.message ?? 'Error cancelando job');
+      setLoadError(e?.message ?? t('monitor.error.cancelJob'));
     }
   };
 
   if (jobs === null) {
     return (
       <Card>
-        <CardContent className="p-6 text-sm text-text-muted">Cargando jobs…</CardContent>
+        <CardContent className="p-6 text-sm text-text-muted">{t('monitor.loading')}</CardContent>
       </Card>
     );
   }
@@ -230,9 +235,11 @@ export function JobsMonitor(): React.ReactElement {
     return (
       <Card>
         <CardContent className="p-6 space-y-3">
-          <p className="text-sm text-destructive">Error cargando jobs: {loadError}</p>
+          <p className="text-sm text-destructive">
+            {t('monitor.loadErrorLine', { error: loadError })}
+          </p>
           <Button size="sm" onClick={() => void fetchJobs()}>
-            Reintentar
+            {t('monitor.retry')}
           </Button>
         </CardContent>
       </Card>
@@ -243,10 +250,8 @@ export function JobsMonitor(): React.ReactElement {
     return (
       <Card>
         <CardContent className="p-6 space-y-2 text-sm text-text-muted">
-          <p>Aún no hay migraciones para este tenant.</p>
-          <p>
-            Crea una desde la pestaña <strong>Crear migración</strong>.
-          </p>
+          <p>{t('monitor.empty')}</p>
+          <p>{tRich('monitor.emptyHint', { tab: t('admin.tabs.wizard') })}</p>
         </CardContent>
       </Card>
     );
@@ -260,18 +265,21 @@ export function JobsMonitor(): React.ReactElement {
       <div className="flex items-center justify-between">
         <p className="text-sm text-text-muted">
           {active.length > 0
-            ? `${active.length} migración(es) en curso · auto-refresh cada ${POLL_INTERVAL_MS / 1000}s`
-            : 'Sin migraciones activas en este momento'}
+            ? t('monitor.activeSummary', {
+                count: active.length,
+                seconds: POLL_INTERVAL_MS / 1000,
+              })
+            : t('monitor.noActive')}
         </p>
         <Button size="sm" variant="ghost" onClick={() => void fetchJobs()}>
-          ↻ Refrescar
+          {t('monitor.refresh')}
         </Button>
       </div>
 
       {active.length > 0 && (
         <section className="space-y-3">
           <h3 className="text-sm font-semibold uppercase tracking-wider text-text-muted">
-            En curso
+            {t('monitor.activeTitle')}
           </h3>
           {active.map((job) => (
             <JobCard
@@ -289,7 +297,7 @@ export function JobsMonitor(): React.ReactElement {
       {terminal.length > 0 && (
         <section className="space-y-3">
           <h3 className="text-sm font-semibold uppercase tracking-wider text-text-muted">
-            Historial
+            {t('monitor.historyTitle')}
           </h3>
           {terminal.map((job) => (
             <JobCard
@@ -336,18 +344,21 @@ function JobCard({
                 type="button"
                 onClick={() => navigator.clipboard.writeText(job.id)}
                 className="ml-2 text-xs text-text-muted hover:text-foreground"
-                title="Copiar ID completo"
+                title={t('monitor.copyId')}
+                aria-label={t('monitor.copyId')}
               >
                 ⎘
               </button>
             </CardTitle>
             <div className="flex items-center gap-2 flex-wrap">
-              <Badge variant={badge.variant}>{badge.label}</Badge>
+              <Badge variant={badge.variant}>{t(badge.label)}</Badge>
               <span className="text-xs text-text-muted">
                 {elapsedSince(job.startedAt)}{' '}
                 {isActive
-                  ? 'en ejecución'
-                  : `· terminó ${job.completedAt ? new Date(job.completedAt).toLocaleString() : ''}`}
+                  ? t('monitor.running')
+                  : t('monitor.finished', {
+                      date: job.completedAt ? formatDateTime(job.completedAt) : '',
+                    })}
               </span>
             </div>
             {isActive && <p className="text-xs text-text-muted font-mono pt-1">{cursorText}</p>}
@@ -359,27 +370,24 @@ function JobCard({
           </div>
           <div className="flex items-center gap-2 shrink-0">
             <Button size="sm" variant="outline" onClick={onExpand}>
-              {expanded ? 'Ocultar' : 'Detalle'}
+              {expanded ? t('monitor.hide') : t('monitor.showDetail')}
             </Button>
             {onCancel && (
               <>
                 <Button size="sm" variant="destructive" onClick={() => setCancelDialogOpen(true)}>
-                  Cancelar
+                  {t('monitor.cancel')}
                 </Button>
                 <AlertDialog open={cancelDialogOpen} onOpenChange={setCancelDialogOpen}>
                   <AlertDialogContent>
                     <AlertDialogHeader>
-                      <AlertDialogTitle>¿Cancelar esta migración?</AlertDialogTitle>
+                      <AlertDialogTitle>{t('monitor.cancelDialog.title')}</AlertDialogTitle>
                       <AlertDialogDescription>
-                        El job dejará de progresar después del tick actual. Lo que ya se cargó al
-                        core se mantiene (idempotencia por externalRef permite re-correr una
-                        migración nueva sin duplicar). Los rows en staging quedan para auditoría
-                        según retentionDays.
+                        {t('monitor.cancelDialog.body')}
                       </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
                       <AlertDialogCancel onClick={() => setCancelDialogOpen(false)}>
-                        Volver
+                        {t('common.back')}
                       </AlertDialogCancel>
                       <AlertDialogAction
                         onClick={() => {
@@ -387,7 +395,7 @@ function JobCard({
                           onCancel();
                         }}
                       >
-                        Sí, cancelar
+                        {t('monitor.cancelDialog.confirm')}
                       </AlertDialogAction>
                     </AlertDialogFooter>
                   </AlertDialogContent>
@@ -412,53 +420,57 @@ function JobDetail({
   detail: { report?: JobReport; dlq?: DlqPage; loading: boolean } | null;
 }): React.ReactElement {
   if (!detail || detail.loading) {
-    return <p className="text-sm text-text-muted">Cargando detalle…</p>;
+    return <p className="text-sm text-text-muted">{t('monitor.detail.loading')}</p>;
   }
   const { report, dlq } = detail;
   return (
     <div className="space-y-5">
       {report && report.byEntity.length > 0 ? (
         <div className="space-y-2">
-          <h4 className="text-sm font-semibold">Reconciliación por entidad</h4>
+          <h4 className="text-sm font-semibold">{t('monitor.detail.reconciliationTitle')}</h4>
           <div className="overflow-x-auto">
             <table className="w-full text-xs">
               <thead className="border-b text-left text-text-muted">
                 <tr>
-                  <th className="py-2 pr-3">Entidad</th>
-                  <th className="py-2 pr-3 text-right">Staged</th>
-                  <th className="py-2 pr-3 text-right">Válidas</th>
-                  <th className="py-2 pr-3 text-right">Cargadas</th>
-                  <th className="py-2 pr-3 text-right">Skipped</th>
-                  <th className="py-2 pr-3 text-right">Failed</th>
+                  <th className="py-2 pr-3">{t('common.entity')}</th>
+                  <th className="py-2 pr-3 text-right">{t('monitor.detail.colStaged')}</th>
+                  <th className="py-2 pr-3 text-right">{t('monitor.detail.colValid')}</th>
+                  <th className="py-2 pr-3 text-right">{t('monitor.detail.colLoaded')}</th>
+                  <th className="py-2 pr-3 text-right">{t('monitor.detail.colSkipped')}</th>
+                  <th className="py-2 pr-3 text-right">{t('monitor.detail.colFailed')}</th>
                 </tr>
               </thead>
               <tbody>
                 {report.byEntity.map((e) => (
                   <tr key={e.entityType} className="border-b">
                     <td className="py-1.5 pr-3 font-mono">{e.entityType}</td>
-                    <td className="py-1.5 pr-3 text-right">{e.stagedCount}</td>
-                    <td className="py-1.5 pr-3 text-right">{e.validCount}</td>
+                    <td className="py-1.5 pr-3 text-right">{formatNumber(e.stagedCount)}</td>
+                    <td className="py-1.5 pr-3 text-right">{formatNumber(e.validCount)}</td>
                     <td className="py-1.5 pr-3 text-right font-semibold text-success-700">
-                      {e.loadedCount}
+                      {formatNumber(e.loadedCount)}
                     </td>
-                    <td className="py-1.5 pr-3 text-right text-text-muted">{e.skippedCount}</td>
-                    <td className="py-1.5 pr-3 text-right text-destructive">{e.failedCount}</td>
+                    <td className="py-1.5 pr-3 text-right text-text-muted">
+                      {formatNumber(e.skippedCount)}
+                    </td>
+                    <td className="py-1.5 pr-3 text-right text-destructive">
+                      {formatNumber(e.failedCount)}
+                    </td>
                   </tr>
                 ))}
               </tbody>
               <tfoot className="border-t font-semibold">
                 <tr>
-                  <td className="py-2 pr-3">Total</td>
+                  <td className="py-2 pr-3">{t('monitor.detail.total')}</td>
                   <td className="py-2 pr-3 text-right">—</td>
                   <td className="py-2 pr-3 text-right">—</td>
                   <td className="py-2 pr-3 text-right text-success-700">
-                    {report.totals.loadedCount}
+                    {formatNumber(report.totals.loadedCount)}
                   </td>
                   <td className="py-2 pr-3 text-right text-text-muted">
-                    {report.totals.skippedCount}
+                    {formatNumber(report.totals.skippedCount)}
                   </td>
                   <td className="py-2 pr-3 text-right text-destructive">
-                    {report.totals.failedCount}
+                    {formatNumber(report.totals.failedCount)}
                   </td>
                 </tr>
               </tfoot>
@@ -466,43 +478,41 @@ function JobDetail({
           </div>
           {report.auditChain.eventsCount > 0 && (
             <p className="text-xs text-text-muted">
-              Cadena de auditoría: {report.auditChain.eventsCount} evento(s) ·{' '}
-              {report.auditChain.verified
-                ? '✓ integridad verificada'
-                : '✗ integridad no verificable'}
+              {t(
+                report.auditChain.verified
+                  ? 'monitor.detail.auditVerified'
+                  : 'monitor.detail.auditUnverifiable',
+                { count: report.auditChain.eventsCount },
+              )}
             </p>
           )}
         </div>
       ) : (
-        <p className="text-sm text-text-muted">
-          Aún no hay datos de reconciliación. El reporte se genera en la fase final del job.
-        </p>
+        <p className="text-sm text-text-muted">{t('monitor.detail.noReconciliation')}</p>
       )}
 
       {dlq && (
         <div className="space-y-2">
           <h4 className="text-sm font-semibold">
-            Dead Letter Queue{' '}
+            {t('monitor.dlq.title')}{' '}
             {dlq.total > 0 && (
               <span className="text-text-muted font-normal">
-                ({dlq.total} fila(s), mostrando {dlq.items.length})
+                {t('monitor.dlq.count', { total: dlq.total, shown: dlq.items.length })}
               </span>
             )}
           </h4>
           {dlq.items.length === 0 ? (
-            <p className="text-xs text-text-muted">
-              Sin errores registrados — todas las filas procesadas OK.
-            </p>
+            <p className="text-xs text-text-muted">{t('monitor.dlq.empty')}</p>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-xs">
                 <thead className="border-b text-left text-text-muted">
                   <tr>
-                    <th className="py-2 pr-3">Entidad</th>
-                    <th className="py-2 pr-3">Source ID</th>
-                    <th className="py-2 pr-3">Phase</th>
-                    <th className="py-2 pr-3">Error</th>
-                    <th className="py-2 pr-3">Mensaje</th>
+                    <th className="py-2 pr-3">{t('common.entity')}</th>
+                    <th className="py-2 pr-3">{t('monitor.dlq.colSourceId')}</th>
+                    <th className="py-2 pr-3">{t('monitor.dlq.colPhase')}</th>
+                    <th className="py-2 pr-3">{t('monitor.dlq.colError')}</th>
+                    <th className="py-2 pr-3">{t('monitor.dlq.colMessage')}</th>
                   </tr>
                 </thead>
                 <tbody>

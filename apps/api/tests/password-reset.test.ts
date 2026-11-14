@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { describe, expect, it, vi } from 'vitest';
 import { UnauthorizedException } from '@nestjs/common';
-import { PasswordResetService } from '../src/auth/password-reset.service';
+import { PasswordResetService, accessLink, safeNextPath } from '../src/auth/password-reset.service';
 
 interface UserRow {
   id: string;
@@ -80,8 +80,17 @@ function makeFakePrisma() {
       name: 'Joao',
       passwordHash: 'old-hash',
       status: 'ACTIVE',
-      // pt-BR es guardable HOY (ALLOWED_LOCALES) pero no está traducido.
       locale: 'pt-BR',
+    },
+    {
+      id: 'user-fr',
+      tenantId: 'tenant-1',
+      email: 'jean@example.com',
+      name: 'Jean',
+      passwordHash: 'old-hash',
+      status: 'ACTIVE',
+      // Guardado por SCIM (copia el locale del IdP sin validar): sin catálogo.
+      locale: 'fr-FR',
     },
     {
       id: 'user-blank-locale',
@@ -101,7 +110,8 @@ function makeFakePrisma() {
     users,
     tenants,
     tenant: {
-      async findUnique(args: { where: { slug: string } }) {
+      async findUnique(args: { where: { slug?: string; id?: string } }) {
+        if (args.where.id) return tenants.find((t) => t.id === args.where.id) ?? null;
         return tenants.find((t) => t.slug === args.where.slug) ?? null;
       },
     },
@@ -282,10 +292,13 @@ describe('PasswordResetService.request', () => {
     const { service } = makeService();
     const en = await service.request({ tenantSlug: 'demo', email: 'john@example.com' });
     expect(en?.locale).toBe('en-US');
-    // pt-BR se devuelve TAL CUAL (un override per-tenant en pt-BR podría ganar);
-    // quien lo aplana al español es el catálogo, no esta capa.
     const pt = await service.request({ tenantSlug: 'demo', email: 'joao@example.com' });
     expect(pt?.locale).toBe('pt-BR');
+    // Un locale SIN catálogo se devuelve TAL CUAL (un override per-tenant en ese
+    // locale podría ganar); quien lo aplana al español es el catálogo, no esta
+    // capa.
+    const fr = await service.request({ tenantSlug: 'demo', email: 'jean@example.com' });
+    expect(fr?.locale).toBe('fr-FR');
   });
 
   it('CAMINO DEGRADADO: fila sin locale o con locale en blanco → es-ES explícito', async () => {
@@ -806,9 +819,51 @@ describe('PasswordResetService.buildResetEmail', () => {
     expect(out.html).toContain('token=a%2Fb%2Bc%3D');
   });
 
-  it('CAMINO DEGRADADO: pt-BR (guardable pero sin traducir) y locale vacío → español', () => {
+  it('pt-BR: asunto, cuerpo, título Y BOTÓN en portugués, sin español ni inglés', () => {
+    // Era el camino degradado de abajo mientras `pt-BR` fue guardable sin
+    // catálogo: el usuario brasileño que pedía restablecer su contraseña recibía
+    // el correo entero en español.
     const { service } = makeService();
-    for (const locale of ['pt-BR', 'es-AR', '']) {
+    const out = service.buildResetEmail(
+      'abc',
+      'Ana',
+      'https://x.test',
+      branding('Academia'),
+      'pt-BR',
+    );
+    expect(out.subject).toBe('Redefinir sua senha em Academia');
+    expect(out.html).toContain('<html lang="pt">');
+    expect(out.text).toContain('Olá, Ana!');
+    expect(out.text).toContain('Recebemos um pedido para redefinir a senha da sua conta');
+    // El CTA sale en el texto plano como «label: url» y en el HTML como botón.
+    expect(out.text).toContain('Redefinir senha: https://x.test/reset-password?token=abc');
+    expect(out.html).toContain('Redefinir senha');
+    expect(out.html).toContain('Redefinir sua senha');
+    for (const ajeno of [
+      'Restablecer contraseña',
+      'Restablecer tu contraseña',
+      'Hola',
+      'Recibimos una solicitud',
+      'Reset password',
+      'Hi Ana',
+      'We received a request',
+    ]) {
+      expect(out.text, `«${ajeno}» se coló en el email portugués`).not.toContain(ajeno);
+      expect(out.html, `«${ajeno}» se coló en el HTML portugués`).not.toContain(ajeno);
+    }
+  });
+
+  it('pt-BR sin nombre: saludo genérico portugués', () => {
+    const { service } = makeService();
+    const out = service.buildResetEmail('abc', null, 'https://x.test', branding(), 'pt-BR');
+    expect(out.text).toContain('Olá!');
+    expect(out.text).not.toContain('Hola,');
+    expect(out.text).not.toContain('Hi,');
+  });
+
+  it('CAMINO DEGRADADO: locale sin catálogo (fr-FR), variante regional o vacío → español', () => {
+    const { service } = makeService();
+    for (const locale of ['fr-FR', 'es-AR', '']) {
       const out = service.buildResetEmail('abc', 'Ana', 'https://x.test', branding(), locale);
       expect(out.subject, locale).toBe('Restablecer tu contraseña en Didacta');
       expect(out.text, locale).toContain('Hola Ana,');
@@ -838,5 +893,225 @@ describe('PasswordResetService.buildResetEmail', () => {
     expect(
       service.buildResetEmail('abc', null, 'https://x.test', branding(), ES, override).subject,
     ).toBe('Restablecer tu contraseña en Didacta');
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Ensayo general de Didacta Cloud (14-nov-2026): el primer acceso.
+// ─────────────────────────────────────────────────────────────────────────────
+
+function makeSendingService() {
+  const prisma = makeFakePrisma();
+  const sent: Array<{ to: string; subject: string; text: string; html: string }> = [];
+  const smtp = {
+    ...fakeSmtp,
+    async send(
+      _config: unknown,
+      message: { to: string; subject: string; text: string; html: string },
+    ) {
+      sent.push(message);
+      return { ok: true, messageId: 'fake' };
+    },
+  };
+  const smtpResolver = { resolve: async () => ({ config: {}, source: 'tenant' }) };
+  const service = new PasswordResetService(
+    prisma as never,
+    fakePasswords as never,
+    fakeAuditLog as never,
+    smtp as never,
+    fakeTenantConfig as never,
+    fakeLogger as never,
+    smtpResolver as never,
+  );
+  return { service, prisma, sent };
+}
+
+const SIETE_DIAS = 7 * 24 * 60;
+
+describe('Bienvenida de la creadora (kind: academy_owner)', () => {
+  it('no es el correo de «restablecer»: asunto de academia lista y validez de 7 días', async () => {
+    const { service, sent } = makeSendingService();
+    await service.requestAndSendEmail(
+      { tenantSlug: 'demo', email: 'ana@example.com' },
+      'https://demo.aula.example',
+      undefined,
+      { ttlMinutes: SIETE_DIAS, kind: 'academy_owner' },
+    );
+    expect(sent).toHaveLength(1);
+    const m = sent[0]!;
+    expect(m.subject).toBe('Tu academia Academia Demo está lista');
+    expect(m.text).toContain('Hola Ana,');
+    expect(m.text).toContain('7 días');
+    expect(m.text).toContain('pides uno nuevo con un clic');
+    // Lo que NO puede decir a quien acaba de crear su academia:
+    for (const prohibido of [
+      'Restablecer',
+      'restablecer',
+      'Si no fuiste tú',
+      'sigue intacta',
+      '60 minutos',
+    ]) {
+      expect(m.text).not.toContain(prohibido);
+      expect(m.html).not.toContain(prohibido);
+    }
+    expect(m.html).toContain('https://demo.aula.example/reset-password?token=');
+  });
+
+  it('en el idioma de la creadora: inglés', async () => {
+    const { service, sent } = makeSendingService();
+    await service.requestAndSendEmail(
+      { tenantSlug: 'demo', email: 'john@example.com' },
+      'https://demo.aula.example',
+      undefined,
+      { ttlMinutes: SIETE_DIAS, kind: 'academy_owner' },
+    );
+    expect(sent[0]!.subject).toBe('Your academy Academia Demo is ready');
+    expect(sent[0]!.text).toContain('Hi John,');
+    expect(sent[0]!.text).toContain('7 days');
+    // Sin las URL (el enlace es /reset-password en todos los correos).
+    expect(sent[0]!.text.replace(/https?:\/\/\S+/g, '')).not.toMatch(/reset|ignore this/i);
+  });
+
+  it('en el idioma de la creadora: portugués de Brasil, con «escola» y nunca «aula»', async () => {
+    const { service, sent } = makeSendingService();
+    await service.requestAndSendEmail(
+      { tenantSlug: 'demo', email: 'joao@example.com' },
+      'https://demo.aula.example',
+      undefined,
+      { ttlMinutes: SIETE_DIAS, kind: 'academy_owner' },
+    );
+    const m = sent[0]!;
+    expect(m.subject).toBe('Sua escola Academia Demo está pronta');
+    expect(m.text).toContain('Olá, Joao!');
+    expect(m.text).toContain('7 dias');
+    // Sin las URL (el dominio de prueba lleva «aula» y el camino, «reset»).
+    const prosa = m.text.replace(/https?:\/\/\S+/g, '');
+    expect(prosa).not.toMatch(/\baula\b/i);
+    expect(prosa).not.toMatch(/redefinir/i);
+  });
+
+  it('el token nace con 7 días de validez, no con 60 minutos', async () => {
+    const { service, prisma } = makeSendingService();
+    await service.requestAndSendEmail(
+      { tenantSlug: 'demo', email: 'ana@example.com' },
+      'https://demo.aula.example',
+      undefined,
+      { ttlMinutes: SIETE_DIAS, kind: 'academy_owner' },
+    );
+    const ttl = prisma.tokens[0]!.expiresAt.getTime() - prisma.tokens[0]!.createdAt.getTime();
+    expect(Math.round(ttl / 60_000)).toBe(SIETE_DIAS);
+  });
+});
+
+describe('Destino tras el primer acceso (`next`)', () => {
+  it('el enlace lleva el destino interno', async () => {
+    const { service, sent } = makeSendingService();
+    await service.requestAndSendEmail(
+      { tenantSlug: 'demo', email: 'ana@example.com' },
+      'https://demo.aula.example/',
+      undefined,
+      { kind: 'academy_owner', ttlMinutes: SIETE_DIAS, next: '/courses/torno-para-principiantes' },
+    );
+    expect(sent[0]!.text).toContain('/reset-password?token=');
+    expect(sent[0]!.text).toContain('&next=%2Fcourses%2Ftorno-para-principiantes');
+  });
+
+  it.each(['//evil.test/x', 'https://evil.test', 'javascript:alert(1)', '/a b', ''])(
+    'un destino que no es una ruta propia se descarta: %s',
+    (next) => {
+      expect(safeNextPath(next)).toBeNull();
+      expect(accessLink('https://a.example', 'tok', next)).toBe(
+        'https://a.example/reset-password?token=tok',
+      );
+    },
+  );
+});
+
+describe('reset devuelve con qué entrar (sin volver a pedir el correo)', () => {
+  it('devuelve el correo GUARDADO y el slug del aula', async () => {
+    const { service } = makeService();
+    const r = await service.request({ tenantSlug: 'demo', email: 'ANA@example.com' });
+    await expect(service.reset(r!.rawToken, 'NuevaPasswordSegura123')).resolves.toEqual({
+      email: 'ana@example.com',
+      tenantSlug: 'demo',
+    });
+  });
+});
+
+describe('Estado del enlace (inspect)', () => {
+  it('valid → used → y un token que no existe es invalid', async () => {
+    const { service } = makeService();
+    const r = await service.request({ tenantSlug: 'demo', email: 'ana@example.com' });
+    await expect(service.inspect(r!.rawToken)).resolves.toBe('valid');
+    await service.reset(r!.rawToken, 'NuevaPasswordSegura123');
+    await expect(service.inspect(r!.rawToken)).resolves.toBe('used');
+    await expect(service.inspect('f'.repeat(64))).resolves.toBe('invalid');
+  });
+
+  it('caducado → expired (sin consumirlo)', async () => {
+    const { service, prisma } = makeService();
+    const r = await service.request({ tenantSlug: 'demo', email: 'ana@example.com' });
+    prisma.tokens[0]!.expiresAt = new Date(Date.now() - 1000);
+    await expect(service.inspect(r!.rawToken)).resolves.toBe('expired');
+    expect(prisma.tokens[0]!.usedAt).toBeNull();
+  });
+});
+
+describe('Pedir otro enlace desde uno caducado (resendExpired)', () => {
+  async function caducado(ttlMinutes: number) {
+    const ctx = makeSendingService();
+    const r = await ctx.service.request(
+      { tenantSlug: 'demo', email: 'ana@example.com' },
+      undefined,
+      { ttlMinutes },
+    );
+    // Se emitió hace 8 días con su validez original; ya caducó.
+    const tok = ctx.prisma.tokens[0]!;
+    const shift = 8 * 24 * 60 * 60_000;
+    tok.createdAt = new Date(tok.createdAt.getTime() - shift);
+    tok.expiresAt = new Date(tok.expiresAt.getTime() - shift);
+    return { ...ctx, raw: r!.rawToken };
+  }
+
+  it('manda UNO nuevo al correo de la cuenta, con la misma validez (7 días)', async () => {
+    const { service, prisma, sent, raw } = await caducado(SIETE_DIAS);
+    const baseFor = vi.fn(async () => 'https://demo.aula.example');
+    await service.resendExpired(raw, baseFor, undefined, '/courses/torno');
+
+    expect(sent).toHaveLength(1);
+    expect(sent[0]!.to).toBe('ana@example.com');
+    expect(sent[0]!.subject).toBe('Tu nuevo enlace para entrar en Academia Demo');
+    expect(sent[0]!.text).toContain('7 días');
+    expect(sent[0]!.text).toContain('&next=%2Fcourses%2Ftorno');
+    expect(baseFor).toHaveBeenCalledWith('tenant-1');
+    // El caducado queda quemado y el nuevo dura 7 días.
+    expect(prisma.tokens[0]!.usedAt).not.toBeNull();
+    const nuevo = prisma.tokens[1]!;
+    expect(Math.round((nuevo.expiresAt.getTime() - nuevo.createdAt.getTime()) / 60_000)).toBe(
+      SIETE_DIAS,
+    );
+  });
+
+  it('un enlace caducado solo sirve para UN reenvío (no bombardea el buzón)', async () => {
+    const { service, sent, raw } = await caducado(SIETE_DIAS);
+    await service.resendExpired(raw, () => 'https://demo.aula.example');
+    await service.resendExpired(raw, () => 'https://demo.aula.example');
+    expect(sent).toHaveLength(1);
+  });
+
+  it('el de restablecer (60 min) se reenvía con 60 min', async () => {
+    const { service, sent, raw } = await caducado(60);
+    await service.resendExpired(raw, () => 'https://demo.aula.example');
+    expect(sent[0]!.text).toContain('60 minutos');
+  });
+
+  it('CONTROL: con un enlace VIGENTE, usado o inexistente no se envía nada', async () => {
+    const { service, sent } = makeSendingService();
+    const vivo = await service.request({ tenantSlug: 'demo', email: 'ana@example.com' });
+    await service.resendExpired(vivo!.rawToken, () => 'https://demo.aula.example');
+    await service.reset(vivo!.rawToken, 'NuevaPasswordSegura123');
+    await service.resendExpired(vivo!.rawToken, () => 'https://demo.aula.example');
+    await service.resendExpired('e'.repeat(64), () => 'https://demo.aula.example');
+    expect(sent).toHaveLength(0);
   });
 });

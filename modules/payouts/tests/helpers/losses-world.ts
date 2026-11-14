@@ -23,12 +23,18 @@ export interface FakeLossesWorld {
   /** Saldo (disponible + pendiente) por `acct_` y divisa. Sin entrada: ilimitado. */
   readonly balances: Map<string, Record<string, number>>;
   setBalance(account: string, currency: string, amount: number): void;
+  /**
+   * Deja las reversiones EN CURSO hasta llamar a la función que devuelve: así
+   * se reproduce un webhook que llega mientras el botón aún está revirtiendo.
+   */
+  holdReversals(): () => void;
 }
 
 export function installLosses(fake: InMemoryPlatformStripeClient): FakeLossesWorld {
   const refunds: StripeObject[] = [];
   const reversals: StripeObject[] = [];
   const balances = new Map<string, Record<string, number>>();
+  let reversalGate: Promise<void> | null = null;
 
   fake.on('POST', '/v1/refunds', (req, f) => {
     const chargeId = req.params['charge'] as string;
@@ -75,7 +81,8 @@ export function installLosses(fake: InMemoryPlatformStripeClient): FakeLossesWor
     data: reversals.filter((r) => r['transfer'] === req.pathParams['id']).reverse(),
     has_more: false,
   }));
-  fake.on('POST', '/v1/transfers/:id/reversals', (req, f) => {
+  fake.on('POST', '/v1/transfers/:id/reversals', async (req, f) => {
+    if (reversalGate) await reversalGate;
     const transferId = req.pathParams['id']!;
     const transfer = f.get(transferId);
     if (!transfer) throw new Error(`no existe la transferencia ${transferId}`);
@@ -131,6 +138,14 @@ export function installLosses(fake: InMemoryPlatformStripeClient): FakeLossesWor
       const entry = balances.get(account) ?? {};
       entry[currency] = amount;
       balances.set(account, entry);
+    },
+    holdReversals() {
+      let release!: () => void;
+      reversalGate = new Promise<void>((resolve) => (release = resolve));
+      return () => {
+        reversalGate = null;
+        release();
+      };
     },
   };
 }

@@ -1,0 +1,46 @@
+{
+  "modal": {
+    "close": "Fechar"
+  },
+  "share": {
+    "label": "Compartilhar recurso",
+    "title": "Compartilhar recurso",
+    "subtitle": "Um documento, um modelo, um link ou uma ferramenta que seja útil para a comunidade.",
+    "titleLabel": "Título",
+    "titlePlaceholder": "Modelo de planejamento semanal",
+    "collectionLabel": "Coleção",
+    "kindLabel": "Tipo",
+    "kindFile": "Arquivo",
+    "kindLink": "Link",
+    "fileLabel": "Arquivo (PDF, Word, Excel, ZIP, JSON…)",
+    "linkLabel": "Link",
+    "linkPlaceholder": "https://…",
+    "descriptionLabel": "Descrição (opcional)",
+    "descriptionPlaceholder": "O que é e para que serve",
+    "cancel": "Cancelar",
+    "sharing": "Compartilhando…",
+    "submit": "Compartilhar recurso",
+    "titleTooShort": "O título precisa ter pelo menos 3 caracteres.",
+    "pickCollection": "Escolha uma coleção.",
+    "pickFile": "Selecione o arquivo para enviar."
+  },
+  "collection": {
+    "label": "Coleção",
+    "titleNew": "Nova coleção",
+    "titleEdit": "Editar coleção",
+    "subtitle": "As coleções agrupam os recursos e têm sua própria capa.",
+    "titleLabel": "Título",
+    "titlePlaceholder": "Modelos e guias",
+    "descriptionLabel": "Descrição",
+    "descriptionPlaceholder": "O que tem dentro",
+    "coverLabel": "Capa",
+    "coverEmpty": "Sem capa: é usado o degradê da marca",
+    "coverRemove": "Remover",
+    "coverUploading": "Enviando capa…",
+    "cancel": "Cancelar",
+    "saving": "Salvando…",
+    "save": "Salvar alterações",
+    "create": "Criar coleção",
+    "titleTooShort": "O título precisa ter pelo menos 3 caracteres."
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "unknown": "Algo deu errado. Tente novamente.",
+  "sessionExpired": "Sessão expirada",
+  "mfa_required": "É necessária a verificação em duas etapas para continuar.",
+  "AMBIGUOUS_TENANT": "Sua conta existe em várias escolas. Acesse pelo domínio da sua escola."
+}

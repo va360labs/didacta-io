@@ -6,6 +6,7 @@
   "localCurrencyNote": "At checkout you can see it in your currency",
   "catalogo": {
     "metaTitle": "Courses",
+    "metaDescription": "Courses from {name}: pick the one you want and start today, with a one-time payment.",
     "title": "Courses",
     "loadError": "The catalog could not be loaded. Reload to try again.",
     "filterAll": "All",
@@ -50,6 +51,7 @@
   },
   "ficha": {
     "metaTitle": "Course",
+    "metaDescription": "{title}, a course from {name}.",
     "notAvailableTitle": "Course not available",
     "notAvailableBody": "This course is not for sale right now. Take a look at the rest of the catalog.",
     "breadcrumbCourses": "Courses",
@@ -62,7 +64,9 @@
     "openingPayment": "Opening secure payment…",
     "buyNow": "Buy now",
     "securePayment": "Secure payment with Stripe. VAT included.",
-    "haveAccountToBuy": "Already have an account? <link>Sign in</link> to buy from your course page."
+    "haveAccountToBuy": "Already have an account? <link>Sign in</link> to buy from your course page.",
+    "syllabusTitle": "What's in the course",
+    "syllabusCount": "{count, plural, one {# lesson} other {# lessons}}"
   },
   "inscripcion": {
     "metaTitle": "Member sign-up",
@@ -121,6 +125,7 @@
   },
   "unete": {
     "metaTitle": "Join",
+    "defaultHeadline": "Become a member",
     "paymentReceived": "Payment received!",
     "activatingMembership": "Your membership is being activated. In a few seconds you will have access to all the courses.",
     "goToCourses": "Go to my courses",
@@ -205,5 +210,47 @@
     "loadError": "We couldn't load the purchase terms, and you can't pay without them.",
     "retry": "Try again",
     "mustTick": "Tick the box to continue"
+  },
+  "siteNotFound": {
+    "title": "Page not found",
+    "body": "The address you requested does not exist on this site."
+  },
+  "portada": {
+    "metaFallbackTitle": "Academy",
+    "metaDescription": "Join {name}: courses, community and live classes.",
+    "navAria": "Access",
+    "signIn": "Log in",
+    "ctaJoin": "Join",
+    "ctaCourse": "See the course",
+    "ctaCourses": "See courses",
+    "ctaFree": "Start for free",
+    "members": "{count, plural, one {member} other {members}}",
+    "createdBy": "Created by <strong>{name}</strong>",
+    "linksAria": "Academy links",
+    "website": "Website",
+    "nextLive": "Next live class",
+    "accessTitle": "How to join",
+    "accessTitleNone": "Log in to the academy",
+    "nothingForSale": "{name} has nothing for sale right now. If you are already a member, log in with your account.",
+    "membershipLabel": "Membership",
+    "from": "from",
+    "membershipCourses": "{count, plural, one {# course included} other {# courses included}}",
+    "membershipCommunity": "Community and live classes",
+    "membershipCta": "Become a member",
+    "membershipTrialCta": "Start your free trial",
+    "singleCourseLabel": "Course",
+    "coursesLabel": "Single courses",
+    "coursesCount": "{count, plural, one {# course for sale} other {# courses for sale}}",
+    "oneTimePayment": "one-time payment",
+    "viewCourse": "See course",
+    "viewCourses": "See the courses",
+    "freeLabel": "Free",
+    "freeWithCourses": "Request your free access and start with: {courses}.",
+    "freeCommunity": "Request your free access to the community.",
+    "alreadyMember": "Already a member?",
+    "coursesTitle": "Courses",
+    "coursesSubtitle": "Buy just the course you want, with a one-time payment.",
+    "allCourses": "See all {count} courses",
+    "poweredBy": "Powered by Didacta"
   }
 }

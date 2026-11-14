@@ -30,6 +30,7 @@ import {
   pastDueSince,
   resolvePastDueGraceDays,
   DEFAULT_PAST_DUE_GRACE_DAYS,
+  DEFAULT_RENEWAL_TEMPLATES,
   type ConfigPort,
   type UserDirectoryPort,
   type DidactaUserRecord,
@@ -1278,6 +1279,31 @@ describe('dashboard: syncSubscribers / listSubscribers / subscriberSummary', () 
       subject: 'Hola',
       body: 'Renueva {enlace}',
     });
+    // La que guardó el tenant es suya: no se traduce aunque el aula esté en pt.
+    expect((await svc.service.getRenewalTemplate(TENANT, 'pt')).subject).toBe('Hola');
+  });
+
+  it('plantilla de renovación por defecto en el idioma del aula, con las mismas variables', async () => {
+    const svc = buildService();
+    const pt = await svc.service.getRenewalTemplate(TENANT, 'pt');
+    expect(pt.subject).toBe('Renove sua assinatura');
+    expect(pt.body).toBe(
+      'Olá!\n\nVimos que o pagamento da sua assinatura ({plan}) está pendente. Você pode renová-la por este link:\n\n{enlace}\n\nSe você já resolveu, ignore esta mensagem. Obrigado.',
+    );
+    expect((await svc.service.getRenewalTemplate(TENANT, 'en')).subject).toBe(
+      'Renew your subscription',
+    );
+    // Control: sin idioma, el español de siempre, byte a byte.
+    expect(await svc.service.getRenewalTemplate(TENANT)).toEqual({
+      subject: 'Renueva tu suscripción',
+      body: 'Hola,\n\nHemos visto que tu suscripción ({plan}) está pendiente de pago. Puedes renovarla desde este enlace:\n\n{enlace}\n\nSi ya lo has resuelto, ignora este mensaje. Gracias.',
+    });
+    // La web sustituye `{plan}` y `{enlace}`: se escriben igual en los tres idiomas.
+    const vars = (s: string) => [...s.matchAll(/\{(\w+)\}/g)].map((m) => m[1]).sort();
+    for (const lang of ['es', 'en', 'pt'] as const) {
+      const t = DEFAULT_RENEWAL_TEMPLATES[lang];
+      expect(vars(t.body), lang).toEqual(vars(DEFAULT_RENEWAL_TEMPLATES.es.body));
+    }
   });
 
   it('listPlanCatalogLabels trae los planes del catálogo (parte B, dedup)', async () => {

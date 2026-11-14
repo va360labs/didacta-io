@@ -26,6 +26,7 @@
   "nombreEtiqueta": "Nombre de la academia",
   "nombrePlaceholder": "Academia Sanz, Formación Aribau, Escuela de Idiomas…",
   "nombreAviso": "Ahora mismo se llama «{nombre}», que salió de tu correo al comprar. Ponle el de verdad.",
+  "nombreAvisoPropia": "Ahora mismo se llama «{nombre}», un nombre provisional. Ponle el de verdad.",
   "nombreVacio": "Escribe un nombre para continuar.",
 
   "marcaTitulo": "Ponle tu cara",

@@ -13,6 +13,7 @@ import { ColorField, SUGGESTED_COLORS } from '@/components/color-field';
 import { Icon, type IconName } from '@/components/icon';
 import { SpaceIcon } from '@/components/space-icon';
 import { Button } from '@/components/ui/button';
+import { DialogBackdrop } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { apiErrorMessage } from '@/lib/i18n/api-error';
@@ -112,14 +113,7 @@ export function CreateSpaceModal({ open, onClose }: Props) {
 
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      {/* Ver `ui/dialog.tsx`: el fondo es un <button> para que la zona de cierre
-          esté anunciada y etiquetada, no un <div> mudo que solo entiende el ratón. */}
-      <button
-        type="button"
-        aria-label={t('cancel')}
-        onClick={onClose}
-        className="fixed inset-0 -z-10 cursor-default bg-black/50"
-      />
+      <DialogBackdrop onClose={onClose} />
       <div
         ref={panelRef}
         role="dialog"

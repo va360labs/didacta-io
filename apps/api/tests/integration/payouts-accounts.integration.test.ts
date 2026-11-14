@@ -294,6 +294,7 @@ describeWithDb('mod.payouts E2 — alta y estado contra Postgres como didacta_ap
       admin.modPayoutsObjectRef.deleteMany({ where }),
       admin.modPayoutsAccount.deleteMany({ where }),
       admin.modPayoutsSettings.deleteMany({ where }),
+      admin.tenantSetting.deleteMany({ where }),
       admin.auditLog.deleteMany({ where }),
       admin.user.deleteMany({ where }),
       admin.tenantDomain.deleteMany({ where }),
@@ -426,6 +427,25 @@ describeWithDb('mod.payouts E2 — alta y estado contra Postgres como didacta_ap
       // Control: A sí la ve.
       const a = await call('GET', '/modules/payouts/status', { auth: bearer(tenants.A.jwt) });
       expect(a.json().account.stripeAccountId).toBe(acctA);
+    });
+
+    it('el país DECLARADO en el alta (tenant_setting) sale en el estado de SU aula y de ninguna otra', async () => {
+      const before = await call('GET', '/modules/payouts/status', { auth: bearer(tenants.C.jwt) });
+      expect(before.json().declaredCountry).toBeNull();
+      await admin.tenantSetting.create({
+        data: {
+          tenantId: tenants.C.id,
+          moduleName: 'payouts',
+          key: 'declared_country',
+          valueJson: 'OTHER',
+          isSecret: false,
+        },
+      });
+      const c = await call('GET', '/modules/payouts/status', { auth: bearer(tenants.C.jwt) });
+      expect(c.json().declaredCountry).toBe('OTHER');
+      // Control: B no ve el de C.
+      const b = await call('GET', '/modules/payouts/status', { auth: bearer(tenants.B.jwt) });
+      expect(b.json().declaredCountry).toBeNull();
     });
 
     it('B no consigue enlace ni panel de A: no tiene cuenta (404)', async () => {
@@ -678,6 +698,26 @@ describeWithDb('mod.payouts E2 — alta y estado contra Postgres como didacta_ap
         expect(res.json().code).toBe('ADMIN_TENANT_NOT_FOUND');
       }
     });
+
+    it('payouts/countries sin credencial → 401; con JWT de tenant_admin → 403', async () => {
+      const none = await call('GET', '/admin/tenants/payouts/countries');
+      expect(none.statusCode).toBe(401);
+      const tenantAdmin = await call('GET', '/admin/tenants/payouts/countries', {
+        auth: bearer(tenants.A.jwt),
+      });
+      expect(tenantAdmin.statusCode).toBe(403);
+    });
+
+    it('payouts/countries con credencial: exactamente `{ supportedCountries }`, la lista del alta', async () => {
+      const res = await call('GET', '/admin/tenants/payouts/countries', { auth: provisioning });
+      expect(res.statusCode).toBe(200);
+      const body = res.json();
+      expect(Object.keys(body)).toEqual(['supportedCountries']);
+      expect(body.supportedCountries).toEqual([...CONFIG.supportedCountries]);
+      expect(body.supportedCountries).toContain('ES');
+      expect(body.supportedCountries).not.toContain('BR');
+      for (const country of body.supportedCountries) expect(country).toMatch(/^[A-Z]{2}$/);
+    });
   });
 
   describe('modo plataforma apagado', () => {
@@ -689,6 +729,7 @@ describeWithDb('mod.payouts E2 — alta y estado contra Postgres como didacta_ap
       ['POST', '/modules/payouts/webhook'],
       ['PUT', `/admin/tenants/00000000-0000-4000-8000-000000000001/payouts-settings`],
       ['GET', `/admin/tenants/00000000-0000-4000-8000-000000000001/payouts`],
+      ['GET', '/admin/tenants/payouts/countries'],
     ] as const)('%s %s no existe (404)', async (method, url) => {
       const res = await call(method, url, {
         target: appOff,

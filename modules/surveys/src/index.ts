@@ -9,10 +9,14 @@ import { manifest } from './manifest.js';
 export { manifest };
 export {
   POST_CLASS_QUESTIONS,
+  POST_CLASS_QUESTIONS_BY_LOCALE,
   SURVEYS_EVENT,
   SurveysService,
+  surveyLocale,
   type SubmitAnswerInput,
+  type SurveyLocale,
   type SurveysEventPublisher,
+  type SurveysLocaleLookup,
 } from './surveys.service.js';
 export {
   SurveysAlreadyRespondedError,

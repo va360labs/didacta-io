@@ -143,7 +143,10 @@
       "AI_PROVIDER_RATE_LIMIT": "El proveedor de IA está saturado ahora mismo. Prueba en unos segundos.",
       "AI_PROVIDER_AUTH": "Las credenciales del proveedor de IA no son válidas. Avisa al admin.",
       "AI_PROVIDER_UNAVAILABLE": "El proveedor de IA no respondió. Prueba de nuevo en un momento."
-    }
+    },
+    "offTitle": "El tutor IA está apagado",
+    "offBody": "Tus alumnos no lo ven porque tu academia no tiene un proveedor de IA. Cuando lo configures, aparecerá en cada lección.",
+    "offCta": "Configurar el proveedor de IA"
   },
   "claseEmbed": {
     "countdownTomorrow": "Mañana",

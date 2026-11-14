@@ -8,7 +8,7 @@ import { Injectable } from '@nestjs/common';
 import { Logger as PinoLogger } from 'nestjs-pino';
 import type { ClientContext } from '../../auth/client-context';
 import { PasswordService } from '../../auth/password.service';
-import { PasswordResetService } from '../../auth/password-reset.service';
+import { PasswordResetService, accessLink } from '../../auth/password-reset.service';
 import {
   resolveEmailBranding,
   renderBrandedEmail,
@@ -22,6 +22,7 @@ import {
   interpolate,
   resolveFixedEmailCopy,
   resolveRecipientLocale,
+  rendersFromCatalog,
   resolveTransactionalDefault,
   toHubTemplateLang,
   type TemplateOverridePrisma,
@@ -85,6 +86,11 @@ export class BillingProvisioningService {
      * preferencia que guardó en su perfil.
      */
     locale?: string;
+    /**
+     * Curso comprado: el enlace de la bienvenida lleva al alumno a él tras su
+     * primer acceso («tu curso ya te espera dentro»), no a la comunidad.
+     */
+    courseId?: string;
   }): Promise<{ userId: string; created: boolean }> {
     const { tenantId, email } = args;
     const existing = await this.prisma.user.findUnique({
@@ -161,8 +167,31 @@ export class BillingProvisioningService {
       args.webBaseUrl,
       args.ctx,
       resolveRecipientLocale(user.locale),
+      await this.coursePath(tenantId, args.courseId),
     );
     return { userId: user.id, created: true };
+  }
+
+  /**
+   * Ruta del curso comprado en el aula (`/courses/<slug>`), o null si no se
+   * sabe. Lectura first-party del curso, acotada al aula; un fallo aquí nunca
+   * impide la bienvenida: sin destino, el alumno entra como siempre.
+   */
+  private async coursePath(tenantId: string, courseId?: string): Promise<string | null> {
+    if (!courseId) return null;
+    try {
+      const course = await this.prisma.modCoursesCourse.findFirst({
+        where: { id: courseId, tenantId, deletedAt: null },
+        select: { slug: true },
+      });
+      return course ? `/courses/${encodeURIComponent(course.slug)}` : null;
+    } catch (err) {
+      this.logger.warn(
+        { err, tenantId, courseId },
+        'billing: no se pudo resolver el curso comprado',
+      );
+      return null;
+    }
   }
 
   private async sendWelcomeEmail(
@@ -172,6 +201,7 @@ export class BillingProvisioningService {
     webBaseUrl: string,
     ctx: ClientContext,
     locale: string,
+    next: string | null = null,
   ): Promise<void> {
     try {
       const resolved = await this.smtpResolver.resolve(tenantId);
@@ -187,7 +217,9 @@ export class BillingProvisioningService {
         return;
       }
       const base = webBaseUrl.replace(/\/$/, '');
-      const setPasswordUrl = `${base}/reset-password?token=${encodeURIComponent(issued.rawToken)}`;
+      // Con el curso comprado como destino: tras definir la contraseña (y el
+      // perfil, si toca) el alumno aterriza en él.
+      const setPasswordUrl = accessLink(base, issued.rawToken, next);
 
       const branding = await resolveEmailBranding(
         this.prisma as unknown as BrandingPrisma,
@@ -228,8 +260,8 @@ export class BillingProvisioningService {
         subject = applied.subject;
         bodyText = applied.bodyText;
         bodyHtml = textToHtmlParagraphs(applied.bodyText);
-      } else if (toHubTemplateLang(locale) === 'en') {
-        // El inglés se renderiza DESDE el catálogo (misma mecánica que un
+      } else if (rendersFromCatalog(locale)) {
+        // Las traducciones se renderizan DESDE el catálogo (misma mecánica que un
         // override) para que composer y catálogo no puedan divergir. El español
         // conserva su maqueta HTML propia más abajo, byte a byte.
         bodyText = interpolate(def.body, vars);

@@ -11,12 +11,24 @@ import type { AgentScope } from './agent-scopes';
  * Nombres de la INTERFAZ que citan las instrucciones y las herramientas del
  * agente. El resto del texto va en inglés (es para el modelo), pero estos los
  * repite el agente a la persona tal cual («publícalo desde "Start here"»): en un
- * aula en español tienen que ser los que esa persona ve en pantalla. Son los de
- * los catálogos de la web (`modoSencillo.nav.empieza`, `agenteIa.titulo`).
+ * aula en español o en portugués tienen que ser los que esa persona ve en
+ * pantalla. Son los de los catálogos de la web (`modoSencillo.tabs.empieza`,
+ * `agenteIa.titulo`); «Comece aqui» es un término fijo del glosario pt-BR.
+ *
+ * `academyWord` es la PALABRA con la que la interfaz llama a la academia. Las
+ * instrucciones dicen «academy» y el modelo la traducía a su aire: en una
+ * sesión real en pt-BR habló de «ferramentas da academia» y «Caminho na
+ * academia», cuando en portugués la interfaz dice «escola» («academia» suena a
+ * gimnasio; glosario pt-BR, commit cf34b8eb).
  */
 export const AGENT_UI_NAMES = {
-  startHere: { es: 'Empieza aquí', en: 'Start here' },
-  agentPanel: { es: 'Hazlo más rápido con tu agente de IA', en: 'Do it faster with your AI agent' },
+  academyWord: { es: 'academia', en: 'academy', pt: 'escola' },
+  startHere: { es: 'Empieza aquí', en: 'Start here', pt: 'Comece aqui' },
+  agentPanel: {
+    es: 'Hazlo más rápido con tu agente de IA',
+    en: 'Do it faster with your AI agent',
+    pt: 'Faça mais rápido com seu agente de IA',
+  },
 } as const satisfies Record<string, Record<AcademyLocale, string>>;
 
 export type AgentUiName = keyof typeof AGENT_UI_NAMES;

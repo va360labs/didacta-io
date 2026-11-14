@@ -67,8 +67,9 @@ export function isNotificationValue(value: unknown): value is NotificationValue 
  *
  * Los textos españoles son literalmente los que estaban incrustados en cada
  * emisor: se movieron de sitio, no se reescribieron. `satisfies` obliga a que
- * los dos idiomas cubran TODOS los términos de la unión — un término nuevo sin
- * inglés no compila, que es justo lo que impide que se cuele un email a medias.
+ * TODOS los idiomas cubran TODOS los términos de la unión — un término nuevo
+ * sin inglés o sin portugués no compila, que es justo lo que impide que se
+ * cuele un email a medias.
  */
 export const HUB_TERMS = {
   es: {
@@ -101,6 +102,20 @@ export const HUB_TERMS = {
     'gamification.staff.perk_requested': 'Someone has requested a perk from their level.',
     'community.actor.unknown': 'Someone',
     'learning.course.unknown': 'your course',
+  },
+  pt: {
+    'quiz.result.passed': 'aprovado',
+    'quiz.result.not_passed': 'não aprovado',
+    'gamification.perk.approved':
+      'Aprovamos sua solicitação de "{{perkTitle}}". Vamos escrever para você para combinar os detalhes.',
+    'gamification.perk.done':
+      'Sua solicitação de "{{perkTitle}}" foi concluída. Esperamos que tenha sido útil!',
+    'gamification.perk.rejected':
+      'Desta vez não foi possível atender à sua solicitação de "{{perkTitle}}".',
+    'gamification.staff.challenge_submitted': 'Nova entrega de desafio aguardando revisão.',
+    'gamification.staff.perk_requested': 'Alguém solicitou um benefício do próprio nível.',
+    'community.actor.unknown': 'Alguém',
+    'learning.course.unknown': 'seu curso',
   },
 } as const satisfies Record<HubTemplateLang, Record<NotificationTerm, string>>;
 

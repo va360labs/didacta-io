@@ -152,3 +152,51 @@ describe('AiTutorController · reindex', () => {
     ).rejects.toBeInstanceOf(ForbiddenException);
   });
 });
+
+describe('AiTutorController · status (¿se le enseña el tutor al alumno?)', () => {
+  function makeAi(configured: { chat: boolean; embed: boolean }) {
+    const isConfigured = vi.fn(async (_tenantId: string, purpose: 'chat' | 'embed') =>
+      purpose === 'chat' ? configured.chat : configured.embed,
+    );
+    return { ai: { isConfigured } as never, isConfigured };
+  }
+
+  it('aula SIN proveedor de IA: no disponible, motivo NO_PROVIDER', async () => {
+    const { registry } = makeRegistry();
+    const { ai, isConfigured } = makeAi({ chat: false, embed: false });
+    const c = new AiTutorController(registry, ai);
+    await expect(c.status(makeUser())).resolves.toEqual({
+      available: false,
+      reason: 'NO_PROVIDER',
+    });
+    // Pregunta por el aula del JWT, no por otra.
+    expect(isConfigured).toHaveBeenCalledWith('tenant-A', 'embed');
+  });
+
+  it('con chat pero sin embeddings tampoco: contestaría «no está indexado»', async () => {
+    const { registry } = makeRegistry();
+    const c = new AiTutorController(registry, makeAi({ chat: true, embed: false }).ai);
+    await expect(c.status(makeUser())).resolves.toMatchObject({ available: false });
+  });
+
+  it('con proveedor para chat y embeddings: disponible', async () => {
+    const { registry } = makeRegistry();
+    const c = new AiTutorController(registry, makeAi({ chat: true, embed: true }).ai);
+    await expect(c.status(makeUser())).resolves.toEqual({ available: true, reason: null });
+  });
+
+  it('sin el módulo cargado: no disponible, MODULE_INACTIVE', async () => {
+    const { registry } = makeRegistry({ indexerEnabled: false });
+    const c = new AiTutorController(registry, makeAi({ chat: true, embed: true }).ai);
+    await expect(c.status(makeUser())).resolves.toEqual({
+      available: false,
+      reason: 'MODULE_INACTIVE',
+    });
+  });
+
+  it('sin sesión: 401', async () => {
+    const { registry } = makeRegistry();
+    const c = new AiTutorController(registry, makeAi({ chat: true, embed: true }).ai);
+    await expect(c.status(undefined)).rejects.toBeInstanceOf(UnauthorizedException);
+  });
+});

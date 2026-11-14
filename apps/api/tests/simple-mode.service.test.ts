@@ -8,6 +8,7 @@ import { CourseHasNoLessonsError, CourseSlugAlreadyExistsError } from '@didacta/
 import { SimpleModeService } from '../src/simple-mode/simple-mode.service';
 import {
   lessonHasContent,
+  quickStartSchema,
   toCourseSlug,
   SimpleModeError,
 } from '../src/simple-mode/simple-mode.model';
@@ -292,6 +293,31 @@ describe('alta en 3 preguntas', () => {
     expect(db.posts[0]?.title).toBe('Welcome to Taller de Acuarela');
   });
 
+  it('alta en portugués: aula `pt`, curso pt-BR, espacios y post en portugués', async () => {
+    const { db, service, courses, community } = mundo();
+    await service.quickStart(T, { id: U }, { ...ALTA, locale: 'pt' });
+    expect(db.settings.get('locale')).toBe('pt');
+    expect(db.settings.get('state')).toMatchObject({ locale: 'pt' });
+    expect(courses.createCourse).toHaveBeenCalledWith(
+      T,
+      U,
+      expect.objectContaining({ language: 'pt-BR' }),
+    );
+    expect(db.modules[0]?.title).toBe('Aulas');
+    const titles = community.createSpace.mock.calls.map(
+      (c) => (c[2] as unknown as { title: string }).title,
+    );
+    expect(titles).toEqual(['Geral', 'Avisos', 'Perguntas e dúvidas']);
+    expect(db.posts[0]?.title).toBe('Boas-vindas à comunidade Taller de Acuarela');
+  });
+
+  it('el cuerpo del alta: es | en | pt (el código, no el tag)', () => {
+    const base = { ...ALTA };
+    expect(quickStartSchema.safeParse({ ...base, locale: 'pt' }).success).toBe(true);
+    expect(quickStartSchema.safeParse({ ...base, locale: 'pt-BR' }).success).toBe(false);
+    expect(quickStartSchema.safeParse({ ...base, locale: 'fr' }).success).toBe(false);
+  });
+
   it('sin idioma en la petición (cliente anterior): el que ya tenía el aula, no español', async () => {
     const { db, service } = mundo();
     // El aprovisionamiento de Cloud lo dejó en inglés.
@@ -456,6 +482,80 @@ describe('Empieza aquí', () => {
     expect(view.salePath).toBe('/catalog/acuarela-desde-cero');
     expect(view.steps.find((s) => s.id === 'payments')?.done).toBe(false);
     expect(view.steps.find((s) => s.id === 'publish')?.done).toBe(false);
+  });
+});
+
+describe('Cloud: cobros conectados sin datos fiscales (ensayo general)', () => {
+  /** El mismo mundo, cobrando por la plataforma con la cuenta lista. */
+  function cloud(taxPending: boolean) {
+    const m = mundo({ paymentsReady: true });
+    const gate = {
+      pricePolicy: vi.fn(async () => ({ settlementCurrency: 'eur', currencies: ['eur'] })),
+      assertPrice: vi.fn(async () => undefined),
+      saleBlockedReason: vi.fn(async () => null),
+      taxProfilePending: vi.fn(async () => taxPending),
+    };
+    const service = new SimpleModeService(
+      m.prisma as never,
+      {
+        getCoursesService: () => m.courses,
+        getMembershipService: () => m.membership,
+        getBillingService: () => m.billing,
+        getCommunityService: () => m.community,
+      } as never,
+      m.stripeResolver as never,
+      gate as never,
+    );
+    return { ...m, service, gate };
+  }
+
+  it('«Conecta tus cobros» NO está hecho sin datos fiscales y lleva directo a completarlos', async () => {
+    const { db, service } = cloud(true);
+    await service.quickStart(T, { id: U }, ALTA);
+    db.lessons.push({ type: 'TEXT', content: { text: 'Hola' }, module: { courseId: 'c1' } });
+    const view = await service.startHere(T);
+    expect(view.steps.find((s) => s.id === 'payments')?.done).toBe(false);
+    expect(view.taxProfilePending).toBe(true);
+    expect(view.taxProfilePath).toBe('/admin/payments#tax-profile');
+    expect(view.paymentsSetupPath).toBe('/admin/payments');
+  });
+
+  it('pero deja publicar (web #39: se cobra igual y se retiene): a la venta y con el paso de cobros pendiente', async () => {
+    const { db, service, courses } = cloud(true);
+    await service.quickStart(T, { id: U }, ALTA);
+    db.lessons.push({ type: 'TEXT', content: { text: 'Hola' }, module: { courseId: 'c1' } });
+    const { salePath } = await service.publish(T, U);
+    expect(salePath).toBe('/catalog/acuarela-desde-cero');
+    expect(courses.publishCourse).toHaveBeenCalled();
+    const view = await service.startHere(T);
+    expect(view.salePath).toBe('/catalog/acuarela-desde-cero');
+    expect(view.steps.find((s) => s.id === 'publish')?.done).toBe(true);
+    expect(view.steps.find((s) => s.id === 'payments')?.done).toBe(false);
+    expect(view.taxProfilePending).toBe(true);
+  });
+
+  it('control: con los datos fiscales completos, el paso está hecho y publica', async () => {
+    const { db, service } = cloud(false);
+    await service.quickStart(T, { id: U }, ALTA);
+    db.lessons.push({ type: 'TEXT', content: { text: 'Hola' }, module: { courseId: 'c1' } });
+    let view = await service.startHere(T);
+    expect(view.steps.find((s) => s.id === 'payments')?.done).toBe(true);
+    expect(view.taxProfilePending).toBe(false);
+    await service.publish(T, U);
+    view = await service.startHere(T);
+    expect(view.steps.find((s) => s.id === 'publish')?.done).toBe(true);
+  });
+
+  it('un aula que ya vendía sin datos fiscales: publicar sigue hecho; cobros, pendiente', async () => {
+    const { db, service, gate } = cloud(false);
+    await service.quickStart(T, { id: U }, ALTA);
+    db.lessons.push({ type: 'TEXT', content: { text: 'Hola' }, module: { courseId: 'c1' } });
+    await service.publish(T, U);
+    gate.taxProfilePending.mockResolvedValue(true);
+    const view = await service.startHere(T);
+    expect(view.steps.find((s) => s.id === 'publish')?.done).toBe(true);
+    expect(view.steps.find((s) => s.id === 'payments')?.done).toBe(false);
+    expect(view.taxProfilePending).toBe(true);
   });
 });
 

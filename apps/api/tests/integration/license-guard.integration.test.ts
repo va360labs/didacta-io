@@ -15,6 +15,14 @@
  *   7. POST /configure sin licencia           → 402 (decorator también gatea).
  *   8. POST /configure con licencia válida    → 200 + persistencia en service.
  *
+ * Todas las peticiones a los endpoints white-label van con sesión de
+ * `super_admin` (fila real en `user`): desde 5322d641 el controller exige
+ * JwtAuthGuard + rol super_admin, y el JwtAuthGuard del controller corre ANTES
+ * que el LicenseGuard que añade `@RequiresCapability` al método. Sin sesión la
+ * respuesta es 401 sea cual sea la licencia — y eso, con su 403 para un
+ * `tenant_admin`, también se comprueba aquí (la licencia no abre una puerta
+ * anónima ni de admin de un solo tenant).
+ *
  * El LicenseService es 100% in-memory (opera sobre el JWT), pero el bootstrap
  * de la app sí usa Prisma → Postgres real. La DB nos sirve de prueba de que
  * el guard funciona dentro de un Nest con DI completo y conexión externa
@@ -32,10 +40,17 @@ import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import { LICENSE_CAPABILITIES } from '@didacta/license-sdk';
 import { createTestApp, type TestApp } from './helpers/test-app';
 import { issueCanonicalLicenses, issueTestLicense } from './helpers/issue-test-license';
+import { bearerHeader } from './helpers/issue-test-jwt';
+import { seedMinimalTenant } from './helpers/seed-tenant';
 
 const PREVIEW_PATH = '/api/v1/branding/white-label/preview';
 const CONFIGURE_PATH = '/api/v1/branding/white-label/configure';
 const CE_OPTIONS_PATH = '/api/v1/branding/options';
+
+/** Sesión de super_admin: lo que exigen los endpoints white-label. */
+function superAdmin(): Promise<string> {
+  return bearerHeader({ roles: ['super_admin'] });
+}
 
 // Helper para cerrar la app y devolver el body parseado de la response.
 async function withApp<T>(
@@ -57,6 +72,14 @@ describe('LicenseGuard — integración con Postgres real (MIG-034)', () => {
     // Genera todas las licencias canónicas con el mismo `now` para que las
     // ventanas de expiración sean coherentes entre tests.
     licenses = await issueCanonicalLicenses(new Date());
+    // El usuario del token tiene que existir: AccountStateInterceptor
+    // (global en AuthModule) rechaza con 401 a una cuenta que no está.
+    const tmp = await createTestApp({ licenseKey: null });
+    try {
+      await seedMinimalTenant(tmp.prisma);
+    } finally {
+      await tmp.close();
+    }
   });
 
   afterAll(() => {
@@ -67,7 +90,9 @@ describe('LicenseGuard — integración con Postgres real (MIG-034)', () => {
     const testApp = await createTestApp({ licenseKey: null });
 
     await withApp(testApp, async (server) => {
-      const res = await supertest(server).get(PREVIEW_PATH);
+      const res = await supertest(server)
+        .get(PREVIEW_PATH)
+        .set('Authorization', await superAdmin());
 
       expect(res.status).toBe(402);
       expect(res.body).toMatchObject({
@@ -86,7 +111,9 @@ describe('LicenseGuard — integración con Postgres real (MIG-034)', () => {
     });
 
     await withApp(testApp, async (server) => {
-      const res = await supertest(server).get(PREVIEW_PATH);
+      const res = await supertest(server)
+        .get(PREVIEW_PATH)
+        .set('Authorization', await superAdmin());
 
       expect(res.status).toBe(200);
       expect(res.body).toMatchObject({
@@ -102,7 +129,9 @@ describe('LicenseGuard — integración con Postgres real (MIG-034)', () => {
     });
 
     await withApp(testApp, async (server) => {
-      const res = await supertest(server).get(PREVIEW_PATH);
+      const res = await supertest(server)
+        .get(PREVIEW_PATH)
+        .set('Authorization', await superAdmin());
 
       expect(res.status).toBe(402);
       expect(res.body.capability).toBe(LICENSE_CAPABILITIES.WHITE_LABEL);
@@ -130,7 +159,9 @@ describe('LicenseGuard — integración con Postgres real (MIG-034)', () => {
     const testApp = await createTestApp({ licenseKey: graceToken });
 
     await withApp(testApp, async (server) => {
-      const res = await supertest(server).get(PREVIEW_PATH);
+      const res = await supertest(server)
+        .get(PREVIEW_PATH)
+        .set('Authorization', await superAdmin());
 
       expect(res.status).toBe(200);
       expect(res.body.canHideBrand).toBe(true);
@@ -151,7 +182,9 @@ describe('LicenseGuard — integración con Postgres real (MIG-034)', () => {
     const testApp = await createTestApp({ licenseKey: graceTokenWithoutCap });
 
     await withApp(testApp, async (server) => {
-      const res = await supertest(server).get(PREVIEW_PATH);
+      const res = await supertest(server)
+        .get(PREVIEW_PATH)
+        .set('Authorization', await superAdmin());
 
       expect(res.status).toBe(402);
       expect(res.body.capability).toBe(LICENSE_CAPABILITIES.WHITE_LABEL);
@@ -173,7 +206,9 @@ describe('LicenseGuard — integración con Postgres real (MIG-034)', () => {
     const testApp = await createTestApp({ licenseKey: edgeToken });
 
     await withApp(testApp, async (server) => {
-      const res = await supertest(server).get(PREVIEW_PATH);
+      const res = await supertest(server)
+        .get(PREVIEW_PATH)
+        .set('Authorization', await superAdmin());
 
       // Justo dentro del grace → capability sigue habilitada.
       expect(res.status).toBe(200);
@@ -184,7 +219,9 @@ describe('LicenseGuard — integración con Postgres real (MIG-034)', () => {
     const testApp = await createTestApp({ licenseKey: licenses.expired });
 
     await withApp(testApp, async (server) => {
-      const res = await supertest(server).get(PREVIEW_PATH);
+      const res = await supertest(server)
+        .get(PREVIEW_PATH)
+        .set('Authorization', await superAdmin());
 
       // Aunque la capability está en el payload, la licencia está expirada
       // → LicenseService la marca como `expired` → isCapabilityEnabled = false.
@@ -206,7 +243,9 @@ describe('LicenseGuard — integración con Postgres real (MIG-034)', () => {
     });
 
     await withApp(testApp, async (server) => {
-      const res = await supertest(server).get(PREVIEW_PATH);
+      const res = await supertest(server)
+        .get(PREVIEW_PATH)
+        .set('Authorization', await superAdmin());
 
       // SDK marca como `invalid` y desactiva todas las capabilities.
       expect(res.status).toBe(402);
@@ -222,7 +261,9 @@ describe('LicenseGuard — integración con Postgres real (MIG-034)', () => {
     });
 
     await withApp(testApp, async (server) => {
-      const res = await supertest(server).get(PREVIEW_PATH);
+      const res = await supertest(server)
+        .get(PREVIEW_PATH)
+        .set('Authorization', await superAdmin());
 
       expect(res.status).toBe(200);
       expect(res.body.canHideBrand).toBe(true);
@@ -237,7 +278,9 @@ describe('LicenseGuard — integración con Postgres real (MIG-034)', () => {
     });
 
     await withApp(testApp, async (server) => {
-      const res = await supertest(server).get(PREVIEW_PATH);
+      const res = await supertest(server)
+        .get(PREVIEW_PATH)
+        .set('Authorization', await superAdmin());
 
       expect(res.status).toBe(402);
     });
@@ -251,6 +294,7 @@ describe('LicenseGuard — integración con Postgres real (MIG-034)', () => {
     await withApp(testApp, async (server) => {
       const res = await supertest(server)
         .post(CONFIGURE_PATH)
+        .set('Authorization', await superAdmin())
         .send({ logoUrl: 'https://acme.example.com/logo.png' });
 
       expect(res.status).toBe(402);
@@ -264,11 +308,14 @@ describe('LicenseGuard — integración con Postgres real (MIG-034)', () => {
     });
 
     await withApp(testApp, async (server) => {
-      const res = await supertest(server).post(CONFIGURE_PATH).send({
-        logoUrl: 'https://acme.example.com/logo.png',
-        primaryColor: '#ff5500',
-        poweredByDidacta: false,
-      });
+      const res = await supertest(server)
+        .post(CONFIGURE_PATH)
+        .set('Authorization', await superAdmin())
+        .send({
+          logoUrl: 'https://acme.example.com/logo.png',
+          primaryColor: '#ff5500',
+          poweredByDidacta: false,
+        });
 
       expect(res.status).toBe(201); // Nest @Post() default 201
       expect(res.body).toMatchObject({
@@ -287,12 +334,35 @@ describe('LicenseGuard — integración con Postgres real (MIG-034)', () => {
     });
   });
 
+  it('[identidad] licencia válida pero sin sesión → 401 (la licencia no abre la puerta)', async () => {
+    const testApp = await createTestApp({ licenseKey: licenses.validWithWhiteLabel });
+
+    await withApp(testApp, async (server) => {
+      const res = await supertest(server).get(PREVIEW_PATH);
+      expect(res.status).toBe(401);
+    });
+  });
+
+  it('[identidad] licencia válida con tenant_admin → 403 (el white-label es de la instalación)', async () => {
+    const testApp = await createTestApp({ licenseKey: licenses.validWithWhiteLabel });
+
+    await withApp(testApp, async (server) => {
+      const res = await supertest(server)
+        .get(PREVIEW_PATH)
+        .set('Authorization', await bearerHeader({ roles: ['tenant_admin'] }));
+      expect(res.status).toBe(403);
+      expect(res.body.code).toBe('ADMIN_FORBIDDEN_SUPER_ADMIN_REQUIRED');
+    });
+  });
+
   it('[regression] flow community → active con licencia distinta cada vez', async () => {
     // Sanity check: dos apps independientes con licencias distintas no
     // contaminan estado entre sí (LicenseService no es singleton cross-app).
     const community = await createTestApp({ licenseKey: null });
     await withApp(community, async (server) => {
-      const r = await supertest(server).get(PREVIEW_PATH);
+      const r = await supertest(server)
+        .get(PREVIEW_PATH)
+        .set('Authorization', await superAdmin());
       expect(r.status).toBe(402);
     });
 
@@ -301,7 +371,9 @@ describe('LicenseGuard — integración con Postgres real (MIG-034)', () => {
     });
     const onlyScim = await createTestApp({ licenseKey: tokenScim });
     await withApp(onlyScim, async (server) => {
-      const r = await supertest(server).get(PREVIEW_PATH);
+      const r = await supertest(server)
+        .get(PREVIEW_PATH)
+        .set('Authorization', await superAdmin());
       expect(r.status).toBe(402);
       expect(r.body.capability).toBe(LICENSE_CAPABILITIES.WHITE_LABEL);
     });

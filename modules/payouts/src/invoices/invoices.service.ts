@@ -710,9 +710,10 @@ export class PayoutsInvoicesService {
           items: draft.items.map(
             (item): InvoicePdfItem => ({
               date: item.occurredAt,
-              description:
-                (item.type === 'COMMISSION_REFUND' ? 'Devolución de comisión: ' : '') +
-                (item.description ?? 'Venta'),
+              // El rótulo («Devolución de comisión», «Venta») lo pone el PDF en
+              // los idiomas de la factura.
+              description: item.description ?? null,
+              commissionRefund: item.type === 'COMMISSION_REFUND',
               saleGross: item.saleGross,
               amount: item.amount,
               originalInvoice: item.originalInvoiceNumber,

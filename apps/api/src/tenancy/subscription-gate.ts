@@ -110,6 +110,10 @@ export const SUBSCRIPTION_GATE_EXEMPT: readonly ExemptRule[] = [
   { method: 'POST', path: '/auth/refresh' },
   { method: 'POST', path: '/auth/forgot-password' },
   { method: 'POST', path: '/auth/reset-password' },
+  // Saber si el enlace de acceso sigue vivo y pedir otro si caducó: sin esto,
+  // un administrador con el aula en pausa no podría ni entrar a pagar.
+  { method: 'POST', path: '/auth/reset-password/status' },
+  { method: 'POST', path: '/auth/reset-password/resend' },
   { method: '*', path: '/auth/mfa/' },
   { method: '*', path: '/auth/oidc/' },
   { method: '*', path: '/auth/saml/' },

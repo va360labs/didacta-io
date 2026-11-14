@@ -32,12 +32,19 @@
 : "${E2E_PG_USER:=didacta_test}"
 : "${E2E_PG_DB:=didacta_test}"
 : "${E2E_PG_PORT:=5433}"
-: "${DATABASE_URL:=postgresql://${E2E_PG_USER}:${E2E_PG_USER}@localhost:${E2E_PG_PORT}/${E2E_PG_DB}?schema=public}"
+# 127.0.0.1 y NO `localhost`, también en REDIS_URL: en Windows `localhost`
+# resuelve primero a ::1 y, con el puerto publicado solo en IPv4 (los
+# contenedores por sesión: `-p 127.0.0.1:<puerto>:5432`), cada conexión nueva
+# espera ~2 s al rechazo por IPv6. Medido: 2080 ms frente a 34 ms. Con eso las
+# transacciones interactivas de Prisma (maxWait 2 s) de una ráfaga de cobros no
+# llegan ni a empezar. El compose publica en todas las interfaces, así que
+# 127.0.0.1 vale igual para él.
+: "${DATABASE_URL:=postgresql://${E2E_PG_USER}:${E2E_PG_USER}@127.0.0.1:${E2E_PG_PORT}/${E2E_PG_DB}?schema=public}"
 
 # REDIS_URL NO es opcional en el arnés. Sin él `messaging-realtime.publisher`
 # degrada a no-op silencioso y los specs de realtime fallan sin decir por qué
 # (5 tests en la sesión anterior). `global-setup.ts` aborta si no está.
-: "${REDIS_URL:=redis://localhost:6380}"
+: "${REDIS_URL:=redis://127.0.0.1:6380}"
 
 # ── Secretos sintéticos de la API (mínimo 32 caracteres) ────────────────────
 : "${JWT_SECRET:=e2e-test-secret-must-be-at-least-32-chars-long-aaaa}"

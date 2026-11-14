@@ -7,10 +7,19 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Select } from '@/components/ui/select';
+import {
+  ACADEMY_LOCALE_NAMES,
+  ACADEMY_LOCALES,
+  catalogOf,
+  proposedAcademyLocale,
+  toSupportedLocale,
+  type AcademyLocale,
+} from '@/i18n/config';
 import { ApiHttpError, apiFetch } from '@/lib/api-client';
 import { authStorage } from '@/lib/auth-storage';
 import { apiErrorMessage } from '@/lib/i18n/api-error';
@@ -99,6 +108,19 @@ export function SetupWizard() {
   const [slugTouched, setSlugTouched] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [hostname, setHostname] = useState('');
+  // Idioma de la academia, preseleccionado con el de la interfaz (el del
+  // navegador de quien instala). Es el que manda en todo lo que el aula enseña
+  // por defecto: espacios, canal de profesores, encuestas, título de /join…
+  const uiLocale = useLocale();
+  const [academyLocale, setAcademyLocale] = useState<AcademyLocale>(
+    catalogOf(toSupportedLocale(uiLocale)),
+  );
+  // Ya en el cliente, el navegador de quien instala manda más que la interfaz
+  // (que sin aula sale en español). Solo al montar: luego decide la persona.
+  useEffect(() => {
+    setAcademyLocale(proposedAcademyLocale(navigator.languages ?? [navigator.language], uiLocale));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Modules — disponibles + selección del operador
   const [availableModules, setAvailableModules] = useState<AvailableModule[] | null>(null);
@@ -182,6 +204,7 @@ export function SetupWizard() {
             name: orgName.trim(),
             slug: orgSlug,
             primaryHostname: hostname.trim() || undefined,
+            locale: academyLocale,
           },
           admin: {
             name: adminName.trim(),
@@ -236,6 +259,8 @@ export function SetupWizard() {
             name={orgName}
             slug={orgSlug}
             hostname={hostname}
+            locale={academyLocale}
+            onChangeLocale={setAcademyLocale}
             showAdvanced={showAdvanced}
             onChangeName={setOrgName}
             onChangeSlug={(v) => {
@@ -390,6 +415,8 @@ function StepOrganization(props: {
   name: string;
   slug: string;
   hostname: string;
+  locale: AcademyLocale;
+  onChangeLocale: (v: AcademyLocale) => void;
   showAdvanced: boolean;
   onChangeName: (v: string) => void;
   onChangeSlug: (v: string) => void;
@@ -420,6 +447,22 @@ function StepOrganization(props: {
             autoFocus
             required
           />
+        </div>
+
+        <div className="space-y-1.5">
+          <Label htmlFor="academyLocale">{t('setup.localeLabel')}</Label>
+          <Select
+            id="academyLocale"
+            value={props.locale}
+            onChange={(e) => props.onChangeLocale(e.target.value as AcademyLocale)}
+          >
+            {ACADEMY_LOCALES.map((l) => (
+              <option key={l} value={l} lang={l}>
+                {ACADEMY_LOCALE_NAMES[l]}
+              </option>
+            ))}
+          </Select>
+          <p className="text-xs text-text-subtle">{t('setup.localeHint')}</p>
         </div>
 
         <div className="space-y-1.5">

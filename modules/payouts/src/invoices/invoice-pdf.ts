@@ -20,8 +20,11 @@ import type { VatRegime } from './vat.js';
  *  - la mención legal del régimen (inversión del sujeto pasivo, no sujeción…);
  *  - en una rectificativa: la factura que rectifica, su fecha y el motivo.
  *
- * Etiquetas en español; si el destinatario no está en España, también en
- * inglés (la ley admite cualquier idioma; el español es el de referencia).
+ * Etiquetas en español; si el destinatario no está en España, también en su
+ * segunda lengua (la ley admite cualquier idioma; el español es el de
+ * referencia): portugués para los países de lengua portuguesa (Brasil,
+ * Portugal…) e inglés para el resto (`invoiceSecondLang`). La mención legal
+ * del régimen de IVA se queda en español: cita la ley española.
  * Las fuentes estándar del PDF solo cubren Windows-1252: lo que se sale (p.
  * ej. «Ł») se translitera en vez de pintar un carácter roto.
  */
@@ -36,7 +39,10 @@ export interface InvoicePdfParty {
 
 export interface InvoicePdfItem {
   readonly date: Date;
-  readonly description: string;
+  /** Lo que se vendió; sin descripción, el PDF pone «Venta» en sus idiomas. */
+  readonly description: string | null;
+  /** Devolución de una comisión ya facturada: el PDF la rotula como tal. */
+  readonly commissionRefund?: boolean;
   readonly saleGross: number | null;
   /** IVA incluido, con signo. */
   readonly amount: number;
@@ -82,7 +88,18 @@ const COUNTRY_NAMES_ES: Readonly<Record<string, string>> = {
   CH: 'Suiza',
   US: 'Estados Unidos',
   CA: 'Canadá',
+  BR: 'Brasil',
 };
+
+/** Países de lengua portuguesa (ISO 3166-1 alfa-2). */
+const PORTUGUESE_SPEAKING = new Set(['BR', 'PT', 'AO', 'MZ', 'CV', 'GW', 'ST', 'TL']);
+
+/** Segunda lengua de la factura según el país del destinatario (`null`: solo español). */
+export function invoiceSecondLang(country: string): 'en' | 'pt' | null {
+  const code = country.trim().toUpperCase();
+  if (code === 'ES') return null;
+  return PORTUGUESE_SPEAKING.has(code) ? 'pt' : 'en';
+}
 
 /** Caracteres que pintan bien las fuentes estándar (Windows-1252). */
 const CP1252_EXTRA = new Set('€‚ƒ„…†‡ˆ‰Š‹ŒŽ‘’“”•–—˜™š›œžŸ');
@@ -140,8 +157,9 @@ function formatAddress(address: TaxAddress | null, country: string): string[] {
 }
 
 export async function renderInvoicePdf(input: InvoicePdfInput): Promise<Buffer> {
-  const bilingual = input.recipient.country !== 'ES';
-  const L = (es: string, en: string) => (bilingual ? `${es} / ${en}` : es);
+  const second = invoiceSecondLang(input.recipient.country);
+  const L = (es: string, en: string, pt: string) =>
+    second ? `${es} / ${second === 'pt' ? pt : en}` : es;
   const money = (amount: number) => formatInvoiceAmount(amount, input.currency);
   const rectifying = input.kind === 'RECTIFYING';
 
@@ -175,7 +193,13 @@ export async function renderInvoicePdf(input: InvoicePdfInput): Promise<Buffer> 
           .fontSize(9)
           .fillColor('#92400e')
           .text(
-            text(L('MODO PRUEBA — SIN VALIDEZ FISCAL', 'TEST MODE — NOT A VALID INVOICE')),
+            text(
+              L(
+                'MODO PRUEBA — SIN VALIDEZ FISCAL',
+                'TEST MODE — NOT A VALID INVOICE',
+                'MODO DE TESTE — SEM VALIDADE FISCAL',
+              ),
+            ),
             left,
             35,
             {
@@ -192,19 +216,23 @@ export async function renderInvoicePdf(input: InvoicePdfInput): Promise<Buffer> 
         .fontSize(18)
         .text(
           text(
-            rectifying ? L('Factura rectificativa', 'Corrective invoice') : L('Factura', 'Invoice'),
+            rectifying
+              ? L('Factura rectificativa', 'Corrective invoice', 'Fatura retificadora')
+              : L('Factura', 'Invoice', 'Fatura'),
           ),
           left,
           60,
         );
       doc.font('Helvetica').fontSize(10).fillColor('#334155');
-      doc.text(text(`${L('Número', 'Number')}: ${input.fullNumber}`));
+      doc.text(text(`${L('Número', 'Number', 'Número')}: ${input.fullNumber}`));
       doc.text(
-        text(`${L('Fecha de expedición', 'Issue date')}: ${formatInvoiceDate(input.issueDate)}`),
+        text(
+          `${L('Fecha de expedición', 'Issue date', 'Data de emissão')}: ${formatInvoiceDate(input.issueDate)}`,
+        ),
       );
       doc.text(
         text(
-          `${L('Periodo de las operaciones', 'Service period')}: ${formatInvoiceDate(input.periodFirstDay)} – ${formatInvoiceDate(input.periodLastDay)}`,
+          `${L('Periodo de las operaciones', 'Service period', 'Período das operações')}: ${formatInvoiceDate(input.periodFirstDay)} – ${formatInvoiceDate(input.periodLastDay)}`,
         ),
       );
       doc.moveDown(1);
@@ -230,7 +258,7 @@ export async function renderInvoicePdf(input: InvoicePdfInput): Promise<Buffer> 
         doc.font('Helvetica').fontSize(9.5).fillColor('#334155');
         const lines = [
           p.taxId ? `NIF: ${p.taxId}` : null,
-          p.vatId ? `${L('NIF-IVA', 'VAT ID')}: ${p.vatId}` : null,
+          p.vatId ? `${L('NIF-IVA', 'VAT ID', 'NIF-IVA')}: ${p.vatId}` : null,
           ...formatAddress(p.address, p.country),
           ...extra,
         ].filter((line): line is string => Boolean(line));
@@ -238,18 +266,24 @@ export async function renderInvoicePdf(input: InvoicePdfInput): Promise<Buffer> 
         return doc.y;
       };
       const yIssuer = party(
-        L('Emisor', 'Issuer'),
+        L('Emisor', 'Issuer', 'Emitente'),
         input.issuer,
         left,
         input.issuer.email ? [input.issuer.email] : [],
       );
       const yRecipient = party(
-        L('Destinatario', 'Customer'),
+        L('Destinatario', 'Customer', 'Destinatário'),
         input.recipient,
         left + colWidth + 20,
         input.recipient.complete
           ? []
-          : [L('Datos del destinatario pendientes de completar', 'Customer details pending')],
+          : [
+              L(
+                'Datos del destinatario pendientes de completar',
+                'Customer details pending',
+                'Dados do destinatário pendentes',
+              ),
+            ],
       );
       doc.y = Math.max(yIssuer, yRecipient) + 16;
       doc.x = left;
@@ -258,7 +292,7 @@ export async function renderInvoicePdf(input: InvoicePdfInput): Promise<Buffer> 
         doc.font('Helvetica-Bold').fontSize(10).fillColor('#0f172a');
         doc.text(
           text(
-            `${L('Rectifica', 'Corrects')}: ${input.rectifies
+            `${L('Rectifica', 'Corrects', 'Retifica')}: ${input.rectifies
               .map(
                 (r) =>
                   `${r.fullNumber} (${formatInvoiceDate(new Date(`${r.issueDate}T00:00:00Z`))})`,
@@ -271,7 +305,9 @@ export async function renderInvoicePdf(input: InvoicePdfInput): Promise<Buffer> 
         );
         if (input.rectificationReason) {
           doc.font('Helvetica').fontSize(10).fillColor('#334155');
-          doc.text(text(`${L('Motivo', 'Reason')}: ${input.rectificationReason}`), { width });
+          doc.text(text(`${L('Motivo', 'Reason', 'Motivo')}: ${input.rectificationReason}`), {
+            width,
+          });
         }
         doc.moveDown(0.8);
       }
@@ -282,6 +318,7 @@ export async function renderInvoicePdf(input: InvoicePdfInput): Promise<Buffer> 
           L(
             `Concepto: comisión de ${input.serviceName} por la gestión del cobro de tus ventas (impuestos incluidos).`,
             `Description: ${input.serviceName} fee for collecting your sales (taxes included).`,
+            `Descrição: comissão de ${input.serviceName} pela gestão do recebimento das suas vendas (impostos incluídos).`,
           ),
         ),
         left,
@@ -292,10 +329,14 @@ export async function renderInvoicePdf(input: InvoicePdfInput): Promise<Buffer> 
 
       // Tabla de líneas.
       const cols = [
-        { label: L('Fecha', 'Date'), w: 70, align: 'left' as const },
-        { label: L('Venta', 'Sale'), w: width - 70 - 90 - 100, align: 'left' as const },
-        { label: L('Importe venta', 'Sale amount'), w: 90, align: 'right' as const },
-        { label: L('Comisión', 'Fee'), w: 100, align: 'right' as const },
+        { label: L('Fecha', 'Date', 'Data'), w: 70, align: 'left' as const },
+        { label: L('Venta', 'Sale', 'Venda'), w: width - 70 - 90 - 100, align: 'left' as const },
+        {
+          label: L('Importe venta', 'Sale amount', 'Valor da venda'),
+          w: 90,
+          align: 'right' as const,
+        },
+        { label: L('Comisión', 'Fee', 'Comissão'), w: 100, align: 'right' as const },
       ];
       const row = (values: string[], bold: boolean) => {
         const y = doc.y;
@@ -328,9 +369,13 @@ export async function renderInvoicePdf(input: InvoicePdfInput): Promise<Buffer> 
         .stroke();
       doc.y += 4;
       for (const item of input.items) {
+        const sold = item.description ?? L('Venta', 'Sale', 'Venda');
+        const concept = item.commissionRefund
+          ? `${L('Devolución de comisión', 'Commission refund', 'Devolução de comissão')}: ${sold}`
+          : sold;
         const description = item.originalInvoice
-          ? `${item.description} (${L('factura', 'invoice')} ${item.originalInvoice})`
-          : item.description;
+          ? `${concept} (${L('factura', 'invoice', 'fatura')} ${item.originalInvoice})`
+          : concept;
         row(
           [
             formatInvoiceDate(item.date),
@@ -352,9 +397,9 @@ export async function renderInvoicePdf(input: InvoicePdfInput): Promise<Buffer> 
       // Totales.
       const rate = `${(input.vatRateBps / 100).toLocaleString('es-ES', { maximumFractionDigits: 2 })} %`;
       const totals: Array<[string, string, boolean]> = [
-        [L('Base imponible', 'Tax base'), money(input.taxBase), false],
-        [`${L('IVA', 'VAT')} (${rate})`, money(input.vatAmount), false],
-        [L('Total', 'Total'), money(input.total), true],
+        [L('Base imponible', 'Tax base', 'Base de cálculo'), money(input.taxBase), false],
+        [`${L('IVA', 'VAT', 'IVA')} (${rate})`, money(input.vatAmount), false],
+        [L('Total', 'Total', 'Total'), money(input.total), true],
       ];
       for (const [label, value, bold] of totals) {
         const y = doc.y;
@@ -376,10 +421,12 @@ export async function renderInvoicePdf(input: InvoicePdfInput): Promise<Buffer> 
           ? L(
               'Importe a tu favor: te devolvimos esta parte de nuestra comisión al hacer el reembolso y ya está en tus cobros. No tienes que hacer nada.',
               'In your favour: we returned this part of our fee when the refund was made, and it is already in your payouts. Nothing to do.',
+              'Valor a seu favor: devolvemos esta parte da nossa comissão quando o reembolso foi feito, e ela já está nos seus recebimentos. Você não precisa fazer nada.',
             )
           : L(
               'Importe ya cobrado: se descontó de las ventas que cobramos en tu nombre. No tienes que pagar nada.',
               'Already paid: deducted from the sales we collected on your behalf. Nothing to pay.',
+              'Valor já pago: foi descontado das vendas que recebemos em seu nome. Você não precisa pagar nada.',
             ),
       );
       doc.font('Helvetica').fontSize(8.5).fillColor('#475569');

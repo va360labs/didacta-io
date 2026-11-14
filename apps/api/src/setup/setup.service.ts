@@ -11,6 +11,11 @@ import { PrismaAuditLogService } from '../modules/prisma-audit-log.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { runSanctionedGlobalAccess } from '../tenancy/tenant-context.storage';
 import type { SetupInitDto } from './dto';
+import {
+  academyDateLocale,
+  writeAcademyLocale,
+  type AcademyLocaleWriter,
+} from '../common/academy-defaults';
 import { SessionRegistryService } from '../auth/session-registry.service';
 import { SetupTokenService } from './setup-token.service';
 
@@ -217,7 +222,10 @@ export class SetupService {
         });
       }
 
-      // 3. Usuario super_admin con password seteado inline.
+      // 3. Usuario super_admin con password seteado inline. Con idioma de la
+      //    academia, nace en ese idioma (no en el español por defecto de la
+      //    columna): su interfaz y sus correos salen así desde el principio.
+      const locale = dto.organization.locale;
       const user = await tx.user.create({
         data: {
           tenantId: tenant.id,
@@ -225,11 +233,20 @@ export class SetupService {
           name: dto.admin.name,
           passwordHash,
           status: 'ACTIVE',
+          ...(locale ? { locale: academyDateLocale(locale) } : {}),
         },
       });
       await tx.userRole.create({
         data: { userId: user.id, roleId: superAdminRole.id },
       });
+
+      // 3b. El idioma de la academia como AJUSTE del aula (ADR-061): es el que
+      //     manda en todo lo que el servidor escribe para todos (espacios,
+      //     canal de profesores, encuestas, textos por defecto de /join…).
+      //     Sin él, el aula deducía el idioma del perfil del admin.
+      if (locale) {
+        await writeAcademyLocale(tx as unknown as AcademyLocaleWriter, tenant.id, locale, user.id);
+      }
 
       // 4. Activación de módulos en el tenant inicial. La política:
       //    - Si el operador pasó `enabledModules`, activamos esa lista
@@ -267,6 +284,7 @@ export class SetupService {
         slug: created.tenant.slug,
         primaryHostname: hostname,
         adminEmail: created.user.email,
+        ...(dto.organization.locale ? { locale: dto.organization.locale } : {}),
       },
       ip: ctx.ip ?? undefined,
       userAgent: ctx.userAgent ?? undefined,

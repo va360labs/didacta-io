@@ -200,7 +200,7 @@ export function parseRichBlocks(body: string): RichBlock[] {
   return blocks;
 }
 
-function InlineNodes({ nodes }: { nodes: RichNode[] }) {
+function InlineNodes({ nodes, mentions = true }: { nodes: RichNode[]; mentions?: boolean }) {
   return (
     <>
       {nodes.map((n, i) => {
@@ -219,6 +219,8 @@ function InlineNodes({ nodes }: { nodes: RichNode[] }) {
               </a>
             );
           case 'mention':
+            // Fuera de la comunidad (una lección) una @ no es una mención.
+            if (!mentions) return <span key={i}>@{n.handle}</span>;
             return (
               <span key={i} className="rounded bg-brand-50 px-0.5 font-semibold text-brand-700">
                 @{n.handle}
@@ -236,13 +238,13 @@ function InlineNodes({ nodes }: { nodes: RichNode[] }) {
           case 'bold':
             return (
               <strong key={i} className="font-semibold">
-                <InlineNodes nodes={n.children} />
+                <InlineNodes nodes={n.children} mentions={mentions} />
               </strong>
             );
           case 'italic':
             return (
               <em key={i}>
-                <InlineNodes nodes={n.children} />
+                <InlineNodes nodes={n.children} mentions={mentions} />
               </em>
             );
           default:
@@ -261,7 +263,11 @@ const HEADING_SIZE: Record<1 | 2 | 3, string> = {
   3: 'text-[1.05em]',
 };
 
-export function RichBody({ body }: { body: string }) {
+/**
+ * `mentions={false}` fuera de la comunidad (lecciones de texto): las `@` se
+ * pintan como texto normal.
+ */
+export function RichBody({ body, mentions = true }: { body: string; mentions?: boolean }) {
   const blocks = useMemo(() => parseRichBlocks(body), [body]);
   return (
     <>
@@ -273,7 +279,7 @@ export function RichBody({ body }: { body: string }) {
               key={i}
               className={`font-display mb-1.5 mt-4 font-semibold text-text first:mt-0 ${HEADING_SIZE[blk.level]}`}
             >
-              <InlineNodes nodes={blk.children} />
+              <InlineNodes nodes={blk.children} mentions={mentions} />
             </Tag>
           );
         }
@@ -286,7 +292,7 @@ export function RichBody({ body }: { body: string }) {
             >
               {blk.items.map((item, j) => (
                 <li key={j}>
-                  <InlineNodes nodes={item} />
+                  <InlineNodes nodes={item} mentions={mentions} />
                 </li>
               ))}
             </Tag>
@@ -297,7 +303,7 @@ export function RichBody({ body }: { body: string }) {
             {blk.lines.map((line, j) => (
               <span key={j}>
                 {j > 0 ? <br /> : null}
-                <InlineNodes nodes={line} />
+                <InlineNodes nodes={line} mentions={mentions} />
               </span>
             ))}
           </p>

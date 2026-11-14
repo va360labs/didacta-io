@@ -51,7 +51,11 @@ describeWithDb('seed.sql — espacios de sistema en el idioma del aula', () => {
     | 'enManual'
     | 'sinNada'
     | 'ajusteEn'
-    | 'ajusteEs',
+    | 'ajusteEs'
+    | 'ptAjuste'
+    | 'ptSencilla'
+    | 'ptPerfil'
+    | 'ptManual',
     string
   >;
   let antesEs: SpaceRow[] = [];
@@ -176,6 +180,35 @@ describeWithDb('seed.sql — espacios de sistema en el idioma del aula', () => {
       data: { tenantId: t.ajusteEs, moduleName: 'academy', key: 'locale', valueJson: 'es' },
     });
 
+    // Portugués de Brasil: el aula guarda `pt` (el código del catálogo). Con la
+    // creadora en español, el ajuste manda.
+    t.ptAjuste = await aula('seed-pt-ajuste', 'es-ES');
+    await admin.tenantSetting.create({
+      data: { tenantId: t.ptAjuste, moduleName: 'academy', key: 'locale', valueJson: 'pt' },
+    });
+
+    // Aula pt del alta sencilla con sus tres espacios: solo le falta el cuarto.
+    t.ptSencilla = await aula('seed-pt-sencilla', 'es-ES');
+    await admin.tenantSetting.create({
+      data: {
+        tenantId: t.ptSencilla,
+        moduleName: 'simple-mode',
+        key: 'state',
+        valueJson: { locale: 'pt', completedAt: new Date().toISOString() },
+      },
+    });
+    await espacio(t.ptSencilla, 'general', 'Geral');
+    await espacio(t.ptSencilla, 'anuncios', 'Avisos');
+    await espacio(t.ptSencilla, 'preguntas', 'Perguntas e dúvidas');
+
+    // Sin ajuste ni alta sencilla: el perfil pt-BR de quien administra (antes
+    // se saltaba por no tener catálogo).
+    t.ptPerfil = await aula('seed-pt-perfil', 'pt-BR');
+
+    // Aula pt con «Materiais compartilhados» creado a mano (otro slug).
+    t.ptManual = await aula('seed-pt-manual', 'pt-BR');
+    await espacio(t.ptManual, 'materiais', ' MATERIAIS compartilhados');
+
     // Tres reinicios: dos con RLS forzada y uno como superusuario.
     applySqlFileViaPsql(SEED, { user: 'didacta_app' });
     applySqlFileViaPsql(SEED, { user: 'didacta_app' });
@@ -271,13 +304,43 @@ describeWithDb('seed.sql — espacios de sistema en el idioma del aula', () => {
     ]);
   });
 
+  it('aula en portugués (ajuste `pt`): los cuatro en portugués de Brasil', async () => {
+    const rows = await spaces(t.ptAjuste);
+    expect(rows.map((r) => [r.slug, r.title, r.description])).toEqual([
+      ['anuncios', 'Avisos', 'Comunicados oficiais da equipe de ensino.'],
+      ['general', 'Geral', 'Conversas abertas para toda a comunidade.'],
+      ['preguntas', 'Perguntas e dúvidas', 'Tire suas dúvidas com a ajuda da comunidade.'],
+      ['recursos', 'Materiais compartilhados', 'Modelos, anotações e materiais de apoio.'],
+    ]);
+    expect(rows.every((r) => r.isSystem)).toBe(true);
+  });
+
+  it('aula pt del alta sencilla: «Materiais compartilhados» una sola vez, el resto intacto', async () => {
+    const rows = await spaces(t.ptSencilla);
+    expect(rows.map((r) => [r.slug, r.title])).toEqual([
+      ['anuncios', 'Avisos'],
+      ['general', 'Geral'],
+      ['preguntas', 'Perguntas e dúvidas'],
+      ['recursos', 'Materiais compartilhados'],
+    ]);
+    expect(rows.some((r) => /recursos compartidos|shared resources/i.test(r.title))).toBe(false);
+  });
+
+  it('aula pt con «Materiais compartilhados» creado a mano: no se añade otro', async () => {
+    const rows = await spaces(t.ptManual);
+    expect(rows.map((r) => r.slug)).toEqual(['anuncios', 'general', 'materiais', 'preguntas']);
+  });
+
   it('el seed deduce el mismo idioma que academyLocale() para cada aula', async () => {
-    const esperado: Array<[string, 'es' | 'en', string]> = [
+    const esperado: Array<[string, 'es' | 'en' | 'pt', string]> = [
       [t.enSencilla, 'en', 'Shared resources'],
       [t.enPerfil, 'en', 'Shared resources'],
       [t.sinNada, 'es', 'Recursos compartidos'],
       [t.ajusteEn, 'en', 'Shared resources'],
       [t.ajusteEs, 'es', 'Recursos compartidos'],
+      [t.ptAjuste, 'pt', 'Materiais compartilhados'],
+      [t.ptSencilla, 'pt', 'Materiais compartilhados'],
+      [t.ptPerfil, 'pt', 'Materiais compartilhados'],
     ];
     for (const [tenantId, idioma, titulo] of esperado) {
       expect(await academyLocale(admin as never, tenantId)).toBe(idioma);

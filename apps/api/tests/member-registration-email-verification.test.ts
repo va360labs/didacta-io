@@ -406,8 +406,21 @@ describe('EmailVerificationService · idioma del email del código', () => {
     expect(enviados[0]!.html).toContain('<html lang="es">');
   });
 
+  it('destinatario con fila pt-BR: el código llega en portugués', async () => {
+    // Era parte del camino degradado de abajo mientras `pt-BR` no tuvo catálogo.
+    const { service, enviados } = makeServiceConUsuario({ locale: 'pt-BR' });
+    await service.requestCode(TENANT_ID, EMAIL, CTX);
+
+    const mail = enviados[0]!;
+    expect(mail.subject).toBe('Seu código de acesso');
+    expect(mail.html).toContain('<html lang="pt">');
+    expect(mail.text).toContain('Digite-o na tela de verificação para continuar');
+    expect(mail.html).not.toContain('Introdúcelo en la pantalla');
+    expect(mail.html).not.toContain('Enter it on the verification screen');
+  });
+
   it('CAMINO DEGRADADO: fila con locale en blanco o sin catálogo → idioma de referencia', async () => {
-    for (const locale of [null, '', '   ', 'pt-BR']) {
+    for (const locale of [null, '', '   ', 'fr-FR']) {
       const { service, enviados } = makeServiceConUsuario({ locale });
       await service.requestCode(TENANT_ID, EMAIL, CTX);
       expect(enviados[0]!.subject, String(locale)).toBe('Tu código de acceso');

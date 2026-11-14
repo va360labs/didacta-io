@@ -17,6 +17,7 @@ import {
   linksFromDrafts,
   type LinkDraft,
 } from '@/components/academy-profile-fields';
+import { PublicHomeToggle } from '@/components/admin/public-home-card';
 import { Icon } from '@/components/icon';
 import { ACADEMY_LOCALE_NAMES, ACADEMY_LOCALES, type AcademyLocale } from '@/i18n/config';
 import { academyApi, type Academy } from '@/lib/academy';
@@ -232,6 +233,16 @@ export function SimpleSettings() {
         </div>
       </form>
 
+      <section className="mt-4 rounded-2xl border border-border bg-surface p-4 sm:p-6">
+        <h2 className="text-lg font-bold text-text">{tMarca('paginaPublica.title')}</h2>
+        <p className="mt-1 max-w-[60ch] text-sm text-text-muted">
+          {tMarca('paginaPublica.description')}
+        </p>
+        <div className="mt-4">
+          <PublicHomeToggle variant="plain" />
+        </div>
+      </section>
+
       <Link
         href="/admin/settings?full=1"
         className="mt-4 flex items-center gap-3 rounded-2xl border border-border bg-surface p-4 hover:border-border-strong"
@@ -245,7 +256,7 @@ export function SimpleSettings() {
       </Link>
 
       <section className="mt-4 rounded-2xl bg-bg-subtle p-4 sm:p-5">
-        <h2 className="font-bold text-text">{t('modoTitulo')}</h2>
+        <h2 className="text-lg font-bold text-text">{t('modoTitulo')}</h2>
         <p className="mt-1 max-w-[60ch] text-sm text-text-muted">{t('modoTexto')}</p>
         <button
           type="button"
