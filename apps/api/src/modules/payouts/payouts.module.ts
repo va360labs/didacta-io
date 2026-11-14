@@ -47,10 +47,10 @@ import { getPlatformPaymentsConfig, type PlatformPaymentsConfig } from './platfo
  *
  *  - Modo plataforma APAGADO (sin `PAYMENTS_PLATFORM_STRIPE_SECRET_KEY`, toda
  *    Community): módulo vacío. Ni controladores, ni worker, ni filtro, ni
- *    cliente de Stripe. Las rutas `/modules/payouts/*` y las dos del pool no
+ *    cliente de Stripe. Las rutas `/modules/payouts/*` y las del pool no
  *    existen: la instalación tiene las mismas rutas que antes.
  *  - Modo plataforma ENCENDIDO: el webhook único, las rutas del creador
- *    («Tus ventas» incluidas), las tres del contrato del pool
+ *    («Tus ventas» incluidas), las cuatro del contrato del pool
  *    (`AdminTenantsPayoutsController`), el conciliador de cuentas, el barrido
  *    de liquidación y el conciliador de cobros. Y el módulo es GLOBAL: lo que exporta lo
  *    reciben con `@Optional()` piezas del host que no lo importan —

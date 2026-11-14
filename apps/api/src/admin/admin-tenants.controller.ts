@@ -555,6 +555,16 @@ export interface TenantPayoutsVolumeRow {
   readonly salesCount: number;
 }
 
+/**
+ * Respuesta de `GET /admin/tenants/payouts/countries`: los países (ISO 3166-1
+ * alfa-2, mayúsculas) donde el operador puede pagar a creadores. Es la misma
+ * lista que aplica el alta (`PAYMENTS_PLATFORM_SUPPORTED_COUNTRIES` o la de
+ * por defecto): Cloud la lee de aquí para no tener una copia que se desfase.
+ */
+export interface TenantPayoutsCountriesResponse {
+  readonly supportedCountries: readonly string[];
+}
+
 /** Respuesta de `GET /admin/tenants/:id/payouts`. */
 export interface TenantPayoutsResponse {
   readonly tenantId: string;
@@ -570,7 +580,7 @@ export interface TenantPayoutsResponse {
 }
 
 /**
- * Las dos rutas de cobros de plataforma del contrato del pool. Viven en una
+ * Las rutas de cobros de plataforma del contrato del pool. Viven en una
  * clase APARTE de `AdminTenantsController` porque solo existen con el modo
  * plataforma encendido: las registra `PayoutsModule.register()`, y sin
  * `PAYMENTS_PLATFORM_STRIPE_SECRET_KEY` la instalación tiene exactamente las
@@ -606,6 +616,25 @@ export class AdminTenantsPayoutsController {
     const from = new Date(`${query.from}T00:00:00.000Z`);
     const toExclusive = new Date(Date.parse(`${query.to}T00:00:00.000Z`) + 86_400_000);
     return this.runtime.reports.volume(from, toExclusive);
+  }
+
+  // También ANTES de las rutas con `:id`, por la misma razón.
+  @Get('payouts/countries')
+  @AllowProvisioning()
+  @ApiOperation({
+    summary:
+      'Países (ISO alfa-2, mayúsculas) donde la plataforma puede pagar a creadores. Solo existe con el modo plataforma encendido.',
+    description:
+      'La misma lista que aplica el alta del creador (`PAYMENTS_PLATFORM_SUPPORTED_COUNTRIES` o la de por defecto). Cloud la lee de aquí para tener una sola fuente.',
+  })
+  getPayoutsCountries(
+    @Req() req: FastifyRequest,
+    @CurrentUser() user: SessionClaims | undefined,
+  ): TenantPayoutsCountriesResponse {
+    requireAdminActor(user, req);
+    return {
+      supportedCountries: this.runtime.accounts.supportedCountries.map((c) => c.toUpperCase()),
+    };
   }
 
   @Put(':id/payouts-settings')

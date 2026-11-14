@@ -678,6 +678,26 @@ describeWithDb('mod.payouts E2 — alta y estado contra Postgres como didacta_ap
         expect(res.json().code).toBe('ADMIN_TENANT_NOT_FOUND');
       }
     });
+
+    it('payouts/countries sin credencial → 401; con JWT de tenant_admin → 403', async () => {
+      const none = await call('GET', '/admin/tenants/payouts/countries');
+      expect(none.statusCode).toBe(401);
+      const tenantAdmin = await call('GET', '/admin/tenants/payouts/countries', {
+        auth: bearer(tenants.A.jwt),
+      });
+      expect(tenantAdmin.statusCode).toBe(403);
+    });
+
+    it('payouts/countries con credencial: exactamente `{ supportedCountries }`, la lista del alta', async () => {
+      const res = await call('GET', '/admin/tenants/payouts/countries', { auth: provisioning });
+      expect(res.statusCode).toBe(200);
+      const body = res.json();
+      expect(Object.keys(body)).toEqual(['supportedCountries']);
+      expect(body.supportedCountries).toEqual([...CONFIG.supportedCountries]);
+      expect(body.supportedCountries).toContain('ES');
+      expect(body.supportedCountries).not.toContain('BR');
+      for (const country of body.supportedCountries) expect(country).toMatch(/^[A-Z]{2}$/);
+    });
   });
 
   describe('modo plataforma apagado', () => {
@@ -689,6 +709,7 @@ describeWithDb('mod.payouts E2 — alta y estado contra Postgres como didacta_ap
       ['POST', '/modules/payouts/webhook'],
       ['PUT', `/admin/tenants/00000000-0000-4000-8000-000000000001/payouts-settings`],
       ['GET', `/admin/tenants/00000000-0000-4000-8000-000000000001/payouts`],
+      ['GET', '/admin/tenants/payouts/countries'],
     ] as const)('%s %s no existe (404)', async (method, url) => {
       const res = await call(method, url, {
         target: appOff,
