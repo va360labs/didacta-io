@@ -85,6 +85,7 @@ import {
 import {
   buildGamificationModule,
   GamificationService,
+  RetentionService,
   type GamificationEventPublisher,
 } from '@didacta/mod-gamification';
 import { communityModule, CommunityService } from '@didacta/mod-community';
@@ -106,6 +107,7 @@ import {
   LearningPathsService,
   ScormService,
   type CourseSaleChecker as LearningCourseSaleChecker,
+  type CourseLevelGateChecker,
 } from '@didacta/mod-learning';
 import { themingModule, ThemingService } from '@didacta/mod-theming';
 import { zoomLiveModule, ZoomLiveService } from '@didacta/mod-zoom-live';
@@ -197,6 +199,8 @@ export class ModuleRegistryService implements OnModuleInit {
   private surveys?: SurveysService;
   private resources?: ResourcesService;
   private gamification?: GamificationService;
+  private retention?: RetentionService;
+  private courseSaleChecker?: LearningCourseSaleChecker;
   /** Cache de activación por (tenant, módulo) para consultas fuera del path HTTP. */
   private readonly moduleEnabledCache = new Map<string, { enabled: boolean; expiresAt: number }>();
 
@@ -227,7 +231,33 @@ export class ModuleRegistryService implements OnModuleInit {
     const cursoALaVenta: LearningCourseSaleChecker = buildCourseSaleChecker(() =>
       this.factory.getPrisma(),
     );
-    this.learning = new LearningService(prisma, context, cursoALaVenta);
+    // «Se desbloquea en el nivel N» (mod.gamification). mod.learning no lee las
+    // tablas de la gamificación: se le pasa esta pregunta ya resuelta. Si el
+    // aula tiene los puntos apagados, no se cierra nada (un nivel que nadie
+    // puede alcanzar no puede retener contenido).
+    const cierrePorNivel: CourseLevelGateChecker = async (tenantId, userId, courseId) => {
+      if (!this.retention) return null;
+      if (!(await this.isModuleEnabledForTenant(tenantId, 'mod.gamification'))) return null;
+      const gate = await this.retention.courseGate(tenantId, userId, courseId);
+      if (!gate) return null;
+      const info = (s: {
+        levelNumber: number;
+        levelName: string;
+        minPoints: number;
+        pointsMissing: number;
+      }) => ({
+        levelNumber: s.levelNumber,
+        levelName: s.levelName,
+        minPoints: s.minPoints,
+        pointsMissing: s.pointsMissing,
+      });
+      return {
+        course: gate.course ? info(gate.course) : null,
+        modules: Object.fromEntries(Object.entries(gate.modules).map(([id, s]) => [id, info(s)])),
+      };
+    };
+    this.courseSaleChecker = cursoALaVenta;
+    this.learning = new LearningService(prisma, context, cursoALaVenta, cierrePorNivel);
     // La ruta de aprendizaje matricula con la regla de `LearningService`: es
     // lo que impide que apuntarse a una ruta regale sus cursos de pago.
     this.learningPaths = new LearningPathsService(prisma, context, this.learning);
@@ -667,6 +697,9 @@ export class ModuleRegistryService implements OnModuleInit {
       },
     };
     this.gamification = new GamificationService(prisma, gamificationPublisher);
+    // Retención estilo Skool sobre el mismo libro de puntos: desbloqueo por
+    // nivel, rachas, insignias, premios automáticos y celebraciones.
+    this.retention = new RetentionService(prisma, gamificationPublisher);
     const gamificationModule = buildGamificationModule();
 
     // mod.messaging: salas por espacio, DMs y canal alumno↔profesores.
@@ -1218,6 +1251,23 @@ export class ModuleRegistryService implements OnModuleInit {
   }
 
   /** Puntos, niveles y retos. SIEMPRE inicializado tras el boot (sin gate de env). */
+  /**
+   * ¿El aula cobra por este curso? La misma regla que impide la automatrícula
+   * (catálogos de cobro + grupos de pago). La usa el desbloqueo por nivel para
+   * no regalar un curso de pago sin que el creador lo decida.
+   */
+  async isCourseSold(tenantId: string, courseId: string): Promise<boolean> {
+    if (!this.courseSaleChecker) return false;
+    return this.courseSaleChecker(tenantId, courseId);
+  }
+
+  getRetentionService(): RetentionService {
+    if (!this.retention) {
+      throw new Error('mod.gamification (retención) no está inicializado (boot incompleto).');
+    }
+    return this.retention;
+  }
+
   getGamificationService(): GamificationService {
     if (!this.gamification) {
       throw new Error('mod.gamification no está inicializado (boot incompleto).');

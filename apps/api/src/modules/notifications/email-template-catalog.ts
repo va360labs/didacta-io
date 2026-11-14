@@ -244,6 +244,20 @@ export const HUB_TEMPLATE_DEFAULTS: Record<string, TemplateDef> = {
     subject: 'Sobre tu solicitud: {{perkTitle}}',
     body: '{{statusText}}{{#staffNote}}\n\n{{staffNote}}{{/staffNote}}',
   },
+  // Retención (mod.gamification): contenido desbloqueado por nivel, insignias
+  // y premios automáticos. Se entregan solos, así que el aviso ES la entrega.
+  'gamification.content.unlocked': {
+    subject: 'Ya tienes disponible «{{courseTitle}}»',
+    body: 'Has llegado al nivel {{levelName}} y se ha abierto «{{courseTitle}}» en {{tenantName}}.\n\nYa puedes entrar a verlo.',
+  },
+  'gamification.badge.earned': {
+    subject: 'Nueva insignia: {{badgeName}}',
+    body: 'Acabas de conseguir la insignia «{{badgeName}}» en {{tenantName}}. La tienes en tu perfil.',
+  },
+  'gamification.reward.granted': {
+    subject: 'Tu premio: {{rewardTitle}}',
+    body: 'Te has ganado «{{rewardTitle}}» en {{tenantName}}.{{#rewardMessage}}\n\n{{rewardMessage}}{{/rewardMessage}}{{#rewardCode}}\n\nTu código: {{rewardCode}}{{/rewardCode}}{{#rewardUrl}}\n\n{{rewardUrl}}{{/rewardUrl}}\n\nLo tienes guardado en la sección de Retos.',
+  },
   // Cobros de plataforma (mod.payouts): aviso de cada venta a quien administra
   // el aula, en la campana. Una clave por tipo (curso, alta, renovación) para
   // no anidar secciones. El correo de la misma venta lo compone el notificador
@@ -383,6 +397,18 @@ export const HUB_TEMPLATE_DEFAULTS_EN: Record<string, TemplateDef> = {
     subject: 'About your request: {{perkTitle}}',
     body: '{{statusText}}{{#staffNote}}\n\n{{staffNote}}{{/staffNote}}',
   },
+  'gamification.content.unlocked': {
+    subject: '"{{courseTitle}}" is now available to you',
+    body: 'You reached the {{levelName}} level and "{{courseTitle}}" is now open at {{tenantName}}.\n\nYou can start it right away.',
+  },
+  'gamification.badge.earned': {
+    subject: 'New badge: {{badgeName}}',
+    body: 'You just earned the "{{badgeName}}" badge at {{tenantName}}. It is on your profile.',
+  },
+  'gamification.reward.granted': {
+    subject: 'Your reward: {{rewardTitle}}',
+    body: 'You earned "{{rewardTitle}}" at {{tenantName}}.{{#rewardMessage}}\n\n{{rewardMessage}}{{/rewardMessage}}{{#rewardCode}}\n\nYour code: {{rewardCode}}{{/rewardCode}}{{#rewardUrl}}\n\n{{rewardUrl}}{{/rewardUrl}}\n\nIt is saved in the Challenges section.',
+  },
   'payouts.sale.course': {
     subject: 'New sale: "{{product}}" ({{amount}})',
     body: '{{#buyer}}{{buyer}}{{/buyer}}{{^buyer}}Someone{{/buyer}} bought "{{product}}" for {{amount}}. You have the details in Sales.{{#held}}\n\nUntil you complete your tax details, the money from this sale stays on hold.{{/held}}',
@@ -517,6 +543,18 @@ export const HUB_TEMPLATE_DEFAULTS_PT: Record<string, TemplateDef> = {
   'gamification.perk.handled': {
     subject: 'Sobre sua solicitação: {{perkTitle}}',
     body: '{{statusText}}{{#staffNote}}\n\n{{staffNote}}{{/staffNote}}',
+  },
+  'gamification.content.unlocked': {
+    subject: '"{{courseTitle}}" já está disponível para você',
+    body: 'Você chegou ao nível {{levelName}} e "{{courseTitle}}" foi liberado em {{tenantName}}.\n\nJá pode começar.',
+  },
+  'gamification.badge.earned': {
+    subject: 'Nova insígnia: {{badgeName}}',
+    body: 'Você acaba de conquistar a insígnia "{{badgeName}}" em {{tenantName}}. Ela está no seu perfil.',
+  },
+  'gamification.reward.granted': {
+    subject: 'Seu prêmio: {{rewardTitle}}',
+    body: 'Você ganhou "{{rewardTitle}}" em {{tenantName}}.{{#rewardMessage}}\n\n{{rewardMessage}}{{/rewardMessage}}{{#rewardCode}}\n\nSeu código: {{rewardCode}}{{/rewardCode}}{{#rewardUrl}}\n\n{{rewardUrl}}{{/rewardUrl}}\n\nEle fica guardado na seção de Desafios.',
   },
   'payouts.sale.course': {
     subject: 'Nova venda: “{{product}}” ({{amount}})',
@@ -1264,6 +1302,42 @@ const HUB_TEMPLATE_META: Record<
       { name: 'perkTitle', description: 'Beneficio solicitado' },
       { name: 'statusText', description: 'Frase según el resultado (aprobada, hecha o rechazada)' },
       { name: 'staffNote', description: 'Respuesta del equipo (puede ir vacío)' },
+      { name: 'tenantName', description: 'Nombre de la plataforma' },
+    ],
+  },
+  'gamification.content.unlocked': {
+    name: 'Contenido desbloqueado por nivel',
+    description:
+      'Cuando un miembro llega al nivel que abre un curso o una sección y ya puede entrar.',
+    category: 'community',
+    channels: ['IN_APP', 'EMAIL'],
+    variables: [
+      { name: 'courseTitle', description: 'Curso que se ha abierto' },
+      { name: 'levelName', description: 'Nivel alcanzado' },
+      { name: 'tenantName', description: 'Nombre de la plataforma' },
+    ],
+  },
+  'gamification.badge.earned': {
+    name: 'Insignia conseguida',
+    description: 'Cuando un miembro gana una insignia (primera publicación, racha, nivel…).',
+    category: 'community',
+    channels: ['IN_APP', 'EMAIL'],
+    variables: [
+      { name: 'badgeName', description: 'Nombre de la insignia' },
+      { name: 'tenantName', description: 'Nombre de la plataforma' },
+    ],
+  },
+  'gamification.reward.granted': {
+    name: 'Premio entregado',
+    description:
+      'Cuando un miembro llega al nivel o a los puntos de un premio automático: el aviso es la entrega.',
+    category: 'community',
+    channels: ['IN_APP', 'EMAIL'],
+    variables: [
+      { name: 'rewardTitle', description: 'Nombre del premio' },
+      { name: 'rewardMessage', description: 'Mensaje del premio (puede ir vacío)' },
+      { name: 'rewardCode', description: 'Código de descuento (puede ir vacío)' },
+      { name: 'rewardUrl', description: 'Enlace del premio (puede ir vacío)' },
       { name: 'tenantName', description: 'Nombre de la plataforma' },
     ],
   },

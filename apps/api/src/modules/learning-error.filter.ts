@@ -36,6 +36,7 @@ const STATUS_BY_CODE: Record<string, number> = {
   // Lección fuera del límite del periodo de prueba de la membresía: se
   // desbloquea pagando (el front pinta el CTA "Pagar ahora"), no por fecha.
   TRIAL_CONTENT_LOCKED: HttpStatus.FORBIDDEN,
+  LEVEL_CONTENT_LOCKED: HttpStatus.FORBIDDEN,
   SCORM_PACKAGE_INVALID: HttpStatus.BAD_REQUEST,
   SCORM_LESSON_TYPE_MISMATCH: HttpStatus.UNPROCESSABLE_ENTITY,
   SCORM_PACKAGE_NOT_FOUND: HttpStatus.NOT_FOUND,

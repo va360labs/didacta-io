@@ -5,6 +5,8 @@
 
 import { Injectable, Logger, type OnModuleInit } from '@nestjs/common';
 import type { NotificationTerm, NotificationValue } from '@didacta/core-kernel';
+import { celebrationLocale, defaultBadgeName } from '@didacta/mod-gamification';
+import { academyLocale, type AcademyDefaultsPrisma } from '../../common/academy-defaults';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ModuleContextFactory } from '../module-context.factory';
 
@@ -36,6 +38,18 @@ interface PerkHandledPayload {
   status: 'APPROVED' | 'DONE' | 'REJECTED';
   perkTitle: string;
   staffNote: string | null;
+}
+
+interface BadgeAwardedPayload {
+  userId: string;
+  kind: string;
+  threshold: number;
+  name: string | null;
+}
+
+interface RewardGrantedPayload {
+  userId: string;
+  grantId: string;
 }
 
 interface PerkRequestedPayload {
@@ -138,7 +152,48 @@ export class GamificationNotificationsBridge implements OnModuleInit {
       await this.notifyStaff(event.metadata.tenantId, 'gamification.staff.perk_requested');
     });
 
-    this.logger.log('Avisos de gamificación suscritos (5 eventos)');
+    // Retención: la insignia y el premio se entregan solos; el aviso ES la
+    // entrega (el premio lleva dentro su mensaje, enlace o código).
+    bus.subscribe<BadgeAwardedPayload>('gamification.badge.awarded', async (event) => {
+      const tenantId = event.metadata.tenantId;
+      if (!tenantId) return;
+      const locale = celebrationLocale(
+        await academyLocale(this.prisma as unknown as AcademyDefaultsPrisma, tenantId),
+      );
+      await this.notifyMember(tenantId, event.data.userId, {
+        templateKey: 'gamification.badge.earned',
+        variables: {
+          badgeName:
+            event.data.name ?? defaultBadgeName(event.data.kind, event.data.threshold, locale),
+        },
+      });
+    });
+
+    bus.subscribe<RewardGrantedPayload>('gamification.reward.granted', async (event) => {
+      const tenantId = event.metadata.tenantId;
+      if (!tenantId) return;
+      // Se avisa con la COPIA registrada (lo que se entregó), no con el premio
+      // tal y como esté ahora.
+      const grant = await this.prisma.modGamificationRewardGrant.findFirst({
+        where: { id: event.data.grantId, tenantId },
+        select: { delivered: true },
+      });
+      const d = grant?.delivered as
+        | { title?: string; message?: string | null; url?: string | null; code?: string | null }
+        | undefined;
+      if (!d?.title) return;
+      await this.notifyMember(tenantId, event.data.userId, {
+        templateKey: 'gamification.reward.granted',
+        variables: {
+          rewardTitle: d.title,
+          rewardMessage: d.message ?? '',
+          rewardCode: d.code ?? '',
+          rewardUrl: d.url ?? '',
+        },
+      });
+    });
+
+    this.logger.log('Avisos de gamificación suscritos (7 eventos)');
   }
 
   /** Al miembro: por dentro y por email, con plantilla editable por el tenant. */
