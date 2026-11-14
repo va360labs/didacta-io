@@ -21,28 +21,24 @@ import {
   feePercent,
   formatStripeAmount,
   payoutsApi,
-  saleStatusView,
-  type PayoutsSaleDto,
   type PayoutsStatusDto,
   type PayoutsSummaryDto,
   type PayoutsTaxProfileDto,
 } from '@/lib/payouts';
+import { SALES_REFRESHED_EVENT, SalesLedger } from '@/components/sales/sales-ledger';
+import {
+  PriceEditor,
+  TakeHomeEstimate,
+  usePriceOptions,
+} from '@/components/simple-price/price-editor';
 import { referralsAdminApi, type AdminCommissionRow, type ReferralsConfig } from '@/lib/referrals';
 import { CashPayoutsAdmin } from './cash-payouts-admin';
 import { fetchTenantContext } from '@/lib/tenant-context';
 import { getPublicCatalog } from '@/lib/catalog';
-import { parseAmount, saleState, simpleModeApi, type StartHereView } from '@/lib/simple-mode';
+import { saleState, simpleModeApi, type StartHereView } from '@/lib/simple-mode';
 import { cn } from '@/lib/utils';
 import { useModernUrl } from '@/lib/use-modern-url';
 import { bpsToPercentInput, percentToBps, primaryCurrency, referralSales } from './sales-math';
-
-const TONE: Record<string, string> = {
-  neutral: 'bg-bg-subtle text-text-muted',
-  info: 'bg-brand-50 text-brand-700',
-  success: 'bg-success-50 text-success-700',
-  warning: 'bg-warning-50 text-warning-700',
-  danger: 'bg-danger-50 text-danger-700',
-};
 
 /**
  * «Ventas» del MODO SENCILLO: lo vendido y lo que llega al banco, el enlace de
@@ -68,31 +64,27 @@ export function SimpleSales({
   onReturnHandled?: () => void;
 }) {
   const t = useTranslations('modoSencilloVentas');
-  const tPagos = useTranslations('adminPagos.payouts.sales');
   // `#referidos` y `#enlace`, las anclas de antes (un enlace guardado), pasan a
   // `#referrals` y `#sale-link` y la página baja a la sección.
   useModernUrl();
   const [view, setView] = useState<StartHereView | null>(null);
   const [status, setStatus] = useState<PayoutsStatusDto | null>(null);
   const [summary, setSummary] = useState<PayoutsSummaryDto | null>(null);
-  const [sales, setSales] = useState<PayoutsSaleDto[]>([]);
   const [tax, setTax] = useState<PayoutsTaxProfileDto | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState(false);
 
   const load = useCallback(async () => {
     try {
-      const [v, st, sum, page, taxProfile] = await Promise.all([
+      const [v, st, sum, taxProfile] = await Promise.all([
         simpleModeApi.startHere(),
         mode === 'platform' ? payoutsApi.status().catch(() => null) : Promise.resolve(null),
         mode === 'platform' ? payoutsApi.summary().catch(() => null) : Promise.resolve(null),
-        mode === 'platform' ? payoutsApi.sales(1, 6).catch(() => null) : Promise.resolve(null),
         mode === 'platform' ? payoutsApi.taxProfile().catch(() => null) : Promise.resolve(null),
       ]);
       setView(v);
       setStatus(st);
       setSummary(sum);
-      setSales(page?.items ?? []);
       setTax(taxProfile);
       setError(false);
     } catch {
@@ -105,6 +97,24 @@ export function SimpleSales({
   useEffect(() => {
     void load();
   }, [load]);
+
+  // La lista se refresca sola (al volver a la pestaña y cada minuto con ella a
+  // la vista): las cifras de arriba la siguen, sin recargar lo demás.
+  useEffect(() => {
+    const onRefreshed = () => {
+      simpleModeApi
+        .startHere()
+        .then((v) => setView(v))
+        .catch(() => undefined);
+      if (mode !== 'platform') return;
+      payoutsApi
+        .summary()
+        .then((sum) => setSummary(sum))
+        .catch(() => undefined);
+    };
+    window.addEventListener(SALES_REFRESHED_EVENT, onRefreshed);
+    return () => window.removeEventListener(SALES_REFRESHED_EVENT, onRefreshed);
+  }, [mode]);
 
   if (!loaded) return <div className="skeleton h-96 w-full max-w-4xl" />;
   if (error || !view) return <p className="text-text-muted">{t('error')}</p>;
@@ -287,78 +297,24 @@ export function SimpleSales({
                 )}
               </section>
             )
-          ) : null}
-          {mode === 'platform' && sales.length > 0 ? (
-            <section
-              className="min-w-0 rounded-2xl border border-border bg-surface"
-              aria-label={t('lista.titulo')}
-            >
-              <div className="flex items-center justify-between px-4 pt-4 pb-1">
-                <h2 className="text-base font-bold text-text">{t('lista.titulo')}</h2>
-                <Link
-                  href={completeHref}
-                  className="text-sm font-bold text-brand-600 hover:underline"
-                >
-                  {t('lista.verTodas')}
-                </Link>
-              </div>
-              <ul>
-                {sales.map((s) => {
-                  const st = saleStatusView(s);
-                  return (
-                    <li
-                      key={s.id}
-                      className="flex items-center gap-3 border-t border-border-soft px-4 py-3 first:border-t-0"
-                    >
-                      <div className="min-w-0 flex-1">
-                        <div className="truncate font-semibold text-text">
-                          {s.description ?? t('lista.sinDescripcion')}
-                        </div>
-                        {s.chargedAt ? (
-                          <div className="text-[13px] text-text-subtle">
-                            {formatDate(s.chargedAt, { dateStyle: 'medium' })}
-                          </div>
-                        ) : null}
-                      </div>
-                      <div className="text-right">
-                        <div className="font-bold text-text tabular-nums">
-                          {formatStripeAmount(s.presentmentAmount, s.presentmentCurrency)}
-                        </div>
-                        <span
-                          className={cn(
-                            'mt-0.5 inline-block rounded-full px-2 py-0.5 text-[11px] font-bold',
-                            TONE[st.tone],
-                          )}
-                        >
-                          {tPagos(`status.${st.key}`)}
-                        </span>
-                      </div>
-                    </li>
-                  );
-                })}
-              </ul>
-            </section>
-          ) : mode !== 'platform' && view ? (
-            // Con la cuenta de pagos propia no hay lista de cobros de la
-            // plataforma: el número de ventas real (pedidos pagados y
-            // suscripciones) y el detalle en el panel de negocio.
+          ) : view ? (
+            // Con la cuenta de pagos propia no hay resumen de cobros de la
+            // plataforma: cuántas ventas lleva (pedidos pagados y
+            // suscripciones). El detalle de cada una, en la lista de abajo.
             <section
               className="min-w-0 rounded-2xl border border-border bg-surface p-5"
               aria-label={t('propias.titulo')}
             >
               <div className="text-sm font-semibold text-text-muted">{t('propias.titulo')}</div>
-              <div className="mt-1 text-[32px] leading-none font-extrabold tracking-tight text-text tabular-nums">
+              <div
+                className="mt-1 text-[32px] leading-none font-extrabold tracking-tight text-text tabular-nums"
+                data-testid="ventas-propias-cuenta"
+              >
                 {view.sales.count}
               </div>
               <p className="mt-2 max-w-[52ch] text-sm text-text-muted">
                 {view.sales.count > 0 ? t('propias.texto') : t('propias.vacio')}
               </p>
-              <Link
-                href="/admin?tab=business"
-                className="mt-3 inline-block text-sm font-bold text-brand-600 hover:underline"
-              >
-                {t('propias.detalle')}
-              </Link>
             </section>
           ) : null}
         </div>
@@ -367,6 +323,16 @@ export function SimpleSales({
           view={view}
           feeBps={summary?.feeBps ?? status?.feeBps ?? null}
           onPriceChanged={load}
+        />
+      </div>
+
+      {/* Todas las ventas con los datos de cada una, a lo ancho. Sin ninguna
+          venta todavía ya lo dicen las tarjetas de arriba (y la lista sigue
+          mirando: aparece sola con la primera). */}
+      <div className="mt-6">
+        <SalesLedger
+          hideWhenEmpty={mode === 'platform' ? !headline : view.sales.count === 0}
+          onChanged={() => void load()}
         />
       </div>
 
@@ -392,6 +358,7 @@ function SaleLinkCard({
   const [editing, setEditing] = useState(false);
   useEffect(() => setOrigin(window.location.origin), []);
   const offer = view.offer;
+  const { fees } = usePriceOptions(offer?.currency ?? 'eur');
   const published = view.salePath !== null;
   // Publicado no basta: sin cobros conectados nadie puede pagar.
   const state = saleState(view);
@@ -491,7 +458,7 @@ function SaleLinkCard({
             <div className="flex items-center justify-between gap-3">
               <div>
                 <div className="text-sm text-text-muted">{t('precio')}</div>
-                <div className="font-bold text-text tabular-nums">
+                <div className="font-bold text-text tabular-nums" data-testid="ventas-precio">
                   {offer.amountCents > 0
                     ? formatCents(offer.amountCents, offer.currency.toUpperCase())
                     : '-'}{' '}
@@ -499,6 +466,14 @@ function SaleLinkCard({
                     {offer.kind === 'course' ? t('pagoUnico') : t('alMes')}
                   </span>
                 </div>
+                {offer.amountCents > 0 ? (
+                  <TakeHomeEstimate
+                    amount={offer.amountCents}
+                    currency={offer.currency}
+                    fees={fees}
+                    className="mt-1"
+                  />
+                ) : null}
               </div>
               <button
                 type="button"
@@ -530,72 +505,25 @@ function PriceForm({
   onSaved: () => Promise<void>;
 }) {
   const t = useTranslations('modoSencilloVentas.enlace');
+  const tCurso = useTranslations('modoSencillo.curso.precioVenta');
   const offer = view.offer!;
-  const [currencies, setCurrencies] = useState<string[]>([offer.currency]);
-  const [currency, setCurrency] = useState(offer.currency);
-  const [amount, setAmount] = useState(
-    offer.amountCents > 0 ? String(offer.amountCents / 100).replace('.', ',') : '',
-  );
-  const [error, setError] = useState<string | null>(null);
-  const [saving, setSaving] = useState(false);
-  useEffect(() => {
-    simpleModeApi
-      .currencies()
-      .then((r) => setCurrencies(r.currencies))
-      .catch(() => undefined);
-  }, []);
-  async function save() {
-    const cents = parseAmount(amount, currency);
-    if (!cents) return setError(t('precioInvalido'));
-    setSaving(true);
-    setError(null);
-    try {
-      await simpleModeApi.updatePrice({ amountCents: cents, currency });
-      await onSaved();
-    } catch {
-      setError(t('precioError'));
-    } finally {
-      setSaving(false);
-    }
-  }
   return (
-    <div>
-      <div className="grid grid-cols-[minmax(0,1fr)_100px] gap-2">
-        <input
-          aria-label={t('precio')}
-          inputMode="decimal"
-          value={amount}
-          onChange={(e) => setAmount(e.target.value)}
-          className="h-11 rounded-xl border border-border bg-surface px-3 text-lg font-bold text-text tabular-nums outline-none focus:border-brand-600 focus:ring-4 focus:ring-brand-100"
-        />
-        <select
-          aria-label={t('precio')}
-          value={currency}
-          onChange={(e) => setCurrency(e.target.value)}
-          className="h-11 rounded-xl border border-border bg-surface px-2 font-semibold text-text"
-        >
-          {currencies.map((c) => (
-            <option key={c} value={c}>
-              {c.toUpperCase()}
-            </option>
-          ))}
-        </select>
-      </div>
-      {error ? <p className="mt-2 text-sm text-danger-700">{error}</p> : null}
-      <div className="mt-3 flex items-center gap-3">
-        <button
-          type="button"
-          onClick={save}
-          disabled={saving}
-          className="inline-flex h-10 items-center rounded-xl bg-brand-600 px-4 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50"
-        >
-          {t('guardar')}
-        </button>
-        <button type="button" onClick={onCancel} className="text-sm font-semibold text-text-muted">
-          {t('cancelar')}
-        </button>
-      </div>
-    </div>
+    <PriceEditor
+      amountCents={offer.amountCents}
+      currency={offer.currency}
+      amountLabel={t('precio')}
+      currencyLabel={tCurso('moneda')}
+      saveLabel={t('guardar')}
+      cancelLabel={t('cancelar')}
+      invalidText={t('precioInvalido')}
+      errorText={t('precioError')}
+      onCancel={onCancel}
+      testId="ventas-precio-editor"
+      onSave={async (price) => {
+        await simpleModeApi.updatePrice(price);
+        await onSaved();
+      }}
+    />
   );
 }
 

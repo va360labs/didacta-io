@@ -24,10 +24,8 @@
  */
 
 import { useCallback, useEffect, useState } from 'react';
-import { PayoutsRefundDialog } from '@/components/admin/payouts-refund-dialog';
 import { useLocale, useTranslations } from 'next-intl';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
+import { SalesLedger } from '@/components/sales/sales-ledger';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { ApiHttpError } from '@/lib/api-client';
 import { apiErrorMessage } from '@/lib/i18n/api-error';
@@ -46,15 +44,7 @@ import {
   type PayoutsSummaryDto,
 } from '@/lib/payouts';
 
-const PAGE_SIZE = 20;
-
-const BADGE_BY_TONE = {
-  neutral: 'muted',
-  info: 'info',
-  success: 'success',
-  warning: 'warning',
-  danger: 'danger',
-} as const;
+const PAGE_SIZE = 100;
 
 export interface PayoutsSalesSectionProps {
   /** Inyectable para tests. */
@@ -69,16 +59,15 @@ export function PayoutsSalesSection({
   const tErrors = useTranslations('errors');
   const locale = useLocale();
 
-  const [page, setPage] = useState(1);
   const [sales, setSales] = useState<PayoutsSalesPageDto | null | undefined>(undefined);
   const [summary, setSummary] = useState<PayoutsSummaryDto | null | undefined>(undefined);
   const [error, setError] = useState<string | null>(null);
-  const [refunding, setRefunding] = useState<PayoutsSaleDto | null>(null);
 
   const load = useCallback(
     async (target: number) => {
       try {
         const [nextSales, nextSummary] = await Promise.all([
+          // Solo para los avisos (retenidas…): la lista es la de «Ventas».
           api.sales(target, PAGE_SIZE),
           api.summary(),
         ]);
@@ -94,8 +83,8 @@ export function PayoutsSalesSection({
   );
 
   useEffect(() => {
-    void load(page);
-  }, [load, page]);
+    void load(1);
+  }, [load]);
 
   // Sin modo plataforma: nada que enseñar.
   if (sales === null || summary === null) return null;
@@ -106,7 +95,6 @@ export function PayoutsSalesSection({
     amount === null || !currency ? null : formatStripeAmount(amount, currency, locale);
   const currencyName = (code: string) =>
     labelOr(tPayouts, `currencies.${code.toLowerCase()}`, code.toUpperCase());
-  const pages = sales ? Math.max(1, Math.ceil(sales.total / sales.pageSize)) : 1;
   const anyHeld = sales?.items.some(
     (s) =>
       s.status === 'HELD' &&
@@ -197,201 +185,9 @@ export function PayoutsSalesSection({
         </Notice>
       ))}
 
-      {sales && sales.total === 0 ? (
-        <Card>
-          <CardContent className="pt-6">
-            <p className="text-sm text-text-muted">{t('empty')}</p>
-          </CardContent>
-        </Card>
-      ) : null}
-
-      {sales && sales.items.length > 0 ? (
-        <Card>
-          <CardContent className="pt-2 md:pt-4">
-            {/* Escritorio: tabla. */}
-            <div className="hidden overflow-x-auto md:block">
-              <table className="w-full text-sm" data-testid="payouts-sales-table">
-                <thead>
-                  <tr className="border-b border-border-soft text-left text-xs text-text-subtle">
-                    <th className="py-2 pr-3 font-medium">{t('colDate')}</th>
-                    <th className="min-w-[10rem] py-2 pr-3 font-medium">{t('colItem')}</th>
-                    <th className="py-2 pr-3 text-right font-medium">{t('colPaid')}</th>
-                    <th className="py-2 pr-3 text-right font-medium">{t('colCardFee')}</th>
-                    <th className="py-2 pr-3 text-right font-medium">
-                      {t('colOperatorFee', { percent, operator })}
-                    </th>
-                    <th className="py-2 pr-3 text-right font-medium">{t('colYouGet')}</th>
-                    <th className="py-2 pr-3 font-medium">{t('colArrives')}</th>
-                    <th className="py-2 font-medium">{t('colStatus')}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {sales.items.map((sale) => {
-                    const row = describeSale(sale, money, locale, t as SalesTranslator);
-                    return (
-                      <tr key={sale.id} className="border-b border-border-soft align-top">
-                        <td className="whitespace-nowrap py-3 pr-3 text-text-muted">{row.date}</td>
-                        <td className="min-w-[10rem] py-3 pr-3 font-medium text-text">
-                          {row.item}
-                        </td>
-                        <td className="whitespace-nowrap py-3 pr-3 text-right tabular-nums text-text">
-                          {row.paid}
-                          {row.studentPaid ? (
-                            <span className="block text-xs font-normal text-text-subtle">
-                              {row.studentPaid}
-                            </span>
-                          ) : null}
-                        </td>
-                        <td className="whitespace-nowrap py-3 pr-3 text-right tabular-nums text-text-muted">
-                          {row.cardFee}
-                        </td>
-                        <td className="whitespace-nowrap py-3 pr-3 text-right tabular-nums text-text-muted">
-                          {row.operatorFee}
-                        </td>
-                        <td className="whitespace-nowrap py-3 pr-3 text-right font-semibold tabular-nums text-text">
-                          {row.youGet}
-                          {row.debtNote ? (
-                            <span className="block text-xs font-normal text-text-subtle">
-                              {row.debtNote}
-                            </span>
-                          ) : null}
-                          {row.refundNote ? (
-                            <span className="block text-xs font-normal text-text-subtle">
-                              {row.refundNote}
-                            </span>
-                          ) : null}
-                        </td>
-                        <td className="whitespace-nowrap py-3 pr-3 text-text-muted">
-                          {row.arrives}
-                        </td>
-                        <td className="min-w-[8.5rem] py-3">
-                          <Badge
-                            variant={BADGE_BY_TONE[row.status.tone]}
-                            className="whitespace-normal text-left leading-snug"
-                          >
-                            {t(`status.${row.status.key}`)}
-                          </Badge>
-                          {/* En la misma celda: la tabla cabe a 1280 px con el menú abierto. */}
-                          {sale.canRefund ? (
-                            <Button
-                              type="button"
-                              variant="secondary"
-                              size="sm"
-                              className="mt-2 block"
-                              onClick={() => setRefunding(sale)}
-                              data-testid="refund-open"
-                            >
-                              {t('refundCta')}
-                            </Button>
-                          ) : null}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-
-            {/* Móvil: una ficha por venta. */}
-            <ul className="divide-y divide-border-soft md:hidden" data-testid="payouts-sales-list">
-              {sales.items.map((sale) => {
-                const row = describeSale(sale, money, locale, t as SalesTranslator);
-                return (
-                  <li key={sale.id} className="space-y-2 py-4">
-                    <div>
-                      <p className="font-medium text-text">{row.item}</p>
-                      <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
-                        <span className="text-xs text-text-subtle">{row.date}</span>
-                        <Badge variant={BADGE_BY_TONE[row.status.tone]}>
-                          {t(`status.${row.status.key}`)}
-                        </Badge>
-                      </div>
-                    </div>
-                    <dl className="grid grid-cols-2 gap-x-3 gap-y-1 text-sm">
-                      <dt className="text-text-muted">{t('colPaid')}</dt>
-                      <dd className="text-right tabular-nums">
-                        {row.paid}
-                        {row.studentPaid ? (
-                          <span className="block text-xs text-text-subtle">{row.studentPaid}</span>
-                        ) : null}
-                      </dd>
-                      <dt className="text-text-muted">{t('colCardFee')}</dt>
-                      <dd className="text-right tabular-nums text-text-muted">{row.cardFee}</dd>
-                      <dt className="text-text-muted">
-                        {t('colOperatorFee', { percent, operator })}
-                      </dt>
-                      <dd className="text-right tabular-nums text-text-muted">{row.operatorFee}</dd>
-                      <dt className="font-medium text-text">{t('colYouGet')}</dt>
-                      <dd className="text-right font-semibold tabular-nums">
-                        {row.youGet}
-                        {row.debtNote ? (
-                          <span className="block text-xs font-normal text-text-subtle">
-                            {row.debtNote}
-                          </span>
-                        ) : null}
-                        {row.refundNote ? (
-                          <span className="block text-xs font-normal text-text-subtle">
-                            {row.refundNote}
-                          </span>
-                        ) : null}
-                      </dd>
-                      <dt className="text-text-muted">{t('colArrives')}</dt>
-                      <dd className="text-right text-text-muted">{row.arrives}</dd>
-                    </dl>
-                    {sale.canRefund ? (
-                      <Button
-                        type="button"
-                        variant="secondary"
-                        size="sm"
-                        onClick={() => setRefunding(sale)}
-                      >
-                        {t('refundCta')}
-                      </Button>
-                    ) : null}
-                  </li>
-                );
-              })}
-            </ul>
-
-            {pages > 1 ? (
-              <div className="flex items-center justify-between gap-3 border-t border-border-soft pt-4 text-sm">
-                <Button
-                  type="button"
-                  variant="secondary"
-                  size="sm"
-                  disabled={page <= 1}
-                  onClick={() => setPage((p) => Math.max(1, p - 1))}
-                >
-                  {t('newer')}
-                </Button>
-                <span className="text-text-muted">{t('pageOf', { page, pages })}</span>
-                <Button
-                  type="button"
-                  variant="secondary"
-                  size="sm"
-                  disabled={page >= pages}
-                  onClick={() => setPage((p) => Math.min(pages, p + 1))}
-                >
-                  {t('older')}
-                </Button>
-              </div>
-            ) : null}
-          </CardContent>
-        </Card>
-      ) : null}
-
-      {refunding ? (
-        <PayoutsRefundDialog
-          sale={refunding}
-          operatorName={operator}
-          open
-          onOpenChange={(open) => {
-            if (!open) setRefunding(null);
-          }}
-          onRefunded={() => void load(page)}
-          api={api}
-        />
-      ) : null}
+      {/* Cada venta con quién la compró, sus comisiones, lo que te llega y en
+          qué está; búsqueda, filtros, detalle (con reembolsar) y exportar. */}
+      <SalesLedger onChanged={() => void load(1)} />
     </section>
   );
 }
