@@ -31,6 +31,7 @@ import { PayoutsInvoiceMailer } from './payouts-invoice-mailer';
 import { PayoutsInvoicesWorker } from './payouts-invoices.worker';
 import { PayoutsLegalController } from './payouts-legal.controller';
 import { PlatformCheckoutGate } from './platform-checkout-gate';
+import { PayoutsBrandingSync } from './payouts-branding.sync';
 import {
   ModulesPlatformEventDispatcher,
   PLATFORM_EVENT_DISPATCHER,
@@ -108,6 +109,7 @@ export class PayoutsModule {
         },
         ...(overrides.vies ? [{ provide: PAYOUTS_VIES_CLIENT, useValue: overrides.vies }] : []),
         PayoutsRuntime,
+        PayoutsBrandingSync,
         PayoutsInvoiceMailer,
         PayoutsInvoicesWorker,
         PayoutsAccountsWorker,
@@ -120,7 +122,7 @@ export class PayoutsModule {
           : { provide: PLATFORM_EVENT_DISPATCHER, useClass: ModulesPlatformEventDispatcher },
         { provide: APP_FILTER, useClass: PayoutsErrorFilter },
       ],
-      exports: [PayoutsRuntime, PlatformObjectGuard, PlatformCheckoutGate],
+      exports: [PayoutsRuntime, PlatformObjectGuard, PlatformCheckoutGate, PayoutsBrandingSync],
     };
   }
 }

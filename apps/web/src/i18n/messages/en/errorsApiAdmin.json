@@ -36,5 +36,7 @@
   "ADMIN_USER_SELF_STATUS_FORBIDDEN": "You cannot suspend or deactivate your own user.",
   "ADMIN_WP_SSO_CONFIG_FORBIDDEN": "Only super_admin and tenant_admin can manage the WP-SSO configuration.",
   "ADMIN_VIDEO_PROTECTION_FORBIDDEN": "Only super_admin or tenant_admin can manage video protection.",
-  "ADMIN_VIDEO_PROTECTION_LIMITS_INVALID": "The daily limit cannot be lower than the hourly limit."
+  "ADMIN_VIDEO_PROTECTION_LIMITS_INVALID": "The daily limit cannot be lower than the hourly limit.",
+  "ADMIN_STRIPE_PUBLISHABLE_KEY_INVALID": "The publishable key must start with pk_test_ or pk_live_.",
+  "ADMIN_STRIPE_PUBLISHABLE_KEY_MODE_MISMATCH": "The publishable key is in a different mode from the secret key (test vs live)."
 }

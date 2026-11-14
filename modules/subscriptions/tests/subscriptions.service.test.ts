@@ -294,6 +294,18 @@ class StripeStub implements SubscriptionsStripeAdapter {
     });
   }
 
+  async retrieveCheckoutSession(sessionId: string) {
+    return {
+      id: sessionId,
+      status: 'open' as const,
+      paymentStatus: 'unpaid',
+      metadata: {},
+      amountTotal: null,
+      currency: null,
+      created: null,
+    };
+  }
+
   async retrievePrice(priceId: string): Promise<StripePriceResult> {
     const p = this.prices.get(priceId);
     if (!p) throw new Error('price not found in stub');

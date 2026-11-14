@@ -8,12 +8,14 @@
  *
  * Todos los endpoints van SIN bearer: el visitante no tiene cuenta y el tenant
  * se resuelve por dominio (Host), igual que la página de membresía (/join).
- * Importes SIEMPRE en céntimos. El checkout es Stripe hosted (redirect) y la
- * cuenta del comprador se crea tras el pago con el email confirmado en Stripe.
+ * Importes SIEMPRE en céntimos. El pago se pinta dentro de la ficha (Checkout
+ * embebido) cuando el aula puede, y si no por el redirect a Stripe; la cuenta
+ * del comprador se crea tras el pago con el email confirmado en Stripe.
  */
 
 import type { WithdrawalWaiverAcceptance } from '@/lib/purchase-consent';
 import { apiFetch } from './api-client';
+import { normalizeCheckoutStart, type CheckoutStart, type RawCheckoutStart } from './checkout';
 
 const PUBLIC_BASE = '/api/v1/modules/billing/public';
 
@@ -69,9 +71,14 @@ export async function startPublicCheckout(
     referralCode?: string;
     /** El precio que el visitante tiene delante: si cambió, 409 `BILLING_PRICE_CHANGED`. */
     expectedPrice?: { unitAmount: number; currency: string };
+    /**
+     * `embedded`: pagar DENTRO de la ficha. El servidor lo concede si puede;
+     * si no, devuelve el redirect de siempre (`mode: 'hosted'`).
+     */
+    uiMode?: 'embedded' | 'hosted';
   },
-): Promise<{ url: string; sessionId: string }> {
-  return apiFetch<{ url: string; sessionId: string }>(
+): Promise<CheckoutStart> {
+  const raw = await apiFetch<RawCheckoutStart>(
     `${PUBLIC_BASE}/checkout/${encodeURIComponent(courseId)}`,
     {
       method: 'POST',
@@ -81,9 +88,11 @@ export async function startPublicCheckout(
         ...(opts?.withdrawalWaiver ? { withdrawalWaiver: opts.withdrawalWaiver } : {}),
         ...(opts?.referralCode ? { referralCode: opts.referralCode } : {}),
         ...(opts?.expectedPrice ? { expectedPrice: opts.expectedPrice } : {}),
+        ...(opts?.uiMode ? { uiMode: opts.uiMode } : {}),
       }),
     },
   );
+  return normalizeCheckoutStart(raw);
 }
 
 // ── Helpers de presentación ──────────────────────────────────────────────────

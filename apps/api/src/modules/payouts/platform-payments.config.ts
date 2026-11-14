@@ -4,6 +4,7 @@
  */
 
 import { z } from 'zod';
+import { publishableKeyProblem } from '../../common/stripe-publishable-key';
 import {
   DEFAULT_FEE_BPS,
   DEFAULT_LOSS_POLICY,
@@ -38,6 +39,12 @@ import {
 /** Variables que lee este fichero. */
 export const PLATFORM_PAYMENTS_ENV = {
   secretKey: 'PAYMENTS_PLATFORM_STRIPE_SECRET_KEY',
+  /**
+   * Clave PUBLICABLE de la misma cuenta (`pk_…`). Opcional: con ella el pago
+   * se pinta dentro de la ficha de venta del aula (Checkout embebido); sin
+   * ella, el redirect de siempre a la página de Stripe.
+   */
+  publishableKey: 'PAYMENTS_PLATFORM_STRIPE_PUBLISHABLE_KEY',
   webhookSecrets: 'PAYMENTS_PLATFORM_STRIPE_WEBHOOK_SECRETS',
   defaultFeeBps: 'PAYMENTS_PLATFORM_DEFAULT_FEE_BPS',
   lossesCollector: 'PAYMENTS_PLATFORM_LOSSES_COLLECTOR',
@@ -159,6 +166,11 @@ export interface PlatformPaymentsEnabled {
   readonly secretKey: string;
   /** `true` si la clave es de producción. */
   readonly livemode: boolean;
+  /**
+   * Clave publicable de la cuenta del operador (pago embebido). `null`/ausente:
+   * el pago va por el redirect de siempre.
+   */
+  readonly publishableKey?: string | null;
   /** Secretos `whsec_…` de los endpoints del webhook de plataforma (1 a 3). */
   readonly webhookSecrets: readonly string[];
   /** Comisión por defecto en puntos básicos, si el tenant no tiene la suya. */
@@ -305,6 +317,10 @@ const secretKeySchema = z.string().transform((key, ctx) => {
 
 const enabledSchema = z.object({
   secretKey: secretKeySchema,
+  publishableKey: z
+    .string()
+    .regex(/^pk_(test|live)_[A-Za-z0-9]{8,255}$/, 'debe ser una clave publicable de Stripe (pk_…)')
+    .optional(),
   webhookSecrets: webhookSecretsSchema,
   defaultFeeBps: integerFromEnv(0, MAX_FEE_BPS).prefault(String(DEFAULT_FEE_BPS)),
   lossesCollector: z.enum(['stripe', 'application']).default('stripe'),
@@ -387,11 +403,22 @@ export function loadPlatformPaymentsConfig(
   }
 
   const data = parsed.data;
+  if (
+    data.publishableKey &&
+    publishableKeyProblem(data.publishableKey, data.secretKey) === 'mode'
+  ) {
+    throw new PlatformPaymentsConfigError([
+      `${PLATFORM_PAYMENTS_ENV.publishableKey}: es de otro modo que ` +
+        `${PLATFORM_PAYMENTS_ENV.secretKey} (prueba con producción o al revés): el pago ` +
+        'embebido no encontraría la sesión.',
+    ]);
+  }
   const invoicing = invoicingFrom(data);
   return Object.freeze({
     enabled: true,
     secretKey: data.secretKey,
     livemode: stripeKeyLivemode(data.secretKey),
+    publishableKey: data.publishableKey ?? null,
     webhookSecrets: Object.freeze([...data.webhookSecrets]),
     defaultFeeBps: data.defaultFeeBps,
     lossesCollector: data.lossesCollector,

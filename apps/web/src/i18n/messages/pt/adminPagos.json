@@ -309,7 +309,10 @@
     "unverifiedBanner": "Configurado, mas não verificado — use o botão <em>Testar conexão</em> para confirmar que as chaves são válidas.",
     "fallbackBanner": "Usando a Stripe global do host (fallback). Se quiser cobrar na sua própria conta, salve uma configuração de tenant.",
     "fallbackBlockedBanner": "Esta escola NÃO está recebendo pagamentos. O servidor tem uma conta do Stripe compartilhada, mas, como há várias escolas, ela não é mais usada automaticamente. Salve aqui as credenciais da sua conta do Stripe ou peça a quem administra o servidor que permita a conta compartilhada (STRIPE_ALLOW_GLOBAL_FALLBACK=true).",
-    "noneBanner": "Stripe não configurada — a venda de cursos avulsos e as assinaturas não funcionam."
+    "noneBanner": "Stripe não configurada — a venda de cursos avulsos e as assinaturas não funcionam.",
+    "publishableKeyLabel": "Chave publicável (opcional)",
+    "publishableKeyPhEmpty": "pk_live_… ou pk_test_…",
+    "publishableKeyHint": "Da mesma conta e do mesmo modo da chave secreta. Com ela, o pagamento acontece dentro da página de venda da sua escola, com a sua marca; sem ela, seus alunos pagam na página da Stripe."
   },
   "alerts": {
     "loadError": "Não conseguimos carregar a configuração de avisos.",

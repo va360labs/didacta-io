@@ -129,6 +129,7 @@ import { buildCourseSaleChecker } from './course-sale-checker';
 import { PayoutsRuntime } from './payouts/payouts-runtime.service';
 import { getPlatformPaymentsConfig } from './payouts/platform-payments.config';
 import { PlatformStripeAdapters } from './payouts/platform-stripe-adapters';
+import { publishableKeyProblem } from '../common/stripe-publishable-key';
 import { ModuleContextFactory } from './module-context.factory';
 import {
   TenantStripeResolverService,
@@ -1137,6 +1138,51 @@ export class ModuleRegistryService implements OnModuleInit {
   getAiContentService(): AiContentService {
     if (!this.aiContent) throw new Error('mod.ai-content no está inicializado');
     return this.aiContent;
+  }
+
+  /**
+   * Clave PUBLICABLE con la que el navegador puede pintar el pago de este
+   * tenant DENTRO de la ficha de venta (Checkout embebido), o `null` si el
+   * pago tiene que ir por el redirect de siempre.
+   *
+   * Tiene que ser de la MISMA cuenta que creará la sesión, así que sigue la
+   * misma bifurcación que el adaptador (`resolveStripeAdapter`):
+   *
+   *  - cobro por la plataforma (cuenta lista) → la del operador
+   *    (`PAYMENTS_PLATFORM_STRIPE_PUBLISHABLE_KEY`);
+   *  - claves propias del aula → la que guardó en Administración → Pagos;
+   *  - cuenta de instancia heredada → `STRIPE_PUBLISHABLE_KEY`.
+   *
+   * Una clave que no es `pk_…` o es de otro modo que la secreta cuenta como
+   * ausente: mejor el redirect que un hueco en la ficha. Nunca lanza.
+   */
+  async resolveCheckoutPublishableKey(tenantId: string): Promise<string | null> {
+    try {
+      if (!this.stripeResolver) return null;
+      if (this.payouts) {
+        const mode = await this.payouts.mode.resolve(tenantId);
+        if (mode.mode === 'platform') {
+          const pk = mode.ready ? (this.payouts.config.publishableKey ?? null) : null;
+          return pk && !publishableKeyProblem(pk, this.payouts.config.secretKey) ? pk : null;
+        }
+        if (mode.mode === 'own') {
+          const pk = mode.credentials.credentials.publishableKey ?? null;
+          return pk && !publishableKeyProblem(pk, mode.credentials.credentials.secretKey)
+            ? pk
+            : null;
+        }
+        return null;
+      }
+      const resolved = await this.stripeResolver.resolve(tenantId);
+      if (!resolved) return null;
+      const pk =
+        resolved.source === 'global'
+          ? process.env['STRIPE_PUBLISHABLE_KEY']?.trim() || null
+          : (resolved.credentials.publishableKey ?? null);
+      return pk && !publishableKeyProblem(pk, resolved.credentials.secretKey) ? pk : null;
+    } catch {
+      return null;
+    }
   }
 
   // Los 3 getters de abajo SIEMPRE devuelven el service — Stripe se resuelve

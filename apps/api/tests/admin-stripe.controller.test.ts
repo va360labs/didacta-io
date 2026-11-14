@@ -81,6 +81,7 @@ describe('AdminStripeController', () => {
       const dto = await controller.getCurrent(ADMIN_USER as never);
       expect(dto).toEqual({
         hasSecretKey: false,
+        publishableKey: null,
         hasWebhookSecret: false,
         hasSubscriptionsWebhookSecret: false,
         mode: null,
@@ -162,6 +163,31 @@ describe('AdminStripeController', () => {
       const stored = configStub.store.get(`${TENANT_A}|billing|stripe`);
       expect((stored?.value as { webhookSecret: string }).webhookSecret).toBe('whsec_abc123');
       expect((stored?.value as { secretKey: string }).secretKey).toBe('sk_test_rotated');
+    });
+
+    it('clave publicable: se guarda, se devuelve (no es secreta) y sobrevive a rotar la secreta', async () => {
+      const dto = await controller.upsert(ADMIN_USER as never, {
+        ...VALID_BODY,
+        publishableKey: ' pk_test_abcdefgh1234 ',
+      });
+      expect(dto.publishableKey).toBe('pk_test_abcdefgh1234');
+      const rotated = await controller.upsert(ADMIN_USER as never, {
+        secretKey: 'sk_test_rotated',
+      });
+      expect(rotated.publishableKey).toBe('pk_test_abcdefgh1234');
+    });
+
+    it('clave publicable que no es pk_ o de otro modo que la secreta → 400 sin guardar', async () => {
+      await expect(
+        controller.upsert(ADMIN_USER as never, { ...VALID_BODY, publishableKey: 'sk_test_x' }),
+      ).rejects.toMatchObject({ response: { code: 'ADMIN_STRIPE_PUBLISHABLE_KEY_INVALID' } });
+      await expect(
+        controller.upsert(ADMIN_USER as never, {
+          ...VALID_BODY,
+          publishableKey: 'pk_live_abcdefgh1234',
+        }),
+      ).rejects.toMatchObject({ response: { code: 'ADMIN_STRIPE_PUBLISHABLE_KEY_MODE_MISMATCH' } });
+      expect(configStub.store.get(`${TENANT_A}|billing|stripe`)).toBeUndefined();
     });
 
     it('sin secretKey ni previo guardado → 400', async () => {

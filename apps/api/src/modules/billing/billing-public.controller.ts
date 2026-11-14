@@ -18,7 +18,7 @@ import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { z } from 'zod';
 import type { FastifyRequest } from 'fastify';
 import { sanitizeRichText } from '@didacta/core-kernel';
-import type { CourseOfferOption } from '@didacta/mod-billing';
+import { toCheckoutLocale, type CourseOfferOption } from '@didacta/mod-billing';
 import { extractClientContext } from '../../auth/client-context';
 import { readRequestLocale } from '../../common/checkout-locale';
 import { ZodValidationPipe } from '../../auth/zod-validation.pipe';
@@ -38,6 +38,12 @@ import {
   withLocalCurrencyHint,
 } from '../payouts/platform-checkout-gate';
 import { resolvePublicHost } from '../../common/resolve-public-host';
+import {
+  checkoutSessionNotFound,
+  checkoutUiModeSchema,
+  ensureCheckoutSessionId,
+  type PublicCheckoutResponse,
+} from '../checkout-ui';
 import { listCoursesForSale, type CoursesForSaleDb } from './public-catalog';
 
 const uuidSchema = z.string().uuid();
@@ -94,6 +100,12 @@ const publicCheckoutSchema = z
       })
       .strict()
       .optional(),
+    /**
+     * `embedded`: la ficha quiere pintar el pago dentro de la página del aula.
+     * Se concede si hay clave publicable para la cuenta que cobra; si no, la
+     * respuesta es el redirect de siempre (`mode: 'hosted'`).
+     */
+    uiMode: checkoutUiModeSchema,
   })
   .strict()
   .optional()
@@ -104,7 +116,22 @@ type PublicCheckoutDto = {
   withdrawalWaiver?: WithdrawalWaiverDto;
   referralCode?: string;
   expectedPrice?: { unitAmount: number; currency: string };
+  uiMode?: 'embedded' | 'hosted';
 };
+
+/**
+ * Lo que la vuelta del pago (la pantalla de gracias) puede saber de él: si se
+ * pagó, qué se compró, cuánto y cuándo. Nunca el id de la sesión de Stripe
+ * (ya lo trae la URL, y no le sirve de nada al comprador).
+ */
+interface PublicCheckoutSessionView {
+  status: 'open' | 'complete' | 'expired' | null;
+  paid: boolean;
+  amount: number | null;
+  currency: string | null;
+  at: string | null;
+  course: { title: string; slug: string; thumbnailUrl: string | null } | null;
+}
 
 /** Curso del catálogo público, con lo justo para la ficha de venta. */
 interface PublicCatalogCourse {
@@ -284,7 +311,7 @@ export class BillingPublicController {
     @Req() req: FastifyRequest,
     @Param('courseId') courseId: string,
     @Body(new ZodValidationPipe(publicCheckoutSchema)) dto: PublicCheckoutDto,
-  ) {
+  ): Promise<PublicCheckoutResponse> {
     const tenantId = await this.resolveTenantId(req);
     ensureUuid(courseId);
     return runAsTenant(tenantId, async () => {
@@ -342,6 +369,13 @@ export class BillingPublicController {
         /\/$/,
         '',
       );
+      // Pago dentro de la ficha si la página lo pide y hay clave publicable de
+      // la cuenta que cobra (plataforma o claves propias del aula).
+      const publishableKey =
+        dto.uiMode === 'embedded'
+          ? await this.registry.resolveCheckoutPublishableKey(tenantId)
+          : null;
+      const requestLocale = readRequestLocale(req.headers);
       const result = await billing.startCheckout({
         tenantId,
         userId: null,
@@ -351,7 +385,11 @@ export class BillingPublicController {
         // Idioma con el que el comprador está navegando AHORA. Viaja en la
         // metadata de Stripe porque su fila de `user` no existe todavía: se
         // crea en el webhook, después del salto a la pasarela.
-        locale: readRequestLocale(req.headers),
+        locale: requestLocale,
+        // La pantalla de pago de Stripe, en el idioma en que se navega el aula.
+        ...(toCheckoutLocale(requestLocale)
+          ? { checkoutLocale: toCheckoutLocale(requestLocale) }
+          : {}),
         // Enlace de referido: opaco aquí; lo valida mod.referrals (código del
         // aula, sin autorreferidos) cuando el pago se completa.
         ...(dto.referralCode ? { referralCode: dto.referralCode.toLowerCase() } : {}),
@@ -360,6 +398,14 @@ export class BillingPublicController {
         // sesión y las de /courses/checkout viven tras el gate de login.
         successUrl: `${base}/catalog/checkout/success?session_id={CHECKOUT_SESSION_ID}`,
         cancelUrl: `${base}/catalog/checkout/cancel`,
+        // Embebido: una sola vuelta, la de gracias, que PREGUNTA si se pagó
+        // (Stripe vuelve aquí también si un medio con redirección falla).
+        ...(publishableKey
+          ? {
+              uiMode: 'embedded' as const,
+              returnUrl: `${base}/catalog/checkout/success?session_id={CHECKOUT_SESSION_ID}&checkout=embedded`,
+            }
+          : {}),
       });
       await this.consents.attachSession(tenantId, consentId, {
         sessionId: result.sessionId,
@@ -367,7 +413,51 @@ export class BillingPublicController {
       });
       // Client context solo para trazabilidad en logs de acceso (no se persiste aquí).
       void extractClientContext(req);
-      return { url: result.url, sessionId: result.sessionId };
+      if (publishableKey && result.clientSecret) {
+        return {
+          mode: 'embedded',
+          sessionId: result.sessionId,
+          url: null,
+          clientSecret: result.clientSecret,
+          publishableKey,
+          amountTotal: result.amountTotal,
+          currency: result.currency,
+        };
+      }
+      return { mode: 'hosted', url: result.url ?? '', sessionId: result.sessionId };
+    });
+  }
+
+  @Get('checkout-session/:sessionId')
+  @ApiOperation({
+    summary:
+      'Vuelta del pago (pantalla de gracias): si la sesión de ESTA academia está pagada, qué curso se compró, cuánto y cuándo. No concede nada (el acceso lo da el webhook). 404 si la sesión no es de una compra de esta academia.',
+  })
+  async checkoutSession(
+    @Req() req: FastifyRequest,
+    @Param('sessionId') sessionId: string,
+  ): Promise<PublicCheckoutSessionView> {
+    ensureCheckoutSessionId(sessionId);
+    const tenantId = await this.resolveTenantId(req);
+    return runAsTenant(tenantId, async () => {
+      const state = await this.registry
+        .getBillingService()
+        .getCheckoutSessionState(tenantId, sessionId);
+      if (!state) throw checkoutSessionNotFound();
+      const course = await this.prisma.modCoursesCourse.findFirst({
+        where: { id: state.courseId, tenantId },
+        select: { title: true, slug: true, thumbnailUrl: true },
+      });
+      return {
+        status: state.status,
+        paid: state.paid,
+        amount: state.amount,
+        currency: state.currency,
+        at: state.at,
+        course: course
+          ? { title: course.title, slug: course.slug, thumbnailUrl: course.thumbnailUrl }
+          : null,
+      };
     });
   }
 

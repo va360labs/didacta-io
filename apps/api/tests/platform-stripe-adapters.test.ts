@@ -24,6 +24,7 @@ import {
   PlatformCheckoutGate,
 } from '../src/modules/payouts/platform-checkout-gate';
 import { PlatformObjectGuard } from '../src/modules/payouts/platform-object-guard';
+import { PayoutsBrandingSync } from '../src/modules/payouts/payouts-branding.sync';
 import { PAYOUTS_STATUS_BY_CODE } from '../src/modules/payouts/payouts-error.filter';
 import { PlatformStripeAdapters } from '../src/modules/payouts/platform-stripe-adapters';
 import { PayoutsRuntime } from '../src/modules/payouts/payouts-runtime.service';
@@ -70,6 +71,18 @@ function fakeAdapter(
     expireCheckoutSession: async (id) => {
       log.push([label, 'expireCheckoutSession', id]);
       return { status: 'expired' };
+    },
+    retrieveCheckoutSession: async (id) => {
+      log.push([label, 'retrieveCheckoutSession', id]);
+      return {
+        id,
+        status: 'complete',
+        paymentStatus: 'paid',
+        metadata: {},
+        amountTotal: 4900,
+        currency: 'eur',
+        created: 1_794_000_000,
+      };
     },
     constructWebhookEvent: () => {
       throw new Error('no se usa');
@@ -215,6 +228,20 @@ describe('PlatformStripeAdapters.billing', () => {
       'plataforma:retrievePrice:price_de_plataforma',
       'propia:retrievePrice:price_heredado',
       'propia:retrieveProduct:prod_heredado',
+    ]);
+  });
+
+  it('la vuelta del pago pregunta por la sesión donde se creó (registrada → plataforma)', async () => {
+    const { adapters, log } = build(
+      { mode: 'platform', ready: true, stripeAccountId: 'acct_1C', country: 'ES', feeBps: 500 },
+      { own: true, registered: ['cs_test_de_plataforma'] },
+    );
+    const adapter = await adapters.billing(TENANT);
+    await adapter.retrieveCheckoutSession('cs_test_de_plataforma');
+    await adapter.retrieveCheckoutSession('cs_test_heredada');
+    expect(log.map(([who, what, id]) => `${who}:${what}:${id as string}`)).toEqual([
+      'plataforma:retrieveCheckoutSession:cs_test_de_plataforma',
+      'propia:retrieveCheckoutSession:cs_test_heredada',
     ]);
   });
 });
@@ -406,6 +433,11 @@ describe('PayoutsModule: apagado no provee nada; encendido es global y exporta l
       webhookSecrets: ['whsec_x'],
     } as never);
     expect(mod.global).toBe(true);
-    expect(mod.exports).toEqual([PayoutsRuntime, PlatformObjectGuard, PlatformCheckoutGate]);
+    expect(mod.exports).toEqual([
+      PayoutsRuntime,
+      PlatformObjectGuard,
+      PlatformCheckoutGate,
+      PayoutsBrandingSync,
+    ]);
   });
 });

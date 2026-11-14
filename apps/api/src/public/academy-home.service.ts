@@ -264,7 +264,7 @@ export class AcademyHomeService {
    * si no hay, `super_admin`, el caso de una instalación propia). Su nombre
    * público y su foto; sin nombre publicable, no se enseña nada.
    */
-  private async creator(tenantId: string): Promise<AcademyHomeData['creator']> {
+  async creator(tenantId: string): Promise<AcademyHomeData['creator']> {
     for (const role of ['tenant_admin', 'super_admin']) {
       const u = await this.prisma.user.findFirst({
         where: {

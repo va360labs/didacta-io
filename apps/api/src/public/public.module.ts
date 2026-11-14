@@ -9,6 +9,7 @@ import { ModulesModule } from '../modules/modules.module';
 import { PrismaModule } from '../prisma/prisma.module';
 import { AcademyHomeController } from './academy-home.controller';
 import { AcademyHomeService } from './academy-home.service';
+import { CheckoutSellerController } from './checkout-seller.controller';
 import { PublicSeoController } from './public-seo.controller';
 import { PublicSeoService } from './public-seo.service';
 import { SiteContextController } from './site-context.controller';
@@ -26,7 +27,12 @@ import { SiteContextController } from './site-context.controller';
   // mod.member-registration). `PlatformCheckoutGate` llega solo si
   // `PayoutsModule` está registrado (global en modo plataforma).
   imports: [PrismaModule, ModulesModule, AuthModule],
-  controllers: [SiteContextController, AcademyHomeController, PublicSeoController],
+  controllers: [
+    SiteContextController,
+    AcademyHomeController,
+    PublicSeoController,
+    CheckoutSellerController,
+  ],
   providers: [AcademyHomeService, PublicSeoService],
 })
 export class PublicModule {}

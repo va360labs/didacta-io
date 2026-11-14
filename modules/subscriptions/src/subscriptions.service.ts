@@ -257,7 +257,8 @@ export class SubscriptionsService {
       interval: price.recurringInterval,
     });
 
-    return { subscriptionId: sub.id, sessionId: session.id, url: session.url };
+    // Siempre alojado (sin `uiMode`): el adaptador garantiza la URL o lanza.
+    return { subscriptionId: sub.id, sessionId: session.id, url: session.url ?? '' };
   }
 
   // ---------------- Cancelación (alumno) ----------------

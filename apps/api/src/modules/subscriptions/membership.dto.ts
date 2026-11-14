@@ -4,6 +4,7 @@
  */
 
 import { z } from 'zod';
+import { checkoutUiModeSchema } from '../checkout-ui';
 import { withdrawalWaiverSchema } from '../purchase-consent/withdrawal-waiver';
 
 /**
@@ -34,6 +35,11 @@ export const membershipCheckoutSchema = z.object({
    * pierde el desistimiento de 14 días. Obligatoria (422 si falta).
    */
   withdrawalWaiver: withdrawalWaiverSchema.optional(),
+  /**
+   * `embedded`: el pago dentro de la página de venta del aula, si hay clave
+   * publicable de la cuenta que cobra. Si no, el redirect de siempre.
+   */
+  uiMode: checkoutUiModeSchema,
 });
 export type MembershipCheckoutDto = z.infer<typeof membershipCheckoutSchema>;
 

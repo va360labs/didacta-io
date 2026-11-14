@@ -145,11 +145,20 @@ class MockPrisma {
 
   modBillingOrder = {
     findUnique: async (args: { where: { id: string } }) => this.orders.get(args.where.id) ?? null,
-    findFirst: async (args: { where: { stripePaymentIntentId?: string } }) => {
+    findFirst: async (args: {
+      where: { stripePaymentIntentId?: string; tenantId?: string; stripeSessionId?: string };
+    }) => {
       for (const o of this.orders.values()) {
         if (
           args.where.stripePaymentIntentId &&
           o.stripePaymentIntentId === args.where.stripePaymentIntentId
+        ) {
+          return o;
+        }
+        if (
+          args.where.stripeSessionId &&
+          o.stripeSessionId === args.where.stripeSessionId &&
+          (args.where.tenantId === undefined || o.tenantId === args.where.tenantId)
         ) {
           return o;
         }
@@ -285,7 +294,20 @@ class MockStripe implements StripeAdapter {
     cancelUrl: string;
     metadata: Record<string, string>;
     customerEmail?: string;
+    uiMode?: string;
+    returnUrl?: string;
+    locale?: string;
   } | null = null;
+  /** Estado que devuelve `retrieveCheckoutSession`, por id de sesión. */
+  sessionStates = new Map<
+    string,
+    {
+      status: 'open' | 'complete' | 'expired';
+      paymentStatus: string;
+      metadata: Record<string, string>;
+    }
+  >();
+  retrieveCalls: string[] = [];
   lastOneOffPrice: {
     name: string;
     unitAmount: number;
@@ -298,6 +320,9 @@ class MockStripe implements StripeAdapter {
     successUrl: string;
     cancelUrl: string;
     customerEmail?: string;
+    uiMode?: string;
+    returnUrl?: string;
+    locale?: string;
   }) {
     this.sessionCounter += 1;
     this.lastCheckout = {
@@ -305,11 +330,31 @@ class MockStripe implements StripeAdapter {
       cancelUrl: params.cancelUrl,
       metadata: params.metadata,
       customerEmail: params.customerEmail,
+      uiMode: params.uiMode,
+      returnUrl: params.returnUrl,
+      locale: params.locale,
     };
+    if (params.uiMode === 'embedded') {
+      return {
+        id: `cs_test_${this.sessionCounter}`,
+        url: null,
+        clientSecret: `cs_test_${this.sessionCounter}_secret`,
+        // Lo que cobra la sesión AHORA (no el precio que se pintó en la ficha).
+        amountTotal: 100,
+        currency: 'eur',
+      };
+    }
     return {
       id: `cs_test_${this.sessionCounter}`,
       url: `https://checkout.stripe.test/cs_test_${this.sessionCounter}`,
     };
+  }
+
+  async retrieveCheckoutSession(sessionId: string) {
+    this.retrieveCalls.push(sessionId);
+    const state = this.sessionStates.get(sessionId);
+    if (!state) throw new StripeApiError(`No such checkout.session: ${sessionId}`);
+    return { id: sessionId, amountTotal: 100, currency: 'eur', created: 1_794_000_000, ...state };
   }
 
   async createOneOffPrice(params: {
@@ -528,6 +573,133 @@ describe('BillingService — startCheckout (alumno)', () => {
         courseId: 'course-1',
       }),
     ).rejects.toBeInstanceOf(ProductInactiveError);
+  });
+});
+
+describe('BillingService — pago embebido en la ficha del aula', () => {
+  let prisma: MockPrisma;
+  let stripe: MockStripe;
+  let svc: BillingService;
+
+  beforeEach(async () => {
+    prisma = new MockPrisma();
+    stripe = new MockStripe();
+    svc = new BillingService(
+      prisma as unknown as never,
+      async () => stripe,
+      new MockPublisher(),
+      urls,
+    );
+    stripe.setPrice('price_a');
+    await svc.createProduct({ tenantId: 't1', courseId: 'course-1', stripePriceId: 'price_a' });
+  });
+
+  const RETURN =
+    'https://aula.test/catalog/checkout/success?session_id={CHECKOUT_SESSION_ID}&checkout=embedded';
+
+  it('pide la sesión embebida con su vuelta e idioma y devuelve el secreto, no una URL', async () => {
+    const result = await svc.startCheckout({
+      tenantId: 't1',
+      userId: null,
+      courseId: 'course-1',
+      uiMode: 'embedded',
+      returnUrl: RETURN,
+      checkoutLocale: 'en',
+      referralCode: 'ana123',
+    });
+    expect(result.url).toBeNull();
+    expect(result.clientSecret).toBe(`${result.sessionId}_secret`);
+    // El importe que enseña el pago es el de la sesión, no el del producto (999).
+    expect(result.amountTotal).toBe(100);
+    expect(result.currency).toBe('eur');
+    expect(stripe.lastCheckout).toMatchObject({
+      uiMode: 'embedded',
+      returnUrl: RETURN,
+      locale: 'en',
+    });
+    // La entrega es la misma: orden PENDING con la sesión y la metadata de siempre.
+    expect(prisma.orders.get(result.orderId)?.stripeSessionId).toBe(result.sessionId);
+    expect(stripe.lastCheckout?.metadata).toMatchObject({
+      orderId: result.orderId,
+      referralCode: 'ana123',
+    });
+  });
+
+  it('sin uiMode: el alojado de siempre (ni vuelta ni idioma)', async () => {
+    const result = await svc.startCheckout({ tenantId: 't1', userId: 'u1', courseId: 'course-1' });
+    expect(result.url).toContain('checkout.stripe.test');
+    expect(result.clientSecret).toBeNull();
+    expect(stripe.lastCheckout?.uiMode).toBeUndefined();
+    expect(stripe.lastCheckout?.returnUrl).toBeUndefined();
+    expect(stripe.lastCheckout?.locale).toBeUndefined();
+  });
+
+  it('estado de la vuelta: pagada, abierta o de otra academia', async () => {
+    const result = await svc.startCheckout({
+      tenantId: 't1',
+      userId: null,
+      courseId: 'course-1',
+      uiMode: 'embedded',
+      returnUrl: RETURN,
+    });
+    stripe.sessionStates.set(result.sessionId, {
+      status: 'open',
+      paymentStatus: 'unpaid',
+      metadata: { tenantId: 't1' },
+    });
+    await expect(svc.getCheckoutSessionState('t1', result.sessionId)).resolves.toMatchObject({
+      status: 'open',
+      paid: false,
+    });
+
+    stripe.sessionStates.set(result.sessionId, {
+      status: 'complete',
+      paymentStatus: 'paid',
+      metadata: { tenantId: 't1' },
+    });
+    await expect(svc.getCheckoutSessionState('t1', result.sessionId)).resolves.toEqual({
+      status: 'complete',
+      paid: true,
+      courseId: 'course-1',
+      amount: 100,
+      currency: 'eur',
+      at: new Date(1_794_000_000_000).toISOString(),
+    });
+
+    // La sesión es de una orden de t1: para t2 no existe (ni se pregunta a Stripe).
+    const calls = stripe.retrieveCalls.length;
+    await expect(svc.getCheckoutSessionState('t2', result.sessionId)).resolves.toBeNull();
+    expect(stripe.retrieveCalls).toHaveLength(calls);
+  });
+
+  it('una orden ya entregada por el webhook es «pagada» sin preguntar a Stripe', async () => {
+    const result = await svc.startCheckout({ tenantId: 't1', userId: 'u1', courseId: 'course-1' });
+    const row = prisma.orders.get(result.orderId)!;
+    row.status = 'COMPLETED';
+    row.amountPaid = 2_900;
+    row.completedAt = new Date('2026-11-14T10:00:00.000Z');
+    await expect(svc.getCheckoutSessionState('t1', result.sessionId)).resolves.toEqual({
+      status: 'complete',
+      paid: true,
+      courseId: 'course-1',
+      amount: 2_900,
+      currency: 'eur',
+      at: '2026-11-14T10:00:00.000Z',
+    });
+    expect(stripe.retrieveCalls).toHaveLength(0);
+  });
+
+  it('completa pero sin cobrar (p. ej. medio diferido) no es «pagada»', async () => {
+    const result = await svc.startCheckout({ tenantId: 't1', userId: 'u1', courseId: 'course-1' });
+    stripe.sessionStates.set(result.sessionId, {
+      status: 'complete',
+      paymentStatus: 'unpaid',
+      metadata: { tenantId: 't1' },
+    });
+    await expect(svc.getCheckoutSessionState('t1', result.sessionId)).resolves.toMatchObject({
+      status: 'complete',
+      paid: false,
+    });
   });
 });
 

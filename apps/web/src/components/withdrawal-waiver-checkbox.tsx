@@ -75,6 +75,8 @@ export function WithdrawalWaiverCheckbox({
   onCheckedChange,
   onRetry,
   className,
+  nudge = false,
+  inputRef,
 }: {
   waiver: WithdrawalWaiverText | null;
   failed: boolean;
@@ -82,6 +84,13 @@ export function WithdrawalWaiverCheckbox({
   onCheckedChange: (value: boolean) => void;
   onRetry: () => void;
   className?: string;
+  /**
+   * Quien intentó pagar sin marcarla: se resalta y se dice por qué el botón no
+   * avanza (el botón apagado sin explicación hizo dudar a una compradora real).
+   */
+  nudge?: boolean;
+  /** Para llevar el foco a la casilla al pulsar «Comprar» sin marcarla. */
+  inputRef?: React.Ref<HTMLInputElement>;
 }): React.JSX.Element {
   const t = useTranslations('publicSite.withdrawalWaiver');
   const id = useId();
@@ -106,19 +115,27 @@ export function WithdrawalWaiverCheckbox({
       </p>
     );
   }
+  const nudging = nudge && !checked;
   return (
     <div
-      className={`flex items-start gap-3 rounded-xl border border-border bg-surface-2 px-3.5 py-3 ${className ?? ''}`}
+      className={`flex items-start gap-3 rounded-xl border px-3.5 py-3 transition-colors ${
+        nudging
+          ? 'border-warning-500 bg-warning-50 ring-2 ring-warning-500/40'
+          : 'border-border bg-surface-2'
+      } ${className ?? ''}`}
       data-testid="withdrawal-waiver"
       data-version={waiver.version}
+      data-nudge={nudging ? 'true' : undefined}
     >
       <input
         id={id}
+        ref={inputRef}
         type="checkbox"
         required
         checked={checked}
         onChange={(e) => onCheckedChange(e.target.checked)}
-        aria-describedby={`${id}-seller`}
+        aria-describedby={`${id}-seller${checked ? '' : ` ${id}-hint`}`}
+        aria-invalid={nudging || undefined}
         className="mt-0.5 h-4 w-4 shrink-0 cursor-pointer rounded border-border text-brand-600 focus:ring-brand-300"
       />
       <div className="min-w-0 text-left">
@@ -128,6 +145,18 @@ export function WithdrawalWaiverCheckbox({
         <p id={`${id}-seller`} className="mt-1 text-xs text-text-muted">
           {waiver.sellerLine}
         </p>
+        {checked ? null : (
+          <p
+            id={`${id}-hint`}
+            className={`mt-1.5 flex items-center gap-1 text-xs font-semibold ${
+              nudging ? 'text-warning-700' : 'text-text-subtle'
+            }`}
+            data-testid="withdrawal-waiver-hint"
+            aria-live="polite"
+          >
+            {t('mustTickToPay')}
+          </p>
+        )}
       </div>
     </div>
   );

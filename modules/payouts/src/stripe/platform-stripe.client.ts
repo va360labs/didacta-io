@@ -41,6 +41,18 @@ export const PLATFORM_STRIPE_V2_API_VERSION = '2026-10-28.preview';
 
 export const STRIPE_API_BASE_URL = 'https://api.stripe.com';
 
+/** Las subidas de ficheros van a otro host (`POST /v1/files`, multipart). */
+export const STRIPE_FILES_BASE_URL = 'https://files.stripe.com';
+
+/** Un fichero para Stripe (logo e icono de la marca de una cuenta conectada). */
+export interface StripeFileUpload {
+  /** `business_icon` (cuadrado) o `business_logo`. */
+  readonly purpose: 'business_icon' | 'business_logo';
+  readonly bytes: Uint8Array;
+  readonly filename: string;
+  readonly contentType: 'image/png' | 'image/jpeg';
+}
+
 const DEFAULT_TIMEOUT_MS = 30_000;
 
 export type StripeHttpMethod = 'GET' | 'POST' | 'DELETE';
@@ -91,6 +103,13 @@ export interface PlatformStripeClient {
     body?: StripeParams,
     options?: StripeRequestOptions,
   ): Promise<T>;
+
+  /**
+   * Sube un fichero a la cuenta de la plataforma (`POST /v1/files`) y
+   * devuelve su `file_…`. Opcional: los clientes que no lo implementan no
+   * sincronizan la marca (se registra y se sigue).
+   */
+  uploadFile?(file: StripeFileUpload): Promise<{ readonly id: string }>;
 }
 
 /**
@@ -177,6 +196,11 @@ export interface FetchPlatformStripeClientOptions {
   readonly apiVersion?: string;
   readonly v2ApiVersion?: string;
   readonly baseUrl?: string;
+  /**
+   * Host de las subidas de ficheros. Por defecto `files.stripe.com`; con un
+   * `baseUrl` propio (el doble de la E2E), ese mismo.
+   */
+  readonly filesBaseUrl?: string;
   readonly timeoutMs?: number;
 }
 
@@ -199,6 +223,7 @@ export class FetchPlatformStripeClient implements PlatformStripeClient {
   readonly #apiVersion: string;
   readonly #v2ApiVersion: string;
   readonly #baseUrl: string;
+  readonly #filesBaseUrl: string;
   readonly #timeoutMs: number;
 
   constructor(options: FetchPlatformStripeClientOptions) {
@@ -208,7 +233,38 @@ export class FetchPlatformStripeClient implements PlatformStripeClient {
     this.#apiVersion = options.apiVersion ?? PLATFORM_STRIPE_API_VERSION;
     this.#v2ApiVersion = options.v2ApiVersion ?? PLATFORM_STRIPE_V2_API_VERSION;
     this.#baseUrl = (options.baseUrl ?? STRIPE_API_BASE_URL).replace(/\/+$/, '');
+    this.#filesBaseUrl = (
+      options.filesBaseUrl ?? (options.baseUrl ? this.#baseUrl : STRIPE_FILES_BASE_URL)
+    ).replace(/\/+$/, '');
     this.#timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+  }
+
+  async uploadFile(file: StripeFileUpload): Promise<{ readonly id: string }> {
+    const form = new FormData();
+    form.append('purpose', file.purpose);
+    form.append(
+      'file',
+      new Blob([file.bytes as unknown as ArrayBuffer], { type: file.contentType }),
+      file.filename,
+    );
+    const created = await this.#send<{ id?: unknown }>(
+      'POST',
+      '/v1/files',
+      `${this.#filesBaseUrl}/v1/files`,
+      {
+        Authorization: `Bearer ${this.#secretKey}`,
+        'Stripe-Version': this.#apiVersion,
+      },
+      // `fetch` pone él mismo el `Content-Type` multipart con su frontera.
+      form as unknown as string,
+    );
+    if (typeof created.id !== 'string' || !created.id.startsWith('file_')) {
+      throw new PlatformStripeApiError('respuesta sin id de fichero', {
+        status: 200,
+        operation: 'POST /v1/files',
+      });
+    }
+    return { id: created.id };
   }
 
   async v1<T = StripeObject>(

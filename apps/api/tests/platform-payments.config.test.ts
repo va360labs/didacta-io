@@ -100,6 +100,7 @@ describe('modo plataforma ENCENDIDO — valores por defecto del plan', () => {
       enabled: true,
       secretKey: CLAVE,
       livemode: false,
+      publishableKey: null,
       webhookSecrets: [SECRETO_1],
       defaultFeeBps: 500,
       lossesCollector: 'stripe',

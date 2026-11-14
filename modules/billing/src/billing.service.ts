@@ -40,7 +40,7 @@ import {
   StripeApiError,
   WebhookTenantMismatchError,
 } from './errors.js';
-import type { StripeAdapter } from './stripe.client.js';
+import type { CheckoutLocale, CheckoutUiMode, StripeAdapter } from './stripe.client.js';
 
 /** Resuelve el StripeAdapter a usar para un tenant concreto, por llamada. */
 export type StripeAdapterResolver = (tenantId: string) => Promise<StripeAdapter>;
@@ -127,6 +127,16 @@ export interface StartCheckoutInput {
   successUrl?: string;
   cancelUrl?: string;
   /**
+   * `embedded`: el pago se pinta DENTRO de la ficha de venta del aula (la
+   * misma Checkout Session con `ui_mode: 'embedded'`) y vuelve a `returnUrl`.
+   * Sin él, el redirect de siempre a la página de Stripe.
+   */
+  uiMode?: CheckoutUiMode;
+  /** Vuelta del embebido, con `{CHECKOUT_SESSION_ID}`. Obligatoria con `embedded`. */
+  returnUrl?: string;
+  /** Idioma de la pantalla de pago de Stripe; sin él, el del navegador. */
+  checkoutLocale?: CheckoutLocale;
+  /**
    * Idioma activo de la UI del comprador. Viaja opaco en la metadata de la
    * session y vuelve en el webhook, que es lo único que sobrevive al salto a
    * Stripe: en el checkout PÚBLICO la fila de `user` no existe todavía. Este
@@ -188,7 +198,33 @@ export interface CourseOffer {
 export interface StartCheckoutResult {
   orderId: string;
   sessionId: string;
-  url: string;
+  /** Página alojada de Stripe; `null` si el pago es embebido. */
+  url: string | null;
+  /** Secreto del pago embebido; `null` si es el alojado. */
+  clientSecret: string | null;
+  /**
+   * Lo que cobrará la sesión creada (unidad mínima) y su moneda. Es lo que
+   * enseña la pantalla de pago: el precio pudo cambiar desde que se pintó la
+   * ficha, y lo que vale es lo que Stripe va a cobrar.
+   */
+  amountTotal: number | null;
+  currency: string | null;
+}
+
+/**
+ * Lo que la vuelta del pago puede decir de una sesión: si está pagada y si
+ * sigue abierta (el comprador puede reintentar). No concede nada.
+ */
+export interface CheckoutSessionState {
+  status: 'open' | 'complete' | 'expired' | null;
+  paid: boolean;
+  /** Curso de la orden (para el resumen de la pantalla de gracias). */
+  courseId: string;
+  /** Lo cobrado (o por cobrar), en unidad mínima, y su moneda. */
+  amount: number | null;
+  currency: string | null;
+  /** Cuándo se pagó (o se creó la sesión, si aún no consta el cobro). ISO 8601. */
+  at: string | null;
 }
 
 /**
@@ -806,6 +842,10 @@ export class BillingService {
         priceId: product.stripePriceId,
         successUrl: input.successUrl ?? this.urls.successUrl(input.courseId),
         cancelUrl: input.cancelUrl ?? this.urls.cancelUrl(input.courseId),
+        ...(input.uiMode === 'embedded'
+          ? { uiMode: 'embedded' as const, returnUrl: input.returnUrl }
+          : {}),
+        ...(input.checkoutLocale ? { locale: input.checkoutLocale } : {}),
         customerEmail: input.userEmail || undefined,
         // Paridad con la membresía (`membership.service.ts`), que lo activa
         // desde siempre: los códigos promocionales se crean una vez en el
@@ -849,7 +889,64 @@ export class BillingService {
       currency: product.currency,
     });
 
-    return { orderId: updated.id, sessionId: session.id, url: session.url };
+    return {
+      orderId: updated.id,
+      sessionId: session.id,
+      url: session.url,
+      clientSecret: session.clientSecret ?? null,
+      amountTotal: session.amountTotal ?? null,
+      currency: session.currency ?? null,
+    };
+  }
+
+  /**
+   * Estado de una sesión de pago de ESTE tenant, para la pantalla de vuelta.
+   *
+   * La sesión tiene que ser de una orden del tenant (la fila manda: un `cs_…`
+   * de otra academia es «no existe», `null`). Después se pregunta a Stripe por
+   * la cuenta del tenant: la orden solo pasa a COMPLETED cuando llega el
+   * webhook, y quien vuelve del pago no tiene por qué esperarlo para saber si
+   * su tarjeta pasó.
+   */
+  async getCheckoutSessionState(
+    tenantId: string,
+    sessionId: string,
+  ): Promise<CheckoutSessionState | null> {
+    const order = await this.prisma.modBillingOrder.findFirst({
+      where: { tenantId, stripeSessionId: sessionId },
+      select: {
+        status: true,
+        courseId: true,
+        amountPaid: true,
+        currency: true,
+        completedAt: true,
+      },
+    });
+    if (!order) return null;
+    // Ya entregada por el webhook: no hace falta preguntar a Stripe.
+    if (order.status === 'COMPLETED') {
+      return {
+        status: 'complete',
+        paid: true,
+        courseId: order.courseId,
+        amount: order.amountPaid,
+        currency: order.currency,
+        at: order.completedAt?.toISOString() ?? null,
+      };
+    }
+    const stripe = await this.stripeFor(tenantId);
+    const session = await stripe.retrieveCheckoutSession(sessionId);
+    if (session.metadata['tenantId'] && session.metadata['tenantId'] !== tenantId) return null;
+    return {
+      status: session.status,
+      paid:
+        session.status === 'complete' &&
+        (session.paymentStatus === 'paid' || session.paymentStatus === 'no_payment_required'),
+      courseId: order.courseId,
+      amount: session.amountTotal ?? null,
+      currency: session.currency ?? order.currency,
+      at: session.created ? new Date(session.created * 1000).toISOString() : null,
+    };
   }
 
   // ---------------- Webhook handler (idempotente) ----------------

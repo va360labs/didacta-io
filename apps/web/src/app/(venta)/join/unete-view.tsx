@@ -15,16 +15,28 @@
  *     activos, cursos, horas), chips de filtrado por categoría real, parrilla
  *     de tarjetas con DETALLE EXPANDIBLE (módulos, profesor, precio suelto),
  *     banner de ahorro, FAQ y testimonial (solo si el admin lo configuró).
- * Cero datos inventados: todo sale de la API del tenant. El pago es Stripe
- * Checkout hosted (redirect).
+ * Cero datos inventados: todo sale de la API del tenant. El pago se pinta
+ * DENTRO de la página (Checkout embebido, `AcademyCheckoutStep`) cuando el aula
+ * puede, y si no por el redirect a Stripe. La vuelta pregunta si se pagó y
+ * resume qué, cuánto y cuándo (`PurchaseThanks`).
  */
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { useLocale, useTranslations } from 'next-intl';
 import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/icon';
+import { AcademyCheckoutStep } from '@/components/checkout/academy-checkout-step';
+import { CheckoutTrust, useCheckoutSeller } from '@/components/checkout/checkout-trust';
+import { PurchaseThanks } from '@/components/checkout/purchase-thanks';
+import {
+  checkoutOutcome,
+  getMembershipCheckoutSession,
+  isCheckoutSessionId,
+  type CheckoutStart,
+  type MembershipCheckoutSessionView,
+} from '@/lib/checkout';
 import { ApiHttpError } from '@/lib/api-client';
 import { authStorage } from '@/lib/auth-storage';
 import { formatDate, formatDuration, formatNumber } from '@/lib/i18n/format';
@@ -87,6 +99,8 @@ export function UneteView() {
   const locale = useLocale();
   const params = useSearchParams();
   const status = params.get('status');
+  const returnSessionId = params.get('session_id');
+  const returnEmbedded = params.get('checkout') === 'embedded';
   const { tenant } = useTenantContext();
 
   const [page, setPage] = useState<MembershipPage | null>(null);
@@ -100,6 +114,32 @@ export function UneteView() {
   const tErrors = useTranslations('errors');
   // Renuncia al desistimiento: sin marcarla no se puede pagar.
   const waiver = useWithdrawalWaiver('membership');
+  // Quien pulsa «Continuar» sin marcarla: se le señala la casilla.
+  const [waiverNudge, setWaiverNudge] = useState(false);
+  const waiverInput = useRef<HTMLInputElement>(null);
+  // Pago embebido abierto (la sesión recién creada), o `null` en la página.
+  const [embedded, setEmbedded] = useState<Extract<CheckoutStart, { mode: 'embedded' }> | null>(
+    null,
+  );
+  const seller = useCheckoutSeller();
+  // Vuelta del pago: lo que la API sabe de esa sesión (undefined = preguntando).
+  const [returnView, setReturnView] = useState<MembershipCheckoutSessionView | null | undefined>(
+    undefined,
+  );
+  useEffect(() => {
+    if (status !== 'success') return;
+    if (!isCheckoutSessionId(returnSessionId)) {
+      setReturnView(null);
+      return;
+    }
+    let alive = true;
+    getMembershipCheckoutSession(returnSessionId)
+      .then((v) => alive && setReturnView(v))
+      .catch(() => alive && setReturnView(null));
+    return () => {
+      alive = false;
+    };
+  }, [status, returnSessionId]);
 
   const session = useMemo(() => authStorage.getSession(), []);
 
@@ -139,30 +179,78 @@ export function UneteView() {
 
   const selected = page?.plans.find((p) => p.id === selectedId) ?? null;
 
-  const checkout = useCallback(async () => {
-    if (!selected || !waiver.acceptance) return;
-    setPaying(true);
-    setPayError(null);
-    try {
-      const { url } = await startMembershipCheckout(
-        selected.id,
-        session?.user.email,
-        getStoredReferralCode() ?? undefined,
-        waiver.acceptance,
-      );
-      window.location.assign(url);
-    } catch (err) {
-      if (err instanceof ApiHttpError && err.code?.startsWith('CHECKOUT_WITHDRAWAL_WAIVER')) {
-        setPayError(apiErrorMessage(err, tErrors));
-        waiver.reload();
-      } else {
-        setPayError(t('unete.payError'));
+  const checkout = useCallback(
+    async (uiMode: 'embedded' | 'hosted' = 'embedded') => {
+      if (!selected) return;
+      if (!waiver.acceptance) {
+        // El botón no está apagado sin más: dice por qué y lleva a la casilla.
+        setWaiverNudge(true);
+        waiverInput.current?.focus();
+        waiverInput.current?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        return;
       }
-      setPaying(false);
-    }
-  }, [selected, session, t, tErrors, waiver]);
+      setPaying(true);
+      setPayError(null);
+      try {
+        const start = await startMembershipCheckout(
+          selected.id,
+          session?.user.email,
+          getStoredReferralCode() ?? undefined,
+          waiver.acceptance,
+          uiMode,
+        );
+        if (start.mode === 'embedded') {
+          setEmbedded(start);
+          setPaying(false);
+          return;
+        }
+        window.location.assign(start.url);
+      } catch (err) {
+        if (err instanceof ApiHttpError && err.code?.startsWith('CHECKOUT_WITHDRAWAL_WAIVER')) {
+          setPayError(apiErrorMessage(err, tErrors));
+          waiver.reload();
+        } else {
+          setPayError(t('unete.payError'));
+        }
+        setPaying(false);
+      }
+    },
+    [selected, session, t, tErrors, waiver],
+  );
+  const closeEmbedded = useCallback(() => setEmbedded(null), []);
 
   // ── Estados de retorno del checkout ────────────────────────────────────────
+  if (status === 'success' && (returnSessionId || returnEmbedded)) {
+    const outcome =
+      returnView === undefined
+        ? ('checking' as const)
+        : returnView === null
+          ? returnEmbedded
+            ? ('unknown' as const)
+            : ('paid' as const)
+          : checkoutOutcome(returnView);
+    return (
+      <PurchaseThanks
+        outcome={outcome}
+        summary={
+          returnView
+            ? {
+                kind: 'membership',
+                title: returnView.plan?.name ?? tenant?.name ?? null,
+                imageUrl: null,
+                amount: returnView.amount,
+                currency: returnView.currency,
+                at: returnView.at,
+              }
+            : null
+        }
+        signedIn={session !== null}
+        nextPath="/courses"
+        retryHref="/join"
+      />
+    );
+  }
+
   if (status === 'success') {
     return (
       <ReturnCard tone="success" title={t('unete.paymentReceived')}>
@@ -228,6 +316,52 @@ export function UneteView() {
     page.standaloneTotalCents > selected.amountCents
       ? page.standaloneTotalCents - selected.amountCents
       : null;
+
+  if (embedded && selected) {
+    return (
+      <AcademyCheckoutStep
+        academy={{
+          name: tenant?.name ?? '',
+          logoUrl: tenant?.logoUrl ?? null,
+          logoDisplayMode: tenant?.logoDisplayMode,
+        }}
+        item={{
+          kind: 'membership',
+          title: selected.name || page.headline || t('unete.defaultHeadline'),
+          detail: `${intervalDescriptionLabel(t, selected.intervalMonths)} · ${formatCents(
+            selected.amountCents,
+            selected.currency,
+            { locale },
+          )}${intervalSuffixLabel(t, selected.intervalMonths)}`,
+          imageUrl: null,
+        }}
+        amount={embedded.amountTotal}
+        currency={embedded.currency}
+        totalNote={
+          trialDays > 0
+            ? t('unete.trialFirstCharge', {
+                days: trialDays,
+                amount: formatCents(selected.amountCents, selected.currency, { locale }),
+                date: formatDate(firstChargeDate, {
+                  locale,
+                  day: 'numeric',
+                  month: 'long',
+                  year: 'numeric',
+                }),
+              })
+            : t('pago.renewsNote')
+        }
+        seller={seller}
+        clientSecret={embedded.clientSecret}
+        publishableKey={embedded.publishableKey}
+        onBack={closeEmbedded}
+        onUnavailable={() => {
+          setEmbedded(null);
+          void checkout('hosted');
+        }}
+      />
+    );
+  }
 
   // Chips de filtrado: categorías REALES presentes en el catálogo.
   // Los precios de referencia de cursos no llevan moneda propia: se muestran
@@ -422,8 +556,13 @@ export function UneteView() {
               waiver={waiver.waiver}
               failed={waiver.failed}
               checked={waiver.checked}
-              onCheckedChange={waiver.setChecked}
+              onCheckedChange={(value) => {
+                waiver.setChecked(value);
+                if (value) setWaiverNudge(false);
+              }}
               onRetry={waiver.reload}
+              nudge={waiverNudge}
+              inputRef={waiverInput}
             />
 
             {payError && (
@@ -432,19 +571,36 @@ export function UneteView() {
               </p>
             )}
 
+            {/* Sin la casilla el botón no está `disabled` (no diría nada): está
+                «aria-disabled» y, al pulsarlo, señala la casilla. */}
             <Button
               size="lg"
-              className="mt-4 w-full"
-              disabled={!selected || paying || !waiver.acceptance}
-              title={!waiver.acceptance ? t('withdrawalWaiver.mustTick') : undefined}
+              className={`mt-4 w-full ${!waiver.acceptance ? 'opacity-60' : ''}`}
+              disabled={!selected || paying}
+              aria-disabled={!waiver.acceptance || undefined}
+              aria-describedby={!waiver.acceptance ? 'unete-casilla-pendiente' : undefined}
               onClick={() => void checkout()}
+              data-testid="unete-pagar"
             >
               <Icon name="lock" className="mr-2 h-4 w-4" />
               {paying ? t('unete.openingPayment') : t('unete.continueToPayment')}
             </Button>
+            {!waiver.acceptance ? (
+              <span id="unete-casilla-pendiente" className="sr-only">
+                {t('withdrawalWaiver.mustTickToPay')}
+              </span>
+            ) : null}
             <p className="mt-3 text-center text-xs text-text-subtle">
               {t('unete.securePaymentNote')}
             </p>
+            <div className="mt-4 border-t border-border-soft pt-4">
+              <CheckoutTrust
+                kind="membership"
+                seller={seller}
+                fallbackName={tenant?.name ?? null}
+                variant="compact"
+              />
+            </div>
           </div>
         </section>
 

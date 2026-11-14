@@ -11,7 +11,11 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { StripeSdkAdapter, type StripeAdapterOptions } from '../src/stripe.client.js';
+import {
+  StripeSdkAdapter,
+  toCheckoutLocale,
+  type StripeAdapterOptions,
+} from '../src/stripe.client.js';
 
 const PARAMS = {
   priceId: 'price_1Abc',
@@ -125,6 +129,126 @@ describe('StripeSdkAdapter.createCheckoutSession — cuenta compartida (Connect)
     const sent = calls[0] as Record<string, unknown>;
     expect(sent).not.toHaveProperty('allow_promotion_codes');
     expect(sent['payment_intent_data']).toEqual({ metadata: PARAMS.metadata });
+  });
+});
+
+function captureEmbedded(
+  options?: StripeAdapterOptions,
+  clientSecret: string | null = 'cs_test_1_secret_x',
+) {
+  const calls: Array<Record<string, unknown>> = [];
+  class FakeStripe {
+    checkout = {
+      sessions: {
+        create: async (params: Record<string, unknown>) => {
+          calls.push(params);
+          return {
+            id: 'cs_test_1',
+            url: null,
+            client_secret: clientSecret,
+            amount_total: 100,
+            currency: 'eur',
+          };
+        },
+        retrieve: async (id: string) => ({
+          id,
+          status: 'complete',
+          payment_status: 'paid',
+          metadata: { tenantId: 't1' },
+          amount_total: 100,
+          currency: 'eur',
+          created: 1_794_000_000,
+        }),
+      },
+    };
+  }
+  const adapter = new StripeSdkAdapter('sk_test_x', 'whsec_x', FakeStripe as never, options ?? {});
+  return { adapter, calls };
+}
+
+const RETURN_URL =
+  'https://aula.test/catalog/checkout/success?session_id={CHECKOUT_SESSION_ID}&checkout=embedded';
+
+describe('StripeSdkAdapter.createCheckoutSession — pago embebido en la ficha del aula', () => {
+  it('ui_mode embedded + return_url, sin success/cancel, y devuelve el secreto (no URL)', async () => {
+    const { adapter, calls } = captureEmbedded();
+    const result = await adapter.createCheckoutSession({
+      ...PARAMS,
+      uiMode: 'embedded',
+      returnUrl: RETURN_URL,
+      locale: 'pt-BR',
+    });
+    expect(result).toEqual({
+      id: 'cs_test_1',
+      url: null,
+      clientSecret: 'cs_test_1_secret_x',
+      amountTotal: 100,
+      currency: 'eur',
+    });
+    const sent = calls[0]!;
+    expect(sent['ui_mode']).toBe('embedded');
+    expect(sent['return_url']).toBe(RETURN_URL);
+    expect(sent['locale']).toBe('pt-BR');
+    expect(sent).not.toHaveProperty('success_url');
+    expect(sent).not.toHaveProperty('cancel_url');
+    // Lo demás, igual que en el alojado: misma entrega por el mismo webhook.
+    expect(sent['client_reference_id']).toBe(PARAMS.metadata.orderId);
+    expect(sent['metadata']).toEqual(PARAMS.metadata);
+    expect(sent['payment_intent_data']).toEqual({ metadata: PARAMS.metadata });
+  });
+
+  it('con Connect conserva on_behalf_of y transfer_group (cobro y transferencia separados)', async () => {
+    const { adapter, calls } = captureEmbedded({
+      connect: { onBehalfOf: 'acct_1Creador' },
+      promotionCodes: 'deny',
+    });
+    await adapter.createCheckoutSession({ ...PARAMS, uiMode: 'embedded', returnUrl: RETURN_URL });
+    expect(calls[0]!['payment_intent_data']).toEqual({
+      metadata: PARAMS.metadata,
+      on_behalf_of: 'acct_1Creador',
+      transfer_group: 'didacta_44444444-4444-4444-8444-444444444444',
+    });
+    expect(calls[0]).not.toHaveProperty('allow_promotion_codes');
+  });
+
+  it('sin returnUrl no llama a Stripe', async () => {
+    const { adapter, calls } = captureEmbedded();
+    await expect(adapter.createCheckoutSession({ ...PARAMS, uiMode: 'embedded' })).rejects.toThrow(
+      /returnUrl/,
+    );
+    expect(calls).toHaveLength(0);
+  });
+
+  it('una sesión embebida sin client_secret es un error, no un pago sin pantalla', async () => {
+    const { adapter } = captureEmbedded(undefined, null);
+    await expect(
+      adapter.createCheckoutSession({ ...PARAMS, uiMode: 'embedded', returnUrl: RETURN_URL }),
+    ).rejects.toThrow(/client_secret/);
+  });
+
+  it('retrieveCheckoutSession devuelve solo estado, cobro y metadata', async () => {
+    const { adapter } = captureEmbedded();
+    await expect(adapter.retrieveCheckoutSession('cs_test_1')).resolves.toEqual({
+      id: 'cs_test_1',
+      status: 'complete',
+      paymentStatus: 'paid',
+      metadata: { tenantId: 't1' },
+      amountTotal: 100,
+      currency: 'eur',
+      created: 1_794_000_000,
+    });
+  });
+});
+
+describe('toCheckoutLocale', () => {
+  it('traduce los idiomas del producto y deja el resto al navegador', () => {
+    expect(toCheckoutLocale('es')).toBe('es');
+    expect(toCheckoutLocale('es-ES')).toBe('es');
+    expect(toCheckoutLocale('en')).toBe('en');
+    expect(toCheckoutLocale('pt-BR')).toBe('pt-BR');
+    expect(toCheckoutLocale('pt')).toBe('pt-BR');
+    expect(toCheckoutLocale('fr')).toBeUndefined();
+    expect(toCheckoutLocale(undefined)).toBeUndefined();
   });
 });
 

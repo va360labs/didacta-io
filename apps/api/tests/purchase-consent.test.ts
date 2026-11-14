@@ -261,7 +261,11 @@ describe('sin la casilla no se paga', () => {
       email: 'Comprador@Example.com',
       withdrawalWaiver: { accepted: true, version: WITHDRAWAL_WAIVER_VERSION, locale: 'es' },
     });
-    expect(result).toEqual({ url: 'https://stripe/cs_test_1', sessionId: 'cs_test_1' });
+    expect(result).toEqual({
+      mode: 'hosted',
+      url: 'https://stripe/cs_test_1',
+      sessionId: 'cs_test_1',
+    });
     expect(billing.startCheckout).toHaveBeenCalledOnce();
     expect(prisma.rows).toHaveLength(1);
     expect(prisma.rows[0]).toMatchObject({

@@ -55,7 +55,7 @@ test.describe('PROD · ficha de venta del curso', () => {
     // que el spec cubre las dos sin depender del curso concreto.
     // Ojo: `.locator('..')` sobre un locator con varias coincidencias viola el
     // modo estricto — hay que reducir a UNA antes de subir al contenedor.
-    const cajasPrecio = page.getByText('Pago único · IVA incluido');
+    const cajasPrecio = page.getByText('Pago único · Precio final');
     await expect(cajasPrecio.first()).toBeVisible();
     await expect(cajasPrecio.first().locator('xpath=..')).toContainText('€');
     await expect(page.getByRole('button', { name: /^Comprar/i }).first()).toBeVisible();

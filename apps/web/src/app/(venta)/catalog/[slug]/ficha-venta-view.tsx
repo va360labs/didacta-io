@@ -8,8 +8,10 @@
 /**
  * Ficha pública de venta: portada, descripción y las opciones de compra
  * reales del curso (precio único o multi-formato con destacada). El CTA
- * lanza el checkout ANÓNIMO de Stripe — la cuenta del comprador se crea
- * tras el pago con el email confirmado en la pasarela.
+ * abre el pago ANÓNIMO de Stripe DENTRO de la ficha (`AcademyCheckoutStep`:
+ * cabecera, color y resumen del aula) cuando el aula puede; si no, el
+ * redirect de siempre. La cuenta del comprador se crea tras el pago con el
+ * email confirmado en la pasarela.
  *
  * El curso llega pintado desde el servidor (`initialCourse`, con su
  * descripción ya saneada en `description`): así está en el HTML que lee un
@@ -18,12 +20,15 @@
  * ofrece volver al catálogo.
  */
 
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useLocale, useTranslations } from 'next-intl';
 import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/icon';
+import { AcademyCheckoutStep } from '@/components/checkout/academy-checkout-step';
+import { CheckoutTrust, useCheckoutSeller } from '@/components/checkout/checkout-trust';
+import type { CheckoutStart } from '@/lib/checkout';
 import {
   WithdrawalWaiverCheckbox,
   useWithdrawalWaiver,
@@ -77,6 +82,14 @@ export function FichaVentaView({ initialCourse, description, initialBrand }: Pro
   );
   const [paying, setPaying] = useState(false);
   const [payError, setPayError] = useState<string | null>(null);
+  // Pago embebido abierto (la sesión recién creada), o `null` en la ficha.
+  const [checkout, setCheckout] = useState<Extract<CheckoutStart, { mode: 'embedded' }> | null>(
+    null,
+  );
+  // Quien pulsa «Comprar» sin marcar la casilla: se le señala la casilla.
+  const [waiverNudge, setWaiverNudge] = useState(false);
+  const waiverInput = useRef<HTMLInputElement>(null);
+  const seller = useCheckoutSeller();
 
   // Si hay sesión (alguien logueado llegó a la página pública), su email
   // precarga el checkout; el provisioning lo reconocerá y no duplicará cuenta.
@@ -109,44 +122,62 @@ export function FichaVentaView({ initialCourse, description, initialBrand }: Pro
 
   const selected = course?.options.find((o) => o.id === selectedId) ?? null;
 
-  const comprar = useCallback(async () => {
-    if (!course || !selected || !waiver.acceptance) return;
-    setPaying(true);
-    setPayError(null);
-    try {
-      const { url } = await startPublicCheckout(course.id, {
-        optionId: selected.id,
-        email: session?.user.email,
-        withdrawalWaiver: waiver.acceptance,
-        referralCode: getStoredReferralCode() ?? undefined,
-        // Lo que tiene delante: si el precio cambió con la página abierta, la
-        // API no cobra otro importe (antes enseñaba 29 € y se cobró 1 €).
-        expectedPrice: { unitAmount: selected.unitAmount, currency: selected.currency },
-      });
-      window.location.assign(url);
-    } catch (err) {
-      if (err instanceof ApiHttpError && err.code?.startsWith('CHECKOUT_WITHDRAWAL_WAIVER')) {
-        setPayError(apiErrorMessage(err, tErrors));
-        waiver.reload();
-      } else if (err instanceof ApiHttpError && err.code === 'BILLING_PRICE_CHANGED') {
-        setPayError(t('ficha.priceChanged'));
-        // Se vuelve a pedir el curso con sus precios de ahora; la opción
-        // elegida se mantiene si sigue existiendo.
-        const fresh = await getPublicCatalog()
-          .then((r) => r.courses.find((c) => c.id === course.id) ?? null)
-          .catch(() => null);
-        if (fresh) {
-          setCourse(fresh);
-          if (!fresh.options.some((o) => o.id === selected.id)) {
-            setSelectedId(featuredOption(fresh.options)?.id ?? null);
-          }
-        }
-      } else {
-        setPayError(t('ficha.payError'));
+  const comprar = useCallback(
+    async (uiMode: 'embedded' | 'hosted' = 'embedded') => {
+      if (!course || !selected) return;
+      if (!waiver.acceptance) {
+        // El botón no está apagado sin más: dice por qué y lleva a la casilla.
+        setWaiverNudge(true);
+        waiverInput.current?.focus();
+        waiverInput.current?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        return;
       }
-      setPaying(false);
-    }
-  }, [course, selected, session, t, tErrors, waiver]);
+      setPaying(true);
+      setPayError(null);
+      try {
+        const start = await startPublicCheckout(course.id, {
+          optionId: selected.id,
+          email: session?.user.email,
+          withdrawalWaiver: waiver.acceptance,
+          referralCode: getStoredReferralCode() ?? undefined,
+          // Lo que tiene delante: si el precio cambió con la página abierta, la
+          // API no cobra otro importe (antes enseñaba 29 € y se cobró 1 €).
+          expectedPrice: { unitAmount: selected.unitAmount, currency: selected.currency },
+          uiMode,
+        });
+        if (start.mode === 'embedded') {
+          setCheckout(start);
+          setPaying(false);
+          return;
+        }
+        window.location.assign(start.url);
+      } catch (err) {
+        if (err instanceof ApiHttpError && err.code?.startsWith('CHECKOUT_WITHDRAWAL_WAIVER')) {
+          setPayError(apiErrorMessage(err, tErrors));
+          waiver.reload();
+        } else if (err instanceof ApiHttpError && err.code === 'BILLING_PRICE_CHANGED') {
+          setPayError(t('ficha.priceChanged'));
+          // Se vuelve a pedir el curso con sus precios de ahora; la opción
+          // elegida se mantiene si sigue existiendo.
+          const fresh = await getPublicCatalog()
+            .then((r) => r.courses.find((c) => c.id === course.id) ?? null)
+            .catch(() => null);
+          if (fresh) {
+            setCourse(fresh);
+            if (!fresh.options.some((o) => o.id === selected.id)) {
+              setSelectedId(featuredOption(fresh.options)?.id ?? null);
+            }
+          }
+        } else {
+          setPayError(t('ficha.payError'));
+        }
+        setPaying(false);
+      }
+    },
+    [course, selected, session, t, tErrors, waiver],
+  );
+
+  const closeCheckout = useCallback(() => setCheckout(null), []);
 
   if (course === undefined) {
     return (
@@ -168,6 +199,40 @@ export function FichaVentaView({ initialCourse, description, initialBrand }: Pro
           <Link href="/catalog">{t('backToCatalog')}</Link>
         </Button>
       </div>
+    );
+  }
+
+  if (checkout && selected) {
+    const shownPrice = selected.unitAmount;
+    const priceChanged =
+      checkout.amountTotal !== null &&
+      checkout.currency?.toLowerCase() === selected.currency.toLowerCase() &&
+      checkout.amountTotal !== shownPrice;
+    return (
+      <AcademyCheckoutStep
+        academy={{
+          name: tenant?.name ?? '',
+          logoUrl: tenant?.logoUrl ?? null,
+          logoDisplayMode: tenantCtx?.logoDisplayMode,
+        }}
+        item={{
+          kind: 'course',
+          title: course.title,
+          detail: selected.name || null,
+          imageUrl: course.thumbnailUrl,
+        }}
+        amount={checkout.amountTotal}
+        currency={checkout.currency}
+        totalNote={priceChanged ? t('pago.priceUpdated') : t('ficha.oneTimePayment')}
+        seller={seller}
+        clientSecret={checkout.clientSecret}
+        publishableKey={checkout.publishableKey}
+        onBack={closeCheckout}
+        onUnavailable={() => {
+          setCheckout(null);
+          void comprar('hosted');
+        }}
+      />
     );
   }
 
@@ -343,8 +408,13 @@ export function FichaVentaView({ initialCourse, description, initialBrand }: Pro
               waiver={waiver.waiver}
               failed={waiver.failed}
               checked={waiver.checked}
-              onCheckedChange={waiver.setChecked}
+              onCheckedChange={(value) => {
+                waiver.setChecked(value);
+                if (value) setWaiverNudge(false);
+              }}
               onRetry={waiver.reload}
+              nudge={waiverNudge}
+              inputRef={waiverInput}
             />
 
             {payError ? (
@@ -353,14 +423,30 @@ export function FichaVentaView({ initialCourse, description, initialBrand }: Pro
               </p>
             ) : null}
 
+            {/* Sin la casilla el botón no está `disabled` (no diría nada): está
+                «aria-disabled» y, al pulsarlo, señala la casilla. */}
             <Button
               size="lg"
-              onClick={comprar}
-              disabled={!selected || paying || !waiver.acceptance}
-              title={!waiver.acceptance ? t('withdrawalWaiver.mustTick') : undefined}
+              onClick={() => void comprar()}
+              disabled={!selected || paying}
+              aria-disabled={!waiver.acceptance || undefined}
+              aria-describedby={!waiver.acceptance ? 'ficha-casilla-pendiente' : undefined}
+              className={!waiver.acceptance ? 'opacity-60' : undefined}
+              data-testid="ficha-comprar"
             >
               {paying ? t('ficha.openingPayment') : t('ficha.buyNow')}
             </Button>
+            {!waiver.acceptance ? (
+              <span id="ficha-casilla-pendiente" className="sr-only">
+                {t('withdrawalWaiver.mustTickToPay')}
+              </span>
+            ) : null}
+            <CheckoutTrust
+              kind="course"
+              seller={seller}
+              fallbackName={tenant?.name ?? null}
+              variant="compact"
+            />
             <p className="text-center text-xs text-text-subtle">{t('ficha.securePayment')}</p>
           </div>
         </section>

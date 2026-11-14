@@ -20,6 +20,12 @@ export const StripeCredentialsSchema = z.object({
   webhookSecret: z.string().min(1),
   /** Si falta, mod.subscriptions cae a `webhookSecret` (mismo criterio que hoy con SUBSCRIPTIONS_WEBHOOK_SECRET). */
   subscriptionsWebhookSecret: z.string().min(1).optional(),
+  /**
+   * Clave PUBLICABLE (`pk_…`) de la misma cuenta. Opcional: con ella el pago se
+   * pinta dentro de la ficha de venta del aula; sin ella, el redirect de
+   * siempre. No es secreta, pero viaja con el resto por comodidad.
+   */
+  publishableKey: z.string().min(1).optional(),
 });
 
 export type StripeCredentials = z.infer<typeof StripeCredentialsSchema>;

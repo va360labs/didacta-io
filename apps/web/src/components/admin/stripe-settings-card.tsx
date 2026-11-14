@@ -44,12 +44,14 @@ interface StripeFormValues {
   secretKey: string;
   webhookSecret: string;
   subscriptionsWebhookSecret: string;
+  publishableKey: string;
 }
 
 const EMPTY_FORM: StripeFormValues = {
   secretKey: '',
   webhookSecret: '',
   subscriptionsWebhookSecret: '',
+  publishableKey: '',
 };
 
 interface ToastState {
@@ -126,6 +128,7 @@ export function StripeSettingsCard({
         ...(form.subscriptionsWebhookSecret.trim()
           ? { subscriptionsWebhookSecret: form.subscriptionsWebhookSecret.trim() }
           : {}),
+        ...(form.publishableKey.trim() ? { publishableKey: form.publishableKey.trim() } : {}),
       };
       const updated = await api.upsert(payload);
       setDto(updated);
@@ -277,6 +280,20 @@ export function StripeSettingsCard({
                 code: (chunks) => <code>{chunks}</code>,
               })}
             </p>
+          </div>
+          <div className="space-y-1.5 sm:col-span-2">
+            <Label htmlFor="stripe-publishable-key">{t('stripe.publishableKeyLabel')}</Label>
+            <Input
+              id="stripe-publishable-key"
+              type="text"
+              autoComplete="off"
+              value={form.publishableKey}
+              onChange={(e) => setForm({ ...form, publishableKey: e.target.value })}
+              placeholder={dto?.publishableKey ?? t('stripe.publishableKeyPhEmpty')}
+              className="font-mono"
+              data-testid="stripe-publishable-key"
+            />
+            <p className="text-xs text-text-subtle">{t('stripe.publishableKeyHint')}</p>
           </div>
 
           {toast ? (

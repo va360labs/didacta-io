@@ -314,6 +314,9 @@ importers:
       '@radix-ui/react-slot':
         specifier: ^1.1.1
         version: 1.2.4(@types/react@19.2.14)(react@19.2.5)
+      '@stripe/stripe-js':
+        specifier: 9.14.0
+        version: 9.14.0
       '@tiptap/extension-image':
         specifier: ^3.22.5
         version: 3.22.5(@tiptap/core@3.22.5(@tiptap/pm@3.22.5))
@@ -3096,6 +3099,10 @@ packages:
 
   '@standard-schema/spec@1.1.0':
     resolution: {integrity: sha512-l2aFy5jALhniG5HgqrD6jXLi/rUWrKvqN/qJx6yoJsgKhblVd+iqqU4RCXavm/jPityDo5TCvKMnpjKnOriy0w==}
+
+  '@stripe/stripe-js@9.14.0':
+    resolution: {integrity: sha512-eCeVT2ee5YWyzz+m/cGwuatcPobe0MxzUGJtat8vUuZo4vNg1bzhoImKaTG2uB1ytIO03MrYAP4d6PTiGl+IZQ==}
+    engines: {node: '>=12.16'}
 
   '@swc/core-darwin-arm64@1.15.30':
     resolution: {integrity: sha512-VvpP+vq08HmGYewMWvrdsxh9s2lthz/808zXm8Yu5kaqeR8Yia2b0eYXleHQ3VAjoStUDk6LzTheBW9KXYQdMA==}
@@ -9521,6 +9528,8 @@ snapshots:
       tslib: 2.9.1
 
   '@standard-schema/spec@1.1.0': {}
+
+  '@stripe/stripe-js@9.14.0': {}
 
   '@swc/core-darwin-arm64@1.15.30':
     optional: true

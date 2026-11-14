@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
  */
 
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
 import type { BillingService } from '@didacta/mod-billing';
 import type { MembershipService } from '@didacta/mod-subscriptions';
 import {
@@ -15,6 +15,7 @@ import {
 } from '@didacta/mod-payouts';
 import { runAsTenant, runGlobalWithoutTenant } from '../../tenancy/tenant-context.storage';
 import type { PaymentModeNotReadyReason } from '../payment-mode.resolver';
+import { PayoutsBrandingSync } from './payouts-branding.sync';
 import { PayoutsRuntime } from './payouts-runtime.service';
 
 /** Motivo público de que un curso no esté a la venta en modo plataforma. */
@@ -75,7 +76,15 @@ export function withLocalCurrencyHint<T extends { readonly currency: string }>(
  */
 @Injectable()
 export class PlatformCheckoutGate {
-  constructor(private readonly runtime: PayoutsRuntime) {}
+  constructor(
+    private readonly runtime: PayoutsRuntime,
+    /**
+     * La marca del aula en su cuenta conectada: se comprueba (en segundo plano
+     * y como mucho cada 10 min) al abrir la ficha y al pagar, para que el pago
+     * y el recibo lleven el logo, el color y el nombre del aula.
+     */
+    @Optional() private readonly branding?: PayoutsBrandingSync,
+  ) {}
 
   /**
    * E8 — ¿Con qué monedas puede poner precios este aula? `null` si no cobra por
@@ -121,6 +130,7 @@ export class PlatformCheckoutGate {
     if (!mode.ready) {
       return { blockedReason: mode.reason, platform: true, settlementCurrency: null };
     }
+    this.branding?.ensureFresh(tenantId);
     const account = await runAsTenant(tenantId, () => this.runtime.accounts.getAccount(tenantId));
     return {
       blockedReason: null,
@@ -163,6 +173,7 @@ export class PlatformCheckoutGate {
     const mode = await runAsTenant(tenantId, () => this.runtime.mode.resolve(tenantId));
     if (mode.mode !== 'platform') return;
     if (!mode.ready) throw new PayoutsNotReadyError(mode.reason);
+    this.branding?.ensureFresh(tenantId);
     await runAsTenant(tenantId, () =>
       billing.resyncStripeCatalog(tenantId, {
         courseId,
@@ -185,6 +196,7 @@ export class PlatformCheckoutGate {
     const mode = await runAsTenant(tenantId, () => this.runtime.mode.resolve(tenantId));
     if (mode.mode !== 'platform') return;
     if (!mode.ready) throw new PayoutsNotReadyError(mode.reason);
+    this.branding?.ensureFresh(tenantId);
     await runAsTenant(tenantId, () =>
       membership.resyncStripeCatalog(tenantId, {
         planId,

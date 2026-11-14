@@ -545,7 +545,23 @@ export class MembershipService {
      * Este módulo NO lo interpreta ni lo valida — lo hace el host.
      */
     locale?: string;
-  }): Promise<{ url: string; sessionId: string }> {
+    /**
+     * `embedded`: el pago dentro de la página de venta del aula (vuelve a
+     * `returnUrl`). Sin él, el redirect de siempre a la página de Stripe.
+     */
+    uiMode?: 'hosted' | 'embedded';
+    /** Vuelta del embebido, con `{CHECKOUT_SESSION_ID}`. */
+    returnUrl?: string;
+    /** Idioma de la pantalla de pago de Stripe; sin él, el del navegador. */
+    checkoutLocale?: 'es' | 'en' | 'pt-BR';
+  }): Promise<{
+    url: string | null;
+    sessionId: string;
+    clientSecret: string | null;
+    /** Lo que cobra HOY la sesión creada (0 con prueba gratis) y su moneda. */
+    amountTotal: number | null;
+    currency: string | null;
+  }> {
     const config = await this.getConfig(args.tenantId);
     if (!config.active) throw new MembershipPageInactiveError();
 
@@ -566,6 +582,10 @@ export class MembershipService {
       priceId,
       successUrl: args.successUrl,
       cancelUrl: args.cancelUrl,
+      ...(args.uiMode === 'embedded'
+        ? { uiMode: 'embedded' as const, returnUrl: args.returnUrl }
+        : {}),
+      ...(args.checkoutLocale ? { locale: args.checkoutLocale } : {}),
       customerEmail: args.email,
       trialDays: plan.trialDays,
       allowPromotionCodes: true,
@@ -578,7 +598,49 @@ export class MembershipService {
         ...(args.locale ? { locale: args.locale } : {}),
       },
     });
-    return { url: session.url, sessionId: session.id };
+    return {
+      url: session.url,
+      sessionId: session.id,
+      clientSecret: session.clientSecret ?? null,
+      amountTotal: session.amountTotal ?? null,
+      currency: session.currency ?? null,
+    };
+  }
+
+  /**
+   * Estado de una sesión de pago de la membresía de ESTE tenant, para la
+   * pantalla de vuelta. La membresía no deja fila hasta el webhook, así que la
+   * pertenencia se comprueba con la metadata que pone `startMembershipCheckout`
+   * (`tenantId` + `membership`): una sesión de otra academia, o que no es de
+   * membresía, es «no existe» (`null`). No concede nada.
+   */
+  async getCheckoutSessionState(
+    tenantId: string,
+    sessionId: string,
+  ): Promise<{
+    status: 'open' | 'complete' | 'expired' | null;
+    paid: boolean;
+    planId: string | null;
+    amount: number | null;
+    currency: string | null;
+    at: string | null;
+  } | null> {
+    const stripe = await this.stripeFor(tenantId);
+    const session = await stripe.retrieveCheckoutSession(sessionId);
+    if (session.metadata['tenantId'] !== tenantId || session.metadata['membership'] !== '1') {
+      return null;
+    }
+    return {
+      planId: session.metadata['planId'] ?? null,
+      amount: session.amountTotal ?? null,
+      currency: session.currency ?? null,
+      at: session.created ? new Date(session.created * 1000).toISOString() : null,
+      status: session.status,
+      // Con prueba gratis no hay cobro hoy: `no_payment_required` también vale.
+      paid:
+        session.status === 'complete' &&
+        (session.paymentStatus === 'paid' || session.paymentStatus === 'no_payment_required'),
+    };
   }
 
   /**

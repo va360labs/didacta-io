@@ -62,6 +62,8 @@ export type {
   CreateSubscriptionCheckoutParams,
   CreateRecurringPriceParams,
   StripeSubscriptionCheckoutResult,
+  SubscriptionCheckoutSessionStatus,
+  SubscriptionCheckoutUiMode,
   StripePriceResult,
   StripeSubscriptionView,
   EndTrialNowResult,
