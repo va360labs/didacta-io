@@ -73,7 +73,7 @@ export class AuthController {
   @Get('tenant-context')
   @ApiOperation({
     summary:
-      'Resuelve el tenant del request por Host header. Devuelve { tenant: { id, slug, name, logoUrl, headline, subheadline, stats, subscriptionGate } } o { tenant: null }. `subscriptionGate.state` es `LOCKED` si el aula está en pausa y `OPEN` en cualquier otro caso.',
+      'Resuelve el tenant del request por Host header. Devuelve { tenant: { id, slug, name, logoUrl, faviconUrl, coverUrl, headline, subheadline, stats, subscriptionGate } } o { tenant: null }. `subscriptionGate.state` es `LOCKED` si el aula está en pausa y `OPEN` en cualquier otro caso.',
   })
   async tenantContext(@Req() req: FastifyRequest) {
     const hostStr = resolvePublicHost(req);
@@ -105,6 +105,8 @@ export class AuthController {
         name: tenant.name,
         logoUrl,
         logoDisplayMode: branding.logoDisplayMode,
+        faviconUrl: branding.faviconUrl,
+        coverUrl: branding.coverUrl,
         headline: branding.headline,
         subheadline: branding.subheadline,
         brandHue: branding.brandHue,

@@ -52,6 +52,13 @@ export interface SigninBrandingContext {
    * admin en mod.theming; las pantallas sin sesión lo necesitan aquí.
    */
   logoDisplayMode: 'logo_only' | 'logo_and_name';
+  /**
+   * Favicon y portada propios (mod.theming), tal cual se guardan (absolutos o
+   * relativos a la API del mismo dominio). Con ellos el web sirve el favicon y
+   * la vista previa en redes del aula; sin ellos genera los de sus iniciales.
+   */
+  faviconUrl: string | null;
+  coverUrl: string | null;
   stats: SigninBrandingStats;
   /**
    * True si el tenant tiene activada la página pública de membresía (/join).
@@ -74,6 +81,8 @@ const EMPTY: SigninBrandingContext = {
   brandHue: DEFAULT_BRAND_HUE,
   brandSaturation: DEFAULT_BRAND_SATURATION,
   logoDisplayMode: 'logo_only',
+  faviconUrl: null,
+  coverUrl: null,
   stats: { activeMembers: 0, publishedCourses: 0 },
   membershipPageActive: false,
 };
@@ -100,6 +109,8 @@ export class SigninContextService {
             brandHue: true,
             brandSaturation: true,
             logoDisplayMode: true,
+            faviconUrl: true,
+            coverUrl: true,
           },
         }),
         this.prisma.user.count({
@@ -124,6 +135,8 @@ export class SigninContextService {
         brandHue: theme?.brandHue ?? DEFAULT_BRAND_HUE,
         brandSaturation: theme?.brandSaturation ?? DEFAULT_BRAND_SATURATION,
         logoDisplayMode: theme?.logoDisplayMode === 'logo_and_name' ? 'logo_and_name' : 'logo_only',
+        faviconUrl: theme?.faviconUrl ?? null,
+        coverUrl: theme?.coverUrl ?? null,
         stats: { activeMembers, publishedCourses },
         membershipPageActive: membership?.active ?? false,
       };

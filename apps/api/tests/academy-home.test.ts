@@ -72,6 +72,7 @@ function world(tenants: Record<string, TenantFixture>) {
         if (!f) return null;
         return {
           name: f.name,
+          slug: `slug-${where.id}`,
           simpleMode: f.simpleMode,
           signupsFrozenAt: f.frozen ? new Date() : null,
           signupsFrozenReason: null,
@@ -385,6 +386,9 @@ describe('AcademyHomeService — caché por aula', () => {
     const b1 = await s.get('b');
     expect(a1.academy.name).toBe('Morning Pour');
     expect(b1.academy.name).toBe('Primer Sorbo');
+    // El slug de cada aula: la campaña de su pie «Powered by Didacta».
+    expect(a1.academy.slug).toBe('slug-a');
+    expect(b1.academy.slug).toBe('slug-b');
     expect(b1.offers.courses.map((c) => c.slug)).toEqual(['espresso-b']);
     expect(a1.offers.courses.map((c) => c.slug)).toEqual(['latte']);
     expect(w.calls.catalog).toBe(2);
