@@ -274,6 +274,12 @@ model User {
   updatedAt             DateTime   @updatedAt @map("updated_at")
   deletedAt             DateTime?  @map("deleted_at")
   lastLoginAt           DateTime?  @map("last_login_at")
+  /// Última vez que la persona usó el aula con su sesión: se sella al entrar y
+  /// al renovar el token (como mucho una vez cada 15 min). `lastLoginAt` solo
+  /// cambia al poner la contraseña, y quien deja la sesión abierta semanas
+  /// parecía inactivo aunque entrase a diario. Null = sin uso registrado
+  /// desde que existe la columna (se mira entonces `lastLoginAt`).
+  lastSeenAt            DateTime?  @map("last_seen_at")
   /// Timestamp en que el usuario completó el onboarding de primera vez.
   /// Null = aún no lo completó → el shell lo fuerza a /onboarding antes de
   /// dejarlo entrar. Backfill de usuarios previos = created_at (no se les
@@ -5472,4 +5478,133 @@ model VideoTenantState {
   updatedAt           DateTime  @updatedAt @map("updated_at")
 
   @@map("video_tenant_state")
+}
+
+// ============================================================================
+// mod.retention — Mensajes automáticos y miembros en riesgo
+// ============================================================================
+//
+// Los mensajes que programa quien administra el aula (bienvenida, primera
+// semana, recuperación…) y el registro de cada envío. Sin claves foráneas fuera
+// del módulo (ADR-016/039): el destinatario y el remitente son ids de `user`
+// que el host valida al enviar; el mensaje directo vive en mod.messaging y aquí
+// solo se guarda su id para medir lecturas y respuestas.
+
+/// Qué hace saltar un mensaje automático.
+enum RetentionTrigger {
+  /// Al entrar en el aula (alta de la cuenta).
+  WELCOME
+  /// A los N días de entrar (`days`).
+  DAYS_AFTER_JOIN
+  /// Si lleva `days` días sin entrar (con reenvío opcional `resendAfterDays`).
+  INACTIVE
+  /// Al terminar un curso (evento `learning.course.completed`).
+  COURSE_COMPLETED
+  /// En su primera publicación de la comunidad (`community.post.created`).
+  FIRST_POST
+  /// Al subir de nivel (`gamification.level.changed`).
+  LEVEL_UP
+  /// Cada año desde que empezó su suscripción o membresía.
+  ANNIVERSARY
+}
+
+/// Estado de un envío. SENDING es la marca que se pone ANTES de mandar el
+/// mensaje directo: si el proceso muere a mitad, el envío queda en FAILED y no
+/// se repite (nunca un mensaje duplicado).
+enum RetentionDeliveryStatus {
+  PENDING
+  SENDING
+  SENT
+  SKIPPED
+  FAILED
+}
+
+/// Ajustes del aula: quién firma los mensajes y las reglas anti-spam que se
+/// pueden mover. Sin fila = valores por defecto.
+model ModRetentionSettings {
+  tenantId            String   @id @map("tenant_id") @db.Uuid
+  /// Quién «escribe» los mensajes (su nombre y su foto). Null = la primera
+  /// persona que administra el aula.
+  senderUserId        String?  @map("sender_user_id") @db.Uuid
+  /// No enviar si el equipo le escribió a mano en estas horas (0 = no mirar).
+  manualCooldownHours Int      @default(24) @map("manual_cooldown_hours")
+  /// Franja en la hora local del alumno en la que se puede enviar [inicio, fin).
+  sendWindowStartHour Int      @default(9) @map("send_window_start_hour")
+  sendWindowEndHour   Int      @default(21) @map("send_window_end_hour")
+  updatedById         String?  @map("updated_by_id") @db.Uuid
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+
+  @@map("mod_retention_settings")
+}
+
+/// Un mensaje automático configurado por el aula.
+model ModRetentionAutomation {
+  id              String           @id @default(uuid()) @db.Uuid
+  tenantId        String           @map("tenant_id") @db.Uuid
+  trigger         RetentionTrigger
+  /// Nombre interno que ve quien administra («Bienvenida», «Primer mes»…).
+  name            String           @db.VarChar(120)
+  /// Plantilla de la que salió (`welcome`, `first_week`…); null = escrita a mano.
+  templateKey     String?          @map("template_key") @db.VarChar(40)
+  /// N de «a los N días» o de «si no entra en N días».
+  days            Int?
+  /// Solo INACTIVE: reenviar UNA vez si sigue sin entrar tras estos días.
+  resendAfterDays Int?             @map("resend_after_days")
+  body            String
+  /// Copia por correo (además del mensaje directo).
+  emailEnabled    Boolean          @default(false) @map("email_enabled")
+  emailSubject    String?          @map("email_subject") @db.VarChar(200)
+  enabled         Boolean          @default(false)
+  /// Desde cuándo cuenta: lo que pasó antes de activarlo no dispara nada (ni
+  /// un envío masivo a los miembros antiguos al encenderlo).
+  activatedAt     DateTime?        @map("activated_at")
+  createdById     String?          @map("created_by_id") @db.Uuid
+  createdAt       DateTime         @default(now()) @map("created_at")
+  updatedAt       DateTime         @updatedAt @map("updated_at")
+  /// Borrado lógico: se conservan sus envíos y sus métricas.
+  deletedAt       DateTime?        @map("deleted_at")
+
+  deliveries ModRetentionDelivery[]
+
+  @@index([tenantId, enabled])
+  @@index([enabled, deletedAt])
+  @@map("mod_retention_automation")
+}
+
+/// Un envío (o intento) de un mensaje automático a una persona. La clave
+/// (aula, mensaje, persona, ocurrencia) es la que hace imposible duplicarlo.
+model ModRetentionDelivery {
+  id             String                  @id @default(uuid()) @db.Uuid
+  tenantId       String                  @map("tenant_id") @db.Uuid
+  automationId   String                  @map("automation_id") @db.Uuid
+  userId         String                  @map("user_id") @db.Uuid
+  /// Qué ocurrencia es: `join`, `day:7`, `inactive:2026-11-01`, `course:<id>`…
+  occurrenceKey  String                  @map("occurrence_key") @db.VarChar(120)
+  status         RetentionDeliveryStatus @default(PENDING)
+  /// No antes de esta fecha (franja horaria del alumno, un mensaje al día…).
+  dueAt          DateTime                @map("due_at")
+  /// Contexto del disparo (curso terminado, nivel alcanzado…).
+  context        Json                    @default("{}")
+  /// Añadido a mano desde «Miembros en riesgo».
+  manual         Boolean                 @default(false)
+  sentAt         DateTime?               @map("sent_at")
+  conversationId String?                 @map("conversation_id") @db.Uuid
+  messageId      String?                 @map("message_id") @db.Uuid
+  emailSentAt    DateTime?               @map("email_sent_at")
+  emailSkipReason String?                @map("email_skip_reason") @db.VarChar(60)
+  readAt         DateTime?               @map("read_at")
+  repliedAt      DateTime?               @map("replied_at")
+  skipReason     String?                 @map("skip_reason") @db.VarChar(60)
+  lastError      String?                 @map("last_error") @db.VarChar(500)
+  createdAt      DateTime                @default(now()) @map("created_at")
+  updatedAt      DateTime                @updatedAt @map("updated_at")
+
+  automation ModRetentionAutomation @relation(fields: [automationId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, automationId, userId, occurrenceKey], map: "mod_retention_delivery_once")
+  @@index([tenantId, status, dueAt])
+  @@index([tenantId, userId, sentAt])
+  @@index([tenantId, automationId, status])
+  @@map("mod_retention_delivery")
 }
