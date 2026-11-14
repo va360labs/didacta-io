@@ -9,6 +9,7 @@ import { notFound } from 'next/navigation';
 import { getLocale, getTranslations } from 'next-intl/server';
 import { cache, Suspense } from 'react';
 import { publicHost } from '@/lib/academy-locale';
+import { ACADEMY_OG_PATH } from '@/lib/academy-mark';
 import {
   canonicalOrigin,
   canonicalUrl,
@@ -101,7 +102,9 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const title = academyName ? `${course.title} | ${academyName}` : course.title;
   const description = await descriptionFor(course, academyName);
   const canonical = origin ? canonicalUrl(origin, fichaPath(course.slug)) : null;
-  const image = course.thumbnailUrl;
+  // La imagen del curso o, sin ella, la del aula (portada, logo o sus
+  // iniciales sobre su color: `app/academy-brand/og`).
+  const image = course.thumbnailUrl ?? ACADEMY_OG_PATH;
   return {
     // Con el nombre del aula, el título es completo y no lleva el sufijo de
     // la plataforma; sin él (aula sin portada), el de siempre.
@@ -120,13 +123,13 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
       locale: ogLocale(await getLocale()),
       ...(academyName ? { siteName: academyName } : {}),
       ...(canonical ? { url: canonical } : {}),
-      ...(image ? { images: [{ url: image }] } : {}),
+      images: [{ url: image }],
     },
     twitter: {
-      card: image ? 'summary_large_image' : 'summary',
+      card: 'summary_large_image',
       title,
       description,
-      ...(image ? { images: [image] } : {}),
+      images: [image],
     },
   };
 }
@@ -171,7 +174,16 @@ export default async function FichaVentaPage({ params }: PageProps) {
       ) : null}
       <FichaVentaView
         initialCourse={course}
-        initialBrand={brand ? { name: brand.name, logoUrl: brand.logoUrl } : undefined}
+        initialBrand={
+          brand
+            ? {
+                name: brand.name,
+                logoUrl: brand.logoUrl,
+                brandHue: brand.brandHue,
+                brandSaturation: brand.brandSaturation,
+              }
+            : undefined
+        }
         // HTML saneado por la API (la frontera autoritativa): pintado aquí, en
         // el servidor, el navegador lo recibe tal cual y no lo vuelve a tocar.
         description={

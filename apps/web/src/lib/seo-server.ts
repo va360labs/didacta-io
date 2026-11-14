@@ -124,7 +124,12 @@ export async function fetchPublicCatalog(
 /** La marca pública del aula (lo que ya enseña su pantalla de acceso). */
 export interface PublicBrand {
   name: string;
+  /** Slug del aula (campaña del pie «Powered by»). `null` en una API anterior. */
+  slug: string | null;
   logoUrl: string | null;
+  /** Favicon propio y portada (mod.theming); `null` si no los hay. */
+  faviconUrl: string | null;
+  coverUrl: string | null;
   brandHue: number | null;
   brandSaturation: number | null;
 }
@@ -150,18 +155,61 @@ export async function fetchPublicBrand(
     });
     if (!res.ok) return null;
     const data = (await res.json()) as { tenant?: Record<string, unknown> | null };
-    const t = data.tenant;
-    if (!t || typeof t.name !== 'string') return null;
-    const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : null);
-    return {
-      name: t.name,
-      logoUrl: typeof t.logoUrl === 'string' ? t.logoUrl : null,
-      brandHue: num(t.brandHue),
-      brandSaturation: num(t.brandSaturation),
-    };
+    return data.tenant ? toPublicBrand(data.tenant) : null;
   } catch {
     return null;
   }
+}
+
+/** La respuesta de `/auth/tenant-context` → `PublicBrand` (solo lo que tiene forma). */
+export function toPublicBrand(t: Record<string, unknown>): PublicBrand | null {
+  if (typeof t.name !== 'string') return null;
+  const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : null);
+  const str = (v: unknown) => (typeof v === 'string' && v.trim() ? v : null);
+  return {
+    name: t.name,
+    slug: str(t.slug),
+    logoUrl: str(t.logoUrl),
+    faviconUrl: str(t.faviconUrl),
+    coverUrl: str(t.coverUrl),
+    brandHue: num(t.brandHue),
+    brandSaturation: num(t.brandSaturation),
+  };
+}
+
+interface BrandCacheEntry {
+  value: PublicBrand | null;
+  expiresAt: number;
+}
+
+const brandCache = new Map<string, BrandCacheEntry>();
+
+/** Solo para tests: vacía la caché de marcas. */
+export function clearPublicBrandCache(): void {
+  brandCache.clear();
+}
+
+/**
+ * `fetchPublicBrand` con caché por host (vida corta, como la indexación), para
+ * lo que se pide en CADA página: el favicon y la imagen para redes que genera
+ * `app/academy-brand`. Un cambio de logo o de color se nota en un minuto.
+ */
+export async function fetchPublicBrandCached(
+  host: string | null,
+  forwardedFor: string | null,
+): Promise<PublicBrand | null> {
+  if (!host) return null;
+  const now = Date.now();
+  const hit = brandCache.get(host);
+  if (hit && hit.expiresAt > now) return hit.value;
+  const value = await fetchPublicBrand(host, forwardedFor);
+  if (brandCache.size >= MAX_HOSTS) {
+    const oldest = brandCache.keys().next().value;
+    if (oldest !== undefined) brandCache.delete(oldest);
+  }
+  brandCache.delete(host);
+  brandCache.set(host, { value, expiresAt: now + (value ? TTL_MS : TTL_FALLO_MS) });
+  return value;
 }
 
 /** Origen público de la petición (`https://aula.ejemplo.com`), o `null`. */

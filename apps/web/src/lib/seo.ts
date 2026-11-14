@@ -201,7 +201,8 @@ export const ROBOTS_NOT_INDEXABLE = [
  * enlaces con `?ref=` llevan su canonical a la limpia y el buscador tiene que
  * poder leerlo), el catálogo y las fichas (no la vuelta del pago), los
  * recursos que hacen falta para pintarlas (CSS/JS de Next) y las imágenes
- * públicas del aula (logo, portada, imágenes de cursos). Todo lo demás, fuera.
+ * públicas del aula (logo, portada, imágenes de cursos, y el favicon y la
+ * vista previa que genera `app/academy-brand`). Todo lo demás, fuera.
  *
  * Con `Allow`/`Disallow` gana la regla más larga (RFC 9309), así que
  * `/catalog/checkout/` cierra la vuelta del pago aunque `/catalog/` esté
@@ -221,6 +222,7 @@ export function buildRobotsTxt(seo: PublicSeo, origin: string): string {
     'Allow: /_next/image',
     'Allow: /api/v1/modules/theming/tenants/',
     'Allow: /api/v1/storage/file/tenants/',
+    'Allow: /academy-brand/',
     'Disallow: /',
     '',
     `Sitemap: ${canonicalUrl(origin, '/sitemap.xml')}`,

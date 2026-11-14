@@ -8,6 +8,7 @@ import { headers } from 'next/headers';
 import { getLocale, getTranslations } from 'next-intl/server';
 import { cache, Suspense } from 'react';
 import { publicHost } from '@/lib/academy-locale';
+import { ACADEMY_OG_PATH } from '@/lib/academy-mark';
 import {
   absoluteUrl,
   canonicalOrigin,
@@ -62,7 +63,11 @@ export async function generateMetadata(): Promise<Metadata> {
   const title = `${t('catalogo.metaTitle')} | ${seo.academy.name}`;
   const description = truncate(t('catalogo.metaDescription', { name: seo.academy.name }));
   const canonical = canonicalUrl(origin, '/catalog');
-  const image = absoluteUrl(origin, seo.academy.coverUrl ?? seo.academy.logoUrl);
+  // Sin portada ni logo, la imagen con sus iniciales y su color.
+  const image =
+    absoluteUrl(origin, seo.academy.coverUrl ?? seo.academy.logoUrl) ??
+    canonicalUrl(origin, ACADEMY_OG_PATH);
+  const largeImage = Boolean(seo.academy.coverUrl) || !seo.academy.logoUrl;
   const indexable = seo.courses.length > 0 && (courses?.length ?? 0) > 0;
   return {
     title: { absolute: title },
@@ -77,13 +82,13 @@ export async function generateMetadata(): Promise<Metadata> {
       description,
       locale: ogLocale(await getLocale()),
       url: canonical,
-      ...(image ? { images: [{ url: image }] } : {}),
+      images: [{ url: image }],
     },
     twitter: {
-      card: seo.academy.coverUrl ? 'summary_large_image' : 'summary',
+      card: largeImage ? 'summary_large_image' : 'summary',
       title,
       description,
-      ...(image ? { images: [image] } : {}),
+      images: [image],
     },
   };
 }
@@ -109,7 +114,16 @@ export default async function CatalogoPage() {
         <CatalogoView
           // Sin el HTML de la descripción: la tarjeta solo enseña texto plano.
           initialCourses={courses?.map(({ descriptionHtml: _html, ...c }) => c)}
-          initialBrand={brand ? { name: brand.name, logoUrl: brand.logoUrl } : undefined}
+          initialBrand={
+            brand
+              ? {
+                  name: brand.name,
+                  logoUrl: brand.logoUrl,
+                  brandHue: brand.brandHue,
+                  brandSaturation: brand.brandSaturation,
+                }
+              : undefined
+          }
         />
       </Suspense>
     </>

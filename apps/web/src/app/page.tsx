@@ -11,6 +11,7 @@ import { cache } from 'react';
 import { AcademyHomeView } from '@/components/academy-home/academy-home-view';
 import { publicHost } from '@/lib/academy-locale';
 import { fetchAcademyHome, referralFromQuery } from '@/lib/academy-home';
+import { ACADEMY_OG_PATH } from '@/lib/academy-mark';
 import {
   academyJsonLd,
   canonicalOrigin,
@@ -65,7 +66,10 @@ export async function generateMetadata(): Promise<Metadata> {
   const { academy } = home;
   const title = academy.name || t('metaFallbackTitle');
   const description = truncate(academy.description ?? t('metaDescription', { name: title }));
-  const image = academy.coverUrl ?? academy.logoUrl;
+  // Su portada, su logo o, sin ninguno, la imagen con sus iniciales y su
+  // color (`app/academy-brand/og`): nunca una vista previa vacía ni de Didacta.
+  const image = academy.coverUrl ?? academy.logoUrl ?? ACADEMY_OG_PATH;
+  const largeImage = Boolean(academy.coverUrl) || image === ACADEMY_OG_PATH;
   const canonical = origin ? canonicalUrl(origin, '/') : null;
   return {
     // El nombre del aula, sin el sufijo de la plataforma: es su página.
@@ -84,13 +88,13 @@ export async function generateMetadata(): Promise<Metadata> {
       description,
       locale: ogLocale(locale),
       ...(canonical ? { url: canonical } : {}),
-      ...(image ? { images: [{ url: image }] } : {}),
+      images: [{ url: image }],
     },
     twitter: {
-      card: academy.coverUrl ? 'summary_large_image' : 'summary',
+      card: largeImage ? 'summary_large_image' : 'summary',
       title,
       description,
-      ...(image ? { images: [image] } : {}),
+      images: [image],
     },
   };
 }
