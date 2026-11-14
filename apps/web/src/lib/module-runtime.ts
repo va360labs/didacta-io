@@ -25,6 +25,7 @@
 
 import React from 'react';
 import ReactDOM from 'react-dom';
+import { useLocale } from 'next-intl';
 import { z } from 'zod';
 
 // UI Components (shadcn/ui)
@@ -75,6 +76,31 @@ import { authStorage } from '@/lib/auth-storage';
 
 // Hooks/Context
 import { useTenantContext } from '@/lib/tenant-context';
+
+// Idioma
+import { DEFAULT_LOCALE } from '@/i18n/config';
+import { getUserFormatPrefs } from '@/lib/i18n/user-prefs';
+
+/**
+ * Versión del runtime. Se sube al añadir algo al contrato para que un módulo
+ * pueda comprobar si el host lo tiene.
+ *
+ *   1.0.0 — React, shadcn/ui, api, utils, `hooks.useTenantContext`.
+ *   1.1.0 — idioma activo: `hooks.useLocale` e `i18n.getLocale()`.
+ */
+export const MODULE_RUNTIME_VERSION = '1.1.0';
+
+/**
+ * Idioma con el que se está pintando la interfaz, para quien lo necesite FUERA
+ * de un render (un `catch`, un formateador). `<html lang>` lo fija el layout
+ * raíz con el locale de next-intl y se actualiza con el `router.refresh()` de
+ * `LocaleSync` al cambiar de idioma; el singleton de `user-prefs` (que también
+ * escribe `LocaleSync`) y `DEFAULT_LOCALE` solo cubren un documento sin `lang`.
+ */
+function getActiveLocale(): string {
+  const fromHtml = typeof document !== 'undefined' ? document.documentElement.lang : '';
+  return fromHtml || getUserFormatPrefs().locale || DEFAULT_LOCALE;
+}
 
 /**
  * Tipo del objeto global `__didacta__`.
@@ -136,7 +162,23 @@ export interface DidactaRuntime {
   /** Hooks y contextos del host. */
   hooks: {
     useTenantContext: typeof useTenantContext;
+    /**
+     * (1.1.0) Idioma activo de la interfaz como tag BCP 47 (`es-ES`, `es-AR`,
+     * `en-US`, `pt-BR`): el `useLocale` de next-intl. Al ser un hook, el
+     * componente que lo usa se vuelve a pintar si el idioma cambia.
+     */
+    useLocale: typeof useLocale;
     // Añadir más hooks según se expongan
+  };
+
+  /** (1.1.0) Idioma. Los textos de cada módulo viven en el propio módulo. */
+  i18n: {
+    /**
+     * Idioma activo (mismo tag que `hooks.useLocale`) leído en el momento de
+     * la llamada, para usarlo fuera de un render. Dentro de un componente,
+     * mejor `hooks.useLocale`.
+     */
+    getLocale: () => string;
   };
 
   /** APIs del core. */
@@ -189,7 +231,7 @@ export function initModuleRuntime(): DidactaRuntime {
   }
 
   const runtime: DidactaRuntime = {
-    version: '1.0.0',
+    version: MODULE_RUNTIME_VERSION,
 
     React,
     ReactDOM,
@@ -236,6 +278,11 @@ export function initModuleRuntime(): DidactaRuntime {
 
     hooks: {
       useTenantContext,
+      useLocale,
+    },
+
+    i18n: {
+      getLocale: getActiveLocale,
     },
 
     api: {
