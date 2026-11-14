@@ -42,7 +42,16 @@ export async function aulaConCreador(
   simple: boolean,
 ): Promise<{ aula: FreshTenant; creador: Auth }> {
   const aula = await freshTenant(`${prefix}${Date.now().toString(36)}`, simple);
-  const creador = await signinAs(aula, `operador@${aula.slug}.test`, aula.password);
+  // La creadora (tenant_admin), no la cuenta del operador (super_admin): es
+  // quien lleva el aula en Didacta Cloud y quien firma las celebraciones.
+  await apiAs(aula.host, '/api/v1/auth/reset-password', {
+    method: 'POST',
+    body: {
+      token: new URL(aula.setPasswordUrl).searchParams.get('token'),
+      newPassword: aula.password,
+    },
+  });
+  const creador = await signinAs(aula, aula.creatorEmail, aula.password);
   // La academia ya tiene nombre y está revisada: sin esto, el modo sencillo
   // manda a quien administra al alta («Tu academia») antes que a Ajustes.
   await apiAs(aula.host, '/api/v1/admin/tenant-settings/academy', {

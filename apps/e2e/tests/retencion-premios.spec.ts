@@ -160,7 +160,7 @@ test.describe('Premios automáticos', () => {
     ).rejects.toThrow(/409/);
   });
 
-  test('modo completo: el mismo panel en Puntos y retos → «Premios y niveles»', async ({
+  test('modo completo: el mismo panel en Puntos y retos → «Premios y desbloqueos»', async ({
     browser,
   }) => {
     const completo = await aulaConCreador('premiocompleto', false);
@@ -170,7 +170,7 @@ test.describe('Premios automáticos', () => {
       completo.creador,
       '/admin/gamification',
     );
-    await page.getByRole('tab', { name: 'Premios y niveles' }).click();
+    await page.getByRole('tab', { name: 'Premios y desbloqueos' }).click();
     await expect(page.getByTestId('premios-y-niveles')).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Premios automáticos' })).toBeVisible();
     // Los niveles tienen su propia pestaña: aquí no se repiten.

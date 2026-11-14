@@ -102,7 +102,7 @@ test.describe('Rachas e insignias', () => {
     const lista = ajustes.page.getByTestId('premios-insignias');
     const fila = lista.locator('li', { has: ajustes.page.getByPlaceholder('Primera publicación') });
     await fila.getByRole('textbox').fill('Rompehielos');
-    await fila.getByRole('button', { name: 'Guardar' }).click();
+    await fila.getByRole('button', { name: 'Renombrar' }).click();
     await expect(fila.getByRole('textbox')).toHaveValue('Rompehielos');
     const comentario = lista.locator('li', {
       has: ajustes.page.getByPlaceholder('Primer comentario'),
