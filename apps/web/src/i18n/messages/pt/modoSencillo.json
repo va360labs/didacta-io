@@ -149,7 +149,11 @@
         "boton": "Conectar recebimentos",
         "ayuda1": "Seus alunos pagam com cartão em uma página de pagamento segura.",
         "ayuda2": "A Didacta fica com 5% de cada venda. O resto é seu e vai para o seu banco.",
-        "ayuda3": "Você vende na sua moeda e cada aluno vê o preço na dele."
+        "ayuda3": "Você vende na sua moeda e cada aluno vê o preço na dele.",
+        "paisNoAdmitido": "Ainda não conseguimos pagar criadores com banco neste país ({pais}). Enquanto isso, você pode montar sua escola e sua comunidade.",
+        "paisNoAdmitidoOtro": "No cadastro, você informou que seu banco fica em outro país, e ainda não conseguimos pagar criadores com banco fora dos países atendidos. Enquanto isso, você pode montar sua escola e sua comunidade.",
+        "otroPais": "Seu banco está em outro país?",
+        "elegirPais": "Escolher o país do meu banco"
       },
       "publish": {
         "titulo": "Publique e copie seu link",

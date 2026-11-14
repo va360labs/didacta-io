@@ -30,6 +30,10 @@ import { JwtOrProvisioningGuard } from '../auth/jwt-or-provisioning.guard';
 import type { SessionClaims } from '../auth/token.service';
 import { ZodValidationPipe } from '../auth/zod-validation.pipe';
 import { PrismaAuditLogService } from '../modules/prisma-audit-log.service';
+import {
+  DECLARED_COUNTRY_OTHER,
+  normalizeDeclaredCountry,
+} from '../modules/payouts/declared-country';
 import { PayoutsRuntime } from '../modules/payouts/payouts-runtime.service';
 import { SUBSCRIPTION_GATE_STATES } from '../tenancy/subscription-gate';
 import { runAsTenant, runGlobalWithoutTenant } from '../tenancy/tenant-context.storage';
@@ -72,6 +76,23 @@ export const createTenantSchema = z.object({
       message: `Idioma sin catálogo en el aula. Valores: ${ACADEMY_LOCALES.join(', ')}.`,
     })
     .transform((v) => toAcademyLocale(v) as AcademyLocale)
+    .optional(),
+  /**
+   * País del banco que el creador DECLARÓ en el alta de Didacta Cloud. Opcional
+   * y retrocompatible: sin él no se guarda nada. Un código ISO 3166-1 alfa-2
+   * (cualquiera, admitido o no; se guarda en mayúsculas) o `OTHER` («su banco
+   * está fuera de la lista que se le ofreció»). Es un dato declarado, no
+   * verificado: el país que cuenta para pagar es el de la cuenta conectada.
+   * Lo usa la tarjeta de cobros para preseleccionarlo y avisar si no se le
+   * puede pagar. Ver `modules/payouts/declared-country.ts`.
+   */
+  payoutsCountry: z
+    .string()
+    .max(10)
+    .refine((v) => normalizeDeclaredCountry(v) !== null, {
+      message: `payoutsCountry debe ser un código de país ISO 3166-1 alfa-2 (p. ej. ES, BR) o ${DECLARED_COUNTRY_OTHER}.`,
+    })
+    .transform((v) => normalizeDeclaredCountry(v) as string)
     .optional(),
 });
 type CreateTenantDto = z.infer<typeof createTenantSchema>;
@@ -555,6 +576,16 @@ export interface TenantPayoutsVolumeRow {
   readonly salesCount: number;
 }
 
+/**
+ * Respuesta de `GET /admin/tenants/payouts/countries`: los países (ISO 3166-1
+ * alfa-2, mayúsculas) donde el operador puede pagar a creadores. Es la misma
+ * lista que aplica el alta (`PAYMENTS_PLATFORM_SUPPORTED_COUNTRIES` o la de
+ * por defecto): Cloud la lee de aquí para no tener una copia que se desfase.
+ */
+export interface TenantPayoutsCountriesResponse {
+  readonly supportedCountries: readonly string[];
+}
+
 /** Respuesta de `GET /admin/tenants/:id/payouts`. */
 export interface TenantPayoutsResponse {
   readonly tenantId: string;
@@ -570,7 +601,7 @@ export interface TenantPayoutsResponse {
 }
 
 /**
- * Las dos rutas de cobros de plataforma del contrato del pool. Viven en una
+ * Las rutas de cobros de plataforma del contrato del pool. Viven en una
  * clase APARTE de `AdminTenantsController` porque solo existen con el modo
  * plataforma encendido: las registra `PayoutsModule.register()`, y sin
  * `PAYMENTS_PLATFORM_STRIPE_SECRET_KEY` la instalación tiene exactamente las
@@ -606,6 +637,25 @@ export class AdminTenantsPayoutsController {
     const from = new Date(`${query.from}T00:00:00.000Z`);
     const toExclusive = new Date(Date.parse(`${query.to}T00:00:00.000Z`) + 86_400_000);
     return this.runtime.reports.volume(from, toExclusive);
+  }
+
+  // También ANTES de las rutas con `:id`, por la misma razón.
+  @Get('payouts/countries')
+  @AllowProvisioning()
+  @ApiOperation({
+    summary:
+      'Países (ISO alfa-2, mayúsculas) donde la plataforma puede pagar a creadores. Solo existe con el modo plataforma encendido.',
+    description:
+      'La misma lista que aplica el alta del creador (`PAYMENTS_PLATFORM_SUPPORTED_COUNTRIES` o la de por defecto). Cloud la lee de aquí para tener una sola fuente.',
+  })
+  getPayoutsCountries(
+    @Req() req: FastifyRequest,
+    @CurrentUser() user: SessionClaims | undefined,
+  ): TenantPayoutsCountriesResponse {
+    requireAdminActor(user, req);
+    return {
+      supportedCountries: this.runtime.accounts.supportedCountries.map((c) => c.toUpperCase()),
+    };
   }
 
   @Put(':id/payouts-settings')

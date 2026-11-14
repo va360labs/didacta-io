@@ -7,11 +7,12 @@
 
 import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import { Icon } from '@/components/icon';
 import { START_HERE_CHANGED_EVENT } from '@/components/simple-shell/simple-shell';
 import { ApiHttpError } from '@/lib/api-client';
-import { formatCents, formatDateTime } from '@/lib/i18n/format';
+import { formatCents, formatDateTime, regionNameFormatter } from '@/lib/i18n/format';
+import { OTHER_COUNTRY, payoutsApi, payoutsStepView, type PayoutsStatusDto } from '@/lib/payouts';
 import {
   parseAmount,
   saleState,
@@ -297,13 +298,7 @@ function StepAction({
         {t('pasos.course.boton')}
       </Link>
     );
-  if (id === 'payments')
-    return (
-      <Link href={view.paymentsSetupPath} className={primary}>
-        <Icon name="briefcase" size={18} />
-        {t('pasos.payments.boton')}
-      </Link>
-    );
+  if (id === 'payments') return <PaymentsAction view={view} primary={primary} />;
   if (id === 'price')
     return (
       <PriceForm
@@ -319,6 +314,72 @@ function StepAction({
     <Link href="/admin/users/invite" className={primary}>
       <Icon name="mail" size={18} />
       {t('pasos.invite.boton')}
+    </Link>
+  );
+}
+
+/**
+ * Acción del paso «Conecta tus cobros». Con cobros de plataforma, la cuenta
+ * del creador tiene que estar en un país donde se le pueda pagar: si el suyo
+ * (el de su cuenta, el que declaró en el alta de Cloud o el del navegador) no
+ * lo está, en vez de mandarlo a un alta que va a fallar se le dice aquí, con
+ * un enlace a la tarjeta por si su banco está en otro país. Si declaró «otro
+ * país» (`OTHER`), el texto lo dice así, sin nombre de país. La decisión es
+ * `payoutsStepView`; esto solo pinta.
+ * Sin modo plataforma (`status` → `null`) o si la petición falla, el botón de
+ * siempre.
+ */
+function PaymentsAction({ view, primary }: { view: StartHereView; primary: string }) {
+  const t = useTranslations('modoSencillo.empieza');
+  const locale = useLocale();
+  const [status, setStatus] = useState<PayoutsStatusDto | null | undefined>(undefined);
+  useEffect(() => {
+    let alive = true;
+    payoutsApi
+      .status()
+      .then((s) => alive && setStatus(s))
+      .catch(() => alive && setStatus(null));
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  // Hasta saberlo, el hueco del botón: un botón que luego se cambia por el
+  // aviso invitaría a pulsarlo.
+  if (status === undefined) {
+    return <div className="skeleton mt-4 h-11 w-52 rounded-xl" aria-hidden="true" />;
+  }
+
+  const browser = typeof navigator !== 'undefined' ? navigator.language : locale;
+  const step = payoutsStepView(status, browser);
+  if (step.kind === 'country-unsupported') {
+    const other = step.country === OTHER_COUNTRY;
+    return (
+      <div data-testid="cobros-pais-no-admitido" data-country={step.country}>
+        <p
+          role="status"
+          className="mt-4 max-w-[60ch] rounded-xl border border-warning-200 bg-warning-50 p-3.5 text-[15px] leading-relaxed text-warning-700"
+        >
+          {other
+            ? t('pasos.payments.paisNoAdmitidoOtro')
+            : t('pasos.payments.paisNoAdmitido', {
+                pais: regionNameFormatter(locale)(step.country),
+              })}
+        </p>
+        <Link
+          href={view.paymentsSetupPath}
+          className="mt-3 inline-block text-sm font-semibold text-brand-600 hover:underline"
+        >
+          {other ? t('pasos.payments.elegirPais') : t('pasos.payments.otroPais')}
+        </Link>
+      </div>
+    );
+  }
+
+  return (
+    <Link href={view.paymentsSetupPath} className={primary}>
+      <Icon name="briefcase" size={18} />
+      {t('pasos.payments.boton')}
     </Link>
   );
 }
