@@ -319,14 +319,9 @@ export class SimpleModeService {
         'Conecta tus cobros antes de publicar: sin ellos nadie podría pagarte.',
       );
     }
-    // Sin datos fiscales se podría vender, pero el dinero se quedaría retenido
-    // sin que la creadora lo supiera (ensayo general): primero, completarlos.
-    if (await this.taxProfilePending(tenantId)) {
-      throw new SimpleModeError(
-        'SIMPLE_MODE_TAX_PROFILE_MISSING',
-        'Completa tus datos fiscales antes de publicar: sin ellos el dinero de tus ventas se quedaría retenido.',
-      );
-    }
+    // Sin datos fiscales SÍ se publica (decisión de producto, web #39: se
+    // cobra igual y se retienen las transferencias; que venda cuanto antes).
+    // Lo avisan el paso «Conecta tus cobros» y «Ventas», no un bloqueo.
 
     if (offer.kind === 'membership') {
       if (!offer.planId) {

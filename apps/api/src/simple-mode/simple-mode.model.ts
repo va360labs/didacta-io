@@ -64,7 +64,8 @@ export interface StartHereView {
   /**
    * La cuenta de cobros ya puede vender, pero faltan los datos fiscales y,
    * sin ellos, el dinero de las ventas se queda retenido. El paso «Conecta tus
-   * cobros» sigue sin hacer y lleva directo a completarlos.
+   * cobros» sigue sin hacer y lleva directo a completarlos; publicar NO espera
+   * (se vende igual y se avisa de lo retenido).
    */
   taxProfilePending: boolean;
   /** Dónde se completan los datos fiscales (la sección de cobros, en su ancla). */

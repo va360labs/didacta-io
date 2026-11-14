@@ -520,14 +520,18 @@ describe('Cloud: cobros conectados sin datos fiscales (ensayo general)', () => {
     expect(view.paymentsSetupPath).toBe('/admin/payments');
   });
 
-  it('y no deja publicar: el dinero de las ventas se quedaría retenido sin que lo supiera', async () => {
+  it('pero deja publicar (web #39: se cobra igual y se retiene): a la venta y con el paso de cobros pendiente', async () => {
     const { db, service, courses } = cloud(true);
     await service.quickStart(T, { id: U }, ALTA);
     db.lessons.push({ type: 'TEXT', content: { text: 'Hola' }, module: { courseId: 'c1' } });
-    await expect(service.publish(T, U)).rejects.toMatchObject({
-      code: 'SIMPLE_MODE_TAX_PROFILE_MISSING',
-    });
-    expect(courses.publishCourse).not.toHaveBeenCalled();
+    const { salePath } = await service.publish(T, U);
+    expect(salePath).toBe('/catalog/acuarela-desde-cero');
+    expect(courses.publishCourse).toHaveBeenCalled();
+    const view = await service.startHere(T);
+    expect(view.salePath).toBe('/catalog/acuarela-desde-cero');
+    expect(view.steps.find((s) => s.id === 'publish')?.done).toBe(true);
+    expect(view.steps.find((s) => s.id === 'payments')?.done).toBe(false);
+    expect(view.taxProfilePending).toBe(true);
   });
 
   it('control: con los datos fiscales completos, el paso está hecho y publica', async () => {
