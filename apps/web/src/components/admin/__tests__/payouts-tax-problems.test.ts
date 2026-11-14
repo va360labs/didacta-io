@@ -13,12 +13,13 @@ import en from '@/i18n/messages/en';
 import es from '@/i18n/messages/es';
 import pt from '@/i18n/messages/pt';
 import { taxProblemsMessage } from '@/components/admin/payouts-tax-profile-card';
+import type { TranslatorLike } from '@/lib/i18n/labels';
 import { taxProfileFieldErrors } from '@/lib/payouts';
 
-const tr = (locale: string, messages: typeof es) =>
+const tr = (locale: 'es-ES' | 'en-US' | 'pt-BR', messages: typeof es) =>
   createTranslator({ locale, messages, namespace: 'adminPagos.payouts.tax' });
 const tEs = tr('es-ES', es);
-const tEn = tr('en-GB', en as unknown as typeof es);
+const tEn = tr('en-US', en as unknown as typeof es);
 const tPt = tr('pt-BR', pt as unknown as typeof es);
 
 describe('error concreto al guardar los datos fiscales', () => {
@@ -60,7 +61,7 @@ describe('error concreto al guardar los datos fiscales', () => {
       'addressCity',
       'birthDate',
     ];
-    for (const t of [tEs, tEn, tPt]) {
+    for (const t of [tEs, tEn, tPt] as unknown as TranslatorLike[]) {
       for (const field of fields) {
         expect(t.has(`problems.${field}.required`), field).toBe(true);
         expect(t.has(`problems.${field}.invalid`), field).toBe(true);
