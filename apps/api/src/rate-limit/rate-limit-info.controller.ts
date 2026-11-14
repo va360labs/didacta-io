@@ -49,6 +49,9 @@ function requireTenantAdmin(user: SessionClaims | undefined): SessionClaims {
 
 export interface RateLimitInfoResponse {
   tier: RateLimitTier;
+  /** Por usuario con sesión. */
+  user: { limit: number; windowSeconds: number };
+  /** Tope por aula (todo el tráfico con sesión, SCIM y claves de API). */
   authenticated: { limit: number; windowSeconds: number };
   public: { limit: number; windowSeconds: number };
   capability: string;
@@ -82,6 +85,10 @@ export class RateLimitInfoController {
     const effective = tier === 'enterprise' ? config.enterprise : config.community;
     return {
       tier,
+      user: {
+        limit: effective.user,
+        windowSeconds: config.windowSeconds,
+      },
       authenticated: {
         limit: effective.authenticated,
         windowSeconds: config.windowSeconds,

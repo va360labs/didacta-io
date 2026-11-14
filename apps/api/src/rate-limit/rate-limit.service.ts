@@ -179,6 +179,82 @@ export class RateLimitService {
   }
 
   /**
+   * Registra una petición CON SESIÓN: un cubo por usuario y, encima, el tope
+   * del aula.
+   *
+   * Antes toda el aula compartía un único cubo (`ratelimit:<tenant>:
+   * authenticated`) de 100/min: diez alumnos navegando a la vez lo agotaban y
+   * el aula entera, profesor incluido, recibía 429. Ahora cada usuario tiene
+   * el suyo (`ratelimit:<tenant>:user:<sub>`) y el del aula pasa a ser una red
+   * de seguridad contra abusos.
+   *
+   * Orden: primero el cubo del usuario. Si ya lo ha agotado, se rechaza SIN
+   * tocar el del aula: lo que gasta un usuario desbocado no puede dejar sin
+   * cupo a sus compañeros.
+   *
+   * Las cabeceras hablan del límite del usuario (es el que verá cualquiera),
+   * con el `remaining` más bajo de los dos; si lo que se agota es el tope del
+   * aula, la decisión lo dice (`bucket: 'authenticated'`).
+   */
+  async recordUserRequest(
+    tenantId: string,
+    userId: string,
+    now: Date = new Date(),
+  ): Promise<RateLimitDecision> {
+    const tier: RateLimitTier = this.getCurrentTier();
+    const userLimit = this.config[tier].user;
+    const tenantLimit = this.config[tier].authenticated;
+    const windowSeconds = this.config.windowSeconds;
+    const minute = Math.floor(now.getTime() / (windowSeconds * 1000));
+    const resetAt = new Date((minute + 1) * windowSeconds * 1000);
+    const userKey = `ratelimit:${tenantId}:user:${userId}:${minute}`;
+    const tenantKey = `ratelimit:${tenantId}:authenticated:${minute}`;
+
+    if (!this.redis) {
+      this.logFailsafeOnce(now, 'Redis client not configured — rate limiter open.');
+      return this.buildAllowAllDecision(tier, 'user', userLimit, resetAt);
+    }
+
+    const retryAfterSeconds = Math.max(1, Math.ceil((resetAt.getTime() - now.getTime()) / 1000));
+    const denied = (bucket: RateLimitBucket, limit: number): RateLimitDecision => ({
+      allowed: false,
+      limit,
+      remaining: 0,
+      resetAt,
+      retryAfterSeconds,
+      tier,
+      bucket,
+    });
+
+    let userCount: number;
+    let tenantCount: number;
+    try {
+      userCount = await this.redis.incr(userKey);
+      await this.redis.expire(userKey, windowSeconds + 5);
+      if (userCount > userLimit) return denied('user', userLimit);
+      tenantCount = await this.redis.incr(tenantKey);
+      await this.redis.expire(tenantKey, windowSeconds + 5);
+    } catch (err) {
+      this.logFailsafeOnce(
+        now,
+        `Redis error in rate limiter, failing open: ${(err as Error).message}`,
+      );
+      return this.buildAllowAllDecision(tier, 'user', userLimit, resetAt);
+    }
+
+    if (tenantCount > tenantLimit) return denied('authenticated', tenantLimit);
+
+    return {
+      allowed: true,
+      limit: userLimit,
+      remaining: Math.max(0, Math.min(userLimit - userCount, tenantLimit - tenantCount)),
+      resetAt,
+      tier,
+      bucket: 'user',
+    };
+  }
+
+  /**
    * Construye la decisión "open" usada cuando Redis no responde. Devolvemos
    * los headers del tier comunidad por defecto (más conservador para el
    * cliente — sabe que en condiciones normales el límite sería ese, pero

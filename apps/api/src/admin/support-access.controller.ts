@@ -13,6 +13,7 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import type { SessionClaims } from '../auth/token.service';
 import { ZodValidationPipe } from '../auth/zod-validation.pipe';
 import { SupportAccessService } from './support-access.service';
+import { LoginRateLimit } from '../rate-limit/login-limit.interceptor';
 
 const redeemSchema = z.object({
   token: z.string().min(1).max(200),
@@ -37,6 +38,7 @@ export class SupportAccessController {
   constructor(private readonly supportAccess: SupportAccessService) {}
 
   @Post('redeem')
+  @LoginRateLimit('support-redeem')
   @ApiOperation({
     summary: 'Canjea un token de acceso de soporte por una sesión de duración limitada.',
     description: [

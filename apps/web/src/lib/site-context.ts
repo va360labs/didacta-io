@@ -26,6 +26,8 @@ const API_INTERNAL_URL = process.env.API_INTERNAL_URL ?? 'http://localhost:4000'
 
 /** Vida de una entrada de caché. Corto: mover un dominio no debe exigir reinicio. */
 const TTL_MS = 30_000;
+/** Vida de un fallo de la API (429, 5xx, caída): se reintenta pronto. */
+const TTL_FALLO_MS = 5_000;
 
 interface CacheEntry {
   value: PublicSiteContext | null;
@@ -46,36 +48,52 @@ export function clearSiteContextCache(): void {
  * El `null` también se cachea, a propósito: si no, un host inexistente
  * golpearía la API en cada petición y sería un amplificador gratuito.
  */
-export async function getSiteContext(host: string | null): Promise<PublicSiteContext | null> {
+export async function getSiteContext(
+  host: string | null,
+  forwardedFor: string | null = null,
+): Promise<PublicSiteContext | null> {
   if (!host) return null;
 
   const now = Date.now();
   const cached = cache.get(host);
   if (cached && cached.expiresAt > now) return cached.value;
 
-  const value = await fetchSiteContext(host);
-  cache.set(host, { value, expiresAt: now + TTL_MS });
-  return value;
+  const { value, ok } = await fetchSiteContext(host, forwardedFor);
+  if (ok) {
+    cache.set(host, { value, expiresAt: now + TTL_MS });
+    return value;
+  }
+  // Fallo de la API: lo último que se supo de este dominio, y se vuelve a
+  // preguntar enseguida. Antes un 429 se guardaba como «no hay sitio» 30 s.
+  const stale = cached?.value ?? null;
+  cache.set(host, { value: stale, expiresAt: now + TTL_FALLO_MS });
+  return stale;
 }
 
-async function fetchSiteContext(host: string): Promise<PublicSiteContext | null> {
+async function fetchSiteContext(
+  host: string,
+  forwardedFor: string | null,
+): Promise<{ value: PublicSiteContext | null; ok: boolean }> {
   try {
+    const xff = forwardedFor?.trim();
     const res = await fetch(`${API_INTERNAL_URL}/api/v1/public/site-context`, {
       // El host que importa es el del visitante, y la llamada sale por
       // loopback: hay que reenviarlo explícitamente o la API resolvería el
       // tenant contra `localhost` (ver `resolve-request-host.ts` en la API).
-      headers: { 'x-forwarded-host': host },
+      // Su IP también: sin ella, el rate limit cuenta la llamada a la IP del
+      // servidor del web, un cupo que comparten todas las aulas.
+      headers: { 'x-forwarded-host': host, ...(xff ? { 'x-forwarded-for': xff } : {}) },
       cache: 'no-store',
     });
 
-    if (res.status === 404) return null;
-    if (!res.ok) return null;
+    if (res.status === 404) return { value: null, ok: true };
+    if (!res.ok) return { value: null, ok: false };
 
-    return (await res.json()) as PublicSiteContext;
+    return { value: (await res.json()) as PublicSiteContext, ok: true };
   } catch {
     // Sin API no se puede afirmar que un dominio sirva el sitio. Devolver
     // `null` deja la petición en el aula, que es el comportamiento que ya
     // había: fallamos hacia lo conocido, no hacia lo nuevo.
-    return null;
+    return { value: null, ok: false };
   }
 }

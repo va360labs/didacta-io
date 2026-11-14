@@ -168,3 +168,14 @@ export function redirectToOwnImage(url: string | null): Response | null {
  * los rastreadores de redes no piden la imagen en cada visita.
  */
 export const BRAND_IMAGE_CACHE = 'public, max-age=300, stale-while-revalidate=3600';
+
+/**
+ * Caché de la imagen generada: la de siempre con la marca del aula, y ninguna
+ * sin ella. La versión neutra sale cuando aún no se ha podido saber la marca
+ * (la API no contestó y no había una buena guardada): si el navegador se la
+ * quedara cinco minutos —más una hora de `stale-while-revalidate`—, la pestaña
+ * seguiría sin la marca del aula mucho después de que la API vuelva.
+ */
+export function brandImageCacheControl(brand: unknown): string {
+  return brand ? BRAND_IMAGE_CACHE : 'no-store';
+}

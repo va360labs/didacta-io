@@ -20,6 +20,9 @@ import { apiFetch } from './api-client';
 export type RateLimitTier = 'community' | 'enterprise';
 
 export interface RateLimitTierConfig {
+  /** Por usuario con sesión. Ausente en una API anterior al cubo por usuario. */
+  user?: number;
+  /** Tope por aula: todo el tráfico con sesión, SCIM y claves de API. */
   authenticated: number;
   public: number;
 }
@@ -27,7 +30,9 @@ export interface RateLimitTierConfig {
 export interface RateLimitInfo {
   /** Tier efectivo para este tenant en este momento. */
   tier: RateLimitTier;
-  /** Cifra y ventana del bucket autenticado en el tier activo. */
+  /** Por usuario con sesión. Ausente en una API anterior al cubo por usuario. */
+  user?: { limit: number; windowSeconds: number };
+  /** Tope por aula (todo el tráfico con sesión, SCIM y claves de API). */
   authenticated: { limit: number; windowSeconds: number };
   /** Cifra y ventana del bucket público en el tier activo. */
   public: { limit: number; windowSeconds: number };

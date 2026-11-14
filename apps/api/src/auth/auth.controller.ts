@@ -39,6 +39,7 @@ import { PasswordResetService } from './password-reset.service';
 import { SigninContextService } from './signin-context.service';
 import { ZodValidationPipe } from './zod-validation.pipe';
 import { resolvePublicHost } from '../common/resolve-public-host';
+import { LoginRateLimit } from '../rate-limit/login-limit.interceptor';
 import {
   resolveWebBaseUrl,
   resolveWebBaseUrlForAuthRedirect,
@@ -120,6 +121,7 @@ export class AuthController {
   }
 
   @Post('signup')
+  @LoginRateLimit('signup')
   @ApiOperation({ summary: 'Registrar un usuario en un tenant' })
   async signup(
     @Req() req: FastifyRequest,
@@ -130,6 +132,7 @@ export class AuthController {
   }
 
   @Post('signin')
+  @LoginRateLimit('signin')
   @ApiOperation({ summary: 'Iniciar sesión con email + password' })
   async signin(
     @Req() req: FastifyRequest,
@@ -153,6 +156,7 @@ export class AuthController {
   }
 
   @Post('forgot-password')
+  @LoginRateLimit('forgot-password')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary:
@@ -178,6 +182,7 @@ export class AuthController {
   }
 
   @Post('reset-password')
+  @LoginRateLimit('reset-password')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Confirmar reset con el token recibido por email + nueva contraseña.' })
   async resetPassword(
@@ -211,6 +216,7 @@ export class AuthController {
   }
 
   @Post('reset-password/resend')
+  @LoginRateLimit('reset-resend')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary:

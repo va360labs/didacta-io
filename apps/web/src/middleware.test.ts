@@ -22,14 +22,17 @@ type Resolve = { known?: boolean; slug?: string | null; surface?: string | null 
 >;
 
 /** Lo que contesta la API por host. Un host que no esté aquí no es de nadie. */
-let hosts: Record<string, Resolve | 'down' | 'http-500'>;
+let hosts: Record<string, Resolve | 'down' | 'http-500' | 'http-429'>;
 let resolveCalls: string[];
+/** Cabeceras con las que el middleware llamó a la API, por ruta. */
+let apiHeaders: Array<{ path: string; headers: Record<string, string> }>;
 
 function stubApi() {
   vi.stubGlobal(
     'fetch',
     vi.fn(async (input: string | URL, init?: { headers?: Record<string, string> }) => {
       const url = String(input);
+      apiHeaders.push({ path: new URL(url).pathname, headers: { ...init?.headers } });
       if (url.endsWith('/api/v1/setup/status')) {
         return new Response(JSON.stringify({ initialized: true }), { status: 200 });
       }
@@ -39,6 +42,7 @@ function stubApi() {
         const answer = hosts[host] ?? { known: false, slug: null, surface: null };
         if (answer === 'down') throw new Error('ECONNREFUSED');
         if (answer === 'http-500') return new Response('boom', { status: 500 });
+        if (answer === 'http-429') return new Response('{}', { status: 429 });
         return new Response(JSON.stringify({ host, ...answer }), { status: 200 });
       }
       throw new Error(`fetch inesperado: ${url}`);
@@ -55,9 +59,10 @@ async function loadMiddleware() {
 function request(
   host: string,
   path = '/',
-  extra: { cookie?: string; acceptLanguage?: string } = {},
+  extra: { cookie?: string; acceptLanguage?: string; xff?: string } = {},
 ): NextRequest {
   const headers = new Headers({ host: 'localhost:3000', 'x-forwarded-host': host });
+  if (extra.xff) headers.set('x-forwarded-for', extra.xff);
   if (extra.cookie) headers.set('cookie', extra.cookie);
   if (extra.acceptLanguage) headers.set('accept-language', extra.acceptLanguage);
   return new NextRequest(`https://${host}${path}`, { headers });
@@ -69,9 +74,11 @@ const pasa = (res: Response) => res.headers.get('x-middleware-next') === '1';
 const ACTIVA = 'aula-activa.didacta.io';
 const SUSPENDIDA = 'aula-impagada.didacta.io';
 const LIBRE = 'zzz-random.didacta.io';
+const SITIO_PUBLICO = 'www.cafe-primeiro.com';
 
 beforeEach(() => {
   resolveCalls = [];
+  apiHeaders = [];
   hosts = {
     [ACTIVA]: { known: true, slug: 'aula-activa', surface: 'APP', suspended: false },
     [SUSPENDIDA]: { known: false, slug: null, surface: null, suspended: true },
@@ -237,6 +244,46 @@ describe('middleware · host gate', () => {
 
     expect(pasa(await middleware(request(SUSPENDIDA)))).toBe(true);
     expect(resolveCalls).toEqual([SUSPENDIDA, SUSPENDIDA]);
+  });
+});
+
+describe('middleware · cupo del rate limit', () => {
+  it('las llamadas a la API llevan la IP del VISITANTE, no cuentan al servidor del web', async () => {
+    // Salen por loopback: sin `X-Forwarded-For` la API las cuenta a la IP del
+    // propio web, un único cupo anónimo que comparten todas las aulas.
+    const middleware = await loadMiddleware();
+    await middleware(request(ACTIVA, '/signin', { xff: '203.0.113.7' }));
+
+    const setup = apiHeaders.find((c) => c.path === '/api/v1/setup/status');
+    const resolve = apiHeaders.find((c) => c.path === '/api/v1/tenancy/resolve');
+    expect(setup?.headers['x-forwarded-for']).toBe('203.0.113.7');
+    expect(resolve?.headers).toEqual({
+      'x-forwarded-host': ACTIVA,
+      'x-forwarded-for': '203.0.113.7',
+    });
+  });
+
+  it('un 429 al revalidar un dominio deja lo último que se supo: un sitio sigue siendo el sitio', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-01-10T10:00:00Z'));
+    hosts[SITIO_PUBLICO] = { known: true, slug: 'cafe', surface: 'SITE', suspended: false };
+    const middleware = await loadMiddleware();
+
+    const antes = await middleware(request(SITIO_PUBLICO, '/'));
+    expect(antes.headers.get('x-middleware-rewrite')).toMatch(/\/site$/);
+
+    // Caducan los cinco minutos y la API contesta 429 (cupo agotado).
+    vi.setSystemTime(new Date('2026-01-10T10:05:01Z'));
+    hosts[SITIO_PUBLICO] = 'http-429';
+    const despues = await middleware(request(SITIO_PUBLICO, '/'));
+    expect(despues.headers.get('x-middleware-rewrite')).toMatch(/\/site$/);
+    expect(resolveCalls).toEqual([SITIO_PUBLICO, SITIO_PUBLICO]);
+  });
+
+  it('control: un 429 con un dominio nunca visto deja pasar, como antes', async () => {
+    hosts[ACTIVA] = 'http-429';
+    const middleware = await loadMiddleware();
+    expect(pasa(await middleware(request(ACTIVA, '/signin')))).toBe(true);
   });
 });
 

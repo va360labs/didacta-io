@@ -77,7 +77,8 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
   const locale = await getLocale();
   // Idioma del aula (cacheado por host): con él se pinta quien entra sin cookie
   // y LocaleSync lo adopta en el primer acceso de quien aún no eligió el suyo.
-  const academyLocale = await getAcademyLocale(publicHost(await headers()));
+  const h = await headers();
+  const academyLocale = await getAcademyLocale(publicHost(h), h.get('x-forwarded-for'));
   const messages = await getMessages();
   return (
     <html

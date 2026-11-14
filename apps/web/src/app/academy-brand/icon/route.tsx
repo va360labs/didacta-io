@@ -6,7 +6,7 @@
 import { ImageResponse } from 'next/og';
 import { publicHost } from '@/lib/academy-locale';
 import {
-  BRAND_IMAGE_CACHE,
+  brandImageCacheControl,
   brandArt,
   IconArt,
   redirectToOwnImage,
@@ -42,6 +42,6 @@ export async function GET(request: Request): Promise<Response> {
   return new ImageResponse(<IconArt art={brandArt(brand)} size={size} rounded={size !== 180} />, {
     width: size,
     height: size,
-    headers: { 'cache-control': BRAND_IMAGE_CACHE },
+    headers: { 'cache-control': brandImageCacheControl(brand) },
   });
 }

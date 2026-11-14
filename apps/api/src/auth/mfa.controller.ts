@@ -24,6 +24,7 @@ import { TokenService, type SessionClaims } from './token.service';
 import { ZodValidationPipe } from './zod-validation.pipe';
 import { PrismaAuditLogService } from '../modules/prisma-audit-log.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { LoginRateLimit } from '../rate-limit/login-limit.interceptor';
 import { SessionRegistryService } from './session-registry.service';
 
 const enableSchema = z.object({
@@ -76,6 +77,7 @@ export class MfaController {
   }
 
   @Post('enable')
+  @LoginRateLimit('mfa')
   @ApiOperation({ summary: 'Confirmar el setup verificando el primer código TOTP' })
   async enable(
     @Req() req: FastifyRequest,
@@ -127,6 +129,7 @@ export class MfaController {
   }
 
   @Post('verify')
+  @LoginRateLimit('mfa')
   @ApiOperation({ summary: 'Verificar el segundo factor para elevar la sesión a mfaVerified=true' })
   async verify(
     @Req() req: FastifyRequest,

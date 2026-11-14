@@ -52,6 +52,28 @@ describe('apiFetch · respuestas que no son JSON', () => {
     await expect(apiFetch('/api/v1/lo-que-sea')).resolves.toBeNull();
   });
 
+  it('un 429 trae en el error los segundos de Retry-After (para reintentar a tiempo)', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        async () =>
+          new Response(JSON.stringify({ code: 'rate_limit_exceeded', message: 'x' }), {
+            status: 429,
+            headers: { 'Content-Type': 'application/json', 'Retry-After': '17' },
+          }),
+      ),
+    );
+    const error = (await apiFetch('/api/v1/auth/tenant-context').catch((e: unknown) => e)) as
+      | ApiHttpError
+      | undefined;
+    expect(error?.status).toBe(429);
+    expect(error?.retryAfterSeconds).toBe(17);
+
+    stubFetch(502, '<html></html>');
+    const sinCabecera = (await apiFetch('/x').catch((e: unknown) => e)) as ApiHttpError;
+    expect(sinCabecera.retryAfterSeconds).toBeUndefined();
+  });
+
   it('un JSON de error normal conserva su message y su code', async () => {
     stubFetch(
       422,

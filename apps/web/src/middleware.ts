@@ -86,11 +86,29 @@ type HostSurface = 'APP' | 'SITE' | null;
 const TTL_CONOCIDO_MS = 5 * 60_000;
 const TTL_DESCONOCIDO_MS = 30_000;
 
-async function checkInitialized(): Promise<boolean> {
+/**
+ * Cabeceras de una llamada del middleware a la API en nombre del visitante.
+ *
+ * La IP del visitante (`X-Forwarded-For`, tal como llega del proxy) viaja SIEMPRE:
+ * la llamada sale por loopback y, sin ella, la API la cuenta a la IP del propio
+ * servidor del web. Así, todas las aulas de la instancia compartían un único
+ * cupo anónimo del rate limit (30 peticiones/min en Community) entre esta
+ * resolución de dominio y el idioma del aula (`lib/academy-locale.ts`).
+ */
+function visitorHeaders(req: NextRequest, host?: string): Record<string, string> {
+  const xff = req.headers.get('x-forwarded-for')?.trim();
+  return {
+    ...(host ? { 'x-forwarded-host': host } : {}),
+    ...(xff ? { 'x-forwarded-for': xff } : {}),
+  };
+}
+
+async function checkInitialized(req: NextRequest): Promise<boolean> {
   if (initializedCache) return true;
   try {
     const res = await fetch(`${API_INTERNAL_URL}/api/v1/setup/status`, {
       cache: 'no-store',
+      headers: visitorHeaders(req),
     });
     if (!res.ok) return true;
     const data = (await res.json()) as { initialized?: boolean };
@@ -148,12 +166,21 @@ function servirAula(req: NextRequest): NextResponse {
 
 async function resolverHost(
   host: string,
+  req: NextRequest,
 ): Promise<{ known: boolean; surface: HostSurface; suspended: boolean }> {
   const ahora = Date.now();
   const cacheado = hostCache.get(host);
   if (cacheado && cacheado.expiresAt > ahora) {
     return { known: cacheado.known, surface: cacheado.surface, suspended: cacheado.suspended };
   }
+  // La API no contesta lo que esperábamos (un 429, un 5xx, caída): lo último
+  // que se supo de este host, aunque haya caducado — un sitio público sigue
+  // siendo el sitio y no el aula —, y si nunca se supo, dejar pasar. Un fallo
+  // de la API no debe convertirse en un 404 global — el modo degradado tiene
+  // que ser «como antes», no «el producto no existe».
+  const degradado = cacheado
+    ? { known: cacheado.known, surface: cacheado.surface, suspended: cacheado.suspended }
+    : { known: true, surface: null, suspended: false };
 
   try {
     const res = await fetch(`${API_INTERNAL_URL}/api/v1/tenancy/resolve`, {
@@ -162,12 +189,9 @@ async function resolverHost(
       // del web contra la API, así que su propio `Host` es el del salto interno
       // y no dice nada. Es la misma cabecera que Next pone al reescribir
       // `/api/*`, así que la API la lee por el mismo camino que en producción.
-      headers: { 'x-forwarded-host': host },
+      headers: visitorHeaders(req, host),
     });
-    // La API no contesta lo que esperábamos: dejar pasar. Un fallo de la API no
-    // debe convertirse en un 404 global — el modo degradado tiene que ser
-    // «como antes», no «el producto no existe».
-    if (!res.ok) return { known: true, surface: null, suspended: false };
+    if (!res.ok) return degradado;
     const data = (await res.json()) as {
       known?: boolean;
       surface?: HostSurface;
@@ -187,12 +211,12 @@ async function resolverHost(
     });
     return { known, surface, suspended };
   } catch {
-    return { known: true, surface: null, suspended: false };
+    return degradado;
   }
 }
 
 export async function middleware(req: NextRequest) {
-  const initialized = await checkInitialized();
+  const initialized = await checkInitialized(req);
   if (!initialized) {
     const url = req.nextUrl.clone();
     url.pathname = '/setup';
@@ -222,7 +246,7 @@ export async function middleware(req: NextRequest) {
   const hostname = host.startsWith('[') ? host : (host.split(':')[0] ?? host);
   if (esHostSiempreValido(hostname)) return servirAula(req);
 
-  const { known, surface, suspended } = await resolverHost(host);
+  const { known, surface, suspended } = await resolverHost(host, req);
   if (suspended) {
     // El aula existe pero está suspendida. Se contesta aquí, con un documento
     // autocontenido, en vez de dejar pasar a la app: no se sirve el shell, ni
