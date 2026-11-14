@@ -257,7 +257,8 @@ export class ModuleRegistryService implements OnModuleInit {
         dimension: result.dimension,
       };
     };
-    this.aiTutorIndexer = new AiTutorIndexerService(prisma, context, embedFn);
+    // El idioma del aula pone la cabecera de módulo («Module 1» en inglés).
+    this.aiTutorIndexer = new AiTutorIndexerService(prisma, context, embedFn, academyLocaleOf);
     this.aiTutorChat = new AiTutorChatService(prisma, context, embedFn, async (args) => {
       const result = await this.aiGateway.chat({
         tenantId: args.tenantId,

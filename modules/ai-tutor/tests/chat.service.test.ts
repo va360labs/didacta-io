@@ -268,6 +268,36 @@ describe('AiTutorChatService.ask (LMS-90.D)', () => {
     expect(result.citations[0]!.snippet).toContain('VLOOKUP');
   });
 
+  // La cabecera de módulo es contexto para el modelo, no texto de la clase: el
+  // extracto de la cita no la enseña (ni la «Módulo 1» de un índice viejo en un
+  // aula inglesa). Control: el resto del fragmento se queda tal cual.
+  it('el extracto de la cita no lleva la cabecera de módulo, en ningún idioma', async () => {
+    const prisma = makeFakePrisma({
+      chunkCount: 5,
+      retrieved: sampleRetrieved,
+      course: { title: 'X' },
+      user: { locale: 'en-US' },
+      hydrationLessons: [
+        { id: 'l1', title: 'Lookup' },
+        { id: 'l2', title: 'Match' },
+      ],
+      hydrationChunks: [
+        { id: 'chunk-1', content: '[Módulo 1: Spreadsheets]\n\nVLOOKUP finds a value' },
+        { id: 'chunk-2', content: '[Module 2: Formulas]\n\n[03:10] INDEX-MATCH is flexible' },
+      ],
+    });
+    const svc = new AiTutorChatService(
+      prisma as never,
+      makeContext() as never,
+      makeEmbed(),
+      makeChat(),
+    );
+    const result = await svc.ask('t1', 'u1', 'c1', { question: 'q' });
+    expect(result.citations[0]!.snippet).toBe('VLOOKUP finds a value');
+    expect(result.citations[1]!.snippet).toBe('[03:10] INDEX-MATCH is flexible');
+    expect(result.citations[1]!.startSeconds).toBe(190);
+  });
+
   it('agrega tokens en mod_ai_tutor_token_usage si no existe fila → create', async () => {
     const prisma = makeFakePrisma({
       chunkCount: 5,
