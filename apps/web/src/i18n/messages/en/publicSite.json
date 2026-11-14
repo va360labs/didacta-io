@@ -20,12 +20,6 @@
     "title": "Payment canceled",
     "body": "No charge was made. You can resume the purchase whenever you want — the course is still in the catalog."
   },
-  "checkoutSuccess": {
-    "title": "Thank you for your purchase!",
-    "body": "Your payment was processed successfully and your course is being activated. Check your email: we have sent you a link to <strong>set your password</strong> and get straight in. If you don’t see it within a few minutes, check spam or use “Forgot your password?” on the sign-in page.",
-    "hadAccount": "Already had an account? Sign in with your usual email: the course is already in it.",
-    "paymentReference": "Payment reference: <code>{id}</code>"
-  },
   "decision": {
     "approvedTitle": "Request approved",
     "approvedBody": "The request was approved. The member now has access.",
@@ -63,7 +57,7 @@
     "payError": "The payment could not be started. Try again in a few seconds.",
     "openingPayment": "Opening secure payment…",
     "buyNow": "Buy now",
-    "securePayment": "Secure payment with Stripe. VAT included.",
+    "securePayment": "Secure payment with Stripe. Final price.",
     "haveAccountToBuy": "Already have an account? <link>Sign in</link> to buy from your course page.",
     "syllabusTitle": "What's in the course",
     "syllabusCount": "{count, plural, one {# lesson} other {# lessons}}"
@@ -144,7 +138,7 @@
     "savingsLabel": "Savings over the original price",
     "savingsAmount": "−{amount}",
     "trialFirstCharge": "{days, plural, one {# day} other {# days}} free trial. First charge of {amount} on {date}.",
-    "firstChargeToday": "Taxes included. First charge today.",
+    "firstChargeToday": "Final price. First charge today.",
     "trialLessonLimit": "During the trial you can watch the first {count} lessons of each course; everything unlocks once you pay.",
     "couponHint": "Have a coupon? You can apply it on the payment screen.",
     "payError": "The payment could not be started. Try again in a few seconds.",
@@ -209,7 +203,8 @@
     "loading": "Loading the purchase terms…",
     "loadError": "We couldn't load the purchase terms, and you can't pay without them.",
     "retry": "Try again",
-    "mustTick": "Tick the box to continue"
+    "mustTick": "Tick the box to continue",
+    "mustTickToPay": "Tick the box to be able to pay."
   },
   "siteNotFound": {
     "title": "Page not found",
@@ -252,5 +247,61 @@
     "coursesSubtitle": "Buy just the course you want, with a one-time payment.",
     "allCourses": "See all {count} courses",
     "poweredBy": "Powered by Didacta"
+  },
+  "pago": {
+    "loading": "Loading secure payment…",
+    "loadError": "The payment form couldn't be shown here.",
+    "openInStripe": "Pay on Stripe's secure page",
+    "regionLabel": "Payment at {name}",
+    "secureBadge": "Secure payment",
+    "backToCourse": "Back to the course",
+    "backToMembership": "Back to the membership",
+    "eyebrow": "Your purchase",
+    "title": "Complete your payment",
+    "kindCourse": "Course",
+    "kindMembership": "Membership",
+    "byCreatorCourse": "Taught by {creator} · {name}",
+    "byCreatorMembership": "Run by {creator} · {name}",
+    "byAcademy": "From {name}",
+    "totalToday": "Total today",
+    "finalPrice": "Final price",
+    "formLabel": "Payment form",
+    "priceUpdated": "The price has changed since you opened the page: this is the amount you will be charged.",
+    "renewsNote": "Renews automatically each period until you cancel.",
+    "trust": {
+      "secureTitle": "Secure payment with Stripe",
+      "secureBody": "Stripe processes your card; {name} never sees its details.",
+      "secureBodyNoName": "Stripe processes your card; the academy never sees its details.",
+      "sellerTitle": "Sold by {name}",
+      "sellerCreatorCourse": "Taught by {creator}.",
+      "sellerCreatorMembership": "Run by {creator}.",
+      "sellerBody": "They charge you and are who you contact if you need anything.",
+      "policyCourseTitle": "Instant access",
+      "policyCourseBody": "By ticking the box you ask to start now and waive the 14-day right of withdrawal.",
+      "policyMembershipTitle": "Instant access, no lock-in",
+      "policyMembershipBody": "Renews automatically each period until you cancel. Starting now waives the 14-day right of withdrawal.",
+      "contactTitle": "Questions? Write to"
+    }
+  },
+  "gracias": {
+    "checking": "Checking your payment…",
+    "paidTitle": "Payment complete!",
+    "pendingTitle": "Your payment is being processed",
+    "pendingBody": "Your bank hasn't confirmed it yet. As soon as it does, we'll email you and you'll get access.",
+    "unpaidTitle": "The payment didn't go through",
+    "unpaidBody": "You haven't been charged. You can try again whenever you like.",
+    "retry": "Try again",
+    "unknownTitle": "We couldn't check your payment",
+    "unknownBody": "If it went through, you'll get a confirmation email in a few minutes and have access. If it doesn't arrive, write to the academy.",
+    "kindCourse": "Course",
+    "kindMembership": "Membership",
+    "amountPaid": "You paid",
+    "amount": "Amount",
+    "date": "Date",
+    "nextStep": "Next step",
+    "nextSignedIn": "It's already in your account.",
+    "nextAnonymous": "We've emailed you a link to <strong>create your password</strong>. If you already had an account, sign in with your usual email.",
+    "enterCourse": "Go to the course",
+    "enterAcademy": "Go to the academy"
   }
 }

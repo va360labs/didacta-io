@@ -20,12 +20,6 @@
     "title": "Pago cancelado",
     "body": "No se realizó ningún cargo. Puedes retomar la compra cuando quieras — el curso sigue en el catálogo."
   },
-  "checkoutSuccess": {
-    "title": "¡Gracias por tu compra!",
-    "body": "Tu pago se procesó correctamente y tu curso se está activando. Revisa tu correo: te hemos enviado un enlace para <strong>definir tu contraseña</strong> y entrar directamente. Si no lo ves en unos minutos, mira en spam o usa “¿Olvidaste tu contraseña?” en el inicio de sesión.",
-    "hadAccount": "¿Ya tenías cuenta? Inicia sesión con tu email de siempre: el curso ya está en ella.",
-    "paymentReference": "Referencia de pago: <code>{id}</code>"
-  },
   "decision": {
     "approvedTitle": "Solicitud aprobada",
     "approvedBody": "La solicitud fue aprobada. El miembro ya tiene acceso.",
@@ -63,7 +57,7 @@
     "payError": "No se pudo iniciar el pago. Inténtalo de nuevo en unos segundos.",
     "openingPayment": "Abriendo pago seguro…",
     "buyNow": "Comprar ahora",
-    "securePayment": "Pago seguro con Stripe. IVA incluido.",
+    "securePayment": "Pago seguro con Stripe. Precio final.",
     "haveAccountToBuy": "¿Ya tienes cuenta? <link>Inicia sesión</link> para comprar desde tu ficha del curso.",
     "syllabusTitle": "Qué incluye el curso",
     "syllabusCount": "{count, plural, one {# lección} other {# lecciones}}"
@@ -144,7 +138,7 @@
     "savingsLabel": "Ahorro sobre el precio original",
     "savingsAmount": "−{amount}",
     "trialFirstCharge": "{days, plural, one {# día} other {# días}} de prueba gratis. Primer cargo de {amount} el {date}.",
-    "firstChargeToday": "Impuestos incluidos. Primer cargo hoy.",
+    "firstChargeToday": "Precio final. Primer cargo hoy.",
     "trialLessonLimit": "Durante la prueba ves las primeras {count} clases de cada curso; al pagar se desbloquea todo.",
     "couponHint": "¿Tienes un cupón? Podrás aplicarlo en la pantalla de pago.",
     "payError": "No se pudo iniciar el pago. Inténtalo de nuevo en unos segundos.",
@@ -209,7 +203,8 @@
     "loading": "Cargando las condiciones de la compra…",
     "loadError": "No hemos podido cargar las condiciones de la compra y sin ellas no se puede pagar.",
     "retry": "Reintentar",
-    "mustTick": "Marca la casilla para continuar"
+    "mustTick": "Marca la casilla para continuar",
+    "mustTickToPay": "Marca la casilla para poder pagar."
   },
   "siteNotFound": {
     "title": "Página no encontrada",
@@ -252,5 +247,61 @@
     "coursesSubtitle": "Compra solo el curso que quieras, con pago único.",
     "allCourses": "Ver los {count} cursos",
     "poweredBy": "Powered by Didacta"
+  },
+  "pago": {
+    "loading": "Cargando el pago seguro…",
+    "loadError": "No se ha podido mostrar el formulario de pago aquí.",
+    "openInStripe": "Pagar en la página segura de Stripe",
+    "regionLabel": "Pago en {name}",
+    "secureBadge": "Pago seguro",
+    "backToCourse": "Volver al curso",
+    "backToMembership": "Volver a la membresía",
+    "eyebrow": "Tu compra",
+    "title": "Completa tu pago",
+    "kindCourse": "Curso",
+    "kindMembership": "Membresía",
+    "byCreatorCourse": "Lo imparte {creator} · {name}",
+    "byCreatorMembership": "La lleva {creator} · {name}",
+    "byAcademy": "De {name}",
+    "totalToday": "Total hoy",
+    "finalPrice": "Precio final",
+    "formLabel": "Formulario de pago",
+    "priceUpdated": "El precio se ha actualizado desde que abriste la página: este es el importe que se cobra.",
+    "renewsNote": "Se renueva sola cada periodo hasta que te des de baja.",
+    "trust": {
+      "secureTitle": "Pago seguro con Stripe",
+      "secureBody": "Stripe procesa la tarjeta; {name} no ve sus datos.",
+      "secureBodyNoName": "Stripe procesa la tarjeta; la academia no ve sus datos.",
+      "sellerTitle": "Vende {name}",
+      "sellerCreatorCourse": "Lo imparte {creator}.",
+      "sellerCreatorMembership": "La lleva {creator}.",
+      "sellerBody": "Es quien te cobra y a quien te diriges si necesitas algo.",
+      "policyCourseTitle": "Acceso inmediato",
+      "policyCourseBody": "Al marcar la casilla pides empezar ya y renuncias a desistir en 14 días.",
+      "policyMembershipTitle": "Acceso inmediato y sin permanencia",
+      "policyMembershipBody": "Se renueva sola cada periodo hasta que te des de baja. Al empezar ya renuncias a desistir en 14 días.",
+      "contactTitle": "¿Dudas? Escribe a"
+    }
+  },
+  "gracias": {
+    "checking": "Comprobando tu pago…",
+    "paidTitle": "¡Pago completado!",
+    "pendingTitle": "Tu pago se está procesando",
+    "pendingBody": "Tu banco aún no lo ha confirmado. En cuanto llegue, te escribimos y tendrás acceso.",
+    "unpaidTitle": "El pago no se ha completado",
+    "unpaidBody": "No se ha hecho ningún cargo. Puedes volver a intentarlo cuando quieras.",
+    "retry": "Volver a intentarlo",
+    "unknownTitle": "No hemos podido comprobar tu pago",
+    "unknownBody": "Si se completó, te llegará un correo de confirmación en unos minutos y tendrás acceso. Si no te llega, escribe a la academia.",
+    "kindCourse": "Curso",
+    "kindMembership": "Membresía",
+    "amountPaid": "Has pagado",
+    "amount": "Importe",
+    "date": "Fecha",
+    "nextStep": "Siguiente paso",
+    "nextSignedIn": "Ya está en tu cuenta.",
+    "nextAnonymous": "Te hemos enviado un correo para <strong>crear tu contraseña</strong>. Si ya tenías cuenta, entra con tu email de siempre.",
+    "enterCourse": "Entrar al curso",
+    "enterAcademy": "Entrar a la academia"
   }
 }

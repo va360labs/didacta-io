@@ -45,6 +45,7 @@ describe('casilla de la renuncia al desistimiento', () => {
         'loadError',
         'loading',
         'mustTick',
+        'mustTickToPay',
         'retry',
       ]);
     }

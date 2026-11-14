@@ -36,5 +36,7 @@
   "ADMIN_USER_SELF_STATUS_FORBIDDEN": "Você não pode suspender nem desativar o seu próprio usuário.",
   "ADMIN_WP_SSO_CONFIG_FORBIDDEN": "Somente super_admin e tenant_admin podem gerenciar a configuração de WP-SSO.",
   "ADMIN_VIDEO_PROTECTION_FORBIDDEN": "Somente super_admin ou tenant_admin podem gerenciar a proteção de vídeo.",
-  "ADMIN_VIDEO_PROTECTION_LIMITS_INVALID": "O limite diário não pode ser menor que o limite por hora."
+  "ADMIN_VIDEO_PROTECTION_LIMITS_INVALID": "O limite diário não pode ser menor que o limite por hora.",
+  "ADMIN_STRIPE_PUBLISHABLE_KEY_INVALID": "A chave publicável deve começar por pk_test_ ou pk_live_.",
+  "ADMIN_STRIPE_PUBLISHABLE_KEY_MODE_MISMATCH": "A chave publicável é de outro modo que a secreta (teste com produção ou o contrário)."
 }

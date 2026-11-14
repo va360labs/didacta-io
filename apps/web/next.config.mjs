@@ -62,6 +62,11 @@ const SKIP_TYPE_CHECK = process.env.SKIP_TYPE_CHECK === '1';
  *    esta CSP NO es la defensa contra XSS —esa es el saneado del contenido en
  *    `packages/core-kernel/src/html/sanitize.ts`—, pero sí impide cargar
  *    script desde otro origen.
+ *  · `script-src` admite además `https://js.stripe.com`: el pago se pinta
+ *    DENTRO de la ficha de venta del aula (Checkout embebido) y Stripe.js solo
+ *    se puede cargar de ahí. El formulario vive en un iframe de Stripe
+ *    (`frame-src https:`) y habla con su API (`connect-src https:`): los datos
+ *    de la tarjeta nunca pasan por nuestro dominio.
  *  · Los orígenes de recursos (`img-src`, `media-src`, `frame-src`) se dejan
  *    abiertos a `https:` a propósito: el almacenamiento puede ser S3, MinIO o
  *    un CDN del operador, y una lista cerrada aquí rompería SCORM, los PDF y
@@ -78,7 +83,7 @@ const CSP = (
     "object-src 'none'",
     "form-action 'self'",
     "frame-ancestors 'self'",
-    "script-src 'self' 'unsafe-inline'",
+    "script-src 'self' 'unsafe-inline' https://js.stripe.com",
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: blob: https:",
     "media-src 'self' blob: https:",
@@ -101,7 +106,11 @@ const SECURITY_HEADERS = [
   { key: 'X-Content-Type-Options', value: 'nosniff' },
   { key: 'X-Frame-Options', value: 'SAMEORIGIN' },
   { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
-  { key: 'Cross-Origin-Opener-Policy', value: 'same-origin' },
+  // `same-origin-allow-popups` y no `same-origin`: el pago embebido abre
+  // ventanas de Stripe para algunos medios (Google Pay, Link, la verificación
+  // 3-D Secure de ciertos bancos) y con `same-origin` se cortaba la vuelta. Las
+  // ventanas que abran OTROS sitios hacia el nuestro siguen aisladas.
+  { key: 'Cross-Origin-Opener-Policy', value: 'same-origin-allow-popups' },
   { key: 'Permissions-Policy', value: 'geolocation=(), microphone=(), camera=()' },
   ...(HSTS_ENABLED
     ? [{ key: 'Strict-Transport-Security', value: 'max-age=31536000; includeSubDomains' }]

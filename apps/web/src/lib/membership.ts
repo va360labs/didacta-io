@@ -13,6 +13,7 @@
 
 import type { WithdrawalWaiverAcceptance } from '@/lib/purchase-consent';
 import { apiFetch } from './api-client';
+import { normalizeCheckoutStart, type CheckoutStart, type RawCheckoutStart } from './checkout';
 import { formatCents as formatCentsI18n, type FmtOverrides } from './i18n/format';
 
 const PUBLIC_BASE = '/api/v1/membership';
@@ -141,16 +142,20 @@ export async function startMembershipCheckout(
   referralCode?: string,
   /** La casilla de la renuncia al desistimiento (la API la exige). */
   withdrawalWaiver?: WithdrawalWaiverAcceptance,
-): Promise<{ url: string }> {
-  return apiFetch<{ url: string }>(`${PUBLIC_BASE}/checkout`, {
+  /** `embedded`: pagar dentro de /join si el servidor puede; si no, redirect. */
+  uiMode?: 'embedded' | 'hosted',
+): Promise<CheckoutStart> {
+  const raw = await apiFetch<RawCheckoutStart>(`${PUBLIC_BASE}/checkout`, {
     method: 'POST',
     body: JSON.stringify({
       planId,
       ...(email ? { email } : {}),
       ...(referralCode ? { referralCode } : {}),
       ...(withdrawalWaiver ? { withdrawalWaiver } : {}),
+      ...(uiMode ? { uiMode } : {}),
     }),
   });
+  return normalizeCheckoutStart(raw);
 }
 
 // ── Admin ────────────────────────────────────────────────────────────────────

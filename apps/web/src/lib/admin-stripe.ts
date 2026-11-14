@@ -23,6 +23,12 @@ import { authStorage } from './auth-storage';
 
 export interface AdminStripeDto {
   hasSecretKey: boolean;
+  /**
+   * Clave publicable guardada (no es secreta), o `null`. Con ella el pago se
+   * pinta dentro de la ficha de venta del aula. Opcional: una API anterior no
+   * la manda.
+   */
+  publishableKey?: string | null;
   hasWebhookSecret: boolean;
   hasSubscriptionsWebhookSecret: boolean;
   /** 'test'/'live' derivado del prefijo de la clave, o null si no hay ninguna. */
@@ -46,6 +52,8 @@ export interface AdminStripeUpsertPayload {
   secretKey?: string;
   webhookSecret?: string;
   subscriptionsWebhookSecret?: string;
+  /** `pk_…` de la misma cuenta (pago dentro del aula). Vacío = se conserva. */
+  publishableKey?: string;
 }
 
 export interface AdminStripeTestResult {
