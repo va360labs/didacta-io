@@ -32,6 +32,7 @@ import { ApiHttpError } from '@/lib/api-client';
 import { apiErrorMessage } from '@/lib/i18n/api-error';
 import { regionNameFormatter } from '@/lib/i18n/format';
 import { labelOr } from '@/lib/i18n/labels';
+import { ptCountryPhrase } from '@/lib/pt-country';
 import {
   countryOptions,
   defaultCountry,
@@ -88,6 +89,12 @@ export function PaymentsConnectCard({
   const tErrors = useTranslations('errors');
   const locale = useLocale();
   const countryName = useCountryName(locale);
+  // «No podemos pagar a cuentas de X»: en portugués la preposición se contrae
+  // con el artículo del país («do Brasil»), y eso lo arma `ptCountryPhrase`.
+  const countryInSentence = (code: string) =>
+    locale.toLowerCase().startsWith('pt')
+      ? ptCountryPhrase(code, countryName(code))
+      : countryName(code);
 
   const [status, setStatus] = useState<PayoutsStatusDto | null | undefined>(initialStatus);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -308,7 +315,9 @@ export function PaymentsConnectCard({
               </div>
               {rejectedCountry || !selectedSupported ? (
                 <StatusLine tone="warning" testId="payouts-country-unsupported">
-                  {t('countryUnsupported', { country: countryName(rejectedCountry ?? country) })}
+                  {t('countryUnsupported', {
+                    country: countryInSentence(rejectedCountry ?? country),
+                  })}
                 </StatusLine>
               ) : null}
               <div className="border-t border-border-soft pt-4">
@@ -340,7 +349,7 @@ export function PaymentsConnectCard({
 
           {status && view.kind === 'country-unsupported' ? (
             <StatusLine tone="warning">
-              {t('countryUnsupported', { country: countryName(view.country) })}
+              {t('countryUnsupported', { country: countryInSentence(view.country) })}
             </StatusLine>
           ) : null}
 

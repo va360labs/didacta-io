@@ -172,7 +172,7 @@
     "alDia": "Al día. Te avisaremos cuando haya algo nuevo.",
     "marcarTodas": "Marcar todas como leídas",
     "vacioTitulo": "No hay notificaciones",
-    "vacioNota": "Cuando te matricules en un curso, completes lecciones o recibas un certificado, vas a ver el resumen acá.",
+    "vacioNota": "Cuando te matricules en un curso, completes lecciones o recibas un certificado, vas a ver el resumen aquí.",
     "nueva": "Nueva",
     "marcarLeida": "Marcar leída"
   },
@@ -309,9 +309,9 @@
     "haceDias": "hace {days}d",
     "errorCarga": "No pudimos cargar tus menciones.",
     "titulo": "Mis menciones",
-    "subtitulo": "Cada vez que alguien te menciona con <code>@usuario</code> en un post o comentario, aparece acá.",
+    "subtitulo": "Cada vez que alguien te menciona con <code>@usuario</code> en un post o comentario, aparece aquí.",
     "vacioTitulo": "Aún no te mencionó nadie",
-    "vacioNota": "Cuando alguien te etiquete con <code>@tu-handle</code>, vas a recibir una notificación in-app y la mención aparecerá acá.",
+    "vacioNota": "Cuando alguien te etiquete con <code>@tu-handle</code>, vas a recibir una notificación in-app y la mención aparecerá aquí.",
     "mencionComentario": "Te mencionaron como <mark>@{handle}</mark> en un comentario.",
     "mencionPost": "Te mencionaron como <mark>@{handle}</mark> en un post.",
     "irHilo": "Ir al hilo →"

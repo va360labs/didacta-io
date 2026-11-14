@@ -396,6 +396,7 @@ export default function CuentaPage() {
               setAvatarUrl={setAvatarUrl}
               documentId={documentId}
               setDocumentId={setDocumentId}
+              isAdmin={isAdmin}
               email={profile.email}
               error={error}
               success={success}
@@ -773,6 +774,8 @@ function EditProfileForm(props: {
   setAvatarUrl: (v: string) => void;
   documentId: string;
   setDocumentId: (v: string) => void;
+  /** Quien administra el aula: la pista «para pedir facturas de pago» es de alumnos. */
+  isAdmin: boolean;
   email: string;
   error: string | null;
   success: boolean;
@@ -917,7 +920,7 @@ function EditProfileForm(props: {
               <p role="alert" className="text-xs text-danger-700">
                 {t('cuenta.dniInvalido')}
               </p>
-            ) : (
+            ) : p.isAdmin ? null : (
               <p className="text-xs text-text-subtle">{t('cuenta.dniAyuda')}</p>
             )}
           </div>

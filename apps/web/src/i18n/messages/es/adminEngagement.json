@@ -184,7 +184,7 @@
   "tags": {
     "noAccess": "Solo los administradores del tenant pueden gestionar los tags de comunidad.",
     "title": "Tags de comunidad",
-    "subtitle": "Cura los tags oficiales del tenant con color e icono. Los autores siguen pudiendo escribir tags libres en sus posts; los curados acá se pintan con el estilo configurado en el feed y la sidebar.",
+    "subtitle": "Cura los tags oficiales del tenant con color e icono. Los autores siguen pudiendo escribir tags libres en sus posts; los curados aquí se pintan con el estilo configurado en el feed y la sidebar.",
     "listTitle": "Tags existentes",
     "loading": "Cargando…",
     "emptyList": "Aún no hay tags. Crea el primero en el formulario de la derecha.",

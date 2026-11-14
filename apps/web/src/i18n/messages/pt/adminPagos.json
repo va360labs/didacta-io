@@ -331,7 +331,7 @@
   },
   "payouts": {
     "title": "Recebimentos",
-    "subtitle": "Seus alunos pagam por meio de {operator} e nós transferimos a sua parte toda semana.",
+    "subtitle": "Seus alunos pagam por meio da {operator} e nós transferimos a sua parte toda semana.",
     "loading": "Carregando o status dos seus recebimentos…",
     "loadError": "Não foi possível carregar o status dos seus recebimentos.",
     "notConnected": "Você ainda não pode receber pagamentos. Conecte seus recebimentos: leva uns 5 minutos e você não precisa colar nenhuma chave.",
@@ -341,7 +341,7 @@
     "entityCompany": "Empresa",
     "connectCta": "Conectar recebimentos",
     "connectingCta": "Abrindo o Stripe…",
-    "countryUnsupported": "Ainda não conseguimos fazer pagamentos para contas de {country}. Avisaremos você quando for possível.",
+    "countryUnsupported": "Ainda não conseguimos fazer pagamentos para contas {country}. Avisaremos você quando for possível.",
     "missing": "Falta um dado para podermos pagar você: {requirement}. Até lá, você não pode vender.",
     "finishCta": "Concluir",
     "review": "O Stripe está analisando seus dados. Quando terminar, você poderá vender; não precisa fazer mais nada.",
@@ -351,8 +351,8 @@
     "dashboardCta": "Ver meus pagamentos no Stripe",
     "openingCta": "Abrindo…",
     "returnSyncing": "Verificando com o Stripe o que você acabou de concluir…",
-    "ownKeysNote": "Atualmente você recebe com as suas próprias chaves do Stripe. Quando terminar de conectar seus recebimentos, as novas vendas vão passar por {operator}.",
-    "alreadyStarted": "Você já começou a conectar seus recebimentos para {country}. Termine clicando em “Concluir”.",
+    "ownKeysNote": "Atualmente você recebe com as suas próprias chaves do Stripe. Quando terminar de conectar seus recebimentos, as novas vendas vão passar pela {operator}.",
+    "alreadyStarted": "Você já começou a conectar seus recebimentos ({country}). Termine clicando em “Concluir”.",
     "requirements": {
       "bank_account": "sua conta bancária",
       "identity_document": "um documento de identidade",
