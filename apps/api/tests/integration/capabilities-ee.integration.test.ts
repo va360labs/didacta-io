@@ -58,6 +58,7 @@ import { seedMinimalTenant } from './helpers/seed-tenant';
 
 // Imports del core de auth/tenant — minimal para arrancar JwtAuthGuard.
 import { TokenService } from '../../src/auth/token.service';
+import { SessionRegistryService } from '../../src/auth/session-registry.service';
 import { JwtAuthGuard } from '../../src/auth/jwt-auth.guard';
 import { PrismaService } from '../../src/prisma/prisma.service';
 import { PrismaAuditLogService } from '../../src/modules/prisma-audit-log.service';
@@ -96,6 +97,10 @@ import { RATE_LIMIT_REDIS_TOKEN, RateLimitService } from '../../src/rate-limit/r
 @Module({
   providers: [
     TokenService,
+    // OidcService la necesita desde que el login SSO registra la sesión
+    // (la misma que emite los tokens en AuthModule). Es la clase real:
+    // PrismaService + TokenService, ambos ya en el grafo.
+    SessionRegistryService,
     JwtAuthGuard,
     PrismaAuditLogService,
     {
@@ -122,6 +127,7 @@ import { RATE_LIMIT_REDIS_TOKEN, RateLimitService } from '../../src/rate-limit/r
   ],
   exports: [
     TokenService,
+    SessionRegistryService,
     JwtAuthGuard,
     PrismaAuditLogService,
     PrismaTenantConfigService,
