@@ -101,8 +101,10 @@ export type {
   AccountEntityType,
   AccountsApiFlavor,
   ConnectedAccountsApi,
+  ConnectedAccountIdentityPrefill,
   CreateConnectedAccountInput,
   CreatedConnectedAccount,
+  PrefillAddress,
   StripeBalanceSettings,
   StripeConnectedAccount,
   StripePayoutScheduleV1,
@@ -113,6 +115,7 @@ export {
   COUNTRY_NOT_SUPPORTED_REASON,
   PayoutsAccountsService,
   deriveStatus,
+  identityFor,
   publicBusinessUrl,
   requirementCategory,
   scheduleFromAccount,
@@ -297,7 +300,9 @@ export {
   checkBirthDate,
   identityFromStripe,
   missingFields,
+  onboardingIdentityFromTax,
 } from './tax/tax-profile.service.js';
+export { esProvinceCode, esProvinceName } from './tax/es-provinces.js';
 export type {
   PayoutsCipher,
   TaxAddress,

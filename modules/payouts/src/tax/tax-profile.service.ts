@@ -6,7 +6,11 @@
 import { createHash } from 'node:crypto';
 import type { PayoutsDbPort, PayoutsLogger, PayoutsTx } from '../accounts.service.js';
 import { PayoutsTaxProfileInvalidError } from '../errors.js';
-import type { ConnectedAccountsApi } from '../stripe/accounts-api.js';
+import type {
+  ConnectedAccountIdentityPrefill,
+  ConnectedAccountsApi,
+} from '../stripe/accounts-api.js';
+import { esProvinceCode, esProvinceName } from './es-provinces.js';
 import { checkTaxId, checkVatId, isEuVatCountry, taxIdHint } from './tax-ids.js';
 import type { ViesClient } from './vies.js';
 
@@ -541,6 +545,10 @@ export function identityFromStripe(
   const entityType: TaxEntityType =
     (raw.business_type ?? fallbackEntity) === 'company' ? 'company' : 'individual';
   const country = (raw.country ?? fallbackCountry ?? '').toUpperCase() || null;
+  // Stripe da la provincia española como código ISO 3166-2 («CA»): se trae
+  // con su nombre («Cádiz»), que es como la escribe el creador.
+  const region = (state: string | null | undefined): string | null =>
+    country === 'ES' ? esProvinceName(state) : state?.trim() || null;
   const fromAddress = (a: StripeAddress | null | undefined): TaxAddress | null =>
     a && (a.line1 || a.city || a.postal_code)
       ? {
@@ -548,7 +556,7 @@ export function identityFromStripe(
           line2: a.line2 ?? null,
           postalCode: a.postal_code ?? '',
           city: a.city ?? '',
-          region: a.state ?? null,
+          region: region(a.state),
         }
       : null;
   if (entityType === 'company') {
@@ -575,6 +583,47 @@ export function identityFromStripe(
     country,
     address: fromAddress(raw.individual?.address),
     birthDate,
+  };
+}
+
+/**
+ * Datos fiscales ya guardados → lo que se precarga al crear la cuenta de
+ * Stripe, para que el alta no vuelva a pedirlos. Puro.
+ *
+ * La provincia solo viaja en España, y como código ISO 3166-2 («Cádiz» →
+ * «CA»): es el formato de `address.state` en Stripe. Una que no se reconoce no
+ * se manda (la pide el alta) en vez de arriesgar un `address_state_invalid`.
+ */
+export function onboardingIdentityFromTax(
+  full: Pick<
+    TaxProfileFull,
+    'entityType' | 'legalName' | 'country' | 'taxId' | 'address' | 'birthDate'
+  > | null,
+): (ConnectedAccountIdentityPrefill & { country: string; entityType: TaxEntityType }) | null {
+  if (!full) return null;
+  const country = (full.country ?? '').toUpperCase();
+  const a = full.address;
+  const address =
+    a && a.line1?.trim() && a.postalCode?.trim() && a.city?.trim()
+      ? {
+          line1: a.line1.trim(),
+          line2: a.line2?.trim() || null,
+          postalCode: a.postalCode.trim(),
+          city: a.city.trim(),
+          state: country === 'ES' ? esProvinceCode(a.region) : null,
+        }
+      : null;
+  const dob = /^(\d{4})-(\d{2})-(\d{2})$/.exec(full.birthDate ?? '');
+  return {
+    country,
+    entityType: full.entityType,
+    companyName: full.entityType === 'company' ? full.legalName.trim() || null : null,
+    address,
+    birthDate:
+      full.entityType === 'individual' && dob
+        ? { year: Number(dob[1]), month: Number(dob[2]), day: Number(dob[3]) }
+        : null,
+    taxId: full.taxId?.trim() || null,
   };
 }
 

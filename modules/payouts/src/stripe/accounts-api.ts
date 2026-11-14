@@ -44,6 +44,41 @@ export const ACCOUNT_ENTITY_TYPES: readonly AccountEntityType[] = ['individual',
 /** Merchant Category Code de «Educational Services». */
 export const EDUCATION_MCC = '8299';
 
+/** Dirección a precargar. La provincia ya va en el formato de Stripe. */
+export interface PrefillAddress {
+  readonly line1: string;
+  readonly line2?: string | null;
+  readonly postalCode: string;
+  readonly city: string;
+  /**
+   * Provincia en ISO 3166-2 sin el prefijo del país («CA» para Cádiz), que es
+   * lo que pide Stripe en `address.state`. `null` = no se manda.
+   */
+  readonly state?: string | null;
+}
+
+/**
+ * Lo que ya sabemos del TITULAR. Todo opcional: lo que no llegue lo pide el
+ * alta alojada, y lo que llegue solo lo confirma (Stripe enseña lo precargado
+ * para revisarlo antes de aceptar el contrato). Se manda al CREAR la cuenta:
+ * después del primer enlace de alta la plataforma ya no puede escribirlo.
+ */
+export interface ConnectedAccountIdentityPrefill {
+  /** Correo de la persona (particular). Quita `individual.email` de lo que pide. */
+  readonly email?: string | null;
+  /** Razón social (empresa). */
+  readonly companyName?: string | null;
+  readonly address?: PrefillAddress | null;
+  /** Fecha de nacimiento (particular). */
+  readonly birthDate?: {
+    readonly day: number;
+    readonly month: number;
+    readonly year: number;
+  } | null;
+  /** NIF de la persona o de la empresa. Solo se manda con país ES (`es_nif`/`es_cif`). */
+  readonly taxId?: string | null;
+}
+
 /** Lo que se sabe del creador al pulsar «Conectar cobros». */
 export interface CreateConnectedAccountInput {
   /** ISO 3166-1 alfa-2 en mayúsculas. */
@@ -58,6 +93,12 @@ export interface CreateConnectedAccountInput {
   readonly productDescription?: string | null;
   /** Ya saneado (`sanitizeStatementDescriptor`); `null` = que lo pida Stripe. */
   readonly statementDescriptor?: string | null;
+  /** Correo PÚBLICO de atención (sale en los recibos de los alumnos). */
+  readonly supportEmail?: string | null;
+  /** Web pública de atención (la del aula). Mismo filtro que `businessUrl`. */
+  readonly supportUrl?: string | null;
+  /** Datos del titular que ya conocemos (ver `ConnectedAccountIdentityPrefill`). */
+  readonly identity?: ConnectedAccountIdentityPrefill | null;
   /** Divisa por defecto (minúsculas). `null` = la que decida Stripe. */
   readonly currency?: string | null;
   /** Idioma del alta alojada (`es-ES`, `en-US`…). */
@@ -281,6 +322,66 @@ export function translateCountryRejection(error: unknown, country: string): neve
   throw error;
 }
 
+/** Solo con el país ES se sabe qué tipo de identificador es el NIF. */
+function spanishTaxId(input: CreateConnectedAccountInput): string | null {
+  const taxId = input.identity?.taxId?.trim();
+  return taxId && input.country.toUpperCase() === 'ES' ? taxId : null;
+}
+
+/** `null` si no hay lo mínimo (calle, código postal y ciudad). */
+function usableAddress(address: PrefillAddress | null | undefined): PrefillAddress | null {
+  if (!address) return null;
+  const line1 = address.line1?.trim();
+  const postalCode = address.postalCode?.trim();
+  const city = address.city?.trim();
+  if (!line1 || !postalCode || !city) return null;
+  return {
+    line1,
+    line2: address.line2?.trim() || null,
+    postalCode,
+    city,
+    state: address.state?.trim() || null,
+  };
+}
+
+/** Dirección en la forma de Stripe (v1 y v2 comparten los nombres). */
+function stripeAddress(address: PrefillAddress, country: string): Record<string, unknown> {
+  return {
+    country,
+    line1: address.line1,
+    ...(address.line2 ? { line2: address.line2 } : {}),
+    postal_code: address.postalCode,
+    city: address.city,
+    ...(address.state ? { state: address.state } : {}),
+  };
+}
+
+function v2Identity(input: CreateConnectedAccountInput): Record<string, unknown> {
+  const identity: Record<string, unknown> = {
+    country: input.country.toLowerCase(),
+    entity_type: input.entityType,
+  };
+  const known = input.identity;
+  if (!known) return identity;
+  const address = usableAddress(known.address);
+  const taxId = spanishTaxId(input);
+  if (input.entityType === 'individual') {
+    const individual: Record<string, unknown> = {};
+    if (known.email) individual['email'] = known.email;
+    if (address) individual['address'] = stripeAddress(address, input.country.toLowerCase());
+    if (known.birthDate) individual['date_of_birth'] = { ...known.birthDate };
+    if (taxId) individual['id_numbers'] = [{ type: 'es_nif', value: taxId }];
+    if (Object.keys(individual).length > 0) identity['individual'] = individual;
+  } else {
+    const business: Record<string, unknown> = {};
+    if (known.companyName) business['registered_name'] = known.companyName;
+    if (address) business['address'] = stripeAddress(address, input.country.toLowerCase());
+    if (taxId) business['id_numbers'] = [{ type: 'es_cif', value: taxId }];
+    if (Object.keys(business).length > 0) identity['business_details'] = business;
+  }
+  return identity;
+}
+
 function v2CreateBody(input: CreateConnectedAccountInput): StripeParams {
   const profile: Record<string, unknown> = {};
   if (input.businessUrl) profile['business_url'] = input.businessUrl;
@@ -292,11 +393,15 @@ function v2CreateBody(input: CreateConnectedAccountInput): StripeParams {
   if (input.statementDescriptor) {
     merchant['statement_descriptor'] = { descriptor: input.statementDescriptor };
   }
+  const support: Record<string, unknown> = {};
+  if (input.supportEmail) support['email'] = input.supportEmail;
+  if (input.supportUrl) support['url'] = input.supportUrl;
+  if (Object.keys(support).length > 0) merchant['support'] = support;
   return {
     contact_email: input.email,
     display_name: input.displayName,
     dashboard: 'express',
-    identity: { country: input.country.toLowerCase(), entity_type: input.entityType },
+    identity: v2Identity(input),
     configuration: {
       merchant,
       recipient: { capabilities: { stripe_balance: { stripe_transfers: { requested: true } } } },
@@ -314,6 +419,26 @@ function v2CreateBody(input: CreateConnectedAccountInput): StripeParams {
   };
 }
 
+function v1Identity(input: CreateConnectedAccountInput): Record<string, unknown> {
+  const known = input.identity;
+  if (!known) return {};
+  const address = usableAddress(known.address);
+  const taxId = spanishTaxId(input);
+  if (input.entityType === 'individual') {
+    const individual: Record<string, unknown> = {};
+    if (known.email) individual['email'] = known.email;
+    if (address) individual['address'] = stripeAddress(address, input.country.toUpperCase());
+    if (known.birthDate) individual['dob'] = { ...known.birthDate };
+    if (taxId) individual['id_number'] = taxId;
+    return Object.keys(individual).length > 0 ? { individual } : {};
+  }
+  const company: Record<string, unknown> = {};
+  if (known.companyName) company['name'] = known.companyName;
+  if (address) company['address'] = stripeAddress(address, input.country.toUpperCase());
+  if (taxId) company['tax_id'] = taxId;
+  return Object.keys(company).length > 0 ? { company } : {};
+}
+
 function v1CreateBody(input: CreateConnectedAccountInput): StripeParams {
   const businessProfile: Record<string, unknown> = {
     mcc: EDUCATION_MCC,
@@ -321,11 +446,14 @@ function v1CreateBody(input: CreateConnectedAccountInput): StripeParams {
   };
   if (input.businessUrl) businessProfile['url'] = input.businessUrl;
   if (input.productDescription) businessProfile['product_description'] = input.productDescription;
+  if (input.supportEmail) businessProfile['support_email'] = input.supportEmail;
+  if (input.supportUrl) businessProfile['support_url'] = input.supportUrl;
   return {
     country: input.country,
     email: input.email,
     business_type: input.entityType,
     business_profile: businessProfile,
+    ...v1Identity(input),
     ...(input.currency ? { default_currency: input.currency } : {}),
     ...(input.statementDescriptor
       ? { settings: { payments: { statement_descriptor: input.statementDescriptor } } }
@@ -341,14 +469,54 @@ function v1CreateBody(input: CreateConnectedAccountInput): StripeParams {
   };
 }
 
-/** Quita `business_url` y repite: el dominio del aula puede no resolver aún. */
+/** Quita la web (del negocio y de soporte) y repite: el dominio del aula puede no resolver aún. */
 function isInvalidBusinessUrl(error: unknown): boolean {
   return (
     error instanceof PlatformStripeApiError &&
     (error.stripeCode === 'url_invalid' ||
       (error.param ?? '').endsWith('business_url') ||
-      (error.param ?? '').endsWith('business_profile[url]'))
+      (error.param ?? '').endsWith('business_profile[url]') ||
+      (error.param ?? '').endsWith('support_url') ||
+      (error.param ?? '').endsWith('support.url'))
   );
+}
+
+/** Códigos con los que Stripe rechaza un dato del titular que precargamos. */
+const PREFILL_REJECTION_CODES: ReadonlySet<string> = new Set([
+  'address_characters_invalid',
+  'address_country_identity_country_mismatch',
+  'address_postal_code_invalid',
+  'address_state_invalid',
+  'address_town_invalid',
+  'unsupported_postal_code',
+  'unsupported_state',
+  'date_of_birth_age_restriction',
+  'date_of_birth_invalid',
+  'email_invalid',
+  'email_domain_invalid_for_recipient',
+  'id_number_invalid',
+  'incorrect_id_number_for_country',
+  'invalid_id_number_for_structure',
+]);
+
+/** Parámetros que solo existen porque los precargamos. */
+const PREFILL_PARAM =
+  /^(identity\.(individual|business_details)|individual|company|configuration\.merchant\.support|business_profile\[support_)/;
+
+/**
+ * ¿Rechazó Stripe algo de lo PRECARGADO (dirección, NIF, fecha, correo de
+ * soporte…)? Entonces se crea la cuenta sin precarga y el alta lo pide: un
+ * dato nuestro mal escrito no puede dejar al creador sin poder cobrar.
+ */
+function isPrefillRejection(error: unknown): boolean {
+  if (!(error instanceof PlatformStripeApiError)) return false;
+  if (error.status < 400 || error.status >= 500) return false;
+  if (error.stripeCode && PREFILL_REJECTION_CODES.has(error.stripeCode)) return true;
+  return PREFILL_PARAM.test(error.param ?? '');
+}
+
+function hasPrefill(input: CreateConnectedAccountInput): boolean {
+  return Boolean(input.identity || input.supportEmail || input.supportUrl);
 }
 
 class StripeConnectedAccountsApi implements ConnectedAccountsApi {
@@ -361,13 +529,24 @@ class StripeConnectedAccountsApi implements ConnectedAccountsApi {
     try {
       return await this.createOnce(input);
     } catch (err) {
-      if (input.businessUrl && isInvalidBusinessUrl(err)) {
-        // Clave distinta: con la misma, Stripe respondería «idempotency_error»
-        // por cambiar los parámetros.
-        return this.createOnce({
+      // Cada reintento con una clave distinta: con la misma, Stripe
+      // respondería «idempotency_error» por cambiar los parámetros. Y cada uno
+      // quita algo, así que la cadena termina.
+      if ((input.businessUrl || input.supportUrl) && isInvalidBusinessUrl(err)) {
+        return this.create({
           ...input,
           businessUrl: null,
+          supportUrl: null,
           idempotencyKey: `${input.idempotencyKey}:sin-url`,
+        });
+      }
+      if (hasPrefill(input) && isPrefillRejection(err)) {
+        return this.create({
+          ...input,
+          identity: null,
+          supportEmail: null,
+          supportUrl: null,
+          idempotencyKey: `${input.idempotencyKey}:sin-precarga`,
         });
       }
       throw err;
