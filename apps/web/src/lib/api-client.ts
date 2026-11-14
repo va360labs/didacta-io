@@ -250,7 +250,13 @@ export async function apiFetch<T>(
     // seguir vivo. Intentamos renovar y reintentar la petición UNA vez de forma
     // transparente; si no hay refresh o también caducó, limpiamos y mandamos al
     // login. No aplica a los propios endpoints de auth ni al reintento.
-    const isAuthEndpoint = path.includes('/auth/refresh') || path.includes('/auth/signin');
+    // El 401 de un enlace de contraseña caducado o usado es la respuesta, no
+    // una sesión caducada: sin esto, la pantalla del enlace te echaba a /signin
+    // en vez de ofrecerte otro.
+    const isAuthEndpoint =
+      path.includes('/auth/refresh') ||
+      path.includes('/auth/signin') ||
+      path.includes('/auth/reset-password');
     if (
       response.status === 401 &&
       typeof window !== 'undefined' &&

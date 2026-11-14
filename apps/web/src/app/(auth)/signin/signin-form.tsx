@@ -12,31 +12,12 @@ import { useTranslations } from 'next-intl';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { ApiHttpError, apiFetch } from '@/lib/api-client';
+import { ApiHttpError } from '@/lib/api-client';
 import { authStorage } from '@/lib/auth-storage';
+import { completeSignIn, signInWithPassword } from '@/lib/complete-signin';
 import { apiErrorMessage } from '@/lib/i18n/api-error';
-import { consumeIntendedPath } from '@/lib/post-login-redirect';
-import { invalidateCommunitySpacesCache } from '@/modules/community';
 import { buildOidcStartUrl, buildWpSsoTryUrl, fetchOidcStatus, fetchWpSsoStatus } from '@/lib/sso';
 import { useTenantContext } from '@/lib/tenant-context';
-import { requestThemeRefresh } from '@/lib/theming';
-
-interface AuthResponse {
-  tokens: { accessToken: string; refreshToken: string; expiresIn: number };
-  mfaRequired: boolean;
-  user: {
-    id: string;
-    email: string;
-    name: string | null;
-    avatarUrl?: string | null;
-    tenantId: string;
-    tenantSlug: string;
-    roles: string[];
-    mfaEnabled: boolean;
-    mustChangePassword?: boolean;
-    onboardingCompletedAt?: string | null;
-  };
-}
 
 interface AmbiguousTenantError {
   code: 'AMBIGUOUS_TENANT';
@@ -61,6 +42,13 @@ export function SignInForm() {
   // sesión WP, el usuario vuelve autenticado sin tocar este form.
   const [wpBouncing, setWpBouncing] = useState<boolean>(false);
   const [wpLoginRequired, setWpLoginRequired] = useState<boolean>(false);
+  // `?email=`: quien llega desde «elige tu contraseña» (si no pudo entrar
+  // solo) o desde un enlace con su correo no tiene que volver a escribirlo.
+  const [prefilledEmail, setPrefilledEmail] = useState('');
+  useEffect(() => {
+    const email = new URLSearchParams(window.location.search).get('email');
+    if (email && email.length <= 200 && email.includes('@')) setPrefilledEmail(email);
+  }, []);
 
   useEffect(() => {
     if (!tenant?.slug) {
@@ -112,40 +100,17 @@ export function SignInForm() {
     setPending(true);
     try {
       const tenantSlug = tenant?.slug ?? (form.get('tenantSlug')?.toString().trim() || undefined);
-      const response = await apiFetch<AuthResponse>('/api/v1/auth/signin', {
-        method: 'POST',
-        body: JSON.stringify({
-          tenantSlug,
-          email: String(form.get('email')),
-          password: String(form.get('password')),
-        }),
+      const response = await signInWithPassword({
+        tenantSlug,
+        email: String(form.get('email')),
+        password: String(form.get('password')),
       });
-      // "Mantener la sesión abierta": marcado → localStorage (sobrevive al
-      // cierre del navegador); desmarcado → sessionStorage (muere con la
-      // pestaña). Ver la nota de `auth-storage.ts`.
-      const remember = form.get('remember') === 'on';
-      authStorage.saveTokens(response.tokens.accessToken, response.tokens.refreshToken, remember);
-      authStorage.saveSession({ user: response.user, mfaRequired: response.mfaRequired }, remember);
-      // Arranca el sidebar de espacios desde cero con el token ya válido (evita
-      // arrastrar un cache vacío o de otro tenant entre navegaciones SPA).
-      invalidateCommunitySpacesCache();
-      // El TenantThemeProvider (root layout) no se re-monta en la navegación SPA
-      // post-login, así que pedimos que recoja el branding (logo) ahora mismo.
-      requestThemeRefresh();
-      if (response.mfaRequired) {
-        // El destino pendiente (deep link) NO se consume acá: lo consumirá el
-        // form de verificación MFA al completar el segundo factor.
-        router.push(response.user.mfaEnabled ? '/mfa/verify' : '/mfa/setup');
-      } else if (response.user.onboardingCompletedAt === null) {
-        // Ídem: el onboarding lo consume al terminar. También quien lleva un
-        // aula en modo sencillo empieza por su perfil (con la foto opcional)
-        // y de ahí sigue al alta en 3 preguntas: ver `lib/first-access.ts`.
-        router.push('/onboarding');
-      } else {
-        // Deep link guardado antes del redirect a /signin (p. ej. enlace
-        // compartido de un post de la comunidad) → volvemos ahí.
-        router.push(consumeIntendedPath() ?? '/home');
-      }
+      // "Mantener la sesión abierta": decide localStorage o sessionStorage.
+      // Segundo factor → MFA; perfil sin hacer → /onboarding (que consume el
+      // deep link al terminar; en modo sencillo, quien lleva el aula sigue de
+      // ahí al alta en 3 preguntas: `lib/first-access.ts`); si no, el deep
+      // link guardado antes del redirect a /signin, o /home.
+      router.push(completeSignIn(response, form.get('remember') === 'on'));
     } catch (e) {
       if (e instanceof ApiHttpError) {
         // Caso especial: el email pertenece a varios tenants → mostrar selector.
@@ -241,10 +206,13 @@ export function SignInForm() {
         <div className="space-y-1.5">
           <Label htmlFor="email">{t('signin.emailLabel')}</Label>
           <Input
+            // `key`: el correo de `?email=` llega tras el primer pintado.
+            key={prefilledEmail || 'vacio'}
             id="email"
             name="email"
             type="email"
             autoComplete="email"
+            defaultValue={prefilledEmail}
             required
             className="h-12"
           />
