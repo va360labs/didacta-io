@@ -10,6 +10,7 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { Icon } from '@/components/icon';
+import { DialogBackdrop } from '@/components/ui/dialog';
 import {
   AGENT_IDS,
   AGENT_LABELS,
@@ -156,11 +157,10 @@ export function AgentPanelMobile({ state, tenantSlug }: PanelProps) {
       </button>
       {state.sheetOpen ? (
         <div className="fixed inset-0 z-(--z-modal) flex flex-col justify-end">
-          <button
-            type="button"
-            aria-label={t('cerrar')}
+          {/* El cierre accesible es la X de la hoja; ver `DialogBackdrop`. */}
+          <DialogBackdrop
+            onClose={() => state.setSheetOpen(false)}
             className="absolute inset-0 bg-black/40"
-            onClick={() => state.setSheetOpen(false)}
           />
           <div
             role="dialog"

@@ -169,7 +169,20 @@ describeWithDb('Webhook de plataforma — Postgres real como didacta_app (RLS fo
     };
     const auditLog = new PrismaAuditLogService(prisma);
 
-    const runtime = new PayoutsRuntime(CONFIG, fake, prisma, stripeResolver, logger as never);
+    // El control (6) espera la liquidación EN LÍNEA, que es lo que hace el
+    // runtime sin REDIS_URL (lo decide al construirse). Se quita del entorno
+    // aquí, como en payouts-losses y payouts-membership: si el shell que lanza
+    // la suite trae REDIS_URL —el arnés E2E la exporta—, el webhook encolaba
+    // la liquidación y la respuesta llegaba sin `settlement`.
+    const previousRedis = process.env['REDIS_URL'];
+    delete process.env['REDIS_URL'];
+    let runtime: PayoutsRuntime;
+    try {
+      runtime = new PayoutsRuntime(CONFIG, fake, prisma, stripeResolver, logger as never);
+    } finally {
+      if (previousRedis !== undefined) process.env['REDIS_URL'] = previousRedis;
+    }
+    expect(runtime.settleInline, 'el runtime liquida en línea').toBe(true);
     const guard = new PlatformObjectGuard(runtime);
     const services = new Map<unknown, unknown>([
       [ModuleRegistryService, registry],

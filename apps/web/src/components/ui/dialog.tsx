@@ -19,6 +19,37 @@ interface DialogContextValue {
 
 const DialogContext = React.createContext<DialogContextValue | null>(null);
 
+/**
+ * Fondo oscuro de un modal: cerrar pulsando fuera, solo con el puntero.
+ *
+ * Oculto a los lectores de pantalla y sin rol de botón A PROPÓSITO. Fue un
+ * `<button aria-label="Cerrar">` a pantalla completa, y eso duplicaba el
+ * control de cierre del propio diálogo: el lector anunciaba dos «Cerrar» (uno
+ * invisible y del tamaño de la pantalla) y en «Nuevo espacio» dos «Cancelar».
+ * Quien no usa el ratón cierra con Escape, con la X o con el botón de cancelar
+ * del diálogo, que sí están dentro de él y dentro de la trampa de foco; pulsar
+ * fuera es un atajo de ratón y no necesita un segundo nombre.
+ *
+ * `className` SUSTITUYE al aspecto por defecto, para los fondos que no van
+ * detrás del panel con `-z-10` (la hoja móvil del agente).
+ */
+export function DialogBackdrop({
+  onClose,
+  className,
+}: {
+  onClose: () => void;
+  className?: string;
+}): React.JSX.Element {
+  return (
+    <div
+      aria-hidden="true"
+      data-testid="dialog-backdrop"
+      onClick={onClose}
+      className={className ?? 'fixed inset-0 -z-10 cursor-default bg-black/50'}
+    />
+  );
+}
+
 export interface DialogProps {
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
@@ -139,18 +170,7 @@ export function DialogContent({ children, className }: DialogContentProps) {
 
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto p-4 sm:items-center">
-      {/* Fondo. Es un <button> y no un <div onClick> porque cerrar pulsando
-          fuera ES una acción, y como <div> ni se anunciaba ni tenía etiqueta.
-          Vive fuera del panel, así que la trampa de foco lo deja fuera del
-          recorrido del tabulador — igual que hace cualquier modal: una zona de
-          cierre a pantalla completa en medio del ciclo confunde más que ayuda.
-          A quien navega con teclado le quedan Escape y la X de la esquina. */}
-      <button
-        type="button"
-        aria-label={t('dialog.close')}
-        onClick={close}
-        className="fixed inset-0 -z-10 cursor-default bg-black/50"
-      />
+      <DialogBackdrop onClose={close} />
       <div
         ref={panelRef}
         role="dialog"
@@ -262,14 +282,7 @@ function DialogLegacy({
 
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      {/* Ver DialogContent: fondo como <button>, fuera del recorrido del
-          tabulador; con teclado se cierra con Escape o con la X. */}
-      <button
-        type="button"
-        aria-label={t('dialog.close')}
-        onClick={close}
-        className="fixed inset-0 -z-10 cursor-default bg-black/50"
-      />
+      <DialogBackdrop onClose={close} />
       <div
         ref={panelRef}
         role="dialog"

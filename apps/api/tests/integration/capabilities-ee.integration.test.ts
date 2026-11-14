@@ -45,6 +45,7 @@
  * test.ts` → 36 tests de integración del LicenseGuard end-to-end.
  */
 
+import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import supertest from 'supertest';
 import { Global, Module } from '@nestjs/common';
@@ -58,6 +59,7 @@ import { seedMinimalTenant } from './helpers/seed-tenant';
 
 // Imports del core de auth/tenant — minimal para arrancar JwtAuthGuard.
 import { TokenService } from '../../src/auth/token.service';
+import { SessionRegistryService } from '../../src/auth/session-registry.service';
 import { JwtAuthGuard } from '../../src/auth/jwt-auth.guard';
 import { PrismaService } from '../../src/prisma/prisma.service';
 import { PrismaAuditLogService } from '../../src/modules/prisma-audit-log.service';
@@ -96,6 +98,10 @@ import { RATE_LIMIT_REDIS_TOKEN, RateLimitService } from '../../src/rate-limit/r
 @Module({
   providers: [
     TokenService,
+    // OidcService la necesita desde que el login SSO registra la sesión
+    // (la misma que emite los tokens en AuthModule). Es la clase real:
+    // PrismaService + TokenService, ambos ya en el grafo.
+    SessionRegistryService,
     JwtAuthGuard,
     PrismaAuditLogService,
     {
@@ -122,6 +128,7 @@ import { RATE_LIMIT_REDIS_TOKEN, RateLimitService } from '../../src/rate-limit/r
   ],
   exports: [
     TokenService,
+    SessionRegistryService,
     JwtAuthGuard,
     PrismaAuditLogService,
     PrismaTenantConfigService,
@@ -206,7 +213,9 @@ async function withApp<T>(
   }
 }
 
-async function bearer(opts: { roles?: readonly string[]; mfaVerified?: boolean } = {}) {
+async function bearer(
+  opts: { roles?: readonly string[]; mfaVerified?: boolean; tenantId?: string } = {},
+) {
   const jwt = await issueTestAccessJwt(opts);
   return `Bearer ${jwt}`;
 }
@@ -501,18 +510,29 @@ describe('LicenseGuard — integración 7 capabilities EE (ART-025, Sprint 2)', 
         licenseKey: licenseWithReports,
         extraModules: [IntegrationAuditExportModule],
       });
-      // El controller registra un entry `audit.report.exported` en la
-      // descarga; el insert tiene FK al tenant → seedeamos.
-      await seedMinimalTenant(testApp.prisma);
+      // Aula PROPIA de este test. Con el tenant compartido de los demás
+      // (`seedMinimalTenant`) el registro de auditoría ya no está vacío en
+      // cuanto otra suite escribe en él —los webhooks salientes apuntan sus
+      // altas— o en la segunda pasada sobre la misma base: el conteo dependía
+      // del orden de los ficheros, no del export.
+      const tenantId = randomUUID();
+      await testApp.prisma.tenant.create({
+        data: { id: tenantId, slug: `audit-export-${tenantId.slice(0, 8)}`, name: 'Audit export' },
+      });
+      const auth = await bearer({ tenantId });
       await withApp(testApp, async (server) => {
-        const res = await supertest(server)
-          .get(PATH)
-          .set('Authorization', await bearer());
+        const res = await supertest(server).get(PATH).set('Authorization', auth);
         expect(res.status).toBe(200);
         expect(res.headers['content-type']).toMatch(/application\/zip/);
         expect(res.headers['content-disposition']).toMatch(/^attachment; filename="audit-/);
-        // El audit log del tenant está vacío → entry count == 0 (header informativo).
+        // El audit log del aula está vacío → entry count == 0 (header informativo).
         expect(res.headers['x-audit-entry-count']).toBe('0');
+
+        // Y el conteo es el de la base, no un cero fijo: la descarga deja su
+        // propio `audit.report.exported`, que la siguiente ya cuenta.
+        const again = await supertest(server).get(PATH).set('Authorization', auth);
+        expect(again.status).toBe(200);
+        expect(again.headers['x-audit-entry-count']).toBe('1');
       });
     });
 
