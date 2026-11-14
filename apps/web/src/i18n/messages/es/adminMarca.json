@@ -149,10 +149,12 @@
     "modules": "Módulos",
     "storage": "Storage",
     "raw": "Avanzado",
-    "virtual-classroom": "Aula virtual"
+    "virtual-classroom": "Aula virtual",
+    "automated-messages": "Mensajes automáticos"
   },
   "configTabsDesc": {
-    "virtual-classroom": "Credenciales Zoom Server-to-Server para sesiones síncronas."
+    "virtual-classroom": "Credenciales Zoom Server-to-Server para sesiones síncronas.",
+    "automated-messages": "Bienvenida, primera semana, recuperación y más, firmados por el aula."
   },
   "modulesTab": {
     "loadError": "No pudimos cargar los módulos.",

@@ -25,6 +25,7 @@ import { authStorage } from '@/lib/auth-storage';
 import { simpleModeApi } from '@/lib/simple-mode';
 import { SaleEmailsEditor } from '@/modules/notifications';
 import { RetentionSettings } from '@/modules/gamification';
+import { AutomatedMessages } from '@/modules/retention';
 import {
   publishThemeUpdate,
   themingApi,
@@ -267,6 +268,11 @@ export function SimpleSettings() {
           <RetentionSettings />
         </div>
       </section>
+
+      {/* Mensajes que el aula envía sola, firmados por quien la administra. */}
+      <div className="mt-4" id="mensajes-automaticos">
+        <AutomatedMessages />
+      </div>
 
       <Link
         href="/admin/settings?full=1"

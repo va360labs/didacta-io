@@ -128,7 +128,7 @@ export class GamificationAnniversaryWorker implements OnApplicationBootstrap, On
 
   private async runTenant(tenantId: string, today: Date): Promise<number> {
     if (!(await this.registry.isModuleEnabledForTenant(tenantId, 'mod.gamification'))) return 0;
-    const settings = await this.registry.getRetentionService().getSettings(tenantId);
+    const settings = await this.registry.getGamificationRetentionService().getSettings(tenantId);
     if (!settings.celebrateAnniversaries) return 0;
     const yearAgo = new Date(today.getTime() - 364 * 86_400_000);
     const candidates = await this.prisma.user.findMany({

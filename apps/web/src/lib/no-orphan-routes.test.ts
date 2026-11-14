@@ -57,6 +57,10 @@ const ALLOWLIST: Record<string, { kind: AllowKind; reason: string }> = {
   },
   '/admin/tenants/new': { kind: 'reachable', reason: 'acción "Nuevo tenant" en /admin/tenants' },
   '/admin/users/invite': { kind: 'reachable', reason: 'acción "Invitar" en /admin/users' },
+  '/admin/users/at-risk': {
+    kind: 'reachable',
+    reason: 'tarjeta «Miembros en riesgo» en Alumnos (modo sencillo) y en /admin/users',
+  },
   '/admin/users/import': {
     kind: 'reachable',
     reason: 'acción "Importar CSV" en /admin/users',

@@ -29,6 +29,7 @@ import { formatDateTime } from '@/lib/i18n/format';
 import { labelOr } from '@/lib/i18n/labels';
 import { paymentTiersApi, type PaymentTier, type UserTier } from '@/lib/payment-connections';
 import { authStorage } from '@/lib/auth-storage';
+import { AtRiskCard } from '@/modules/retention';
 
 /// Tamaño de página por defecto. Coincide con el `limit` default del API.
 /// Si cambia, ajustar también en backend (admin-users.controller.ts).
@@ -153,6 +154,8 @@ function UsuariosCompleta() {
           </Button>
         </div>
       </header>
+
+      <AtRiskCard />
 
       <Card>
         <CardContent className="flex flex-wrap items-end gap-4 p-4">

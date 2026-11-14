@@ -103,7 +103,7 @@ export class GamificationRetentionController {
   ) {}
 
   private get retention() {
-    return this.registry.getRetentionService();
+    return this.registry.getGamificationRetentionService();
   }
 
   // ── Miembro ────────────────────────────────────────────────────────────────

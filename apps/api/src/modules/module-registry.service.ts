@@ -85,9 +85,15 @@ import {
 import {
   buildGamificationModule,
   GamificationService,
-  RetentionService,
+  RetentionService as GamificationRetentionService,
   type GamificationEventPublisher,
 } from '@didacta/mod-gamification';
+import {
+  buildRetentionModule,
+  RetentionService,
+  type RetentionEventPublisher,
+  type RetentionPorts,
+} from '@didacta/mod-retention';
 import { communityModule, CommunityService } from '@didacta/mod-community';
 import { coursesModule, CoursesService } from '@didacta/mod-courses';
 import { helloWorldModule } from '@didacta/mod-hello-world';
@@ -201,8 +207,17 @@ export class ModuleRegistryService implements OnModuleInit {
   private surveys?: SurveysService;
   private resources?: ResourcesService;
   private gamification?: GamificationService;
+  /** Retención de la gamificación: desbloqueo por nivel, rachas, insignias y premios. */
+  private gamificationRetention?: GamificationRetentionService;
+  /** mod.retention: mensajes automáticos y miembros en riesgo. */
   private retention?: RetentionService;
   private courseSaleChecker?: LearningCourseSaleChecker;
+  /**
+   * Puertos de mod.retention. Los cablea `RetentionHostPorts` (RetentionModule)
+   * al arrancar: necesitan el publicador en tiempo real de la mensajería, que
+   * vive en otro módulo de Nest y no existe todavía cuando se construye esto.
+   */
+  private retentionPorts?: RetentionPorts;
   /** Cache de activación por (tenant, módulo) para consultas fuera del path HTTP. */
   private readonly moduleEnabledCache = new Map<string, { enabled: boolean; expiresAt: number }>();
 
@@ -238,9 +253,9 @@ export class ModuleRegistryService implements OnModuleInit {
     // aula tiene los puntos apagados, no se cierra nada (un nivel que nadie
     // puede alcanzar no puede retener contenido).
     const cierrePorNivel: CourseLevelGateChecker = async (tenantId, userId, courseId) => {
-      if (!this.retention) return null;
+      if (!this.gamificationRetention) return null;
       if (!(await this.isModuleEnabledForTenant(tenantId, 'mod.gamification'))) return null;
-      const gate = await this.retention.courseGate(tenantId, userId, courseId);
+      const gate = await this.gamificationRetention.courseGate(tenantId, userId, courseId);
       if (!gate) return null;
       const info = (s: {
         levelNumber: number;
@@ -701,9 +716,12 @@ export class ModuleRegistryService implements OnModuleInit {
     this.gamification = new GamificationService(prisma, gamificationPublisher);
     // Retención estilo Skool sobre el mismo libro de puntos: desbloqueo por
     // nivel, rachas, insignias, premios automáticos y celebraciones.
-    this.retention = new RetentionService(prisma, gamificationPublisher, async (tenantId) =>
-      // Sin modo plataforma en la instalación, siempre son claves propias.
-      this.payouts ? discountCodesAllowedFor(await this.payouts.mode.resolve(tenantId)) : true,
+    this.gamificationRetention = new GamificationRetentionService(
+      prisma,
+      gamificationPublisher,
+      async (tenantId) =>
+        // Sin modo plataforma en la instalación, siempre son claves propias.
+        this.payouts ? discountCodesAllowedFor(await this.payouts.mode.resolve(tenantId)) : true,
     );
     const gamificationModule = buildGamificationModule();
 
@@ -778,6 +796,44 @@ export class ModuleRegistryService implements OnModuleInit {
       academyLocaleOf,
     );
     const messagingModule = buildMessagingModule(this.messaging);
+
+    // mod.retention: mensajes automáticos y miembros en riesgo. Los puertos
+    // (miembros, matrículas, mensajería…) los pone el host al arrancar.
+    const retentionEventBus = this.factory.getEventBus();
+    const retentionPublisher: RetentionEventPublisher = {
+      publish: async (tenantId, actorId, name, payload) => {
+        await retentionEventBus.publish({
+          name,
+          version: 1,
+          data: payload as never,
+          metadata: {
+            tenantId,
+            userId: actorId ?? undefined,
+            timestamp: new Date().toISOString(),
+            traceId: cryptoRandom(),
+            idempotencyKey: `${name}:${(payload as { deliveryId?: string }).deliveryId ?? cryptoRandom()}`,
+          },
+        });
+      },
+    };
+    this.retention = new RetentionService(
+      prisma,
+      () => {
+        if (!this.retentionPorts) {
+          throw new Error(
+            'mod.retention: los puertos del host no están cableados (boot incompleto).',
+          );
+        }
+        return this.retentionPorts;
+      },
+      retentionPublisher,
+      {
+        info: (msg, meta) => this.pino.log(meta ?? {}, msg),
+        warn: (msg, meta) => this.pino.warn(meta ?? {}, msg),
+        error: (msg, meta) => this.pino.error(meta ?? {}, msg),
+      },
+    );
+    const retentionModule = buildRetentionModule(this.retention);
 
     // mod.payment-connections: agregador read-only multi-cuenta. NO se gatea por
     // env (las API keys son per-conexión, cifradas en tenant_setting vía el
@@ -870,6 +926,8 @@ export class ModuleRegistryService implements OnModuleInit {
       buildMemberRegistrationModule(),
       referralsModule,
       messagingModule,
+      // Depende (hard) de mod.messaging: es su canal.
+      retentionModule,
       surveysModule,
       resourcesModule,
       gamificationModule,
@@ -1311,11 +1369,11 @@ export class ModuleRegistryService implements OnModuleInit {
     return this.courseSaleChecker(tenantId, courseId);
   }
 
-  getRetentionService(): RetentionService {
-    if (!this.retention) {
+  getGamificationRetentionService(): GamificationRetentionService {
+    if (!this.gamificationRetention) {
       throw new Error('mod.gamification (retención) no está inicializado (boot incompleto).');
     }
-    return this.retention;
+    return this.gamificationRetention;
   }
 
   getGamificationService(): GamificationService {
@@ -1323,6 +1381,18 @@ export class ModuleRegistryService implements OnModuleInit {
       throw new Error('mod.gamification no está inicializado (boot incompleto).');
     }
     return this.gamification;
+  }
+
+  getRetentionService(): RetentionService {
+    if (!this.retention) {
+      throw new Error('mod.retention no está inicializado (boot incompleto).');
+    }
+    return this.retention;
+  }
+
+  /** Lo llama `RetentionHostPorts` al arrancar (ver `retentionPorts`). */
+  attachRetentionPorts(ports: RetentionPorts): void {
+    this.retentionPorts = ports;
   }
 
   getMessagingService(): MessagingService {

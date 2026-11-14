@@ -43,6 +43,9 @@ const ADMIN_ROLES = new Set(['super_admin', 'tenant_admin']);
 
 const NO_CLIENT_CONTEXT: ClientContext = { ip: null, userAgent: null };
 
+/** Como mucho una escritura de `lastSeenAt` cada 15 minutos por persona. */
+const LAST_SEEN_THROTTLE_MS = 15 * 60 * 1000;
+
 /** Rol por defecto de un alta por signup (el mismo que asignan los flujos de registro). */
 const DEFAULT_SIGNUP_ROLE = 'alumno';
 
@@ -365,9 +368,10 @@ export class AuthService {
       });
     }
 
+    const signedInAt = new Date();
     await this.prisma.user.update({
       where: { id: user.id },
-      data: { lastLoginAt: new Date() },
+      data: { lastLoginAt: signedInAt, lastSeenAt: signedInAt },
     });
 
     const roles = user.roles.map((r: { role: { name: string } }) => r.role.name);
@@ -484,8 +488,9 @@ export class AuthService {
     // de «sesiones activas» del usuario acumularía una fila por hora.
     return runAsTenant(
       user.tenantId,
-      () =>
-        this.sessions
+      async () => {
+        await this.touchLastSeen(user.id);
+        return this.sessions
           .rotate(
             claims.sid,
             {
@@ -505,9 +510,35 @@ export class AuthService {
               });
             }
             throw err;
-          }),
+          });
+      },
       { traceLabel: 'auth-refresh', userId: user.id },
     );
+  }
+
+  /**
+   * Sella `lastSeenAt` al renovar el token: quien deja la sesión abierta y
+   * entra a diario no vuelve a poner la contraseña, y con solo `lastLoginAt`
+   * parecía que llevaba semanas sin entrar (los mensajes de recuperación y
+   * «Miembros en riesgo» le habrían escrito por error). Como mucho una
+   * escritura cada 15 minutos por persona, y nunca rompe la renovación.
+   */
+  private async touchLastSeen(userId: string): Promise<void> {
+    const now = new Date();
+    try {
+      await this.prisma.user.updateMany({
+        where: {
+          id: userId,
+          OR: [
+            { lastSeenAt: null },
+            { lastSeenAt: { lt: new Date(now.getTime() - LAST_SEEN_THROTTLE_MS) } },
+          ],
+        },
+        data: { lastSeenAt: now },
+      });
+    } catch {
+      // Es una marca de actividad: si no se puede escribir, se renueva igual.
+    }
   }
 
   /**

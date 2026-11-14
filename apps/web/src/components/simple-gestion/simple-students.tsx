@@ -13,6 +13,7 @@ import { adminUsersApi, type UserListItem } from '@/lib/admin-users';
 import { authStorage } from '@/lib/auth-storage';
 import { formatDate } from '@/lib/i18n/format';
 import { simpleModeApi } from '@/lib/simple-mode';
+import { AtRiskCard } from '@/modules/retention';
 import { cn } from '@/lib/utils';
 import { MemberCardAchievements, useMemberSummaries } from '@/modules/gamification';
 import { onlyStudents, shareUrl } from './helpers';
@@ -141,6 +142,11 @@ export function SimpleStudents() {
           <div className="skeleton mt-3 h-11 w-full" />
         )}
       </section>
+
+      {/* A quién conviene escribir antes de que se vaya (mod.retention). */}
+      <div className="mt-4">
+        <AtRiskCard />
+      </div>
 
       {error ? (
         <p

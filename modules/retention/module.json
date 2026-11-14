@@ -1,0 +1,18 @@
+{
+  "name": "retention",
+  "version": "1.0.0",
+  "edition": "community",
+  "coreVersionRequired": "^0.1.0",
+  "displayName": "Retención · mensajes automáticos y miembros en riesgo",
+  "category": "community",
+  "tablePrefix": "mod_retention_",
+  "permissions": ["retention.manage"],
+  "events": [
+    {
+      "name": "retention.message.sent"
+    }
+  ],
+  "hooks": [],
+  "apiNamespace": "/modules/retention",
+  "surfaces": ["admin"]
+}

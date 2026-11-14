@@ -83,7 +83,7 @@ export class GamificationRetentionBridge implements OnModuleInit {
       await this.guard(event.metadata.tenantId, async (tenantId) => {
         const member = await this.host.member(tenantId, userId);
         if (!member) return;
-        const retention = this.registry.getRetentionService();
+        const retention = this.registry.getGamificationRetentionService();
         const { newDay } = await retention.recordActivity(
           tenantId,
           userId,
@@ -101,7 +101,7 @@ export class GamificationRetentionBridge implements OnModuleInit {
           const { userId, courseId } = event.data;
           const member = await this.host.member(tenantId, userId);
           if (!member) return;
-          const retention = this.registry.getRetentionService();
+          const retention = this.registry.getGamificationRetentionService();
           await retention.recordActivity(tenantId, userId, new Date(), member.timeZone);
           await retention.evaluateBadges(tenantId, userId, { completedCourse: true });
           if (member.isStaff) return;
@@ -119,7 +119,9 @@ export class GamificationRetentionBridge implements OnModuleInit {
     // Cada punto puede cruzar el umbral de un premio por puntos.
     bus.subscribe<{ userId: string }>('gamification.points.awarded', async (event) => {
       await this.guard(event.metadata.tenantId, async (tenantId) => {
-        await this.registry.getRetentionService().grantDueRewards(tenantId, event.data.userId);
+        await this.registry
+          .getGamificationRetentionService()
+          .grantDueRewards(tenantId, event.data.userId);
       });
     });
 
@@ -128,7 +130,7 @@ export class GamificationRetentionBridge implements OnModuleInit {
       async (event) => {
         await this.guard(event.metadata.tenantId, async (tenantId) => {
           const { userId, from, to, levelName } = event.data;
-          const retention = this.registry.getRetentionService();
+          const retention = this.registry.getGamificationRetentionService();
           // Lo que estaba por encima del nivel anterior y ya no lo está.
           const previous = from
             ? await this.prisma.modGamificationLevel.findUnique({
@@ -187,7 +189,7 @@ export class GamificationRetentionBridge implements OnModuleInit {
   ): Promise<void> {
     const member = await this.host.member(tenantId, userId);
     if (!member) return;
-    const retention = this.registry.getRetentionService();
+    const retention = this.registry.getGamificationRetentionService();
     await retention.recordActivity(tenantId, userId, at, member.timeZone);
     await retention.evaluateBadges(tenantId, userId, {
       posted: fact.posted,
@@ -267,7 +269,7 @@ export class GamificationRetentionBridge implements OnModuleInit {
     if (!(await this.registry.isModuleEnabledForTenant(tenantId, 'mod.community'))) return;
     const author = await this.host.celebrationAuthor(tenantId);
     if (!author) return;
-    const retention = this.registry.getRetentionService();
+    const retention = this.registry.getGamificationRetentionService();
     const plan = await retention.planCelebration(
       tenantId,
       kind,

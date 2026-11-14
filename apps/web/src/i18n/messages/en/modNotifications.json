@@ -279,6 +279,17 @@
         "tenantName": "Platform name"
       }
     },
+    "retention_message": {
+      "name": "Automated message from the academy",
+      "description": "Email copy of an automated message (welcome, first week, win-back…). The subject and the text are written by whoever runs the academy in Automated messages.",
+      "vars": {
+        "subject": "Subject written in the automated message",
+        "body": "Message text, with its variables already filled in",
+        "replyUrl": "Link to the academy's messages to reply",
+        "unsubUrl": "Unsubscribe link for community emails",
+        "tenantName": "Platform name"
+      }
+    },
     "lesson_unlocked": {
       "name": "Lesson unlocked",
       "description": "When a lesson scheduled by date unlocks (drip).",

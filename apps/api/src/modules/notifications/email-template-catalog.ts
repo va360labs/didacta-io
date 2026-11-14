@@ -214,6 +214,15 @@ export const HUB_TEMPLATE_DEFAULTS: Record<string, TemplateDef> = {
     subject: '{{subject}}',
     body: '{{body}}{{#postUrl}}\n\nVer la publicación: {{postUrl}}{{/postUrl}}{{#unsubUrl}}\n\n———\nRecibes este aviso como miembro de la comunidad. Para dejar de recibir los correos de la comunidad (avisos y resumen semanal), entra aquí: {{unsubUrl}}{{/unsubUrl}}',
   },
+  // Mensaje automático del aula (mod.retention): bienvenida, primera semana,
+  // recuperación… El asunto y el texto los escribe quien administra el aula
+  // (passthrough, ya con sus variables resueltas); lo que es copy del producto
+  // —responder en el aula y el pie de baja— vive aquí. Las dos son secciones:
+  // sin dirección pública del aula desaparecen.
+  'retention.message': {
+    subject: '{{subject}}',
+    body: '{{body}}{{#replyUrl}}\n\nPuedes responder a este mensaje desde el aula: {{replyUrl}}{{/replyUrl}}{{#unsubUrl}}\n\n———\nRecibes este correo como miembro de {{tenantName}}. Para dejar de recibir los correos de la comunidad, entra aquí: {{unsubUrl}}{{/unsubUrl}}',
+  },
   // Aviso de desbloqueo de una clase programada por fecha (MEJ-009). Lo dispara
   // el LessonUnlockNotifierWorker cuando la lección cruza su publishAt.
   'lesson.unlocked': {
@@ -372,6 +381,13 @@ export const HUB_TEMPLATE_DEFAULTS_EN: Record<string, TemplateDef> = {
     subject: '{{subject}}',
     body: '{{body}}{{#postUrl}}\n\nSee the post: {{postUrl}}{{/postUrl}}{{#unsubUrl}}\n\n———\nYou receive this notice as a member of the community. To stop receiving community emails (notices and the weekly digest), go here: {{unsubUrl}}{{/unsubUrl}}',
   },
+  // Automated message from the academy (mod.retention): the subject and the
+  // text are written by whoever runs it; the reply line and the footer are
+  // product copy.
+  'retention.message': {
+    subject: '{{subject}}',
+    body: '{{body}}{{#replyUrl}}\n\nYou can reply to this message from the academy: {{replyUrl}}{{/replyUrl}}{{#unsubUrl}}\n\n———\nYou receive this email as a member of {{tenantName}}. To stop receiving community emails, go here: {{unsubUrl}}{{/unsubUrl}}',
+  },
   'lesson.unlocked': {
     subject: 'Now available: {{lessonTitle}}',
     body: 'The lesson "{{lessonTitle}}" from the course "{{courseTitle}}" is now available.',
@@ -518,6 +534,10 @@ export const HUB_TEMPLATE_DEFAULTS_PT: Record<string, TemplateDef> = {
   'community.broadcast': {
     subject: '{{subject}}',
     body: '{{body}}{{#postUrl}}\n\nVer a publicação: {{postUrl}}{{/postUrl}}{{#unsubUrl}}\n\n———\nVocê recebe este aviso por ser membro da comunidade. Para deixar de receber os e-mails da comunidade (avisos e resumo semanal), acesse: {{unsubUrl}}{{/unsubUrl}}',
+  },
+  'retention.message': {
+    subject: '{{subject}}',
+    body: '{{body}}{{#replyUrl}}\n\nVocê pode responder a esta mensagem pela escola: {{replyUrl}}{{/replyUrl}}{{#unsubUrl}}\n\n———\nVocê recebe este e-mail por ser membro de {{tenantName}}. Para deixar de receber os e-mails da comunidade, acesse: {{unsubUrl}}{{/unsubUrl}}',
   },
   'lesson.unlocked': {
     subject: 'Já está disponível: {{lessonTitle}}',
@@ -1235,6 +1255,20 @@ const HUB_TEMPLATE_META: Record<
         description:
           'Enlace de baja de los correos de la comunidad: avisos y resumen (solo en el email)',
       },
+      { name: 'tenantName', description: 'Nombre de la plataforma' },
+    ],
+  },
+  'retention.message': {
+    name: 'Mensaje automático del aula',
+    description:
+      'Copia por correo de un mensaje automático (bienvenida, primera semana, recuperación…). El asunto y el texto los escribe quien administra el aula en Mensajes automáticos.',
+    category: 'community',
+    channels: ['EMAIL'],
+    variables: [
+      { name: 'subject', description: 'Asunto escrito en el mensaje automático' },
+      { name: 'body', description: 'Texto del mensaje, con sus variables ya resueltas' },
+      { name: 'replyUrl', description: 'Enlace a la mensajería del aula para responder' },
+      { name: 'unsubUrl', description: 'Enlace de baja de los correos de la comunidad' },
       { name: 'tenantName', description: 'Nombre de la plataforma' },
     ],
   },

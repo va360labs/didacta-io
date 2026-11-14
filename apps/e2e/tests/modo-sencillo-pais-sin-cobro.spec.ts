@@ -136,6 +136,20 @@ async function enEmpiezaAqui(
   });
   if (opts.ui !== 'es-ES') {
     await ctx.addCookies([{ name: 'didacta_locale', value: opts.ui, url: tenant.base }]);
+    // El perfil también: tras el alta en español quedó en `es-ES`, y LocaleSync
+    // hace que mande el perfil sobre la cookie. Con solo la cookie, la pantalla
+    // se volvía a poner en español en cuanto llegaba el perfil, y el test
+    // dependía de terminar antes (fallaba en la tanda completa).
+    const bearer = await page.evaluate(
+      () =>
+        localStorage.getItem('didacta.access_token') ??
+        sessionStorage.getItem('didacta.access_token'),
+    );
+    await apiAs(tenant.host, '/api/v1/me/profile', {
+      method: 'PATCH',
+      bearer: bearer ?? '',
+      body: { locale: opts.ui },
+    });
   }
   await page.reload();
   await expect(page.locator('[data-step="payments"]')).toHaveAttribute('aria-current', 'step', {

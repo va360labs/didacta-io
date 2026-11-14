@@ -209,5 +209,17 @@
   "PURCHASE_CONSENT_TENANT_NOT_FOUND": "No encontramos esta academia.",
   "PAYOUTS_TAX_PROFILE_INVALID": "Revisa tus datos fiscales: hay campos que faltan o no son válidos.",
   "PAYOUTS_INVOICE_NOT_FOUND": "No encontramos esa factura.",
-  "PAYOUTS_INVOICING_DISABLED": "La facturación de la comisión no está activada en esta instalación."
+  "PAYOUTS_INVOICING_DISABLED": "La facturación de la comisión no está activada en esta instalación.",
+  "RETENTION_ADMIN_REQUIRED": "Solo quien administra el aula puede gestionar los mensajes automáticos.",
+  "RETENTION_AUTOMATION_NOT_FOUND": "Mensaje automático no encontrado.",
+  "RETENTION_TEMPLATE_NOT_FOUND": "No existe esa plantilla.",
+  "RETENTION_BODY_INVALID": "Escribe el mensaje (entre 1 y 4.000 caracteres).",
+  "RETENTION_UNKNOWN_VARIABLE": "Variable desconocida: {detail}",
+  "RETENTION_VARIABLE_NOT_AVAILABLE": "La variable {detail} no se puede usar en este mensaje.",
+  "RETENTION_DAYS_INVALID": "El número de días no es válido para este mensaje.",
+  "RETENTION_SUBJECT_INVALID": "El asunto del correo admite hasta 200 caracteres.",
+  "RETENTION_SETTINGS_INVALID": "Ajustes no válidos: revisa la franja horaria y las horas de espera.",
+  "RETENTION_SENDER_INVALID": "Los mensajes solo los puede firmar alguien del equipo del aula.",
+  "RETENTION_RECOVERY_NOT_CONFIGURED": "Activa primero el mensaje de recuperación («Si no entra en X días»).",
+  "RETENTION_MEMBER_NOT_ELIGIBLE": "A esta persona no se le envían mensajes automáticos."
 }

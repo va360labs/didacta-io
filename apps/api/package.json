@@ -46,6 +46,7 @@
     "@didacta/mod-payouts": "workspace:*",
     "@didacta/mod-referrals": "workspace:*",
     "@didacta/mod-resources": "workspace:*",
+    "@didacta/mod-retention": "workspace:*",
     "@didacta/mod-subscriptions": "workspace:*",
     "@didacta/mod-surveys": "workspace:*",
     "@didacta/mod-theming": "workspace:*",

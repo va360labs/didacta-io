@@ -279,6 +279,17 @@
         "tenantName": "Nombre de la plataforma"
       }
     },
+    "retention_message": {
+      "name": "Mensaje automático del aula",
+      "description": "Copia por correo de un mensaje automático (bienvenida, primera semana, recuperación…). El asunto y el texto los escribe quien administra el aula en Mensajes automáticos.",
+      "vars": {
+        "subject": "Asunto escrito en el mensaje automático",
+        "body": "Texto del mensaje, con sus variables ya resueltas",
+        "replyUrl": "Enlace a la mensajería del aula para responder",
+        "unsubUrl": "Enlace de baja de los correos de la comunidad",
+        "tenantName": "Nombre de la plataforma"
+      }
+    },
     "lesson_unlocked": {
       "name": "Clase desbloqueada",
       "description": "Cuando una clase programada por fecha se desbloquea (drip).",

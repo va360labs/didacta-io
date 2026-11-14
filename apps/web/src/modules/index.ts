@@ -31,6 +31,7 @@ import { migratorLearndashExtension } from './migrator-learndash';
 import { notificationsExtension } from './notifications';
 import { paymentConnectionsExtension } from './payment-connections';
 import { resourcesExtension } from './resources';
+import { retentionExtension } from './retention';
 import { subscriptionsExtension } from './subscriptions';
 import { surveysExtension } from './surveys';
 import { zoomLiveExtension } from './zoom-live';
@@ -50,6 +51,7 @@ export const moduleExtensions: readonly ModuleWebExtension[] = [
   notificationsExtension,
   paymentConnectionsExtension,
   resourcesExtension,
+  retentionExtension,
   subscriptionsExtension,
   surveysExtension,
   zoomLiveExtension,
