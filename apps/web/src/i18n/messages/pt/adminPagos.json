@@ -434,6 +434,7 @@
       "summaryOperatorFees": "{percent}% {operator}",
       "summaryReceived": "Recebido",
       "summaryPending": "A caminho",
+      "summaryHeld": "Retido",
       "summaryDebtNetted": "Descontado para quitar dívidas",
       "summaryDebt": "A descontar das próximas vendas",
       "summarySalesCount": "{count, plural, one {# venda} other {# vendas}}",
@@ -454,7 +455,7 @@
         "notPaidOutHow": "Como ainda não tínhamos enviado esse valor para você, ele sai do que íamos enviar.",
         "cardFeeCreator": "O banco não devolve a taxa do cartão ({amount}): ela fica por sua conta e é descontada dos seus próximos recebimentos.",
         "cardFeePlatform": "O banco não devolve a taxa do cartão ({amount}): {operator} assume esse custo.",
-        "operatorFeeReturned": "A comissão de {operator} ({amount}) é devolvida para você.",
+        "operatorFeeReturned": "{operator} devolve ao aluno a comissão proporcional dele ({amount}): essa parte não é descontada de você.",
         "operatorFeeKept": "A comissão de {operator} ({amount}) não é devolvida: ela é descontada dos seus próximos recebimentos.",
         "total": "No total, você terá {amount} descontados.",
         "accessFull": "Com o reembolso total, o aluno perde o acesso ao curso.",
@@ -537,6 +538,45 @@
         "not_eu": "Só para países da UE.",
         "country_mismatch": "Não é do seu país.",
         "underage": "Você precisa ser maior de idade."
+      },
+      "problemsIntro": "Não salvamos seus dados fiscais.",
+      "problems": {
+        "entityType": {
+          "required": "Escolha como você vende (pessoa física ou empresa).",
+          "invalid": "Escolha como você vende (pessoa física ou empresa)."
+        },
+        "legalName": {
+          "required": "Falta seu nome ou razão social.",
+          "invalid": "O nome ou a razão social não é válido."
+        },
+        "country": {
+          "required": "Falta o país.",
+          "invalid": "O país não é válido."
+        },
+        "taxId": {
+          "required": "Falta o NIF.",
+          "invalid": "O NIF não é válido."
+        },
+        "vatId": {
+          "required": "Falta o NIF-IVA.",
+          "invalid": "O NIF-IVA não é válido."
+        },
+        "addressLine1": {
+          "required": "Falta o endereço.",
+          "invalid": "O endereço não é válido."
+        },
+        "addressPostalCode": {
+          "required": "Falta o CEP.",
+          "invalid": "O CEP não é válido."
+        },
+        "addressCity": {
+          "required": "Falta a cidade.",
+          "invalid": "A cidade não é válida."
+        },
+        "birthDate": {
+          "required": "Falta a data de nascimento.",
+          "invalid": "A data de nascimento não é válida."
+        }
       },
       "save": "Salvar dados fiscais",
       "saving": "Salvando…",

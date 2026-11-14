@@ -9,6 +9,7 @@ import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { PaymentsConnectCard } from '@/components/admin/payments-connect-card';
+import { PayoutsTaxProfileCard } from '@/components/admin/payouts-tax-profile-card';
 import { Icon } from '@/components/icon';
 import { START_HERE_CHANGED_EVENT } from '@/components/simple-shell/simple-shell';
 import { adminModulesApi } from '@/lib/admin-modules';
@@ -24,6 +25,7 @@ import {
   type PayoutsSaleDto,
   type PayoutsStatusDto,
   type PayoutsSummaryDto,
+  type PayoutsTaxProfileDto,
 } from '@/lib/payouts';
 import { referralsAdminApi, type AdminCommissionRow, type ReferralsConfig } from '@/lib/referrals';
 import { CashPayoutsAdmin } from './cash-payouts-admin';
@@ -74,21 +76,24 @@ export function SimpleSales({
   const [status, setStatus] = useState<PayoutsStatusDto | null>(null);
   const [summary, setSummary] = useState<PayoutsSummaryDto | null>(null);
   const [sales, setSales] = useState<PayoutsSaleDto[]>([]);
+  const [tax, setTax] = useState<PayoutsTaxProfileDto | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState(false);
 
   const load = useCallback(async () => {
     try {
-      const [v, st, sum, page] = await Promise.all([
+      const [v, st, sum, page, taxProfile] = await Promise.all([
         simpleModeApi.startHere(),
         mode === 'platform' ? payoutsApi.status().catch(() => null) : Promise.resolve(null),
         mode === 'platform' ? payoutsApi.summary().catch(() => null) : Promise.resolve(null),
         mode === 'platform' ? payoutsApi.sales(1, 6).catch(() => null) : Promise.resolve(null),
+        mode === 'platform' ? payoutsApi.taxProfile().catch(() => null) : Promise.resolve(null),
       ]);
       setView(v);
       setStatus(st);
       setSummary(sum);
       setSales(page?.items ?? []);
+      setTax(taxProfile);
       setError(false);
     } catch {
       setError(true);
@@ -109,6 +114,19 @@ export function SimpleSales({
   // también cobra: no se le pide conectar nada.
   const cardKind = mode === 'own' ? 'own-keys' : derivePayoutsCardView(status).kind;
   const ready = cardKind === 'ready' || cardKind === 'own-keys';
+  // Cobros conectados pero sin datos fiscales: las ventas se cobran y el
+  // dinero NO sale. Ensayo general: aquí se leía «el dinero de cada venta llega
+  // a tu banco» y solo se avisaba tras «Ver detalles».
+  const taxMissing =
+    mode === 'platform' &&
+    cardKind === 'ready' &&
+    tax !== null &&
+    tax.required &&
+    tax.status !== 'complete';
+  const refresh = () => {
+    void load();
+    window.dispatchEvent(new Event(START_HERE_CHANGED_EVENT));
+  };
 
   return (
     <div className="mx-auto max-w-[1080px]" data-testid="ventas-sencillo">
@@ -141,6 +159,29 @@ export function SimpleSales({
                 />
               </div>
             </section>
+          ) : taxMissing && tax ? (
+            <section
+              className="rounded-2xl border border-warning-200 bg-warning-50 p-4"
+              data-testid="ventas-faltan-fiscales"
+            >
+              <h2 className="flex items-center gap-2 text-base font-bold text-warning-700">
+                <Icon name="alert" size={18} />
+                {t('cobros.faltanFiscales')}
+              </h2>
+              <p className="mt-1 max-w-[70ch] text-sm text-warning-700" role="status">
+                {tax.heldSales > 0
+                  ? t('cobros.retenidas', {
+                      n: tax.heldSales,
+                      importe: headline
+                        ? formatStripeAmount(headline.held, headline.currency)
+                        : '—',
+                    })
+                  : t('cobros.sinRetenidas')}
+              </p>
+              <div className="mt-3">
+                <PayoutsTaxProfileCard hideStatusNotice onSaved={refresh} />
+              </div>
+            </section>
           ) : (
             <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-text-muted">
               <span className="inline-flex items-center gap-1.5">
@@ -159,7 +200,11 @@ export function SimpleSales({
             headline ? (
               <section
                 aria-label={t('resumen.vendido')}
-                className="grid grid-cols-2 overflow-hidden rounded-2xl border border-border bg-surface lg:grid-cols-3"
+                data-testid="ventas-resumen"
+                className={cn(
+                  'grid grid-cols-2 overflow-hidden rounded-2xl border border-border bg-surface',
+                  headline.held > 0 && headline.pending > 0 ? 'lg:grid-cols-4' : 'lg:grid-cols-3',
+                )}
               >
                 <div className="col-span-2 border-b border-border p-4 lg:col-span-1 lg:border-r lg:border-b-0 lg:p-5">
                   <div className="text-sm font-semibold text-text-muted">
@@ -180,15 +225,38 @@ export function SimpleSales({
                     {formatStripeAmount(headline.received, headline.currency)}
                   </div>
                 </div>
-                <div className="p-4 lg:p-5">
-                  <div className="text-sm font-semibold text-text-muted">
-                    {t('resumen.enCamino')}
+                {/* Lo retenido NO va «en camino»: no llega en los próximos días. */}
+                {headline.pending > 0 || headline.held === 0 ? (
+                  <div className="p-4 lg:p-5">
+                    <div className="text-sm font-semibold text-text-muted">
+                      {t('resumen.enCamino')}
+                    </div>
+                    <div className="mt-0.5 text-[21px] font-extrabold tracking-tight text-text tabular-nums lg:text-[28px]">
+                      {formatStripeAmount(headline.pending, headline.currency)}
+                    </div>
+                    <div className="text-[13px] text-text-subtle">{t('resumen.enCaminoNota')}</div>
                   </div>
-                  <div className="mt-0.5 text-[21px] font-extrabold tracking-tight text-text tabular-nums lg:text-[28px]">
-                    {formatStripeAmount(headline.pending, headline.currency)}
+                ) : null}
+                {headline.held > 0 ? (
+                  <div
+                    className={cn(
+                      'bg-warning-50 p-4 lg:p-5',
+                      headline.pending > 0 &&
+                        'col-span-2 border-t border-border lg:col-span-1 lg:border-t-0 lg:border-l',
+                    )}
+                    data-testid="ventas-retenido"
+                  >
+                    <div className="text-sm font-semibold text-warning-700">
+                      {t('resumen.retenido')}
+                    </div>
+                    <div className="mt-0.5 text-[21px] font-extrabold tracking-tight text-warning-700 tabular-nums lg:text-[28px]">
+                      {formatStripeAmount(headline.held, headline.currency)}
+                    </div>
+                    <div className="text-[13px] text-warning-700">
+                      {taxMissing ? t('resumen.retenidoNotaFiscal') : t('resumen.retenidoNota')}
+                    </div>
                   </div>
-                  <div className="text-[13px] text-text-subtle">{t('resumen.enCaminoNota')}</div>
-                </div>
+                ) : null}
               </section>
             ) : (
               <section className="flex flex-col items-start gap-3 rounded-2xl border border-dashed border-border-strong bg-surface p-6 sm:flex-row sm:items-center">

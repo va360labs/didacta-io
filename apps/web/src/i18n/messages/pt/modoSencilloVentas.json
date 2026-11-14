@@ -8,6 +8,9 @@
     "conectarTitulo": "Conecte seus recebimentos para começar a vender",
     "conectarTexto": "Sem os recebimentos conectados, ninguém consegue pagar você. Vamos pedir seus dados e o número da sua conta bancária.",
     "listos": "Recebimentos conectados: o dinheiro de cada venda cai na sua conta.",
+    "faltanFiscales": "Falta um passo para o dinheiro chegar até você: seus dados fiscais.",
+    "retenidas": "{n, plural, one {Você tem # venda retida} other {Você tem # vendas retidas}} ({importe}) porque faltam seus dados fiscais. O dinheiro está seguro: enviamos assim que você completar os dados aqui embaixo.",
+    "sinRetenidas": "Até você completar esses dados, suas vendas são cobradas, mas o dinheiro não chega até você. Leva um minuto: o que a Stripe já sabia vem preenchido.",
     "propios": "Você recebe pela sua própria conta de pagamentos.",
     "detalles": "Ver detalhes"
   },
@@ -16,7 +19,10 @@
     "ventas": "{n, plural, one {# venda} other {# vendas}}",
     "enBanco": "Já na sua conta",
     "enCamino": "A caminho",
-    "enCaminoNota": "Cai nos próximos dias"
+    "enCaminoNota": "Cai nos próximos dias",
+    "retenido": "Retido",
+    "retenidoNotaFiscal": "Até você completar seus dados fiscais",
+    "retenidoNota": "Não sai até ser resolvido: veja “Ver detalhes”"
   },
   "vacio": {
     "titulo": "Aqui você verá suas vendas",

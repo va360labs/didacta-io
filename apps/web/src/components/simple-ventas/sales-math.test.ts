@@ -41,7 +41,23 @@ describe('Ventas (modo sencillo): resumen', () => {
       gross: 127400,
       received: 100,
       pending: 50,
+      held: 0,
     });
+  });
+
+  it('ensayo general: tras devolver la venta entera «Ya en tu banco» no sigue diciendo 44,76 €', () => {
+    // 49 € → 44,76 € enviados y luego retirados por el reembolso total.
+    const s = {
+      currencies: [{ ...fila('eur', 1, 4900), received: 4476, receivedNet: 0, reversed: 4476 }],
+    } as unknown as PayoutsSummaryDto;
+    expect(primaryCurrency(s)).toMatchObject({ received: 0 });
+  });
+
+  it('lo retenido va aparte: no es «en camino» ni «llega en los próximos días»', () => {
+    const s = {
+      currencies: [{ ...fila('eur', 1, 4900), received: 0, pending: 0, held: 4476 }],
+    } as unknown as PayoutsSummaryDto;
+    expect(primaryCurrency(s)).toMatchObject({ pending: 0, held: 4476 });
   });
 });
 

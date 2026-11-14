@@ -8,6 +8,9 @@
     "conectarTitulo": "Conecta tus cobros para empezar a vender",
     "conectarTexto": "Sin cobros conectados nadie puede pagarte. Te pediremos tus datos y tu número de cuenta.",
     "listos": "Cobros conectados: el dinero de cada venta llega a tu banco.",
+    "faltanFiscales": "Falta un paso para que te llegue el dinero: tus datos fiscales.",
+    "retenidas": "{n, plural, one {Tienes # venta retenida} other {Tienes # ventas retenidas}} ({importe}) porque faltan tus datos fiscales. El dinero está a salvo: te lo enviamos en cuanto los completes aquí abajo.",
+    "sinRetenidas": "Hasta que los completes, tus ventas se cobran pero el dinero no te llega. Es un minuto: lo que ya sabía Stripe viene escrito.",
     "propios": "Cobras con tu propia cuenta de pagos.",
     "detalles": "Ver detalles"
   },
@@ -16,7 +19,10 @@
     "ventas": "{n, plural, one {# venta} other {# ventas}}",
     "enBanco": "Ya en tu banco",
     "enCamino": "En camino",
-    "enCaminoNota": "Llega en los próximos días"
+    "enCaminoNota": "Llega en los próximos días",
+    "retenido": "Retenido",
+    "retenidoNotaFiscal": "Hasta que completes tus datos fiscales",
+    "retenidoNota": "No sale hasta que se resuelva: mira «Ver detalles»"
   },
   "vacio": {
     "titulo": "Aquí verás tus ventas",
