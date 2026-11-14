@@ -15,6 +15,10 @@ import { LICENSE_CAPABILITIES, LicenseService } from '@didacta/license-sdk';
 import { type AdminActor, auditActorId, auditActorTrace } from '../auth/admin-actor';
 import type { ClientContext } from '../auth/client-context';
 import { PasswordResetService } from '../auth/password-reset.service';
+import {
+  type DeclaredCountryWriter,
+  writeDeclaredCountry,
+} from '../modules/payouts/declared-country';
 import { PayoutsRuntime } from '../modules/payouts/payouts-runtime.service';
 import { TenantStripeResolverService } from '../modules/tenant-stripe-resolver.service';
 import { PrismaAuditLogService } from '../modules/prisma-audit-log.service';
@@ -323,6 +327,8 @@ export class AdminTenantsService {
       primaryHostname: string;
       simpleMode?: boolean;
       locale?: AcademyLocale;
+      /** País del banco DECLARADO en el alta de Cloud (ISO alfa-2 u `OTHER`), ya normalizado. */
+      payoutsCountry?: string;
     },
     webBaseUrl: WelcomeLinkBase,
     ctx: ClientContext = NO_CTX,
@@ -347,6 +353,8 @@ export class AdminTenantsService {
       primaryHostname: string;
       simpleMode?: boolean;
       locale?: AcademyLocale;
+      /** País del banco DECLARADO en el alta de Cloud (ISO alfa-2 u `OTHER`), ya normalizado. */
+      payoutsCountry?: string;
     },
     webBaseUrl: WelcomeLinkBase,
     ctx: ClientContext,
@@ -444,6 +452,16 @@ export class AdminTenantsService {
           admin.id,
         );
       }
+      // Dato DECLARADO por el creador, no verificado: solo orienta la tarjeta
+      // de cobros (preselección y aviso). El país que cuenta es el de su cuenta.
+      if (dto.payoutsCountry) {
+        await writeDeclaredCountry(
+          tx as unknown as DeclaredCountryWriter,
+          tenant.id,
+          dto.payoutsCountry,
+          admin.id,
+        );
+      }
       return { tenant, admin };
     });
 
@@ -458,6 +476,7 @@ export class AdminTenantsService {
         primaryHostname: hostname,
         adminEmail: dto.adminEmail,
         ...(dto.locale ? { locale: dto.locale } : {}),
+        ...(dto.payoutsCountry ? { payoutsCountry: dto.payoutsCountry } : {}),
         ...auditActorTrace(actor),
       },
       ip: ctx.ip ?? undefined,

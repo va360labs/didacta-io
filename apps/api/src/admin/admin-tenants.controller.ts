@@ -30,6 +30,10 @@ import { JwtOrProvisioningGuard } from '../auth/jwt-or-provisioning.guard';
 import type { SessionClaims } from '../auth/token.service';
 import { ZodValidationPipe } from '../auth/zod-validation.pipe';
 import { PrismaAuditLogService } from '../modules/prisma-audit-log.service';
+import {
+  DECLARED_COUNTRY_OTHER,
+  normalizeDeclaredCountry,
+} from '../modules/payouts/declared-country';
 import { PayoutsRuntime } from '../modules/payouts/payouts-runtime.service';
 import { SUBSCRIPTION_GATE_STATES } from '../tenancy/subscription-gate';
 import { runAsTenant, runGlobalWithoutTenant } from '../tenancy/tenant-context.storage';
@@ -72,6 +76,23 @@ export const createTenantSchema = z.object({
       message: `Idioma sin catálogo en el aula. Valores: ${ACADEMY_LOCALES.join(', ')}.`,
     })
     .transform((v) => toAcademyLocale(v) as AcademyLocale)
+    .optional(),
+  /**
+   * País del banco que el creador DECLARÓ en el alta de Didacta Cloud. Opcional
+   * y retrocompatible: sin él no se guarda nada. Un código ISO 3166-1 alfa-2
+   * (cualquiera, admitido o no; se guarda en mayúsculas) o `OTHER` («su banco
+   * está fuera de la lista que se le ofreció»). Es un dato declarado, no
+   * verificado: el país que cuenta para pagar es el de la cuenta conectada.
+   * Lo usa la tarjeta de cobros para preseleccionarlo y avisar si no se le
+   * puede pagar. Ver `modules/payouts/declared-country.ts`.
+   */
+  payoutsCountry: z
+    .string()
+    .max(10)
+    .refine((v) => normalizeDeclaredCountry(v) !== null, {
+      message: `payoutsCountry debe ser un código de país ISO 3166-1 alfa-2 (p. ej. ES, BR) o ${DECLARED_COUNTRY_OTHER}.`,
+    })
+    .transform((v) => normalizeDeclaredCountry(v) as string)
     .optional(),
 });
 type CreateTenantDto = z.infer<typeof createTenantSchema>;

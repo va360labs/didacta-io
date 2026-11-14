@@ -34,6 +34,7 @@ import { ZodValidationPipe } from '../../auth/zod-validation.pipe';
 import { runAsTenant } from '../../tenancy/tenant-context.storage';
 import { TenantResolverService } from '../../tenancy/tenant-resolver.service';
 import { PrismaAuditLogService } from '../prisma-audit-log.service';
+import { readDeclaredCountry, type DeclaredCountryReader } from './declared-country';
 import { PayoutsRuntime } from './payouts-runtime.service';
 
 /**
@@ -68,6 +69,13 @@ export interface PayoutsStatusResponse {
   readonly reason: string | null;
   readonly account: PayoutsAccountView | null;
   readonly supportedCountries: readonly string[];
+  /**
+   * País del banco que el creador DECLARÓ al darse de alta en Cloud (ISO
+   * alfa-2 en mayúsculas u `OTHER`), o `null` si el aula no lo tiene. No está
+   * verificado: el país que cuenta es el de `account`. La web lo usa para
+   * preseleccionarlo y avisar si no se le puede pagar.
+   */
+  readonly declaredCountry: string | null;
   /** Comisión del operador vigente para este aula, en puntos básicos. */
   readonly feeBps: number;
   /**
@@ -140,10 +148,11 @@ export class PayoutsController {
           if (!(err instanceof PayoutsAccountNotFoundError)) throw err;
         }
       }
-      const [mode, account, settings] = await Promise.all([
+      const [mode, account, settings, declaredCountry] = await Promise.all([
         this.runtime.mode.resolve(tenantId),
         this.runtime.accounts.getAccount(tenantId),
         this.runtime.settings.get(tenantId),
+        readDeclaredCountry(this.runtime.prisma as unknown as DeclaredCountryReader, tenantId),
       ]);
       return {
         platform: true,
@@ -154,6 +163,7 @@ export class PayoutsController {
         reason: mode.mode === 'platform' && !mode.ready ? mode.reason : null,
         account,
         supportedCountries: this.runtime.accounts.supportedCountries,
+        declaredCountry,
         feeBps: settings.feeBps,
         settlementCurrency: settlementCurrencyOf(account),
         priceCurrencies: PLATFORM_PRICE_CURRENCIES,
