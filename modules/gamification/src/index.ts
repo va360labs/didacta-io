@@ -54,11 +54,9 @@ export {
 } from './retention.service.js';
 export {
   CELEBRATION_KINDS,
-  CELEBRATION_MARKER,
   celebrationLocale,
   defaultBadgeName,
   computeStreak,
-  isCelebrationBody,
   liveStreak,
   localDay,
   renderCelebration,

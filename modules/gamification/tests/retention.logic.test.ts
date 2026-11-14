@@ -1,12 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
-  CELEBRATION_MARKER,
   addDays,
   celebrationLocale,
   computeStreak,
   escapeMd,
   hasReached,
-  isCelebrationBody,
   liveStreak,
   localDay,
   numberLevels,
@@ -126,7 +124,7 @@ describe('niveles y cierres', () => {
 });
 
 describe('renderCelebration — un post por día y tipo, sin spam', () => {
-  it('una persona → post personal, con la marca para no puntuarlo', () => {
+  it('una persona → post personal (sin marcas: lo que se publica es lo que se lee)', () => {
     const r = renderCelebration(
       'course',
       [{ userId: 'u1', name: 'Ana', detail: 'Excel desde cero' }],
@@ -134,13 +132,13 @@ describe('renderCelebration — un post por día y tipo, sin spam', () => {
     );
     expect(r.title).toBe('🎓 ¡Ana ha terminado «Excel desde cero»!');
     expect(r.body).toContain('**Ana**');
-    expect(isCelebrationBody(r.body)).toBe(true);
+    expect(r.body).not.toContain('<!--');
   });
 
   it('varias el mismo día → UN post que las nombra; más de 12 → «y N más»', () => {
     const many = Array.from({ length: 15 }, (_, i) => ({ userId: `u${i}`, name: `Persona ${i}` }));
     const r = renderCelebration('intro', many, 'es');
-    expect(r.title).toBe('👋 Hoy se han presentado 15 personas');
+    expect(r.title).toBe('👋 15 personas se han presentado hoy');
     expect(r.body.match(/^- \*\*/gm)).toHaveLength(12);
     expect(r.body).toContain('- y 3 más');
   });
@@ -160,6 +158,6 @@ describe('renderCelebration — un post por día y tipo, sin spam', () => {
     expect(escapeMd('**Ana** @luis [x](https://e.vil)')).toBe('Ana luis x(https://e.vil)');
     const r = renderCelebration('intro', [{ userId: 'u', name: '@todos **hack**' }], 'es');
     expect(r.body).not.toContain('@');
-    expect(r.body).toContain(CELEBRATION_MARKER);
+    expect(r.body).toContain('**todos hack**');
   });
 });

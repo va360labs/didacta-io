@@ -210,15 +210,19 @@ export function CourseCard({ course, href, lock }: Props) {
                   ? t('courseCard.percentCompleted', { percent: Math.round(progress) })
                   : t('courseCard.notEnrolled')}
               </span>
-              <span
-                className={cn(
-                  'inline-flex items-center gap-1.5 text-xs font-semibold',
-                  ctaTone === 'success' ? 'text-[var(--didacta-success-fg)]' : 'text-brand-700',
-                )}
-              >
-                {ctaLabel}
-                <Icon name={ctaIcon} size={14} />
-              </span>
+              {/* Con candado no hay «Empezar»: la tarjeta abre el curso para
+                  ver qué falta, pero no promete lo que aún no se puede hacer. */}
+              {lock ? null : (
+                <span
+                  className={cn(
+                    'inline-flex items-center gap-1.5 text-xs font-semibold',
+                    ctaTone === 'success' ? 'text-[var(--didacta-success-fg)]' : 'text-brand-700',
+                  )}
+                >
+                  {ctaLabel}
+                  <Icon name={ctaIcon} size={14} />
+                </span>
+              )}
             </div>
           </div>
         </CardContent>

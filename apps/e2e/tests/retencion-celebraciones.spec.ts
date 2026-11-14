@@ -54,7 +54,7 @@ async function posts(t: FreshTenant, auth: Auth): Promise<PostRow[]> {
 }
 
 const celebraciones = (list: PostRow[], prefijo: string) =>
-  list.filter((p) => p.title.startsWith(prefijo) && p.body.includes('didacta-celebracion'));
+  list.filter((p) => p.title.startsWith(prefijo) && p.source === 'api');
 
 async function terminarCurso(t: FreshTenant, a: Auth, c: CursoSembrado) {
   const mias = await apiAs<Array<{ id: string; courseId: string }>>(
@@ -165,7 +165,7 @@ test.describe('Celebraciones en la comunidad', () => {
     });
     const dos = await hasta(
       () => posts(aula, creador),
-      (l) => celebraciones(l, '👋').some((p) => p.title === '👋 Hoy se han presentado 2 personas'),
+      (l) => celebraciones(l, '👋').some((p) => p.title === '👋 2 personas se han presentado hoy'),
     );
     const intro = celebraciones(dos, '👋');
     expect(intro).toHaveLength(1);
@@ -182,7 +182,7 @@ test.describe('Celebraciones en la comunidad', () => {
     await new Promise((r) => setTimeout(r, 2500));
     const despues = celebraciones(await posts(aula, creador), '👋');
     expect(despues).toHaveLength(1);
-    expect(despues[0]!.title).toBe('👋 Hoy se han presentado 2 personas');
+    expect(despues[0]!.title).toBe('👋 2 personas se han presentado hoy');
   });
 
   test('curso terminado: se celebra; quien no quiere salir no sale', async ({ browser }) => {
@@ -214,7 +214,7 @@ test.describe('Celebraciones en la comunidad', () => {
     );
     const cursos = celebraciones(dos, '🎓');
     expect(cursos).toHaveLength(1);
-    expect(cursos[0]!.title).toBe('🎓 Hoy han terminado un curso 2 personas');
+    expect(cursos[0]!.title).toBe('🎓 2 personas han terminado un curso hoy');
     expect(cursos[0]!.body).toContain('**Marcos Vidal**');
     // Control: Nuria terminó, pero eligió no salir.
     expect(cursos[0]!.body).not.toContain('Nuria');
@@ -266,7 +266,7 @@ test.describe('Celebraciones en la comunidad', () => {
 
   test('la alumna ve las celebraciones en la comunidad', async ({ browser }) => {
     const { page, close } = await abrir(browser, aula, irene, '/community');
-    await expect(page.getByText('👋 Hoy se han presentado 2 personas').first()).toBeVisible();
+    await expect(page.getByText('👋 2 personas se han presentado hoy').first()).toBeVisible();
     await expect(
       page.getByText('🎂 Irene Soler cumple 1 año en la comunidad').first(),
     ).toBeVisible();

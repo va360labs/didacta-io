@@ -6,7 +6,6 @@
 import { Injectable, Logger, type OnModuleInit } from '@nestjs/common';
 import {
   celebrationLocale,
-  isCelebrationBody,
   renderCelebration,
   type CelebrationEntry,
   type CelebrationKind,
@@ -51,10 +50,11 @@ export class GamificationRetentionBridge implements OnModuleInit {
       await this.guard(event.metadata.tenantId, async (tenantId) => {
         const post = await this.prisma.modCommunityPost.findFirst({
           where: { id: event.data.postId, tenantId },
-          select: { id: true, authorId: true, createdAt: true, source: true, body: true },
+          select: { id: true, authorId: true, createdAt: true, source: true },
         });
-        // Integraciones y las propias celebraciones no son participación.
-        if (!post || post.source === 'api' || isCelebrationBody(post.body)) return;
+        // Integraciones (y las propias celebraciones, que se publican con
+        // `source: 'api'`) no son participación.
+        if (!post || post.source === 'api') return;
         await this.onParticipation(tenantId, post.authorId, post.createdAt, {
           sourceKey: `community.post:${post.id}`,
           posted: true,
@@ -141,6 +141,10 @@ export class GamificationRetentionBridge implements OnModuleInit {
           await retention.evaluateBadges(tenantId, userId);
           const member = await this.host.member(tenantId, userId);
           if (!member || member.isStaff) return;
+          // Llegar al nivel 1 (el de entrada, normalmente 0 puntos) no es una
+          // subida: celebrarlo llenaría la comunidad con cada primer punto.
+          const levels = await this.registry.getGamificationService().listLevels(tenantId);
+          if (levels.findIndex((l) => l.key === to) < 1) return;
           await this.celebrate(tenantId, 'level', `${userId}:${to}`, {
             userId,
             name: member.name,

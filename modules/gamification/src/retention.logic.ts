@@ -182,9 +182,6 @@ export interface CelebrationEntry {
 
 export type CelebrationLocale = 'es' | 'en' | 'pt';
 
-/** Marca invisible para reconocer el post (y no puntuarlo ni celebrarlo). */
-export const CELEBRATION_MARKER = '<!--didacta-celebracion-->';
-
 /** Tope de nombres con detalle en un post agrupado; el resto, «y N más». */
 const LIST_MAX = 12;
 
@@ -227,7 +224,7 @@ const COPY: Record<CelebrationLocale, Record<CelebrationKind, Copy>> = {
         title: `🎓 ¡${e.name} ha terminado «${e.detail ?? ''}»!`,
         body: `${person(e)} acaba de terminar el curso «${escapeMd(e.detail ?? '')}». ¡Enhorabuena! Déjale un comentario.`,
       }),
-      manyTitle: (n) => `🎓 Hoy han terminado un curso ${n} personas`,
+      manyTitle: (n) => `🎓 ${n} personas han terminado un curso hoy`,
       manyIntro: 'Enhorabuena a quienes han terminado un curso hoy:',
       line: (e) => `- ${person(e)} — «${escapeMd(e.detail ?? '')}»`,
       more: (n) => `- y ${n} más`,
@@ -238,7 +235,7 @@ const COPY: Record<CelebrationLocale, Record<CelebrationKind, Copy>> = {
         title: `👋 Te damos la bienvenida, ${e.name}`,
         body: `${person(e)} acaba de presentarse en la comunidad. ¡Pásate a saludar!`,
       }),
-      manyTitle: (n) => `👋 Hoy se han presentado ${n} personas`,
+      manyTitle: (n) => `👋 ${n} personas se han presentado hoy`,
       manyIntro: 'Damos la bienvenida a quienes se han presentado hoy:',
       line: (e) => `- ${person(e)}`,
       more: (n) => `- y ${n} más`,
@@ -253,7 +250,7 @@ const COPY: Record<CelebrationLocale, Record<CelebrationKind, Copy>> = {
           body: `Hoy hace ${anios} que ${person(e)} se unió a la comunidad. ¡Gracias por estar aquí!`,
         };
       },
-      manyTitle: (n) => `🎂 Hoy celebran su aniversario ${n} personas`,
+      manyTitle: (n) => `🎂 ${n} personas cumplen años en la comunidad hoy`,
       manyIntro: 'Hoy cumplen años en la comunidad:',
       line: (e) => {
         const n = years(e.detail);
@@ -267,7 +264,7 @@ const COPY: Record<CelebrationLocale, Record<CelebrationKind, Copy>> = {
         title: `⭐ ${e.name} ha subido al nivel ${e.detail ?? ''}`,
         body: `${person(e)} acaba de llegar al nivel ${escapeMd(e.detail ?? '')}. ¡Enhorabuena!`,
       }),
-      manyTitle: (n) => `⭐ Hoy han subido de nivel ${n} personas`,
+      manyTitle: (n) => `⭐ ${n} personas han subido de nivel hoy`,
       manyIntro: 'Enhorabuena a quienes han subido de nivel hoy:',
       line: (e) => `- ${person(e)} — ${escapeMd(e.detail ?? '')}`,
       more: (n) => `- y ${n} más`,
@@ -333,7 +330,7 @@ const COPY: Record<CelebrationLocale, Record<CelebrationKind, Copy>> = {
         title: `🎓 ${e.name} concluiu "${e.detail ?? ''}"!`,
         body: `${person(e)} acaba de concluir o curso "${escapeMd(e.detail ?? '')}". Parabéns! Deixe um comentário.`,
       }),
-      manyTitle: (n) => `🎓 Hoje ${n} pessoas concluíram um curso`,
+      manyTitle: (n) => `🎓 ${n} pessoas concluíram um curso hoje`,
       manyIntro: 'Parabéns a quem concluiu um curso hoje:',
       line: (e) => `- ${person(e)} — "${escapeMd(e.detail ?? '')}"`,
       more: (n) => `- e mais ${n}`,
@@ -344,7 +341,7 @@ const COPY: Record<CelebrationLocale, Record<CelebrationKind, Copy>> = {
         title: `👋 Boas-vindas, ${e.name}`,
         body: `${person(e)} acaba de se apresentar na comunidade. Passe para dar um oi!`,
       }),
-      manyTitle: (n) => `👋 Hoje ${n} pessoas se apresentaram`,
+      manyTitle: (n) => `👋 ${n} pessoas se apresentaram hoje`,
       manyIntro: 'Damos as boas-vindas a quem se apresentou hoje:',
       line: (e) => `- ${person(e)}`,
       more: (n) => `- e mais ${n}`,
@@ -359,7 +356,7 @@ const COPY: Record<CelebrationLocale, Record<CelebrationKind, Copy>> = {
           body: `Hoje faz ${label} que ${person(e)} entrou na comunidade. Obrigado por estar aqui!`,
         };
       },
-      manyTitle: (n) => `🎂 Hoje ${n} pessoas comemoram aniversário na comunidade`,
+      manyTitle: (n) => `🎂 ${n} pessoas fazem aniversário na comunidade hoje`,
       manyIntro: 'Hoje fazem aniversário na comunidade:',
       line: (e) => {
         const n = years(e.detail);
@@ -373,7 +370,7 @@ const COPY: Record<CelebrationLocale, Record<CelebrationKind, Copy>> = {
         title: `⭐ ${e.name} subiu para o nível ${e.detail ?? ''}`,
         body: `${person(e)} acaba de chegar ao nível ${escapeMd(e.detail ?? '')}. Parabéns!`,
       }),
-      manyTitle: (n) => `⭐ Hoje ${n} pessoas subiram de nível`,
+      manyTitle: (n) => `⭐ ${n} pessoas subiram de nível hoje`,
       manyIntro: 'Parabéns a quem subiu de nível hoje:',
       line: (e) => `- ${person(e)} — ${escapeMd(e.detail ?? '')}`,
       more: (n) => `- e mais ${n}`,
@@ -409,19 +406,15 @@ export function renderCelebration(
       name: flat(e.name),
       detail: e.detail ? flat(e.detail) : e.detail,
     });
-    return { title: clip(one.title), body: `${one.body}\n\n${CELEBRATION_MARKER}` };
+    return { title: clip(one.title), body: one.body };
   }
   const shown = entries.slice(0, LIST_MAX);
   const lines = shown.map((e) => copy.line(e));
   if (entries.length > LIST_MAX) lines.push(copy.more(entries.length - LIST_MAX));
   return {
     title: clip(copy.manyTitle(entries.length)),
-    body: `${copy.manyIntro}\n\n${lines.join('\n')}\n\n${copy.outro}\n\n${CELEBRATION_MARKER}`,
+    body: `${copy.manyIntro}\n\n${lines.join('\n')}\n\n${copy.outro}`,
   };
-}
-
-export function isCelebrationBody(body: string | null | undefined): boolean {
-  return !!body && body.includes(CELEBRATION_MARKER);
 }
 
 // ── Nombres por defecto de las insignias ─────────────────────────────────────
