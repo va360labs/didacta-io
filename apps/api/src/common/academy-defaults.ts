@@ -87,6 +87,31 @@ export function toAcademyLocale(raw: unknown): AcademyLocale | null {
 }
 
 /**
+ * El primer idioma de una cabecera `Accept-Language` que tiene catálogo en el
+ * aula (`en-GB,en;q=0.9` → `en`), o `null`. Respeta el orden de preferencia
+ * por `q`; lo que no se puede leer no cuenta.
+ */
+export function localeFromAcceptLanguage(header: unknown): AcademyLocale | null {
+  const raw = Array.isArray(header) ? header[0] : header;
+  if (typeof raw !== 'string') return null;
+  const tags = raw
+    .split(',')
+    .map((part, i) => {
+      const [tag = '', ...params] = part.trim().split(';');
+      const q = params.map((p) => p.trim()).find((p) => p.startsWith('q='));
+      const weight = q ? Number(q.slice(2)) : 1;
+      return { tag: tag.trim(), weight: Number.isFinite(weight) ? weight : 0, i };
+    })
+    .filter((t) => t.tag && t.weight > 0)
+    .sort((a, b) => b.weight - a.weight || a.i - b.i);
+  for (const t of tags) {
+    const l = toAcademyLocale(t.tag);
+    if (l) return l;
+  }
+  return null;
+}
+
+/**
  * Tag completo para formatear fechas en el idioma del aula. Es también el tag
  * de perfil con el que nace un usuario del aula (`newUserLocale`), así que tiene
  * que ser uno de `PROFILE_LOCALES`.

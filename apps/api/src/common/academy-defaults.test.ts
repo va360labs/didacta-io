@@ -14,6 +14,7 @@ import {
   deducedAcademyLocale,
   explicitAcademyLocale,
   isValidTimeZone,
+  localeFromAcceptLanguage,
   newUserLocale,
   newUserTimeZone,
   resolveAcademyLocale,
@@ -73,6 +74,27 @@ describe('toAcademyLocale', () => {
     for (const l of ACADEMY_LOCALES) {
       expect(ALLOWED_LOCALES as readonly string[]).toContain(academyDateLocale(l));
     }
+  });
+});
+
+describe('localeFromAcceptLanguage', () => {
+  it('el primer idioma del navegador que tiene catálogo, por preferencia', () => {
+    expect(localeFromAcceptLanguage('en-GB,en;q=0.9,es;q=0.8')).toBe('en');
+    expect(localeFromAcceptLanguage('pt-BR,pt;q=0.9')).toBe('pt');
+    // Uno sin catálogo delante no cuenta: se pasa al siguiente.
+    expect(localeFromAcceptLanguage('fr-FR,fr;q=0.9,es;q=0.5')).toBe('es');
+    // El orden lo marca `q`, no la posición.
+    expect(localeFromAcceptLanguage('es;q=0.3,en;q=0.9')).toBe('en');
+    // q=0 es «no lo quiero».
+    expect(localeFromAcceptLanguage('en;q=0,pt')).toBe('pt');
+    expect(localeFromAcceptLanguage(['en-US'])).toBe('en');
+  });
+
+  it('sin cabecera, o sin ningún idioma con catálogo: null', () => {
+    expect(localeFromAcceptLanguage(undefined)).toBeNull();
+    expect(localeFromAcceptLanguage('')).toBeNull();
+    expect(localeFromAcceptLanguage('*')).toBeNull();
+    expect(localeFromAcceptLanguage('fr,de;q=0.8')).toBeNull();
   });
 });
 

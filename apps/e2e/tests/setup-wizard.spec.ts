@@ -80,6 +80,34 @@ test.describe('Wizard de setup — token de un solo uso', () => {
 
     expect(res.status).toBe(409);
   });
+
+  test('la academia queda con el idioma elegido en el asistente, como ajuste del aula', async () => {
+    // El alta de arriba eligió «Español» en el asistente. La API lo guarda como
+    // AJUSTE del aula (`academy/locale`) y la administradora nace en ese
+    // idioma. Antes no se guardaba nada: el aula deducía el idioma del perfil
+    // del admin, que nacía siempre en español, y una academia inglesa salía en
+    // español en todo lo que el servidor escribe para todos.
+    const signin = await fetch(`${API_DIRECT_URL}/api/v1/auth/signin`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        tenantSlug: 'academia-e2e',
+        email: 'admin-e2e@example.test',
+        password: 'SetupWizardPass123!',
+      }),
+    });
+    expect(signin.ok, `signin (${signin.status})`).toBe(true);
+    const { tokens } = (await signin.json()) as { tokens: { accessToken: string } };
+    const auth = { Authorization: `Bearer ${tokens.accessToken}` };
+    const academia = (await (
+      await fetch(`${API_DIRECT_URL}/api/v1/admin/tenant-settings/academy`, { headers: auth })
+    ).json()) as { locale: string; localeSource: string };
+    expect(academia).toMatchObject({ locale: 'es', localeSource: 'setting' });
+    const perfil = (await (
+      await fetch(`${API_DIRECT_URL}/api/v1/me/profile`, { headers: auth })
+    ).json()) as { locale: string };
+    expect(perfil.locale).toBe('es-ES');
+  });
 });
 
 async function fillWizardUpToSubmit(
@@ -89,6 +117,9 @@ async function fillWizardUpToSubmit(
   await page.getByRole('button', { name: 'Empezar configuración' }).click();
 
   await page.getByLabel('Nombre de la organización').fill(args.orgName);
+  // El idioma de la academia viene propuesto con el del navegador; se elige a
+  // mano para que el resto del recorrido (en español) no dependa del runner.
+  await page.getByLabel('Idioma de la academia').selectOption('es');
   // window.location.host en el runner E2E incluye el puerto (localhost:3010),
   // que el backend rechaza como hostname inválido (HOSTNAME_RE no acepta
   // ":"). En producción tras un reverse proxy esto no ocurre porque el

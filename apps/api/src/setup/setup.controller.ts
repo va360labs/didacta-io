@@ -11,6 +11,7 @@ import { ZodValidationPipe } from '../auth/zod-validation.pipe';
 import { setupInitSchema, type SetupInitDto } from './dto';
 import { SetupService } from './setup.service';
 import { resolvePublicHost } from '../common/resolve-public-host';
+import { localeFromAcceptLanguage } from '../common/academy-defaults';
 
 @ApiTags('Setup')
 @Controller('setup')
@@ -53,6 +54,16 @@ export class SetupController {
     const setupToken = Array.isArray(tokenHeader)
       ? (tokenHeader[0] ?? null)
       : (tokenHeader ?? null);
-    return this.service.init(dto, hostNoPort, extractClientContext(req), setupToken);
+    // Idioma de la academia: el que se eligió en el asistente; si el cliente
+    // no lo manda, el del navegador de quien instala. Antes no había ninguno y
+    // el aula se quedaba con el del perfil del admin, que nace en español.
+    const locale =
+      dto.organization.locale ?? localeFromAcceptLanguage(req.headers['accept-language']);
+    return this.service.init(
+      { ...dto, organization: { ...dto.organization, ...(locale ? { locale } : {}) } },
+      hostNoPort,
+      extractClientContext(req),
+      setupToken,
+    );
   }
 }
