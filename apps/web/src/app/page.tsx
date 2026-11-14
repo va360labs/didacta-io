@@ -11,6 +11,15 @@ import { cache } from 'react';
 import { AcademyHomeView } from '@/components/academy-home/academy-home-view';
 import { publicHost } from '@/lib/academy-locale';
 import { fetchAcademyHome, referralFromQuery } from '@/lib/academy-home';
+import {
+  academyJsonLd,
+  canonicalOrigin,
+  canonicalUrl,
+  ogLocale,
+  serializeJsonLd,
+  truncate,
+} from '@/lib/seo';
+import { fetchPublicSeo, requestOrigin } from '@/lib/seo-server';
 
 /**
  * La raíz del aula.
@@ -36,48 +45,45 @@ const loadHome = cache(async () => {
   return fetchAcademyHome(publicHost(h), h.get('x-forwarded-for'));
 });
 
-/** Origen público de la petición, para las URL absolutas de Open Graph. */
-async function requestOrigin(): Promise<string | null> {
+/**
+ * Indexación del aula (dominio canónico, datos para el JSON-LD) y origen de la
+ * petición. La API la cachea por aula y este servidor por host.
+ */
+const loadSeo = cache(async () => {
   const h = await headers();
   const host = publicHost(h);
-  if (!host) return null;
-  const proto =
-    h.get('x-forwarded-proto')?.split(',')[0]?.trim() ||
-    (/^(localhost|127\.|\[::1\])|\.localhost(:|$)/.test(host) ? 'http' : 'https');
-  try {
-    return new URL(`${proto}://${host}`).origin;
-  } catch {
-    return null;
-  }
-}
-
-/** `og:locale` en el formato de Open Graph. */
-function ogLocale(locale: string): string {
-  return locale.toLowerCase().startsWith('en') ? 'en_US' : 'es_ES';
-}
+  const seo = await fetchPublicSeo(host, h.get('x-forwarded-for'));
+  return { seo, origin: canonicalOrigin(seo, requestOrigin(h, host)) };
+});
 
 export async function generateMetadata(): Promise<Metadata> {
   const home = await loadHome();
   if (!home || !home.enabled) return {};
   const t = await getTranslations('publicSite.portada');
   const locale = await getLocale();
-  const origin = await requestOrigin();
+  const { origin } = await loadSeo();
   const { academy } = home;
   const title = academy.name || t('metaFallbackTitle');
-  const description = academy.description ?? t('metaDescription', { name: title });
+  const description = truncate(academy.description ?? t('metaDescription', { name: title }));
   const image = academy.coverUrl ?? academy.logoUrl;
+  const canonical = origin ? canonicalUrl(origin, '/') : null;
   return {
     // El nombre del aula, sin el sufijo de la plataforma: es su página.
     title: { absolute: title },
     description,
+    // Decisión de Valentín: la portada pública SÍ se indexa (lo demás del aula
+    // sigue con el `noindex` del layout raíz). Con `?ref=` o `?preview=1` es la
+    // misma página: el canonical, siempre a la URL limpia.
+    robots: { index: true, follow: true, 'max-image-preview': 'large' },
     ...(origin ? { metadataBase: new URL(origin) } : {}),
+    ...(canonical ? { alternates: { canonical } } : {}),
     openGraph: {
       type: 'website',
       siteName: title,
       title,
       description,
       locale: ogLocale(locale),
-      ...(origin ? { url: `${origin}/` } : {}),
+      ...(canonical ? { url: canonical } : {}),
       ...(image ? { images: [{ url: image }] } : {}),
     },
     twitter: {
@@ -93,7 +99,21 @@ export default async function RootPage({ searchParams }: { searchParams: SearchP
   const home = await loadHome();
   if (!home || !home.enabled) redirect('/home');
   const sp = await searchParams;
+  const { seo, origin } = await loadSeo();
   return (
-    <AcademyHomeView home={home} refCode={referralFromQuery(sp.ref)} preview={sp.preview === '1'} />
+    <>
+      {/* Datos estructurados de la academia, solo con datos reales del aula. */}
+      {seo?.indexable && origin ? (
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: serializeJsonLd(academyJsonLd(seo, origin)) }}
+        />
+      ) : null}
+      <AcademyHomeView
+        home={home}
+        refCode={referralFromQuery(sp.ref)}
+        preview={sp.preview === '1'}
+      />
+    </>
   );
 }

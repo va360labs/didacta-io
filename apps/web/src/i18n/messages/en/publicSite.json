@@ -6,6 +6,7 @@
   "localCurrencyNote": "At checkout you can see it in your currency",
   "catalogo": {
     "metaTitle": "Courses",
+    "metaDescription": "Courses from {name}: pick the one you want and start today, with a one-time payment.",
     "title": "Courses",
     "loadError": "The catalog could not be loaded. Reload to try again.",
     "filterAll": "All",
@@ -50,6 +51,7 @@
   },
   "ficha": {
     "metaTitle": "Course",
+    "metaDescription": "{title}, a course from {name}.",
     "notAvailableTitle": "Course not available",
     "notAvailableBody": "This course is not for sale right now. Take a look at the rest of the catalog.",
     "breadcrumbCourses": "Courses",

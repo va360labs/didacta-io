@@ -11,11 +11,14 @@
  * lanza el checkout ANÓNIMO de Stripe — la cuenta del comprador se crea
  * tras el pago con el email confirmado en la pasarela.
  *
- * El curso se resuelve por slug contra el catálogo público (un solo
- * endpoint); si no está a la venta o no existe, se ofrece volver al catálogo.
+ * El curso llega pintado desde el servidor (`initialCourse`, con su
+ * descripción ya saneada en `description`): así está en el HTML que lee un
+ * buscador. Si el servidor no pudo traerlo, se resuelve aquí por slug contra
+ * el catálogo público, como antes; si no está a la venta o no existe, se
+ * ofrece volver al catálogo.
  */
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useLocale, useTranslations } from 'next-intl';
@@ -42,7 +45,19 @@ import {
   type CatalogCourse,
 } from '@/lib/catalog';
 
-export function FichaVentaView() {
+interface Props {
+  /** El curso, ya leído en el servidor. Sin él, se pide desde el navegador. */
+  initialCourse?: CatalogCourse;
+  /**
+   * La descripción pintada en el servidor con el HTML que saneó la API. Solo
+   * cuenta con `initialCourse`; en el camino del navegador se sanea aquí.
+   */
+  description?: ReactNode;
+  /** Nombre y logo del aula para la caja de compra mientras llega su contexto. */
+  initialBrand?: { name: string; logoUrl: string | null };
+}
+
+export function FichaVentaView({ initialCourse, description, initialBrand }: Props = {}) {
   const t = useTranslations('publicSite');
   const tCommon = useTranslations('common');
   const tErrors = useTranslations('errors');
@@ -53,10 +68,13 @@ export function FichaVentaView() {
   // coinciden → mismatch de hidratación.
   const locale = useLocale();
   const params = useParams<{ slug: string }>();
-  const { tenant } = useTenantContext();
+  const { tenant: tenantCtx } = useTenantContext();
+  const tenant = tenantCtx ?? initialBrand ?? null;
 
-  const [course, setCourse] = useState<CatalogCourse | null | undefined>(undefined);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [course, setCourse] = useState<CatalogCourse | null | undefined>(initialCourse);
+  const [selectedId, setSelectedId] = useState<string | null>(
+    initialCourse ? (featuredOption(initialCourse.options)?.id ?? null) : null,
+  );
   const [paying, setPaying] = useState(false);
   const [payError, setPayError] = useState<string | null>(null);
 
@@ -71,6 +89,8 @@ export function FichaVentaView() {
   }, []);
 
   useEffect(() => {
+    // Ya viene del servidor: no se vuelve a pedir.
+    if (initialCourse) return;
     let cancelled = false;
     getPublicCatalog()
       .then((r) => {
@@ -85,7 +105,7 @@ export function FichaVentaView() {
     return () => {
       cancelled = true;
     };
-  }, [params.slug]);
+  }, [params.slug, initialCourse]);
 
   const selected = course?.options.find((o) => o.id === selectedId) ?? null;
 
@@ -176,7 +196,9 @@ export function FichaVentaView() {
               del formador), así que hay que renderizarla como tal — igual que
               hace la ficha autenticada en (app)/courses/[slug]. Pintándola como
               texto plano, el comprador veía las etiquetas «<p>» en crudo. */}
-          {course.description ? (
+          {initialCourse ? (
+            (description ?? null)
+          ) : course.description ? (
             <div
               className="prose prose-slate max-w-none leading-relaxed prose-p:text-text-muted prose-a:text-brand-700"
               dangerouslySetInnerHTML={{ __html: sanitizeRichHtml(course.description) }}
