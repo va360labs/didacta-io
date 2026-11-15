@@ -65,8 +65,8 @@ describe('prismaSoporteAdminIds', () => {
 describe('resolverAutorTicket', () => {
   it('usa el nombre de la cuenta del aula, nunca el email', async () => {
     const findFirst = vi.fn(async () => ({ name: '  Ana López ' }));
-    const autor = await resolverAutorTicket({ user: { findFirst } } as never, 't1', 'u1');
-    expect(autor).toEqual({ id: 'u1', nombre: 'Ana López' });
+    const autor = await resolverAutorTicket({ user: { findFirst } } as never, claims(['alumno']));
+    expect(autor).toEqual({ id: 'u1', nombre: 'Ana López', esAdmin: false });
     expect(findFirst).toHaveBeenCalledWith({
       where: { id: 'u1', tenantId: 't1', deletedAt: null },
       select: { name: true },
@@ -75,10 +75,21 @@ describe('resolverAutorTicket', () => {
 
   it('sin nombre lo deja vacío (la palabra «miembro» la pone cada idioma)', async () => {
     const findFirst = vi.fn(async () => ({ name: null }));
-    expect(await resolverAutorTicket({ user: { findFirst } } as never, 't1', 'u1')).toEqual({
-      id: 'u1',
-      nombre: '',
-    });
+    expect(await resolverAutorTicket({ user: { findFirst } } as never, claims(['alumno']))).toEqual(
+      { id: 'u1', nombre: '', esAdmin: false },
+    );
+  });
+
+  it.each([
+    [['tenant_admin'], true],
+    [['super_admin'], true],
+    [['formador'], false],
+    [['moderador'], false],
+    [['alumno'], false],
+  ])('roles de la SESIÓN %j → administra el aula: %s (decide el destino)', async (roles, es) => {
+    const findFirst = vi.fn(async () => ({ name: 'X' }));
+    const autor = await resolverAutorTicket({ user: { findFirst } } as never, claims(roles));
+    expect(autor.esAdmin).toBe(es);
   });
 });
 
@@ -122,8 +133,8 @@ describe('respuesta de la captura', () => {
 
 describe('SoporteErrorFilter', () => {
   function responder(error: Error) {
-    const send = vi.fn();
-    const reply = { status: vi.fn(() => ({ send })) };
+    const send = vi.fn((_body: unknown) => undefined);
+    const reply = { status: vi.fn((_status: number) => ({ send })) };
     const host = {
       getType: () => 'http',
       switchToHttp: () => ({ getResponse: () => reply }),
@@ -155,6 +166,16 @@ describe('forma del cuerpo', () => {
   it('crear: solo los tres tipos; texto corto lo deja pasar para que lo rechace el servicio', () => {
     expect(crearTicketSchema.safeParse({ tipo: 'OTRO', texto: 'hola hola' }).success).toBe(false);
     expect(crearTicketSchema.safeParse({ tipo: 'MEJORA', texto: 'ab' }).success).toBe(true);
+  });
+
+  it('crear: un «destino» en el cuerpo no llega al servicio (lo decide la sesión)', () => {
+    const r = crearTicketSchema.safeParse({
+      tipo: 'MEJORA',
+      texto: 'hola hola',
+      destino: 'PLATAFORMA',
+    });
+    expect(r.success).toBe(true);
+    expect(r.data).not.toHaveProperty('destino');
   });
 
   it('crear: una captura enorme se corta antes de decodificarla', () => {

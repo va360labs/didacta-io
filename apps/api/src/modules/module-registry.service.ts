@@ -861,9 +861,9 @@ export class ModuleRegistryService implements OnModuleInit {
     // mod.soporte: «Ayuda y sugerencias». Módulo nuevo (ADR-039): solo usa sus
     // tablas. El host le da quién administra el aula, el storage de cada aula
     // para las capturas, la dirección pública del aula (enlaces de los
-    // correos), el aviso al operador de la plataforma (solo con
-    // SUPPORT_OPERATOR_ALERT_EMAIL) y el contexto del aula para los avisos,
-    // que salen en segundo plano tras responder.
+    // correos), el aviso al operador de la plataforma de los tickets de quien
+    // administra un aula (solo con SUPPORT_OPERATOR_ALERT_EMAIL) y el contexto
+    // del aula para los avisos, que salen en segundo plano tras responder.
     const soporteOperador = readSupportOperatorConfig();
     if (soporteOperador.problem) this.pino.error({}, `alert: ${soporteOperador.problem}`);
     const soporteNotifier = soporteOperador.alertEmail

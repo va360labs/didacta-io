@@ -114,18 +114,26 @@ export class SoporteController {
   @Post('tickets')
   @ApiOperation({
     summary:
-      'Abrir un ticket (algo no funciona, tengo un problema, tengo una sugerencia) con captura opcional. Como mucho 5 en 24 horas. Responde en cuanto se guarda; los avisos salen después.',
+      'Abrir un ticket (algo no funciona, tengo un problema, tengo una sugerencia) con captura opcional. Un miembro escribe al equipo del aula; quien administra el aula, a Didacta. Como mucho 5 en 24 horas. Responde en cuanto se guarda; los avisos salen después.',
   })
   async crear(
     @CurrentUser() user: SessionClaims | undefined,
     @Body(new ZodValidationPipe(crearTicketSchema)) dto: CrearTicketDto,
   ) {
     const u = this.requireUser(user);
-    return this.service().crear(
-      u.tenantId,
-      await resolverAutorTicket(this.prisma, u.tenantId, u.sub),
-      dto,
-    );
+    // El destino (aula o Didacta) lo decide el servicio con los roles de la
+    // sesión; el esquema del cuerpo ni siquiera admite un campo `destino`.
+    return this.service().crear(u.tenantId, await resolverAutorTicket(this.prisma, u), dto);
+  }
+
+  @Get('canal')
+  @ApiOperation({
+    summary:
+      'A quién iría un ticket de quien llama (AULA si es miembro, PLATAFORMA si administra el aula) y si hay alguien al otro lado. La web no enseña el botón si no.',
+  })
+  async canal(@CurrentUser() user: SessionClaims | undefined) {
+    const u = this.requireUser(user);
+    return this.service().canal(callerDe(u));
   }
 
   @Get('tickets/mios')

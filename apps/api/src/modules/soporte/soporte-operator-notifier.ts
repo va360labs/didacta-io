@@ -11,23 +11,26 @@ import {
   type EmailBranding,
 } from '../../common/branded-email';
 import { runAsTenant } from '../../tenancy/tenant-context.storage';
-import type { SmtpAdapterService } from '../smtp-adapter.service';
+import type { SmtpAdapterService, SmtpSendConfig } from '../smtp-adapter.service';
+import { sanitizeReplyTo } from '../smtp-sender-identity';
 import type { TenantSmtpResolverService } from '../tenant-smtp-resolver.service';
 
 /**
  * Correo inmediato al OPERADOR de la plataforma (Didacta Cloud) por cada
- * ticket de soporte nuevo de cualquier aula. Va en español —lo lee el
- * operador, no el aula— y lleva todo lo necesario para actuar sin abrir nada:
- * el aula (nombre y dominio), el tipo, el texto entero, quién lo abre (nombre
- * y correo), si trae captura y el enlace directo al ticket en la bandeja del
- * aula.
+ * ticket que le escribe QUIEN ADMINISTRA un aula (destino PLATAFORMA; lo que
+ * escriben los alumnos va a la bandeja de su aula y no llega aquí). Va en
+ * español —lo lee el operador— y lleva todo lo necesario para contestar sin
+ * abrir nada: el aula (nombre y dominio), que lo escribe su creador (nombre y
+ * correo), el tipo, el texto entero, la captura ADJUNTA y la hora. El operador
+ * no tiene bandeja: responde contestando al correo, que lleva Reply-To con el
+ * correo del creador.
  *
  * Sale por el SMTP GLOBAL del despliegue (el de la plataforma), así que llega
  * aunque el aula no tenga SMTP propio; solo si el despliegue no tiene ninguno
  * se intenta con el del aula. Cualquier fallo (sin SMTP, el servidor de correo
  * lo rechaza, una excepción) queda en el log con nivel de error y prefijo
  * `alert:`, que es lo que vigila el operador. Nunca lanza: el ticket ya está
- * guardado y el equipo del aula ya tiene su aviso.
+ * guardado.
  */
 
 const OPERATOR_BRAND: EmailBranding = {
@@ -81,14 +84,17 @@ export interface OperatorEmail {
 export interface OperatorEmailData {
   academy: string;
   domain: string;
+  /** Dirección pública del aula, para entrar a mirar; `''` si no se sabe. */
+  academyUrl: string;
   tipo: TipoTicket;
   texto: string;
   autorNombre: string;
+  /** Correo del creador: el Reply-To y lo que se enseña; null si no se pudo leer. */
   autorEmail: string | null;
   tieneCaptura: boolean;
+  /** Si la captura va adjunta (puede haberla y no poder leerse). */
+  capturaAdjunta: boolean;
   createdAt: Date;
-  /** Enlace directo al ticket en la bandeja del aula; `''` si no se sabe el dominio. */
-  ticketUrl: string;
 }
 
 function una(linea: string, max: number): string {
@@ -106,28 +112,37 @@ export function buildOperatorEmail(d: OperatorEmailData): OperatorEmail {
     timeStyle: 'short',
     timeZone: 'Europe/Madrid',
   }).format(d.createdAt);
-  const subject = una(`[Soporte] ${d.academy}: ${tipo.toLowerCase()} — ${autor}`, 150);
-  const title = `Ticket nuevo en «${d.academy}»`;
-  const captura = d.tieneCaptura ? 'Sí (se ve en el ticket)' : 'No';
+  const subject = una(`[Soporte] Creador de ${d.academy}: ${tipo.toLowerCase()} — ${autor}`, 150);
+  const title = `Ticket del CREADOR de «${d.academy}»`;
+  const captura = d.capturaAdjunta
+    ? 'Sí, va adjunta a este correo'
+    : d.tieneCaptura
+      ? 'Sí, pero no se pudo adjuntar'
+      : 'No';
+  const responder = d.autorEmail
+    ? `Contesta a este correo: la respuesta le llega a ${d.autorEmail}.`
+    : 'No se pudo leer su correo: escríbele desde el aula.';
   const { html, text } = renderBrandedEmail(OPERATOR_BRAND, {
     lang: 'es',
     title,
     preheader: una(d.texto, 140),
     bodyHtml: textToHtmlParagraphs(d.texto),
     bodyText: d.texto,
-    ...(d.ticketUrl
-      ? { cta: { label: 'Abrir el ticket en la bandeja del aula', url: d.ticketUrl } }
-      : {}),
     sections: [
-      { heading: 'Aula', lines: [d.academy, d.domain || '(sin dominio)'] },
+      {
+        heading: 'Aula',
+        lines: [d.academy, d.domain || '(sin dominio)'],
+        ...(d.academyUrl ? { link: { label: 'Entrar en el aula', url: d.academyUrl } } : {}),
+      },
+      { heading: 'Lo escribe su creador (administra el aula)', lines: [quien] },
       { heading: 'Tipo', lines: [tipo] },
-      { heading: 'Quién lo abre', lines: [quien] },
       { heading: 'Captura', lines: [captura] },
       { heading: 'Recibido', lines: [`${fecha} (hora peninsular)`] },
+      { heading: 'Cómo responder', lines: [responder] },
     ],
     signature: false,
     footerNote:
-      'Te llega porque este despliegue tiene SUPPORT_OPERATOR_ALERT_EMAIL. El equipo del aula recibe su propio aviso.',
+      'Te llega porque este despliegue tiene SUPPORT_OPERATOR_ALERT_EMAIL. Solo llegan aquí los tickets de quien administra un aula; los de sus alumnos van a la bandeja del aula.',
   });
   return { subject, text, html };
 }
@@ -155,20 +170,42 @@ export class SoporteOperatorNotifier {
         this.autor(tenantId, aviso.autorId),
         this.base(tenantId),
       ]);
+      const replyTo = sanitizeReplyTo(autor?.email);
       const email = buildOperatorEmail({
         academy,
         domain: dominio(base),
+        academyUrl: base,
         tipo: aviso.tipo,
         texto: aviso.texto,
         autorNombre: aviso.autorNombre || autor?.name?.trim() || '',
-        autorEmail: autor?.email ?? null,
+        autorEmail: replyTo,
         tieneCaptura: aviso.tieneCaptura,
+        capturaAdjunta: aviso.captura !== null,
         createdAt: aviso.createdAt,
-        ticketUrl: base ? `${base}/admin/support?ticket=${ticketId}` : '',
       });
+      // Reply-To = el creador: el operador contesta respondiendo al correo.
+      const config: SmtpSendConfig = replyTo
+        ? { ...resolved.config, sender: { ...(resolved.config.sender ?? {}), replyTo } }
+        : resolved.config;
       const result = await this.deps.smtp.send(
-        resolved.config,
-        { to: this.deps.alertEmail, subject: email.subject, text: email.text, html: email.html },
+        config,
+        {
+          to: this.deps.alertEmail,
+          subject: email.subject,
+          text: email.text,
+          html: email.html,
+          ...(aviso.captura
+            ? {
+                attachments: [
+                  {
+                    filename: aviso.captura.nombre,
+                    content: aviso.captura.data,
+                    contentType: aviso.captura.contentType,
+                  },
+                ],
+              }
+            : {}),
+        },
         SENDER_NAME,
       );
       if (!result.ok) {

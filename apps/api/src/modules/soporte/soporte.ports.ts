@@ -52,19 +52,20 @@ export function prismaSoporteAdminIds(prisma: {
 }
 
 /**
- * La copia del autor que se guarda con el ticket y ve el equipo. Nombre: el
- * `name` de la cuenta, nunca el email. Sin nombre, «Miembro» (el servicio).
+ * El autor del ticket: la copia del nombre que se guarda (el `name` de la
+ * cuenta, nunca el email; vacío si no tiene) y si administra el aula, que
+ * decide el destino. Esto último sale de los roles de la SESIÓN, nunca del
+ * cuerpo de la petición.
  */
 export async function resolverAutorTicket(
   prisma: { user: Pick<UserLookup['user'], 'findFirst'> },
-  tenantId: string,
-  userId: string,
+  user: SessionClaims,
 ): Promise<AutorTicket> {
   const u = await prisma.user.findFirst({
-    where: { id: userId, tenantId, deletedAt: null },
+    where: { id: user.sub, tenantId: user.tenantId, deletedAt: null },
     select: { name: true },
   });
-  return { id: userId, nombre: u?.name?.trim() ?? '' };
+  return { id: user.sub, nombre: u?.name?.trim() ?? '', esAdmin: callerDe(user).esAdmin };
 }
 
 /** Capturas con el storage de cada aula (su S3 propio si lo configuró, o el global). */

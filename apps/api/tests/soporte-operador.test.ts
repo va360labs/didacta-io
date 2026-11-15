@@ -13,11 +13,12 @@ import {
 import { readSupportOperatorConfig } from '../src/modules/soporte/soporte-operator.config';
 
 /**
- * Aviso inmediato al operador de la plataforma (`SUPPORT_OPERATOR_ALERT_EMAIL`)
- * de cada ticket nuevo de cualquier aula: en español, con el aula, el tipo, el
- * texto entero, quién lo abre, si trae captura y el enlace al ticket; por el
- * SMTP de la PLATAFORMA aunque el aula no tenga el suyo; y si falla, al log
- * con nivel de error.
+ * Correo inmediato al operador de la plataforma (`SUPPORT_OPERATOR_ALERT_EMAIL`)
+ * de cada ticket que le escribe QUIEN ADMINISTRA un aula: en español, diciendo
+ * que es del creador del aula, con el aula y su dominio, el tipo, el texto
+ * entero, la captura adjunta y Reply-To del creador para contestar por correo;
+ * por el SMTP de la PLATAFORMA aunque el aula no tenga el suyo; y si falla, al
+ * log con nivel de error.
  */
 
 describe('SUPPORT_OPERATOR_ALERT_EMAIL', () => {
@@ -42,14 +43,17 @@ describe('SUPPORT_OPERATOR_ALERT_EMAIL', () => {
   });
 });
 
+const PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3]);
+
 const AVISO: AvisoOperadorTicket = {
   tenantId: 'tenant-1',
   ticketId: '7f3c2a10-0000-4000-8000-000000000001',
   tipo: 'FALLO',
   texto: 'Al pulsar «Publicar» sale un error.\n\nPasa desde ayer con Chrome.',
   autorId: 'user-1',
-  autorNombre: 'Ana López',
+  autorNombre: 'Lucía Martín',
   tieneCaptura: true,
+  captura: { data: PNG, contentType: 'image/webp', nombre: 'pantalla.webp' },
   createdAt: new Date('2026-11-15T17:42:00.000Z'),
 };
 
@@ -57,71 +61,79 @@ describe('buildOperatorEmail', () => {
   const email = buildOperatorEmail({
     academy: 'Cerámica con Lucía',
     domain: 'ceramica.didacta.io',
+    academyUrl: 'https://ceramica.didacta.io',
     tipo: 'FALLO',
     texto: AVISO.texto,
-    autorNombre: 'Ana López',
-    autorEmail: 'ana@example.com',
+    autorNombre: 'Lucía Martín',
+    autorEmail: 'lucia@example.com',
     tieneCaptura: true,
+    capturaAdjunta: true,
     createdAt: AVISO.createdAt,
-    ticketUrl: 'https://ceramica.didacta.io/admin/support?ticket=abc',
   });
 
-  it('el asunto dice el aula, el tipo y quién, en español', () => {
-    expect(email.subject).toBe('[Soporte] Cerámica con Lucía: algo no funciona — Ana López');
+  it('el asunto dice que es del CREADOR del aula, el tipo y quién, en español', () => {
+    expect(email.subject).toBe(
+      '[Soporte] Creador de Cerámica con Lucía: algo no funciona — Lucía Martín',
+    );
   });
 
-  it('el texto plano lleva todo lo necesario para actuar sin abrir nada', () => {
+  it('el texto plano lleva todo lo necesario para contestar sin abrir nada', () => {
     for (const trozo of [
-      'Ticket nuevo en «Cerámica con Lucía»',
+      'Ticket del CREADOR de «Cerámica con Lucía»',
       'Al pulsar «Publicar» sale un error.',
       'Pasa desde ayer con Chrome.',
-      'Cerámica con Lucía',
       'ceramica.didacta.io',
+      'Entrar en el aula: https://ceramica.didacta.io',
+      'LO ESCRIBE SU CREADOR (ADMINISTRA EL AULA)\nLucía Martín <lucia@example.com>',
       'Algo no funciona',
-      'Ana López <ana@example.com>',
-      'Sí (se ve en el ticket)',
+      'Sí, va adjunta a este correo',
       '15 de noviembre de 2026 a las 18:42 (hora peninsular)',
-      'Abrir el ticket en la bandeja del aula: https://ceramica.didacta.io/admin/support?ticket=abc',
+      'Contesta a este correo: la respuesta le llega a lucia@example.com.',
     ]) {
       expect(email.text, trozo).toContain(trozo);
     }
+    // No hay bandeja del operador ni el ticket sale en la del aula.
+    expect(email.text).not.toContain('/admin/support');
   });
 
-  it('el HTML escapa lo que escribe el miembro', () => {
+  it('el HTML escapa lo que escribe el creador', () => {
     const malo = buildOperatorEmail({
       academy: 'Aula <b>',
       domain: '',
+      academyUrl: '',
       tipo: 'MEJORA',
       texto: '<script>alert(1)</script>',
       autorNombre: '<img src=x onerror=alert(1)>',
       autorEmail: null,
       tieneCaptura: false,
+      capturaAdjunta: false,
       createdAt: AVISO.createdAt,
-      ticketUrl: '',
     });
     expect(malo.html).not.toContain('<script>');
     expect(malo.html).not.toContain('<img src=x');
     expect(malo.html).toContain('&lt;script&gt;');
     expect(malo.text).toContain('(sin dominio)');
     expect(malo.text).toContain('CAPTURA\nNo');
-    expect(malo.text).not.toContain('Abrir el ticket');
+    expect(malo.text).toContain('No se pudo leer su correo');
+    expect(malo.text).not.toContain('Entrar en el aula');
   });
 
-  it('sin nombre de cuenta lo dice; sin correo, solo el nombre', () => {
+  it('con captura que no se pudo leer, lo dice', () => {
     const sin = buildOperatorEmail({
       academy: 'A',
       domain: 'a.didacta.io',
+      academyUrl: '',
       tipo: 'PROBLEMA',
       texto: 'xxxxx',
       autorNombre: '',
       autorEmail: null,
-      tieneCaptura: false,
+      tieneCaptura: true,
+      capturaAdjunta: false,
       createdAt: AVISO.createdAt,
-      ticketUrl: '',
     });
     expect(sin.text).toContain('(sin nombre)');
     expect(sin.text).toContain('Tiene un problema');
-    expect(sin.text).toContain('No');
+    expect(sin.text).toContain('Sí, pero no se pudo adjuntar');
   });
 });
 
@@ -148,13 +160,15 @@ describe('SoporteOperatorNotifier', () => {
     return new SoporteOperatorNotifier({
       prisma: {
         tenant: { findUnique: vi.fn(async () => ({ name: 'Cerámica con Lucía' })) },
-        user: { findFirst: vi.fn(async () => ({ email: 'ana@example.com', name: 'Ana' })) },
+        user: {
+          findFirst: vi.fn(async () => ({ email: 'lucia@example.com', name: 'Lucía' })),
+        },
       },
       smtpResolver: { resolveGlobal, resolve } as never,
       smtp: { send } as never,
       webBaseUrl: async () => 'https://ceramica.didacta.io/',
       alertEmail: 'valen@va360labs.com',
-      logger: { error, log: vi.fn() },
+      logger: { error, log: vi.fn() } as never,
       ...over,
     });
   }
@@ -166,21 +180,42 @@ describe('SoporteOperatorNotifier', () => {
     resolve = vi.fn(async () => DEL_AULA);
   });
 
-  it('sale por el SMTP de la plataforma, a la dirección del operador, con el enlace al ticket', async () => {
+  it('sale por el SMTP de la plataforma, al operador, con Reply-To del creador y la captura adjunta', async () => {
     await notifier().avisar(AVISO);
     expect(send).toHaveBeenCalledTimes(1);
     const [config, input, nombre] = send.mock.calls[0]!;
-    expect(config).toBe(GLOBAL.config);
+    expect(config).toEqual({ ...GLOBAL.config, sender: { replyTo: 'lucia@example.com' } });
     expect(resolve).not.toHaveBeenCalled();
     expect(input.to).toBe('valen@va360labs.com');
-    expect(input.subject).toBe('[Soporte] Cerámica con Lucía: algo no funciona — Ana López');
-    expect(input.text).toContain('ceramica.didacta.io');
-    expect(input.text).toContain('Ana López <ana@example.com>');
-    expect(input.text).toContain(
-      `https://ceramica.didacta.io/admin/support?ticket=${AVISO.ticketId}`,
+    expect(input.subject).toBe(
+      '[Soporte] Creador de Cerámica con Lucía: algo no funciona — Lucía Martín',
     );
+    expect(input.text).toContain('ceramica.didacta.io');
+    expect(input.text).toContain('Lucía Martín <lucia@example.com>');
+    expect(input.attachments).toEqual([
+      { filename: 'pantalla.webp', content: PNG, contentType: 'image/webp' },
+    ]);
     expect(nombre).toBe('Didacta soporte');
     expect(error).not.toHaveBeenCalled();
+  });
+
+  it('sin captura no adjunta nada', async () => {
+    await notifier().avisar({ ...AVISO, tieneCaptura: false, captura: null });
+    expect(send.mock.calls[0]![1]).not.toHaveProperty('attachments');
+  });
+
+  it('un correo de creador que no es una dirección limpia no se usa como Reply-To', async () => {
+    await notifier({
+      prisma: {
+        tenant: { findUnique: vi.fn(async () => ({ name: 'A' })) },
+        user: {
+          findFirst: vi.fn(async () => ({ email: 'mala, dirección@x.com', name: 'X' })),
+        },
+      },
+    }).avisar(AVISO);
+    const [config, input] = send.mock.calls[0]!;
+    expect(config).toBe(GLOBAL.config);
+    expect(input.text).toContain('No se pudo leer su correo');
   });
 
   it('sale aunque el aula no tenga SMTP propio (control: no se pregunta por el del aula)', async () => {
@@ -190,10 +225,13 @@ describe('SoporteOperatorNotifier', () => {
     expect(resolve).not.toHaveBeenCalled();
   });
 
-  it('un despliegue sin SMTP de plataforma usa el del aula', async () => {
+  it('un despliegue sin SMTP de plataforma usa el del aula, también con Reply-To', async () => {
     resolveGlobal.mockReturnValue(null);
     await notifier().avisar(AVISO);
-    expect(send.mock.calls[0]![0]).toBe(DEL_AULA.config);
+    expect(send.mock.calls[0]![0]).toEqual({
+      ...DEL_AULA.config,
+      sender: { replyTo: 'lucia@example.com' },
+    });
   });
 
   it('sin ningún SMTP: no envía y lo deja en el log con nivel de error', async () => {
@@ -234,9 +272,10 @@ describe('SoporteOperatorNotifier', () => {
         throw new Error('sin dominio');
       },
     }).avisar(AVISO);
-    const input = send.mock.calls[0]![1];
+    const [config, input] = send.mock.calls[0]!;
+    expect(config).toBe(GLOBAL.config);
     expect(input.subject).toContain('tenant-1');
-    expect(input.text).toContain('Ana López');
+    expect(input.text).toContain('Lucía Martín');
     expect(input.text).toContain('(sin dominio)');
   });
 });

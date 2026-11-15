@@ -9,8 +9,9 @@
  *    ni pidiendo por id ni con una consulta sin filtro;
  *  - el tope de 5 tickets al día aguanta 8 envíos A LA VEZ de la misma
  *    persona (candado de verdad, `pg_advisory_xact_lock`): entran 5 justos;
- *  - los avisos salen en segundo plano con el contexto del aula: llegan a su
- *    equipo (lectura de `user` bajo RLS) y al operador, no a otra aula;
+ *  - el ticket de un alumno avisa en segundo plano, con el contexto del aula,
+ *    a su equipo (lectura de `user` bajo RLS), no al operador ni a otra aula;
+ *  - el de quien administra va al operador y no sale en la bandeja del aula;
  *  - la nota interna nunca llega a quien abrió el ticket.
  */
 
@@ -141,8 +142,8 @@ describeWithDb('mod.soporte — Postgres real como didacta_app', () => {
     await closeModule?.();
   });
 
-  const ana = () => ({ id: users['anaA']!, nombre: 'Ana' });
-  const beto = () => ({ id: users['betoB']!, nombre: 'Beto' });
+  const ana = () => ({ id: users['anaA']!, nombre: 'Ana', esAdmin: false });
+  const beto = () => ({ id: users['betoB']!, nombre: 'Beto', esAdmin: false });
   const adminA = () => ({ id: users['adminA']!, esAdmin: true });
   const adminB = () => ({ id: users['adminB']!, esAdmin: true });
 
@@ -206,7 +207,7 @@ describeWithDb('mod.soporte — Postgres real como didacta_app', () => {
     ).toBe(5);
   });
 
-  it('los avisos de fondo llevan el contexto del aula: su equipo y el operador, no otra aula', async () => {
+  it('ticket de un alumno: avisos de fondo con el contexto del aula a SU equipo, no al operador', async () => {
     await service.esperarAvisos();
     hub.length = 0;
     operador.length = 0;
@@ -214,21 +215,49 @@ describeWithDb('mod.soporte — Postgres real como didacta_app', () => {
       service.crear(tenants.a, ana(), { tipo: 'PROBLEMA', texto: 'No me llega el certificado' }),
     );
     await service.esperarAvisos();
+    expect(t.destino).toBe('AULA');
     const nuevos = hub.filter((h) => h.templateKey === 'soporte.ticket.nuevo');
     expect(nuevos.map((h) => `${h.to}:${h.channel}`).sort()).toEqual(
       [`${users['adminA']}:email`, `${users['adminA']}:in-app`].sort(),
     );
     expect(hub.some((h) => h.to === users['adminB'])).toBe(false);
+    expect(operador).toHaveLength(0);
+    const fila = await admin.modSoporteTicket.findUnique({ where: { id: t.id } });
+    expect(fila?.destino).toBe('AULA');
+  });
+
+  it('ticket de quien administra: a Didacta (operador), ni a su equipo ni a su bandeja', async () => {
+    await service.esperarAvisos();
+    hub.length = 0;
+    operador.length = 0;
+    const lucia = { id: users['adminA']!, nombre: 'Lucía Admin', esAdmin: true };
+    const t = await runAsTenant(tenants.a, () =>
+      service.crear(tenants.a, lucia, { tipo: 'FALLO', texto: 'No puedo cambiar el dominio' }),
+    );
+    await service.esperarAvisos();
+    expect(t.destino).toBe('PLATAFORMA');
+    expect((await admin.modSoporteTicket.findUnique({ where: { id: t.id } }))?.destino).toBe(
+      'PLATAFORMA',
+    );
     expect(operador).toEqual([
       expect.objectContaining({
         tenantId: tenants.a,
         ticketId: t.id,
-        tipo: 'PROBLEMA',
-        texto: 'No me llega el certificado',
-        autorNombre: 'Ana',
-        tieneCaptura: false,
+        texto: 'No puedo cambiar el dominio',
+        autorId: users['adminA'],
+        captura: null,
       }),
     ]);
+    expect(hub).toHaveLength(0);
+    const bandeja = await runAsTenant(tenants.a, () =>
+      service.listarAdmin(tenants.a, adminA(), {}),
+    );
+    expect(bandeja.items.map((i) => i.id)).not.toContain(t.id);
+    await expect(
+      runAsTenant(tenants.a, () => service.obtenerAdmin(tenants.a, adminA(), t.id)),
+    ).rejects.toBeInstanceOf(TicketNoEncontradoError);
+    const mios = await runAsTenant(tenants.a, () => service.mios(tenants.a, users['adminA']!));
+    expect(mios.find((m) => m.id === t.id)?.destino).toBe('PLATAFORMA');
   });
 
   it('la nota interna nunca llega a quien abrió el ticket', async () => {
