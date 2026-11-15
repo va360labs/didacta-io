@@ -9,14 +9,18 @@ import { useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { Icon } from '@/components/icon';
 import { SoporteDialog } from './soporte-dialog';
-import { useSoporteEnabled } from './use-soporte';
+import { useSoporteCanal } from './use-soporte';
 
 /** Mismo azul → verde que el avatar sin foto: el color de la marca en el menú. */
 const DEGRADADO = 'linear-gradient(135deg, #2E7DCE 0%, #18B5A8 100%)';
 
 /**
  * Botón «Ayuda y sugerencias». Solo sale con mod.soporte encendido para el
- * aula y con sesión (sin token, `useSoporteEnabled` responde que no).
+ * aula, con sesión y con alguien al otro lado (`useSoporteCanal`): un miembro
+ * escribe al equipo de su aula; quien administra el aula, al equipo de
+ * Didacta. Si el despliegue no tiene soporte de plataforma (Community propia,
+ * sin `SUPPORT_OPERATOR_ALERT_EMAIL`), a quien administra NO se le enseña: no
+ * hay nadie a quien escribir y una ventana que promete respuesta mentiría.
  *  - `card`: tarjeta destacada al final de la lista del menú lateral, dentro
  *    del scroll (menú expandido y cajón del móvil), para no robar alto a la lista.
  *  - `rail`: solo icono con un punto de color, en el rail plegado de escritorio.
@@ -32,9 +36,10 @@ export function SoporteButton({
   onNavigate?: () => void;
 }) {
   const t = useTranslations('modSoporte.boton');
-  const enabled = useSoporteEnabled();
+  const canal = useSoporteCanal();
   const [open, setOpen] = useState(false);
-  if (!enabled) return null;
+  if (!canal || !canal.disponible) return null;
+  const aDidacta = canal.destino === 'PLATAFORMA';
 
   function abrir() {
     onNavigate?.();
@@ -96,12 +101,12 @@ export function SoporteButton({
               {etiqueta}
             </span>
             <span className="mt-0.5 block text-[11.5px] leading-snug text-white/60">
-              {t('ayuda')}
+              {aDidacta ? t('ayudaPlataforma') : t('ayuda')}
             </span>
           </span>
         </button>
       )}
-      <SoporteDialog open={open} onClose={() => setOpen(false)} />
+      <SoporteDialog open={open} onClose={() => setOpen(false)} destino={canal.destino} />
     </>
   );
 }

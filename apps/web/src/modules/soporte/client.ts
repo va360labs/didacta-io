@@ -11,6 +11,7 @@ import {
   filtrosAQuery,
   type ContextoTicket,
   type CrearTicketInput,
+  type DestinoTicket,
   type EstadoTicket,
   type TipoTicket,
 } from './logic';
@@ -24,6 +25,7 @@ export interface TicketView {
   tipo: TipoTicket;
   texto: string;
   estado: EstadoTicket;
+  destino: DestinoTicket;
   tieneCaptura: boolean;
   createdAt: string;
   updatedAt: string;
@@ -38,6 +40,12 @@ export interface AdminTicketView extends TicketView {
 }
 
 export type ConteoPorEstado = Record<EstadoTicket, number>;
+
+/** A quién escribiría quien mira y si hay alguien al otro lado (`GET /canal`). */
+export interface CanalSoporte {
+  destino: DestinoTicket;
+  disponible: boolean;
+}
 
 export interface AdminListado {
   items: AdminTicketView[];
@@ -55,6 +63,10 @@ function json(method: string, body?: unknown): RequestInit {
 }
 
 export const soporteApi = {
+  async canal(): Promise<CanalSoporte> {
+    return apiFetch<CanalSoporte>(`${BASE}/canal`, json('GET'), withAuth());
+  },
+
   async crear(input: CrearTicketInput): Promise<TicketView> {
     return apiFetch<TicketView>(`${BASE}/tickets`, json('POST', input), withAuth());
   },

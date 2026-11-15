@@ -11,6 +11,7 @@ import { useTranslations } from 'next-intl';
 import { Button } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
+import { authStorage } from '@/lib/auth-storage';
 import { archivoABase64, mensajeDeError, soporteApi, type TicketView } from './client';
 import {
   TEXTO_MAX,
@@ -21,6 +22,7 @@ import {
   construirPayload,
   validarCaptura,
   validarTexto,
+  type DestinoTicket,
   type TipoCaptura,
   type TipoTicket,
 } from './logic';
@@ -32,7 +34,9 @@ export const RUTA_MIS_TICKETS = '/support';
 
 /**
  * «Ayuda y sugerencias»: abre un ticket (sugerencia, fallo o problema) con
- * captura opcional. La página, el navegador, la ventana y la hora se mandan
+ * captura opcional. Un miembro escribe al equipo de su aula; quien administra
+ * el aula (`destino` PLATAFORMA, lo decide el servidor) escribe al equipo de
+ * Didacta y la ventana se lo dice: sus textos y la respuesta por correo. La página, el navegador, la ventana y la hora se mandan
  * solos. La API responde en cuanto guarda el ticket (los avisos al equipo
  * salen después), así que «Enviando…» dura lo que tarda en guardarse.
  */
@@ -40,10 +44,13 @@ export function SoporteDialog({
   open,
   onClose,
   onEnviado,
+  destino = 'AULA',
 }: {
   open: boolean;
   onClose: () => void;
   onEnviado?: (t: TicketView) => void;
+  /** A quién escribe quien mira (`useSoporteCanal`). Solo cambia los textos. */
+  destino?: DestinoTicket;
 }) {
   const t = useTranslations('modSoporte');
   const tErrors = useTranslations('errors');
@@ -56,6 +63,9 @@ export function SoporteDialog({
   const [enviando, setEnviando] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [enviado, setEnviado] = useState<TicketView | null>(null);
+  const aDidacta = destino === 'PLATAFORMA';
+  /** Los textos de cada tipo: los del aula o los de escribir a Didacta. */
+  const tipos = aDidacta ? ('tiposPlataforma' as const) : ('tipos' as const);
 
   // Cada vez que se abre, empieza en blanco.
   useEffect(() => {
@@ -130,17 +140,26 @@ export function SoporteDialog({
     }
   }
 
+  const correo = authStorage.getSession()?.user.email ?? null;
+
   if (enviado) {
     return (
       <Dialog
         open={open}
         onOpenChange={(v) => (v ? undefined : onClose())}
         title={t('dialogo.enviadoTitulo')}
-        description={t('dialogo.enviadoDescripcion')}
+        description={
+          aDidacta ? t('dialogo.enviadoDescripcionPlataforma') : t('dialogo.enviadoDescripcion')
+        }
       >
         <p className="text-sm text-text" data-testid="soporte-enviado">
-          {t('dialogo.enviadoTexto')}
+          {aDidacta ? t('dialogo.enviadoTextoPlataforma') : t('dialogo.enviadoTexto')}
         </p>
+        {aDidacta && correo ? (
+          <p className="mt-2 text-sm text-text-muted" data-testid="soporte-enviado-correo">
+            {t('dialogo.enviadoCorreoPlataforma', { email: correo })}
+          </p>
+        ) : null}
         <div className="mt-5 flex flex-wrap justify-end gap-2">
           <Button type="button" variant="ghost" onClick={onClose}>
             {t('dialogo.cerrar')}
@@ -159,8 +178,8 @@ export function SoporteDialog({
     <Dialog
       open={open}
       onOpenChange={(v) => (v ? undefined : onClose())}
-      title={t('dialogo.titulo')}
-      description={t('dialogo.descripcion')}
+      title={aDidacta ? t('dialogo.tituloPlataforma') : t('dialogo.titulo')}
+      description={aDidacta ? t('dialogo.descripcionPlataforma') : t('dialogo.descripcion')}
       maxWidthClass="max-w-xl"
     >
       <form id={formId} onSubmit={(e) => void enviar(e)} data-testid="soporte-form">
@@ -187,10 +206,10 @@ export function SoporteDialog({
                       checked={tipo === valor}
                       onChange={() => setTipo(valor)}
                     />
-                    {t(`tipos.${valor}.label`)}
+                    {t(`${tipos}.${valor}.label`)}
                   </span>
                   <span className="mt-0.5 text-xs text-text-muted">
-                    {t(`tipos.${valor}.ayuda`)}
+                    {t(`${tipos}.${valor}.ayuda`)}
                   </span>
                 </label>
               ))}
@@ -199,7 +218,7 @@ export function SoporteDialog({
 
           <div>
             <label htmlFor={`${formId}-texto`} className={labelClass}>
-              {t(`tipos.${tipo}.pregunta`)}
+              {t(`${tipos}.${tipo}.pregunta`)}
             </label>
             <Textarea
               id={`${formId}-texto`}
@@ -208,7 +227,7 @@ export function SoporteDialog({
               maxLength={TEXTO_MAX}
               required
               onChange={(e) => setTexto(e.target.value)}
-              placeholder={t(`tipos.${tipo}.pista`)}
+              placeholder={t(`${tipos}.${tipo}.pista`)}
               data-testid="soporte-texto-input"
             />
             <p className="mt-1 text-right text-xs text-text-muted tabular-nums">

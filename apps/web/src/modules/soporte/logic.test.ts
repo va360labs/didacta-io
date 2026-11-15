@@ -50,6 +50,29 @@ describe('tipos de ticket', () => {
     expect(ptSoporte.tipos.PROBLEMA.label).toBe('Estou com um problema');
   });
 
+  it('quien administra escribe a Didacta: sus tipos, su ventana y su «enviado», en los tres idiomas', () => {
+    for (const cat of [esSoporte, enSoporte, ptSoporte]) {
+      for (const tipo of TIPOS) {
+        const t = cat.tiposPlataforma[tipo];
+        for (const campo of ['label', 'ayuda', 'pregunta', 'pista'] as const) {
+          expect(t[campo].length, `${tipo}.${campo}`).toBeGreaterThan(0);
+        }
+      }
+      // La ventana dice a quién escribe y que la respuesta llega por correo.
+      expect(cat.dialogo.tituloPlataforma).toMatch(/Didacta/);
+      expect(cat.dialogo.enviadoCorreoPlataforma).toContain('{email}');
+      expect(cat.mios.enviadoADidacta).toMatch(/Didacta/);
+    }
+    expect(esSoporte.dialogo.tituloPlataforma).toBe('Escribe al equipo de Didacta');
+    expect(enSoporte.dialogo.tituloPlataforma).toBe('Write to the Didacta team');
+    expect(ptSoporte.dialogo.tituloPlataforma).toBe('Escreva para a equipe da Didacta');
+    expect(enSoporte.mios.enviadoADidacta).toBe('Sent to Didacta');
+    expect(ptSoporte.mios.enviadoADidacta).toBe('Enviado à Didacta');
+    // El miembro sigue escribiendo a su aula, no a Didacta.
+    expect(esSoporte.dialogo.descripcion).not.toMatch(/Didacta/);
+    expect(enSoporte.dialogo.descripcion).not.toMatch(/Didacta/);
+  });
+
   it('en portugués el aula es «escola», nunca «academia»', () => {
     const texto = JSON.stringify(ptSoporte);
     expect(texto).toMatch(/escola/);

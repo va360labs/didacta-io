@@ -1,7 +1,8 @@
 {
   "boton": {
     "etiqueta": "Ayuda y sugerencias",
-    "ayuda": "Cuéntanos qué falla o qué mejorarías"
+    "ayuda": "Cuéntanos qué falla o qué mejorarías",
+    "ayudaPlataforma": "Escribe al equipo de Didacta"
   },
   "tipos": {
     "MEJORA": {
@@ -19,6 +20,26 @@
     "PROBLEMA": {
       "label": "Tengo un problema",
       "ayuda": "Acceso, pagos, cursos…",
+      "pregunta": "¿Qué ha pasado?",
+      "pista": "Qué estabas haciendo, qué esperabas y qué ha pasado."
+    }
+  },
+  "tiposPlataforma": {
+    "MEJORA": {
+      "label": "Tengo una sugerencia",
+      "ayuda": "Ideas para mejorar Didacta",
+      "pregunta": "¿Qué mejorarías de Didacta?",
+      "pista": "Qué echas en falta o cambiarías de la plataforma, y para qué te serviría."
+    },
+    "FALLO": {
+      "label": "Algo no funciona",
+      "ayuda": "Algo de la plataforma falla",
+      "pregunta": "¿Qué ha pasado?",
+      "pista": "Qué estabas haciendo, qué esperabas y qué ha pasado."
+    },
+    "PROBLEMA": {
+      "label": "Tengo un problema",
+      "ayuda": "Cobros, dominio, correos, acceso…",
       "pregunta": "¿Qué ha pasado?",
       "pista": "Qué estabas haciendo, qué esperabas y qué ha pasado."
     }
@@ -46,7 +67,12 @@
     "enviadoTitulo": "Recibido, gracias",
     "enviadoDescripcion": "El equipo del aula lo verá y te avisaremos cuando cambie de estado.",
     "enviadoTexto": "Hemos guardado tu ticket. Puedes seguirlo en «Tus tickets».",
-    "cerrar": "Cerrar"
+    "cerrar": "Cerrar",
+    "tituloPlataforma": "Escribe al equipo de Didacta",
+    "descripcionPlataforma": "Una sugerencia, un fallo o un problema con la plataforma. Lo lee el equipo de Didacta y te respondemos por correo.",
+    "enviadoDescripcionPlataforma": "El equipo de Didacta lo leerá y te responderemos por correo.",
+    "enviadoTextoPlataforma": "Hemos guardado tu ticket. Lo tienes en «Tus tickets».",
+    "enviadoCorreoPlataforma": "Te escribiremos a {email}."
   },
   "validacion": {
     "vacio": "Escribe tu mensaje.",
@@ -66,7 +92,10 @@
     "subtitulo": "Lo que has contado al equipo del aula y en qué punto está.",
     "nuevo": "Nuevo ticket",
     "vacio": "Aún no has abierto ningún ticket. Si algo no funciona, tienes un problema o se te ocurre una mejora, cuéntanoslo con «Nuevo ticket».",
-    "apagado": "La ayuda no está disponible en esta aula."
+    "apagado": "La ayuda no está disponible en esta aula.",
+    "subtituloPlataforma": "Lo que has escrito al equipo de Didacta. Te respondemos por correo.",
+    "enviadoADidacta": "Enviado a Didacta",
+    "respuestaPorCorreo": "Te responderemos por correo."
   },
   "bandeja": {
     "titulo": "Tickets de soporte",

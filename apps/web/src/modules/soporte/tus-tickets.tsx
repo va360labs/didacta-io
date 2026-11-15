@@ -16,12 +16,15 @@ import { CapturaImagen } from './captura-imagen';
 import { esProhibido, mensajeDeError, soporteApi, type TicketView } from './client';
 import { estadoBadge, ticketPedido } from './logic';
 import { SoporteDialog } from './soporte-dialog';
+import { useSoporteCanal } from './use-soporte';
 
 const FECHA: Intl.DateTimeFormatOptions = { dateStyle: 'medium', timeStyle: 'short' };
 
 /**
  * «Tus tickets» (/support): los tickets de quien mira, del más nuevo al más
- * viejo, con su estado. Nunca la nota interna (la API no la manda).
+ * viejo, con su estado. Nunca la nota interna (la API no la manda). Los que
+ * escribió a Didacta (quien administra el aula) no tienen un estado que cambie
+ * aquí: dicen «Enviado a Didacta» y que la respuesta llega por correo.
  * `?ticket=<id>` marca ese y lleva hasta él: lo usa el aviso de la campana y
  * el correo cuando cambia de estado.
  */
@@ -34,6 +37,8 @@ export function TusTickets() {
   const [apagado, setApagado] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [nuevo, setNuevo] = useState(false);
+  const canal = useSoporteCanal();
+  const aDidacta = canal?.destino === 'PLATAFORMA';
 
   const recargar = useCallback(async () => {
     setError(null);
@@ -71,11 +76,15 @@ export function TusTickets() {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="font-display text-2xl font-bold text-text">{t('mios.titulo')}</h1>
-          <p className="mt-1 text-sm text-text-muted">{t('mios.subtitulo')}</p>
+          <p className="mt-1 text-sm text-text-muted">
+            {aDidacta ? t('mios.subtituloPlataforma') : t('mios.subtitulo')}
+          </p>
         </div>
-        <Button type="button" onClick={() => setNuevo(true)} data-testid="soporte-nuevo">
-          {t('mios.nuevo')}
-        </Button>
+        {canal?.disponible ? (
+          <Button type="button" onClick={() => setNuevo(true)} data-testid="soporte-nuevo">
+            {t('mios.nuevo')}
+          </Button>
+        ) : null}
       </div>
 
       {error ? (
@@ -120,10 +129,20 @@ export function TusTickets() {
               }
             >
               <div className="flex flex-wrap items-center gap-2 text-sm">
-                <span className="font-semibold text-text">{t(`tipos.${ticket.tipo}.label`)}</span>
-                <Badge variant={estadoBadge(ticket.estado)} data-testid="soporte-estado">
-                  {t(`estados.${ticket.estado}`)}
-                </Badge>
+                <span className="font-semibold text-text">
+                  {ticket.destino === 'PLATAFORMA'
+                    ? t(`tiposPlataforma.${ticket.tipo}.label`)
+                    : t(`tipos.${ticket.tipo}.label`)}
+                </span>
+                {ticket.destino === 'PLATAFORMA' ? (
+                  <Badge variant="info" data-testid="soporte-estado">
+                    {t('mios.enviadoADidacta')}
+                  </Badge>
+                ) : (
+                  <Badge variant={estadoBadge(ticket.estado)} data-testid="soporte-estado">
+                    {t(`estados.${ticket.estado}`)}
+                  </Badge>
+                )}
                 <span className="ml-auto text-xs text-text-muted">
                   {formatDateTime(ticket.createdAt, FECHA)}
                 </span>
@@ -131,6 +150,11 @@ export function TusTickets() {
               <p className="mt-2 whitespace-pre-wrap break-words text-sm text-text">
                 {ticket.texto}
               </p>
+              {ticket.destino === 'PLATAFORMA' ? (
+                <p className="mt-2 text-xs text-text-muted" data-testid="soporte-respuesta-correo">
+                  {t('mios.respuestaPorCorreo')}
+                </p>
+              ) : null}
               {ticket.tieneCaptura ? (
                 <div className="mt-3">
                   <CapturaImagen ticketId={ticket.id} />
@@ -145,6 +169,7 @@ export function TusTickets() {
         open={nuevo}
         onClose={() => setNuevo(false)}
         onEnviado={() => void recargar()}
+        destino={canal?.destino ?? 'AULA'}
       />
     </div>
   );

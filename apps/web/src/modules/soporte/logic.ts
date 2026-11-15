@@ -13,6 +13,13 @@ export type TipoTicket = 'FALLO' | 'PROBLEMA' | 'MEJORA';
 export type EstadoTicket = 'NUEVO' | 'EN_CURSO' | 'RESUELTO' | 'DESCARTADO';
 export type TipoCaptura = 'image/png' | 'image/jpeg' | 'image/webp';
 
+/**
+ * A quién va un ticket: AULA (lo abre un miembro: al equipo de su aula) o
+ * PLATAFORMA (lo abre quien administra el aula: al equipo de Didacta). Lo
+ * decide el servidor con los roles de la sesión; la web solo adapta los textos.
+ */
+export type DestinoTicket = 'AULA' | 'PLATAFORMA';
+
 export interface ContextoTicket {
   url?: string;
   userAgent?: string;

@@ -1,7 +1,8 @@
 {
   "boton": {
     "etiqueta": "Help & feedback",
-    "ayuda": "Tell us what is broken or what you would improve"
+    "ayuda": "Tell us what is broken or what you would improve",
+    "ayudaPlataforma": "Write to the Didacta team"
   },
   "tipos": {
     "MEJORA": {
@@ -19,6 +20,26 @@
     "PROBLEMA": {
       "label": "I have a problem",
       "ayuda": "Access, payments, courses…",
+      "pregunta": "What happened?",
+      "pista": "What you were doing, what you expected and what happened."
+    }
+  },
+  "tiposPlataforma": {
+    "MEJORA": {
+      "label": "I have a suggestion",
+      "ayuda": "Ideas to improve Didacta",
+      "pregunta": "What would you improve in Didacta?",
+      "pista": "What you miss or would change in the platform, and what it would help you with."
+    },
+    "FALLO": {
+      "label": "Something is not working",
+      "ayuda": "Something in the platform fails",
+      "pregunta": "What happened?",
+      "pista": "What you were doing, what you expected and what happened."
+    },
+    "PROBLEMA": {
+      "label": "I have a problem",
+      "ayuda": "Payments, domain, emails, access…",
       "pregunta": "What happened?",
       "pista": "What you were doing, what you expected and what happened."
     }
@@ -46,7 +67,12 @@
     "enviadoTitulo": "Received, thank you",
     "enviadoDescripcion": "The academy team will see it and we will let you know when its status changes.",
     "enviadoTexto": "We have saved your ticket. You can follow it in “Your tickets”.",
-    "cerrar": "Close"
+    "cerrar": "Close",
+    "tituloPlataforma": "Write to the Didacta team",
+    "descripcionPlataforma": "A suggestion, a bug or a problem with the platform. The Didacta team reads it and we reply by email.",
+    "enviadoDescripcionPlataforma": "The Didacta team will read it and we will reply by email.",
+    "enviadoTextoPlataforma": "We have saved your ticket. You can find it in “Your tickets”.",
+    "enviadoCorreoPlataforma": "We will write to {email}."
   },
   "validacion": {
     "vacio": "Write your message.",
@@ -66,7 +92,10 @@
     "subtitulo": "What you have told the academy team and where it stands.",
     "nuevo": "New ticket",
     "vacio": "You have not opened any tickets yet. If something is not working, you have a problem or you think of an improvement, tell us with “New ticket”.",
-    "apagado": "Help is not available in this academy."
+    "apagado": "Help is not available in this academy.",
+    "subtituloPlataforma": "What you have written to the Didacta team. We reply by email.",
+    "enviadoADidacta": "Sent to Didacta",
+    "respuestaPorCorreo": "We will reply by email."
   },
   "bandeja": {
     "titulo": "Support tickets",
