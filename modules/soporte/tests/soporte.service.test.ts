@@ -17,6 +17,7 @@ import {
   PLANTILLA_TICKET_ESTADO,
   PLANTILLA_TICKET_NUEVO,
   SoporteService,
+  destinoDe,
   marcasEstado,
   marcasTipo,
   type AutorTicket,
@@ -34,11 +35,21 @@ const HORA = 3600 * 1000;
 const AHORA = new Date('2026-11-12T10:00:00.000Z');
 const mas = (horas: number) => new Date(AHORA.getTime() + horas * HORA);
 
-const ana: AutorTicket = { id: '11111111-1111-4111-8111-111111111111', nombre: 'Ana' };
-const beto: AutorTicket = { id: '22222222-2222-4222-8222-222222222222', nombre: 'Beto' };
+const ana: AutorTicket = {
+  id: '11111111-1111-4111-8111-111111111111',
+  nombre: 'Ana',
+  esAdmin: false,
+};
+const beto: AutorTicket = {
+  id: '22222222-2222-4222-8222-222222222222',
+  nombre: 'Beto',
+  esAdmin: false,
+};
 const ADMIN_ID = '44444444-4444-4444-8444-444444444444';
 const ADMIN2_ID = '55555555-5555-4555-8555-555555555555';
 const admin: Caller = { id: ADMIN_ID, esAdmin: true };
+/** Quien administra el aula escribiendo a Didacta (destino PLATAFORMA). */
+const lucia: AutorTicket = { id: ADMIN_ID, nombre: 'Lucía', esAdmin: true };
 const comoMiembro = (a: AutorTicket): Caller => ({ id: a.id, esAdmin: false });
 
 const PNG = Buffer.concat([
@@ -159,6 +170,7 @@ describe('crear', () => {
       tipo: 'FALLO',
       texto: 'El botón de guardar no hace nada.',
       estado: 'NUEVO',
+      destino: 'AULA',
       tieneCaptura: false,
       createdAt: AHORA.toISOString(),
       updatedAt: expect.any(String),
@@ -180,7 +192,7 @@ describe('crear', () => {
   });
 
   it('sin nombre de cuenta lo guarda vacío, sin una palabra en español', async () => {
-    await crear({ id: ana.id, nombre: '   ' });
+    await crear({ id: ana.id, nombre: '   ', esAdmin: false });
     expect(db.tickets[0]).toMatchObject({ autorNombre: '' });
   });
 
@@ -478,9 +490,10 @@ describe('avisos al equipo del aula al crear', () => {
     expect(extracto.endsWith('…')).toBe(true);
   });
 
-  it('no se avisa a sí mismo un administrador que abre un ticket', async () => {
-    await crearYAvisar({ id: ADMIN_ID, nombre: 'Admin' });
-    expect(new Set(envios.map((e) => e.to))).toEqual(new Set([ADMIN2_ID]));
+  it('el ticket de un miembro NO llega al operador de la plataforma', async () => {
+    await crearYAvisar();
+    expect(envios.filter((e) => e.templateKey === PLANTILLA_TICKET_NUEVO)).toHaveLength(4);
+    expect(operador).toHaveLength(0);
   });
 
   it('solo avisa al equipo del aula del ticket', async () => {
@@ -509,9 +522,45 @@ describe('avisos al equipo del aula al crear', () => {
       {
         name: 'soporte.ticket.created',
         tenantId: T1,
-        data: { ticketId: t.id, autorId: ana.id, tipo: 'FALLO' },
+        data: { ticketId: t.id, autorId: ana.id, tipo: 'FALLO', destino: 'AULA' },
       },
     ]);
+  });
+});
+
+describe('destino: lo decide quién lo abre, en el servidor', () => {
+  it('destinoDe: administrar el aula → PLATAFORMA; si no → AULA', () => {
+    expect(destinoDe(true)).toBe('PLATAFORMA');
+    expect(destinoDe(false)).toBe('AULA');
+  });
+
+  it('un miembro escribe al aula; quien administra, a Didacta', async () => {
+    const delMiembro = await crear(ana);
+    const deLucia = await crear(lucia);
+    expect(delMiembro.destino).toBe('AULA');
+    expect(deLucia.destino).toBe('PLATAFORMA');
+    expect(db.tickets.map((t) => t['destino'])).toEqual(['AULA', 'PLATAFORMA']);
+  });
+
+  it('lo que mande el cliente no cuenta: un «destino» en el cuerpo se ignora', async () => {
+    const t = await crear(ana, { destino: 'PLATAFORMA' } as never);
+    expect(t.destino).toBe('AULA');
+    const u = await crear(lucia, { destino: 'AULA' } as never);
+    expect(u.destino).toBe('PLATAFORMA');
+  });
+
+  it('canal: el miembro siempre tiene a quién escribir; quien administra, solo con operador', () => {
+    expect(svc.canal({ id: ana.id, esAdmin: false })).toEqual({
+      destino: 'AULA',
+      disponible: true,
+    });
+    expect(svc.canal(admin)).toEqual({ destino: 'PLATAFORMA', disponible: true });
+    const sinOperador = construir({ avisarOperador: undefined });
+    expect(sinOperador.canal(admin)).toEqual({ destino: 'PLATAFORMA', disponible: false });
+    expect(sinOperador.canal({ id: ana.id, esAdmin: false })).toEqual({
+      destino: 'AULA',
+      disponible: true,
+    });
   });
 });
 
@@ -566,61 +615,90 @@ describe('en segundo plano: el miembro no espera al correo', () => {
   });
 });
 
-describe('aviso inmediato al operador de la plataforma', () => {
-  it('cada ticket nuevo le llega con el texto entero, el autor y si trae captura', async () => {
+describe('ticket de quien administra: a Didacta, por correo al operador', () => {
+  it('le llega con el texto entero, el autor y la captura ADJUNTA (no tiene bandeja)', async () => {
     const largo = `Empieza aquí. ${'detalle '.repeat(60)}y termina aquí.`;
-    const t = await crearYAvisar(ana, {
+    const t = await crearYAvisar(lucia, {
       tipo: 'PROBLEMA',
       texto: largo,
       captura: { data: PNG.toString('base64'), filename: 'a.png', contentType: 'image/png' },
     });
-    expect(operador).toEqual([
-      {
-        tenantId: T1,
-        ticketId: t.id,
-        tipo: 'PROBLEMA',
-        texto: largo.trim(),
-        autorId: ana.id,
-        autorNombre: 'Ana',
-        tieneCaptura: true,
-        createdAt: AHORA,
-      },
-    ]);
-  });
-
-  it('también cuando el aula no tiene a nadie a quien avisar', async () => {
-    await crearYAvisar(ana, {}, T2);
-    expect(envios).toHaveLength(0);
     expect(operador).toHaveLength(1);
-    expect(operador[0]).toMatchObject({ tenantId: T2, tieneCaptura: false });
+    expect(operador[0]).toEqual({
+      tenantId: T1,
+      ticketId: t.id,
+      tipo: 'PROBLEMA',
+      texto: largo.trim(),
+      autorId: ADMIN_ID,
+      autorNombre: 'Lucía',
+      tieneCaptura: true,
+      captura: { data: PNG, contentType: 'image/webp', nombre: 'a.webp' },
+      createdAt: AHORA,
+    });
   });
 
-  it('sin puerto (Community sin operador) no se avisa a nadie de fuera', async () => {
+  it('NO avisa al equipo del aula: ni campana ni correo a nadie', async () => {
+    await crearYAvisar(lucia);
+    expect(operador).toHaveLength(1);
+    expect(envios).toHaveLength(0);
+  });
+
+  it('sin captura, el aviso lo dice y no adjunta nada', async () => {
+    await crearYAvisar(lucia);
+    expect(operador[0]).toMatchObject({ tieneCaptura: false, captura: null });
+  });
+
+  it('sin operador (Community propia): se guarda como PLATAFORMA y no avisa a nadie', async () => {
     const sinOperador = construir({ avisarOperador: undefined });
-    await sinOperador.crear(T1, ana, base, AHORA);
+    const t = await sinOperador.crear(T1, lucia, base, AHORA);
     await sinOperador.esperarAvisos();
+    expect(t.destino).toBe('PLATAFORMA');
     expect(operador).toHaveLength(0);
-    expect(envios).toHaveLength(4);
+    expect(envios).toHaveLength(0);
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining('sin operador'),
+      expect.objectContaining({ ticketId: t.id }),
+    );
   });
 
-  it('si falla, queda en el log con nivel de error y el equipo sí recibe su aviso', async () => {
+  it('si falla, queda en el log con nivel de error y el ticket sigue guardado', async () => {
     avisarOperador.mockRejectedValue(new Error('SMTP de la plataforma caído'));
-    const t = await crearYAvisar();
+    const t = await crearYAvisar(lucia);
     expect(error).toHaveBeenCalledWith(
       expect.stringContaining('operador'),
       expect.objectContaining({ ticketId: t.id, error: 'SMTP de la plataforma caído' }),
     );
-    expect(envios.filter((e) => e.templateKey === PLANTILLA_TICKET_NUEVO)).toHaveLength(4);
     expect(db.tickets).toHaveLength(1);
   });
 
   it('un ticket rechazado (límite diario) no avisa al operador', async () => {
-    for (let i = 0; i < 5; i++) await crear(ana);
+    for (let i = 0; i < 5; i++) await crear(lucia);
     await svc.esperarAvisos();
     operador.length = 0;
-    await expect(crear(ana)).rejects.toBeInstanceOf(LimiteDiarioError);
+    await expect(crear(lucia)).rejects.toBeInstanceOf(LimiteDiarioError);
     await svc.esperarAvisos();
     expect(operador).toHaveLength(0);
+  });
+
+  it('no sale en la bandeja del aula: ni en la lista, ni en el contador, ni por id', async () => {
+    const delMiembro = await crear(ana, {}, T1, mas(0));
+    const deLucia = await crear(lucia, {}, T1, mas(1));
+    const lista = await svc.listarAdmin(T1, admin, {});
+    expect(lista.items.map((i) => i.id)).toEqual([delMiembro.id]);
+    expect(lista.counts.NUEVO).toBe(1);
+    expect(await svc.menuAdmin(T1, admin)).toEqual({ allowed: true, badge: 1 });
+    await expect(svc.obtenerAdmin(T1, admin, deLucia.id)).rejects.toBeInstanceOf(
+      TicketNoEncontradoError,
+    );
+    await expect(
+      svc.actualizarAdmin(T1, admin, deLucia.id, { estado: 'RESUELTO' }, mas(2)),
+    ).rejects.toBeInstanceOf(TicketNoEncontradoError);
+    expect(db.tickets.find((t) => t['id'] === deLucia.id)!['estado']).toBe('NUEVO');
+  });
+
+  it('su autora lo ve en «Tus tickets», marcado como de Didacta', async () => {
+    const t = await crear(lucia);
+    expect(await svc.mios(T1, ADMIN_ID)).toMatchObject([{ id: t.id, destino: 'PLATAFORMA' }]);
   });
 });
 
@@ -795,8 +873,9 @@ describe('actualizarAdmin', () => {
     expect(avisos()).toHaveLength(2);
   });
 
-  it('el administrador que cambia su propio ticket no se avisa a sí mismo', async () => {
-    const t = await crear({ id: ADMIN_ID, nombre: 'Admin' });
+  it('quien abrió un ticket para el aula y luego pasó a administrarla no se avisa a sí misma', async () => {
+    // Lo abrió siendo miembro (AULA); hoy administra y lo cambia ella.
+    const t = await crear({ id: ADMIN_ID, nombre: 'Lucía', esAdmin: false });
     await svc.esperarAvisos();
     envios = [];
     await svc.actualizarAdmin(T1, admin, t.id, { estado: 'RESUELTO' }, mas(1));
@@ -885,6 +964,13 @@ describe('captura', () => {
     await expect(svc.captura(T1, comoMiembro(beto), sin.id)).rejects.toBeInstanceOf(
       TicketNoEncontradoError,
     );
+  });
+
+  it('ticket a Didacta: la captura solo para su autora; otro admin del aula, 404', async () => {
+    const t = await conCaptura(lucia);
+    await expect(svc.captura(T1, admin, t.id)).resolves.toBeDefined(); // su autora
+    const otroAdmin: Caller = { id: ADMIN2_ID, esAdmin: true };
+    await expect(svc.captura(T1, otroAdmin, t.id)).rejects.toBeInstanceOf(TicketNoEncontradoError);
   });
 
   it('un archivo que ya no está en el storage da 404', async () => {

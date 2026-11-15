@@ -5964,8 +5964,9 @@ model ModRetentionDelivery {
 // mod.soporte — «Ayuda y sugerencias»: tickets de los miembros para el equipo
 // ============================================================================
 //
-// Traído de Community (VA360, PR #358/#359) con el MISMO esquema, para que un
-// arreglo pueda pasar de un repo a otro sin traducir nada. Módulo nuevo
+// Traído de Community (VA360, PR #358/#359) con el MISMO esquema más la columna
+// `destino` (en Cloud lo que abre quien administra el aula va a Didacta, no a su
+// bandeja), para que un arreglo pueda pasar de un repo a otro. Módulo nuevo
 // (ADR-039): solo usa sus tablas (prefijo `mod_soporte_`). El autor es un id
 // lógico de `user`, sin clave foránea fuera del módulo; su nombre se guarda
 // como copia. Una fase 2 añadiría el hilo de mensajes en su propia tabla
@@ -5987,6 +5988,17 @@ enum ModSoporteEstado {
   DESCARTADO
 }
 
+/// A quién va el ticket. Lo decide el servidor con los roles de la sesión de
+/// quien lo abre, nunca el cliente (Valen, 15-nov: «los tickets son para que el
+/// creador pueda comunicarse con nosotros y los alumnos del creador con el
+/// propio creador»).
+enum ModSoporteDestino {
+  /// Lo abre un miembro sin rol de administración: al equipo del aula (su bandeja).
+  AULA
+  /// Lo abre quien administra el aula: a Didacta (correo al operador), no a su bandeja.
+  PLATAFORMA
+}
+
 model ModSoporteTicket {
   id                 String           @id @default(uuid()) @db.Uuid
   tenantId           String           @map("tenant_id") @db.Uuid
@@ -5997,6 +6009,7 @@ model ModSoporteTicket {
   tipo               ModSoporteTipo
   texto              String
   estado             ModSoporteEstado @default(NUEVO)
+  destino            ModSoporteDestino @default(AULA)
   /// Contexto que añade la web sola: dónde estaba la persona y con qué.
   contextoUrl        String?          @map("contexto_url")
   contextoUserAgent  String?          @map("contexto_user_agent")
@@ -6015,7 +6028,7 @@ model ModSoporteTicket {
   createdAt          DateTime         @default(now()) @map("created_at")
   updatedAt          DateTime         @updatedAt @map("updated_at")
 
-  @@index([tenantId, estado, createdAt(sort: Desc)])
+  @@index([tenantId, destino, estado, createdAt(sort: Desc)])
   @@index([tenantId, autorId, createdAt(sort: Desc)])
   @@map("mod_soporte_ticket")
 }

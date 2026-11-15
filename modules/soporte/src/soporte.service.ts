@@ -19,14 +19,23 @@ import {
  *
  * Un miembro envía un ticket (algo no funciona, tengo un problema o una
  * sugerencia) con una captura opcional y el contexto de la pantalla en la que
- * estaba. Ve solo los suyos y su estado, nunca la nota interna. Quien
- * administra el aula los ve todos, cambia el estado y escribe una nota
- * interna.
+ * estaba. Ve solo los suyos y su estado, nunca la nota interna.
+ *
+ * El DESTINO depende de quién lo abre (Valen, 15-nov: «los tickets son para
+ * que el creador pueda comunicarse con nosotros y los alumnos del creador con
+ * el propio creador»). Lo decide el servidor con los roles de la sesión:
+ *   - AULA: lo abre un miembro sin rol de administración. Avisa al equipo del
+ *     aula (campana y correo) y sale en su bandeja, donde cambian el estado y
+ *     escriben una nota interna. El operador de la plataforma no se entera.
+ *   - PLATAFORMA: lo abre quien administra el aula. Va a Didacta: correo
+ *     inmediato al operador (con la captura adjunta; responde por correo). No
+ *     avisa al equipo del aula ni sale en su bandeja.
  *
  * Toda la lógica vive aquí; el controller del host solo resuelve quién llama.
  * Módulo nuevo (ADR-039): no lee ni escribe tablas de otros módulos. El host
  * le pasa:
- *   - `AutorTicket` al crear (id y nombre, que se guarda como copia);
+ *   - `AutorTicket` al crear (id, nombre, que se guarda como copia, y si
+ *     administra el aula, que decide el destino);
  *   - `Caller` en cada lectura (id y si administra el aula);
  *   - `SoportePorts`: quién administra el aula, el almacén de capturas, la
  *     dirección pública del aula, el aviso al operador de la plataforma y cómo
@@ -42,8 +51,9 @@ import {
  *   - Los avisos no llevan texto en español: el tipo y el estado viajan como
  *     marcas (`esFallo`, `estadoResuelto`…) y cada plantilla del hub (es, en,
  *     pt) pone su frase. El idioma lo decide el hub por destinatario.
- *   - Aviso inmediato al operador de la plataforma (Didacta Cloud) de cada
- *     ticket nuevo, si el host lo cablea (`avisarOperador`).
+ *   - El destino (arriba). Sin aviso al operador cableado (`avisarOperador`,
+ *     instalaciones propias de Community), quien administra no tiene a quién
+ *     escribir: `canal()` lo dice y la web no le enseña el botón.
  */
 
 export const TIPOS_TICKET = ['FALLO', 'PROBLEMA', 'MEJORA'] as const;
@@ -54,6 +64,18 @@ export type EstadoTicket = (typeof ESTADOS_TICKET)[number];
 
 /** Estados que cierran el ticket (ponen `closedAt`). */
 export const ESTADOS_CERRADOS: readonly EstadoTicket[] = ['RESUELTO', 'DESCARTADO'];
+
+/** A quién va el ticket: al equipo del aula o a Didacta. */
+export const DESTINOS_TICKET = ['AULA', 'PLATAFORMA'] as const;
+export type DestinoTicket = (typeof DESTINOS_TICKET)[number];
+
+/**
+ * El destino sale SOLO de si quien lo abre administra el aula (roles de la
+ * sesión, que resuelve el host). Nunca de lo que mande el cliente.
+ */
+export function destinoDe(autorEsAdmin: boolean): DestinoTicket {
+  return autorEsAdmin ? 'PLATAFORMA' : 'AULA';
+}
 
 export const LIMITES = {
   textoMin: 5,
@@ -100,6 +122,11 @@ export interface AutorTicket {
   id: string;
   /** Nombre de la cuenta (nunca el email); lo resuelve el host. Puede venir vacío. */
   nombre: string;
+  /**
+   * Administra el aula (super_admin o tenant_admin, por los roles de la
+   * sesión): su ticket va a Didacta, no a la bandeja del aula.
+   */
+  esAdmin: boolean;
 }
 
 export interface Caller {
@@ -128,6 +155,8 @@ export interface TicketView {
   tipo: TipoTicket;
   texto: string;
   estado: EstadoTicket;
+  /** AULA (al equipo del aula) o PLATAFORMA (a Didacta). */
+  destino: DestinoTicket;
   tieneCaptura: boolean;
   createdAt: string;
   updatedAt: string;
@@ -181,7 +210,11 @@ export interface SoporteCapturaStorage {
   get(tenantId: string, key: string): Promise<Buffer>;
 }
 
-/** Lo que el operador de la plataforma recibe de cada ticket nuevo. */
+/**
+ * Lo que el operador de la plataforma recibe de cada ticket que le escribe
+ * quien administra un aula (destino PLATAFORMA). No tiene bandeja: responde
+ * por correo, así que la captura va con el aviso.
+ */
 export interface AvisoOperadorTicket {
   tenantId: string;
   ticketId: string;
@@ -191,7 +224,20 @@ export interface AvisoOperadorTicket {
   autorId: string;
   autorNombre: string;
   tieneCaptura: boolean;
+  /** La captura en sí, para adjuntarla; null sin captura o si no se pudo leer. */
+  captura: CapturaArchivo | null;
   createdAt: Date;
+}
+
+/** Lo que la web necesita saber antes de enseñar el botón a quien llama. */
+export interface CanalSoporte {
+  /** A quién iría un ticket que abriera ahora. */
+  destino: DestinoTicket;
+  /**
+   * ¿Hay alguien al otro lado? Siempre en AULA (su equipo); en PLATAFORMA solo
+   * si el despliegue avisa a un operador.
+   */
+  disponible: boolean;
 }
 
 /** Lo que el host resuelve por el módulo, que no lee tablas core (ADR-039). */
@@ -207,9 +253,10 @@ export interface SoportePorts {
    */
   webBaseUrl?(tenantId: string): Promise<string>;
   /**
-   * Aviso inmediato al operador de la plataforma de cada ticket nuevo (Didacta
-   * Cloud). Sin puerto, nadie de fuera del aula se entera. Si falla, el
-   * módulo lo deja en el log con nivel de error y el ticket sigue guardado.
+   * Aviso inmediato al operador de la plataforma de cada ticket que le
+   * escribe quien administra un aula (Didacta Cloud). Sin puerto (Community
+   * propia) quien administra no tiene a quién escribir. Si falla, el módulo
+   * lo deja en el log con nivel de error y el ticket sigue guardado.
    */
   avisarOperador?(aviso: AvisoOperadorTicket): Promise<void>;
   /**
@@ -227,6 +274,7 @@ interface TicketRow {
   tipo: TipoTicket;
   texto: string;
   estado: EstadoTicket;
+  destino: DestinoTicket;
   contextoUrl: string | null;
   contextoUserAgent: string | null;
   contextoViewport: string | null;
@@ -324,11 +372,23 @@ export class SoporteService {
   // ── Miembros ───────────────────────────────────────────────────────────────
 
   /**
+   * A quién escribiría quien llama y si hay alguien al otro lado. La web lo
+   * pregunta antes de enseñar el botón: quien administra un aula sin
+   * operador configurado (Community propia) no ve una ventana que promete una
+   * respuesta que no va a llegar.
+   */
+  canal(caller: Caller): CanalSoporte {
+    const destino = destinoDe(caller.esAdmin);
+    return { destino, disponible: destino === 'AULA' || Boolean(this.ports.avisarOperador) };
+  }
+
+  /**
    * Envía un ticket. Todo se comprueba antes de guardar nada: tipo, texto,
    * captura y el límite de 5 en 24 horas. Si guardar la captura falla, el
-   * ticket se guarda sin ella (lo importante es que llegue). Responde en
-   * cuanto el ticket está guardado; los avisos al equipo y al operador salen
-   * justo después, en segundo plano, y nunca hacen fallar el envío.
+   * ticket se guarda sin ella (lo importante es que llegue). El destino lo
+   * decide el servidor (`destinoDe`). Responde en cuanto el ticket está
+   * guardado; los avisos (al equipo del aula o al operador, según el destino)
+   * salen justo después, en segundo plano, y nunca hacen fallar el envío.
    */
   async crear(
     tenantId: string,
@@ -339,6 +399,8 @@ export class SoporteService {
     const tipo = validarTipo(input.tipo);
     const texto = validarTexto(input.texto);
     const captura = input.captura ? validarCaptura(input.captura) : null;
+    // Solo de los roles de la sesión: un `destino` en el cuerpo se ignora.
+    const destino = destinoDe(autor.esAdmin === true);
 
     const contexto = input.contexto ?? {};
     // Contar y crear en una transacción con un candado por persona y aula:
@@ -367,6 +429,7 @@ export class SoporteService {
           tipo,
           texto,
           estado: 'NUEVO',
+          destino,
           contextoUrl: recortar(contexto.url, LIMITES.contextoUrl),
           contextoUserAgent: recortar(contexto.userAgent, LIMITES.contextoUserAgent),
           contextoViewport: recortar(contexto.viewport, LIMITES.contextoViewport),
@@ -385,9 +448,23 @@ export class SoporteService {
       ticketId: row.id,
       autorId: row.autorId,
       tipo: row.tipo,
+      destino: row.destino,
     });
     const guardado = row;
-    this.lanzar(tenantId, 'ticket nuevo', () => this.avisarTicketNuevo(guardado));
+    if (guardado.destino === 'PLATAFORMA') {
+      if (!this.ports.avisarOperador) {
+        // Community propia: no hay operador. La web no enseña el botón a quien
+        // administra (`canal`); si llega igual por la API, se guarda y punto.
+        this.ctx?.logger?.warn('mod.soporte: ticket a la plataforma sin operador configurado', {
+          tenantId,
+          ticketId: guardado.id,
+        });
+      } else {
+        this.lanzar(tenantId, 'ticket a la plataforma', () => this.avisarOperador(guardado));
+      }
+    } else {
+      this.lanzar(tenantId, 'ticket nuevo', () => this.avisarAdmins(guardado));
+    }
     return vista(row);
   }
 
@@ -402,33 +479,24 @@ export class SoporteService {
   }
 
   /**
-   * La captura de un ticket, para su autor o quien administra el aula. A
+   * La captura de un ticket, para su autor o, si el ticket es para el aula,
+   * para quien la administra. Un ticket a Didacta no es del equipo del aula:
+   * solo lo ve su autor (el operador la recibe adjunta en el correo). A
    * cualquier otro, o si no hay captura, «no encontrado»: no se dice que existe.
    */
   async captura(tenantId: string, caller: Caller, ticketId: string): Promise<CapturaArchivo> {
     const row = await this.cargar(tenantId, ticketId);
-    if (!caller.esAdmin && row.autorId !== caller.id) throw new TicketNoEncontradoError();
-    const storage = this.ports.storage;
-    if (!row.capturaKey || !storage) throw new TicketNoEncontradoError();
-    let data: Buffer;
-    try {
-      data = await storage.get(tenantId, row.capturaKey);
-    } catch (e) {
-      this.ctx?.logger?.warn('mod.soporte: no se pudo leer la captura', {
-        tenantId,
-        ticketId,
-        error: mensaje(e),
-      });
-      throw new TicketNoEncontradoError();
-    }
-    return {
-      data,
-      contentType: row.capturaContentType ?? 'application/octet-stream',
-      nombre: row.capturaNombre ?? `captura.${extensionDe(row.capturaContentType ?? '')}`,
-    };
+    const delEquipo = caller.esAdmin && row.destino === 'AULA';
+    if (!delEquipo && row.autorId !== caller.id) throw new TicketNoEncontradoError();
+    const archivo = await this.leerCaptura(row);
+    if (!archivo) throw new TicketNoEncontradoError();
+    return archivo;
   }
 
   // ── Equipo del aula ────────────────────────────────────────────────────────
+  // La bandeja es para lo que escriben los miembros (destino AULA). Lo que
+  // quien administra escribe a Didacta no sale aquí: ni en la lista, ni en el
+  // contador, ni por id (404).
 
   /** Tickets del aula (filtrados, los 200 más nuevos) y cuántos hay en cada estado. */
   async listarAdmin(
@@ -445,11 +513,13 @@ export class SoporteService {
       : undefined;
     const [rows, ...porEstado] = await Promise.all([
       this.tickets.findMany({
-        where: { tenantId, estado, tipo },
+        where: { tenantId, destino: 'AULA', estado, tipo },
         orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
         take: LIMITES.listaAdmin,
       }) as Promise<TicketRow[]>,
-      ...ESTADOS_TICKET.map((e) => this.tickets.count({ where: { tenantId, estado: e } })),
+      ...ESTADOS_TICKET.map((e) =>
+        this.tickets.count({ where: { tenantId, destino: 'AULA', estado: e } }),
+      ),
     ]);
     const counts = Object.fromEntries(
       ESTADOS_TICKET.map((e, i) => [e, porEstado[i] ?? 0]),
@@ -467,13 +537,15 @@ export class SoporteService {
     caller: Caller,
   ): Promise<{ allowed: false } | { allowed: true; badge: number }> {
     if (!caller.esAdmin) return { allowed: false };
-    const badge = await this.tickets.count({ where: { tenantId, estado: 'NUEVO' } });
+    const badge = await this.tickets.count({
+      where: { tenantId, destino: 'AULA', estado: 'NUEVO' },
+    });
     return { allowed: true, badge };
   }
 
   async obtenerAdmin(tenantId: string, caller: Caller, ticketId: string): Promise<AdminTicketView> {
     soloAdmin(caller);
-    return vistaAdmin(await this.cargar(tenantId, ticketId));
+    return vistaAdmin(await this.cargarDeLaBandeja(tenantId, ticketId));
   }
 
   /**
@@ -496,7 +568,7 @@ export class SoporteService {
       throw new TextoInvalidoError('ESTADO_INVALIDO');
     }
     const nota = tocaNota ? validarNota(cambios.notaInterna) : undefined;
-    const antes = await this.cargar(tenantId, ticketId);
+    const antes = await this.cargarDeLaBandeja(tenantId, ticketId);
 
     const data: Record<string, unknown> = {};
     if (tocaNota) data['notaInterna'] = nota;
@@ -551,6 +623,34 @@ export class SoporteService {
     })) as TicketRow | null;
     if (!row) throw new TicketNoEncontradoError();
     return row;
+  }
+
+  /** Un ticket de la bandeja del aula (destino AULA); uno a Didacta es «no encontrado». */
+  private async cargarDeLaBandeja(tenantId: string, ticketId: string): Promise<TicketRow> {
+    const row = await this.cargar(tenantId, ticketId);
+    if (row.destino !== 'AULA') throw new TicketNoEncontradoError();
+    return row;
+  }
+
+  /** La captura de un ticket desde el storage del aula; `null` si no tiene o no se puede leer. */
+  private async leerCaptura(row: TicketRow): Promise<CapturaArchivo | null> {
+    const storage = this.ports.storage;
+    if (!row.capturaKey || !storage) return null;
+    try {
+      const data = await storage.get(row.tenantId, row.capturaKey);
+      return {
+        data,
+        contentType: row.capturaContentType ?? 'application/octet-stream',
+        nombre: row.capturaNombre ?? `captura.${extensionDe(row.capturaContentType ?? '')}`,
+      };
+    } catch (e) {
+      this.ctx?.logger?.warn('mod.soporte: no se pudo leer la captura', {
+        tenantId: row.tenantId,
+        ticketId: row.id,
+        error: mensaje(e),
+      });
+      return null;
+    }
   }
 
   /**
@@ -644,12 +744,11 @@ export class SoporteService {
     );
   }
 
-  /** Ticket nuevo: al operador de la plataforma y al equipo del aula, a la vez. */
-  private async avisarTicketNuevo(row: TicketRow): Promise<void> {
-    await Promise.all([this.avisarOperador(row), this.avisarAdmins(row)]);
-  }
-
-  /** Al operador de la plataforma (Cloud). Un fallo queda en el log con nivel de error. */
+  /**
+   * Ticket a Didacta (destino PLATAFORMA): al operador de la plataforma, con
+   * la captura adjunta (no tiene bandeja). Un fallo queda en el log con nivel
+   * de error.
+   */
   private async avisarOperador(row: TicketRow): Promise<void> {
     const avisar = this.ports.avisarOperador;
     if (!avisar) return;
@@ -662,6 +761,7 @@ export class SoporteService {
         autorId: row.autorId,
         autorNombre: row.autorNombre,
         tieneCaptura: row.capturaKey !== null,
+        captura: await this.leerCaptura(row),
         createdAt: row.createdAt,
       });
     } catch (e) {
@@ -673,7 +773,10 @@ export class SoporteService {
     }
   }
 
-  /** A cada administrador del aula (menos al autor), en la campana y por correo. */
+  /**
+   * Ticket para el aula (destino AULA): a cada persona que la administra
+   * (menos al autor), en la campana y por correo.
+   */
   private async avisarAdmins(row: TicketRow): Promise<void> {
     let admins: string[];
     try {
@@ -807,6 +910,7 @@ function vista(row: TicketRow): TicketView {
     tipo: row.tipo,
     texto: row.texto,
     estado: row.estado,
+    destino: row.destino,
     tieneCaptura: row.capturaKey !== null,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),

@@ -9,6 +9,7 @@ import { SoporteService } from './soporte.service.js';
 
 export { manifest };
 export {
+  DESTINOS_TICKET,
   ESTADOS_CERRADOS,
   ESTADOS_TICKET,
   LIMITES,
@@ -18,6 +19,7 @@ export {
   RUTA_MIS_TICKETS,
   SoporteService,
   TIPOS_TICKET,
+  destinoDe,
   extracto,
   marcasEstado,
   marcasTipo,
@@ -27,6 +29,8 @@ export {
   type AdminTicketView,
   type AutorTicket,
   type AvisoOperadorTicket,
+  type CanalSoporte,
+  type DestinoTicket,
   type Caller,
   type CambiosAdmin,
   type CapturaArchivo,

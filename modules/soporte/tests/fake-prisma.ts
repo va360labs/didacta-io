@@ -162,6 +162,7 @@ export function fakePrisma() {
     () => ({
       id: randomUUID(),
       estado: 'NUEVO',
+      destino: 'AULA',
       contextoUrl: null,
       contextoUserAgent: null,
       contextoViewport: null,
