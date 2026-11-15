@@ -197,6 +197,12 @@
 : "${E2E_MAILPIT_SMTP_HOST:=127.0.0.1}"
 : "${E2E_MAILPIT_SMTP_PORT:=1026}"
 
+# Aviso al operador de cada ticket nuevo de «Ayuda y sugerencias» (mod.soporte),
+# como `valen@va360labs.com` en el pool. Sale por el SMTP de la plataforma; sin
+# él (este arnés no lo tiene), por el del aula. `soporte.spec.ts` lo lee del
+# buzón de pruebas. Solo lo dispara abrir un ticket: no afecta a otros specs.
+: "${SUPPORT_OPERATOR_ALERT_EMAIL:=operador-soporte@didacta-e2e.test}"
+
 E2E_ENV_VARS="
 DATABASE_URL REDIS_URL
 E2E_PG_CONTAINER E2E_PG_USER E2E_PG_DB E2E_PG_PORT
@@ -214,6 +220,7 @@ STRIPE_ALLOW_GLOBAL_FALLBACK ZOOM_ALLOW_STUB E2E_STRIPE_DOUBLE_PORT STRIPE_TEST_
 E2E_BUNNY_DOUBLE_PORT BUNNY_STREAM_API_KEY BUNNY_STREAM_LIBRARY_ID BUNNY_STREAM_CDN_HOSTNAME
 BUNNY_STREAM_TOKEN_KEY BUNNY_STREAM_WEBHOOK_SECRET BUNNY_STREAM_API_BASE_URL BUNNY_STREAM_TUS_ENDPOINT
 E2E_MAILPIT_URL E2E_MAILPIT_SMTP_HOST E2E_MAILPIT_SMTP_PORT
+SUPPORT_OPERATOR_ALERT_EMAIL
 "
 
 # shellcheck disable=SC2086
