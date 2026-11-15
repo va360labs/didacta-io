@@ -6,7 +6,7 @@
 import { expect, test, type Browser, type Page } from '@playwright/test';
 import { mailById, mailsTo, smtpForMailpit, type MailpitFull } from '../helpers/mailpit';
 import { fotoPngBase64 } from '../helpers/png';
-import { aulaConCreador, alumno, notificaciones, type Auth } from '../helpers/retencion';
+import { aulaConCreador, alumno, notificaciones, signinAs, type Auth } from '../helpers/retencion';
 import { injectSession } from '../helpers/auth';
 import { apiAs, type FreshTenant } from '../helpers/simple-tenant';
 
@@ -18,13 +18,20 @@ import { apiAs, type FreshTenant } from '../helpers/simple-tenant';
  * Lo que protege:
  *  - El módulo está ENCENDIDO en un aula nueva sin tocar nada (así nace en
  *    Cloud) y el botón sale en la cabecera del modo sencillo.
- *  - El miembro abre un «Algo no funciona» con captura y lo ve en «Tus
- *    tickets» como «Nuevo», con su captura.
- *  - El OPERADOR de la plataforma (`SUPPORT_OPERATOR_ALERT_EMAIL`) recibe el
- *    correo en el momento, en español, con el aula y su dominio, el tipo, el
- *    texto entero, quién lo abre, la captura y el enlace al ticket. Con el SMTP
- *    de la plataforma (como el pool) el aula no tiene SMTP propio; en un arnés
- *    sin él, se le pone al aula y el aviso sale por ahí.
+ *  - El destino depende de quién lo abre (Valen, 15-nov: «los tickets son para
+ *    que el creador pueda comunicarse con nosotros y los alumnos del creador
+ *    con el propio creador»):
+ *      · ALUMNO → su aula: abre un «Algo no funciona» con captura, lo ve en
+ *        «Tus tickets» como «Nuevo»; el equipo del aula recibe su correo en el
+ *        idioma del aula y el OPERADOR NO recibe nada (Mailpit).
+ *      · CREADORA → Didacta: la ventana le dice que escribe al equipo de
+ *        Didacta; el operador (`SUPPORT_OPERATOR_ALERT_EMAIL`) recibe el correo
+ *        en el momento, en español, diciendo que es del CREADOR del aula, con
+ *        Reply-To de la creadora y la captura adjunta; NO sale en la bandeja
+ *        del aula ni en la campana ni el correo de nadie del equipo; en «Tus
+ *        tickets» dice «Enviado a Didacta».
+ *    Con el SMTP de la plataforma (como el pool) el aula no tiene SMTP propio;
+ *    en un arnés sin él, se le pone al aula y los correos salen por ahí.
  *  - El equipo lo encuentra en «Más» → «Tickets de soporte», lo pasa a
  *    «Resuelto» con una nota interna; el miembro ve «Resuelto», recibe su aviso
  *    (campana y correo) y nunca la nota.
@@ -32,7 +39,8 @@ import { apiAs, type FreshTenant } from '../helpers/simple-tenant';
  *  - El tope de 5 al día aguanta envíos A LA VEZ (5 entran, el resto 429) y la
  *    captura de otro da 404; una página HTML que dice ser PNG, 400.
  *  - La interfaz y los avisos al equipo y al miembro van en el idioma del aula:
- *    un aula en inglés (móvil) y otra en portugués (escritorio).
+ *    un aula en inglés (móvil) y otra en portugués (escritorio), también la
+ *    ventana de la creadora que escribe a Didacta.
  */
 
 test.describe.configure({ mode: 'serial' });
@@ -90,15 +98,32 @@ async function prepararCorreo(aula: FreshTenant, creador: Auth): Promise<boolean
   return plataforma;
 }
 
+/** Lo que Mailpit da de un mensaje entero, con Reply-To y adjuntos. */
+type Correo = MailpitFull & {
+  ReplyTo?: Array<{ Address: string; Name?: string }>;
+  Attachments?: Array<{ FileName: string; ContentType: string }>;
+};
+
 /** El correo más reciente a `to` cuyo asunto cumple `asunto`, esperando hasta `ms`. */
-async function correo(to: string, asunto: RegExp, ms = 20_000): Promise<MailpitFull> {
+async function correo(to: string, asunto: RegExp, ms = 20_000): Promise<Correo> {
   const hasta = Date.now() + ms;
   while (Date.now() < hasta) {
     const m = (await mailsTo(to).catch(() => [])).find((x) => asunto.test(x.Subject));
-    if (m) return mailById(m.ID);
+    if (m) return (await mailById(m.ID)) as Correo;
     await new Promise((r) => setTimeout(r, 300));
   }
   throw new Error(`No llegó a ${to} un correo con asunto ${asunto} en ${ms} ms`);
+}
+
+/**
+ * Que NO llega un correo a `to` con ese asunto. Solo tiene sentido DESPUÉS de
+ * ver llegar el correo que sale en la misma tanda de avisos (control): así la
+ * espera no es un sleep a ciegas.
+ */
+async function ningunCorreo(to: string, asunto: RegExp, ms = 2_500): Promise<void> {
+  await new Promise((r) => setTimeout(r, ms));
+  const llegados = (await mailsTo(to).catch(() => [])).filter((x) => asunto.test(x.Subject));
+  expect(llegados.map((m) => m.Subject)).toEqual([]);
 }
 
 async function abrirComo(
@@ -140,6 +165,7 @@ let viaPlataforma = false;
 
 /** Nombre del aula: único por pasada, porque el buzón de pruebas es compartido. */
 const ACADEMIA = `Cerámica Soporte ${STAMP}`;
+const CREADORA = `Lucía Creadora ${STAMP}`;
 
 test.beforeAll(async () => {
   ({ aula, creador: creadora } = await aulaConCreador('sop', true));
@@ -147,6 +173,11 @@ test.beforeAll(async () => {
     method: 'PUT',
     bearer: creadora.tokens.accessToken,
     body: { name: ACADEMIA, locale: 'es' },
+  });
+  await apiAs(aula.host, '/api/v1/me/profile', {
+    method: 'PATCH',
+    bearer: creadora.tokens.accessToken,
+    body: { name: CREADORA },
   });
   ana = await alumno(aula, `ana-${STAMP}@${aula.slug}.test`, `Ana Soporte ${STAMP}`);
   beto = await alumno(aula, `beto-${STAMP}@${aula.slug}.test`, `Beto Soporte ${STAMP}`);
@@ -214,39 +245,21 @@ test('el miembro abre un fallo con captura desde la cabecera y lo ve en «Tus ti
   ticketId = creado!.id;
 });
 
-test('el operador recibe el correo EN EL MOMENTO, en español y con todo lo necesario', async () => {
-  const m = await correo(OPERADOR, new RegExp(`^\\[Soporte\\] ${ACADEMIA}:`), 15_000);
-  expect(m.Subject).toBe(`[Soporte] ${ACADEMIA}: algo no funciona — Ana Soporte ${STAMP}`);
-  for (const trozo of [
-    `Ticket nuevo en «${ACADEMIA}»`,
-    TEXTO,
-    aula.host,
-    'Algo no funciona',
-    `Ana Soporte ${STAMP} <${ana.user.email}>`,
-    'Sí (se ve en el ticket)',
-    `/admin/support?ticket=${ticketId}`,
-  ]) {
-    expect(m.Text, trozo).toContain(trozo);
-  }
-  if (viaPlataforma) {
-    // Con el SMTP de la plataforma (el pool), el aula no tiene SMTP propio y
-    // sale igual, firmado por la plataforma.
-    expect(m.From).toMatchObject({
-      Name: 'Didacta soporte',
-      Address: 'plataforma@didacta-e2e.test',
-    });
-  } else {
-    // Sin SMTP de plataforma sale por el del aula, con el remitente que el
-    // aula configuró (io no reescribe el de un SMTP propio).
-    expect(m.From.Address).toBe(`hola@${aula.slug}.example.com`);
-  }
-  // Y quien administra el aula recibe SU aviso, en el idioma del aula.
-  const equipo = await correo(aula.creatorEmail, /^Ticket de soporte: /);
+test('ticket del alumno: llega al equipo del aula y NO al operador de la plataforma', async () => {
+  // Quien administra el aula recibe SU aviso, en el idioma del aula…
+  const equipo = await correo(aula.creatorEmail, /^Ticket de soporte: Ana Soporte/, 15_000);
   expect(equipo.Subject).toBe(
     `Ticket de soporte: Ana Soporte ${STAMP} avisa de que algo no funciona`,
   );
   expect(equipo.Text).toContain(`«${TEXTO}»`);
   expect(equipo.Text).toContain(`/admin/support?ticket=${ticketId}`);
+  // …y al operador no le llega nada de este ticket (sale en la misma tanda que
+  // el del equipo, que ya ha llegado: no es una espera a ciegas).
+  await ningunCorreo(OPERADOR, new RegExp(ACADEMIA));
+  const campana = (await notificaciones(aula, creadora)).filter(
+    (n) => n.templateKey === 'soporte.ticket.nuevo' && n.metadata?.['ticketId'] === ticketId,
+  );
+  expect(campana).toHaveLength(1);
 });
 
 test('el equipo lo encuentra en «Más», ve contexto y captura, y lo resuelve con una nota', async ({
@@ -383,6 +396,124 @@ test('tope de 5 al día con envíos A LA VEZ: entran 5 y el resto 429', async ()
   }
 });
 
+test('la creadora escribe a DIDACTA: correo al operador con Reply-To y nada en su bandeja ni en la campana', async ({
+  browser,
+}) => {
+  const texto = `No puedo conectar mi dominio propio (${STAMP})`;
+  const canal = await apiAs<{ destino: string; disponible: boolean }>(aula.host, `${BASE}/canal`, {
+    bearer: creadora.tokens.accessToken,
+  });
+  expect(canal).toEqual({ destino: 'PLATAFORMA', disponible: true });
+  // Control: para un alumno, su aula.
+  expect(await apiAs(aula.host, `${BASE}/canal`, { bearer: ana.tokens.accessToken })).toEqual({
+    destino: 'AULA',
+    disponible: true,
+  });
+
+  const { page, close } = await abrirComo(browser, aula, creadora, '/start');
+  try {
+    await boton(page).click();
+    const dialogo = page.getByRole('dialog');
+    await expect(
+      dialogo.getByRole('heading', { name: 'Escribe al equipo de Didacta' }),
+    ).toBeVisible();
+    await expect(
+      dialogo.getByText(
+        'Una sugerencia, un fallo o un problema con la plataforma. Lo lee el equipo de Didacta y te respondemos por correo.',
+      ),
+    ).toBeVisible();
+    await expect(dialogo.getByRole('radio', { name: 'Tengo una sugerencia' })).toBeChecked();
+    await expect(dialogo.getByLabel('¿Qué mejorarías de Didacta?')).toBeVisible();
+    await dialogo.getByRole('radio', { name: 'Tengo un problema' }).check();
+    await dialogo.getByLabel('¿Qué ha pasado?').fill(texto);
+    await dialogo.getByTestId('soporte-captura-input').setInputFiles({
+      name: 'dominio.png',
+      mimeType: 'image/png',
+      buffer: PNG,
+    });
+    await dialogo.getByTestId('soporte-enviar').click();
+    await expect(dialogo.getByTestId('soporte-enviado')).toHaveText(
+      'Hemos guardado tu ticket. Lo tienes en «Tus tickets».',
+    );
+    await expect(dialogo.getByTestId('soporte-enviado-correo')).toHaveText(
+      `Te escribiremos a ${aula.creatorEmail}.`,
+    );
+    await dialogo.getByTestId('soporte-ver-tickets').click();
+    await expect(page.getByRole('heading', { level: 1, name: 'Tus tickets' })).toBeVisible();
+    await expect(
+      page.getByText('Lo que has escrito al equipo de Didacta. Te respondemos por correo.'),
+    ).toBeVisible();
+    const ticket = page.getByTestId('soporte-ticket').filter({ hasText: texto });
+    await expect(ticket.getByTestId('soporte-estado')).toHaveText('Enviado a Didacta');
+    await expect(ticket.getByTestId('soporte-respuesta-correo')).toHaveText(
+      'Te responderemos por correo.',
+    );
+  } finally {
+    await close();
+  }
+
+  const mios = await apiAs<Array<{ id: string; texto: string; destino: string }>>(
+    aula.host,
+    `${BASE}/tickets/mios`,
+    { bearer: creadora.tokens.accessToken },
+  );
+  const suyo = mios.find((t) => t.texto === texto)!;
+  expect(suyo.destino).toBe('PLATAFORMA');
+
+  // Al operador, en el momento: del CREADOR, con Reply-To y la captura adjunta.
+  const op = await correo(OPERADOR, new RegExp(`^\\[Soporte\\] Creador de ${ACADEMIA}:`), 15_000);
+  expect(op.Subject).toBe(`[Soporte] Creador de ${ACADEMIA}: tiene un problema — ${CREADORA}`);
+  expect(op.ReplyTo?.map((r) => r.Address)).toEqual([aula.creatorEmail]);
+  expect(op.Attachments?.map((a) => a.ContentType)).toEqual([expect.stringMatching(/^image\//)]);
+  for (const trozo of [
+    `Ticket del CREADOR de «${ACADEMIA}»`,
+    texto,
+    aula.host,
+    `${CREADORA} <${aula.creatorEmail}>`,
+    'Tiene un problema',
+    'Sí, va adjunta a este correo',
+    `Contesta a este correo: la respuesta le llega a ${aula.creatorEmail}.`,
+  ]) {
+    expect(op.Text, trozo).toContain(trozo);
+  }
+  if (viaPlataforma) {
+    expect(op.From).toMatchObject({
+      Name: 'Didacta soporte',
+      Address: 'plataforma@didacta-e2e.test',
+    });
+  } else {
+    // Sin SMTP de plataforma sale por el del aula, con el remitente que el
+    // aula configuró (io no reescribe el de un SMTP propio).
+    expect(op.From.Address).toBe(`hola@${aula.slug}.example.com`);
+  }
+
+  // NO es de la bandeja del aula: ni en la lista, ni por id, ni en el contador.
+  const lista = await llamar(aula, `${BASE}/admin/tickets`, {
+    bearer: creadora.tokens.accessToken,
+  });
+  const ids = (lista.body?.['items'] as Array<{ id: string }>).map((i) => i.id);
+  expect(ids).not.toContain(suyo.id);
+  expect(ids).toContain(ticketId); // control: el del alumno sí
+  expect(
+    (
+      await llamar(aula, `${BASE}/admin/tickets/${suyo.id}`, {
+        bearer: creadora.tokens.accessToken,
+      })
+    ).status,
+  ).toBe(404);
+
+  // NI en la campana ni en el correo de nadie del equipo del aula.
+  const operadorDelAula = await signinAs(aula, `operador@${aula.slug}.test`, aula.password);
+  for (const quien of [creadora, operadorDelAula]) {
+    const campana = (await notificaciones(aula, quien)).filter(
+      (n) => n.metadata?.['ticketId'] === suyo.id,
+    );
+    expect(campana).toHaveLength(0);
+  }
+  await ningunCorreo(aula.creatorEmail, new RegExp(`Ticket de soporte: ${CREADORA}`), 500);
+  await ningunCorreo(`operador@${aula.slug}.test`, new RegExp(`Ticket de soporte: ${CREADORA}`), 0);
+});
+
 test('apagado desde Módulos: 403 en la API y el botón no sale; al encenderlo, vuelve', async ({
   browser,
 }) => {
@@ -472,14 +603,13 @@ test('aula en inglés, en el móvil: botón, ventana, «Your tickets», bandeja 
     await m.close();
   }
 
-  // El operador, en español (es para él); el equipo del aula, en inglés.
-  const op = await correo(OPERADOR, new RegExp(`\\[Soporte\\] ${en.aula.slug}:`), 15_000);
-  expect(op.Text).toContain(texto);
+  // El equipo del aula, en inglés; el operador no se entera (es de un alumno).
   const equipo = await correo(en.aula.creatorEmail, /^Support ticket: /);
   expect(equipo.Subject).toBe(
     `Support ticket: Member ${STAMP} reports that something is not working`,
   );
   expect(equipo.Text).toContain('opened a ticket in "Help & feedback"');
+  await ningunCorreo(OPERADOR, new RegExp(en.aula.slug));
 
   const id = (
     await apiAs<Array<{ id: string; texto: string }>>(en.aula.host, `${BASE}/tickets/mios`, {
@@ -499,6 +629,35 @@ test('aula en inglés, en el móvil: botón, ventana, «Your tickets», bandeja 
   }
   const aviso = await correo(en.miembro.user.email, /^Your support ticket is resolved$/);
   expect(aviso.Text).toContain('is now "Resolved"');
+
+  // La creadora del aula en inglés escribe a Didacta: su ventana, en inglés.
+  const textoCreadora = `My custom domain does not connect (${STAMP})`;
+  const c = await abrirComo(browser, en.aula, en.creador, '/start', movil);
+  try {
+    await boton(c.page).click();
+    const dialogo = c.page.getByRole('dialog');
+    await expect(dialogo.getByRole('heading', { name: 'Write to the Didacta team' })).toBeVisible();
+    await expect(dialogo.getByLabel('What would you improve in Didacta?')).toBeVisible();
+    await dialogo.getByRole('radio', { name: 'Something is not working' }).check();
+    await dialogo.getByLabel('What happened?').fill(textoCreadora);
+    await dialogo.getByTestId('soporte-enviar').click();
+    await expect(dialogo.getByTestId('soporte-enviado-correo')).toHaveText(
+      `We will write to ${en.aula.creatorEmail}.`,
+    );
+    await dialogo.getByTestId('soporte-ver-tickets').click();
+    const suyo = c.page.getByTestId('soporte-ticket').filter({ hasText: textoCreadora });
+    await expect(suyo.getByTestId('soporte-estado')).toHaveText('Sent to Didacta');
+    await expect(suyo.getByTestId('soporte-respuesta-correo')).toHaveText(
+      'We will reply by email.',
+    );
+    await expect(c.page.locator('body')).not.toContainText(/Enviado a Didacta|Tus tickets/);
+  } finally {
+    await c.close();
+  }
+  // Al operador, en español, con Reply-To de la creadora.
+  const op = await correo(OPERADOR, new RegExp(`^\\[Soporte\\] Creador de ${en.aula.slug}:`));
+  expect(op.Text).toContain(textoCreadora);
+  expect(op.ReplyTo?.map((r) => r.Address)).toEqual([en.aula.creatorEmail]);
 });
 
 test('aula en portugués de Brasil: ventana, «Seus tickets» y aviso al equipo en portugués', async ({
@@ -527,4 +686,33 @@ test('aula en portugués de Brasil: ventana, «Seus tickets» y aviso al equipo 
   const equipo = await correo(pt.aula.creatorEmail, /^Ticket de suporte: /);
   expect(equipo.Subject).toBe(`Ticket de suporte: Member ${STAMP} está com um problema`);
   expect(equipo.Text).toContain('abriu um ticket em "Ajuda e sugestões"');
+  await ningunCorreo(OPERADOR, new RegExp(pt.aula.slug));
+
+  // A criadora escreve para a Didacta: a janela dela, em português.
+  const textoCriadora = `Não consigo configurar os pagamentos (${STAMP})`;
+  const c = await abrirComo(browser, pt.aula, pt.creador, '/start', { locale: 'pt-BR' });
+  try {
+    await boton(c.page).click();
+    const dialogo = c.page.getByRole('dialog');
+    await expect(
+      dialogo.getByRole('heading', { name: 'Escreva para a equipe da Didacta' }),
+    ).toBeVisible();
+    await expect(dialogo.getByLabel('O que você melhoraria na Didacta?')).toBeVisible();
+    await dialogo.getByRole('radio', { name: 'Estou com um problema' }).check();
+    await dialogo.getByLabel('O que aconteceu?').fill(textoCriadora);
+    await dialogo.getByTestId('soporte-enviar').click();
+    await expect(dialogo.getByTestId('soporte-enviado-correo')).toHaveText(
+      `Vamos escrever para ${pt.aula.creatorEmail}.`,
+    );
+    await dialogo.getByTestId('soporte-ver-tickets').click();
+    const suyo = c.page.getByTestId('soporte-ticket').filter({ hasText: textoCriadora });
+    await expect(suyo.getByTestId('soporte-estado')).toHaveText('Enviado à Didacta');
+    await expect(suyo.getByTestId('soporte-respuesta-correo')).toHaveText(
+      'Responderemos por e-mail.',
+    );
+  } finally {
+    await c.close();
+  }
+  const op = await correo(OPERADOR, new RegExp(`^\\[Soporte\\] Creador de ${pt.aula.slug}:`));
+  expect(op.ReplyTo?.map((r) => r.Address)).toEqual([pt.aula.creatorEmail]);
 });
