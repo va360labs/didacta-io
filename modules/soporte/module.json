@@ -1,0 +1,14 @@
+{
+  "name": "soporte",
+  "version": "1.0.0",
+  "edition": "community",
+  "coreVersionRequired": "^0.1.0",
+  "displayName": "Ayuda y sugerencias · tickets de soporte",
+  "category": "community",
+  "tablePrefix": "mod_soporte_",
+  "permissions": ["soporte.send", "soporte.manage"],
+  "events": [{ "name": "soporte.ticket.created" }, { "name": "soporte.ticket.status_changed" }],
+  "hooks": [],
+  "apiNamespace": "/modules/soporte",
+  "surfaces": ["alumno", "admin"]
+}

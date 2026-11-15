@@ -5959,3 +5959,63 @@ model ModRetentionDelivery {
   @@index([tenantId, automationId, status])
   @@map("mod_retention_delivery")
 }
+
+// ============================================================================
+// mod.soporte — «Ayuda y sugerencias»: tickets de los miembros para el equipo
+// ============================================================================
+//
+// Traído de Community (VA360, PR #358/#359) con el MISMO esquema, para que un
+// arreglo pueda pasar de un repo a otro sin traducir nada. Módulo nuevo
+// (ADR-039): solo usa sus tablas (prefijo `mod_soporte_`). El autor es un id
+// lógico de `user`, sin clave foránea fuera del módulo; su nombre se guarda
+// como copia. Una fase 2 añadiría el hilo de mensajes en su propia tabla
+// (`mod_soporte_mensaje`), sin tocar esta.
+
+enum ModSoporteTipo {
+  /// «Algo no funciona».
+  FALLO
+  /// «Tengo un problema».
+  PROBLEMA
+  /// «Tengo una sugerencia».
+  MEJORA
+}
+
+enum ModSoporteEstado {
+  NUEVO
+  EN_CURSO
+  RESUELTO
+  DESCARTADO
+}
+
+model ModSoporteTicket {
+  id                 String           @id @default(uuid()) @db.Uuid
+  tenantId           String           @map("tenant_id") @db.Uuid
+  /// ID lógico de quien lo envía (tabla core `user`, sin FK cross-module).
+  autorId            String           @map("autor_id") @db.Uuid
+  /// Copia del nombre de la cuenta al enviarlo (nunca el email).
+  autorNombre        String           @map("autor_nombre")
+  tipo               ModSoporteTipo
+  texto              String
+  estado             ModSoporteEstado @default(NUEVO)
+  /// Contexto que añade la web sola: dónde estaba la persona y con qué.
+  contextoUrl        String?          @map("contexto_url")
+  contextoUserAgent  String?          @map("contexto_user_agent")
+  contextoViewport   String?          @map("contexto_viewport")
+  contextoAt         DateTime?        @map("contexto_at")
+  /// Clave de la captura en el storage del aula. Nunca sale al navegador:
+  /// se entrega por la ruta del módulo, que comprueba quién la pide.
+  capturaKey         String?          @map("captura_key")
+  capturaContentType String?          @map("captura_content_type")
+  capturaNombre      String?          @map("captura_nombre")
+  capturaSize        Int?             @map("captura_size")
+  /// Solo para el equipo: el autor nunca la ve.
+  notaInterna        String?          @map("nota_interna")
+  /// Cuándo pasó a resuelto o descartado. Se limpia al reabrirlo.
+  closedAt           DateTime?        @map("closed_at")
+  createdAt          DateTime         @default(now()) @map("created_at")
+  updatedAt          DateTime         @updatedAt @map("updated_at")
+
+  @@index([tenantId, estado, createdAt(sort: Desc)])
+  @@index([tenantId, autorId, createdAt(sort: Desc)])
+  @@map("mod_soporte_ticket")
+}
