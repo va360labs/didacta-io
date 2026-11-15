@@ -32,12 +32,12 @@ describe('SUPPORT_OPERATOR_ALERT_EMAIL', () => {
 
   it('con un correo, ese (sin espacios)', () => {
     expect(
-      readSupportOperatorConfig({ SUPPORT_OPERATOR_ALERT_EMAIL: ' valen@va360labs.com ' }),
-    ).toEqual({ alertEmail: 'valen@va360labs.com', problem: null });
+      readSupportOperatorConfig({ SUPPORT_OPERATOR_ALERT_EMAIL: ' operador@example.com ' }),
+    ).toEqual({ alertEmail: 'operador@example.com', problem: null });
   });
 
   it('mal escrita: no avisa y lo dice (no tumba el arranque)', () => {
-    const c = readSupportOperatorConfig({ SUPPORT_OPERATOR_ALERT_EMAIL: 'valen@va360labs' });
+    const c = readSupportOperatorConfig({ SUPPORT_OPERATOR_ALERT_EMAIL: 'operador@example' });
     expect(c.alertEmail).toBeNull();
     expect(c.problem).toContain('SUPPORT_OPERATOR_ALERT_EMAIL');
   });
@@ -167,7 +167,7 @@ describe('SoporteOperatorNotifier', () => {
       smtpResolver: { resolveGlobal, resolve } as never,
       smtp: { send } as never,
       webBaseUrl: async () => 'https://ceramica.didacta.io/',
-      alertEmail: 'valen@va360labs.com',
+      alertEmail: 'operador@example.com',
       logger: { error, log: vi.fn() } as never,
       ...over,
     });
@@ -186,7 +186,7 @@ describe('SoporteOperatorNotifier', () => {
     const [config, input, nombre] = send.mock.calls[0]!;
     expect(config).toEqual({ ...GLOBAL.config, sender: { replyTo: 'lucia@example.com' } });
     expect(resolve).not.toHaveBeenCalled();
-    expect(input.to).toBe('valen@va360labs.com');
+    expect(input.to).toBe('operador@example.com');
     expect(input.subject).toBe(
       '[Soporte] Creador de Cerámica con Lucía: algo no funciona — Lucía Martín',
     );

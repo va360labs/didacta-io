@@ -12,7 +12,7 @@
  * (`PAYMENTS_PLATFORM_OPERATOR_ALERT_EMAIL`, `VIDEO_CLOUD_OPERATOR_ALERT_EMAIL`):
  * una dirección en una variable de entorno y el SMTP GLOBAL del despliegue.
  *
- *  - Didacta Cloud (el pool): `SUPPORT_OPERATOR_ALERT_EMAIL=valen@va360labs.com`
+ *  - Didacta Cloud (el pool): `SUPPORT_OPERATOR_ALERT_EMAIL=operador@example.com`
  *    en el compose del servicio. Cada ticket de un creador le llega en el
  *    momento, con Reply-To del creador para contestar por correo.
  *  - Una instalación propia de Community: sin la variable quien administra no

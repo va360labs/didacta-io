@@ -198,7 +198,7 @@
 : "${E2E_MAILPIT_SMTP_PORT:=1026}"
 
 # Aviso al operador de cada ticket nuevo de «Ayuda y sugerencias» (mod.soporte),
-# como `valen@va360labs.com` en el pool. Sale por el SMTP de la plataforma; sin
+# como `operador@example.com` en el pool. Sale por el SMTP de la plataforma; sin
 # él (este arnés no lo tiene), por el del aula. `soporte.spec.ts` lo lee del
 # buzón de pruebas. Solo lo dispara abrir un ticket: no afecta a otros specs.
 : "${SUPPORT_OPERATOR_ALERT_EMAIL:=operador-soporte@didacta-e2e.test}"
