@@ -321,6 +321,23 @@ export const HUB_TEMPLATE_DEFAULTS: Record<string, TemplateDef> = {
     subject: 'Un momento: ¿qué te pareció "{{topic}}"?',
     body: 'Ayer estuviste inscrito en "{{topic}}" y aún no nos has contado qué te pareció. Son 30 segundos y la respuesta es anónima — de verdad nos ayuda a mejorar las próximas clases.{{#surveyUrl}}\n\nValórala desde la página de la clase:\n{{surveyUrl}}{{/surveyUrl}}\n\n(Si ya la valoraste desde otra cuenta o no llegaste a asistir, ignora este mensaje.)',
   },
+
+  // «Ayuda y sugerencias» (mod.soporte): ticket nuevo, a cada persona que
+  // administra el aula; cambio de estado, a quien lo abrió. En la campana y por
+  // correo. El tipo y el estado llegan como marcas (`esFallo`,
+  // `estadoResuelto`…) y cada idioma pone su frase; el enlace directo va en
+  // `ticketUrl` (vacío si no se sabe la dirección del aula). La campana enlaza
+  // por `ticketId` (notification-link.ts de la web).
+  'soporte.ticket.nuevo': {
+    subject:
+      'Ticket de soporte: {{#autorNombre}}{{autorNombre}}{{/autorNombre}}{{^autorNombre}}un miembro{{/autorNombre}} {{#esFallo}}avisa de que algo no funciona{{/esFallo}}{{#esProblema}}tiene un problema{{/esProblema}}{{#esMejora}}te deja una sugerencia{{/esMejora}}',
+    body: '{{#autorNombre}}{{autorNombre}}{{/autorNombre}}{{^autorNombre}}Un miembro{{/autorNombre}} ha abierto un ticket en «Ayuda y sugerencias» ({{#esFallo}}algo no funciona{{/esFallo}}{{#esProblema}}un problema{{/esProblema}}{{#esMejora}}una sugerencia{{/esMejora}}):\n\n«{{extracto}}»\n\n{{#ticketUrl}}Ábrelo y respóndele cambiando su estado: {{ticketUrl}}{{/ticketUrl}}{{^ticketUrl}}Lo tienes en Administración → Tickets de soporte.{{/ticketUrl}}',
+  },
+  'soporte.ticket.estado': {
+    subject:
+      'Tu ticket de soporte está {{#estadoNuevo}}abierto de nuevo{{/estadoNuevo}}{{#estadoEnCurso}}en curso{{/estadoEnCurso}}{{#estadoResuelto}}resuelto{{/estadoResuelto}}{{#estadoDescartado}}descartado{{/estadoDescartado}}',
+    body: 'Tu ticket de soporte ({{#esFallo}}algo no funciona{{/esFallo}}{{#esProblema}}un problema{{/esProblema}}{{#esMejora}}una sugerencia{{/esMejora}}) ha pasado a «{{#estadoNuevo}}Nuevo{{/estadoNuevo}}{{#estadoEnCurso}}En curso{{/estadoEnCurso}}{{#estadoResuelto}}Resuelto{{/estadoResuelto}}{{#estadoDescartado}}Descartado{{/estadoDescartado}}».\n\n«{{extracto}}»\n\n{{#ticketUrl}}Míralo aquí: {{ticketUrl}}{{/ticketUrl}}{{^ticketUrl}}Lo tienes en «Tus tickets».{{/ticketUrl}}',
+  },
 };
 
 /**
@@ -464,6 +481,16 @@ export const HUB_TEMPLATE_DEFAULTS_EN: Record<string, TemplateDef> = {
   'surveys.post_class.reminder': {
     subject: 'One moment: what did you think of "{{topic}}"?',
     body: 'Yesterday you were registered for "{{topic}}" and you have not told us what you thought yet. It takes 30 seconds and the answer is anonymous — it really helps us improve the next classes.{{#surveyUrl}}\n\nRate it from the class page:\n{{surveyUrl}}{{/surveyUrl}}\n\n(If you already rated it from another account or did not attend, please ignore this message.)',
+  },
+  'soporte.ticket.nuevo': {
+    subject:
+      'Support ticket: {{#autorNombre}}{{autorNombre}}{{/autorNombre}}{{^autorNombre}}a member{{/autorNombre}} {{#esFallo}}reports that something is not working{{/esFallo}}{{#esProblema}}has a problem{{/esProblema}}{{#esMejora}}left you a suggestion{{/esMejora}}',
+    body: '{{#autorNombre}}{{autorNombre}}{{/autorNombre}}{{^autorNombre}}A member{{/autorNombre}} opened a ticket in "Help & feedback" ({{#esFallo}}something is not working{{/esFallo}}{{#esProblema}}a problem{{/esProblema}}{{#esMejora}}a suggestion{{/esMejora}}):\n\n"{{extracto}}"\n\n{{#ticketUrl}}Open it and reply by changing its status: {{ticketUrl}}{{/ticketUrl}}{{^ticketUrl}}You will find it in Admin → Support tickets.{{/ticketUrl}}',
+  },
+  'soporte.ticket.estado': {
+    subject:
+      'Your support ticket is {{#estadoNuevo}}open again{{/estadoNuevo}}{{#estadoEnCurso}}in progress{{/estadoEnCurso}}{{#estadoResuelto}}resolved{{/estadoResuelto}}{{#estadoDescartado}}dismissed{{/estadoDescartado}}',
+    body: 'Your support ticket ({{#esFallo}}something is not working{{/esFallo}}{{#esProblema}}a problem{{/esProblema}}{{#esMejora}}a suggestion{{/esMejora}}) is now "{{#estadoNuevo}}New{{/estadoNuevo}}{{#estadoEnCurso}}In progress{{/estadoEnCurso}}{{#estadoResuelto}}Resolved{{/estadoResuelto}}{{#estadoDescartado}}Dismissed{{/estadoDescartado}}".\n\n"{{extracto}}"\n\n{{#ticketUrl}}See it here: {{ticketUrl}}{{/ticketUrl}}{{^ticketUrl}}You will find it in "Your tickets".{{/ticketUrl}}',
   },
 };
 
@@ -615,6 +642,16 @@ export const HUB_TEMPLATE_DEFAULTS_PT: Record<string, TemplateDef> = {
   'surveys.post_class.reminder': {
     subject: 'Um instante: o que você achou de "{{topic}}"?',
     body: 'Você se inscreveu em "{{topic}}", que aconteceu ontem, e ainda não nos contou o que achou. São 30 segundos e a resposta é anônima — ela realmente nos ajuda a melhorar as próximas aulas.{{#surveyUrl}}\n\nAvalie pela página da aula:\n{{surveyUrl}}{{/surveyUrl}}\n\n(Se você já avaliou por outra conta ou não chegou a participar, ignore esta mensagem.)',
+  },
+  'soporte.ticket.nuevo': {
+    subject:
+      'Ticket de suporte: {{#autorNombre}}{{autorNombre}}{{/autorNombre}}{{^autorNombre}}um membro{{/autorNombre}} {{#esFallo}}avisa que algo não está funcionando{{/esFallo}}{{#esProblema}}está com um problema{{/esProblema}}{{#esMejora}}deixou uma sugestão{{/esMejora}}',
+    body: '{{#autorNombre}}{{autorNombre}}{{/autorNombre}}{{^autorNombre}}Um membro{{/autorNombre}} abriu um ticket em "Ajuda e sugestões" ({{#esFallo}}algo não está funcionando{{/esFallo}}{{#esProblema}}um problema{{/esProblema}}{{#esMejora}}uma sugestão{{/esMejora}}):\n\n"{{extracto}}"\n\n{{#ticketUrl}}Abra e responda mudando o status: {{ticketUrl}}{{/ticketUrl}}{{^ticketUrl}}Ele está em Administração → Tickets de suporte.{{/ticketUrl}}',
+  },
+  'soporte.ticket.estado': {
+    subject:
+      'Seu ticket de suporte está {{#estadoNuevo}}aberto de novo{{/estadoNuevo}}{{#estadoEnCurso}}em andamento{{/estadoEnCurso}}{{#estadoResuelto}}resolvido{{/estadoResuelto}}{{#estadoDescartado}}descartado{{/estadoDescartado}}',
+    body: 'Seu ticket de suporte ({{#esFallo}}algo não está funcionando{{/esFallo}}{{#esProblema}}um problema{{/esProblema}}{{#esMejora}}uma sugestão{{/esMejora}}) passou para "{{#estadoNuevo}}Novo{{/estadoNuevo}}{{#estadoEnCurso}}Em andamento{{/estadoEnCurso}}{{#estadoResuelto}}Resolvido{{/estadoResuelto}}{{#estadoDescartado}}Descartado{{/estadoDescartado}}".\n\n"{{extracto}}"\n\n{{#ticketUrl}}Veja aqui: {{ticketUrl}}{{/ticketUrl}}{{^ticketUrl}}Ele está em "Seus tickets".{{/ticketUrl}}',
   },
 };
 
@@ -1507,6 +1544,41 @@ const HUB_TEMPLATE_META: Record<
     variables: [
       { name: 'topic', description: 'Título de la clase' },
       { name: 'surveyUrl', description: 'Enlace a la página de la clase (/live/…)' },
+      { name: 'tenantName', description: 'Nombre de la plataforma' },
+    ],
+  },
+  'soporte.ticket.nuevo': {
+    name: 'Nuevo ticket de soporte',
+    description:
+      'Cuando un miembro abre un ticket desde «Ayuda y sugerencias», a cada persona que administra el aula. En la campana y por correo.',
+    category: 'system',
+    channels: ['IN_APP', 'EMAIL'],
+    variables: [
+      { name: 'autorNombre', description: 'Nombre de quien abre el ticket (vacío si no tiene)' },
+      { name: 'esFallo', description: 'Marca: el tipo es «Algo no funciona»' },
+      { name: 'esProblema', description: 'Marca: el tipo es «Tengo un problema»' },
+      { name: 'esMejora', description: 'Marca: el tipo es «Tengo una sugerencia»' },
+      { name: 'extracto', description: 'El principio del texto del ticket' },
+      { name: 'ticketUrl', description: 'Enlace directo al ticket en la bandeja del equipo' },
+      { name: 'tenantName', description: 'Nombre de la plataforma' },
+    ],
+  },
+  'soporte.ticket.estado': {
+    name: 'Tu ticket de soporte ha cambiado de estado',
+    description:
+      'Cuando el equipo cambia el estado de un ticket, a quien lo abrió. En la campana y por correo. Nunca incluye la nota interna.',
+    category: 'system',
+    channels: ['IN_APP', 'EMAIL'],
+    variables: [
+      { name: 'estadoNuevo', description: 'Marca: el estado nuevo es «Nuevo»' },
+      { name: 'estadoEnCurso', description: 'Marca: el estado nuevo es «En curso»' },
+      { name: 'estadoResuelto', description: 'Marca: el estado nuevo es «Resuelto»' },
+      { name: 'estadoDescartado', description: 'Marca: el estado nuevo es «Descartado»' },
+      { name: 'esFallo', description: 'Marca: el tipo es «Algo no funciona»' },
+      { name: 'esProblema', description: 'Marca: el tipo es «Tengo un problema»' },
+      { name: 'esMejora', description: 'Marca: el tipo es «Tengo una sugerencia»' },
+      { name: 'extracto', description: 'El principio del texto del ticket' },
+      { name: 'ticketUrl', description: 'Enlace directo al ticket en «Tus tickets»' },
       { name: 'tenantName', description: 'Nombre de la plataforma' },
     ],
   },

@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { blockedBy, CONTENT_SCOPES, normalizePath, scopeLabels } from './restriction-scopes';
+import {
+  blockedBy,
+  CONTENT_SCOPES,
+  NEVER_BLOCKED,
+  normalizePath,
+  scopeLabels,
+} from './restriction-scopes';
 
 /**
  * Estos tests son la red de seguridad del fichero de reglas. La mitad
@@ -138,6 +144,16 @@ describe('blockedBy — lo que NUNCA se bloquea', () => {
     expect(blockedBy(ALL, 'POST', '/api/v1/modules/zoom-live/sessions/abc/register')).toBeNull();
     expect(blockedBy(ALL, 'POST', '/api/v1/modules/zoom-live/sessions/abc/join')).toBeNull();
     expect(blockedBy(ALL, 'POST', '/api/v1/modules/events/abc/register')).toBeNull();
+  });
+
+  it('deja pedir ayuda con «Ayuda y sugerencias» (abrir un ticket), pero no más', () => {
+    expect(blockedBy(ALL, 'POST', '/api/v1/modules/soporte/tickets')).toBeNull();
+    expect(NEVER_BLOCKED.some((r) => r.pattern.test('/modules/soporte/tickets'))).toBe(true);
+    // La red de seguridad es SOLO para abrir un ticket: ni la bandeja del
+    // equipo ni ninguna otra ruta del módulo quedan exentas por ella.
+    expect(NEVER_BLOCKED.some((r) => r.pattern.test('/modules/soporte/admin/tickets/abc'))).toBe(
+      false,
+    );
   });
 
   it('un silenciado en mensajes sigue leyendo: marcar leído y abrir el stream', () => {

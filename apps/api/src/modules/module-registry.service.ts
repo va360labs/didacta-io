@@ -95,6 +95,7 @@ import {
   type RetentionEventPublisher,
   type RetentionPorts,
 } from '@didacta/mod-retention';
+import { buildSoporteModule, SoporteService } from '@didacta/mod-soporte';
 import { communityModule, CommunityService } from '@didacta/mod-community';
 import { coursesModule, CoursesService } from '@didacta/mod-courses';
 import { helloWorldModule } from '@didacta/mod-hello-world';
@@ -132,7 +133,10 @@ import {
 import { Logger as PinoLogger } from 'nestjs-pino';
 import { AiGatewayService } from '../ai/ai-gateway.service';
 import { academyLocale, type AcademyDefaultsPrisma } from '../common/academy-defaults';
-import { runSanctionedGlobalAccess } from '../tenancy/tenant-context.storage';
+import { runAsTenant, runSanctionedGlobalAccess } from '../tenancy/tenant-context.storage';
+import { buildCapturaStorage, prismaSoporteAdminIds } from './soporte/soporte.ports';
+import { readSupportOperatorConfig } from './soporte/soporte-operator.config';
+import { SoporteOperatorNotifier } from './soporte/soporte-operator-notifier';
 import { resolveCoreContractVersion } from '../core-version';
 import { buildCourseSaleChecker } from './course-sale-checker';
 import { discountCodesAllowedFor } from './gamification/discount-codes-allowed';
@@ -214,6 +218,8 @@ export class ModuleRegistryService implements OnModuleInit {
   private gamificationRetention?: GamificationRetentionService;
   /** mod.retention: mensajes automáticos y miembros en riesgo. */
   private retention?: RetentionService;
+  /** mod.soporte: «Ayuda y sugerencias» (tickets de los miembros para el equipo). */
+  private soporte?: SoporteService;
   private courseSaleChecker?: LearningCourseSaleChecker;
   /**
    * Puertos de mod.retention. Los cablea `RetentionHostPorts` (RetentionModule)
@@ -852,6 +858,37 @@ export class ModuleRegistryService implements OnModuleInit {
     );
     const retentionModule = buildRetentionModule(this.retention);
 
+    // mod.soporte: «Ayuda y sugerencias». Módulo nuevo (ADR-039): solo usa sus
+    // tablas. El host le da quién administra el aula, el storage de cada aula
+    // para las capturas, la dirección pública del aula (enlaces de los
+    // correos), el aviso al operador de la plataforma (solo con
+    // SUPPORT_OPERATOR_ALERT_EMAIL) y el contexto del aula para los avisos,
+    // que salen en segundo plano tras responder.
+    const soporteOperador = readSupportOperatorConfig();
+    if (soporteOperador.problem) this.pino.error({}, `alert: ${soporteOperador.problem}`);
+    const soporteNotifier = soporteOperador.alertEmail
+      ? new SoporteOperatorNotifier({
+          prisma: this.factory.getPrisma() as never,
+          smtpResolver: this.factory.getSmtpResolver(),
+          smtp: this.factory.getSmtpAdapter(),
+          webBaseUrl: (tenantId) => this.factory.getTenantWebBaseUrl(tenantId),
+          alertEmail: soporteOperador.alertEmail,
+        })
+      : null;
+    this.soporte = new SoporteService(
+      prisma,
+      {
+        adminIds: prismaSoporteAdminIds(this.factory.getPrisma() as never),
+        storage: buildCapturaStorage((tenantId) => this.factory.getStorageForTenant(tenantId)),
+        webBaseUrl: (tenantId) => this.factory.getTenantWebBaseUrl(tenantId),
+        ...(soporteNotifier ? { avisarOperador: (aviso) => soporteNotifier.avisar(aviso) } : {}),
+        enSegundoPlano: (tenantId, tarea) =>
+          runAsTenant(tenantId, tarea, { traceLabel: 'soporte' }),
+      },
+      context,
+    );
+    const soporteModule = buildSoporteModule(this.soporte);
+
     // mod.payment-connections: agregador read-only multi-cuenta. NO se gatea por
     // env (las API keys son per-conexión, cifradas en tenant_setting vía el
     // config service). El SDK de Stripe se carga perezosamente la primera vez
@@ -945,6 +982,7 @@ export class ModuleRegistryService implements OnModuleInit {
       messagingModule,
       // Depende (hard) de mod.messaging: es su canal.
       retentionModule,
+      soporteModule,
       surveysModule,
       resourcesModule,
       gamificationModule,
@@ -1413,6 +1451,14 @@ export class ModuleRegistryService implements OnModuleInit {
       throw new Error('mod.retention no está inicializado (boot incompleto).');
     }
     return this.retention;
+  }
+
+  /** «Ayuda y sugerencias» (tickets). SIEMPRE inicializado tras el boot (sin gate de env). */
+  getSoporteService(): SoporteService {
+    if (!this.soporte) {
+      throw new Error('mod.soporte no está inicializado (boot incompleto).');
+    }
+    return this.soporte;
   }
 
   /** Lo llama `RetentionHostPorts` al arrancar (ver `retentionPorts`). */

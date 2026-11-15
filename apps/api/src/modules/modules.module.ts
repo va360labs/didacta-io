@@ -19,6 +19,7 @@ import { SubscriptionsModule } from './subscriptions/subscriptions.module';
 import { ReferralsModule } from './referrals/referrals.module';
 import { MessagingModule } from './messaging/messaging.module';
 import { RetentionModule } from './retention/retention.module';
+import { SoporteModule } from './soporte/soporte.module';
 import { PaymentConnectionsModule } from './payment-connections/payment-connections.module';
 import { PayoutsModule } from './payouts/payouts.module';
 import { PurchaseConsentModule } from './purchase-consent/purchase-consent.module';
@@ -73,6 +74,7 @@ import { OutboxMetrics, outboxMetricsProviders } from './outbox.metrics';
     forwardRef(() => ReferralsModule),
     forwardRef(() => MessagingModule),
     forwardRef(() => RetentionModule),
+    forwardRef(() => SoporteModule),
     forwardRef(() => PaymentConnectionsModule),
     forwardRef(() => CommunityModule),
     forwardRef(() => CertificatesModule),

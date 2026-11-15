@@ -162,6 +162,9 @@ export const NEVER_BLOCKED: readonly RouteMatcher[] = [
   // Apuntarse o borrarse de una clase en directo o un evento ya publicado.
   { methods: ['POST'], pattern: /^\/modules\/zoom-live\/.*\/(register|unregister|join)$/ },
   { methods: ['POST'], pattern: /^\/modules\/events\/[^/]+\/(register|unregister)$/ },
+  // Pedir ayuda o avisar de un fallo con «Ayuda y sugerencias»: una sanción no
+  // puede dejar a nadie sin forma de contactar con el equipo del aula.
+  { methods: ['POST'], pattern: /^\/modules\/soporte\/tickets$/ },
 ];
 
 const GLOBAL_PREFIX = /^\/api\/v\d+/;

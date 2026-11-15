@@ -442,6 +442,35 @@
         "tenantName": "Nombre de la plataforma"
       }
     },
+    "soporte_ticket_nuevo": {
+      "name": "Nuevo ticket de soporte",
+      "description": "Cuando un miembro abre un ticket desde «Ayuda y sugerencias», a cada persona que administra el aula. En la campana y por correo.",
+      "vars": {
+        "autorNombre": "Nombre de quien abre el ticket (vacío si no tiene)",
+        "esFallo": "Marca: el tipo es «Algo no funciona»",
+        "esProblema": "Marca: el tipo es «Tengo un problema»",
+        "esMejora": "Marca: el tipo es «Tengo una sugerencia»",
+        "extracto": "El principio del texto del ticket",
+        "ticketUrl": "Enlace directo al ticket en la bandeja del equipo",
+        "tenantName": "Nombre de la plataforma"
+      }
+    },
+    "soporte_ticket_estado": {
+      "name": "Tu ticket de soporte ha cambiado de estado",
+      "description": "Cuando el equipo cambia el estado de un ticket, a quien lo abrió. En la campana y por correo. Nunca incluye la nota interna.",
+      "vars": {
+        "estadoNuevo": "Marca: el estado nuevo es «Nuevo»",
+        "estadoEnCurso": "Marca: el estado nuevo es «En curso»",
+        "estadoResuelto": "Marca: el estado nuevo es «Resuelto»",
+        "estadoDescartado": "Marca: el estado nuevo es «Descartado»",
+        "esFallo": "Marca: el tipo es «Algo no funciona»",
+        "esProblema": "Marca: el tipo es «Tengo un problema»",
+        "esMejora": "Marca: el tipo es «Tengo una sugerencia»",
+        "extracto": "El principio del texto del ticket",
+        "ticketUrl": "Enlace directo al ticket en «Tus tickets»",
+        "tenantName": "Nombre de la plataforma"
+      }
+    },
     "payouts_sale_course": {
       "name": "Venta de un curso (aviso al equipo)",
       "description": "Cuando un alumno compra un curso, a quien administra el aula. Solo en la campana: el correo lo envía el operador de cobros.",

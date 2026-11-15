@@ -442,6 +442,35 @@
         "tenantName": "Nome da plataforma"
       }
     },
+    "soporte_ticket_nuevo": {
+      "name": "Novo ticket de suporte",
+      "description": "Quando um membro abre um ticket em “Ajuda e sugestões”, para cada pessoa que administra a escola. No sino e por e-mail.",
+      "vars": {
+        "autorNombre": "Nome de quem abre o ticket (vazio se não tiver)",
+        "esFallo": "Marca: o tipo é “Algo não está funcionando”",
+        "esProblema": "Marca: o tipo é “Estou com um problema”",
+        "esMejora": "Marca: o tipo é “Tenho uma sugestão”",
+        "extracto": "O começo do texto do ticket",
+        "ticketUrl": "Link direto para o ticket na caixa da equipe",
+        "tenantName": "Nome da plataforma"
+      }
+    },
+    "soporte_ticket_estado": {
+      "name": "Seu ticket de suporte mudou de status",
+      "description": "Quando a equipe muda o status de um ticket, para quem o abriu. No sino e por e-mail. Nunca inclui a nota interna.",
+      "vars": {
+        "estadoNuevo": "Marca: o novo status é “Novo”",
+        "estadoEnCurso": "Marca: o novo status é “Em andamento”",
+        "estadoResuelto": "Marca: o novo status é “Resolvido”",
+        "estadoDescartado": "Marca: o novo status é “Descartado”",
+        "esFallo": "Marca: o tipo é “Algo não está funcionando”",
+        "esProblema": "Marca: o tipo é “Estou com um problema”",
+        "esMejora": "Marca: o tipo é “Tenho uma sugestão”",
+        "extracto": "O começo do texto do ticket",
+        "ticketUrl": "Link direto para o ticket em “Seus tickets”",
+        "tenantName": "Nome da plataforma"
+      }
+    },
     "payouts_sale_course": {
       "name": "Venda de um curso (aviso à equipe)",
       "description": "Quando um aluno compra um curso, para quem administra a escola. Só no sino: o e-mail é enviado pelo operador dos recebimentos.",
