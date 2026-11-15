@@ -34,6 +34,7 @@ import { useTenantContext } from '@/lib/tenant-context';
 import { formatTenantName } from '@/lib/tenant-name';
 import { cn } from '@/lib/utils';
 import { CHAT_TOGGLE_EVENT, useMessagingContext } from '@/modules/messaging';
+import { SoporteButton } from '@/modules/soporte';
 import { SimpleBell } from './simple-bell';
 import { avatarInitials, Counter, useOutsideClose } from './shell-utils';
 
@@ -202,6 +203,9 @@ export function SimpleShell({
               >
                 <Icon name="search" size={20} />
               </button>
+              {/* «Ayuda y sugerencias» (mod.soporte): el modo sencillo no tiene
+                  menú lateral, así que va aquí. Solo con el módulo encendido. */}
+              <SoporteButton variant="header" />
               <MessagesButton />
               <SimpleBell />
               <AvatarMenu session={session} activeModules={activeModules} onLogout={onLogout} />

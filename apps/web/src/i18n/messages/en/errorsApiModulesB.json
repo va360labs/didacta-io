@@ -255,5 +255,19 @@
   "RETENTION_SETTINGS_INVALID": "Invalid settings: check the sending hours and the waiting time.",
   "RETENTION_SENDER_INVALID": "Messages can only be signed by someone on the academy's team.",
   "RETENTION_RECOVERY_NOT_CONFIGURED": "Turn on the win-back message first (“If they don't log in for X days”).",
-  "RETENTION_MEMBER_NOT_ELIGIBLE": "Automated messages aren't sent to this person."
+  "RETENTION_MEMBER_NOT_ELIGIBLE": "Automated messages aren't sent to this person.",
+  "SOPORTE_LIMITE_DIARIO": "You have sent 5 tickets in the last 24 hours. Please wait a little before sending another one.",
+  "SOPORTE_TEXTO_CORTO": "Write at least 5 characters.",
+  "SOPORTE_TEXTO_LARGO": "The text can be at most 4000 characters long.",
+  "SOPORTE_TIPO_INVALIDO": "Choose what kind of ticket it is.",
+  "SOPORTE_NOTA_LARGA": "The internal note can be at most 4000 characters long.",
+  "SOPORTE_ESTADO_INVALIDO": "That status does not exist.",
+  "SOPORTE_SIN_CAMBIOS": "Set the status or the internal note.",
+  "SOPORTE_CAPTURA_TIPO": "The screenshot must be a PNG, JPEG or WebP image.",
+  "SOPORTE_CAPTURA_VACIA": "The screenshot is empty.",
+  "SOPORTE_CAPTURA_ILEGIBLE": "The screenshot cannot be read.",
+  "SOPORTE_CAPTURA_PESADA": "The screenshot is larger than 5 MB.",
+  "SOPORTE_CAPTURA_NO_CASA": "The content of the screenshot does not match an image of that type.",
+  "SOPORTE_NO_ENCONTRADO": "Ticket not found.",
+  "SOPORTE_SIN_PERMISO": "Only those who run the academy can manage tickets."
 }

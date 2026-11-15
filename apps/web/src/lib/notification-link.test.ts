@@ -82,4 +82,18 @@ describe('notificationLink', () => {
       actionLabel: 'View',
     });
   });
+
+  it('soporte: ticket nuevo → la bandeja con ese ticket; cambio de estado → «Tus tickets»', () => {
+    expect(notificationLink('soporte.ticket.nuevo', { ticketId: 't-1' }, tEs)).toEqual({
+      href: '/admin/support?ticket=t-1',
+      actionLabel: 'Ver',
+    });
+    expect(notificationLink('soporte.ticket.estado', { ticketId: 't-1' }, tEn)).toEqual({
+      href: '/support?ticket=t-1',
+      actionLabel: 'View',
+    });
+    // Sin id, a la lista (nunca a una ruta rota ni a `?ticket=undefined`).
+    expect(notificationLink('soporte.ticket.nuevo', {}, tEs)?.href).toBe('/admin/support');
+    expect(notificationLink('soporte.ticket.estado', {}, tEs)?.href).toBe('/support');
+  });
 });

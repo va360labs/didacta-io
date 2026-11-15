@@ -1,0 +1,100 @@
+{
+  "boton": {
+    "etiqueta": "Ayuda y sugerencias",
+    "ayuda": "Cuéntanos qué falla o qué mejorarías"
+  },
+  "tipos": {
+    "MEJORA": {
+      "label": "Tengo una sugerencia",
+      "ayuda": "Ideas, mejoras, cosas que echas en falta",
+      "pregunta": "¿Qué mejorarías del aula?",
+      "pista": "Qué te gustaría que hubiera o que funcionara de otra forma, y para qué te serviría."
+    },
+    "FALLO": {
+      "label": "Algo no funciona",
+      "ayuda": "Un botón, una página, un vídeo…",
+      "pregunta": "¿Qué ha pasado?",
+      "pista": "Qué estabas haciendo, qué esperabas y qué ha pasado."
+    },
+    "PROBLEMA": {
+      "label": "Tengo un problema",
+      "ayuda": "Acceso, pagos, cursos…",
+      "pregunta": "¿Qué ha pasado?",
+      "pista": "Qué estabas haciendo, qué esperabas y qué ha pasado."
+    }
+  },
+  "estados": {
+    "NUEVO": "Nuevo",
+    "EN_CURSO": "En curso",
+    "RESUELTO": "Resuelto",
+    "DESCARTADO": "Descartado"
+  },
+  "dialogo": {
+    "titulo": "Ayuda y sugerencias",
+    "descripcion": "Una idea para mejorar el aula, un fallo o un problema: lo lee el equipo del aula.",
+    "tipo": "¿Qué nos quieres contar?",
+    "contador": "{n} / {max}",
+    "captura": "Captura (opcional)",
+    "capturaAyuda": "PNG, JPEG o WebP, hasta 5 MB.",
+    "vistaPrevia": "Vista previa de la captura",
+    "quitar": "Quitar",
+    "contexto": "Se enviará también: la página, el navegador y la hora.",
+    "cancelar": "Cancelar",
+    "enviar": "Enviar",
+    "enviando": "Enviando…",
+    "verMisTickets": "Ver tus tickets",
+    "enviadoTitulo": "Recibido, gracias",
+    "enviadoDescripcion": "El equipo del aula lo verá y te avisaremos cuando cambie de estado.",
+    "enviadoTexto": "Hemos guardado tu ticket. Puedes seguirlo en «Tus tickets».",
+    "cerrar": "Cerrar"
+  },
+  "validacion": {
+    "vacio": "Escribe tu mensaje.",
+    "corto": "Escribe al menos {min} caracteres.",
+    "largo": "Como mucho {max} caracteres.",
+    "capturaTipo": "La captura tiene que ser una imagen PNG, JPEG o WebP.",
+    "capturaPesada": "La captura no puede pasar de 5 MB."
+  },
+  "errorGenerico": "No se ha podido completar. Inténtalo de nuevo.",
+  "captura": {
+    "error": "No se ha podido cargar la captura.",
+    "abrir": "Abrir la captura",
+    "alt": "Captura del ticket"
+  },
+  "mios": {
+    "titulo": "Tus tickets",
+    "subtitulo": "Lo que has contado al equipo del aula y en qué punto está.",
+    "nuevo": "Nuevo ticket",
+    "vacio": "Aún no has abierto ningún ticket. Si algo no funciona, tienes un problema o se te ocurre una mejora, cuéntanoslo con «Nuevo ticket».",
+    "apagado": "La ayuda no está disponible en esta aula."
+  },
+  "bandeja": {
+    "titulo": "Tickets de soporte",
+    "subtitulo": "Fallos, problemas y sugerencias que envían los miembros. Al cambiar el estado, se le avisa a quien lo abrió.",
+    "sinAcceso": "Esta bandeja es solo del equipo que administra el aula.",
+    "apagado": "La ayuda está apagada en esta aula. Enciéndela desde Módulos para usarla.",
+    "todos": "Todos",
+    "conteo": "{label} · {n}",
+    "filtroEstado": "Estado",
+    "filtroTipo": "Tipo",
+    "todosLosTipos": "Todos los tipos",
+    "sinTickets": "No hay tickets con estos filtros.",
+    "elige": "Elige un ticket para verlo.",
+    "miembro": "Miembro",
+    "autor": "Quién",
+    "abierto": "Abierto",
+    "actualizado": "Actualizado",
+    "cerrado": "Cerrado",
+    "contexto": "Contexto",
+    "pagina": "Página",
+    "navegador": "Navegador",
+    "ventana": "Ventana",
+    "hora": "Hora",
+    "estado": "Estado",
+    "nota": "Nota interna",
+    "notaAyuda": "Solo la ve el equipo",
+    "guardar": "Guardar",
+    "guardando": "Guardando…",
+    "guardado": "Guardado."
+  }
+}

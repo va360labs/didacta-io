@@ -255,5 +255,19 @@
   "RETENTION_SETTINGS_INVALID": "Ajustes inválidos: revise o horário de envio e o tempo de espera.",
   "RETENTION_SENDER_INVALID": "As mensagens só podem ser assinadas por alguém da equipe da escola.",
   "RETENTION_RECOVERY_NOT_CONFIGURED": "Ative primeiro a mensagem de recuperação («Se não entrar em X dias»).",
-  "RETENTION_MEMBER_NOT_ELIGIBLE": "Esta pessoa não recebe mensagens automáticas."
+  "RETENTION_MEMBER_NOT_ELIGIBLE": "Esta pessoa não recebe mensagens automáticas.",
+  "SOPORTE_LIMITE_DIARIO": "Você enviou 5 tickets nas últimas 24 horas. Espere um pouco antes de enviar outro.",
+  "SOPORTE_TEXTO_CORTO": "Escreva pelo menos 5 caracteres.",
+  "SOPORTE_TEXTO_LARGO": "O texto pode ter no máximo 4000 caracteres.",
+  "SOPORTE_TIPO_INVALIDO": "Escolha que tipo de ticket é.",
+  "SOPORTE_NOTA_LARGA": "A nota interna pode ter no máximo 4000 caracteres.",
+  "SOPORTE_ESTADO_INVALIDO": "Esse status não existe.",
+  "SOPORTE_SIN_CAMBIOS": "Informe o status ou a nota interna.",
+  "SOPORTE_CAPTURA_TIPO": "A captura de tela precisa ser uma imagem PNG, JPEG ou WebP.",
+  "SOPORTE_CAPTURA_VACIA": "A captura de tela está vazia.",
+  "SOPORTE_CAPTURA_ILEGIBLE": "Não é possível ler a captura de tela.",
+  "SOPORTE_CAPTURA_PESADA": "A captura de tela tem mais de 5 MB.",
+  "SOPORTE_CAPTURA_NO_CASA": "O conteúdo da captura de tela não corresponde a uma imagem desse tipo.",
+  "SOPORTE_NO_ENCONTRADO": "Ticket não encontrado.",
+  "SOPORTE_SIN_PERMISO": "Só quem administra a escola pode gerenciar os tickets."
 }

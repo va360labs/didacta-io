@@ -86,6 +86,23 @@ export function notificationLink(
     case 'payouts.sale.renewal':
       // Venta nueva (aviso a quien administra el aula): a «Ventas».
       return { href: '/admin/payments', actionLabel: view };
+    case 'soporte.ticket.nuevo': {
+      // Ticket nuevo de «Ayuda y sugerencias» (aviso al equipo): a la bandeja,
+      // con ese ticket abierto.
+      const ticketId = str(meta.ticketId);
+      return {
+        href: ticketId ? `/admin/support?ticket=${encodeURIComponent(ticketId)}` : '/admin/support',
+        actionLabel: view,
+      };
+    }
+    case 'soporte.ticket.estado': {
+      // Cambió el estado de mi ticket: a «Tus tickets», marcado.
+      const ticketId = str(meta.ticketId);
+      return {
+        href: ticketId ? `/support?ticket=${encodeURIComponent(ticketId)}` : '/support',
+        actionLabel: view,
+      };
+    }
     default:
       return null;
   }

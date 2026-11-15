@@ -16,6 +16,7 @@ import { VersionUpdateBanner } from '@/components/version-update-banner';
 import type { StoredSession } from '@/lib/auth-storage';
 import { useTenantContext } from '@/lib/tenant-context';
 import { formatTenantName } from '@/lib/tenant-name';
+import { SoporteButton } from '@/modules/soporte';
 
 export interface SidebarItem {
   href: string;
@@ -381,6 +382,8 @@ export function SidebarContent({
         </nav>
 
         <div className="flex flex-col items-center gap-1.5 border-t border-white/8 px-2 py-3">
+          {/* «Ayuda y sugerencias» (mod.soporte): solo con el módulo encendido. */}
+          <SoporteButton variant="rail" onNavigate={onNavigate} />
           <Link
             href={'/account' as never}
             onClick={onNavigate}
@@ -717,6 +720,10 @@ export function SidebarContent({
             </div>
           );
         })}
+        {/* «Ayuda y sugerencias» (mod.soporte): solo con el módulo encendido.
+            Va al final de la lista, dentro del scroll, y no en la tira fija de
+            abajo: en el cajón del móvil esa tira le quitaría alto al menú. */}
+        <SoporteButton variant="card" onNavigate={onNavigate} />
       </nav>
 
       {/* ── User strip ── */}

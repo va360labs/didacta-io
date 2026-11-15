@@ -53,7 +53,10 @@ const RUTAS_LIBRES = [
   '/reset-password',
   '/mfa',
   '/auth',
-  '/support',
+  // El enlace de acceso de soporte del operador. Solo `/support/access`: en
+  // `/support` vive «Tus tickets» (mod.soporte), que es una pantalla más del
+  // aula y con el aula en pausa enseña la pausa como las demás.
+  '/support/access',
   '/setup',
 ];
 

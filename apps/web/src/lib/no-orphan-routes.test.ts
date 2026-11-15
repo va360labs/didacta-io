@@ -76,6 +76,11 @@ const ALLOWLIST: Record<string, { kind: AllowKind; reason: string }> = {
       'aterrizaje tras el login: lleva a /start (admin de aula sencilla con pasos pendientes) o a /community',
   },
   '/notifications': { kind: 'reachable', reason: 'icono de campana (notifications-bell)' },
+  '/support': {
+    kind: 'reachable',
+    reason:
+      '«Tus tickets» (mod.soporte): enlace «Ver tus tickets» del botón «Ayuda y sugerencias» (menú lateral y cabecera del modo sencillo), aviso de la campana y correo de cambio de estado',
+  },
   '/admin/integrations/api': {
     kind: 'reachable',
     reason: 'enlace "Integración API" en /admin/api-keys (documentación en vivo para integradores)',

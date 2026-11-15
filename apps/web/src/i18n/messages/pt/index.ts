@@ -56,6 +56,7 @@ import modNotifications from './modNotifications.json';
 import modPaymentConnections from './modPaymentConnections.json';
 import modResources from './modResources.json';
 import modRetention from './modRetention.json';
+import modSoporte from './modSoporte.json';
 import modSubscriptions from './modSubscriptions.json';
 import modSurveys from './modSurveys.json';
 import modZoomLive from './modZoomLive.json';
@@ -114,6 +115,7 @@ export default {
   modPaymentConnections,
   modResources,
   modRetention,
+  modSoporte,
   modSubscriptions,
   modSurveys,
   modZoomLive,

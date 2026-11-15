@@ -1,0 +1,100 @@
+{
+  "boton": {
+    "etiqueta": "Help & feedback",
+    "ayuda": "Tell us what is broken or what you would improve"
+  },
+  "tipos": {
+    "MEJORA": {
+      "label": "I have a suggestion",
+      "ayuda": "Ideas, improvements, things you miss",
+      "pregunta": "What would you improve in the academy?",
+      "pista": "What you would like to have or to work differently, and what it would help you with."
+    },
+    "FALLO": {
+      "label": "Something is not working",
+      "ayuda": "A button, a page, a video…",
+      "pregunta": "What happened?",
+      "pista": "What you were doing, what you expected and what happened."
+    },
+    "PROBLEMA": {
+      "label": "I have a problem",
+      "ayuda": "Access, payments, courses…",
+      "pregunta": "What happened?",
+      "pista": "What you were doing, what you expected and what happened."
+    }
+  },
+  "estados": {
+    "NUEVO": "New",
+    "EN_CURSO": "In progress",
+    "RESUELTO": "Resolved",
+    "DESCARTADO": "Dismissed"
+  },
+  "dialogo": {
+    "titulo": "Help & feedback",
+    "descripcion": "An idea to improve the academy, a bug or a problem: the academy team reads it.",
+    "tipo": "What would you like to tell us?",
+    "contador": "{n} / {max}",
+    "captura": "Screenshot (optional)",
+    "capturaAyuda": "PNG, JPEG or WebP, up to 5 MB.",
+    "vistaPrevia": "Screenshot preview",
+    "quitar": "Remove",
+    "contexto": "We will also send: the page, the browser and the time.",
+    "cancelar": "Cancel",
+    "enviar": "Send",
+    "enviando": "Sending…",
+    "verMisTickets": "See your tickets",
+    "enviadoTitulo": "Received, thank you",
+    "enviadoDescripcion": "The academy team will see it and we will let you know when its status changes.",
+    "enviadoTexto": "We have saved your ticket. You can follow it in “Your tickets”.",
+    "cerrar": "Close"
+  },
+  "validacion": {
+    "vacio": "Write your message.",
+    "corto": "Write at least {min} characters.",
+    "largo": "At most {max} characters.",
+    "capturaTipo": "The screenshot must be a PNG, JPEG or WebP image.",
+    "capturaPesada": "The screenshot cannot be larger than 5 MB."
+  },
+  "errorGenerico": "It could not be completed. Please try again.",
+  "captura": {
+    "error": "The screenshot could not be loaded.",
+    "abrir": "Open the screenshot",
+    "alt": "Ticket screenshot"
+  },
+  "mios": {
+    "titulo": "Your tickets",
+    "subtitulo": "What you have told the academy team and where it stands.",
+    "nuevo": "New ticket",
+    "vacio": "You have not opened any tickets yet. If something is not working, you have a problem or you think of an improvement, tell us with “New ticket”.",
+    "apagado": "Help is not available in this academy."
+  },
+  "bandeja": {
+    "titulo": "Support tickets",
+    "subtitulo": "Bugs, problems and suggestions sent by members. When you change the status, whoever opened it is notified.",
+    "sinAcceso": "This inbox is only for the team that runs the academy.",
+    "apagado": "Help is turned off in this academy. Turn it on from Modules to use it.",
+    "todos": "All",
+    "conteo": "{label} · {n}",
+    "filtroEstado": "Status",
+    "filtroTipo": "Type",
+    "todosLosTipos": "All types",
+    "sinTickets": "There are no tickets with these filters.",
+    "elige": "Choose a ticket to see it.",
+    "miembro": "Member",
+    "autor": "Who",
+    "abierto": "Opened",
+    "actualizado": "Updated",
+    "cerrado": "Closed",
+    "contexto": "Context",
+    "pagina": "Page",
+    "navegador": "Browser",
+    "ventana": "Window",
+    "hora": "Time",
+    "estado": "Status",
+    "nota": "Internal note",
+    "notaAyuda": "Only the team sees it",
+    "guardar": "Save",
+    "guardando": "Saving…",
+    "guardado": "Saved."
+  }
+}

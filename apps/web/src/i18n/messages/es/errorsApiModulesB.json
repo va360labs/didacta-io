@@ -226,5 +226,19 @@
   "RETENTION_SETTINGS_INVALID": "Ajustes no válidos: revisa la franja horaria y las horas de espera.",
   "RETENTION_SENDER_INVALID": "Los mensajes solo los puede firmar alguien del equipo del aula.",
   "RETENTION_RECOVERY_NOT_CONFIGURED": "Activa primero el mensaje de recuperación («Si no entra en X días»).",
-  "RETENTION_MEMBER_NOT_ELIGIBLE": "A esta persona no se le envían mensajes automáticos."
+  "RETENTION_MEMBER_NOT_ELIGIBLE": "A esta persona no se le envían mensajes automáticos.",
+  "SOPORTE_LIMITE_DIARIO": "Has enviado 5 tickets en las últimas 24 horas. Espera un poco antes de enviar otro.",
+  "SOPORTE_TEXTO_CORTO": "Escribe al menos 5 caracteres.",
+  "SOPORTE_TEXTO_LARGO": "El texto admite como mucho 4000 caracteres.",
+  "SOPORTE_TIPO_INVALIDO": "Elige qué tipo de ticket es.",
+  "SOPORTE_NOTA_LARGA": "La nota interna admite como mucho 4000 caracteres.",
+  "SOPORTE_ESTADO_INVALIDO": "Ese estado no existe.",
+  "SOPORTE_SIN_CAMBIOS": "Indica el estado o la nota interna.",
+  "SOPORTE_CAPTURA_TIPO": "La captura tiene que ser una imagen PNG, JPEG o WebP.",
+  "SOPORTE_CAPTURA_VACIA": "La captura está vacía.",
+  "SOPORTE_CAPTURA_ILEGIBLE": "La captura no se puede leer.",
+  "SOPORTE_CAPTURA_PESADA": "La captura pesa más de 5 MB.",
+  "SOPORTE_CAPTURA_NO_CASA": "El contenido de la captura no corresponde a una imagen de ese tipo.",
+  "SOPORTE_NO_ENCONTRADO": "Ticket no encontrado.",
+  "SOPORTE_SIN_PERMISO": "Solo quien administra el aula puede gestionar los tickets."
 }

@@ -62,6 +62,9 @@ describe('isGateFreePath — lo que sigue abierto con el aula en pausa', () => {
     '/join',
     '/site',
     '/signin-x',
+    // «Tus tickets» y la bandeja del equipo (mod.soporte): pantallas del aula.
+    '/support',
+    '/admin/support',
   ])('%s enseña la pausa', (path) => {
     expect(isGateFreePath(path)).toBe(false);
   });
