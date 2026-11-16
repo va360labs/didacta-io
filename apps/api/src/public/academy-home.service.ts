@@ -76,6 +76,17 @@ export interface AcademyHomeCourse {
   optionCount: number;
 }
 
+export interface AcademyHomePlan {
+  id: string;
+  name: string;
+  amountCents: number;
+  currency: string;
+  compareAtCents: number | null;
+  intervalMonths: number;
+  trialDays: number;
+  isFeatured: boolean;
+}
+
 export interface AcademyHomeMembership {
   /** El titular que escribió el aula; `null` si es el de por defecto. */
   headline: string | null;
@@ -90,6 +101,11 @@ export interface AcademyHomeMembership {
     trialDays: number;
   };
   planCount: number;
+  /**
+   * TODOS los planes activos, en el orden del aula: el modal «Selecciona tu
+   * plan» de la portada los lista para elegir uno antes de ir a la compra.
+   */
+  plans: AcademyHomePlan[];
   /** Cursos publicados que entran con la membresía (si el aula los enseña). */
   courseCount: number | null;
 }
@@ -419,6 +435,16 @@ export class AcademyHomeService {
         trialDays: plan.trialDays,
       },
       planCount: page.plans.length,
+      plans: page.plans.map((p) => ({
+        id: p.id,
+        name: p.name,
+        amountCents: p.amountCents,
+        currency: p.currency,
+        compareAtCents: p.compareAtCents,
+        intervalMonths: p.intervalMonths,
+        trialDays: p.trialDays,
+        isFeatured: p.isFeatured,
+      })),
       courseCount: page.courses.length > 0 ? page.courses.length : null,
     };
   }

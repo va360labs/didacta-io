@@ -185,6 +185,60 @@ test.describe('Página pública de la academia', () => {
     expect(desborde).toBeLessThanOrEqual(0);
   });
 
+  test('con varios planes, el botón abre «Selecciona tu plan» y cada plan lleva a la compra con ese plan', async ({
+    page,
+  }) => {
+    const a = await aula('portada-planes', true);
+    await apiAs(a.host, '/api/v1/membership/admin/config', {
+      method: 'PUT',
+      bearer: a.operator,
+      body: { active: true },
+    });
+    const crear = (body: Record<string, unknown>) =>
+      apiAs<{ id: string }>(a.host, '/api/v1/membership/admin/plans', {
+        method: 'POST',
+        bearer: a.operator,
+        body,
+      });
+    const mensual = await crear({ name: 'Mensual', intervalMonths: 1, amountCents: 1900 });
+    const anual = await crear({
+      name: 'Anual',
+      intervalMonths: 12,
+      amountCents: 19000,
+      compareAtCents: 22800,
+      isFeatured: true,
+    });
+
+    await page.goto(`${a.base}/?ref=amigo123`);
+    const cta = page.getByTestId('portada-membresia-cta');
+    await expect(cta).toBeVisible();
+    // Con varios planes el botón ya no es un enlace: abre el modal.
+    await expect(cta).not.toHaveAttribute('href', /.*/);
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+    await cta.click();
+
+    // Solo el diálogo abierto está en el árbol de accesibilidad: la portada pinta
+    // el botón dos veces (cabecera y tarjeta) y cada uno trae el suyo.
+    const modal = page.getByRole('dialog');
+    await expect(modal).toBeVisible();
+    const planes = modal.getByTestId('portada-plan');
+    await expect(planes).toHaveCount(2);
+    // El anual lleva su equivalente mensual (190/12 = 15,83) y su precio tachado.
+    await expect(planes.filter({ hasText: 'Anual' })).toContainText('15,83');
+    await expect(planes.filter({ hasText: 'Anual' })).toContainText('228');
+    // Cada plan lleva a la compra con ESE plan y conserva el ?ref=.
+    await expect(modal.locator(`a[href="/join?plan=${mensual.id}&ref=amigo123"]`)).toHaveCount(1);
+    await expect(modal.locator(`a[href="/join?plan=${anual.id}&ref=amigo123"]`)).toHaveCount(1);
+
+    // Esc cierra.
+    await page.keyboard.press('Escape');
+    await expect(modal).toBeHidden();
+
+    // Y /join respeta el plan pedido (el mensual, no el destacado).
+    await page.goto(`${a.base}/join?plan=${mensual.id}`);
+    await expect(page.getByRole('radio', { checked: true })).toContainText('19');
+  });
+
   test('con sesión va a su inicio de siempre; con el ajuste apagado, al acceso', async ({
     page,
   }) => {

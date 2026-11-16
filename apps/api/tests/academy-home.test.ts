@@ -292,6 +292,16 @@ describe('AcademyHomeService — datos publicables del aula', () => {
       plan: { amountCents: 1900, intervalMonths: 1, trialDays: 7 },
       planCount: 2,
     });
+    // El modal de la portada lista TODOS los planes, no solo el destacado.
+    expect(data.offers.membership?.plans).toHaveLength(2);
+    expect(data.offers.membership?.plans[0]).toEqual(
+      expect.objectContaining({
+        id: expect.any(String),
+        name: expect.any(String),
+        amountCents: expect.any(Number),
+        isFeatured: expect.any(Boolean),
+      }),
+    );
     // El curso sin precio es de cualquier miembro; el que se vende, no.
     expect(data.offers.free).toEqual({
       courses: [{ slug: 'gratis-a', title: 'Gratis A', thumbnailUrl: null }],

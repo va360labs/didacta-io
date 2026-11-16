@@ -100,6 +100,7 @@ export function UneteView() {
   const locale = useLocale();
   const params = useSearchParams();
   const status = params.get('status');
+  const planParam = params.get('plan');
   const returnSessionId = params.get('session_id');
   const returnEmbedded = params.get('checkout') === 'embedded';
   const { tenant } = useTenantContext();
@@ -165,8 +166,10 @@ export function UneteView() {
       .then((p) => {
         if (cancelled) return;
         setPage(p);
+        // `?plan=<id>` viene del modal «Selecciona tu plan» de la portada.
+        const pedido = p.plans.find((x) => x.id === planParam);
         const featured = p.plans.find((x) => x.isFeatured) ?? p.plans[p.plans.length - 1];
-        setSelectedId(featured?.id ?? null);
+        setSelectedId((pedido ?? featured)?.id ?? null);
       })
       .catch((err) => {
         if (cancelled) return;
@@ -176,7 +179,7 @@ export function UneteView() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [planParam]);
 
   const selected = page?.plans.find((p) => p.id === selectedId) ?? null;
 

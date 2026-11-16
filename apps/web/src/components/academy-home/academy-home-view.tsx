@@ -22,6 +22,7 @@ import { formatNumber } from '@/lib/i18n/format';
 import { formatCents } from '@/lib/membership';
 import { socialLinkName } from '@/lib/social-links';
 import { AcademyHomeSession, EARLY_SESSION_REDIRECT, LiveDate } from './academy-home-client';
+import { JoinPlansButton, type PlanOption } from './join-plans-button';
 
 /**
  * PÁGINA PÚBLICA DE LA ACADEMIA: lo que ve en la raíz del aula quien todavía no
@@ -52,12 +53,53 @@ type T = Awaited<ReturnType<typeof getTranslations<'publicSite'>>>;
 
 const FONT = { fontFamily: 'var(--font-figtree), var(--font-sans)' } as const;
 
+/** «Mensual», «Anual»…: el nombre corto de la periodicidad (sin «Suscripción»). */
+function intervalName(t: T, months: number): string {
+  if (months === 12) return t('unete.intervalNameYear');
+  if (months === 6) return t('unete.intervalNameSemester');
+  if (months === 3) return t('unete.intervalNameQuarter');
+  if (months === 1) return t('unete.intervalNameMonth');
+  return t('unete.intervalDescMonths', { months });
+}
+
 function intervalSuffix(t: T, months: number): string {
   if (months === 12) return t('unete.intervalSuffixYear');
   if (months === 6) return t('unete.intervalSuffixSemester');
   if (months === 3) return t('unete.intervalSuffixQuarter');
   if (months === 1) return t('unete.intervalSuffixMonth');
   return t('unete.intervalSuffixMonths', { months });
+}
+
+/**
+ * Los planes de la membresía listos para el modal «Selecciona tu plan»: textos
+ * traducidos e importes formateados. Vacío si la API es anterior y no los manda.
+ */
+function planOptions(
+  home: AcademyHome,
+  t: T,
+  money: (cents: number, currency: string) => string,
+  refCode: string | null,
+): PlanOption[] {
+  return (home.offers.membership?.plans ?? []).map((p) => ({
+    id: p.id,
+    name: p.name,
+    intervalLabel: intervalName(t, p.intervalMonths),
+    price: money(p.amountCents, p.currency),
+    suffix: intervalSuffix(t, p.intervalMonths),
+    compare:
+      p.compareAtCents && p.compareAtCents > p.amountCents
+        ? money(p.compareAtCents, p.currency)
+        : null,
+    perMonth:
+      p.intervalMonths > 1
+        ? t('portada.planPerMonth', {
+            amount: money(Math.round(p.amountCents / p.intervalMonths), p.currency),
+          })
+        : null,
+    trial: p.trialDays > 0 ? t('unete.planTrialSuffix', { days: p.trialDays }) : null,
+    featured: p.isFeatured,
+    href: withRef(`/join?plan=${encodeURIComponent(p.id)}`, refCode),
+  }));
 }
 
 export async function AcademyHomeView({ home, refCode, preview }: Props) {
@@ -67,6 +109,7 @@ export async function AcademyHomeView({ home, refCode, preview }: Props) {
   const primary = primaryAccess(home, refCode);
   const brand = brandStyle(academy.brandHue, academy.brandSaturation);
   const signinHref = withRef('/signin', refCode);
+  const plans = planOptions(home, t, (c, cur) => formatCents(c, cur, { locale }), refCode);
   const money = (cents: number, currency: string) => formatCents(cents, currency, { locale });
   const cheapestCourse = offers.courses.reduce<AcademyHomeCourse | null>(
     (min, c) => (min === null || c.price.amountCents < min.price.amountCents ? c : min),
@@ -104,13 +147,18 @@ export async function AcademyHomeView({ home, refCode, preview }: Props) {
               {t('portada.signIn')}
             </a>
             {primary && primaryLabel ? (
-              <a
+              <JoinPlansButton
+                // Solo la membresía abre el modal; el resto de accesos es un enlace.
+                plans={primary.kind === 'membership' ? plans : []}
                 href={primary.href}
-                data-testid="portada-cta"
-                className="inline-flex h-10 items-center rounded-xl bg-brand-600 px-4 text-[15px] font-semibold text-white shadow-sm transition-colors hover:bg-brand-700"
-              >
-                {primaryLabel}
-              </a>
+                label={primaryLabel}
+                testId="portada-cta"
+                className="inline-flex h-10 cursor-pointer items-center rounded-xl bg-brand-600 px-4 text-[15px] font-semibold text-white shadow-sm transition-colors hover:bg-brand-700"
+                title={t('portada.plansModalTitle')}
+                closeLabel={t('portada.plansModalClose')}
+                bestValueLabel={t('unete.bestValue')}
+                planCtaLabel={t('portada.ctaJoin')}
+              />
             ) : null}
           </nav>
         </div>
@@ -414,15 +462,21 @@ function AccessCard({
                 <Perk>{t('unete.planTrialSuffix', { days: membership.plan.trialDays })}</Perk>
               ) : null}
             </ul>
-            <a
+            <JoinPlansButton
+              plans={planOptions(home, t, money, refCode)}
               href={withRef('/join', refCode)}
-              data-testid="portada-membresia-cta"
-              className="mt-4 flex h-12 w-full items-center justify-center rounded-xl bg-brand-600 text-[16px] font-bold text-white shadow-sm transition-colors hover:bg-brand-700"
-            >
-              {membership.plan.trialDays > 0
-                ? t('portada.membershipTrialCta')
-                : t('portada.membershipCta')}
-            </a>
+              label={
+                membership.plan.trialDays > 0
+                  ? t('portada.membershipTrialCta')
+                  : t('portada.membershipCta')
+              }
+              testId="portada-membresia-cta"
+              className="mt-4 flex h-12 w-full cursor-pointer items-center justify-center rounded-xl bg-brand-600 text-[16px] font-bold text-white shadow-sm transition-colors hover:bg-brand-700"
+              title={t('portada.plansModalTitle')}
+              closeLabel={t('portada.plansModalClose')}
+              bestValueLabel={t('unete.bestValue')}
+              planCtaLabel={t('portada.ctaJoin')}
+            />
           </div>
         ) : null}
 

@@ -38,6 +38,17 @@ export interface AcademyHomeCourse {
   optionCount: number;
 }
 
+export interface AcademyHomePlan {
+  id: string;
+  name: string;
+  amountCents: number;
+  currency: string;
+  compareAtCents: number | null;
+  intervalMonths: number;
+  trialDays: number;
+  isFeatured: boolean;
+}
+
 export interface AcademyHomeMembership {
   headline: string | null;
   subheadline: string | null;
@@ -50,6 +61,8 @@ export interface AcademyHomeMembership {
     trialDays: number;
   };
   planCount: number;
+  /** Todos los planes activos (modal «Selecciona tu plan»). Ausente en una API anterior. */
+  plans?: AcademyHomePlan[];
   courseCount: number | null;
 }
 
