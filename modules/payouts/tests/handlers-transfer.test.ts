@@ -113,6 +113,65 @@ describe('checkTransferEvent', () => {
   it('otros tipos se ignoran', async () => {
     await expect(check('tr_bueno', 'transfer.paid')).resolves.toEqual({ outcome: 'ignored' });
   });
+
+  describe('crédito de plataforma (afiliados): transferencia sin venta, con su propio asiento', () => {
+    const creditTransfer = (extra: Record<string, unknown> = {}) => ({
+      id: 'tr_credito',
+      object: 'transfer',
+      amount: 1250,
+      amount_reversed: 0,
+      currency: 'eur',
+      destination: ACCT,
+      metadata: { didacta_credit_key: `payouts:credit:${A}:aff:uno:eur:2026-W47` },
+      ...extra,
+    });
+    const entry = (amount = -1250, currency = 'eur') =>
+      db.insert('modPayoutsLedgerEntry', {
+        tenantId: A,
+        accountId: db.tables['modPayoutsAccount']![0]!['id'],
+        type: 'TRANSFER',
+        amount,
+        currency,
+        stripeObjectId: 'tr_credito',
+        idempotencyKey: `payouts:credit:${A}:aff:uno:eur:2026-W47`,
+        occurredAt: new Date('2026-11-16T10:00:00Z'),
+      });
+
+    it('con asiento que casa → ok, sin alerta de «transferencia sin venta»', async () => {
+      fake.seed(creditTransfer());
+      entry();
+      await expect(check('tr_credito')).resolves.toEqual({ outcome: 'ok', saleId: '' });
+      expect(alerts).toEqual([]);
+    });
+
+    it('aún sin asiento (se está anotando) → in_flight, sin alerta', async () => {
+      fake.seed(creditTransfer());
+      await expect(check('tr_credito')).resolves.toEqual({ outcome: 'in_flight', saleId: '' });
+      expect(alerts).toEqual([]);
+    });
+
+    it('CONTROL: importe o divisa que no casan con el asiento → alerta transfer_mismatch', async () => {
+      fake.seed(creditTransfer({ amount: 9999 }));
+      entry();
+      const result = await check('tr_credito');
+      expect(result).toMatchObject({ outcome: 'mismatch' });
+      expect(alerts[0]).toMatchObject({ alert: 'payouts.transfer_mismatch' });
+
+      alerts.length = 0;
+      fake.seed(creditTransfer({ currency: 'usd' }));
+      await expect(check('tr_credito')).resolves.toMatchObject({ outcome: 'mismatch' });
+      expect(alerts).toHaveLength(1);
+    });
+
+    it('revertido a mano en Stripe → alerta (un crédito no se revierte desde el panel)', async () => {
+      fake.seed(creditTransfer({ amount_reversed: 500 }));
+      entry();
+      await expect(check('tr_credito', 'transfer.reversed')).resolves.toMatchObject({
+        outcome: 'mismatch',
+      });
+      expect(alerts[0]).toMatchObject({ alert: 'payouts.transfer_mismatch' });
+    });
+  });
 });
 
 describe('handleChargeEvent', () => {

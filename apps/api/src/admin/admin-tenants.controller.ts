@@ -10,6 +10,8 @@ import {
   Delete,
   ForbiddenException,
   Get,
+  HttpCode,
+  Logger,
   NotFoundException,
   Param,
   Patch,
@@ -17,11 +19,18 @@ import {
   Put,
   Query,
   Req,
+  Res,
   UnauthorizedException,
   UseGuards,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
-import type { FastifyRequest } from 'fastify';
+import {
+  PayoutsCreditInvalidError,
+  PayoutsCreditNoAccountError,
+  PayoutsInvoicingDisabledError,
+  type FeeRow,
+} from '@didacta/mod-payouts';
+import type { FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { auditActorId, auditActorTrace, type AdminActor } from '../auth/admin-actor';
 import { extractClientContext } from '../auth/client-context';
@@ -34,12 +43,19 @@ import {
   DECLARED_COUNTRY_OTHER,
   normalizeDeclaredCountry,
 } from '../modules/payouts/declared-country';
+import type { PayoutsInvoicesResponse } from '../modules/payouts/payouts-legal.controller';
+import type { PayoutsSummaryResponse } from '../modules/payouts/payouts-sales.controller';
 import { PayoutsRuntime } from '../modules/payouts/payouts-runtime.service';
 import { SUBSCRIPTION_GATE_STATES } from '../tenancy/subscription-gate';
 import { runAsTenant, runGlobalWithoutTenant } from '../tenancy/tenant-context.storage';
 import { TenantResolverService } from '../tenancy/tenant-resolver.service';
 import { ACADEMY_LOCALES, toAcademyLocale, type AcademyLocale } from '../common/academy-defaults';
-import { AdminTenantsService, type TenantUsageItem } from './admin-tenants.service';
+import {
+  AdminTenantsService,
+  type TenantBrandingResponse,
+  type TenantUsageItem,
+} from './admin-tenants.service';
+import { HEX_COLOR } from './tenant-branding';
 import { SupportAccessService } from './support-access.service';
 
 // Los schemas de las rutas de la lista blanca se exportan para que
@@ -106,6 +122,21 @@ const renameSchema = z.object({
   name: z.string().min(1).max(120),
 });
 type RenameDto = z.infer<typeof renameSchema>;
+
+/**
+ * `PUT /admin/tenants/:id/branding`. Contrato con `didacta-cloud`: al menos uno
+ * de los dos. El color es un hex `#RRGGBB`; el aula lo guarda como tono y
+ * saturación (ver `tenant-branding.ts`).
+ */
+export const brandingSchema = z
+  .object({
+    name: z.string().trim().min(1).max(120).optional(),
+    primaryColor: z.string().regex(HEX_COLOR, 'Color #RRGGBB').optional(),
+  })
+  .refine((dto) => dto.name !== undefined || dto.primaryColor !== undefined, {
+    message: 'Indica al menos `name` o `primaryColor`.',
+  });
+type BrandingDto = z.infer<typeof brandingSchema>;
 
 export const domainSchema = z.object({
   hostname: z.string().min(1).max(253),
@@ -357,6 +388,58 @@ export class AdminTenantsController {
     );
   }
 
+  @Get(':id/branding')
+  @AllowProvisioning()
+  @ApiOperation({
+    summary: 'Nombre, color y dominio de un aula. Solo super_admin o credencial de provisioning.',
+    description:
+      'Solo lectura. `primaryColor` es el color principal tal como se pinta (`#rrggbb`) o `null` si el aula no ha personalizado su marca.',
+  })
+  async getBranding(
+    @Req() req: FastifyRequest,
+    @CurrentUser() user: SessionClaims | undefined,
+    @Param('id') id: string,
+  ): Promise<TenantBrandingResponse> {
+    requireAdminActor(user, req);
+    return this.service.getBranding(id);
+  }
+
+  @Put(':id/branding')
+  @AllowProvisioning()
+  @ApiOperation({
+    summary:
+      'Cambiar el nombre y/o el color de un aula (al menos uno). Solo super_admin o credencial de provisioning.',
+    description: [
+      'Es la ÚNICA puerta por la que la credencial de provisioning puede renombrar un aula,',
+      'y solo junto a la marca: `PATCH :id` sigue siendo del humano. El nombre usa el mismo',
+      'camino y el mismo audit log (`admin.tenant.renamed`) que `rename`, con el actor de',
+      'máquina marcado.',
+      '',
+      '`primaryColor` es `#RRGGBB`. El aula guarda tono y saturación y fija la luminosidad:',
+      'la respuesta devuelve el color ya normalizado, que puede no ser idéntico al enviado.',
+      '',
+      'Idempotente: lo que ya es lo pedido no se escribe ni deja fila en el audit log. Con',
+      'los cobros de plataforma encendidos, la marca se sincroniza con Stripe en segundo plano.',
+    ].join('\n'),
+  })
+  async setBranding(
+    @Req() req: FastifyRequest,
+    @CurrentUser() user: SessionClaims | undefined,
+    @Param('id') id: string,
+    @Body(new ZodValidationPipe(brandingSchema)) dto: BrandingDto,
+  ): Promise<TenantBrandingResponse> {
+    const actor = requireAdminActor(user, req);
+    return this.service.setBranding(
+      actor,
+      id,
+      {
+        ...(dto.name !== undefined ? { name: dto.name } : {}),
+        ...(dto.primaryColor !== undefined ? { primaryColor: dto.primaryColor } : {}),
+      },
+      extractClientContext(req),
+    );
+  }
+
   @Patch(':id/signups')
   @AllowProvisioning()
   @ApiOperation({
@@ -577,6 +660,41 @@ export interface TenantPayoutsVolumeRow {
 }
 
 /**
+ * `GET /admin/tenants/payouts/fees?from&to`: el mismo schema que `volume`
+ * (días UTC incluidos, máximo 366). Contrato con `didacta-cloud`.
+ */
+export const payoutsFeesQuerySchema = payoutsVolumeQuerySchema;
+type PayoutsFeesQuery = z.infer<typeof payoutsFeesQuerySchema>;
+
+/** Fila de `GET /admin/tenants/payouts/fees`. Importes ≥ 0 en unidad mínima de `currency`. */
+export type TenantPayoutsFeesRow = FeeRow;
+
+/**
+ * `POST /admin/tenants/:id/payouts/credits`. Contrato con `didacta-cloud`.
+ * Mueve dinero: el cuerpo se valida a mano para que cualquier fallo de forma
+ * sea `PAYOUTS_CREDIT_INVALID` (400) con el campo en `detail`.
+ */
+export const payoutsCreditSchema = z.object({
+  /** Unidad mínima de `currency`; entero > 0. El tope lo pone el operador. */
+  amount: z.number().int().min(1).max(2_147_483_647),
+  /** ISO 4217 en minúsculas. */
+  currency: z.string().regex(/^[a-z]{3}$/),
+  /** 8–120 caracteres. Una clave = como mucho un crédito. */
+  idempotencyKey: z.string().regex(/^[A-Za-z0-9._:-]{8,120}$/),
+  /** Para el audit log y la descripción de la transferencia. */
+  reason: z.string().trim().min(1).max(200),
+});
+
+/** Respuesta de `POST /admin/tenants/:id/payouts/credits`. */
+export interface TenantPayoutsCreditResponse {
+  readonly status: 'transferred';
+  /** `tr_…` de Stripe; el mismo en un reintento con la misma clave. */
+  readonly transferId: string;
+  readonly amount: number;
+  readonly currency: string;
+}
+
+/**
  * Respuesta de `GET /admin/tenants/payouts/countries`: los países (ISO 3166-1
  * alfa-2, mayúsculas) donde el operador puede pagar a creadores. Es la misma
  * lista que aplica el alta (`PAYMENTS_PLATFORM_SUPPORTED_COUNTRIES` o la de
@@ -637,6 +755,35 @@ export class AdminTenantsPayoutsController {
     const from = new Date(`${query.from}T00:00:00.000Z`);
     const toExclusive = new Date(Date.parse(`${query.to}T00:00:00.000Z`) + 86_400_000);
     return this.runtime.reports.volume(from, toExclusive);
+  }
+
+  // También ANTES de las rutas con `:id`.
+  @Get('payouts/fees')
+  @AllowProvisioning()
+  @ApiOperation({
+    summary:
+      'Comisión del operador por aula, día (UTC del asiento) y divisa de liquidación, entre `from` y `to` (ambos incluidos, YYYY-MM-DD, máx. 366 días). Sale del libro, no del volumen.',
+    description: [
+      '`feeCollected` = comisión cobrada (asientos `PLATFORM_FEE`) y `feeReturned` = comisión',
+      'devuelta por reembolsos y disputas (`PLATFORM_FEE_REFUND`), ambas en unidad mínima y ≥ 0.',
+      'El neto es `feeCollected − feeReturned` y puede ser negativo en un día: un reembolso',
+      'tardío cae en el día en que se devolvió, no en el de la venta.',
+      '',
+      'A diferencia de `payouts/volume` (que suma la comisión de cada venta por día de cobro y no',
+      'resta lo devuelto), esto es lo que de verdad se queda el operador, y es el mismo criterio',
+      'de la factura de la comisión. Conviene volver a pedir los últimos días. Nunca suma divisas',
+      'distintas. Solo existe con el modo plataforma encendido.',
+    ].join('\n'),
+  })
+  async getPayoutsFees(
+    @Req() req: FastifyRequest,
+    @CurrentUser() user: SessionClaims | undefined,
+    @Query(new ZodValidationPipe(payoutsFeesQuerySchema)) query: PayoutsFeesQuery,
+  ): Promise<TenantPayoutsFeesRow[]> {
+    requireAdminActor(user, req);
+    const from = new Date(`${query.from}T00:00:00.000Z`);
+    const toExclusive = new Date(Date.parse(`${query.to}T00:00:00.000Z`) + 86_400_000);
+    return this.runtime.reports.fees(from, toExclusive);
   }
 
   // También ANTES de las rutas con `:id`, por la misma razón.
@@ -724,6 +871,171 @@ export class AdminTenantsPayoutsController {
         debtOutstanding,
       };
     });
+  }
+
+  @Get(':id/payouts/summary')
+  @AllowProvisioning()
+  @ApiOperation({
+    summary:
+      'Resumen de cobros de un aula por divisa: vendido, comisiones, recibido, pendiente y deuda. Solo lectura.',
+    description:
+      'La misma respuesta que el resumen que ve el propio creador (`GET /modules/payouts/summary`): una fila por divisa de liquidación, nunca se suman divisas distintas.',
+  })
+  async getPayoutsSummary(
+    @Req() req: FastifyRequest,
+    @CurrentUser() user: SessionClaims | undefined,
+    @Param('id') id: string,
+  ): Promise<PayoutsSummaryResponse> {
+    requireAdminActor(user, req);
+    await this.requireTenant(id);
+    return runAsTenant(id, async () => {
+      const [summary, settings] = await Promise.all([
+        this.runtime.reports.summary(id),
+        this.runtime.settings.get(id),
+      ]);
+      return { ...summary, operatorName: this.runtime.config.displayName, feeBps: settings.feeBps };
+    });
+  }
+
+  @Get(':id/payouts/invoices')
+  @AllowProvisioning()
+  @ApiOperation({
+    summary:
+      'Facturas de la comisión emitidas a un aula, más recientes primero. `enabled: false` si la instalación no factura.',
+  })
+  async getPayoutsInvoices(
+    @Req() req: FastifyRequest,
+    @CurrentUser() user: SessionClaims | undefined,
+    @Param('id') id: string,
+  ): Promise<PayoutsInvoicesResponse> {
+    requireAdminActor(user, req);
+    await this.requireTenant(id);
+    const invoices = this.runtime.invoices;
+    if (!invoices) return { enabled: false, items: [] };
+    return { enabled: true, items: await runAsTenant(id, () => invoices.list(id)) };
+  }
+
+  @Get(':id/payouts/invoices/:invoiceId/pdf')
+  @AllowProvisioning()
+  @ApiOperation({
+    summary:
+      'El PDF de una factura de la comisión, tal como se emitió. De otra aula: 404 (`PAYOUTS_INVOICE_NOT_FOUND`).',
+    description:
+      'Binario `application/pdf` con `cache-control: private, no-store` y `content-disposition: attachment`.',
+  })
+  async getPayoutsInvoicePdf(
+    @Req() req: FastifyRequest,
+    @CurrentUser() user: SessionClaims | undefined,
+    @Param('id') id: string,
+    @Param('invoiceId') invoiceId: string,
+    @Res() reply: FastifyReply,
+  ): Promise<void> {
+    requireAdminActor(user, req);
+    await this.requireTenant(id);
+    const invoices = this.runtime.invoices;
+    if (!invoices) throw new PayoutsInvoicingDisabledError();
+    const { fileName, pdf } = await runAsTenant(id, () => invoices.pdf(id, invoiceId));
+    void reply
+      .header('content-type', 'application/pdf')
+      .header(
+        'content-disposition',
+        `attachment; filename="${fileName.replace(/[^A-Za-z0-9._-]/g, '_')}"`,
+      )
+      .header('cache-control', 'private, no-store')
+      .send(pdf);
+  }
+
+  @Post(':id/payouts/credits')
+  @HttpCode(200)
+  @AllowProvisioning()
+  @ApiOperation({
+    summary:
+      'Crédito de la plataforma a la cuenta conectada de un aula: mueve `amount` del saldo del operador al del creador. MUEVE DINERO.',
+    description: [
+      'Cuerpo: `{ amount: entero > 0 (unidad mínima), currency: 3 letras minúsculas,',
+      'idempotencyKey: 8–120 caracteres [A-Za-z0-9._:-], reason: 1–200 }`.',
+      '',
+      '**Idempotente de verdad**: una misma `idempotencyKey` produce como mucho una',
+      'transferencia. Reintentar la misma petición devuelve el crédito original (200, mismo',
+      '`transferId`) sin mover nada, aunque la cuenta ya no esté lista. Reutilizar la clave con',
+      'otro importe o divisa es un 409 `PAYOUTS_CREDIT_IDEMPOTENCY_CONFLICT`.',
+      '',
+      'Respuesta: `{ status: "transferred", transferId, amount, currency }`. Errores con `code`:',
+      '`PAYOUTS_CREDIT_INVALID` (400; `detail` = el campo), `PAYOUTS_CREDIT_NO_ACCOUNT` (409; sin',
+      'cuenta conectada, no lista, o el aula no cobra por la plataforma),',
+      '`PAYOUTS_CREDIT_INSUFFICIENT_PLATFORM_BALANCE` (409; no se ha movido nada). Un fallo',
+      'transitorio de Stripe es 503 y se puede reintentar con la misma clave; otro es 502.',
+      '',
+      'Deja `payouts.credit.transferred` en el audit log del aula y, en el libro de cobros, un',
+      '`ADJUSTMENT` (+) y un `TRANSFER` (−) que suman 0. El importe tiene un tope por crédito',
+      '(`PAYMENTS_PLATFORM_CREDIT_MAX_MINOR`, por defecto 1.000.000). No compensa la deuda del',
+      'creador. Solo existe con el modo plataforma encendido.',
+    ].join('\n'),
+  })
+  async createPayoutsCredit(
+    @Req() req: FastifyRequest,
+    @CurrentUser() user: SessionClaims | undefined,
+    @Param('id') id: string,
+    @Body() body: unknown,
+  ): Promise<TenantPayoutsCreditResponse> {
+    const actor = requireAdminActor(user, req);
+    await this.requireTenant(id);
+    const parsed = payoutsCreditSchema.safeParse(body);
+    if (!parsed.success) {
+      const field = parsed.error.issues[0]?.path.join('.');
+      throw new PayoutsCreditInvalidError(field || 'body');
+    }
+    // Solo el modo plataforma tiene cuenta del operador desde la que mover
+    // dinero: un aula con claves propias o sin cobros no puede recibir esto.
+    const mode = await runAsTenant(id, () => this.runtime.mode.resolve(id));
+    if (mode.mode !== 'platform') {
+      throw new PayoutsCreditNoAccountError(`mode_${mode.mode}`);
+    }
+    // `tenantId` va DESPUÉS del cuerpo: el aula es la de la URL, pase lo que pase.
+    const result = await this.runtime.credits.credit({
+      ...parsed.data,
+      tenantId: id,
+      initiatedBy: auditActorId(actor),
+    });
+    if (result.created) {
+      // Una vez, al crearlo (un reintento no deja otra fila). Si el audit log
+      // fallase, el dinero ya se movió: no se devuelve un error que invite a
+      // reintentar; el libro (append-only) lleva el motivo y quién lo ordenó.
+      const client = extractClientContext(req);
+      try {
+        await runAsTenant(id, () =>
+          this.auditLog.record({
+            tenantId: id,
+            actorId: auditActorId(actor),
+            action: 'payouts.credit.transferred',
+            resourceType: 'payouts_credit',
+            resourceId: result.transferId,
+            metadata: {
+              transferId: result.transferId,
+              amount: result.amount,
+              currency: result.currency,
+              idempotencyKey: parsed.data.idempotencyKey,
+              reason: parsed.data.reason,
+              ...auditActorTrace(actor),
+            },
+            ip: client.ip ?? undefined,
+            userAgent: client.userAgent ?? undefined,
+          }),
+        );
+      } catch (err) {
+        new Logger(AdminTenantsPayoutsController.name).error(
+          `payouts.credit: crédito ${result.transferId} transferido pero sin fila en el audit log: ${
+            err instanceof Error ? err.message : String(err)
+          }`,
+        );
+      }
+    }
+    return {
+      status: 'transferred',
+      transferId: result.transferId,
+      amount: result.amount,
+      currency: result.currency,
+    };
   }
 
   private async requireTenant(id: string): Promise<void> {

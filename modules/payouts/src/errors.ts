@@ -382,6 +382,62 @@ export class PayoutsRefundRejectedError extends PayoutsError {
   }
 }
 
+/**
+ * Un crédito de plataforma al creador (`POST …/payouts/credits`) no es válido:
+ * importe, divisa, clave o motivo fuera de forma, o por encima del tope del
+ * operador. `detail` dice qué campo.
+ */
+export class PayoutsCreditInvalidError extends PayoutsError {
+  constructor(detail: string) {
+    super(`Crédito no válido: ${detail}`, 'PAYOUTS_CREDIT_INVALID', { detail });
+    this.name = 'PayoutsCreditInvalidError';
+  }
+}
+
+/**
+ * El aula no tiene una cuenta conectada a la que mover el crédito: cobra con
+ * claves propias, no ha conectado nada o su cuenta no está lista (sin alta
+ * completa, restringida, rechazada o desconectada). `detail` = el motivo.
+ */
+export class PayoutsCreditNoAccountError extends PayoutsError {
+  constructor(reason: string) {
+    super(
+      'Esta academia no tiene una cuenta de cobros lista para recibir el crédito.',
+      'PAYOUTS_CREDIT_NO_ACCOUNT',
+      { detail: reason },
+    );
+    this.name = 'PayoutsCreditNoAccountError';
+  }
+}
+
+/** El saldo de la cuenta de la plataforma no alcanza para el crédito. No se ha movido nada. */
+export class PayoutsCreditInsufficientPlatformBalanceError extends PayoutsError {
+  constructor(currency: string) {
+    super(
+      `El saldo de la plataforma en ${currency.toUpperCase()} no alcanza para este crédito.`,
+      'PAYOUTS_CREDIT_INSUFFICIENT_PLATFORM_BALANCE',
+      { detail: currency.toUpperCase() },
+    );
+    this.name = 'PayoutsCreditInsufficientPlatformBalanceError';
+  }
+}
+
+/**
+ * La clave de idempotencia de un crédito ya se usó con OTRO importe, divisa o
+ * cuenta. Reintentar el mismo crédito es legítimo (devuelve el original); esto
+ * es una clave reutilizada para otra cosa y no se resuelve en silencio.
+ */
+export class PayoutsCreditIdempotencyConflictError extends PayoutsError {
+  constructor(what: string) {
+    super(
+      'La clave de idempotencia ya se usó para un crédito distinto.',
+      'PAYOUTS_CREDIT_IDEMPOTENCY_CONFLICT',
+      { detail: what },
+    );
+    this.name = 'PayoutsCreditIdempotencyConflictError';
+  }
+}
+
 /** La clave de Stripe de plataforma no tiene el formato esperado. */
 export class PlatformStripeConfigError extends PayoutsError {
   constructor(what: string) {

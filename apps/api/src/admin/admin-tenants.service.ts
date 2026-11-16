@@ -9,9 +9,11 @@ import {
   Injectable,
   NotFoundException,
   Optional,
+  ServiceUnavailableException,
 } from '@nestjs/common';
 import { Logger as PinoLogger } from 'nestjs-pino';
 import { LICENSE_CAPABILITIES, LicenseService } from '@didacta/license-sdk';
+import { updateThemeSchema } from '@didacta/mod-theming';
 import { type AdminActor, auditActorId, auditActorTrace } from '../auth/admin-actor';
 import type { ClientContext } from '../auth/client-context';
 import { FIRST_ACCESS_TTL_MINUTES, PasswordResetService } from '../auth/password-reset.service';
@@ -19,13 +21,16 @@ import {
   type DeclaredCountryWriter,
   writeDeclaredCountry,
 } from '../modules/payouts/declared-country';
+import { PayoutsBrandingSync } from '../modules/payouts/payouts-branding.sync';
 import { PayoutsRuntime } from '../modules/payouts/payouts-runtime.service';
+import { ModuleRegistryService } from '../modules/module-registry.service';
 import { TenantStripeResolverService } from '../modules/tenant-stripe-resolver.service';
 import { PrismaAuditLogService } from '../modules/prisma-audit-log.service';
 import { PrismaService } from '../prisma/prisma.service';
 import type { GateState } from '../tenancy/subscription-gate';
 import { SubscriptionGateService } from '../tenancy/subscription-gate.service';
-import { runGlobalWithoutTenant } from '../tenancy/tenant-context.storage';
+import { runAsTenant, runGlobalWithoutTenant } from '../tenancy/tenant-context.storage';
+import { brandToHex, hexToBrand } from './tenant-branding';
 import {
   academyDateLocale,
   writeAcademyLocale,
@@ -119,6 +124,28 @@ export interface SubscriptionGateInput {
 }
 
 /**
+ * Respuesta de `GET` y `PUT /admin/tenants/:id/branding`. Contrato con
+ * `didacta-cloud` (ver `tests/contract/admin-tenants.contract.test.ts`).
+ */
+export interface TenantBrandingResponse {
+  readonly name: string;
+  /**
+   * Color principal del aula tal como se pinta (`#rrggbb`, minúsculas), o
+   * `null` si el aula no ha personalizado su marca (usa la de Didacta).
+   */
+  readonly primaryColor: string | null;
+  readonly slug: string;
+  /** Dominio primario del aula, o `null` si no tiene. */
+  readonly primaryHostname: string | null;
+}
+
+export interface TenantBrandingInput {
+  readonly name?: string;
+  /** `#RRGGBB`. Se guarda como tono y saturación (la luminosidad es fija). */
+  readonly primaryColor?: string;
+}
+
+/**
  * Roles que NO cuentan como miembro: son quien opera la academia, no quien la
  * consume. Cobrar por el administrador que da de alta a los demás sería cobrar
  * por el propio acto de administrar.
@@ -154,6 +181,12 @@ export class AdminTenantsService {
     // Cobros de plataforma (solo existe con el modo encendido): al archivar un
     // aula se desconectan sus cobros (E6).
     @Optional() private readonly payouts?: PayoutsRuntime,
+    // Marca del aula (`GET/PUT :id/branding`): el color vive en mod.theming.
+    // Opcionales por lo mismo que los anteriores; sin registro no se puede
+    // escribir el color (503), pero sí leerlo.
+    @Optional() private readonly moduleRegistry?: ModuleRegistryService,
+    // Solo con los cobros de plataforma: lleva la marca a la cuenta de Stripe.
+    @Optional() private readonly paymentsBranding?: PayoutsBrandingSync,
   ) {}
 
   /**
@@ -882,6 +915,120 @@ export class AdminTenantsService {
       userAgent: ctx.userAgent ?? undefined,
     });
     return this.getDetail(tenantId);
+  }
+
+  /**
+   * Nombre y color de un aula, para el panel del creador de Didacta Cloud.
+   * Solo lectura: no crea el tema si no existe (`primaryColor: null`).
+   */
+  async getBranding(id: string): Promise<TenantBrandingResponse> {
+    const tenant = await runGlobalWithoutTenant(() =>
+      this.prisma.tenant.findFirst({
+        where: { id, deletedAt: null },
+        select: { name: true, slug: true },
+      }),
+    );
+    if (!tenant) {
+      throw new NotFoundException({
+        message: 'Tenant no encontrado.',
+        code: 'ADMIN_TENANT_NOT_FOUND',
+      });
+    }
+    // Tema y dominio llevan RLS por aula: se leen con el contexto del aula
+    // pedida (como `TenantResolverService.resolvePrimaryDomain`). Medido contra
+    // Postgres con RLS forzada: la relación `domains` anidada en la consulta
+    // global del tenant volvía VACÍA, y `primaryHostname` salía `null`.
+    const [theme, primary] = await runAsTenant(id, () =>
+      Promise.all([
+        this.prisma.modThemingTenantTheme.findUnique({
+          where: { tenantId: id },
+          select: { brandHue: true, brandSaturation: true },
+        }),
+        this.prisma.tenantDomain.findFirst({
+          where: { tenantId: id, isPrimary: true },
+          select: { hostname: true },
+        }),
+      ]),
+    );
+    return {
+      name: tenant.name,
+      primaryColor: theme ? brandToHex(theme.brandHue, theme.brandSaturation) : null,
+      slug: tenant.slug,
+      primaryHostname: primary?.hostname ?? null,
+    };
+  }
+
+  /**
+   * Cambia el nombre y/o el color de un aula. Idempotente: lo que ya es lo
+   * pedido no se escribe ni deja fila en el audit log.
+   *
+   * El nombre sigue EXACTAMENTE el camino de `rename` (mismo audit log
+   * `admin.tenant.renamed`, con el actor de máquina marcado): esta es la única
+   * puerta por la que la credencial de provisioning puede renombrar, y solo
+   * con la marca. `PATCH :id` sigue sin abrirse a la máquina.
+   *
+   * El color pasa por el servicio de theming del módulo (`updateThemeSchema`)
+   * como tono y saturación; ver `tenant-branding.ts`. Todo se valida ANTES de
+   * escribir nada, para no dejar un nombre cambiado con un color que falla.
+   */
+  async setBranding(
+    actor: AdminActor,
+    id: string,
+    input: TenantBrandingInput,
+    ctx: ClientContext = NO_CTX,
+  ): Promise<TenantBrandingResponse> {
+    const current = await this.getBranding(id);
+    const color =
+      input.primaryColor !== undefined
+        ? updateThemeSchema.parse(hexToBrand(input.primaryColor))
+        : null;
+    if (color && !this.moduleRegistry) {
+      throw new ServiceUnavailableException({
+        message: 'El servicio de marca del aula no está disponible.',
+        code: 'ADMIN_TENANT_BRANDING_UNAVAILABLE',
+      });
+    }
+
+    let changed = false;
+    const name = input.name?.trim();
+    if (name !== undefined && name !== current.name) {
+      await this.rename(actor, id, name, ctx);
+      changed = true;
+    }
+
+    if (color && this.moduleRegistry) {
+      const nextHex = brandToHex(color.brandHue ?? 0, color.brandSaturation ?? 0);
+      // Devolver tal cual el hex que se acaba de leer no es un cambio: sin esta
+      // comprobación, el redondeo a 8 bits por canal haría derivar el aula un
+      // paso en cada «guardar lo que ya hay».
+      const sameAsRead = input.primaryColor?.toLowerCase() === current.primaryColor;
+      if (!sameAsRead && nextHex !== current.primaryColor) {
+        const registry = this.moduleRegistry;
+        await runAsTenant(id, () => registry.getThemingService().update(id, color));
+        await runAsTenant(id, () =>
+          this.auditLog.record({
+            tenantId: id,
+            actorId: auditActorId(actor),
+            action: 'admin.tenant.branding_color_changed',
+            resourceType: 'tenant',
+            resourceId: id,
+            metadata: {
+              previousColor: current.primaryColor,
+              color: nextHex,
+              ...auditActorTrace(actor),
+            },
+            ip: ctx.ip ?? undefined,
+            userAgent: ctx.userAgent ?? undefined,
+          }),
+        );
+        changed = true;
+      }
+    }
+
+    // Stripe enseña el nombre y el color del aula: que se enteren. En segundo
+    // plano y solo con los cobros de plataforma encendidos.
+    if (changed) this.paymentsBranding?.request(id);
+    return this.getBranding(id);
   }
 }
 

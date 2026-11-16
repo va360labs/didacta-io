@@ -124,6 +124,22 @@ export interface VolumeRow {
   readonly salesCount: number;
 }
 
+/**
+ * Fila del contrato `GET /admin/tenants/payouts/fees`: la comisión del
+ * operador de un aula en un día UTC y una divisa, leída del LIBRO (no del
+ * volumen). Importes en unidad mínima, siempre ≥ 0.
+ */
+export interface FeeRow {
+  readonly tenantId: string;
+  /** Día UTC del asiento (`occurred_at`), `YYYY-MM-DD`. */
+  readonly day: string;
+  readonly currency: string;
+  /** Comisión cobrada: suma de −importe de los asientos `PLATFORM_FEE`. */
+  readonly feeCollected: number;
+  /** Comisión devuelta: suma de los asientos `PLATFORM_FEE_REFUND`. */
+  readonly feeReturned: number;
+}
+
 const WEEKDAYS = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
 const DAY_MS = 86_400_000;
 
@@ -550,6 +566,60 @@ export class PayoutsReportsService {
     }
     for (const dispute of disputes) {
       row(dispute.tenantId, dispute.createdAt, dispute.currency).disputes += dispute.amount;
+    }
+    return [...rows.values()].sort(
+      (a, b) =>
+        a.day.localeCompare(b.day) ||
+        a.tenantId.localeCompare(b.tenantId) ||
+        a.currency.localeCompare(b.currency),
+    );
+  }
+
+  /**
+   * Comisión del operador de TODAS las aulas por día (UTC del asiento) y
+   * divisa, entre `from` (incluido) y `to` (excluido). Acceso global
+   * sancionado: solo para el plano de control.
+   *
+   * Sale del libro, no del volumen: `reports.volume()` suma `platformFee` por
+   * día de COBRO y no resta la comisión que se devuelve en un reembolso o una
+   * disputa. Aquí `feeCollected` es la suma de −importe de los asientos
+   * `PLATFORM_FEE` (que van en negativo, como toda salida del creador) y
+   * `feeReturned` la de los `PLATFORM_FEE_REFUND` (en positivo). El neto del
+   * día es `feeCollected − feeReturned`, y es el mismo criterio con el que
+   * se factura la comisión (`invoices.service.ts`). Un asiento cuenta en el
+   * día en que ocurrió, así que un reembolso tardío cae en SU día y deja ese
+   * día en negativo: quien consuma esto debe volver a pedir los últimos días
+   * y recalcular, no sumar a ciegas.
+   *
+   * Nunca suma divisas distintas.
+   */
+  async fees(from: Date, to: Date): Promise<FeeRow[]> {
+    const entries = await this.db.global((tx) =>
+      tx.modPayoutsLedgerEntry.findMany({
+        where: {
+          type: { in: ['PLATFORM_FEE', 'PLATFORM_FEE_REFUND'] },
+          occurredAt: { gte: from, lt: to },
+        },
+        select: { tenantId: true, type: true, amount: true, currency: true, occurredAt: true },
+      }),
+    );
+    const rows = new Map<string, Mutable<FeeRow>>();
+    for (const entry of entries) {
+      const day = entry.occurredAt.toISOString().slice(0, 10);
+      const key = `${day}|${entry.tenantId}|${entry.currency}`;
+      let row = rows.get(key);
+      if (!row) {
+        row = {
+          tenantId: entry.tenantId,
+          day,
+          currency: entry.currency,
+          feeCollected: 0,
+          feeReturned: 0,
+        };
+        rows.set(key, row);
+      }
+      if (entry.type === 'PLATFORM_FEE') row.feeCollected += -entry.amount;
+      else row.feeReturned += entry.amount;
     }
     return [...rows.values()].sort(
       (a, b) =>

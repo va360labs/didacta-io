@@ -114,6 +114,8 @@ describe('modo plataforma ENCENDIDO — valores por defecto del plan', () => {
       accountsApi: 'v2',
       displayName: 'Didacta',
       debtAlertMinor: 10000,
+      // Tope de un crédito de plataforma (afiliados): 10.000 € en eur.
+      creditMaxMinor: 1_000_000,
       // E6: lo decidido por el dueño — el operador devuelve su 5 % en
       // proporción; la comisión de la tarjeta y la disputa perdida, el creador;
       // y la tasa de una disputa GANADA (Stripe no la devuelve), también.
@@ -305,6 +307,20 @@ describe('modo plataforma ENCENDIDO — valores propios', () => {
       displayName: 'Academia Cloud',
       debtAlertMinor: 50000,
     });
+  });
+
+  it('tope de un crédito de plataforma: 1.000.000 por defecto, configurable, y nunca 0 ni no numérico', () => {
+    expect(cargar(encendido()).creditMaxMinor).toBe(1_000_000);
+    expect(cargar(encendido({ PAYMENTS_PLATFORM_CREDIT_MAX_MINOR: '250000' })).creditMaxMinor).toBe(
+      250_000,
+    );
+    for (const mala of ['0', '-5', '1.5', 'mucho', '']) {
+      if (mala === '') continue; // vacío = sin definir = el de por defecto
+      expect(
+        errorDe(encendido({ PAYMENTS_PLATFORM_CREDIT_MAX_MINOR: mala })).problems.join('\n'),
+        mala,
+      ).toContain('PAYMENTS_PLATFORM_CREDIT_MAX_MINOR');
+    }
   });
 
   it('comisión 0 y 3000 son los extremos válidos', () => {

@@ -286,11 +286,15 @@ export type { DisputeEventOutcome } from './handlers/dispute.js';
 export { PayoutsReportsService, creatorReceives, estimatePayoutDate } from './reports.service.js';
 export type {
   CurrencySummary,
+  FeeRow,
   SaleView,
   SalesPage,
   SalesSummary,
   VolumeRow,
 } from './reports.service.js';
+
+export { PayoutsCreditsService, creditLedgerKey, creditTransferGroup } from './credits.service.js';
+export type { CreditInput, CreditOutcome, CreditsServiceOptions } from './credits.service.js';
 
 export { PayoutsSettingsService } from './settings.service.js';
 export type { PayoutsSettingsView } from './settings.service.js';
@@ -415,6 +419,10 @@ export {
   PayoutsTaxProfileInvalidError,
   PayoutsInvoiceNotFoundError,
   PayoutsInvoicingDisabledError,
+  PayoutsCreditInvalidError,
+  PayoutsCreditNoAccountError,
+  PayoutsCreditInsufficientPlatformBalanceError,
+  PayoutsCreditIdempotencyConflictError,
   PlatformStripeConfigError,
   PlatformStripeApiError,
 } from './errors.js';

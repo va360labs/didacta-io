@@ -6,7 +6,7 @@
  * CONTRATO CON `didacta-cloud` — UC-C104
  * ============================================================================
  *
- * Estas once operaciones son las que un plano de control externo consume para
+ * Estas trece operaciones son las que un plano de control externo consume para
  * dar de alta, operar, facturar y sostener tenants. **Romperlas es un breaking change**:
  * no basta con que la suite siga verde aquí, hay que coordinar el cambio con
  * `didacta-cloud` (y con cualquier self-hoster que automatice su instalación)
@@ -33,6 +33,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   AdminTenantsController,
   AdminTenantsPayoutsController,
+  brandingSchema,
+  payoutsCreditSchema,
+  payoutsFeesQuerySchema,
   payoutsSettingsSchema,
   payoutsVolumeQuerySchema,
   createTenantSchema,
@@ -56,7 +59,7 @@ import { loadPlatformPaymentsConfig } from '../../src/modules/payouts/platform-p
 const ACTOR = { kind: 'user' as const, userId: 'user-super-1' };
 const TENANT_ID = '99999999-8888-7777-6666-555555555555';
 
-/** Las 11 operaciones del contrato: verbo + ruta relativa al controller. */
+/** Las 13 operaciones del contrato: verbo + ruta relativa al controller. */
 const CONTRACT_ROUTES: Array<{ handler: string; method: number; path: string }> = [
   { handler: 'list', method: RequestMethod.GET, path: '/' },
   { handler: 'usage', method: RequestMethod.GET, path: 'usage' },
@@ -77,6 +80,9 @@ const CONTRACT_ROUTES: Array<{ handler: string; method: number; path: string }> 
   },
   { handler: 'addDomain', method: RequestMethod.POST, path: ':id/domains' },
   { handler: 'removeDomain', method: RequestMethod.DELETE, path: ':id/domains/:hostname' },
+  // Panel del creador de Cloud (ADR-007): nombre y color del aula.
+  { handler: 'getBranding', method: RequestMethod.GET, path: ':id/branding' },
+  { handler: 'setBranding', method: RequestMethod.PUT, path: ':id/branding' },
 ];
 
 /** Ruta del canje. No cuelga de `admin/tenants`: es pública y la abre un navegador. */
@@ -675,6 +681,16 @@ const PAYOUTS_ROUTES: Array<{ handler: string; method: number; path: string }> =
   { handler: 'getPayoutsCountries', method: RequestMethod.GET, path: 'payouts/countries' },
   { handler: 'setPayoutsSettings', method: RequestMethod.PUT, path: ':id/payouts-settings' },
   { handler: 'getPayouts', method: RequestMethod.GET, path: ':id/payouts' },
+  // Panel del creador y afiliados (ADR-007 y ADR-008, 2026-11-16).
+  { handler: 'getPayoutsFees', method: RequestMethod.GET, path: 'payouts/fees' },
+  { handler: 'getPayoutsSummary', method: RequestMethod.GET, path: ':id/payouts/summary' },
+  { handler: 'getPayoutsInvoices', method: RequestMethod.GET, path: ':id/payouts/invoices' },
+  {
+    handler: 'getPayoutsInvoicePdf',
+    method: RequestMethod.GET,
+    path: ':id/payouts/invoices/:invoiceId/pdf',
+  },
+  { handler: 'createPayoutsCredit', method: RequestMethod.POST, path: ':id/payouts/credits' },
 ];
 
 describe('CONTRATO · admin/tenants (cobros de plataforma) ↔ didacta-cloud', () => {
@@ -840,6 +856,87 @@ describe('CONTRATO · admin/tenants (cobros de plataforma) ↔ didacta-cloud', (
     expect(names.indexOf('getPayoutsVolume')).toBeGreaterThan(-1);
     expect(names.indexOf('getPayoutsVolume')).toBeLessThan(names.indexOf('setPayoutsSettings'));
     expect(names.indexOf('getPayoutsVolume')).toBeLessThan(names.indexOf('getPayouts'));
+  });
+
+  it('las rutas fijas (volume, countries, fees) se declaran ANTES que TODAS las de `:id`', () => {
+    const names = Object.getOwnPropertyNames(AdminTenantsPayoutsController.prototype);
+    const fijas = ['getPayoutsVolume', 'getPayoutsCountries', 'getPayoutsFees'];
+    const conId = PAYOUTS_ROUTES.filter((r) => r.path.startsWith(':id')).map((r) => r.handler);
+    expect(conId.length).toBeGreaterThanOrEqual(6);
+    for (const fija of fijas) {
+      expect(names.indexOf(fija), fija).toBeGreaterThan(-1);
+      for (const handler of conId) {
+        expect(names.indexOf(fija), `${fija} antes de ${handler}`).toBeLessThan(
+          names.indexOf(handler),
+        );
+      }
+    }
+  });
+
+  it('payouts/fees usa el MISMO schema que payouts/volume: `from` y `to`, días incluidos, máx. 366', () => {
+    expect(payoutsFeesQuerySchema).toBe(payoutsVolumeQuerySchema);
+    expect(Object.keys(payoutsFeesQuerySchema.shape).sort()).toEqual(['from', 'to']);
+    expect(payoutsFeesQuerySchema.safeParse({ from: '2025-11-12', to: '2026-11-12' }).success).toBe(
+      true,
+    );
+    expect(payoutsFeesQuerySchema.safeParse({ from: '2025-11-11', to: '2026-11-12' }).success).toBe(
+      false,
+    );
+    expect(payoutsFeesQuerySchema.safeParse({ from: '2026-11-13', to: '2026-11-12' }).success).toBe(
+      false,
+    );
+  });
+
+  it('credits: el cuerpo lleva exactamente amount, currency, idempotencyKey y reason, con sus límites', () => {
+    expect(Object.keys(payoutsCreditSchema.shape).sort()).toEqual(
+      ['amount', 'currency', 'idempotencyKey', 'reason'].sort(),
+    );
+    const ok = {
+      amount: 250,
+      currency: 'eur',
+      idempotencyKey: 'aff:af0001:eur:2026-W47',
+      reason: 'Afiliación 2026-W47',
+    };
+    expect(payoutsCreditSchema.safeParse(ok).success).toBe(true);
+    const bad: Array<[string, Record<string, unknown>]> = [
+      ['amount 0', { amount: 0 }],
+      ['amount negativo', { amount: -1 }],
+      ['amount decimal', { amount: 1.5 }],
+      ['amount como texto', { amount: '250' }],
+      ['currency en mayúsculas', { currency: 'EUR' }],
+      ['currency de 2 letras', { currency: 'eu' }],
+      ['clave de 7', { idempotencyKey: 'abcdefg' }],
+      ['clave de 121', { idempotencyKey: 'a'.repeat(121) }],
+      ['reason vacío', { reason: '' }],
+      ['reason de 201', { reason: 'x'.repeat(201) }],
+    ];
+    for (const [name, patch] of bad) {
+      expect(payoutsCreditSchema.safeParse({ ...ok, ...patch }).success, name).toBe(false);
+    }
+    for (const campo of Object.keys(ok)) {
+      const incompleto: Record<string, unknown> = { ...ok };
+      delete incompleto[campo];
+      expect(payoutsCreditSchema.safeParse(incompleto).success, `${campo} obligatorio`).toBe(false);
+    }
+  });
+
+  it('branding: el cuerpo lleva name y/o primaryColor (#RRGGBB), al menos uno', () => {
+    expect(brandingSchema.safeParse({ name: 'Mi academia' }).success).toBe(true);
+    expect(brandingSchema.safeParse({ primaryColor: '#0A84FF' }).success).toBe(true);
+    expect(brandingSchema.safeParse({ name: 'Mi academia', primaryColor: '#0a84ff' }).success).toBe(
+      true,
+    );
+    for (const bad of [
+      {},
+      { name: '   ' },
+      { name: 'x'.repeat(121) },
+      { primaryColor: 'red' },
+      { primaryColor: '#fff' },
+      { primaryColor: '0A84FF' },
+      { primaryColor: '#0A84FG' },
+    ]) {
+      expect(brandingSchema.safeParse(bad).success, JSON.stringify(bad)).toBe(false);
+    }
   });
 
   it('payouts/volume: `from` y `to` son días YYYY-MM-DD incluidos, máximo 366 días', () => {

@@ -10,6 +10,7 @@ import {
   FetchViesClient,
   PayoutsAccountsService,
   PayoutsBrandingService,
+  PayoutsCreditsService,
   PayoutsDebtsService,
   PayoutsInvoicesService,
   PayoutsTaxProfileService,
@@ -182,6 +183,10 @@ export class PayoutsRuntime {
         : {}),
     });
     this.reports = new PayoutsReportsService(db);
+    this.credits = new PayoutsCreditsService(db, stripe, {
+      logger: plainLogger,
+      ...(config.creditMaxMinor !== undefined ? { maxMinor: config.creditMaxMinor } : {}),
+    });
     this.portal = new PayoutsPortalService(db, stripe);
 
     // E6: reembolsos, disputas, deudas y desconexión.
@@ -253,6 +258,8 @@ export class PayoutsRuntime {
   readonly invoices: PayoutsInvoicesService | null;
   /** «Tus ventas», resumen por divisa y volumen del pool. */
   readonly reports: PayoutsReportsService;
+  /** Crédito de la plataforma a la cuenta del aula (afiliados, ADR-008). */
+  readonly credits: PayoutsCreditsService;
   /** `true` sin `REDIS_URL`: el webhook liquida en línea. */
   readonly settleInline: boolean;
   /** Portal de cliente del creador (E5). */

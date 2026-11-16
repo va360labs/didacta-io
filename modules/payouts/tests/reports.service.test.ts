@@ -354,3 +354,75 @@ describe('volumen para el plano de control', () => {
     ]);
   });
 });
+
+describe('comisión del operador para el plano de control (fees)', () => {
+  const from = new Date('2026-11-10T00:00:00Z');
+  const to = new Date('2026-11-14T00:00:00Z');
+
+  function entry(
+    tenantId: string,
+    type: string,
+    amount: number,
+    currency: string,
+    occurredAt: string,
+  ) {
+    return db.insert('modPayoutsLedgerEntry', {
+      tenantId,
+      accountId: account[tenantId],
+      type,
+      amount,
+      currency,
+      idempotencyKey: `test:${randomUUID()}`,
+      occurredAt: new Date(occurredAt),
+    })[0]!;
+  }
+
+  it('suma −importe de PLATFORM_FEE como cobrada y PLATFORM_FEE_REFUND como devuelta, por aula, día UTC y divisa', async () => {
+    entry(A, 'PLATFORM_FEE', -500, 'eur', '2026-11-12T10:00:00Z');
+    entry(A, 'PLATFORM_FEE', -150, 'eur', '2026-11-12T23:59:59Z');
+    entry(A, 'PLATFORM_FEE_REFUND', 250, 'eur', '2026-11-12T12:00:00Z');
+    // Otra divisa el mismo día: fila aparte, nunca se mezcla.
+    entry(A, 'PLATFORM_FEE', -500, 'usd', '2026-11-12T10:00:00Z');
+    // Otra aula y otro día.
+    entry(B, 'PLATFORM_FEE', -300, 'gbp', '2026-11-13T00:00:00Z');
+
+    await expect(reports.fees(from, to)).resolves.toEqual([
+      { tenantId: A, day: '2026-11-12', currency: 'eur', feeCollected: 650, feeReturned: 250 },
+      { tenantId: A, day: '2026-11-12', currency: 'usd', feeCollected: 500, feeReturned: 0 },
+      { tenantId: B, day: '2026-11-13', currency: 'gbp', feeCollected: 300, feeReturned: 0 },
+    ]);
+  });
+
+  it('un reembolso tardío cae en SU día y deja ese día solo con devolución (neto negativo)', async () => {
+    entry(A, 'PLATFORM_FEE', -500, 'eur', '2026-11-10T10:00:00Z');
+    entry(A, 'PLATFORM_FEE_REFUND', 500, 'eur', '2026-11-13T10:00:00Z');
+    const rows = await reports.fees(from, to);
+    expect(rows).toEqual([
+      { tenantId: A, day: '2026-11-10', currency: 'eur', feeCollected: 500, feeReturned: 0 },
+      { tenantId: A, day: '2026-11-13', currency: 'eur', feeCollected: 0, feeReturned: 500 },
+    ]);
+  });
+
+  it('el día es el UTC del asiento: 23:59:59Z y 00:00:00Z caen en días distintos; `to` es exclusivo', async () => {
+    entry(A, 'PLATFORM_FEE', -100, 'eur', '2026-11-11T23:59:59Z');
+    entry(A, 'PLATFORM_FEE', -200, 'eur', '2026-11-12T00:00:00Z');
+    entry(A, 'PLATFORM_FEE', -999, 'eur', '2026-11-14T00:00:00Z'); // == to: fuera
+    entry(A, 'PLATFORM_FEE', -999, 'eur', '2026-11-09T23:59:59Z'); // antes de from: fuera
+    expect(await reports.fees(from, to)).toEqual([
+      { tenantId: A, day: '2026-11-11', currency: 'eur', feeCollected: 100, feeReturned: 0 },
+      { tenantId: A, day: '2026-11-12', currency: 'eur', feeCollected: 200, feeReturned: 0 },
+    ]);
+  });
+
+  it('solo cuentan los asientos de comisión: ventas, comisión de Stripe, transferencias y ajustes no', async () => {
+    entry(A, 'SALE_GROSS', 10000, 'eur', '2026-11-12T10:00:00Z');
+    entry(A, 'STRIPE_FEE', -175, 'eur', '2026-11-12T10:00:00Z');
+    entry(A, 'TRANSFER', -9325, 'eur', '2026-11-12T10:00:00Z');
+    entry(A, 'ADJUSTMENT', 1250, 'eur', '2026-11-12T10:00:00Z');
+    expect(await reports.fees(from, to)).toEqual([]);
+  });
+
+  it('sin asientos en el rango → lista vacía, no ceros', async () => {
+    expect(await reports.fees(from, to)).toEqual([]);
+  });
+});

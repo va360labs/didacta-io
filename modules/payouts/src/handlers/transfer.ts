@@ -4,6 +4,7 @@
  */
 
 import type { PayoutsDbPort, PayoutsLogger } from '../accounts.service.js';
+import { CREDIT_METADATA_KEY } from '../credits.service.js';
 import { idOf } from '../event-router.js';
 import { PAYOUTS_ALERTS } from '../settlement.service.js';
 import type { PlatformStripeClient } from '../stripe/platform-stripe.client.js';
@@ -100,6 +101,46 @@ export async function checkTransferEvent(
       return { outcome: 'mismatch', saleId: entry.saleId ?? '', problems };
     }
     return { outcome: 'ok', saleId: entry.saleId ?? '' };
+  }
+
+  // Crédito de plataforma (afiliados): transferencia sin venta, respaldada por
+  // su propio asiento `TRANSFER` (`payouts:credit:…`). Se coteja con él.
+  if (typeof transfer.metadata?.[CREDIT_METADATA_KEY] === 'string') {
+    const entry = await deps.db.inTenant(input.tenantId, (tx) =>
+      tx.modPayoutsLedgerEntry.findFirst({
+        where: { tenantId: input.tenantId, stripeObjectId: transfer.id, type: 'TRANSFER' },
+        select: { amount: true, currency: true },
+      }),
+    );
+    // Aún sin asiento: el crédito la acaba de crear y está anotándola.
+    if (!entry) return { outcome: 'in_flight', saleId: '' };
+    const reversedInStripe = transfer.amount_reversed ?? 0;
+    const problems: string[] = [];
+    if (entry.amount !== -(transfer.amount ?? NaN)) {
+      problems.push(`importe ${String(transfer.amount)} ≠ asiento ${-entry.amount}`);
+    }
+    if (entry.currency !== (transfer.currency ?? '').toLowerCase()) {
+      problems.push(`divisa ${String(transfer.currency)} ≠ ${entry.currency}`);
+    }
+    // Un crédito no se revierte desde el panel: si Stripe lo da por revertido
+    // lo ha hecho un humano en su consola, y hay que enterarse.
+    if (reversedInStripe !== 0) {
+      problems.push(`revertido en Stripe ${String(reversedInStripe)} (no hay reversión anotada)`);
+    }
+    if (problems.length > 0) {
+      (deps.logger?.error ?? deps.logger?.warn)?.call(
+        deps.logger,
+        {
+          alert: PAYOUTS_ALERTS.transferMismatch,
+          tenantId: input.tenantId,
+          transferId: transfer.id,
+          problems,
+        },
+        `${PAYOUTS_ALERTS.transferMismatch}: la transferencia del crédito no casa con su asiento`,
+      );
+      return { outcome: 'mismatch', saleId: '', problems };
+    }
+    return { outcome: 'ok', saleId: '' };
   }
 
   const found = await deps.db.inTenant(input.tenantId, async (tx) => {

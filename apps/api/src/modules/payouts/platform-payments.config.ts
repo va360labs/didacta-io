@@ -56,6 +56,13 @@ export const PLATFORM_PAYMENTS_ENV = {
   accountsApi: 'PAYMENTS_PLATFORM_ACCOUNTS_API',
   displayName: 'PAYMENTS_PLATFORM_DISPLAY_NAME',
   debtAlertMinor: 'PAYMENTS_PLATFORM_DEBT_ALERT_MINOR',
+  /**
+   * Tope de UN crédito de plataforma (`POST …/payouts/credits`), en la unidad
+   * mínima de su divisa. Es el techo de lo que una credencial de provisioning
+   * robada puede mover del saldo del operador por llamada. Por defecto,
+   * 1.000.000 (10.000 € en eur).
+   */
+  creditMaxMinor: 'PAYMENTS_PLATFORM_CREDIT_MAX_MINOR',
   // E6 — quién asume qué cuando el dinero vuelve (por defecto, lo decidido
   // por el dueño: el operador devuelve su 5 % en proporción; la comisión de
   // la tarjeta no devuelta y la tasa de una disputa perdida, el creador).
@@ -217,6 +224,11 @@ export interface PlatformPaymentsEnabled {
   readonly displayName: string;
   /** Deuda abierta (unidad mínima) a partir de la cual se avisa al operador. */
   readonly debtAlertMinor: number;
+  /**
+   * Tope de un crédito de plataforma en unidad mínima. Opcional para las
+   * configuraciones escritas a mano (tests): ausente = el del módulo.
+   */
+  readonly creditMaxMinor?: number;
   /** Quién asume qué en reembolsos y disputas (E6). */
   readonly lossPolicy: PayoutsLossPolicy;
   /** Adónde van las alertas de dinero por correo. `null`: solo al log. */
@@ -377,6 +389,7 @@ const enabledSchema = z.object({
   accountsApi: z.enum(['v2', 'v1']).default('v2'),
   displayName: z.string().max(80).default('Didacta'),
   debtAlertMinor: integerFromEnv(0, 2_147_483_647).prefault('10000'),
+  creditMaxMinor: integerFromEnv(1, 2_147_483_647).prefault('1000000'),
   cardFeeEstimate: cardFeeEstimateSchema.optional(),
   refundPlatformFee: z.enum(['proportional', 'none']).default('proportional'),
   refundCardFeeBearer: z.enum(['creator', 'platform']).default('creator'),
@@ -480,6 +493,7 @@ export function loadPlatformPaymentsConfig(
     accountsApi: data.accountsApi,
     displayName: data.displayName,
     debtAlertMinor: data.debtAlertMinor,
+    creditMaxMinor: data.creditMaxMinor,
     lossPolicy: Object.freeze({
       refundPlatformFee: data.refundPlatformFee === 'proportional',
       refundCardFeeBearer: data.refundCardFeeBearer,

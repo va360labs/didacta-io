@@ -25,7 +25,7 @@ import { AdminTenantsVideoController } from '../src/video/cloud/video-cloud.cont
 import { ALLOW_PROVISIONING_KEY } from '../src/auth/jwt-or-provisioning.guard';
 
 /**
- * Las 11 operaciones que el plano de control necesita para dar de alta, operar,
+ * Las 13 operaciones que el plano de control necesita para dar de alta, operar,
  * facturar y sostener un tenant. Ni una más.
  *
  * `setSignups` (U7) se añadió el 2026-08-12 a conciencia: congelar altas es el
@@ -47,6 +47,13 @@ import { ALLOW_PROVISIONING_KEY } from '../src/auth/jwt-or-provisioning.guard';
  * `setSignups`, el núcleo solo obedece: no cuenta días ni mira planes, y
  * `subscription-gate.test.ts` lo vigila. No toca `status` ni las sesiones; lo
  * peor que puede hacer es dejar un aula en pausa, y el mismo PUT la reabre.
+ *
+ * `getBranding` y `setBranding` (2026-11-16) son el panel del creador de Didacta
+ * Cloud (ADR-007): leer y cambiar el NOMBRE y el COLOR del aula. Es la ÚNICA
+ * puerta por la que la credencial puede renombrar, y solo junto a la marca —
+ * `rename` (`PATCH :id`) sigue denegada a la máquina—. El nombre usa el mismo
+ * camino y audit log que `rename`; el color, el servicio de theming. No tocan
+ * estado, dominio, sesiones ni licencia. Lo fija `tenant-branding.test.ts`.
  */
 const WHITELIST = [
   'list',
@@ -60,6 +67,8 @@ const WHITELIST = [
   'revokeSupportAccess',
   'addDomain',
   'removeDomain',
+  'getBranding',
+  'setBranding',
 ];
 
 /**
@@ -120,7 +129,7 @@ function isAllowed(controller: new (...args: never[]) => unknown, handler: strin
 }
 
 describe('UC-C103 AC2 · superficie de la credencial de provisioning', () => {
-  it('abre exactamente las 11 rutas de la lista blanca en AdminTenantsController', () => {
+  it('abre exactamente las 13 rutas de la lista blanca en AdminTenantsController', () => {
     const abiertas = routeHandlersOf(AdminTenantsController).filter((h) =>
       isAllowed(AdminTenantsController, h),
     );
@@ -138,22 +147,48 @@ describe('UC-C103 AC2 · superficie de la credencial de provisioning', () => {
     }
   });
 
-  it('abre exactamente las 4 rutas de cobros de plataforma en AdminTenantsPayoutsController, y no hay más', () => {
+  it('abre exactamente las 9 rutas de cobros de plataforma en AdminTenantsPayoutsController, y no hay más', () => {
     // Solo existen con el modo plataforma (las registra PayoutsModule). Fijar
     // la comisión de un aula, leer su estado de cobro, el volumen cobrado de
     // todas las aulas (E4) y los países donde se puede pagar a creadores
     // (2026-11-14; de solo lectura, una lista de la configuración, sin datos
     // de ningún aula): el contrato con Cloud.
+    //
+    // 2026-11-16 (panel del creador, ADR-007 y ADR-008), cinco más:
+    //  - `getPayoutsFees`: comisión del operador por aula, día y divisa, leída
+    //    del libro. Solo lectura. Alimenta el programa de afiliados.
+    //  - `getPayoutsSummary`, `getPayoutsInvoices`, `getPayoutsInvoicePdf`: lo
+    //    que el creador ve en «Cobros», leído por aula. Solo lectura; el PDF
+    //    sale sin guardarse y una factura de otra aula es 404.
+    //  - `createPayoutsCredit`: la ÚNICA ruta de esta credencial que MUEVE
+    //    DINERO del saldo del operador. Es idempotente por clave, tiene tope
+    //    por crédito y solo paga a la cuenta conectada del aula; lo fijan
+    //    `modules/payouts/tests/credits.service.test.ts` y
+    //    `admin-tenants-panel-creador.test.ts`. Si hace falta otra ruta que
+    //    mueva dinero, este test es el sitio donde pararse a discutirlo.
     const todas = routeHandlersOf(AdminTenantsPayoutsController).sort();
     expect(todas).toEqual([
+      'createPayoutsCredit',
       'getPayouts',
       'getPayoutsCountries',
+      'getPayoutsFees',
+      'getPayoutsInvoicePdf',
+      'getPayoutsInvoices',
+      'getPayoutsSummary',
       'getPayoutsVolume',
       'setPayoutsSettings',
     ]);
     for (const handler of todas) {
       expect(isAllowed(AdminTenantsPayoutsController, handler)).toBe(true);
     }
+  });
+
+  it('de esas 9, solo createPayoutsCredit y setPayoutsSettings escriben; el resto son GET', () => {
+    const proto = AdminTenantsPayoutsController.prototype as unknown as Record<string, unknown>;
+    const escriben = routeHandlersOf(AdminTenantsPayoutsController)
+      .filter((h) => Reflect.getMetadata(METHOD_METADATA, proto[h] as object) !== 0)
+      .sort();
+    expect(escriben).toEqual(['createPayoutsCredit', 'setPayoutsSettings']);
   });
 
   it('abre exactamente las 2 rutas de vídeo de Cloud en AdminTenantsVideoController, y no hay más', () => {
