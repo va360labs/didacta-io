@@ -203,7 +203,7 @@
     "tierNoCourses": "Todavía no incluye cursos.",
     "tierMoreCourses": "{count, plural, one {Ver # curso más} other {Ver # cursos más}}",
     "tierFreePrice": "Gratis",
-    "tierFreeNote": "Creas tu cuenta y entras, sin pagar nada.",
+    "tierFreeNote": "Te apuntas gratis y, en cuanto el aula te da paso, entras sin pagar nada.",
     "tierFreeEnter": "Entrar gratis",
     "tierFreeClosed": "Ahora mismo no se admiten altas gratis.",
     "tierChosenLabel": "Has elegido",

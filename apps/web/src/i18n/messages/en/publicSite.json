@@ -203,7 +203,7 @@
     "tierNoCourses": "No courses included yet.",
     "tierMoreCourses": "{count, plural, one {Show # more course} other {Show # more courses}}",
     "tierFreePrice": "Free",
-    "tierFreeNote": "Create your account and get in, without paying anything.",
+    "tierFreeNote": "Sign up for free and, as soon as the academy lets you in, you're in without paying anything.",
     "tierFreeEnter": "Join for free",
     "tierFreeClosed": "Free sign-ups are closed right now.",
     "tierChosenLabel": "You chose",

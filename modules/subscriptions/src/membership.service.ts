@@ -1257,7 +1257,7 @@ export class MembershipService {
         tenantId,
         active: true,
         tierId: { in: paidTiers.map((t) => t.id) },
-        NOT: { id: sub.planId ?? undefined },
+        ...(sub.planId ? { NOT: { id: sub.planId } } : {}),
       },
       orderBy: [{ sortOrder: 'asc' }, { amountCents: 'asc' }],
     });

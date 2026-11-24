@@ -20,6 +20,14 @@ import http from 'node:http';
  * `POST /v1/subscriptions/:id`: pausa, cupón y baja al final del periodo) y
  * `POST /v1/coupons`. Una suscripción que no conoce la inventa mensual y al
  * día (periodo de 30 días que acaba en 20); `setSubscription` la ajusta.
+ * Para el CAMBIO DE NIVEL: `POST /v1/subscriptions/:id` con `items[0][price]`
+ * cambia el precio de la línea y prorratea por lo que queda de periodo (con
+ * `always_invoice` deja una factura pagada en `latest_invoice`; con
+ * `create_prorations`, la diferencia pendiente para la próxima), y
+ * `POST /v1/invoices/create_preview` devuelve esa misma cuenta sin cambiar
+ * nada. `failNextPriceChange()` hace que el siguiente cambio de precio
+ * responda 402 (tarjeta rechazada) sin tocar la suscripción, como Stripe con
+ * `payment_behavior: error_if_incomplete`.
  * La API habla con él cuando
  * arranca con `STRIPE_TEST_API_URL` y una clave `sk_test_` (ver
  * `apps/api/src/modules/stripe-test-api.ts`). Guarda lo creado en memoria y
@@ -32,6 +40,10 @@ export interface StripeDouble {
   subscription: (id: string) => Record<string, unknown>;
   /** Fija campos de una suscripción (p. ej. `current_period_end`). */
   setSubscription: (id: string, patch: Record<string, unknown>) => void;
+  /** El siguiente cambio de precio de una suscripción responde 402 (tarjeta rechazada). */
+  failNextPriceChange: () => void;
+  /** Un objeto creado (precio, producto, factura…) por su id. */
+  object: (id: string) => Record<string, unknown> | undefined;
   close: () => Promise<void>;
 }
 
@@ -48,9 +60,17 @@ function defaultSubscription(id: string): Record<string, unknown> {
     current_period_start: now - 10 * DAY,
     current_period_end: now + 20 * DAY,
     canceled_at: null,
+    customer: `cus_doble_${id}`,
+    latest_invoice: null,
+    metadata: {},
     items: {
       object: 'list',
-      data: [{ price: { id: 'price_doble', recurring: { interval: 'month', interval_count: 1 } } }],
+      data: [
+        {
+          id: `si_doble_${id}`,
+          price: { id: 'price_doble', recurring: { interval: 'month', interval_count: 1 } },
+        },
+      ],
     },
     pause_collection: null,
     discount: null,
@@ -83,6 +103,27 @@ export async function startStripeDouble(
   };
   let seq = 0;
   const run = Date.now().toString(36);
+  let failPriceChange = false;
+  /** Importe de un precio: el que dice la línea o el del precio creado aquí. */
+  const amountOf = (price: Record<string, unknown> | undefined): number => {
+    if (!price) return 0;
+    if (typeof price['unit_amount'] === 'number') return price['unit_amount'] as number;
+    const created = objects.get(String(price['id']));
+    return typeof created?.['unit_amount'] === 'number' ? (created['unit_amount'] as number) : 0;
+  };
+  /** Prorrateo de pasar la línea a `newPriceId` ahora: (nuevo − viejo) × lo que queda. */
+  const prorationOf = (sub: Record<string, unknown>, newPriceId: string) => {
+    const items = sub['items'] as { data: Array<{ price: Record<string, unknown> }> };
+    const oldAmount = amountOf(items.data[0]?.price);
+    const newPrice = objects.get(newPriceId) ?? { id: newPriceId };
+    const newAmount = amountOf(newPrice);
+    const start = Number(sub['current_period_start']);
+    const end = Number(sub['current_period_end']);
+    const now = Math.floor(Date.now() / 1000);
+    const left = end > start ? Math.max(0, Math.min(1, (end - now) / (end - start))) : 1;
+    const currency = String(newPrice['currency'] ?? 'eur');
+    return { amount: Math.round((newAmount - oldAmount) * left), currency, newPrice };
+  };
   const server = http.createServer((req, res) => {
     let raw = '';
     req.on('data', (c) => (raw += c));
@@ -101,7 +142,13 @@ export async function startStripeDouble(
           unit_amount: Number(body.unit_amount),
           currency: body.currency,
           active: true,
-          type: 'one_time',
+          type: body['recurring[interval]'] ? 'recurring' : 'one_time',
+          recurring: body['recurring[interval]']
+            ? {
+                interval: body['recurring[interval]'],
+                interval_count: Number(body['recurring[interval_count]'] ?? 1),
+              }
+            : null,
         };
       } else if (req.method === 'POST' && path === '/v1/checkout/sessions') {
         // Único entre ejecuciones: `stripe_session_id` es UNIQUE en toda la base.
@@ -146,8 +193,68 @@ export async function startStripeDouble(
         return;
       } else if (req.method === 'GET' && /^\/v1\/subscriptions\/[^/]+$/.test(path)) {
         obj = subscriptionOf(decodeURIComponent(path.split('/').pop()!));
+      } else if (req.method === 'POST' && path === '/v1/invoices/create_preview') {
+        const sub = subscriptionOf(String(body['subscription'] ?? ''));
+        const priceId = body['subscription_details[items][0][price]'] ?? '';
+        const { amount, currency } = prorationOf(sub, priceId);
+        obj = {
+          id: `upcoming_doble_${++seq}`,
+          object: 'invoice',
+          amount_due: Math.max(0, amount),
+          total: amount,
+          currency,
+        };
+        res.setHeader('content-type', 'application/json');
+        res.end(JSON.stringify(obj));
+        return;
       } else if (req.method === 'POST' && /^\/v1\/subscriptions\/[^/]+$/.test(path)) {
         const sub = subscriptionOf(decodeURIComponent(path.split('/').pop()!));
+        const newPriceId = body['items[0][price]'];
+        if (newPriceId) {
+          // Cambio de nivel. Con `error_if_incomplete`, una tarjeta rechazada
+          // deja la suscripción como estaba y responde 402.
+          if (failPriceChange) {
+            failPriceChange = false;
+            res.statusCode = 402;
+            res.setHeader('content-type', 'application/json');
+            res.end(
+              JSON.stringify({
+                error: {
+                  type: 'card_error',
+                  code: 'card_declined',
+                  message: 'Your card was declined.',
+                },
+              }),
+            );
+            return;
+          }
+          const { amount, currency, newPrice } = prorationOf(sub, newPriceId);
+          const items = sub.items as { data: Array<Record<string, unknown>> };
+          items.data[0] = { ...items.data[0], price: newPrice };
+          for (const [k, v] of Object.entries(body)) {
+            if (k.startsWith('metadata[')) {
+              (sub.metadata as Record<string, string>)[k.slice('metadata['.length, -1)] = v;
+            }
+          }
+          if (body['proration_behavior'] === 'always_invoice' && amount !== 0) {
+            const invoice = {
+              id: `in_doble_${run}_${++seq}`,
+              object: 'invoice',
+              status: 'paid',
+              amount_paid: Math.max(0, amount),
+              amount_due: Math.max(0, amount),
+              total: amount,
+              currency,
+              billing_reason: 'subscription_update',
+              subscription: sub.id,
+              customer: sub.customer,
+            };
+            objects.set(invoice.id, invoice);
+            sub.latest_invoice = invoice;
+          } else if (body['proration_behavior'] === 'create_prorations') {
+            sub.pending_proration = amount;
+          }
+        }
         if (body['pause_collection[behavior]']) {
           sub.pause_collection = {
             behavior: body['pause_collection[behavior]'],
@@ -255,6 +362,10 @@ export async function startStripeDouble(
     setSubscription: (id: string, patch: Record<string, unknown>) => {
       Object.assign(subscriptionOf(id), patch);
     },
+    failNextPriceChange: () => {
+      failPriceChange = true;
+    },
+    object: (id: string) => objects.get(id),
     close: () => new Promise((resolve) => server.close(() => resolve())),
   };
 }
