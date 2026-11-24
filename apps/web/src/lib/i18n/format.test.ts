@@ -10,6 +10,7 @@ import {
   formatDate,
   formatDateTime,
   formatDuration,
+  formatList,
   formatNumber,
   formatTime,
   localeRegion,
@@ -276,6 +277,18 @@ describe('formatDuration (ICU, sucesora de lib/format)', () => {
     expect(formatDuration(90, tEn)).toBe('1 h 30 min');
     expect(formatDuration(90, tPt)).toBe('1 h 30 min');
     expect(formatDuration(45, tPt)).toBe('45 min');
+  });
+});
+
+describe('formatList', () => {
+  it('enumera en el idioma pedido o en el activo', () => {
+    expect(formatList(['Torno', 'Esmaltes', 'Hornos'], { locale: 'es-ES' })).toBe(
+      'Torno, Esmaltes y Hornos',
+    );
+    expect(formatList(['Torno', 'Esmaltes'], { locale: 'en-US' })).toBe('Torno and Esmaltes');
+    expect(formatList(['Torno', 'Esmaltes'], { locale: 'pt-BR' })).toBe('Torno e Esmaltes');
+    setUserFormatPrefs({ locale: 'es-ES' });
+    expect(formatList(['Torno'])).toBe('Torno');
   });
 });
 

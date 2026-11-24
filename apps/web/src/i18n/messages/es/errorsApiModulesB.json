@@ -240,5 +240,12 @@
   "SOPORTE_CAPTURA_PESADA": "La captura pesa más de 5 MB.",
   "SOPORTE_CAPTURA_NO_CASA": "El contenido de la captura no corresponde a una imagen de ese tipo.",
   "SOPORTE_NO_ENCONTRADO": "Ticket no encontrado.",
-  "SOPORTE_SIN_PERMISO": "Solo quien administra el aula puede gestionar los tickets."
+  "SOPORTE_SIN_PERMISO": "Solo quien administra el aula puede gestionar los tickets.",
+  "MEMBERSHIP_TIER_NOT_FOUND": "Ese nivel ya no existe. Recarga la página.",
+  "MEMBERSHIP_TIER_INVALID": "Revisa el nivel: el nombre no puede estar vacío ni repetirse, y solo puede haber un nivel gratis.",
+  "MEMBERSHIP_TIER_IN_USE": "Este nivel ya tiene alumnos: no se puede borrar. Apágalo y dejará de venderse; quien ya lo tiene lo conserva.",
+  "MEMBERSHIP_TIER_IS_FREE": "El nivel gratis no lleva precios: se entra sin pagar.",
+  "MEMBERSHIP_PLAN_NAME_TAKEN": "Ya tienes un precio con ese nombre. Ponle otro.",
+  "MEMBERSHIP_PLAN_CHANGE_NOT_ALLOWED": "Ahora no puedes cambiar de plan. Si tienes un pago pendiente, una pausa o la baja programada, resuélvelo primero.",
+  "MEMBERSHIP_PLAN_CHANGE_PAYMENT_FAILED": "No se pudo cobrar la diferencia con tu tarjeta. Tu plan no ha cambiado: revisa tu tarjeta y vuelve a intentarlo."
 }

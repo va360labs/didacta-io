@@ -173,7 +173,8 @@
     "downloadPdf": "View / download PDF ↗",
     "unavailableTitle": "We couldn't load your subscriptions",
     "unavailableDesc": "Please reload in a few minutes. This does not affect your payments or your access.",
-    "saldoReferidos": "Paid with referral balance: {amount} · charged {paid}"
+    "saldoReferidos": "Paid with referral balance: {amount} · charged {paid}",
+    "nivel": "Level: {name}"
   },
   "security": {
     "sessionsLoadError": "We could not load your sessions.",
@@ -421,6 +422,45 @@
       "REFUNDED": "Refunded",
       "PARTIALLY_REFUNDED": "Partially refunded",
       "CANCELLED": "Cancelled"
+    }
+  },
+  "cambioPlan": {
+    "boton": "Change plan",
+    "titulo": "Change plan",
+    "actualConNivel": "Right now you're on {tier} and pay {price}.",
+    "actualSinNivel": "Right now you pay {price}.",
+    "elige": "Choose the one you want to switch to:",
+    "tuNivel": "your level now",
+    "sube": "Costs more per month",
+    "baja": "Costs less per month",
+    "recomendado": "Recommended",
+    "porMes": "{price}/month",
+    "porTrimestre": "{price}/quarter",
+    "porSemestre": "{price}/6 months",
+    "porAnio": "{price}/year",
+    "porMeses": "{price} every {months} months",
+    "calculando": "Working out what will happen…",
+    "resumenPrueba": "You're still on your free trial: you won't be charged anything today. When it ends, you'll pay {price}.",
+    "resumenCobroHoy": "Today you'll be charged {amount}: the price difference until your next invoice.",
+    "resumenSinCobroHoy": "You won't be charged anything today.",
+    "resumenCredito": "Your next invoice will go down by {amount} (what you have left over from what you already paid).",
+    "resumenDespues": "After that you'll pay {price}.",
+    "resumenAcceso": "The change is immediate: from today you get everything {tier} includes.",
+    "resumenPierdes": "And you'll no longer have what only {tier} includes.",
+    "confirmar": "Confirm the change",
+    "confirmarPagando": "Pay {amount} and switch",
+    "procesando": "One moment…",
+    "cancelar": "Not now",
+    "cerrar": "Close",
+    "ok": "Done: you now have {tier} for {price}.",
+    "okCobrado": "Today you were charged {amount}.",
+    "error": "That didn't work. Please try again.",
+    "pasarAGratis": "Switch to {name} (free)",
+    "bloqueado": {
+      "no_membership": "You don't have an active subscription to change.",
+      "not_active": "You can't change plans right now: your subscription isn't up to date. Once it is, you can do it from here.",
+      "cancel_scheduled": "Your cancellation is scheduled, so you can't change plans right now.",
+      "pause_scheduled": "You have a pause scheduled, so you can't change plans right now."
     }
   }
 }

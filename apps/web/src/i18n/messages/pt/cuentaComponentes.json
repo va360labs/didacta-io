@@ -173,7 +173,8 @@
     "downloadPdf": "Ver / baixar PDF ↗",
     "unavailableTitle": "Não conseguimos consultar suas assinaturas",
     "unavailableDesc": "Recarregue a página em alguns minutos. Isso não afeta seus pagamentos nem seu acesso.",
-    "saldoReferidos": "Pago com saldo de indicações: {amount} · cobrado {paid}"
+    "saldoReferidos": "Pago com saldo de indicações: {amount} · cobrado {paid}",
+    "nivel": "Nível: {name}"
   },
   "security": {
     "sessionsLoadError": "Não conseguimos carregar suas sessões.",
@@ -421,6 +422,45 @@
       "REFUNDED": "Reembolsado",
       "PARTIALLY_REFUNDED": "Reembolso parcial",
       "CANCELLED": "Cancelado"
+    }
+  },
+  "cambioPlan": {
+    "boton": "Trocar de plano",
+    "titulo": "Trocar de plano",
+    "actualConNivel": "Agora você está no {tier} e paga {price}.",
+    "actualSinNivel": "Agora você paga {price}.",
+    "elige": "Escolha para qual quer trocar:",
+    "tuNivel": "o seu nível agora",
+    "sube": "Custa mais por mês",
+    "baja": "Custa menos por mês",
+    "recomendado": "Recomendado",
+    "porMes": "{price}/mês",
+    "porTrimestre": "{price}/trimestre",
+    "porSemestre": "{price}/semestre",
+    "porAnio": "{price}/ano",
+    "porMeses": "{price} a cada {months} meses",
+    "calculando": "Calculando o que vai acontecer…",
+    "resumenPrueba": "Você continua no seu teste grátis: hoje não será cobrado nada. Quando ele terminar, você pagará {price}.",
+    "resumenCobroHoy": "Hoje serão cobrados {amount}: a diferença de preço até a sua próxima fatura.",
+    "resumenSinCobroHoy": "Hoje não será cobrado nada.",
+    "resumenCredito": "Sua próxima fatura vai baixar {amount} (o que sobra a seu favor do que você já pagou).",
+    "resumenDespues": "Depois você pagará {price}.",
+    "resumenAcceso": "A troca é imediata: a partir de hoje você tem tudo o que o {tier} inclui.",
+    "resumenPierdes": "E deixa de ter o que só o {tier} inclui.",
+    "confirmar": "Confirmar a troca",
+    "confirmarPagando": "Pagar {amount} e trocar",
+    "procesando": "Um momento…",
+    "cancelar": "Agora não",
+    "cerrar": "Fechar",
+    "ok": "Pronto: agora você tem o {tier} por {price}.",
+    "okCobrado": "Hoje foram cobrados {amount}.",
+    "error": "Não foi possível concluir. Tente novamente.",
+    "pasarAGratis": "Passar para {name} (grátis)",
+    "bloqueado": {
+      "no_membership": "Você não tem uma assinatura ativa para trocar.",
+      "not_active": "Agora você não pode trocar de plano: sua assinatura não está em dia. Quando estiver, poderá fazer isso por aqui.",
+      "cancel_scheduled": "Você tem o cancelamento agendado, então agora não pode trocar de plano.",
+      "pause_scheduled": "Você tem uma pausa agendada, então agora não pode trocar de plano."
     }
   }
 }

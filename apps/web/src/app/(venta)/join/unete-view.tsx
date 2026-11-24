@@ -19,6 +19,11 @@
  * DENTRO de la página (Checkout embebido, `AcademyCheckoutStep`) cuando el aula
  * puede, y si no por el redirect a Stripe. La vuelta pregunta si se pagó y
  * resume qué, cuánto y cuándo (`PurchaseThanks`).
+ *
+ * Aula CON NIVELES (`page.tiers` no vacío): primero una tarjeta por nivel
+ * (`TierCards`); su botón abre ESTA MISMA columna de pago con los planes de ese
+ * nivel y el catálogo con sus cursos. Un `?plan=` de un nivel entra directo a
+ * su pago. Sin niveles, la página es la de siempre.
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -39,10 +44,9 @@ import {
   type MembershipCheckoutSessionView,
 } from '@/lib/checkout';
 import { ApiHttpError } from '@/lib/api-client';
-import { authStorage } from '@/lib/auth-storage';
+import { authStorage, type StoredSession } from '@/lib/auth-storage';
 import { formatDate, formatDuration, formatNumber } from '@/lib/i18n/format';
-import type { TranslatorLike } from '@/lib/i18n/labels';
-import { useTenantContext } from '@/lib/tenant-context';
+import { useTenantContext, type TenantContextResponse } from '@/lib/tenant-context';
 import {
   formatCents,
   getMembershipPage,
@@ -50,6 +54,8 @@ import {
   type MembershipCourse,
   type MembershipPage,
 } from '@/lib/membership';
+import { intervalDescriptionLabel, intervalSuffixLabel } from './interval-labels';
+import { TierCards, defaultPlanId, hasTiers, plansOfTier, tierCatalog } from './tier-cards';
 import { couponsAtCheckout, showLocalCurrencyNote } from '@/lib/checkout-hints';
 import {
   WithdrawalWaiverCheckbox,
@@ -72,24 +78,6 @@ function categoryStyle(name: string): string {
   return CATEGORY_STYLES[h % CATEGORY_STYLES.length]!;
 }
 
-/** Etiqueta de periodicidad: "/mes", "/trimestre", …, "/N meses" (catálogo i18n). */
-function intervalSuffixLabel(t: TranslatorLike, intervalMonths: number): string {
-  if (intervalMonths === 12) return t('unete.intervalSuffixYear');
-  if (intervalMonths === 6) return t('unete.intervalSuffixSemester');
-  if (intervalMonths === 3) return t('unete.intervalSuffixQuarter');
-  if (intervalMonths === 1) return t('unete.intervalSuffixMonth');
-  return t('unete.intervalSuffixMonths', { months: intervalMonths });
-}
-
-/** Nombre largo: "Suscripción mensual/trimestral/…/cada N meses" (catálogo i18n). */
-function intervalDescriptionLabel(t: TranslatorLike, intervalMonths: number): string {
-  if (intervalMonths === 12) return t('unete.intervalDescYear');
-  if (intervalMonths === 6) return t('unete.intervalDescSemester');
-  if (intervalMonths === 3) return t('unete.intervalDescQuarter');
-  if (intervalMonths === 1) return t('unete.intervalDescMonth');
-  return t('unete.intervalDescMonths', { months: intervalMonths });
-}
-
 export function UneteView() {
   const t = useTranslations('publicSite');
   const tCommon = useTranslations('common');
@@ -109,6 +97,11 @@ export function UneteView() {
   const [notAvailable, setNotAvailable] = useState(false);
   const [loadError, setLoadError] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  // Aula con niveles: cada cuánto paga en cada nivel (`tierId` → `planId`) y el
+  // nivel elegido. Sin nivel elegido se ven las tarjetas; con él, el pago de
+  // siempre con sus planes.
+  const [periodByTier, setPeriodByTier] = useState<Record<string, string>>({});
+  const [chosenTierId, setChosenTierId] = useState<string | null>(null);
   const [openCourseId, setOpenCourseId] = useState<string | null>(null);
   const [filter, setFilter] = useState<string>('Todos');
   const [paying, setPaying] = useState(false);
@@ -168,6 +161,24 @@ export function UneteView() {
         setPage(p);
         // `?plan=<id>` viene del modal «Selecciona tu plan» de la portada.
         const pedido = p.plans.find((x) => x.id === planParam);
+        if (hasTiers(p)) {
+          // Con niveles: cada tarjeta marca su «mejor valor» (o el plan pedido,
+          // en la suya). Si el plan pedido es de un nivel, se va directo a su
+          // pago: ya lo eligió en la portada.
+          const periods: Record<string, string> = {};
+          let pedidoTierId: string | null = null;
+          for (const tier of p.tiers ?? []) {
+            const plans = plansOfTier(p, tier);
+            const own = pedido && plans.some((x) => x.id === pedido.id) ? pedido.id : null;
+            if (own) pedidoTierId = tier.id;
+            const id = own ?? defaultPlanId(plans);
+            if (id) periods[tier.id] = id;
+          }
+          setPeriodByTier(periods);
+          setChosenTierId(pedidoTierId);
+          setSelectedId(pedidoTierId ? (pedido?.id ?? null) : null);
+          return;
+        }
         const featured = p.plans.find((x) => x.isFeatured) ?? p.plans[p.plans.length - 1];
         setSelectedId((pedido ?? featured)?.id ?? null);
       })
@@ -222,6 +233,22 @@ export function UneteView() {
     [selected, session, t, tErrors, waiver],
   );
   const closeEmbedded = useCallback(() => setEmbedded(null), []);
+
+  /** Botón de una tarjeta de nivel: el pago de siempre, con ese plan marcado. */
+  const chooseTier = useCallback((tierId: string, planId: string) => {
+    setPeriodByTier((prev) => ({ ...prev, [tierId]: planId }));
+    setSelectedId(planId);
+    setChosenTierId(tierId);
+    setPayError(null);
+    window.scrollTo({ top: 0 });
+  }, []);
+  /** «Cambiar»: vuelta a las tarjetas, con lo que había marcado en cada una. */
+  const backToTiers = useCallback(() => {
+    setChosenTierId(null);
+    setPayError(null);
+    setOpenCourseId(null);
+    setFilter('Todos');
+  }, []);
 
   // ── Estados de retorno del checkout ────────────────────────────────────────
   if (status === 'success' && (returnSessionId || returnEmbedded)) {
@@ -308,6 +335,20 @@ export function UneteView() {
     );
   }
 
+  // Aula con niveles: el nivel elegido (o ninguno: se ven las tarjetas). Con
+  // nivel, la columna de pago ofrece solo sus planes y el catálogo, sus cursos.
+  // Sin niveles, todo es la página entera, como siempre.
+  const tiers = page.tiers ?? [];
+  const chosenTier = tiers.find((x) => x.id === chosenTierId) ?? null;
+  const plansShown = chosenTier ? plansOfTier(page, chosenTier) : page.plans;
+  const catalog = chosenTier
+    ? tierCatalog(page, chosenTier)
+    : {
+        courses: page.courses,
+        totalMinutes: page.stats.totalMinutes,
+        standaloneTotalCents: page.standaloneTotalCents,
+      };
+
   const trialDays = selected?.trialDays ?? 0;
   const savings =
     selected?.compareAtCents && selected.compareAtCents > selected.amountCents
@@ -315,10 +356,10 @@ export function UneteView() {
       : null;
   const firstChargeDate = new Date(Date.now() + trialDays * 86_400_000);
   const catalogSavings =
-    page.standaloneTotalCents !== null &&
+    catalog.standaloneTotalCents !== null &&
     selected &&
-    page.standaloneTotalCents > selected.amountCents
-      ? page.standaloneTotalCents - selected.amountCents
+    catalog.standaloneTotalCents > selected.amountCents
+      ? catalog.standaloneTotalCents - selected.amountCents
       : null;
 
   if (embedded && selected) {
@@ -331,7 +372,12 @@ export function UneteView() {
         }}
         item={{
           kind: 'membership',
-          title: selected.name || page.headline || t('unete.defaultHeadline'),
+          // Con niveles, lo que compra es el nivel (el plan solo dice cada cuánto paga).
+          title: chosenTier
+            ? selected.name && selected.name !== chosenTier.name
+              ? `${chosenTier.name} · ${selected.name}`
+              : chosenTier.name
+            : selected.name || page.headline || t('unete.defaultHeadline'),
           detail: `${intervalDescriptionLabel(t, selected.intervalMonths)} · ${formatCents(
             selected.amountCents,
             selected.currency,
@@ -367,6 +413,40 @@ export function UneteView() {
     );
   }
 
+  // Cobro por la plataforma: el pago no admite cupones, así que no se prometen.
+  const coupons = couponsAtCheckout(page);
+
+  // ── Aula con niveles y ninguno elegido: una tarjeta por nivel ──────────────
+  if (tiers.length > 0 && !chosenTier) {
+    return (
+      <div className="flex flex-col gap-8">
+        {status === 'cancel' && (
+          <div className="rounded-xl border border-warning/40 bg-warning/5 px-4 py-3 text-sm text-warning-700">
+            {t('unete.payCanceledTiers')}
+          </div>
+        )}
+        <section className="overflow-hidden rounded-2xl border border-border bg-surface shadow-md">
+          <MembershipHeader tenant={tenant} page={page} />
+        </section>
+        <TierCards
+          page={page}
+          tiers={tiers}
+          periodByTier={periodByTier}
+          onPeriodChange={(tierId, planId) =>
+            setPeriodByTier((prev) => ({ ...prev, [tierId]: planId }))
+          }
+          onChoose={chooseTier}
+          freeSignupPath={page.freeSignupPath ?? null}
+        />
+        <div className="mx-auto w-full max-w-xl">
+          <AccountBox session={session} />
+        </div>
+        <MembershipFaq coupons={coupons} />
+        {page.testimonial ? <MembershipTestimonial testimonial={page.testimonial} /> : null}
+      </div>
+    );
+  }
+
   // Chips de filtrado: categorías REALES presentes en el catálogo.
   // Los precios de referencia de cursos no llevan moneda propia: se muestran
   // comparados contra los planes, así que heredan la del plan elegido (o la
@@ -374,15 +454,13 @@ export function UneteView() {
   const pageCurrency = selected?.currency ?? page.plans[0]?.currency ?? 'eur';
 
   const categories = [
-    ...new Set(page.courses.map((c) => c.category).filter((x): x is string => !!x)),
+    ...new Set(catalog.courses.map((c) => c.category).filter((x): x is string => !!x)),
   ];
   const chips = categories.length > 0 ? ['Todos', ...categories] : [];
   const visibleCourses =
-    filter === 'Todos' ? page.courses : page.courses.filter((c) => c.category === filter);
+    filter === 'Todos' ? catalog.courses : catalog.courses.filter((c) => c.category === filter);
 
-  const totalHours = Math.round(page.stats.totalMinutes / 60);
-  // Cobro por la plataforma: el pago no admite cupones, así que no se prometen.
-  const coupons = couponsAtCheckout(page);
+  const totalHours = Math.round(catalog.totalMinutes / 60);
 
   return (
     <div className="grid items-start gap-9 lg:grid-cols-[minmax(300px,26rem)_minmax(0,1fr)]">
@@ -395,51 +473,32 @@ export function UneteView() {
         )}
 
         <section className="overflow-hidden rounded-2xl border border-border bg-surface shadow-md">
-          {/* Cabecera oscura con brillo radial tintado al brand */}
-          <div
-            className="relative px-7 py-7 text-center"
-            style={{ backgroundColor: 'hsl(var(--brand-h) 52% 11%)' }}
-          >
-            <div
-              aria-hidden="true"
-              className="pointer-events-none absolute inset-0"
-              style={{
-                background:
-                  'radial-gradient(120% 90% at 50% -20%, hsl(var(--brand-h) 63% 55% / 0.28), transparent 60%)',
-              }}
-            />
-            <div className="relative">
-              {tenant?.logoUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={tenant.logoUrl}
-                  alt={tenant?.name ?? ''}
-                  className="mx-auto h-11 w-auto rounded-lg bg-white/95 p-1"
-                />
-              ) : tenant?.name ? (
-                // Sin logo, sus iniciales sobre su color (nunca el de Didacta).
-                <span className="inline-flex items-center gap-2.5 rounded-lg border border-white/15 bg-black/25 px-3 py-2 text-xl font-extrabold text-white">
-                  <AcademyMark
-                    name={tenant.name}
-                    hue={tenant.brandHue}
-                    saturation={tenant.brandSaturation}
-                    size={32}
-                  />
-                  {tenant.name}
-                </span>
-              ) : null}
-              <h1 className="mt-4 text-2xl font-bold tracking-tight text-white">
-                {page.headline ?? t('unete.defaultHeadline')}
-              </h1>
-              {page.subheadline ? (
-                <p className="mx-4 mt-2 text-sm leading-5 text-white/70">{page.subheadline}</p>
-              ) : null}
-            </div>
-          </div>
+          <MembershipHeader tenant={tenant} page={page} />
 
           <div className="flex flex-col p-6">
+            {/* Con niveles: qué nivel se está pagando y cómo volver a elegir. */}
+            {chosenTier ? (
+              <div
+                className="mb-4 flex items-center justify-between gap-3"
+                data-testid="nivel-elegido"
+              >
+                <div className="min-w-0">
+                  <p className="text-[13px] text-text-muted">{t('unete.tierChosenLabel')}</p>
+                  <p className="truncate text-lg font-bold">{chosenTier.name}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={backToTiers}
+                  className="shrink-0 text-sm font-semibold text-brand-700 hover:underline"
+                  data-testid="nivel-cambiar"
+                >
+                  {t('unete.tierChange')}
+                </button>
+              </div>
+            ) : null}
+
             {/* Selector de planes */}
-            {page.plans.length === 0 ? (
+            {plansShown.length === 0 ? (
               <p className="rounded-xl border border-border bg-surface-2 px-4 py-3 text-sm text-text-muted">
                 {t('unete.noPlans')}
               </p>
@@ -449,7 +508,7 @@ export function UneteView() {
                 aria-label={t('unete.plansAriaLabel')}
                 className="flex flex-col gap-2.5"
               >
-                {page.plans.map((plan) => {
+                {plansShown.map((plan) => {
                   const isSelected = plan.id === selectedId;
                   return (
                     <button
@@ -457,7 +516,12 @@ export function UneteView() {
                       type="button"
                       role="radio"
                       aria-checked={isSelected}
-                      onClick={() => setSelectedId(plan.id)}
+                      onClick={() => {
+                        setSelectedId(plan.id);
+                        if (chosenTier) {
+                          setPeriodByTier((prev) => ({ ...prev, [chosenTier.id]: plan.id }));
+                        }
+                      }}
                       className={
                         isSelected
                           ? 'flex items-center gap-3.5 rounded-xl border-2 border-brand-500 bg-brand-50 px-4 py-3.5 text-left transition'
@@ -616,40 +680,22 @@ export function UneteView() {
         </section>
 
         {/* Caja de cuenta */}
-        {session ? (
-          <div className="flex items-center gap-3 rounded-xl border border-border bg-surface px-4 py-3.5">
-            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-brand-100 font-bold text-brand-700">
-              {(session.user.name ?? session.user.email).slice(0, 1).toUpperCase()}
-            </span>
-            <div className="min-w-0 flex-1">
-              {session.user.name ? (
-                <p className="truncate text-sm font-semibold">{session.user.name}</p>
-              ) : null}
-              <p className="truncate text-[13px] text-text-muted">{session.user.email}</p>
-            </div>
-            <span className="text-right text-xs leading-4 text-text-subtle">
-              {t.rich('unete.buyWithAccount', { br: () => <br /> })}
-            </span>
-          </div>
-        ) : (
-          <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-border bg-surface px-4 py-3.5">
-            <p className="text-sm text-text-muted">{t('unete.accountAutoCreated')}</p>
-            <Link href="/signin" className="text-sm font-semibold text-brand-700 hover:underline">
-              {t('unete.haveAccountLink')}
-            </Link>
-          </div>
-        )}
+        <AccountBox session={session} />
       </div>
 
       {/* ══ CATÁLOGO ══ */}
       <div className="min-w-0">
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
-            <h2 className="text-[28px] font-bold tracking-tight">{t('unete.includesTitle')}</h2>
+            <h2 className="text-[28px] font-bold tracking-tight">
+              {chosenTier
+                ? t('unete.tierIncludesTitle', { name: chosenTier.name })
+                : t('unete.includesTitle')}
+            </h2>
             <p className="mt-2 text-[15px] text-text-muted">{t('unete.includesSubtitle')}</p>
           </div>
           <span className="whitespace-nowrap text-sm text-text-muted">
-            {t('unete.coursesCountFull', { count: page.courses.length })}
+            {t('unete.coursesCountFull', { count: catalog.courses.length })}
           </span>
         </div>
 
@@ -664,9 +710,9 @@ export function UneteView() {
             </div>
           )}
           <div className="min-w-[150px] flex-1 rounded-xl border border-border bg-surface p-4">
-            <div className="text-[26px] font-bold">{page.courses.length}</div>
+            <div className="text-[26px] font-bold">{catalog.courses.length}</div>
             <div className="mt-0.5 text-[13px] text-text-muted">
-              {t('unete.coursesIncluded', { count: page.courses.length })}
+              {t('unete.coursesIncluded', { count: catalog.courses.length })}
             </div>
           </div>
           {totalHours > 0 && (
@@ -719,12 +765,12 @@ export function UneteView() {
         </div>
 
         {/* Banner de ahorro */}
-        {page.standaloneTotalCents !== null && selected ? (
+        {catalog.standaloneTotalCents !== null && selected ? (
           <div className="mt-6 flex flex-wrap items-center gap-6 rounded-2xl border border-border bg-surface px-6 py-5">
             <div>
               <div className="text-[13px] text-text-muted">{t('unete.boughtSeparately')}</div>
               <div className="text-[22px] font-bold text-text-subtle line-through">
-                {formatCents(page.standaloneTotalCents, selected.currency, { locale })}
+                {formatCents(catalog.standaloneTotalCents, selected.currency, { locale })}
               </div>
             </div>
             <Icon name="arrow-right" className="h-6 w-6 text-success-600" />
@@ -746,66 +792,173 @@ export function UneteView() {
         ) : null}
 
         {/* FAQ: afirmaciones verificables del producto (no datos inventados). */}
-        <div className="mt-8">
-          <h3 className="mb-4 text-xl font-bold">{t('unete.faqTitle')}</h3>
-          <div className="grid gap-4 sm:grid-cols-2">
-            {(
-              [
-                { q: t('unete.faq1Q'), a: t('unete.faq1A') },
-                { q: t('unete.faq2Q'), a: t('unete.faq2A') },
-                { q: t('unete.faq3Q'), a: t('unete.faq3A') },
-                {
-                  q: t('unete.faq4Q'),
-                  a: coupons ? t('unete.faq4A') : t('unete.faq4ANoCoupon'),
-                },
-              ] as const
-            ).map((faq) => (
-              <div key={faq.q} className="rounded-xl border border-border bg-surface px-5 py-4">
-                <div className="mb-1.5 text-[15px] font-semibold">{faq.q}</div>
-                <div className="text-sm leading-[21px] text-text-muted">{faq.a}</div>
-              </div>
-            ))}
-          </div>
-        </div>
+        <MembershipFaq coupons={coupons} className="mt-8" />
 
         {/* Testimonial oscuro (solo si el admin lo configuró) */}
         {page.testimonial && (
-          <figure
-            className="relative mt-6 overflow-hidden rounded-2xl px-8 py-7"
-            style={{ backgroundColor: 'hsl(var(--brand-h) 52% 11%)' }}
-          >
-            <div
-              aria-hidden="true"
-              className="pointer-events-none absolute inset-0"
-              style={{
-                background:
-                  'radial-gradient(90% 120% at 100% 0%, hsl(var(--brand-h) 63% 55% / 0.22), transparent 55%)',
-              }}
-            />
-            <div className="relative">
-              <div
-                aria-hidden="true"
-                className="text-[40px] font-extrabold leading-none"
-                style={{ color: 'hsl(var(--brand-h) 63% 55%)' }}
-              >
-                &ldquo;
-              </div>
-              <blockquote className="mb-4 mt-2 max-w-3xl text-[17px] leading-7 text-white/90">
-                {page.testimonial.quote}
-              </blockquote>
-              <figcaption>
-                <div className="text-[15px] font-semibold text-white">
-                  {page.testimonial.author}
-                </div>
-                {page.testimonial.role ? (
-                  <div className="text-[13px] text-white/55">{page.testimonial.role}</div>
-                ) : null}
-              </figcaption>
-            </div>
-          </figure>
+          <MembershipTestimonial testimonial={page.testimonial} className="mt-6" />
         )}
       </div>
     </div>
+  );
+}
+
+/**
+ * Cabecera oscura con brillo radial tintado al brand: logo (o iniciales) del
+ * aula, titular y subtítulo. La usan la columna de pago y, con niveles, la
+ * pantalla de las tarjetas.
+ */
+function MembershipHeader({
+  tenant,
+  page,
+}: {
+  tenant: TenantContextResponse['tenant'];
+  page: MembershipPage;
+}) {
+  const t = useTranslations('publicSite');
+  return (
+    <div
+      className="relative px-7 py-7 text-center"
+      style={{ backgroundColor: 'hsl(var(--brand-h) 52% 11%)' }}
+    >
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0"
+        style={{
+          background:
+            'radial-gradient(120% 90% at 50% -20%, hsl(var(--brand-h) 63% 55% / 0.28), transparent 60%)',
+        }}
+      />
+      <div className="relative">
+        {tenant?.logoUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={tenant.logoUrl}
+            alt={tenant?.name ?? ''}
+            className="mx-auto h-11 w-auto rounded-lg bg-white/95 p-1"
+          />
+        ) : tenant?.name ? (
+          // Sin logo, sus iniciales sobre su color (nunca el de Didacta).
+          <span className="inline-flex items-center gap-2.5 rounded-lg border border-white/15 bg-black/25 px-3 py-2 text-xl font-extrabold text-white">
+            <AcademyMark
+              name={tenant.name}
+              hue={tenant.brandHue}
+              saturation={tenant.brandSaturation}
+              size={32}
+            />
+            {tenant.name}
+          </span>
+        ) : null}
+        <h1 className="mt-4 text-2xl font-bold tracking-tight text-white">
+          {page.headline ?? t('unete.defaultHeadline')}
+        </h1>
+        {page.subheadline ? (
+          <p className="mx-4 mt-2 text-sm leading-5 text-white/70">{page.subheadline}</p>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+/** Con quién se compra: la cuenta con la que entró, o que se crea al pagar. */
+function AccountBox({ session }: { session: StoredSession | null }) {
+  const t = useTranslations('publicSite');
+  if (session) {
+    return (
+      <div className="flex items-center gap-3 rounded-xl border border-border bg-surface px-4 py-3.5">
+        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-brand-100 font-bold text-brand-700">
+          {(session.user.name ?? session.user.email).slice(0, 1).toUpperCase()}
+        </span>
+        <div className="min-w-0 flex-1">
+          {session.user.name ? (
+            <p className="truncate text-sm font-semibold">{session.user.name}</p>
+          ) : null}
+          <p className="truncate text-[13px] text-text-muted">{session.user.email}</p>
+        </div>
+        <span className="text-right text-xs leading-4 text-text-subtle">
+          {t.rich('unete.buyWithAccount', { br: () => <br /> })}
+        </span>
+      </div>
+    );
+  }
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-border bg-surface px-4 py-3.5">
+      <p className="text-sm text-text-muted">{t('unete.accountAutoCreated')}</p>
+      <Link href="/signin" className="text-sm font-semibold text-brand-700 hover:underline">
+        {t('unete.haveAccountLink')}
+      </Link>
+    </div>
+  );
+}
+
+/** Preguntas frecuentes: afirmaciones verificables del producto. */
+function MembershipFaq({ coupons, className }: { coupons: boolean; className?: string }) {
+  const t = useTranslations('publicSite');
+  return (
+    <div className={className}>
+      <h3 className="mb-4 text-xl font-bold">{t('unete.faqTitle')}</h3>
+      <div className="grid gap-4 sm:grid-cols-2">
+        {(
+          [
+            { q: t('unete.faq1Q'), a: t('unete.faq1A') },
+            { q: t('unete.faq2Q'), a: t('unete.faq2A') },
+            { q: t('unete.faq3Q'), a: t('unete.faq3A') },
+            {
+              q: t('unete.faq4Q'),
+              a: coupons ? t('unete.faq4A') : t('unete.faq4ANoCoupon'),
+            },
+          ] as const
+        ).map((faq) => (
+          <div key={faq.q} className="rounded-xl border border-border bg-surface px-5 py-4">
+            <div className="mb-1.5 text-[15px] font-semibold">{faq.q}</div>
+            <div className="text-sm leading-[21px] text-text-muted">{faq.a}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/** Testimonio oscuro (solo si el admin lo configuró). */
+function MembershipTestimonial({
+  testimonial,
+  className,
+}: {
+  testimonial: NonNullable<MembershipPage['testimonial']>;
+  className?: string;
+}) {
+  return (
+    <figure
+      className={`relative overflow-hidden rounded-2xl px-8 py-7 ${className ?? ''}`}
+      style={{ backgroundColor: 'hsl(var(--brand-h) 52% 11%)' }}
+    >
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0"
+        style={{
+          background:
+            'radial-gradient(90% 120% at 100% 0%, hsl(var(--brand-h) 63% 55% / 0.22), transparent 55%)',
+        }}
+      />
+      <div className="relative">
+        <div
+          aria-hidden="true"
+          className="text-[40px] font-extrabold leading-none"
+          style={{ color: 'hsl(var(--brand-h) 63% 55%)' }}
+        >
+          &ldquo;
+        </div>
+        <blockquote className="mb-4 mt-2 max-w-3xl text-[17px] leading-7 text-white/90">
+          {testimonial.quote}
+        </blockquote>
+        <figcaption>
+          <div className="text-[15px] font-semibold text-white">{testimonial.author}</div>
+          {testimonial.role ? (
+            <div className="text-[13px] text-white/55">{testimonial.role}</div>
+          ) : null}
+        </figcaption>
+      </div>
+    </figure>
   );
 }
 

@@ -24,6 +24,8 @@ const ADMIN_BASE = '/api/v1/membership/admin';
 export interface MembershipPlan {
   id: string;
   name: string;
+  /** Nivel del plan (Básico, Pro…), o null en un aula sin niveles. */
+  tierId?: string | null;
   /** Meses por periodo (1..12): 1 mensual, 3 trimestral, 6 semestral, 12 anual… */
   intervalMonths: number;
   amountCents: number;
@@ -68,11 +70,46 @@ export interface MembershipStats {
   totalMinutes: number;
 }
 
+/** Un curso tal y como se nombra en la tarjeta de un nivel. */
+export interface MembershipTierCourse {
+  id: string;
+  title: string;
+  thumbnailUrl: string | null;
+}
+
+/**
+ * Un nivel de la membresía en /join. `includes` es lo que da el nivel: hoy sus
+ * cursos; es un objeto para poder añadir más cosas (espacios de la comunidad,
+ * directos) sin romper a quien ya lo lee.
+ */
+export interface MembershipPublicTier {
+  id: string;
+  name: string;
+  description: string | null;
+  isFree: boolean;
+  sortOrder: number;
+  accessGroupId: string | null;
+  includes: {
+    /** Todos los cursos publicados (también los nuevos). */
+    allCourses: boolean;
+    courses: MembershipTierCourse[];
+  };
+  /** Planes del nivel (ids de `MembershipPage.plans`). Vacío en el gratis. */
+  planIds: string[];
+}
+
 export interface MembershipPage {
   /** `null`: sin titular propio → el de por defecto del catálogo, en el idioma del aula. */
   headline: string | null;
   subheadline: string | null;
   plans: MembershipPlan[];
+  /**
+   * Niveles encendidos (con el gratis si lo hay), en su orden. Vacío en un aula
+   * sin niveles: la página se pinta como siempre, con `plans`.
+   */
+  tiers?: MembershipPublicTier[];
+  /** «Entrar gratis» del nivel gratis (el registro gratis), o null si está cerrado. */
+  freeSignupPath?: string | null;
   courses: MembershipCourse[];
   standaloneTotalCents: number | null;
   stats: MembershipStats;
@@ -117,6 +154,8 @@ export interface MembershipConfigInput {
 
 export interface PlanInput {
   name: string;
+  /** Nivel del plan (solo al crearlo; luego no cambia). */
+  tierId?: string | null;
   intervalMonths: number;
   amountCents: number;
   /** ISO 4217 en minúsculas (p. ej. 'eur', 'usd'). Si falta, la API usa 'eur'. */
@@ -130,7 +169,65 @@ export interface PlanInput {
   currencyOptions?: Record<string, number> | null;
 }
 
+/** Un nivel tal y como lo edita el creador (`GET /membership/admin/tiers`). */
+export interface MembershipAdminTier {
+  id: string;
+  name: string;
+  description: string | null;
+  isFree: boolean;
+  sortOrder: number;
+  /** Apagado: no se vende; quien ya lo paga conserva su acceso. */
+  active: boolean;
+  accessGroupId: string | null;
+  /** Da todos los cursos publicados (también los nuevos). */
+  allCourses: boolean;
+  /** Cursos del nivel (vacío con `allCourses`). */
+  courseIds: string[];
+  plans: MembershipAdminPlan[];
+  /** Gente dentro (de pago: membresías vivas; gratis: miembros de su grupo). */
+  members: number;
+}
+
+export interface MembershipAdminTiers {
+  tiers: MembershipAdminTier[];
+  /** Planes sin nivel (los de antes): pasan al primer nivel de pago que se cree. */
+  legacyPlanCount: number;
+  /** El registro gratis (puerta del nivel gratis) encendido y abierto. */
+  freeSignup: { moduleEnabled: boolean; open: boolean };
+}
+
+export interface CreateTierInput {
+  name: string;
+  description?: string | null;
+  isFree?: boolean;
+  allCourses?: boolean;
+  courseIds?: string[];
+}
+
+export interface UpdateTierInput {
+  name?: string;
+  description?: string | null;
+  active?: boolean;
+  courseIds?: string[];
+}
+
+/** Lectura pública de los niveles (`GET /membership/tiers`). */
+export interface MembershipTierSummary {
+  id: string;
+  name: string;
+  accessGroupId: string | null;
+  isFree: boolean;
+}
+
 // ── Público ──────────────────────────────────────────────────────────────────
+
+/** Niveles encendidos del aula: id, nombre, grupo que dan y si son gratis. */
+export async function getMembershipTiers(): Promise<MembershipTierSummary[]> {
+  const res = await apiFetch<{ tiers: MembershipTierSummary[] }>(`${PUBLIC_BASE}/tiers`, {
+    method: 'GET',
+  });
+  return res.tiers;
+}
 
 export async function getMembershipPage(): Promise<MembershipPage> {
   return apiFetch<MembershipPage>(`${PUBLIC_BASE}/page`, { method: 'GET' });
@@ -191,6 +288,36 @@ export const membershipAdminApi = {
   },
   async updateConfig(bearer: string, input: MembershipConfigInput): Promise<MembershipConfig> {
     return apiFetch(`${ADMIN_BASE}/config`, { method: 'PUT', body: JSON.stringify(input) }, bearer);
+  },
+
+  // ── Niveles ──
+  async listTiers(bearer: string): Promise<MembershipAdminTiers> {
+    return apiFetch(`${ADMIN_BASE}/tiers`, { method: 'GET' }, bearer);
+  },
+  async createTier(bearer: string, input: CreateTierInput): Promise<MembershipAdminTier> {
+    return apiFetch(`${ADMIN_BASE}/tiers`, { method: 'POST', body: JSON.stringify(input) }, bearer);
+  },
+  async updateTier(
+    bearer: string,
+    id: string,
+    input: UpdateTierInput,
+  ): Promise<MembershipAdminTier> {
+    return apiFetch(
+      `${ADMIN_BASE}/tiers/${encodeURIComponent(id)}`,
+      { method: 'PATCH', body: JSON.stringify(input) },
+      bearer,
+    );
+  },
+  async reorderTiers(bearer: string, tierIds: string[]): Promise<MembershipAdminTiers> {
+    return apiFetch(
+      `${ADMIN_BASE}/tiers/order`,
+      { method: 'PUT', body: JSON.stringify({ tierIds }) },
+      bearer,
+    );
+  },
+  /** Con alumnos dentro la API responde 409 (`MEMBERSHIP_TIER_IN_USE`): se apaga en su lugar. */
+  async deleteTier(bearer: string, id: string): Promise<void> {
+    await apiFetch(`${ADMIN_BASE}/tiers/${encodeURIComponent(id)}`, { method: 'DELETE' }, bearer);
   },
 };
 

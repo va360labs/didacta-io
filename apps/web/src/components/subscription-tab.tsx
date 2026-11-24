@@ -16,12 +16,19 @@
  *     (motivo + pausa o descuento si el aula los ofrece); es el único camino de
  *     baja (el portal de Stripe ya no la ofrece).
  *
+ * En un aula con NIVELES, la tarjeta de la membresía dice en qué nivel está y
+ * ofrece «Cambiar de plan» (`ChangePlanDialog`, con prorrateo de Stripe) y, si
+ * hay nivel gratis, pasar a él, que es darse de baja (el diálogo de siempre).
+ * Qué se puede hacer lo dice la API (`change-options`): sin opciones, nada
+ * nuevo en pantalla.
+ *
  * Antes vivía como página suelta en /account/subscriptions (ruta huérfana). Todo
  * CE, sin EeGate.
  */
 
 import { useTranslations } from 'next-intl';
 import { useEffect, useState } from 'react';
+import { ChangePlanDialog } from '@/components/change-plan-dialog';
 import { Icon } from '@/components/icon';
 import { LeaveSubscriptionDialog } from '@/components/leave-subscription-dialog';
 import { Badge } from '@/components/ui/badge';
@@ -31,14 +38,36 @@ import { ApiHttpError } from '@/lib/api-client';
 import { authStorage } from '@/lib/auth-storage';
 import { apiErrorMessage } from '@/lib/i18n/api-error';
 import { formatCents, formatDate } from '@/lib/i18n/format';
-import { labelOr } from '@/lib/i18n/labels';
+import { labelOr, type TranslatorLike } from '@/lib/i18n/labels';
 import { mySubscriptionApi, type MySubscriptionItem } from '@/lib/my-subscription';
 import {
   subscriptionsApi,
   type InvoiceRow,
+  type PlanChangeBlockReason,
+  type PlanChangeOptions,
   type SubscriptionRow,
   type SubscriptionStatus,
 } from '@/modules/subscriptions';
+
+/** ¿Hay una membresía viva por la que preguntar si se puede cambiar de plan? */
+function hasLiveMembership(subs: SubscriptionRow[]): boolean {
+  return subs.some((s) => s.planId !== null && s.status !== 'CANCELED');
+}
+
+/**
+ * Lo que la fila cruda de una acción (pagar ahora, baja, cambio) no trae y sí
+ * puso el listado: nombres, nivel, portal y descuento vivo.
+ */
+function keepEnrichment(updated: SubscriptionRow, prev: SubscriptionRow): SubscriptionRow {
+  return {
+    ...updated,
+    planName: prev.planName,
+    tierId: prev.tierId,
+    tierName: prev.tierName,
+    courseTitle: prev.courseTitle,
+    billingPortal: prev.billingPortal,
+  };
+}
 
 /** Lee el `?status` del retorno de Stripe (success/cancel) una sola vez al montar. */
 function useCheckoutStatus(): 'success' | 'cancel' | null {
@@ -73,6 +102,13 @@ export function SubscriptionTab() {
   const [invoicesById, setInvoicesById] = useState<Record<string, InvoiceRow[]>>({});
   /** Suscripción con el diálogo «Darme de baja» abierto. */
   const [leaving, setLeaving] = useState<SubscriptionRow | null>(null);
+  /**
+   * Cambio de plan de la membresía según la API: a qué puede pasar, si algo lo
+   * impide y si hay nivel gratis. `null`: sin membresía o la API no contestó
+   * (la tarjeta queda como siempre).
+   */
+  const [changeOptions, setChangeOptions] = useState<PlanChangeOptions | null>(null);
+  const [changingPlan, setChangingPlan] = useState(false);
   const tBaja = useTranslations('bajaRetencion');
   const checkoutStatus = useCheckoutStatus();
 
@@ -94,6 +130,15 @@ export function SubscriptionTab() {
       ]);
       if (inPlatform.status === 'fulfilled') {
         setSubs(inPlatform.value.subscriptions);
+        // Solo con una membresía viva se pregunta qué cambios de plan hay.
+        // Best-effort: si no contesta, la tarjeta queda como siempre.
+        if (hasLiveMembership(inPlatform.value.subscriptions)) {
+          try {
+            setChangeOptions(await subscriptionsApi.membershipChangeOptions(token));
+          } catch {
+            setChangeOptions(null);
+          }
+        }
       }
       if (ext.status === 'fulfilled') {
         setExternal(ext.value.subscriptions);
@@ -121,29 +166,35 @@ export function SubscriptionTab() {
     }
   }
 
+  /**
+   * Recarga la lista y lo que se puede cambiar de plan: tras una baja (ya no
+   * se puede cambiar) o un cambio de plan (nivel y precio nuevos).
+   */
+  function refreshSubscriptions() {
+    const token = authStorage.getAccessToken();
+    if (!token) return;
+    void subscriptionsApi
+      .listMine(token)
+      .then((r) => setSubs(r.subscriptions))
+      .catch(() => undefined);
+    // Si no contesta, se queda lo que había: no se cierra un diálogo abierto.
+    void subscriptionsApi
+      .membershipChangeOptions(token)
+      .then((o) => setChangeOptions(o))
+      .catch(() => undefined);
+  }
+
   /** Tras decidir en «Darme de baja»: repinta la tarjeta conservando el enriquecimiento. */
   function onLeaveDone(updated: SubscriptionRow) {
     setSubs((prev) =>
       prev.map((s) =>
         s.id === updated.id
-          ? {
-              ...updated,
-              planName: s.planName,
-              courseTitle: s.courseTitle,
-              billingPortal: s.billingPortal,
-              retentionDiscount: s.retentionDiscount,
-            }
+          ? { ...keepEnrichment(updated, s), retentionDiscount: s.retentionDiscount }
           : s,
       ),
     );
     // El descuento recién aceptado se ve al recargar la lista.
-    const token = authStorage.getAccessToken();
-    if (token) {
-      void subscriptionsApi
-        .listMine(token)
-        .then((r) => setSubs(r.subscriptions))
-        .catch(() => undefined);
-    }
+    refreshSubscriptions();
   }
 
   /** CTA "Pagar ahora": termina el trial de la membresía y cobra ya. */
@@ -157,18 +208,9 @@ export function SubscriptionTab() {
     try {
       const res = await subscriptionsApi.membershipPayNow(token);
       // La respuesta del módulo trae la fila cruda: conservamos el
-      // enriquecimiento (planName/courseTitle) que puso el listado.
+      // enriquecimiento (planName/tierName/courseTitle) que puso el listado.
       setSubs((prev) =>
-        prev.map((s) =>
-          s.id === res.subscription.id
-            ? {
-                ...res.subscription,
-                planName: s.planName,
-                courseTitle: s.courseTitle,
-                billingPortal: s.billingPortal,
-              }
-            : s,
-        ),
+        prev.map((s) => (s.id === res.subscription.id ? keepEnrichment(res.subscription, s) : s)),
       );
       if (res.subscription.status === 'ACTIVE') {
         setActionSuccess(t('subscription.payNowSuccess'));
@@ -319,18 +361,41 @@ export function SubscriptionTab() {
         />
       ) : null}
 
+      {changingPlan && changeOptions ? (
+        <ChangePlanDialog
+          options={changeOptions}
+          open
+          onOpenChange={(next) => {
+            if (!next) setChangingPlan(false);
+          }}
+          onDone={() => refreshSubscriptions()}
+        />
+      ) : null}
+
       {subs.map((sub) => {
         const isMembership = sub.planId !== null;
         const title = isMembership
           ? (sub.planName ?? t('subscription.membershipFallback'))
           : (sub.courseTitle ??
             t('subscription.courseFallback', { id: (sub.courseId ?? '').slice(0, 8) }));
+        // Cambio de plan: solo en la tarjeta de la membresía de la que habla la API.
+        const change =
+          isMembership && changeOptions?.subscription?.id === sub.id ? changeOptions : null;
+        const canLeave = sub.status !== 'CANCELED' && !sub.cancelAtPeriodEnd;
         return (
           <Card key={sub.id}>
             <CardHeader>
               <CardTitle className="flex flex-wrap items-center gap-2">
                 <Icon name={isMembership ? 'sparkles' : 'book'} size={18} />
                 <span>{title}</span>
+                {isMembership && sub.tierName ? (
+                  <span
+                    className="rounded-full border border-brand-200 bg-brand-50 px-2.5 py-0.5 text-xs font-semibold text-brand-700"
+                    data-testid="sub-nivel"
+                  >
+                    {t('subscription.nivel', { name: sub.tierName })}
+                  </span>
+                ) : null}
                 <SubStatusBadge status={sub.status} />
               </CardTitle>
               <CardDescription>
@@ -444,7 +509,30 @@ export function SubscriptionTab() {
                     {busyId === sub.id ? t('subscription.processing') : t('subscription.payNowCta')}
                   </Button>
                 ) : null}
-                {sub.status !== 'CANCELED' && !sub.cancelAtPeriodEnd ? (
+                {change && change.options.length > 0 && change.blockedReason === null ? (
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={() => setChangingPlan(true)}
+                    disabled={busyId === sub.id}
+                    data-testid="sub-cambiar-plan"
+                  >
+                    {t('cambioPlan.boton')}
+                  </Button>
+                ) : null}
+                {/* Pasar al nivel gratis es darse de baja: el diálogo de siempre. */}
+                {change?.freeTier && canLeave ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    onClick={() => setLeaving(sub)}
+                    disabled={busyId === sub.id}
+                    data-testid="sub-pasar-a-gratis"
+                  >
+                    {t('cambioPlan.pasarAGratis', { name: change.freeTier.name })}
+                  </Button>
+                ) : null}
+                {canLeave ? (
                   <Button
                     type="button"
                     variant="ghost"
@@ -460,6 +548,12 @@ export function SubscriptionTab() {
                 </Button>
               </div>
 
+              {change && change.options.length > 0 && change.blockedReason !== null ? (
+                <p className="text-sm text-text-muted" data-testid="sub-cambio-bloqueado">
+                  {blockedReasonText(t, change.blockedReason)}
+                </p>
+              ) : null}
+
               {invoicesById[sub.id] ? <InvoicesList invoices={invoicesById[sub.id]!} /> : null}
             </CardContent>
           </Card>
@@ -471,6 +565,20 @@ export function SubscriptionTab() {
 
 function Skeleton() {
   return <div className="skeleton h-32 w-full" />;
+}
+
+/** Por qué no puede cambiar de plan ahora, en llano (`cuentaComponentes`). */
+function blockedReasonText(t: TranslatorLike, reason: PlanChangeBlockReason): string {
+  switch (reason) {
+    case 'cancel_scheduled':
+      return t('cambioPlan.bloqueado.cancel_scheduled');
+    case 'pause_scheduled':
+      return t('cambioPlan.bloqueado.pause_scheduled');
+    case 'no_membership':
+      return t('cambioPlan.bloqueado.no_membership');
+    default:
+      return t('cambioPlan.bloqueado.not_active');
+  }
 }
 
 /** Tarjeta de la suscripción EXTERNA (payment-connections) con el CTA de portal. */

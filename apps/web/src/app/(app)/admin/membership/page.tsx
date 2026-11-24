@@ -7,7 +7,10 @@
 
 /**
  * Administración de la MEMBRESÍA (página pública /join):
- *   - Planes: precio, periodicidad, precio tachado, días de prueba, orden.
+ *   - Niveles (Básico, Pro, Gratis…): cada uno con sus cursos y sus precios
+ *     (`TiersEditor`, el mismo editor que «Ventas» del modo sencillo).
+ *   - Planes: precio, periodicidad, precio tachado, días de prueba, orden. Con
+ *     niveles de pago, solo los que se quedaran sin nivel.
  *   - Página: activo, headline, grupo de acceso concedido, precios individuales
  *     por curso (lo que costarían por separado) y testimonial opcional.
  * Todos los selectores usan datos reales (grupos y cursos del tenant).
@@ -43,41 +46,23 @@ import {
   type CurrencyOptionDraft,
   type PriceDraftError,
 } from '@/lib/pricing';
-import { minorToInput, parseMajorInput } from '@/lib/stripe-currencies';
+import { minorToInput } from '@/lib/stripe-currencies';
 import {
   membershipAdminApi,
   type MembershipAdminPlan,
+  type MembershipAdminTiers,
   type MembershipConfig,
 } from '@/lib/membership';
 import { queryParam } from '@/lib/legacy-routes';
-
-/**
- * Lo que escribe el admin («999», «999,5», «39.900») → unidad mínima de STRIPE
- * para esa moneda (`@/lib/stripe-currencies`: COP y HUF con dos decimales
- * aunque `Intl` diga cero; JPY sin ninguno). `0` vale (plan gratis). `null` si
- * no es un importe.
- */
-function amountToCents(raw: string, currency: string, locale: string): number | null {
-  const t = raw.trim();
-  if (!t) return null;
-  if (/^0+([.,]0+)?$/.test(t)) return 0;
-  return parseMajorInput(t, currency, locale);
-}
-
-function centsToAmount(cents: number | null, currency: string, locale: string): string {
-  if (cents === null) return '';
-  return minorToInput(cents, currency, locale);
-}
-
-/**
- * Monedas del selector con claves propias (las de siempre). Con cobros de
- * plataforma, las de `usePricePolicy` (las de liquidación de los países
- * admitidos), con la del creador por defecto.
- */
-const CURRENCY_OPTIONS = ['eur', 'usd', 'gbp', 'mxn', 'cop', 'ars', 'pen', 'brl'];
-
-/** Periodicidades habituales del selector; la API admite cualquier 1..12. */
-const INTERVAL_PRESETS = [1, 3, 6, 12];
+import { TiersEditor } from '@/components/membership-tiers/tiers-editor';
+// Importes, monedas y periodicidades: las mismas reglas que el editor de niveles.
+// Con cobros de plataforma, las monedas las da `usePricePolicy`.
+import {
+  MEMBERSHIP_CURRENCY_OPTIONS as CURRENCY_OPTIONS,
+  amountToMinor as amountToCents,
+  intervalOptions,
+  minorToAmount as centsToAmount,
+} from '@/components/membership-tiers/tier-helpers';
 
 interface PlanDraft {
   name: string;
@@ -143,6 +128,15 @@ function MembresiaCompleta() {
   const [stripeReady, setStripeReady] = useState<boolean | null>(null);
   /** Modo plataforma (cobros de Didacta): `true` si la cuenta aún no puede vender. */
   const [payoutsNotReady, setPayoutsNotReady] = useState(false);
+  /**
+   * Niveles de la membresía (los trae la tarjeta «Niveles»). Con algún nivel de
+   * pago, cada nivel da su grupo y sus precios: la tarjeta «Planes» solo enseña
+   * los que se quedaran sin nivel y el «Grupo de acceso» de la página se oculta.
+   * Sin niveles (o solo con el gratis) la página es la de siempre.
+   */
+  const [tierData, setTierData] = useState<MembershipAdminTiers | null>(null);
+  const hasPaidTiers = tierData?.tiers.some((tier) => !tier.isFree) ?? false;
+  const shownPlans = plans && hasPaidTiers ? plans.filter((p) => !p.tierId) : plans;
 
   // Alta/edición de plan
   const [draft, setDraft] = useState<PlanDraft>(EMPTY_DRAFT);
@@ -170,6 +164,17 @@ function MembresiaCompleta() {
 
   function token(): string | null {
     return authStorage.getAccessToken();
+  }
+
+  /** Tras un cambio en «Niveles»: sus precios (y los que adopta el primer nivel) cambian. */
+  async function reloadPlans() {
+    const bearer = token();
+    if (!bearer) return;
+    try {
+      setPlans(await membershipAdminApi.listPlans(bearer));
+    } catch (e) {
+      setError(apiErrorMessage(e, tErrors));
+    }
   }
 
   useEffect(() => {
@@ -378,7 +383,8 @@ function MembresiaCompleta() {
         // para todas como antes). El placeholder enseña cuál será.
         headline: headline.trim(),
         subheadline: subheadline.trim() || null,
-        accessGroupId: accessGroupId || null,
+        // Con niveles de pago el grupo lo da cada nivel: no se toca el de la página.
+        ...(hasPaidTiers ? {} : { accessGroupId: accessGroupId || null }),
         showCourses,
         trialLessonLimit: parsedTrialLimit,
         coursePrices,
@@ -452,188 +458,196 @@ function MembresiaCompleta() {
         </p>
       )}
 
-      {/* ── Planes ── */}
-      <Card>
-        <CardHeader>
-          <CardTitle>{t('plansTitle')}</CardTitle>
-          <CardDescription>{t('plansDescription')}</CardDescription>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-4">
-          {plans === null ? (
-            <p className="text-sm text-text-muted">{t('loading')}</p>
-          ) : plans.length === 0 ? (
-            <p className="text-sm text-text-muted">{t('plansEmpty')}</p>
-          ) : (
-            <ul className="flex flex-col gap-2">
-              {plans.map((plan) => (
-                <li
-                  key={plan.id}
-                  className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-border bg-surface px-4 py-3"
-                >
-                  <div className="min-w-0">
-                    <p className="font-semibold">
-                      {plan.name}{' '}
-                      {plan.isFeatured ? <Badge variant="success">{t('featured')}</Badge> : null}{' '}
-                      {!plan.active ? <Badge variant="muted">{t('inactive')}</Badge> : null}
-                    </p>
-                    <p className="text-sm text-text-muted">
-                      {subscriptionLabel(plan.intervalMonths)} ·{' '}
-                      {plan.compareAtCents ? (
-                        <span className="line-through">
-                          {formatCents(plan.compareAtCents, plan.currency.toUpperCase())}
-                        </span>
-                      ) : null}{' '}
-                      <strong>{formatCents(plan.amountCents, plan.currency.toUpperCase())}</strong>
-                      {plan.trialDays > 0
-                        ? ` · ${t('trialDaysSuffix', { days: plan.trialDays })}`
-                        : ''}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Button variant="ghost" size="sm" onClick={() => startEdit(plan)}>
-                      {t('edit')}
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      disabled={busy}
-                      onClick={() => void togglePlanActive(plan)}
-                    >
-                      {plan.active ? t('deactivate') : t('activate')}
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      disabled={busy}
-                      onClick={() => void removePlan(plan)}
-                    >
-                      {t('delete')}
-                    </Button>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
+      {/* ── Niveles (Básico, Pro, Gratis…) ── */}
+      <TiersEditor variant="full" onData={setTierData} onMutated={() => void reloadPlans()} />
 
-          {/* Alta / edición */}
-          <div className="grid gap-3 rounded-xl border border-border bg-surface-2 p-4 md:grid-cols-2">
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="plan-name">{t('nameLabel')}</Label>
-              <Input
-                id="plan-name"
-                placeholder={t('namePlaceholder')}
-                value={draft.name}
-                onChange={(e) => setDraft({ ...draft, name: e.target.value })}
-              />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="plan-interval">{t('intervalLabel')}</Label>
-              <Select
-                id="plan-interval"
-                value={String(draft.intervalMonths)}
-                onChange={(e) => setDraft({ ...draft, intervalMonths: Number(e.target.value) })}
-              >
-                {(INTERVAL_PRESETS.includes(draft.intervalMonths)
-                  ? INTERVAL_PRESETS
-                  : [...INTERVAL_PRESETS, draft.intervalMonths].sort((a, b) => a - b)
-                ).map((n) => (
-                  <option key={n} value={String(n)}>
-                    {intervalOptionLabel(n)}
-                  </option>
+      {/* ── Planes ── (con niveles de pago, solo los que se quedaran sin nivel) */}
+      {hasPaidTiers && shownPlans?.length === 0 ? null : (
+        <Card>
+          <CardHeader>
+            <CardTitle>{t('plansTitle')}</CardTitle>
+            <CardDescription>
+              {hasPaidTiers ? t('tiers.page.loosePlansDescription') : t('plansDescription')}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-4">
+            {shownPlans === null ? (
+              <p className="text-sm text-text-muted">{t('loading')}</p>
+            ) : shownPlans.length === 0 ? (
+              <p className="text-sm text-text-muted">{t('plansEmpty')}</p>
+            ) : (
+              <ul className="flex flex-col gap-2">
+                {shownPlans.map((plan) => (
+                  <li
+                    key={plan.id}
+                    className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-border bg-surface px-4 py-3"
+                  >
+                    <div className="min-w-0">
+                      <p className="font-semibold">
+                        {plan.name}{' '}
+                        {plan.isFeatured ? <Badge variant="success">{t('featured')}</Badge> : null}{' '}
+                        {!plan.active ? <Badge variant="muted">{t('inactive')}</Badge> : null}
+                      </p>
+                      <p className="text-sm text-text-muted">
+                        {subscriptionLabel(plan.intervalMonths)} ·{' '}
+                        {plan.compareAtCents ? (
+                          <span className="line-through">
+                            {formatCents(plan.compareAtCents, plan.currency.toUpperCase())}
+                          </span>
+                        ) : null}{' '}
+                        <strong>
+                          {formatCents(plan.amountCents, plan.currency.toUpperCase())}
+                        </strong>
+                        {plan.trialDays > 0
+                          ? ` · ${t('trialDaysSuffix', { days: plan.trialDays })}`
+                          : ''}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Button variant="ghost" size="sm" onClick={() => startEdit(plan)}>
+                        {t('edit')}
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        disabled={busy}
+                        onClick={() => void togglePlanActive(plan)}
+                      >
+                        {plan.active ? t('deactivate') : t('activate')}
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        disabled={busy}
+                        onClick={() => void removePlan(plan)}
+                      >
+                        {t('delete')}
+                      </Button>
+                    </div>
+                  </li>
                 ))}
-              </Select>
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="plan-currency">{t('currencyLabel')}</Label>
-              <Select
-                id="plan-currency"
-                value={draft.currency}
-                onChange={(e) => setDraft({ ...draft, currency: e.target.value })}
-              >
-                {(() => {
-                  const list = pricePolicy?.currencies ?? CURRENCY_OPTIONS;
-                  return list.includes(draft.currency) ? list : [...list, draft.currency];
-                })().map((c) => (
-                  <option key={c} value={c}>
-                    {pricePolicy?.platform && c === pricePolicy.settlementCurrency
-                      ? tPrice('currencyYours', { currency: c.toUpperCase() })
-                      : c.toUpperCase()}
-                  </option>
-                ))}
-              </Select>
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="plan-amount">
-                {t('priceLabel', { currency: draft.currency.toUpperCase() })}
-              </Label>
-              <Input
-                id="plan-amount"
-                inputMode="decimal"
-                placeholder="999"
-                value={draft.amountRaw}
-                onChange={(e) => setDraft({ ...draft, amountRaw: e.target.value })}
-              />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="plan-compare">{t('compareAtLabel')}</Label>
-              <Input
-                id="plan-compare"
-                inputMode="decimal"
-                placeholder="1188"
-                value={draft.compareAtRaw}
-                onChange={(e) => setDraft({ ...draft, compareAtRaw: e.target.value })}
-              />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="plan-trial">{t('trialDaysLabel')}</Label>
-              <Input
-                id="plan-trial"
-                inputMode="numeric"
-                value={draft.trialDays}
-                onChange={(e) => setDraft({ ...draft, trialDays: e.target.value })}
-              />
-            </div>
-            {pricePolicy?.platform ? (
-              <div className="flex flex-col gap-3 md:col-span-2">
-                <CurrencyNotice policy={pricePolicy} currency={draft.currency} />
-                <MarketPricesFields
-                  idPrefix="plan"
-                  currency={draft.currency}
-                  options={draft.marketPrices}
-                  errors={marketErrors}
-                  disabled={busy}
-                  onOptions={(marketPrices) => setDraft({ ...draft, marketPrices })}
-                />
+              </ul>
+            )}
+
+            {/* Alta / edición (con niveles de pago, un plan nuevo va en su nivel) */}
+            {hasPaidTiers && !editingId ? null : (
+              <div className="grid gap-3 rounded-xl border border-border bg-surface-2 p-4 md:grid-cols-2">
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="plan-name">{t('nameLabel')}</Label>
+                  <Input
+                    id="plan-name"
+                    placeholder={t('namePlaceholder')}
+                    value={draft.name}
+                    onChange={(e) => setDraft({ ...draft, name: e.target.value })}
+                  />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="plan-interval">{t('intervalLabel')}</Label>
+                  <Select
+                    id="plan-interval"
+                    value={String(draft.intervalMonths)}
+                    onChange={(e) => setDraft({ ...draft, intervalMonths: Number(e.target.value) })}
+                  >
+                    {intervalOptions(draft.intervalMonths).map((n) => (
+                      <option key={n} value={String(n)}>
+                        {intervalOptionLabel(n)}
+                      </option>
+                    ))}
+                  </Select>
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="plan-currency">{t('currencyLabel')}</Label>
+                  <Select
+                    id="plan-currency"
+                    value={draft.currency}
+                    onChange={(e) => setDraft({ ...draft, currency: e.target.value })}
+                  >
+                    {(() => {
+                      const list = pricePolicy?.currencies ?? CURRENCY_OPTIONS;
+                      return list.includes(draft.currency) ? list : [...list, draft.currency];
+                    })().map((c) => (
+                      <option key={c} value={c}>
+                        {pricePolicy?.platform && c === pricePolicy.settlementCurrency
+                          ? tPrice('currencyYours', { currency: c.toUpperCase() })
+                          : c.toUpperCase()}
+                      </option>
+                    ))}
+                  </Select>
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="plan-amount">
+                    {t('priceLabel', { currency: draft.currency.toUpperCase() })}
+                  </Label>
+                  <Input
+                    id="plan-amount"
+                    inputMode="decimal"
+                    placeholder="999"
+                    value={draft.amountRaw}
+                    onChange={(e) => setDraft({ ...draft, amountRaw: e.target.value })}
+                  />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="plan-compare">{t('compareAtLabel')}</Label>
+                  <Input
+                    id="plan-compare"
+                    inputMode="decimal"
+                    placeholder="1188"
+                    value={draft.compareAtRaw}
+                    onChange={(e) => setDraft({ ...draft, compareAtRaw: e.target.value })}
+                  />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="plan-trial">{t('trialDaysLabel')}</Label>
+                  <Input
+                    id="plan-trial"
+                    inputMode="numeric"
+                    value={draft.trialDays}
+                    onChange={(e) => setDraft({ ...draft, trialDays: e.target.value })}
+                  />
+                </div>
+                {pricePolicy?.platform ? (
+                  <div className="flex flex-col gap-3 md:col-span-2">
+                    <CurrencyNotice policy={pricePolicy} currency={draft.currency} />
+                    <MarketPricesFields
+                      idPrefix="plan"
+                      currency={draft.currency}
+                      options={draft.marketPrices}
+                      errors={marketErrors}
+                      disabled={busy}
+                      onOptions={(marketPrices) => setDraft({ ...draft, marketPrices })}
+                    />
+                  </div>
+                ) : null}
+                <div className="flex items-end gap-2 pb-1">
+                  <Switch
+                    id="plan-featured"
+                    checked={draft.isFeatured}
+                    onCheckedChange={(v) => setDraft({ ...draft, isFeatured: v })}
+                  />
+                  <Label htmlFor="plan-featured">{t('featuredLabel')}</Label>
+                </div>
+                <div className="flex items-center gap-2 md:col-span-2">
+                  <Button disabled={busy} onClick={() => void savePlan()}>
+                    {editingId ? t('saveChanges') : t('createPlan')}
+                  </Button>
+                  {editingId ? (
+                    <Button
+                      variant="ghost"
+                      onClick={() => {
+                        setEditingId(null);
+                        setDraft(emptyDraft());
+                        setMarketErrors([]);
+                      }}
+                    >
+                      {t('cancelEdit')}
+                    </Button>
+                  ) : null}
+                </div>
               </div>
-            ) : null}
-            <div className="flex items-end gap-2 pb-1">
-              <Switch
-                id="plan-featured"
-                checked={draft.isFeatured}
-                onCheckedChange={(v) => setDraft({ ...draft, isFeatured: v })}
-              />
-              <Label htmlFor="plan-featured">{t('featuredLabel')}</Label>
-            </div>
-            <div className="flex items-center gap-2 md:col-span-2">
-              <Button disabled={busy} onClick={() => void savePlan()}>
-                {editingId ? t('saveChanges') : t('createPlan')}
-              </Button>
-              {editingId ? (
-                <Button
-                  variant="ghost"
-                  onClick={() => {
-                    setEditingId(null);
-                    setDraft(emptyDraft());
-                    setMarketErrors([]);
-                  }}
-                >
-                  {t('cancelEdit')}
-                </Button>
-              ) : null}
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* ── Página pública ── */}
       <Card>
@@ -657,21 +671,30 @@ function MembresiaCompleta() {
                 onChange={(e) => setHeadline(e.target.value)}
               />
             </div>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="cfg-group">{t('groupLabel')}</Label>
-              <Select
-                id="cfg-group"
-                value={accessGroupId}
-                onChange={(e) => setAccessGroupId(e.target.value)}
+            {hasPaidTiers ? (
+              <p
+                className="self-end text-sm text-text-muted"
+                data-testid="membresia-grupo-por-nivel"
               >
-                <option value="">{t('noGroupOption')}</option>
-                {groups.map((g) => (
-                  <option key={g.id} value={g.id}>
-                    {g.name}
-                  </option>
-                ))}
-              </Select>
-            </div>
+                {t('tiers.page.groupByTier')}
+              </p>
+            ) : (
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="cfg-group">{t('groupLabel')}</Label>
+                <Select
+                  id="cfg-group"
+                  value={accessGroupId}
+                  onChange={(e) => setAccessGroupId(e.target.value)}
+                >
+                  <option value="">{t('noGroupOption')}</option>
+                  {groups.map((g) => (
+                    <option key={g.id} value={g.id}>
+                      {g.name}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+            )}
             <div className="flex flex-col gap-1.5 md:col-span-2">
               <Label htmlFor="cfg-sub">{t('subheadlineLabel')}</Label>
               <Textarea

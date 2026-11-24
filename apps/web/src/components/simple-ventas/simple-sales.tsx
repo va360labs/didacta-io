@@ -11,6 +11,7 @@ import { useTranslations } from 'next-intl';
 import { PaymentsConnectCard } from '@/components/admin/payments-connect-card';
 import { PayoutsTaxProfileCard } from '@/components/admin/payouts-tax-profile-card';
 import { Icon } from '@/components/icon';
+import { TiersEditor } from '@/components/membership-tiers/tiers-editor';
 import { START_HERE_CHANGED_EVENT } from '@/components/simple-shell/simple-shell';
 import { adminModulesApi } from '@/lib/admin-modules';
 import { authStorage } from '@/lib/auth-storage';
@@ -335,6 +336,10 @@ export function SimpleSales({
           onChanged={() => void load()}
         />
       </div>
+
+      {/* Varios niveles (Básico, Pro, Gratis…), cada uno con sus cursos y sus
+          precios: el mismo editor que la página completa de la membresía. */}
+      <TiersEditor variant="simple" className="mt-8" onMutated={() => void load()} />
 
       <ReferralsSection />
     </div>
