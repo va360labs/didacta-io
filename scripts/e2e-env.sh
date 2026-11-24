@@ -197,6 +197,15 @@
 : "${E2E_MAILPIT_SMTP_HOST:=127.0.0.1}"
 : "${E2E_MAILPIT_SMTP_PORT:=1026}"
 
+# «Dirección de tu academia» (cambiar el subdominio del aula desde Ajustes):
+# solo existe con esta variable, como en Didacta Cloud (`didacta.io`). En el
+# arnés las aulas nuevas viven en `<slug>.localhost` (Chromium lo resuelve
+# solo), así que el sufijo es `localhost`. El aula de arranque (`localhost`) y
+# la de humo (`127.0.0.1`) no cuelgan de él: su tarjeta dice que no se cambia
+# desde ahí y nada más. `direccion-academia.spec.ts` lo prueba, también SIN la
+# variable (levanta una segunda API sin ella).
+: "${TENANT_SUBDOMAIN_SUFFIX:=localhost}"
+
 # Aviso al operador de cada ticket nuevo de «Ayuda y sugerencias» (mod.soporte),
 # como `operador@example.com` en el pool. Sale por el SMTP de la plataforma; sin
 # él (este arnés no lo tiene), por el del aula. `soporte.spec.ts` lo lee del
@@ -221,6 +230,7 @@ E2E_BUNNY_DOUBLE_PORT BUNNY_STREAM_API_KEY BUNNY_STREAM_LIBRARY_ID BUNNY_STREAM_
 BUNNY_STREAM_TOKEN_KEY BUNNY_STREAM_WEBHOOK_SECRET BUNNY_STREAM_API_BASE_URL BUNNY_STREAM_TUS_ENDPOINT
 E2E_MAILPIT_URL E2E_MAILPIT_SMTP_HOST E2E_MAILPIT_SMTP_PORT
 SUPPORT_OPERATOR_ALERT_EMAIL
+TENANT_SUBDOMAIN_SUFFIX
 "
 
 # shellcheck disable=SC2086

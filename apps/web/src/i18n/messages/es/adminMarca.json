@@ -390,5 +390,36 @@
     "saved": "Guardado",
     "error": "No se ha podido guardar. Inténtalo de nuevo.",
     "loadError": "No se ha podido cargar este ajuste."
+  },
+  "direccionAula": {
+    "title": "Dirección de tu academia",
+    "description": "Es la dirección web de tu academia: la que usáis tú y tus alumnos para entrar. Puedes cambiarla tú mismo.",
+    "current": "Ahora es",
+    "label": "Nueva dirección",
+    "hint": {
+      "checking": "Comprobando…",
+      "available": "¡Está libre!",
+      "current": "Esta ya es la dirección de tu academia.",
+      "taken": "Ya la usa otra academia. Prueba con otra.",
+      "reserved": "Esta dirección no se puede usar. Prueba con otra.",
+      "invalid": "Usa solo letras sin tildes, números y guiones (entre 3 y 63).",
+      "error": "No hemos podido comprobarla. Inténtalo de nuevo."
+    },
+    "left": "Cambios que te quedan: {left} de {max} (cada {days} días).",
+    "change": "Cambiar dirección",
+    "limit": "Ya has cambiado la dirección {max} veces en los últimos {days} días. Podrás volver a cambiarla a partir del {date}.",
+    "ownDomain": "Tu academia usa su propio dominio ({host}), así que su dirección no se cambia desde aquí.",
+    "confirmTitle": "¿Cambiar la dirección de tu academia?",
+    "confirmFromTo": "Pasará de {old} a {new}.",
+    "confirmOldLinks": "Los enlaces antiguos seguirán funcionando: llevarán solos a la dirección nueva.",
+    "confirmSignin": "Todo el mundo, tú también, tendrá que volver a entrar con su correo y su contraseña en la dirección nueva.",
+    "confirmShare": "Si tienes la dirección en tu web o en tus redes, cámbiala allí cuando puedas.",
+    "confirm": "Sí, cambiar la dirección",
+    "cancel": "Cancelar",
+    "saving": "Cambiando…",
+    "done": "Hecho. Tu academia ya está en {url}. Te llevamos allí para que vuelvas a entrar…",
+    "goNow": "Ir ahora",
+    "error": "No se ha podido cambiar la dirección. Inténtalo de nuevo.",
+    "loadError": "No se ha podido cargar la dirección de la academia."
   }
 }

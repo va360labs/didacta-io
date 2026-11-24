@@ -17,6 +17,7 @@ import {
   linksFromDrafts,
   type LinkDraft,
 } from '@/components/academy-profile-fields';
+import { AcademyAddressCard } from '@/components/admin/academy-address-card';
 import { PublicHomeToggle } from '@/components/admin/public-home-card';
 import { Icon } from '@/components/icon';
 import { RetentionSettingsCard } from '@/components/retention/retention-settings-card';
@@ -41,7 +42,8 @@ const DIDACTA_SAT = 70;
 /**
  * «Ajustes» del MODO SENCILLO: tu academia (nombre, idioma, logo y color, con
  * vista previa en vivo; y cómo se presenta en la comunidad: portada,
- * descripción y enlaces), los correos que reciben los alumnos al comprar,
+ * descripción y enlaces), su dirección (en Didacta Cloud), los correos que
+ * reciben los alumnos al comprar,
  * premios y niveles, los mensajes automáticos, «Cuando alguien quiere irse»
  * (la oferta al darse de baja) y el interruptor para pasar al modo completo. Lo técnico
  * (correo propio, cobros con claves, Zoom, idioma…) sigue en la misma página
@@ -239,6 +241,11 @@ export function SimpleSettings() {
           ) : null}
         </div>
       </form>
+
+      {/* La dirección con la que se entra al aula: el creador la cambia él
+          solo. Solo existe con TENANT_SUBDOMAIN_SUFFIX (Didacta Cloud); en
+          cualquier otra instalación no pinta nada. */}
+      <AcademyAddressCard variant="section" />
 
       {/* Lo que reciben los alumnos al comprar: asunto y mensaje a su gusto,
           con el recibo de la compra siempre debajo. */}

@@ -9,6 +9,8 @@ import { ModulesModule } from '../modules/modules.module';
 import { SsoOidcModule } from '../sso/oidc/oidc.module';
 import { SsoSamlModule } from '../sso/saml/saml.module';
 import { SsoWpModule } from '../sso/wp/wp-sso.module';
+import { AcademyAddressController } from './academy-address/academy-address.controller';
+import { AcademyAddressService } from './academy-address/academy-address.service';
 import { AdminAcademyController } from './admin-academy.controller';
 import { AdminApiKeysController } from './admin-api-keys.controller';
 import { AdminModulesController } from './admin-modules.controller';
@@ -70,6 +72,9 @@ import { SupportAccessService } from './support-access.service';
     // ajeno: el dueño de una academia es tenant_admin y no podía ni ponerle
     // nombre a la suya. Este no acepta id, opera sobre el tenant del token.
     AdminAcademyController,
+    // «Dirección de tu academia»: el administrador cambia él solo el
+    // subdominio de su aula. Solo existe con TENANT_SUBDOMAIN_SUFFIX.
+    AcademyAddressController,
     // SMTP per-tenant — GET/PUT/POST test. Wrappea el almacenamiento
     // genérico de tenant_setting con un contrato dedicado (alpha.75).
     AdminSmtpController,
@@ -112,6 +117,7 @@ import { SupportAccessService } from './support-access.service';
     AdminBusinessMetricsService,
     AdminImagesService,
     CustomDomainsService,
+    AcademyAddressService,
     SuperUsersService,
     // U8 — emisión, revocación y canje del acceso de soporte de vida corta.
     SupportAccessService,

@@ -28,6 +28,11 @@ import { TenantResolverService } from './tenant-resolver.service';
  * No revela nada que no fuera público: quién quiera saber si un subdominio
  * existe solo tiene que visitarlo.
  *
+ * `redirectTo` es el dominio primario cuando el host es una dirección ANTERIOR
+ * del aula (su administrador cambió el subdominio): el web responde 308 a las
+ * páginas pedidas por ahí. `null` en cualquier otro caso. Solo cuesta una
+ * segunda consulta en ese caso raro.
+ *
  * `suspended` distingue el aula que existe pero está suspendida del host que no
  * es de nadie, para que el web pueda decírselo a quien llega en vez de un «Not
  * Found». Va con `known: false` y SIN slug ni surface: de un tenant suspendido
@@ -45,20 +50,22 @@ export class TenancyController {
   @Get('resolve')
   @ApiOperation({
     summary:
-      'Resuelve el host público del request a un tenant. { known, slug, host, surface, suspended }.',
+      'Resuelve el host público del request a un tenant. { known, slug, host, surface, suspended, redirectTo }.',
     description:
-      'El host sale de `X-Forwarded-Host` y, si no viene, de `Host`. El middleware del web reenvía el suyo en `X-Forwarded-Host` para preguntar por el dominio del visitante y no por el del salto interno. `surface` dice si ese dominio sirve la app del aula (`APP`) o el sitio público (`SITE`), para que el middleware reparta sin una segunda llamada por navegación. `suspended: true` significa que el dominio es de un tenant suspendido: llega con `known: false` y sin `slug` ni `surface`.',
+      'El host sale de `X-Forwarded-Host` y, si no viene, de `Host`. El middleware del web reenvía el suyo en `X-Forwarded-Host` para preguntar por el dominio del visitante y no por el del salto interno. `surface` dice si ese dominio sirve la app del aula (`APP`) o el sitio público (`SITE`), para que el middleware reparta sin una segunda llamada por navegación. `suspended: true` significa que el dominio es de un tenant suspendido: llega con `known: false` y sin `slug` ni `surface`. `redirectTo` es el dominio primario del aula cuando el host es una dirección anterior suya (el web redirige sus páginas con 308; `/api/*` no se redirige); `null` en cualquier otro caso.',
   })
   async resolve(@Req() req: FastifyRequest) {
     const host = resolvePublicHost(req);
     const resolution = await this.tenantResolver.resolveHostStatusByRequest(req);
     const tenant = resolution.status === 'active' ? resolution.tenant : null;
+    const redirectTo = tenant ? await this.tenantResolver.resolveAliasRedirect(tenant) : null;
     return {
       known: tenant !== null,
       slug: tenant?.slug ?? null,
       host: host ?? null,
       surface: tenant?.surface ?? null,
       suspended: resolution.status === 'suspended',
+      redirectTo,
     };
   }
 

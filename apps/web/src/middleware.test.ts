@@ -422,6 +422,110 @@ describe('middleware · noindex por cabecera (solo la portada y la venta se inde
   });
 });
 
+/**
+ * Dirección ANTERIOR de un aula: su administrador cambió el subdominio. La API
+ * la da por conocida y dice adónde se fue (`redirectTo`): las páginas van con
+ * 308 a la nueva conservando ruta y query.
+ */
+describe('middleware · dirección anterior del aula', () => {
+  const VIEJA = 'joaquin-viejo.didacta.io';
+  const NUEVA = 'joaquin.didacta.io';
+
+  beforeEach(() => {
+    hosts[VIEJA] = {
+      known: true,
+      slug: 'joaquin',
+      surface: 'APP',
+      suspended: false,
+      redirectTo: NUEVA,
+    };
+  });
+
+  it.each([
+    ['/', `https://${NUEVA}/`],
+    ['/catalog/acuarela?ref=ANA', `https://${NUEVA}/catalog/acuarela?ref=ANA`],
+    ['/reset-password?token=abc', `https://${NUEVA}/reset-password?token=abc`],
+    ['/signin', `https://${NUEVA}/signin`],
+  ])('%s → 308 a %s', async (path, destino) => {
+    const mw = await loadMiddleware();
+    const res = await mw(request(VIEJA, path));
+    expect(res.status).toBe(308);
+    expect(res.headers.get('location')).toBe(destino);
+  });
+
+  it('control: la dirección nueva (sin redirectTo) se sirve, no redirige', async () => {
+    hosts[NUEVA] = { known: true, slug: 'joaquin', surface: 'APP', suspended: false };
+    const mw = await loadMiddleware();
+    const res = await mw(request(NUEVA, '/catalog?ref=ANA'));
+    expect(pasa(res)).toBe(true);
+    expect(res.headers.get('location')).toBeNull();
+  });
+
+  it('detrás del proxy: https aunque la web hable http, y sin el puerto interno', async () => {
+    const mw = await loadMiddleware();
+    const headers = new Headers({
+      host: VIEJA,
+      'x-forwarded-proto': 'https',
+      'x-forwarded-host': VIEJA,
+    });
+    const res = await mw(new NextRequest(`http://${VIEJA}/catalog?ref=X`, { headers }));
+    expect(res.headers.get('location')).toBe(`https://${NUEVA}/catalog?ref=X`);
+  });
+
+  it('en local conserva el puerto de la web (`vieja.localhost:3010`)', async () => {
+    hosts['vieja.localhost:3010'] = {
+      known: true,
+      surface: 'APP',
+      suspended: false,
+      redirectTo: 'nueva.localhost',
+    };
+    const mw = await loadMiddleware();
+    const headers = new Headers({ host: 'vieja.localhost:3010' });
+    const res = await mw(new NextRequest('http://vieja.localhost:3010/admin?x=1', { headers }));
+    expect(res.status).toBe(308);
+    expect(res.headers.get('location')).toBe('http://nueva.localhost:3010/admin?x=1');
+  });
+
+  it('un `redirectTo` que no es un hostname limpio no se usa como destino', async () => {
+    hosts[VIEJA] = {
+      known: true,
+      surface: 'APP',
+      suspended: false,
+      redirectTo: 'evil.example/phish?x=',
+    };
+    const mw = await loadMiddleware();
+    const res = await mw(request(VIEJA, '/'));
+    expect(pasa(res)).toBe(true);
+  });
+
+  it('un dominio del SITIO público nunca redirige por aquí', async () => {
+    hosts[VIEJA] = { known: true, surface: 'SITE', suspended: false, redirectTo: NUEVA };
+    const mw = await loadMiddleware();
+    const res = await mw(request(VIEJA, '/blog'));
+    expect(res.status).not.toBe(308);
+  });
+
+  it('`/api/*` no pasa por el middleware: webhooks y MCP de la dirección vieja siguen respondiendo', async () => {
+    vi.resetModules();
+    const { config } = await import('./middleware');
+    const matcher = new RegExp(`^${config.matcher[0]}$`);
+    for (const path of ['/api/v1/modules/payouts/webhook', '/api/v1/agent/mcp', '/api']) {
+      expect(matcher.test(path), path).toBe(false);
+    }
+    // Control: las páginas sí pasan.
+    for (const path of ['/catalog', '/signin', '/admin/settings']) {
+      expect(matcher.test(path), path).toBe(true);
+    }
+  });
+
+  it('se cachea como cualquier host conocido: una sola consulta a la API', async () => {
+    const mw = await loadMiddleware();
+    await mw(request(VIEJA, '/'));
+    await mw(request(VIEJA, '/catalog'));
+    expect(resolveCalls.filter((h) => h === VIEJA)).toHaveLength(1);
+  });
+});
+
 describe('textos de aula suspendida', () => {
   it('están en los dos idiomas y no son el mismo texto', () => {
     for (const key of ['metaTitle', 'title', 'body', 'owner'] as const) {

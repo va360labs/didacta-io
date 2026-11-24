@@ -38,5 +38,14 @@
   "ADMIN_VIDEO_PROTECTION_FORBIDDEN": "Somente super_admin ou tenant_admin podem gerenciar a proteção de vídeo.",
   "ADMIN_VIDEO_PROTECTION_LIMITS_INVALID": "O limite diário não pode ser menor que o limite por hora.",
   "ADMIN_STRIPE_PUBLISHABLE_KEY_INVALID": "A chave publicável deve começar por pk_test_ ou pk_live_.",
-  "ADMIN_STRIPE_PUBLISHABLE_KEY_MODE_MISMATCH": "A chave publicável é de outro modo que a secreta (teste com produção ou o contrário)."
+  "ADMIN_STRIPE_PUBLISHABLE_KEY_MODE_MISMATCH": "A chave publicável é de outro modo que a secreta (teste com produção ou o contrário).",
+  "ACADEMY_ADDRESS_DISABLED": "Esta instalação não permite trocar o endereço da escola.",
+  "ACADEMY_ADDRESS_FORBIDDEN": "Só quem administra a escola pode trocar o endereço dela.",
+  "ACADEMY_ADDRESS_TAKEN": "Outra escola já usa este endereço. Tente outro.",
+  "ACADEMY_ADDRESS_RESERVED": "Este endereço não pode ser usado. Tente outro.",
+  "ACADEMY_ADDRESS_INVALID": "O endereço só pode ter letras sem acento, números e hífens (de 3 a 63).",
+  "ACADEMY_ADDRESS_UNCHANGED": "Este já é o endereço da sua escola.",
+  "ACADEMY_ADDRESS_CHANGE_LIMIT": "Você já trocou o endereço 3 vezes nos últimos 30 dias. Poderá trocar de novo mais adiante.",
+  "ACADEMY_ADDRESS_OWN_DOMAIN": "Sua escola usa um domínio próprio: o endereço não é trocado por aqui.",
+  "ACADEMY_ADDRESS_NONE": "Sua escola não tem um endereço para trocar."
 }

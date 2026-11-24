@@ -6,6 +6,7 @@
 import { createHash } from 'node:crypto';
 import { Injectable } from '@nestjs/common';
 import type { AuditLogService } from '@didacta/core-kernel';
+import type { Prisma } from '@didacta/database';
 import { PrismaService } from '../prisma/prisma.service';
 
 /**
@@ -54,6 +55,21 @@ function canonicalStringify(value: unknown): string {
   });
 }
 
+/** Una entrada del audit log, tal como la piden los servicios. */
+export interface AuditEntry {
+  tenantId: string;
+  actorId: string | null;
+  action: string;
+  resourceType: string;
+  resourceId: string;
+  metadata?: Record<string, unknown>;
+  ip?: string;
+  userAgent?: string;
+}
+
+/** Lo que `recordInTransaction` necesita de la transacción del llamador. */
+export type AuditLogTx = Pick<Prisma.TransactionClient, '$executeRaw' | 'auditLog'>;
+
 /** Primera clave del advisory lock: el «espacio» de la cadena de auditoría. */
 const AUDIT_CHAIN_LOCK_SPACE = 'audit_log';
 
@@ -64,67 +80,73 @@ const AUDIT_WRITE_TIMEOUT_MS = 10_000;
 export class PrismaAuditLogService implements AuditLogService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async record(entry: {
-    tenantId: string;
-    actorId: string | null;
-    action: string;
-    resourceType: string;
-    resourceId: string;
-    metadata?: Record<string, unknown>;
-    ip?: string;
-    userAgent?: string;
-  }): Promise<void> {
+  async record(entry: AuditEntry): Promise<void> {
     await this.prisma.$transaction(
-      async (tx) => {
-        // Lock de DOS claves: (espacio «audit_log», tenant). La forma de dos
-        // enteros no comparte espacio con la de un solo bigint que usan otros
-        // servicios (access-groups), así que una coincidencia de hash con ellos
-        // no hace esperar a nadie.
-        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${AUDIT_CHAIN_LOCK_SPACE}), hashtext(${entry.tenantId}))`;
-
-        // A partir de aquí nadie más del tenant está entre este SELECT y su
-        // INSERT: el «último» que se lee es el último de verdad.
-        const last = await tx.auditLog.findFirst({
-          where: { tenantId: entry.tenantId },
-          orderBy: { id: 'desc' },
-          select: { hash: true },
-        });
-        const prevHash = last?.hash ?? null;
-
-        const timestamp = new Date();
-        const hashInput = canonicalStringify({
-          prevHash,
-          tenantId: entry.tenantId,
-          actorId: entry.actorId,
-          action: entry.action,
-          resourceType: entry.resourceType,
-          resourceId: entry.resourceId,
-          metadata: entry.metadata ?? {},
-          timestamp: timestamp.toISOString(),
-        });
-        const hash = createHash('sha256').update(hashInput).digest('hex');
-
-        await tx.auditLog.create({
-          data: {
-            tenantId: entry.tenantId,
-            actorId: entry.actorId,
-            action: entry.action,
-            resourceType: entry.resourceType,
-            resourceId: entry.resourceId,
-            metadata: (entry.metadata ?? {}) as never,
-            ip: entry.ip ?? null,
-            userAgent: entry.userAgent ?? null,
-            timestamp,
-            prevHash,
-            hash,
-          },
-        });
-      },
+      async (tx) => this.recordInTransaction(tx, entry),
       // En una ráfaga de acciones del mismo tenant, una escritura espera al
       // lock de las anteriores. Los 2 s / 5 s por defecto de Prisma se quedan
       // cortos ahí, y un timeout aquí es una entrada de auditoría perdida.
       { maxWait: AUDIT_WRITE_TIMEOUT_MS, timeout: AUDIT_WRITE_TIMEOUT_MS },
     );
+  }
+
+  /**
+   * La misma escritura que `record`, dentro de una transacción del llamador.
+   *
+   * Para las acciones cuyo rastro tiene que quedar en la MISMA transacción que
+   * el cambio: si el cambio se confirma, su entrada también, y si no, ninguna.
+   * El cambio de dirección del aula lo necesita porque el audit log es además
+   * su contador (el límite de cambios se cuenta aquí): un cambio sin su fila
+   * sería un cambio gratis.
+   *
+   * Toma el mismo lock de la cadena del tenant que `record`, así que las dos
+   * vías se serializan entre sí. El llamador decide los tiempos de su
+   * transacción.
+   */
+  async recordInTransaction(tx: AuditLogTx, entry: AuditEntry): Promise<void> {
+    // Lock de DOS claves: (espacio «audit_log», tenant). La forma de dos
+    // enteros no comparte espacio con la de un solo bigint que usan otros
+    // servicios (access-groups), así que una coincidencia de hash con ellos
+    // no hace esperar a nadie.
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${AUDIT_CHAIN_LOCK_SPACE}), hashtext(${entry.tenantId}))`;
+
+    // A partir de aquí nadie más del tenant está entre este SELECT y su
+    // INSERT: el «último» que se lee es el último de verdad.
+    const last = await tx.auditLog.findFirst({
+      where: { tenantId: entry.tenantId },
+      orderBy: { id: 'desc' },
+      select: { hash: true },
+    });
+    const prevHash = last?.hash ?? null;
+
+    const timestamp = new Date();
+    const hashInput = canonicalStringify({
+      prevHash,
+      tenantId: entry.tenantId,
+      actorId: entry.actorId,
+      action: entry.action,
+      resourceType: entry.resourceType,
+      resourceId: entry.resourceId,
+      metadata: entry.metadata ?? {},
+      timestamp: timestamp.toISOString(),
+    });
+    const hash = createHash('sha256').update(hashInput).digest('hex');
+
+    await tx.auditLog.create({
+      data: {
+        tenantId: entry.tenantId,
+        actorId: entry.actorId,
+        action: entry.action,
+        resourceType: entry.resourceType,
+        resourceId: entry.resourceId,
+        metadata: (entry.metadata ?? {}) as never,
+        ip: entry.ip ?? null,
+        userAgent: entry.userAgent ?? null,
+        timestamp,
+        prevHash,
+        hash,
+      },
+    });
   }
 
   /**

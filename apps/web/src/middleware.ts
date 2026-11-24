@@ -6,6 +6,7 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { LOCALE_COOKIE } from './i18n/config';
 import { ACADEMY_BRAND_PATH } from './lib/academy-mark';
+import { aliasRedirectUrl, sanitizeRedirectHost } from './lib/alias-redirect';
 import { legacyRedirectPath } from './lib/legacy-routes';
 import { robotsHeaderFor } from './lib/seo';
 import { SITE_PATH_PREFIX } from './lib/site-routing';
@@ -41,6 +42,13 @@ import {
  *    aula recién aprovisionada funcione sin tocar el proxy. La capa correcta es
  *    esta.
  *
+ *    Y un cuarto: el host es una dirección ANTERIOR de un aula (su
+ *    administrador cambió el subdominio). Sigue siendo del aula, pero sus
+ *    páginas responden 308 a la dirección de ahora con la misma ruta y query
+ *    (`lib/alias-redirect.ts`). `/api/*` no pasa por aquí (ver el matcher), así
+ *    que los webhooks y clientes registrados con la dirección vieja siguen
+ *    funcionando.
+ *
  *    Dentro de esta puerta hay un tercer caso: el host de un tenant que existe
  *    pero está SUSPENDIDO. Antes caía en el mismo 404 que un host desconocido,
  *    y al cliente con la suscripción vencida le parecía que su dominio estaba
@@ -61,11 +69,28 @@ const ALLOW_UNKNOWN_HOSTS = process.env['DIDACTA_ALLOW_UNKNOWN_HOSTS'] === 'true
 
 let initializedCache = false;
 
-/** host → (¿es de algún tenant?, ¿está suspendido?, cuándo caduca la respuesta). */
+/**
+ * host → (¿es de algún tenant?, ¿está suspendido?, ¿es una dirección anterior
+ * y adónde se fue?, cuándo caduca la respuesta).
+ */
 const hostCache = new Map<
   string,
-  { known: boolean; surface: HostSurface; suspended: boolean; expiresAt: number }
+  {
+    known: boolean;
+    surface: HostSurface;
+    suspended: boolean;
+    redirectTo: string | null;
+    expiresAt: number;
+  }
 >();
+
+interface HostInfo {
+  known: boolean;
+  surface: HostSurface;
+  suspended: boolean;
+  /** Dirección de ahora del aula, si este host es una anterior suya. */
+  redirectTo: string | null;
+}
 
 /// Qué sirve un dominio. `null` = no lo sabemos (host siempre válido, o la
 /// API no contestó): en ese caso se sirve el aula, que es lo que ya había.
@@ -164,23 +189,30 @@ function servirAula(req: NextRequest): NextResponse {
   return NextResponse.redirect(url, 308);
 }
 
-async function resolverHost(
-  host: string,
-  req: NextRequest,
-): Promise<{ known: boolean; surface: HostSurface; suspended: boolean }> {
+async function resolverHost(host: string, req: NextRequest): Promise<HostInfo> {
   const ahora = Date.now();
   const cacheado = hostCache.get(host);
   if (cacheado && cacheado.expiresAt > ahora) {
-    return { known: cacheado.known, surface: cacheado.surface, suspended: cacheado.suspended };
+    return {
+      known: cacheado.known,
+      surface: cacheado.surface,
+      suspended: cacheado.suspended,
+      redirectTo: cacheado.redirectTo,
+    };
   }
   // La API no contesta lo que esperábamos (un 429, un 5xx, caída): lo último
   // que se supo de este host, aunque haya caducado — un sitio público sigue
   // siendo el sitio y no el aula —, y si nunca se supo, dejar pasar. Un fallo
   // de la API no debe convertirse en un 404 global — el modo degradado tiene
   // que ser «como antes», no «el producto no existe».
-  const degradado = cacheado
-    ? { known: cacheado.known, surface: cacheado.surface, suspended: cacheado.suspended }
-    : { known: true, surface: null, suspended: false };
+  const degradado: HostInfo = cacheado
+    ? {
+        known: cacheado.known,
+        surface: cacheado.surface,
+        suspended: cacheado.suspended,
+        redirectTo: cacheado.redirectTo,
+      }
+    : { known: true, surface: null, suspended: false, redirectTo: null };
 
   try {
     const res = await fetch(`${API_INTERNAL_URL}/api/v1/tenancy/resolve`, {
@@ -196,6 +228,7 @@ async function resolverHost(
       known?: boolean;
       surface?: HostSurface;
       suspended?: boolean;
+      redirectTo?: unknown;
     };
     const known = data.known === true;
     const surface = data.surface === 'SITE' ? 'SITE' : data.surface === 'APP' ? 'APP' : null;
@@ -203,13 +236,17 @@ async function resolverHost(
     // anterior a este campo no lo manda (y se sigue contestando el 404 de
     // antes), y un aula en marcha nunca puede acabar tapada por este aviso.
     const suspended = !known && data.suspended === true;
+    // Solo de un aula conocida, y solo si es un hostname limpio: una API
+    // anterior no lo manda y el web sigue sirviendo como siempre.
+    const redirectTo = known ? sanitizeRedirectHost(data.redirectTo) : null;
     hostCache.set(host, {
       known,
       surface,
       suspended,
+      redirectTo,
       expiresAt: ahora + (known ? TTL_CONOCIDO_MS : TTL_DESCONOCIDO_MS),
     });
-    return { known, surface, suspended };
+    return { known, surface, suspended, redirectTo };
   } catch {
     return degradado;
   }
@@ -246,7 +283,7 @@ export async function middleware(req: NextRequest) {
   const hostname = host.startsWith('[') ? host : (host.split(':')[0] ?? host);
   if (esHostSiempreValido(hostname)) return servirAula(req);
 
-  const { known, surface, suspended } = await resolverHost(host, req);
+  const { known, surface, suspended, redirectTo } = await resolverHost(host, req);
   if (suspended) {
     // El aula existe pero está suspendida. Se contesta aquí, con un documento
     // autocontenido, en vez de dejar pasar a la app: no se sirve el shell, ni
@@ -260,6 +297,12 @@ export async function middleware(req: NextRequest) {
       status: TENANT_SUSPENDED_STATUS,
       headers: tenantSuspendedHeaders(catalog),
     });
+  }
+  if (known && redirectTo && surface !== 'SITE') {
+    // Dirección anterior del aula: a la de ahora, con la misma ruta y query.
+    // 308 y no 301: conserva el método, y un buscador mueve la ficha a la
+    // dirección nueva igual que con un 301.
+    return NextResponse.redirect(aliasRedirectUrl(req.nextUrl, redirectTo, req.headers), 308);
   }
   if (known) {
     // Reparto por dominio: el mismo despliegue sirve el aula y el sitio

@@ -390,5 +390,36 @@
     "saved": "Salvo",
     "error": "Não foi possível salvar. Tente de novo.",
     "loadError": "Não foi possível carregar esta configuração."
+  },
+  "direccionAula": {
+    "title": "Endereço da sua escola",
+    "description": "É o endereço da sua escola na internet: o que você e seus alunos usam para entrar. Você mesmo pode trocá-lo.",
+    "current": "Agora é",
+    "label": "Novo endereço",
+    "hint": {
+      "checking": "Verificando…",
+      "available": "Está livre!",
+      "current": "Este já é o endereço da sua escola.",
+      "taken": "Outra escola já usa este endereço. Tente outro.",
+      "reserved": "Este endereço não pode ser usado. Tente outro.",
+      "invalid": "Use só letras sem acento, números e hífens (de 3 a 63).",
+      "error": "Não foi possível verificar. Tente de novo."
+    },
+    "left": "Trocas restantes: {left} de {max} (a cada {days} dias).",
+    "change": "Trocar endereço",
+    "limit": "Você já trocou o endereço {max} vezes nos últimos {days} dias. Poderá trocar de novo a partir de {date}.",
+    "ownDomain": "Sua escola usa um domínio próprio ({host}), então o endereço não é trocado por aqui.",
+    "confirmTitle": "Trocar o endereço da sua escola?",
+    "confirmFromTo": "Vai passar de {old} para {new}.",
+    "confirmOldLinks": "Os links antigos continuam funcionando: levam sozinhos ao endereço novo.",
+    "confirmSignin": "Todo mundo, inclusive você, vai precisar entrar de novo com e-mail e senha no endereço novo.",
+    "confirmShare": "Se o endereço está no seu site ou nas suas redes, troque lá quando puder.",
+    "confirm": "Sim, trocar o endereço",
+    "cancel": "Cancelar",
+    "saving": "Trocando…",
+    "done": "Pronto. Sua escola já está em {url}. Vamos te levar até lá para você entrar de novo…",
+    "goNow": "Ir agora",
+    "error": "Não foi possível trocar o endereço. Tente de novo.",
+    "loadError": "Não foi possível carregar o endereço da escola."
   }
 }
