@@ -119,7 +119,11 @@
     "doneUnknownBody": "We could not verify your group membership, but we received your request. We will review your case and email you.",
     "doneActiveTitle": "You're in",
     "doneActiveBody": "Your account is ready. Sign in with your email and password.",
-    "doneActiveCta": "Sign in"
+    "doneActiveCta": "Sign in",
+    "introStepsAuto": "Verify your email and create your account in {count, plural, =3 {three} other {two}} steps.",
+    "introSingleAuto": "Fill in your details and create your account.",
+    "dataBodyAuto": "With this we'll create your account. You can complete your profile once you're in.",
+    "createAccount": "Create my account"
   },
   "unete": {
     "metaTitle": "Join",
@@ -213,7 +217,8 @@
     "tierChange": "Change",
     "tierIncludesTitle": "Everything {name} includes",
     "tierSpacesHeading": "Community spaces only for this plan",
-    "tierLivesHeading": "Upcoming live sessions only for this plan"
+    "tierLivesHeading": "Upcoming live sessions only for this plan",
+    "tierFreeNoteInstant": "Sign up for free, confirm your email with a code and you are in straight away, without paying anything."
   },
   "verificar": {
     "notFoundTitle": "Certificate not found",

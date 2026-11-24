@@ -114,6 +114,8 @@ export interface MembershipPage {
   tiers?: MembershipPublicTier[];
   /** «Entrar gratis» del nivel gratis (el registro gratis), o null si está cerrado. */
   freeSignupPath?: string | null;
+  /** Se entra gratis al momento (al confirmar el correo); si no, espera a que lo aprueben. */
+  freeSignupInstant?: boolean;
   courses: MembershipCourse[];
   standaloneTotalCents: number | null;
   stats: MembershipStats;

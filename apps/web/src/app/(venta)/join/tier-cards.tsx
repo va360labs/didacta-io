@@ -125,7 +125,12 @@ export function TierCards({
       >
         {tiers.map((tier) =>
           tier.isFree ? (
-            <FreeTierCard key={tier.id} tier={tier} freeSignupPath={freeSignupPath} />
+            <FreeTierCard
+              key={tier.id}
+              tier={tier}
+              freeSignupPath={freeSignupPath}
+              instant={page.freeSignupInstant === true}
+            />
           ) : (
             <PaidTierCard
               key={tier.id}
@@ -253,9 +258,12 @@ function PaidTierCard({
 function FreeTierCard({
   tier,
   freeSignupPath,
+  instant,
 }: {
   tier: MembershipPublicTier;
   freeSignupPath: string | null;
+  /** Se entra al momento al confirmar el correo (si no, espera a la aprobación). */
+  instant: boolean;
 }) {
   const t = useTranslations('publicSite');
   return (
@@ -267,7 +275,9 @@ function FreeTierCard({
 
       <div className="mt-5 rounded-xl border border-border bg-surface-2 px-4 py-3.5">
         <span className="text-xl font-bold">{t('unete.tierFreePrice')}</span>
-        <p className="mt-0.5 text-[13px] text-text-muted">{t('unete.tierFreeNote')}</p>
+        <p className="mt-0.5 text-[13px] text-text-muted" data-testid="nivel-gratis-nota">
+          {t(instant ? 'unete.tierFreeNoteInstant' : 'unete.tierFreeNote')}
+        </p>
       </div>
 
       {freeSignupPath ? (

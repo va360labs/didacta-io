@@ -10,6 +10,7 @@ import path from 'node:path';
 import { expect, test, type Browser, type Page } from '@playwright/test';
 import { apiAs, freshTenant, sql, type FreshTenant } from '../helpers/simple-tenant';
 import { startStripeDouble, type StripeDouble } from '../helpers/stripe-double';
+import { smtpForMailpit, waitForMail } from '../helpers/mailpit';
 
 /**
  * MEMBRESÍA POR NIVELES, de punta a punta en un aula nueva que cobra con sus
@@ -251,6 +252,13 @@ test('niveles: Básico, Pro y Gratis; subir y bajar con prorrateo; cada uno ve l
   const bearer = await operatorToken(tenant);
   await aulaPuestaEnMarcha(tenant, bearer);
   const tenantId = sql(`SELECT id FROM tenant WHERE slug = '${tenant.slug}'`);
+  // El correo del aula sale por el buzón de pruebas: el nivel gratis verifica
+  // el correo con un código.
+  await apiAs(tenant.host, '/api/v1/admin/tenant-settings/smtp', {
+    method: 'PUT',
+    bearer,
+    body: smtpForMailpit(`hola@${tenant.slug}.example.com`, 'Guitarra'),
+  });
 
   const cursoA = await crearCurso(tenant, bearer, 'Guitarra desde cero', stamp);
   const cursoB = await crearCurso(tenant, bearer, 'Improvisacion avanzada', stamp);
@@ -326,6 +334,20 @@ test('niveles: Básico, Pro y Gratis; subir y bajar con prorrateo; cada uno ve l
   expect(planPro.amountCents).toBe(3000);
   // Cada nivel es un grupo de acceso propio; el gratis, el de las altas aprobadas.
   expect(new Set(lista.map((t) => t.accessGroupId)).size).toBe(3);
+
+  // «Quién puede verlo» de un espacio: al pasar a «Solo estos niveles» salen
+  // marcados los dos niveles de pago (no el gratis), con la nota debajo.
+  await creadora.goto('/admin/community/spaces');
+  await creadora.locator('#space-niveles').check({ timeout: 30_000 });
+  const basicoGroup = lista.find((t) => t.id === basico.id)!.accessGroupId!;
+  const proGroup = lista.find((t) => t.id === pro.id)!.accessGroupId!;
+  await expect(creadora.locator(`#space-nivel-${basicoGroup}`)).toBeChecked();
+  await expect(creadora.locator(`#space-nivel-${proGroup}`)).toBeChecked();
+  await expect(creadora.locator(`#space-nivel-${gratis.accessGroupId}`)).toHaveCount(0);
+  await expect(creadora.getByTestId('space-nota-niveles')).toHaveText(
+    'Un nivel no incluye a otro: marca todos los que deben verlo.',
+  );
+  await shot(creadora, '01b-quien-puede-verlo-todos-marcados');
   expect(
     sql(
       `SELECT is_default_for_approval FROM mod_access_groups_group WHERE id = '${gratis.accessGroupId}'`,
@@ -343,6 +365,33 @@ test('niveles: Básico, Pro y Gratis; subir y bajar con prorrateo; cada uno ve l
       { id: gratis.id, name: 'Gratis', accessGroupId: gratis.accessGroupId, isFree: true },
     ]),
   );
+
+  // Un espacio y un directo SOLO para Pro (lo que la tarjeta de Pro nombra).
+  await apiAs(tenant.host, '/api/v1/modules/community/spaces', {
+    method: 'POST',
+    bearer,
+    body: {
+      slug: `sala-pro-${stamp}`,
+      title: 'Sala Pro',
+      description: 'Descripción que no debe salir en /join',
+      accessGroupIds: [pro.accessGroupId],
+    },
+  });
+  const directoPro = new Date(Date.now() + 5 * DAY * 1000);
+  await apiAs(tenant.host, '/api/v1/modules/zoom-live/sessions', {
+    method: 'POST',
+    bearer,
+    body: {
+      topic: 'Masterclass de improvisación',
+      description: 'Agenda privada',
+      startTime: directoPro.toISOString(),
+      durationMinutes: 60,
+      timezone: 'Europe/Madrid',
+      hostEmail: operador,
+      externalJoinUrl: `https://meet.example.com/sala-pro-${stamp}`,
+      accessGroupIds: [pro.accessGroupId],
+    },
+  });
 
   // ── 2. /join: una tarjeta por nivel con lo que incluye ───────────────────
   const visita = await newPage(browser, tenant);
@@ -362,7 +411,37 @@ test('niveles: Básico, Pro y Gratis; subir y bajar con prorrateo; cada uno ve l
     'href',
     /\/member-registration/,
   );
+  // Pro nombra su espacio y su próximo directo (nombre y fecha, sin enlaces ni
+  // descripción); Básico, que no los tiene, no enseña nada de eso.
+  await expect(visita.getByTestId(`nivel-espacios-${pro.id}`)).toHaveText('Sala Pro');
+  await expect(visita.getByTestId(`nivel-directos-${pro.id}`)).toContainText(
+    'Masterclass de improvisación',
+  );
+  await expect(visita.getByTestId(`nivel-incluye-extra-${basico.id}`)).toHaveCount(0);
+  const html = await visita.content();
+  expect(html).not.toContain('meet.example.com');
+  expect(html).not.toContain('Descripción que no debe salir');
+  expect(html).not.toContain('Agenda privada');
   await shot(visita, '02-join-por-niveles');
+
+  // Pago cancelado: la vuelta lleva el plan y siguen elegidos nivel y periodo.
+  await visita.getByTestId(`nivel-comprar-${pro.id}`).click();
+  await visita.getByTestId('withdrawal-waiver').getByRole('checkbox').check();
+  await visita.getByTestId('unete-pagar').click();
+  await expect
+    .poll(() => stripe.calls.filter((c) => c.path === '/v1/checkout/sessions').length, {
+      timeout: 20_000,
+    })
+    .toBe(1);
+  const sesionPago = stripe.calls.find((c) => c.path === '/v1/checkout/sessions')!;
+  const vuelta = sesionPago.body['cancel_url']!;
+  expect(new URL(vuelta).pathname).toBe('/join');
+  expect(new URL(vuelta).search).toBe(`?status=cancel&plan=${planPro.id}`);
+  await visita.goto(`/join${new URL(vuelta).search}`);
+  await expect(visita.getByTestId('nivel-elegido')).toContainText('Pro', { timeout: 30_000 });
+  await expect(visita.getByText('Pago cancelado.')).toBeVisible();
+  await expect(visita.getByTestId('unete-pagar')).toBeVisible();
+  await shot(visita, '02b-join-vuelta-pago-cancelado');
 
   // ── 3. Ana compra Básico → ve A y no B ──────────────────────────────────
   const anaEmail = `ana.${stamp}@example.com`;
@@ -540,19 +619,28 @@ test('niveles: Básico, Pro y Gratis; subir y bajar con prorrateo; cada uno ve l
   expect((await subDeAna())?.planId).toBe(planBasico.id);
   expect((await matriculas()).get(cursoB)).not.toBe('ACTIVE');
 
-  // ── 7. Leo entra gratis: ve L y ni A ni B ───────────────────────────────
+  // ── 7. Leo entra gratis (confirma su correo y entra sin esperar): ve L ───
   const leoEmail = `leo.${stamp}@example.com`;
+  await apiAs(tenant.host, '/api/v1/modules/member-registration/otp/request', {
+    method: 'POST',
+    body: { email: leoEmail },
+  });
+  const codigo = /\b(\d{6})\b/.exec((await waitForMail(leoEmail)).Text ?? '')?.[1];
+  const verificado = await apiAs<{ verificationToken: string }>(
+    tenant.host,
+    '/api/v1/modules/member-registration/otp/verify',
+    { method: 'POST', body: { email: leoEmail, code: codigo } },
+  );
   const alta = await rawAs(tenant.host, '/api/v1/modules/member-registration/register', {
     method: 'POST',
-    body: { name: 'Leo Prueba', email: leoEmail, password: PASSWORD },
+    body: {
+      name: 'Leo Prueba',
+      password: PASSWORD,
+      verificationToken: verificado.verificationToken,
+    },
   });
   expect(alta.status).toBe(201);
-  const leoId = sql(`SELECT id FROM "user" WHERE email = '${leoEmail}'`);
-  await apiAs(tenant.host, `/api/v1/modules/member-registration/admin/requests/${leoId}/decision`, {
-    method: 'POST',
-    bearer,
-    body: { action: 'approve' },
-  });
+  expect(alta.body['status']).toBe('ACTIVE');
   sql(`UPDATE "user" SET onboarding_completed_at = now() WHERE email = '${leoEmail}'`);
   const leo = await apiAs<{ tokens: { accessToken: string } }>(tenant.host, '/api/v1/auth/signin', {
     method: 'POST',

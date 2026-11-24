@@ -119,7 +119,11 @@
     "doneUnknownBody": "No pudimos verificar tu pertenencia al grupo, pero recibimos tu solicitud. Revisaremos tu caso y te avisaremos por email.",
     "doneActiveTitle": "Ya estás dentro",
     "doneActiveBody": "Tu cuenta está lista. Entra con tu correo y tu contraseña.",
-    "doneActiveCta": "Entrar"
+    "doneActiveCta": "Entrar",
+    "introStepsAuto": "Verifica tu correo y crea tu cuenta en {count, plural, =3 {tres} other {dos}} pasos.",
+    "introSingleAuto": "Completa tus datos y crea tu cuenta.",
+    "dataBodyAuto": "Con esto creamos tu cuenta. Podrás completar tu perfil al entrar.",
+    "createAccount": "Crear mi cuenta"
   },
   "unete": {
     "metaTitle": "Únete",
@@ -213,7 +217,8 @@
     "tierChange": "Cambiar",
     "tierIncludesTitle": "Todo lo que incluye {name}",
     "tierSpacesHeading": "Espacios de la comunidad solo para este plan",
-    "tierLivesHeading": "Próximos directos solo para este plan"
+    "tierLivesHeading": "Próximos directos solo para este plan",
+    "tierFreeNoteInstant": "Te apuntas gratis, confirmas tu correo con un código y entras al momento, sin pagar nada."
   },
   "verificar": {
     "notFoundTitle": "Certificado no encontrado",

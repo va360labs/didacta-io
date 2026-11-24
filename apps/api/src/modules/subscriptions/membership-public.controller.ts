@@ -106,7 +106,8 @@ export class MembershipPublicController {
     return runAsTenant(tenantId, async () => {
       const base = await this.registry.getMembershipService().getPublicPage(tenantId);
       // Sin niveles, la página sale tal cual la da el módulo.
-      let page: typeof base & { freeSignupPath?: string | null } = base;
+      let page: typeof base & { freeSignupPath?: string | null; freeSignupInstant?: boolean } =
+        base;
       if (base.tiers?.length) {
         const enabled = new Set(
           (await this.tenantModules.list(tenantId)).filter((m) => m.enabled).map((m) => m.name),
@@ -121,8 +122,19 @@ export class MembershipPublicController {
             : null,
         });
         // Nivel gratis: «Entrar gratis» lleva al registro gratis si está abierto.
+        // Y si se entra al momento (correo verificado, sin esperar al creador)
+        // o la persona queda pendiente de que la aprueben: la tarjeta lo dice.
         if (base.tiers.some((t) => t.isFree)) {
-          page = { ...page, freeSignupPath: await this.freeSignupPath(tenantId, enabled) };
+          const freeSignupPath = await this.freeSignupPath(tenantId, enabled);
+          page = {
+            ...page,
+            freeSignupPath,
+            freeSignupInstant:
+              freeSignupPath !== null &&
+              (await new MemberRegistrationSettings(this.tenantConfig).resolveAutoApprove(
+                tenantId,
+              )),
+          };
         }
       }
       // Sin modo plataforma (Community) la página sale tal cual, sin campos nuevos.

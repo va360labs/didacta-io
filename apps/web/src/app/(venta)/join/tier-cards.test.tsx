@@ -333,6 +333,17 @@ describe('Tarjetas de nivel', () => {
     expect(list.querySelectorAll('li')).toHaveLength(8);
   });
 
+  it('la tarjeta gratis dice si se entra al momento o hay que esperar a que te aprueben', async () => {
+    await render('es', { page: { ...PAGE, freeSignupInstant: true } });
+    expect(byTestId('nivel-gratis-nota')!.textContent).toContain('entras al momento');
+    for (const { root, container } of mounted.splice(0)) {
+      await act(async () => root.unmount());
+      container.remove();
+    }
+    await render('es');
+    expect(byTestId('nivel-gratis-nota')!.textContent).toContain('en cuanto el aula te da paso');
+  });
+
   it('sin espacios ni directos propios, el nivel no pinta nada más', async () => {
     await render('es');
     expect(byTestId(`nivel-incluye-extra-${PRO.id}`)).toBeNull();

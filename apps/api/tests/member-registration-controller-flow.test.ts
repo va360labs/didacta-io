@@ -127,7 +127,13 @@ describe('MemberRegistrationPublicController · config', () => {
       configured: true,
       verifiers: ['telegram', 'otp'],
       botUsername: 'mi_bot',
+      autoApprove: false,
     });
+  });
+
+  it('dice si se entra al momento (nivel gratis con aprobación automática)', async () => {
+    const { controller } = makeController(policy({ verifiers: ['otp'] }), { autoApprove: true });
+    expect((await controller.config(REQ)).autoApprove).toBe(true);
   });
 
   it('registro cerrado → configured:false', async () => {

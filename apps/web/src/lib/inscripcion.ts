@@ -36,6 +36,8 @@ export interface InscripcionConfig {
   verifiers: InscripcionVerifier[];
   /** Username del bot para el Telegram Login Widget. null si no aplica. */
   botUsername: string | null;
+  /** Se entra al momento al verificar el correo (nivel gratis), sin esperar a nadie. */
+  autoApprove?: boolean;
 }
 
 /** Payload que emite el Telegram Login Widget al autenticar. */

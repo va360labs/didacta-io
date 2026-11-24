@@ -112,6 +112,8 @@ export function InscripcionForm() {
   const [configLoading, setConfigLoading] = useState(true);
   const [configured, setConfigured] = useState(false);
   const [verifiers, setVerifiers] = useState<InscripcionVerifier[]>([]);
+  /** El aula deja entrar al momento a quien verifica su correo: «cuenta», no «solicitud». */
+  const [autoApprove, setAutoApprove] = useState(false);
   const [botUsername, setBotUsername] = useState<string | null>(null);
 
   const [step, setStep] = useState(0);
@@ -162,6 +164,7 @@ export function InscripcionForm() {
       if (cancelled) return;
       setConfigured(config.configured);
       setVerifiers(config.verifiers);
+      setAutoApprove(config.autoApprove === true);
       setBotUsername(config.botUsername);
       setConfigLoading(false);
     })();
@@ -369,8 +372,10 @@ export function InscripcionForm() {
         </h1>
         <p className="mt-1 text-sm text-text-subtle">
           {steps.length > 1
-            ? t('inscripcion.introSteps', { count: steps.length })
-            : t('inscripcion.introSingle')}
+            ? t(autoApprove ? 'inscripcion.introStepsAuto' : 'inscripcion.introSteps', {
+                count: steps.length,
+              })
+            : t(autoApprove ? 'inscripcion.introSingleAuto' : 'inscripcion.introSingle')}
         </p>
       </header>
 
@@ -518,7 +523,9 @@ export function InscripcionForm() {
             <div className="space-y-4">
               <div>
                 <h2 className="text-lg font-semibold">{t('inscripcion.dataTitle')}</h2>
-                <p className="text-sm text-text-muted">{t('inscripcion.dataBody')}</p>
+                <p className="text-sm text-text-muted">
+                  {t(autoApprove ? 'inscripcion.dataBodyAuto' : 'inscripcion.dataBody')}
+                </p>
               </div>
 
               {emailInDatos ? (
@@ -627,7 +634,9 @@ export function InscripcionForm() {
                 disabled={!canNext || submitting}
                 onClick={() => void handleSubmit()}
               >
-                {submitting ? t('inscripcion.creating') : t('inscripcion.createRequest')}
+                {submitting
+                  ? t('inscripcion.creating')
+                  : t(autoApprove ? 'inscripcion.createAccount' : 'inscripcion.createRequest')}
               </Button>
             )}
           </div>

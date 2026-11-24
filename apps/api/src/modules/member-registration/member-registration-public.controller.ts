@@ -135,6 +135,10 @@ export class MemberRegistrationPublicController {
         configured: policy.enabled && policy.operational,
         verifiers: policy.verifiers,
         botUsername: policy.botUsername,
+        // Se entra al momento al verificar el correo (nivel gratis): el
+        // formulario habla de «tu cuenta» y no de «tu solicitud».
+        autoApprove:
+          policy.verifiers.includes('otp') && (await this.settings.resolveAutoApprove(tenantId)),
       };
     });
   }
