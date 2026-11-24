@@ -64,6 +64,17 @@ describe('anuncio del directo en la comunidad', () => {
     );
   });
 
+  it('una clase restringida a unos niveles se anuncia SIN su descripción (la lee todo el feed)', () => {
+    const post = announcementPost({ ...SESSION, accessGroupIds: ['g-pro'] }, 's-1', 'es');
+    expect(post.body).not.toContain('Bring your grinder.');
+    expect(post.body).toContain('Clase en directo: **Dialing in espresso**.');
+    expect(post.body).toContain('<!--didacta-clase:s-1-->');
+    // Control: abierta (lista vacía), con descripción.
+    expect(announcementPost({ ...SESSION, accessGroupIds: [] }, 's-1', 'es').body).toContain(
+      'Bring your grinder.',
+    );
+  });
+
   it('una zona que Intl no conoce no tumba el anuncio', () => {
     expect(formatWhen(SESSION.startTime, 'Mars/Olympus', 'en')).toMatch(/2026/);
   });

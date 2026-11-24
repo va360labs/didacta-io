@@ -491,7 +491,11 @@ export class AgentService {
   // ── Comunidad ──────────────────────────────────────────────────────────────
 
   private async listSpaces(tenantId: string) {
-    const spaces = await this.registry.getCommunityService().listSpaces(tenantId);
+    // El dueño de la clave es admin (`requireOwner`): ve todos los espacios,
+    // también los restringidos a un nivel.
+    const spaces = await this.registry
+      .getCommunityService()
+      .listSpaces(tenantId, { canModerate: true });
     return { spaces: spaces.map((s) => ({ slug: s.slug, title: s.title })) };
   }
 
@@ -514,7 +518,7 @@ export class AgentService {
     }
 
     const svc = this.registry.getCommunityService();
-    const spaces = await svc.listSpaces(tenantId);
+    const spaces = await svc.listSpaces(tenantId, { canModerate: true, userId: owner.id });
     let space: string | null;
     if (args.space) {
       const match = spaces.find((s) => s.slug === args.space);

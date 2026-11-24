@@ -27,7 +27,11 @@ export const manifest: ModuleManifest = parseModuleManifest({
     modules: [],
     // Lectura (nunca escritura) de la barra lateral del feed, por `tenant_id`
     // (ADR-016): el ranking de los puntos, la presencia del aula y la marca.
+    // mod.access-groups: quién es miembro ACTIVO de qué nivel, para los
+    // espacios restringidos. Llega resuelto por el host (puerto
+    // `AccessGroupMembership`); el módulo no lee sus tablas.
     optionalModules: [
+      { name: 'mod.access-groups', version: '^1.0.0' },
       { name: 'mod.courses', version: '^1.0.0' },
       { name: 'mod.gamification', version: '^1.0.0' },
       { name: 'mod.messaging', version: '^1.0.0' },

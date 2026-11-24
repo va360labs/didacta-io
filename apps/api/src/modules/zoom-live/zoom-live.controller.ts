@@ -140,7 +140,10 @@ export class ZoomLiveController {
     if (!user) throw new UnauthorizedException();
     ensureSessionId(id);
     const viewer = viewerOf(user);
-    const view = await this.registry.getZoomLiveService().register(user.tenantId, user.sub, id);
+    // Clase de un nivel que no tiene: 403 ZOOM_SESSION_LOCKED.
+    const view = await this.registry
+      .getZoomLiveService()
+      .register(user.tenantId, user.sub, id, viewer.isStaff);
     // El staff que se inscribe no debe perder `startUrl` en la respuesta
     // (la página /live reemplaza su estado con este payload).
     return viewer.isStaff

@@ -114,7 +114,6 @@ export class SurveysReminderWorker implements OnApplicationBootstrap, OnModuleDe
    */
   async runSweep(): Promise<{ surveys: number; reminders: number }> {
     const service = this.registry.getSurveysService();
-    const prisma = this.factory.getPrisma();
     // Barrido cross-tenant de encuestas vencidas (inventario RLS F3).
     const due = await runSanctionedGlobalAccess(() =>
       service.findDueReminders(new Date(), reminderDelayHours()),
@@ -130,11 +129,13 @@ export class SurveysReminderWorker implements OnApplicationBootstrap, OnModuleDe
         const claimed = await service.claimReminder(survey.tenantId, survey.id);
         if (!claimed) return 0;
 
-        // Lectura acotada de mod_zoom_live_session_registration (ADR-016, manifest).
-        const registrations = await prisma.modZoomSessionRegistration.findMany({
-          where: { tenantId: survey.tenantId, sessionId: survey.zoomSessionId },
-          select: { userId: true },
-        });
+        // Inscritos que todavía pueden ver la clase (service público de
+        // mod.zoom-live, ADR-016): quien perdió su nivel no recibe recordatorio.
+        const registrations = (
+          await this.registry
+            .getZoomLiveService()
+            .listRegisteredUserIds(survey.tenantId, survey.zoomSessionId)
+        ).map((userId) => ({ userId }));
         const pending = await service.filterPendingRespondents(
           survey.tenantId,
           survey.id,

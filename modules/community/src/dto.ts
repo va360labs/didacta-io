@@ -163,6 +163,11 @@ export const createSpaceSchema = z.object({
   icon: z.string().max(10).optional(),
   color: z.string().max(100).optional(),
   sortOrder: z.number().int().min(0).optional(),
+  /**
+   * Quién puede verlo: grupos de acceso (niveles de membresía) cuyos miembros
+   * activos ven el espacio. Vacío o ausente al crear = todos los miembros.
+   */
+  accessGroupIds: z.array(z.string().uuid()).max(50).optional(),
 });
 export type CreateSpaceDto = z.infer<typeof createSpaceSchema>;
 

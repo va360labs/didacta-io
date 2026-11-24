@@ -34,6 +34,7 @@ export {
   type MessagingLocale,
   type MessagingLocaleLookup,
   type MessagingPublicUser,
+  type MessagingSpaceAudience,
   type MessagingSpaceSummary,
   type MessagingSpacesLookup,
   type MessagingStaffLookup,

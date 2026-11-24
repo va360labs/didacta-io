@@ -95,7 +95,11 @@ export class CommunityApiController {
   })
   async listSpaces(@CurrentUser() user: SessionClaims | undefined) {
     if (!user) throw new UnauthorizedException();
-    const spaces = await this.registry.getCommunityService().listSpaces(user.tenantId);
+    // La key es de un admin (lo exige el scope y `createPost`): ve todos los
+    // espacios, también los de un nivel.
+    const spaces = await this.registry
+      .getCommunityService()
+      .listSpaces(user.tenantId, { canModerate: true, userId: user.sub });
     return { spaces: spaces.map((s) => ({ slug: s.slug, title: s.title })) };
   }
 
@@ -200,7 +204,7 @@ export class CommunityApiController {
     // Espacio destino → PRIMER tag (convenio del composer web). Con `space`
     // explícito validamos contra los espacios reales; sin él caemos al
     // espacio "general" si el tenant lo tiene (default de la UI).
-    const spaces = await svc.listSpaces(user.tenantId);
+    const spaces = await svc.listSpaces(user.tenantId, { canModerate: true, userId: user.sub });
     let spaceSlug: string | null;
     if (dto.space) {
       const match = spaces.find((s) => s.slug === dto.space);

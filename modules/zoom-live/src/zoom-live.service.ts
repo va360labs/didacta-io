@@ -28,7 +28,9 @@ import {
   CourseNotInTenantError,
   LessonNotInCourseError,
   NotRegisteredError,
+  SessionAccessGroupUnknownError,
   SessionAlreadyEndedError,
+  SessionLockedError,
   SessionNotFoundError,
   SessionNotOpenForRegistrationError,
   ZoomNotConfiguredError,
@@ -43,6 +45,32 @@ import {
 import { isFalseStart, OUT_OF_SCHEDULE_NOTE } from './false-start.js';
 import { webhookEventKey } from './webhook-event-key.js';
 
+/**
+ * Pertenencia a los grupos de acceso (mod.access-groups; cada nivel de
+ * membresía es un grupo). La resuelve el host contra el dueño de los grupos:
+ * este módulo no lee sus tablas (ADR-016).
+ */
+export interface ZoomAccessGroupMembership {
+  /** Grupos VIVOS en los que `userId` es miembro ACTIVO. */
+  activeGroupIdsOf(tenantId: string, userId: string): Promise<string[]>;
+  /** De `userIds`, quiénes son miembros ACTIVOS de alguno de `groupIds` (vivos). */
+  activeMembersAmong(tenantId: string, groupIds: string[], userIds: string[]): Promise<string[]>;
+  /** Nombre de los grupos VIVOS de la lista (los borrados no salen). */
+  groupNames(tenantId: string, groupIds: string[]): Promise<Array<{ id: string; name: string }>>;
+}
+
+/** Sin puerto nadie es miembro de nada: lo restringido solo lo ve el staff. */
+const NO_MEMBERSHIP: ZoomAccessGroupMembership = {
+  activeGroupIdsOf: async () => [],
+  activeMembersAmong: async () => [],
+  groupNames: async () => [],
+};
+
+/** Staff de las clases en directo: ve y entra a todas, tenga el nivel que tenga. */
+export const ZOOM_STAFF_ROLES: readonly string[] = ['super_admin', 'tenant_admin', 'formador'];
+
+type AccessLevelView = { id: string; name: string };
+
 export class ZoomLiveService {
   /**
    * Cliente fijo inyectado en el constructor (override para tests). Si es
@@ -55,8 +83,102 @@ export class ZoomLiveService {
     private readonly prisma: PrismaClient,
     private readonly ctx: ModuleContext,
     api?: ZoomApiClient,
+    /**
+     * Clases restringidas por nivel: quién es miembro activo de qué grupo de
+     * acceso. Sin él, las clases con nivel solo las ve el staff (falla cerrado).
+     */
+    private readonly membership: ZoomAccessGroupMembership = NO_MEMBERSHIP,
   ) {
     this.fixedApi = api;
+  }
+
+  // ------------------- acceso por nivel -------------------
+
+  /**
+   * Decide, para quien mira, qué clases le quedan cerradas. Una sola consulta
+   * de grupos por petición, y ninguna si no hay clases con nivel o mira el
+   * staff.
+   */
+  private async lockCheck(
+    tenantId: string,
+    viewer: SessionViewer | undefined,
+    rows: ReadonlyArray<{ accessGroupIds?: string[] | null }>,
+  ): Promise<(groupIds: readonly string[] | null | undefined) => boolean> {
+    if (viewer?.isStaff) return () => false;
+    if (!rows.some((r) => (r.accessGroupIds ?? []).length > 0)) return () => false;
+    const mine = new Set(
+      viewer ? await this.membership.activeGroupIdsOf(tenantId, viewer.userId) : [],
+    );
+    return (groupIds) => {
+      const ids = groupIds ?? [];
+      return ids.length > 0 && !ids.some((g) => mine.has(g));
+    };
+  }
+
+  /** Nombres de los niveles de estas clases, para «Disponible en». */
+  private async levelsOf(
+    tenantId: string,
+    rows: ReadonlyArray<{ accessGroupIds?: string[] | null }>,
+  ): Promise<Map<string, AccessLevelView>> {
+    const ids = [...new Set(rows.flatMap((r) => r.accessGroupIds ?? []))];
+    if (ids.length === 0) return new Map();
+    const named = await this.membership.groupNames(tenantId, ids);
+    return new Map(named.map((g) => [g.id, g]));
+  }
+
+  /**
+   * ¿Puede `viewer` ver esta clase? `false` si no existe. Lo usan otros
+   * módulos (las encuestas post-clase) para no abrir por la puerta de atrás lo
+   * que aquí está cerrado.
+   */
+  async canView(tenantId: string, sessionId: string, viewer: SessionViewer): Promise<boolean> {
+    const row = await this.prisma.modZoomSession.findFirst({
+      where: { tenantId, id: sessionId },
+      select: { accessGroupIds: true },
+    });
+    if (!row) return false;
+    const isLocked = await this.lockCheck(tenantId, viewer, [row]);
+    return !isLocked(row.accessGroupIds);
+  }
+
+  /**
+   * De `userIds`, quiénes pueden ver una clase con estos niveles: el staff
+   * siempre y el resto si es miembro activo de alguno. Sin niveles, todos.
+   */
+  private async audienceOf(
+    tenantId: string,
+    groupIds: readonly string[] | null | undefined,
+    userIds: string[],
+  ): Promise<string[]> {
+    const ids = groupIds ?? [];
+    if (ids.length === 0 || userIds.length === 0) return userIds;
+    const staffRows = await this.prisma.user.findMany({
+      where: {
+        tenantId,
+        id: { in: userIds },
+        roles: { some: { role: { name: { in: [...ZOOM_STAFF_ROLES] } } } },
+      },
+      select: { id: true },
+    });
+    const staff = new Set(staffRows.map((r) => r.id));
+    const members = new Set(
+      await this.membership.activeMembersAmong(
+        tenantId,
+        [...ids],
+        userIds.filter((u) => !staff.has(u)),
+      ),
+    );
+    return userIds.filter((u) => staff.has(u) || members.has(u));
+  }
+
+  /** Niveles elegidos para una clase: existentes y vivos en el aula, sin repetir. */
+  private async validAccessGroupIds(tenantId: string, raw: readonly string[]): Promise<string[]> {
+    const ids = [...new Set(raw)];
+    if (ids.length === 0) return ids;
+    const found = new Set((await this.membership.groupNames(tenantId, ids)).map((g) => g.id));
+    const missing = ids.find((id) => !found.has(id));
+    if (missing) throw new SessionAccessGroupUnknownError(missing);
+    return ids;
   }
 
   /**
@@ -117,6 +239,10 @@ export class ZoomLiveService {
       viewer,
       rows.map((r) => r.id),
     );
+    const [isLocked, levels] = await Promise.all([
+      this.lockCheck(tenantId, viewer, rows),
+      this.levelsOf(tenantId, rows),
+    ]);
 
     return rows.map((r) =>
       this.toView(r, {
@@ -124,6 +250,9 @@ export class ZoomLiveService {
         includeJoinUrl: (viewer?.isStaff ?? false) || mineSet.has(r.id),
         registeredCount: r._count.registrations,
         isRegistered: mineSet.has(r.id),
+        locked: isLocked(r.accessGroupIds),
+        levels,
+        showGroupIds: viewer?.isStaff ?? false,
       }),
     );
   }
@@ -135,11 +264,20 @@ export class ZoomLiveService {
     });
     if (!row) throw new SessionNotFoundError(sessionId);
     const mineSet = await this.registeredSessionIds(tenantId, viewer, [sessionId]);
+    // Una clase con un nivel que quien mira no tiene se devuelve CERRADA (no
+    // 404): la página enseña el candado y a qué niveles se abre.
+    const [isLocked, levels] = await Promise.all([
+      this.lockCheck(tenantId, viewer, [row]),
+      this.levelsOf(tenantId, [row]),
+    ]);
     return this.toView(row, {
       includeStartUrl: false,
       includeJoinUrl: (viewer?.isStaff ?? false) || mineSet.has(sessionId),
       registeredCount: row._count.registrations,
       isRegistered: mineSet.has(sessionId),
+      locked: isLocked(row.accessGroupIds),
+      levels,
+      showGroupIds: viewer?.isStaff ?? false,
     });
   }
 
@@ -164,6 +302,9 @@ export class ZoomLiveService {
       includeJoinUrl: true,
       registeredCount: row._count.registrations,
       isRegistered: mineSet.has(sessionId),
+      locked: false,
+      levels: await this.levelsOf(tenantId, [row]),
+      showGroupIds: true,
     });
   }
 
@@ -172,11 +313,19 @@ export class ZoomLiveService {
    * inscripción no duplica fila ni re-emite el evento. Solo se admite
    * mientras la sesión está SCHEDULED o STARTED.
    */
-  async register(tenantId: string, userId: string, sessionId: string): Promise<SessionView> {
+  async register(
+    tenantId: string,
+    userId: string,
+    sessionId: string,
+    /** Staff: se inscribe aunque la clase sea de un nivel que no tenga. */
+    isStaff = false,
+  ): Promise<SessionView> {
     const session = await this.prisma.modZoomSession.findFirst({
       where: { tenantId, id: sessionId },
     });
     if (!session) throw new SessionNotFoundError(sessionId);
+    const isLocked = await this.lockCheck(tenantId, { userId, isStaff }, [session]);
+    if (isLocked(session.accessGroupIds)) throw new SessionLockedError();
     if (session.status === 'ENDED' || session.status === 'CANCELLED') {
       throw new SessionNotOpenForRegistrationError();
     }
@@ -238,7 +387,7 @@ export class ZoomLiveService {
       }
     }
 
-    return this.get(tenantId, sessionId, { userId, isStaff: false });
+    return this.get(tenantId, sessionId, { userId, isStaff });
   }
 
   /**
@@ -326,6 +475,11 @@ export class ZoomLiveService {
     });
     if (!session) throw new SessionNotFoundError(sessionId);
     if (session.status === 'CANCELLED') throw new SessionNotOpenForRegistrationError();
+
+    // Clase de un nivel que no tiene: sin enlace, aunque se hubiera inscrito
+    // antes de perder el nivel.
+    const isLocked = await this.lockCheck(tenantId, { userId, isStaff }, [session]);
+    if (isLocked(session.accessGroupIds)) throw new SessionLockedError();
 
     // Mismo gating que el `joinUrl` del detalle (ADR-017): sin inscripción no
     // hay enlace, y el servidor es quien lo decide.
@@ -675,13 +829,27 @@ export class ZoomLiveService {
     return count > 0;
   }
 
-  /** Inscritos de una sesión (ids). Lo usa el worker de recordatorios. */
+  /**
+   * Inscritos de una sesión (ids) que TODAVÍA pueden verla: quien perdió el
+   * nivel de una clase restringida no recibe recordatorios ni encuestas. Lo
+   * usan el worker de recordatorios y las encuestas post-clase.
+   */
   async listRegisteredUserIds(tenantId: string, sessionId: string): Promise<string[]> {
-    const rows = await this.prisma.modZoomSessionRegistration.findMany({
-      where: { tenantId, sessionId },
-      select: { userId: true },
-    });
-    return rows.map((r) => r.userId);
+    const [rows, session] = await Promise.all([
+      this.prisma.modZoomSessionRegistration.findMany({
+        where: { tenantId, sessionId },
+        select: { userId: true },
+      }),
+      this.prisma.modZoomSession.findFirst({
+        where: { tenantId, id: sessionId },
+        select: { accessGroupIds: true },
+      }),
+    ]);
+    return this.audienceOf(
+      tenantId,
+      session?.accessGroupIds,
+      rows.map((r) => r.userId),
+    );
   }
 
   /**
@@ -745,6 +913,10 @@ export class ZoomLiveService {
       if (!lesson) throw new LessonNotInCourseError();
     }
 
+    // Los niveles se validan ANTES de crear la reunión en Zoom: un nivel que no
+    // existe no puede dejar una reunión huérfana.
+    const accessGroupIds = await this.validAccessGroupIds(tenantId, dto.accessGroupIds ?? []);
+
     // Enlace propio (Meet, Teams, su Zoom personal…): no se habla con Zoom.
     // El formador entra por el mismo enlace que los alumnos.
     const meeting: { meetingId: string | null; joinUrl: string; startUrl: string } =
@@ -768,6 +940,7 @@ export class ZoomLiveService {
         zoomMeetingId: meeting.meetingId,
         joinUrl: meeting.joinUrl,
         startUrl: meeting.startUrl,
+        accessGroupIds,
       },
     });
 
@@ -789,6 +962,9 @@ export class ZoomLiveService {
       includeJoinUrl: true,
       registeredCount: 0,
       isRegistered: false,
+      locked: false,
+      levels: await this.levelsOf(tenantId, [created]),
+      showGroupIds: true,
     });
   }
 
@@ -805,6 +981,10 @@ export class ZoomLiveService {
     if (existing.status === 'ENDED' || existing.status === 'CANCELLED') {
       throw new SessionAlreadyEndedError();
     }
+    const accessGroupIds =
+      dto.accessGroupIds !== undefined
+        ? await this.validAccessGroupIds(tenantId, dto.accessGroupIds)
+        : undefined;
 
     if (existing.zoomMeetingId) {
       const api = await this.clientFor(tenantId);
@@ -840,6 +1020,7 @@ export class ZoomLiveService {
         // mandó) hablaba de otra hora. Con `reminderSentAt` a NULL el worker
         // vuelve a avisar 2h antes de la hora nueva.
         ...(dto.startTime !== undefined ? { reminderSentAt: null } : {}),
+        ...(accessGroupIds !== undefined ? { accessGroupIds } : {}),
       },
       include: { _count: { select: { registrations: true } } },
     });
@@ -853,6 +1034,9 @@ export class ZoomLiveService {
       includeJoinUrl: true,
       registeredCount: updated._count.registrations,
       isRegistered: false,
+      locked: false,
+      levels: await this.levelsOf(tenantId, [updated]),
+      showGroupIds: true,
     });
   }
 
@@ -903,13 +1087,19 @@ export class ZoomLiveService {
       where: { tenantId, sessionId },
       select: { userId: true },
     });
+    // El aviso de cancelación solo a quien todavía puede ver la clase.
+    const registeredUserIds = await this.audienceOf(
+      tenantId,
+      existing.accessGroupIds,
+      registrations.map((r) => r.userId),
+    );
 
     await this.publish(tenantId, actorId, 'zoom.session.cancelled', {
       sessionId,
       topic: existing.topic,
       startTime: existing.startTime.toISOString(),
       timezone: existing.timezone,
-      registeredUserIds: registrations.map((r) => r.userId),
+      registeredUserIds,
     });
   }
 
@@ -1451,6 +1641,7 @@ export class ZoomLiveService {
       startUrl: string | null;
       recordingUrl: string | null;
       recordingDurationMinutes: number | null;
+      accessGroupIds?: string[] | null;
       createdAt: Date;
       updatedAt: Date;
     },
@@ -1460,8 +1651,47 @@ export class ZoomLiveService {
       includeJoinUrl: boolean;
       registeredCount: number;
       isRegistered: boolean;
+      /**
+       * Clase de un nivel que quien mira no tiene: solo título, hora y niveles.
+       * Pisa `includeJoinUrl` (aunque se hubiera inscrito antes).
+       */
+      locked: boolean;
+      /** Nombres de los niveles (los que salgan de `accessGroupIds`). */
+      levels: Map<string, AccessLevelView>;
+      /** Devolver los ids de los grupos (solo al staff: el editor los usa). */
+      showGroupIds: boolean;
     },
   ): SessionView {
+    const groupIds = row.accessGroupIds ?? [];
+    const accessLevels = groupIds
+      .map((g) => opts.levels.get(g))
+      .filter((l): l is AccessLevelView => Boolean(l));
+    if (opts.locked) {
+      return {
+        id: row.id,
+        tenantId: row.tenantId,
+        courseId: row.courseId,
+        lessonId: row.lessonId,
+        topic: row.topic,
+        description: null,
+        status: row.status as SessionStatus,
+        startTime: row.startTime.toISOString(),
+        durationMinutes: row.durationMinutes,
+        timezone: row.timezone,
+        hostEmail: '',
+        zoomMeetingId: null,
+        joinUrl: null,
+        recordingUrl: null,
+        recordingDurationMinutes: null,
+        registeredCount: opts.registeredCount,
+        isRegistered: false,
+        locked: true,
+        accessLevels,
+        accessGroupIds: [],
+        createdAt: row.createdAt.toISOString(),
+        updatedAt: row.updatedAt.toISOString(),
+      };
+    }
     return {
       id: row.id,
       tenantId: row.tenantId,
@@ -1481,6 +1711,9 @@ export class ZoomLiveService {
       recordingDurationMinutes: row.recordingDurationMinutes,
       registeredCount: opts.registeredCount,
       isRegistered: opts.isRegistered,
+      locked: false,
+      accessLevels,
+      accessGroupIds: opts.showGroupIds ? groupIds : [],
       createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString(),
     };

@@ -1145,6 +1145,11 @@ model ModCommunitySpace {
   sortOrder   Int      @default(0) @map("sort_order")
   isSystem    Boolean  @default(false) @map("is_system")
   createdById String?  @map("created_by_id") @db.Uuid
+  /// Quién puede verlo: grupos de acceso (mod.access-groups; cada nivel de
+  /// membresía es uno) cuyos miembros ACTIVOS ven el espacio. Vacío = todos los
+  /// miembros del aula. IDs lógicos, sin FK cross-module (ADR-016). El equipo
+  /// del aula (admin y formador) lo ve siempre.
+  accessGroupIds String[] @default([]) @map("access_group_ids") @db.Uuid
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
 
@@ -1956,6 +1961,11 @@ model ModZoomSession {
   /// Duración total del meeting reportada por Zoom en `recording.completed`
   /// (minutos enteros). NULL si todavía no hay grabación.
   recordingDurationMinutes Int?      @map("recording_duration_minutes")
+  /// Quién puede verla: grupos de acceso (mod.access-groups; cada nivel de
+  /// membresía es uno) cuyos miembros ACTIVOS ven la clase, se inscriben y
+  /// reciben enlace, avisos y grabación. Vacío = todos los miembros. IDs
+  /// lógicos, sin FK cross-module (ADR-016). El staff la ve siempre.
+  accessGroupIds           String[]  @default([]) @map("access_group_ids") @db.Uuid
   createdAt                DateTime  @default(now()) @map("created_at")
   updatedAt                DateTime  @updatedAt @map("updated_at")
 

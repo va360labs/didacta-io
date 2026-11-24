@@ -16,6 +16,8 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { SurveysSurveyNotFoundError } from '@didacta/mod-surveys';
+import { ZOOM_STAFF_ROLES } from '@didacta/mod-zoom-live';
 import { z } from 'zod';
 import { CurrentUser } from '../../auth/decorators';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
@@ -61,6 +63,8 @@ export class SurveysController {
     @Param('sessionId') sessionId: string,
   ) {
     const u = this.requireUser(user);
+    // La encuesta de una clase de un nivel que no tiene no existe para él.
+    if (!(await this.canSeeClass(u, sessionId))) return { survey: null };
     const survey = await this.registry
       .getSurveysService()
       .getForZoomSession(u.tenantId, sessionId, u.sub);
@@ -78,6 +82,15 @@ export class SurveysController {
     @Body(new ZodValidationPipe(submitSchema)) dto: z.infer<typeof submitSchema>,
   ) {
     const u = this.requireUser(user);
+    // Responder la encuesta de una clase de un nivel que no tiene: como si no
+    // existiera (no puede ensuciar la nota de una clase que no ha visto).
+    const own = await this.factory.getPrisma().modSurveysSurvey.findFirst({
+      where: { id: surveyId, tenantId: u.tenantId },
+      select: { zoomSessionId: true },
+    });
+    if (own?.zoomSessionId && !(await this.canSeeClass(u, own.zoomSessionId))) {
+      throw new SurveysSurveyNotFoundError();
+    }
     await this.registry.getSurveysService().submitResponse({
       tenantId: u.tenantId,
       surveyId,
@@ -164,6 +177,15 @@ export class SurveysController {
   private requireUser(user: SessionClaims | undefined): SessionClaims {
     if (!user) throw new UnauthorizedException();
     return user;
+  }
+
+  /** ¿Puede ver la clase? (mod.zoom-live decide: nivel de membresía y staff). */
+  private async canSeeClass(user: SessionClaims, sessionId: string): Promise<boolean> {
+    if (!z.string().uuid().safeParse(sessionId).success) return false;
+    return this.registry.getZoomLiveService().canView(user.tenantId, sessionId, {
+      userId: user.sub,
+      isStaff: user.roles.some((r) => ZOOM_STAFF_ROLES.includes(r)),
+    });
   }
 
   private requireAdmin(user: SessionClaims | undefined): SessionClaims {

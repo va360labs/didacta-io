@@ -96,7 +96,7 @@ import {
   type RetentionPorts,
 } from '@didacta/mod-retention';
 import { buildSoporteModule, SoporteService } from '@didacta/mod-soporte';
-import { communityModule, CommunityService } from '@didacta/mod-community';
+import { communityModule, CommunityService, seesAllSpaces } from '@didacta/mod-community';
 import { coursesModule, CoursesService } from '@didacta/mod-courses';
 import { helloWorldModule } from '@didacta/mod-hello-world';
 import { wpSsoModule } from '@didacta/mod-wp-sso';
@@ -139,6 +139,10 @@ import { readSupportOperatorConfig } from './soporte/soporte-operator.config';
 import { SoporteOperatorNotifier } from './soporte/soporte-operator-notifier';
 import { resolveCoreContractVersion } from '../core-version';
 import { buildCourseSaleChecker } from './course-sale-checker';
+import {
+  buildAccessGroupMembership,
+  type AccessGroupMembershipDb,
+} from './access-groups/access-group-membership';
 import { discountCodesAllowedFor } from './gamification/discount-codes-allowed';
 import { PayoutsRuntime } from './payouts/payouts-runtime.service';
 import { getPlatformPaymentsConfig } from './payouts/platform-payments.config';
@@ -289,9 +293,16 @@ export class ModuleRegistryService implements OnModuleInit {
     this.learningPaths = new LearningPathsService(prisma, context, this.learning);
     this.certificates = new CertificatesService(prisma, context);
     this.assessments = new AssessmentsService(prisma, context);
-    this.community = new CommunityService(prisma, context);
+    // Espacios de la comunidad y directos restringidos por nivel de membresía:
+    // quién es miembro ACTIVO de qué grupo de acceso. Lo resuelve el dueño de
+    // los grupos (mod.access-groups); ni la comunidad ni los directos leen sus
+    // tablas.
+    const pertenencia = buildAccessGroupMembership(
+      () => this.factory.getPrisma() as unknown as AccessGroupMembershipDb,
+    );
+    this.community = new CommunityService(prisma, context, pertenencia);
     this.theming = new ThemingService(prisma, context);
-    this.zoomLive = new ZoomLiveService(prisma, context);
+    this.zoomLive = new ZoomLiveService(prisma, context, undefined, pertenencia);
     this.fundae = new FundaeService(prisma, context);
     this.fundaeCompanies = new FundaeCompanyService(prisma, context);
     this.fundaeRlpt = new FundaeRlptService(prisma, context);
@@ -777,18 +788,31 @@ export class ModuleRegistryService implements OnModuleInit {
     this.messaging = new MessagingService(
       prisma,
       messagingPublisher,
-      // Espacios de mod.community vía su service público (ADR-016, vía A).
-      async (tenantId) => {
+      // Espacios de mod.community vía su service público (ADR-016, vía A). Con
+      // `caller`, solo los que puede ver: la sala de un espacio con un nivel
+      // que no tiene ni aparece ni se abre.
+      async (tenantId, caller) => {
         if (!this.community) return [];
-        const spaces = await this.community.listSpaces(tenantId);
-        return spaces.map((s) => ({
-          id: s.id,
-          slug: s.slug,
-          title: s.title,
-          icon: s.icon,
-          color: s.color,
-          sortOrder: s.sortOrder,
-        }));
+        const spaces = await this.community.listSpaces(
+          tenantId,
+          caller
+            ? {
+                canModerate: false,
+                userId: caller.userId,
+                seesAllSpaces: seesAllSpaces(caller.roles),
+              }
+            : { canModerate: false, seesAllSpaces: true },
+        );
+        return spaces
+          .filter((s) => !s.locked)
+          .map((s) => ({
+            id: s.id,
+            slug: s.slug,
+            title: s.title,
+            icon: s.icon,
+            color: s.color,
+            sortOrder: s.sortOrder,
+          }));
       },
       // Nombre+avatar de usuarios del tenant: el módulo no lee `user`.
       async (tenantId, ids) => {
@@ -817,6 +841,12 @@ export class ModuleRegistryService implements OnModuleInit {
       },
       // Idioma del aula para el canal de profesores y los títulos de respaldo.
       academyLocaleOf,
+      // Quién de una sala de espacio puede seguir recibiendo sus mensajes
+      // (quien perdió el nivel del espacio, no).
+      async (tenantId, spaceId, userIds) => {
+        if (!this.community) return userIds;
+        return this.community.filterSpaceAudience(tenantId, spaceId, userIds);
+      },
     );
     const messagingModule = buildMessagingModule(this.messaging);
 

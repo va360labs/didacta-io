@@ -108,3 +108,25 @@ export class SpaceNotDeletableError extends CommunityError {
     super('SPACE_NOT_DELETABLE', message);
   }
 }
+
+/**
+ * El espacio está restringido a niveles que quien publica no tiene. Solo salta
+ * al ESCRIBIR (publicar o mover un post a ese espacio): al leer, lo cerrado se
+ * comporta como si no existiera (404), para no confirmar nada.
+ */
+export class SpaceLockedError extends CommunityError {
+  constructor(slug: string) {
+    super('COMMUNITY_SPACE_LOCKED', `El espacio '${slug}' es solo para algunos niveles.`, {
+      detail: slug,
+    });
+  }
+}
+
+/** Uno de los niveles elegidos para un espacio no existe (o se borró) en el aula. */
+export class AccessGroupUnknownError extends CommunityError {
+  constructor(groupId: string) {
+    super('COMMUNITY_ACCESS_GROUP_UNKNOWN', `El nivel '${groupId}' no existe en esta aula.`, {
+      detail: groupId,
+    });
+  }
+}

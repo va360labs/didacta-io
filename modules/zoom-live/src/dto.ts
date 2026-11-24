@@ -61,6 +61,12 @@ export const createSessionSchema = z.object({
    * Solo `https://`.
    */
   externalJoinUrl: externalJoinUrlSchema.optional(),
+  /**
+   * Quién puede verla: grupos de acceso (niveles de membresía) cuyos miembros
+   * activos ven la clase, se inscriben y reciben enlace, avisos y grabación.
+   * Vacío o ausente = todos los miembros.
+   */
+  accessGroupIds: z.array(z.string().uuid()).max(50).optional(),
 });
 export type CreateSessionDto = z.infer<typeof createSessionSchema>;
 
@@ -78,6 +84,8 @@ export const updateSessionSchema = z.object({
    * no duplica nada — quien consume el evento es idempotente.
    */
   announce: z.boolean().optional(),
+  /** Quién puede verla (ver `createSessionSchema`). `[]` la abre a todos. */
+  accessGroupIds: z.array(z.string().uuid()).max(50).optional(),
 });
 export type UpdateSessionDto = z.infer<typeof updateSessionSchema>;
 
@@ -182,6 +190,16 @@ export interface SessionView {
   recordingDurationMinutes: number | null;
   /** Nº de miembros inscritos a la sesión. */
   registeredCount: number;
+  /**
+   * La clase es de un nivel que quien mira no tiene: solo se le enseña el
+   * título, la hora y los niveles con los que se abre. Sin descripción, sin
+   * enlace, sin grabación y sin poder inscribirse.
+   */
+  locked: boolean;
+  /** Niveles con los que se abre la clase (vacío = todos los miembros). */
+  accessLevels: Array<{ id: string; name: string }>;
+  /** Grupos elegidos, tal cual. Solo para el staff (el editor los necesita). */
+  accessGroupIds: string[];
   /** ¿El viewer actual está inscrito? false cuando no hay viewer. */
   isRegistered: boolean;
   createdAt: string;

@@ -19,9 +19,11 @@ import {
  * Servicio de dominio de mod.messaging (US-M1..M3 del PRD `mensajes`).
  *
  * Tres tipos de conversación:
- *  - SPACE: sala 1:1 con un espacio de mod.community. Acceso abierto a todo
- *    miembro del tenant (los espacios no tienen membresía propia). La fila de
- *    conversación se crea lazy al abrir la sala por primera vez.
+ *  - SPACE: sala 1:1 con un espacio de mod.community. Abierta a quien puede
+ *    ver ese espacio: todo miembro del tenant, salvo que el espacio esté
+ *    restringido a unos niveles de membresía (lo decide `spacesLookup` con el
+ *    llamante). La fila de conversación se crea lazy al abrir la sala por
+ *    primera vez.
  *  - DM: directo entre dos miembros. `dmKey` canónica (ids ordenados) hace el
  *    get-or-create idempotente por par.
  *  - FACULTY: canal privado 1 alumno + equipo docente. El staff participa POR
@@ -53,8 +55,26 @@ export interface MessagingSpaceSummary {
   sortOrder: number;
 }
 
-/** Espacios visibles del tenant (mod.community). */
-export type MessagingSpacesLookup = (tenantId: string) => Promise<MessagingSpaceSummary[]>;
+/**
+ * Espacios del tenant (mod.community). Con `caller`, SOLO los que esa persona
+ * puede ver (un espacio con un nivel de membresía que no tiene no sale). Sin
+ * `caller`, todos.
+ */
+export type MessagingSpacesLookup = (
+  tenantId: string,
+  caller?: MessagingCaller,
+) => Promise<MessagingSpaceSummary[]>;
+
+/**
+ * De `userIds`, quiénes pueden ver el espacio `spaceId`. Lo usa el push de una
+ * sala de espacio: quien la abrió y luego perdió el nivel no sigue recibiendo
+ * sus mensajes.
+ */
+export type MessagingSpaceAudience = (
+  tenantId: string,
+  spaceId: string,
+  userIds: string[],
+) => Promise<string[]>;
 
 export interface MessagingPublicUser {
   id: string;
@@ -226,6 +246,7 @@ export class MessagingService {
     private readonly usersLookup: MessagingUsersLookup,
     private readonly staffLookup: MessagingStaffLookup,
     private readonly localeLookup?: MessagingLocaleLookup,
+    private readonly spaceAudience?: MessagingSpaceAudience,
   ) {}
 
   /** Títulos por defecto en el idioma del aula. De mejor esfuerzo: si falla, español. */
@@ -248,7 +269,9 @@ export class MessagingService {
    */
   async listConversations(tenantId: string, caller: MessagingCaller): Promise<ConversationView[]> {
     const staff = isStaff(caller.roles);
-    const spaces = await this.spacesLookup(tenantId);
+    // Solo los espacios que el llamante puede ver: la sala de uno cerrado por
+    // nivel no aparece en su lista.
+    const spaces = await this.spacesLookup(tenantId, caller);
     const spaceById = new Map(spaces.map((s) => [s.id, s]));
 
     // Auto-provisión del canal de profesores del alumno (AC1 UC-M301).
@@ -487,7 +510,8 @@ export class MessagingService {
     caller: MessagingCaller,
     spaceSlug: string,
   ): Promise<{ conversationId: string }> {
-    const spaces = await this.spacesLookup(tenantId);
+    // Un espacio cerrado para el llamante responde como uno que no existe.
+    const spaces = await this.spacesLookup(tenantId, caller);
     const space = spaces.find((s) => s.slug === spaceSlug);
     if (!space) throw new SpaceNotFoundError(spaceSlug);
 
@@ -723,7 +747,12 @@ export class MessagingService {
   }
 
   private async assertAccess(conv: ConversationRow, caller: MessagingCaller): Promise<void> {
-    if (conv.type === 'SPACE') return; // abierta a todo el tenant
+    if (conv.type === 'SPACE') {
+      // Abierta a quien puede ver el espacio (todo el tenant salvo nivel).
+      const spaces = await this.spacesLookup(conv.tenantId, caller);
+      if (conv.spaceId && spaces.some((s) => s.id === conv.spaceId)) return;
+      throw new NotParticipantError();
+    }
     if (conv.type === 'FACULTY') {
       if (conv.studentId === caller.userId || isStaff(caller.roles)) return;
       throw new NotParticipantError();
@@ -906,11 +935,16 @@ export class MessagingService {
       set.delete(authorId);
       return [...set];
     }
-    // SPACE: quienes han abierto la sala alguna vez (fila de participante).
+    // SPACE: quienes han abierto la sala alguna vez (fila de participante) y
+    // pueden seguir viendo el espacio.
     const rows = (await this.prisma.modMessagingParticipant.findMany({
       where: { tenantId, conversationId: conv.id, userId: { not: authorId } },
       select: { userId: true },
     })) as Array<{ userId: string }>;
-    return rows.map((r) => r.userId);
+    const ids = rows.map((r) => r.userId);
+    if (this.spaceAudience && conv.spaceId && ids.length > 0) {
+      return this.spaceAudience(tenantId, conv.spaceId, ids);
+    }
+    return ids;
   }
 }

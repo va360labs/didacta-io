@@ -29,11 +29,13 @@ import {
   listPostsQuerySchema,
   moderationActionSchema,
   NotModeratorError,
+  seesAllSpaces,
   updatePostSchema,
   updateSpaceSchema,
   updateTagSchema,
   userPreferencesSchema,
   type AddReactionDto,
+  type CommunityViewer,
   type CreateBroadcastDto,
   type CreateCommentDto,
   type CreatePostDto,
@@ -102,7 +104,8 @@ export class CommunityController {
     if (dto.notifyAll && !canModerate(user)) throw new NotModeratorError();
     const author = await this.authorOf(user);
     const svc = this.registry.getCommunityService();
-    const post = await svc.createPost(user.tenantId, author, dto);
+    // Publicar en un espacio con un nivel que no tiene: 403 COMMUNITY_SPACE_LOCKED.
+    const post = await svc.createPost(user.tenantId, author, dto, 'web', viewerOf(user));
     if (dto.notifyAll) {
       // El body puede llevar el marcador de adjuntos al final; lo recortamos.
       const markerIdx = post.body.indexOf('<!--didacta-attachments:');
@@ -133,7 +136,12 @@ export class CommunityController {
     if (!user) throw new UnauthorizedException();
     return this.registry
       .getCommunityService()
-      .updatePost(user.tenantId, { id: user.sub, canModerate: canModerate(user) }, id, dto);
+      .updatePost(
+        user.tenantId,
+        { id: user.sub, canModerate: canModerate(user), seesAllSpaces: seesAllSpaces(user.roles) },
+        id,
+        dto,
+      );
   }
 
   @Get('posts')
@@ -143,9 +151,7 @@ export class CommunityController {
     @Query(new ZodValidationPipe(listPostsQuerySchema)) query: ListPostsQueryDto,
   ) {
     if (!user) throw new UnauthorizedException();
-    return this.registry
-      .getCommunityService()
-      .listPosts(user.tenantId, query, { canModerate: canModerate(user) });
+    return this.registry.getCommunityService().listPosts(user.tenantId, query, viewerOf(user));
   }
 
   @Get('attachments')
@@ -159,16 +165,14 @@ export class CommunityController {
     if (!user) throw new UnauthorizedException();
     return this.registry
       .getCommunityService()
-      .listAttachments(user.tenantId, query, { canModerate: canModerate(user) });
+      .listAttachments(user.tenantId, query, viewerOf(user));
   }
 
   @Get('posts/:id')
   @ApiOperation({ summary: 'Detalle del post (incluye comments + reactions)' })
   async getPost(@CurrentUser() user: SessionClaims | undefined, @Param('id') id: string) {
     if (!user) throw new UnauthorizedException();
-    return this.registry
-      .getCommunityService()
-      .getPostDetail(user.tenantId, id, { canModerate: canModerate(user) });
+    return this.registry.getCommunityService().getPostDetail(user.tenantId, id, viewerOf(user));
   }
 
   @Delete('posts/:id')
@@ -189,7 +193,9 @@ export class CommunityController {
   ) {
     if (!user) throw new UnauthorizedException();
     const author = await this.authorOf(user);
-    return this.registry.getCommunityService().addComment(user.tenantId, id, author, dto);
+    return this.registry
+      .getCommunityService()
+      .addComment(user.tenantId, id, author, dto, viewerOf(user));
   }
 
   @Delete('comments/:id')
@@ -208,7 +214,9 @@ export class CommunityController {
     @Body(new ZodValidationPipe(addReactionSchema)) dto: AddReactionDto,
   ) {
     if (!user) throw new UnauthorizedException();
-    return this.registry.getCommunityService().addReaction(user.tenantId, user.sub, dto);
+    return this.registry
+      .getCommunityService()
+      .addReaction(user.tenantId, user.sub, dto, viewerOf(user));
   }
 
   @Delete('reactions/:id')
@@ -240,7 +248,9 @@ export class CommunityController {
   })
   async listMyMentions(@CurrentUser() user: SessionClaims | undefined) {
     if (!user) throw new UnauthorizedException();
-    return this.registry.getCommunityService().listMyMentions(user.tenantId, user.sub);
+    return this.registry
+      .getCommunityService()
+      .listMyMentions(user.tenantId, user.sub, 50, viewerOf(user));
   }
 
   @Get('me/preferences')
@@ -400,7 +410,12 @@ export class CommunityController {
     @CurrentUser() user: SessionClaims | undefined,
   ): Promise<CommunitySidebarData & { canManage: boolean }> {
     if (!user) throw new UnauthorizedException();
-    const data = await this.sidebar.get(user.tenantId, user.sub);
+    // Los «últimos comentarios» dependen de quien mira: los de espacios con
+    // un nivel que no tiene no salen.
+    const data = await this.sidebar.get(user.tenantId, {
+      userId: user.sub,
+      seesAllSpaces: seesAllSpaces(user.roles),
+    });
     // Lo único que depende de quien mira: el botón «Ajustes» del aula.
     return { ...data, canManage: canModerate(user) };
   }
@@ -408,10 +423,13 @@ export class CommunityController {
   // ── Espacios ───────────────────────────────────────────────────────────────
 
   @Get('spaces')
-  @ApiOperation({ summary: 'Listar espacios de comunidad del tenant' })
+  @ApiOperation({
+    summary:
+      'Listar espacios de comunidad del tenant. Los de un nivel que quien mira no tiene salen con `locked: true` (nombre, icono y `accessLevels`, sin descripción).',
+  })
   async listSpaces(@CurrentUser() user: SessionClaims | undefined) {
     if (!user) throw new UnauthorizedException();
-    return this.registry.getCommunityService().listSpaces(user.tenantId);
+    return this.registry.getCommunityService().listSpaces(user.tenantId, viewerOf(user));
   }
 
   @Post('spaces')
@@ -539,4 +557,17 @@ const MODERATOR_ROLES = new Set(['super_admin', 'tenant_admin']);
 
 function canModerate(user: SessionClaims): boolean {
   return user.roles.some((r) => MODERATOR_ROLES.has(r));
+}
+
+/**
+ * Quien mira, para la comunidad: los admins moderan (ven lo oculto) y el
+ * equipo del aula (admin o formador) ve los espacios con nivel; el resto ve
+ * los de los niveles de los que es miembro activo.
+ */
+function viewerOf(user: SessionClaims): CommunityViewer {
+  return {
+    canModerate: canModerate(user),
+    userId: user.sub,
+    seesAllSpaces: seesAllSpaces(user.roles),
+  };
 }

@@ -10,8 +10,19 @@ export { manifest };
 export {
   CommunityService,
   type BroadcastRecipient,
+  type CommunitySpaceView,
+  type CommunityViewer,
   type RecentComment,
 } from './community.service.js';
+export {
+  NO_ACCESS_GROUPS,
+  SPACE_STAFF_ROLES,
+  SpaceAccess,
+  seesAllSpaces,
+  type AccessGroupMembership,
+  type AccessLevel,
+  type SpaceViewer,
+} from './space-access.js';
 export {
   parseBodyAttachments,
   flattenPostAttachments,
@@ -50,6 +61,7 @@ export {
   type UserPreferencesDto,
 } from './dto.js';
 export {
+  AccessGroupUnknownError,
   CommentNotFoundError,
   CommunityError,
   NestedRepliesTooDeepError,
@@ -59,6 +71,7 @@ export {
   PostNotFoundError,
   ReactionTargetMissingError,
   SpaceAlreadyExistsError,
+  SpaceLockedError,
   SpaceNotDeletableError,
   SpaceNotFoundError,
   TagNameAlreadyExistsError,

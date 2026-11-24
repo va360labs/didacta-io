@@ -18,6 +18,7 @@ import type {
 } from './dto.js';
 import { flattenPostAttachments, type CommunityAttachment } from './attachments.js';
 import {
+  AccessGroupUnknownError,
   CommentNotFoundError,
   NestedRepliesTooDeepError,
   NotAuthorError,
@@ -25,11 +26,19 @@ import {
   PostNotFoundError,
   ReactionTargetMissingError,
   SpaceAlreadyExistsError,
+  SpaceLockedError,
   SpaceNotDeletableError,
   SpaceNotFoundError,
   TagNameAlreadyExistsError,
   TagNotFoundError,
 } from './errors.js';
+import {
+  NO_ACCESS_GROUPS,
+  SpaceAccess,
+  type AccessGroupMembership,
+  type AccessLevel,
+  type SpaceViewer,
+} from './space-access.js';
 
 /**
  * Tope de posts recientes que escanea la Galería para extraer adjuntos.
@@ -92,19 +101,88 @@ const WRITABLE_ACCOUNT = { status: 'ACTIVE', deletedAt: null } as const;
 
 /**
  * Destinatario de un lote de aviso masivo. `optedOut` = dado de baja de los
- * correos de la comunidad (por cualquiera de las dos marcas).
+ * correos de la comunidad (por cualquiera de las dos marcas). `canSee` = puede
+ * ver la publicación del aviso: si está en un espacio con nivel que no tiene,
+ * el aviso no se le manda (ni se cuenta).
  */
 export interface BroadcastRecipient {
   userId: string;
   email: string;
   optedOut: boolean;
+  canSee: boolean;
+}
+
+/**
+ * Quien mira la comunidad. `canModerate` (admin) ve además lo oculto por
+ * moderación; `seesAllSpaces` (equipo del aula: admin o formador) ve los
+ * espacios con nivel. Sin `userId` y sin ser equipo no se ve nada restringido.
+ */
+export interface CommunityViewer {
+  canModerate: boolean;
+  userId?: string | null;
+  seesAllSpaces?: boolean;
+}
+
+/** Un espacio tal como lo ve quien pregunta. */
+export interface CommunitySpaceView {
+  id: string;
+  slug: string;
+  title: string;
+  /** `null` también cuando el espacio está cerrado para quien mira. */
+  description: string | null;
+  icon: string;
+  color: string;
+  sortOrder: number;
+  isSystem: boolean;
+  /** Cerrado para quien mira: se enseña el nombre y el candado, nada más. */
+  locked: boolean;
+  /** Niveles con los que se abre (vacío = todos los miembros). */
+  accessLevels: AccessLevel[];
+  /** Grupos elegidos, tal cual. Solo para el equipo (el editor los necesita). */
+  accessGroupIds: string[];
+}
+
+function spaceViewerOf(viewer: CommunityViewer): SpaceViewer {
+  return {
+    userId: viewer.userId ?? null,
+    seesEverything: viewer.canModerate || viewer.seesAllSpaces === true,
+  };
 }
 
 export class CommunityService {
+  private readonly access: SpaceAccess;
+
   constructor(
     private readonly prisma: PrismaClient,
     private readonly ctx: ModuleContext,
-  ) {}
+    /**
+     * Pertenencia a los grupos de acceso, resuelta por el host contra su dueño
+     * (mod.access-groups). Sin ella nadie es miembro de nada y los espacios con
+     * nivel solo los ve el equipo (falla cerrado).
+     */
+    membership: AccessGroupMembership = NO_ACCESS_GROUPS,
+  ) {
+    this.access = new SpaceAccess(prisma, membership);
+  }
+
+  /** Slugs de los espacios cerrados para quien mira ([] para el equipo). */
+  async blockedSpaceSlugs(tenantId: string, viewer: CommunityViewer): Promise<string[]> {
+    return this.access.blockedSlugs(tenantId, spaceViewerOf(viewer));
+  }
+
+  /** Rechaza escribir en un espacio cerrado para quien escribe. */
+  private async assertTagsWritable(
+    tenantId: string,
+    viewer: CommunityViewer,
+    tags: readonly string[] | undefined,
+  ): Promise<void> {
+    if (!tags || tags.length === 0) return;
+    const blocked = await this.blockedSpaceSlugs(tenantId, viewer);
+    if (blocked.length === 0) return;
+    const set = new Set(blocked);
+    const hit = tags.find((t) => set.has(t) || set.has(t.toLowerCase()));
+    if (hit) throw new SpaceLockedError(hit.toLowerCase());
+  }
 
   async createPost(
     tenantId: string,
@@ -112,7 +190,14 @@ export class CommunityService {
     dto: CreatePostDto,
     /** Origen: 'web' (UI, default) o 'api' (integración con API key). */
     source: 'web' | 'api' = 'web',
+    /**
+     * Quien publica, para no dejarle escribir en un espacio con nivel que no
+     * tiene. Sin él (procesos del sistema, como el anuncio de una clase) no se
+     * comprueba: no hay persona a la que cerrarle nada.
+     */
+    viewer?: CommunityViewer,
   ) {
+    if (viewer) await this.assertTagsWritable(tenantId, viewer, dto.tags);
     const post = await this.prisma.modCommunityPost.create({
       data: {
         tenantId,
@@ -125,9 +210,14 @@ export class CommunityService {
         source,
       },
     });
-    await this.persistMentions(tenantId, author.id, author.displayName, dto.body, {
-      postId: post.id,
-    });
+    await this.persistMentions(
+      tenantId,
+      author.id,
+      author.displayName,
+      dto.body,
+      { postId: post.id },
+      post.tags,
+    );
     await this.publish(tenantId, author.id, 'community.post.created', {
       postId: post.id,
       authorId: author.id,
@@ -143,15 +233,19 @@ export class CommunityService {
    */
   async updatePost(
     tenantId: string,
-    actor: { id: string; canModerate: boolean },
+    actor: { id: string; canModerate: boolean; seesAllSpaces?: boolean },
     postId: string,
     patch: UpdatePostDto,
   ) {
+    const viewer: CommunityViewer = { ...actor, userId: actor.id };
+    const blocked = await this.blockedSpaceSlugs(tenantId, viewer);
     const post = await this.prisma.modCommunityPost.findFirst({
-      where: { id: postId, tenantId, deletedAt: null },
+      where: { id: postId, tenantId, deletedAt: null, ...SpaceAccess.postWhere(blocked) },
     });
     if (!post) throw new PostNotFoundError();
     if (post.authorId !== actor.id && !actor.canModerate) throw new NotAuthorError();
+    // Mover el post a un espacio cerrado para quien edita tampoco vale.
+    if (patch.tags !== undefined) await this.assertTagsWritable(tenantId, viewer, patch.tags);
 
     const updated = await this.prisma.modCommunityPost.update({
       where: { id: postId },
@@ -182,6 +276,7 @@ export class CommunityService {
         post.authorDisplayName,
         patch.body,
         { postId },
+        updated.tags,
         yaAvisados,
       );
     }
@@ -196,8 +291,11 @@ export class CommunityService {
   async listPosts(
     tenantId: string,
     query: ListPostsQueryDto,
-    viewer: { canModerate: boolean } = { canModerate: false },
+    viewer: CommunityViewer = { canModerate: false },
   ) {
+    // Espacios con nivel que quien mira no tiene: sus posts no salen en
+    // ninguna vista (la de «todo» incluida).
+    const blocked = await this.blockedSpaceSlugs(tenantId, viewer);
     // Filtro de comentarios alineado con la visibilidad de moderación:
     // los comentarios ocultos solo cuentan para admins. Sin esta cláusula,
     // un alumno vería "5 comentarios" pero al abrir el post solo verá los
@@ -232,6 +330,7 @@ export class CommunityService {
         ...(query.authorId !== undefined ? { authorId: query.authorId } : {}),
         ...(query.tag !== undefined ? { tags: { has: query.tag } } : {}),
         ...(query.source !== undefined ? { source: query.source } : {}),
+        ...SpaceAccess.postWhere(blocked),
       },
       orderBy,
       take: query.limit,
@@ -266,14 +365,16 @@ export class CommunityService {
   async listAttachments(
     tenantId: string,
     query: { tag?: string },
-    viewer: { canModerate: boolean } = { canModerate: false },
+    viewer: CommunityViewer = { canModerate: false },
   ): Promise<CommunityAttachment[]> {
+    const blocked = await this.blockedSpaceSlugs(tenantId, viewer);
     const posts = await this.prisma.modCommunityPost.findMany({
       where: {
         tenantId,
         deletedAt: null,
         ...(viewer.canModerate ? {} : { hiddenAt: null }),
         ...(query.tag !== undefined ? { tags: { has: query.tag } } : {}),
+        ...SpaceAccess.postWhere(blocked),
       },
       orderBy: [{ createdAt: 'desc' }],
       take: ATTACHMENT_POST_SCAN_LIMIT,
@@ -292,14 +393,18 @@ export class CommunityService {
   async getPostDetail(
     tenantId: string,
     postId: string,
-    viewer: { canModerate: boolean } = { canModerate: false },
+    viewer: CommunityViewer = { canModerate: false },
   ) {
+    // Un post de un espacio cerrado para quien mira responde igual que uno que
+    // no existe: 404, sin confirmar nada.
+    const blocked = await this.blockedSpaceSlugs(tenantId, viewer);
     const post = await this.prisma.modCommunityPost.findFirst({
       where: {
         id: postId,
         tenantId,
         deletedAt: null,
         ...(viewer.canModerate ? {} : { hiddenAt: null }),
+        ...SpaceAccess.postWhere(blocked),
       },
       include: {
         comments: {
@@ -343,14 +448,17 @@ export class CommunityService {
   async listRecentComments(
     tenantId: string,
     limit = RECENT_COMMENTS_DEFAULT,
+    /** Quien mira: los comentarios de espacios con nivel que no tiene no salen. */
+    viewer: CommunityViewer = { canModerate: false },
   ): Promise<RecentComment[]> {
     const take = Math.min(Math.max(1, Math.trunc(limit) || 1), RECENT_COMMENTS_MAX);
+    const blocked = await this.blockedSpaceSlugs(tenantId, viewer);
     const rows = await this.prisma.modCommunityComment.findMany({
       where: {
         tenantId,
         deletedAt: null,
         hiddenAt: null,
-        post: { tenantId, deletedAt: null, hiddenAt: null },
+        post: { tenantId, deletedAt: null, hiddenAt: null, ...SpaceAccess.postWhere(blocked) },
       },
       orderBy: { createdAt: 'desc' },
       take,
@@ -392,10 +500,15 @@ export class CommunityService {
     postId: string,
     author: { id: string; displayName: string | null },
     dto: CreateCommentDto,
+    /** Quien comenta. Por defecto, el autor sin rol de equipo. */
+    viewer: CommunityViewer = { canModerate: false, userId: author.id },
   ) {
+    // Comentar en un post de un espacio cerrado para quien comenta: 404, como
+    // si no existiera.
+    const blocked = await this.blockedSpaceSlugs(tenantId, viewer);
     const post = await this.prisma.modCommunityPost.findFirst({
-      where: { id: postId, tenantId, deletedAt: null },
-      select: { id: true, authorId: true, title: true },
+      where: { id: postId, tenantId, deletedAt: null, ...SpaceAccess.postWhere(blocked) },
+      select: { id: true, authorId: true, title: true, tags: true },
     });
     if (!post) throw new PostNotFoundError();
 
@@ -425,13 +538,18 @@ export class CommunityService {
         parentCommentId: dto.parentCommentId ?? null,
       },
     });
-    await this.persistMentions(tenantId, author.id, author.displayName, dto.body, {
-      commentId: comment.id,
-    });
+    await this.persistMentions(
+      tenantId,
+      author.id,
+      author.displayName,
+      dto.body,
+      { commentId: comment.id },
+      post.tags,
+    );
     await this.notifyCommentTarget({
       tenantId,
       author,
-      post: { id: post.id, authorId: post.authorId, title: post.title },
+      post: { id: post.id, authorId: post.authorId, title: post.title, tags: post.tags },
       comment: { id: comment.id, body: dto.body, parentCommentId: comment.parentCommentId },
       parentAuthorId,
     });
@@ -460,7 +578,7 @@ export class CommunityService {
   private async notifyCommentTarget(args: {
     tenantId: string;
     author: { id: string; displayName: string | null };
-    post: { id: string; authorId: string; title: string };
+    post: { id: string; authorId: string; title: string; tags: string[] };
     comment: { id: string; body: string; parentCommentId: string | null };
     parentAuthorId: string | null;
   }): Promise<void> {
@@ -468,6 +586,10 @@ export class CommunityService {
     const recipient = isReply ? args.parentAuthorId : args.post.authorId;
     if (!recipient) return;
     if (recipient === args.author.id) return; // no auto-notificación
+    // Quien ya no puede ver el espacio del post (perdió su nivel) no recibe el
+    // extracto del comentario por correo ni por la campana.
+    const audience = await this.access.audienceForTags(args.tenantId, args.post.tags, [recipient]);
+    if (!audience.has(recipient)) return;
 
     const variables = {
       actorId: args.author.id,
@@ -601,13 +723,21 @@ export class CommunityService {
    * criterio y mismos códigos (`POST_NOT_FOUND` / `COMMENT_NOT_FOUND`) que
    * `addComment`.
    */
-  async addReaction(tenantId: string, actorId: string, dto: AddReactionDto) {
+  async addReaction(
+    tenantId: string,
+    actorId: string,
+    dto: AddReactionDto,
+    /** Quien reacciona. Por defecto, el actor sin rol de equipo. */
+    viewer: CommunityViewer = { canModerate: false, userId: actorId },
+  ) {
     const targets = [dto.postId, dto.commentId].filter((x): x is string => Boolean(x));
     if (targets.length !== 1) throw new ReactionTargetMissingError();
 
+    // Reaccionar a algo de un espacio cerrado para quien reacciona: 404.
+    const blocked = await this.blockedSpaceSlugs(tenantId, viewer);
     if (dto.postId) {
       const post = await this.prisma.modCommunityPost.findFirst({
-        where: { id: dto.postId, tenantId, deletedAt: null },
+        where: { id: dto.postId, tenantId, deletedAt: null, ...SpaceAccess.postWhere(blocked) },
         select: { id: true },
       });
       if (!post) throw new PostNotFoundError();
@@ -620,7 +750,12 @@ export class CommunityService {
       // Borrar un post no borra sus comentarios: siguen vivos en la tabla pero
       // el hilo ya no existe. Reaccionar a uno es reaccionar a contenido borrado.
       const thread = await this.prisma.modCommunityPost.findFirst({
-        where: { id: comment.postId, tenantId, deletedAt: null },
+        where: {
+          id: comment.postId,
+          tenantId,
+          deletedAt: null,
+          ...SpaceAccess.postWhere(blocked),
+        },
         select: { id: true },
       });
       if (!thread) throw new CommentNotFoundError();
@@ -745,14 +880,24 @@ export class CommunityService {
       createdAt: Date;
     }>;
   }> {
-    const mentionsRows = await this.prisma.modCommunityMention.findMany({
-      where: {
-        tenantId,
-        mentionedUserId: userId,
-        createdAt: { gt: since },
-      },
-      orderBy: { createdAt: 'desc' },
-    });
+    // El resumen lo lee una persona concreta: lo de los espacios con nivel que
+    // no tiene no sale ni como mención ni como respuesta.
+    const blocked = await this.access.blockedSlugs(
+      tenantId,
+      await this.access.viewerOf(tenantId, userId),
+    );
+    const mentionsRows = await this.visibleMentions(
+      tenantId,
+      await this.prisma.modCommunityMention.findMany({
+        where: {
+          tenantId,
+          mentionedUserId: userId,
+          createdAt: { gt: since },
+        },
+        orderBy: { createdAt: 'desc' },
+      }),
+      blocked,
+    );
     const mentions = mentionsRows.map((m) => ({
       postId: m.postId,
       commentId: m.commentId,
@@ -792,6 +937,7 @@ export class CommunityService {
           deletedAt: null,
           hiddenAt: null,
           NOT: { authorId: userId }, // no contamos las propias
+          ...(blocked.length > 0 ? { post: SpaceAccess.postWhere(blocked) } : {}),
         },
         orderBy: { createdAt: 'desc' },
         take: 50,
@@ -886,6 +1032,8 @@ export class CommunityService {
     tenantId: string,
     userId: string,
     limit: number = 50,
+    /** Quien pregunta (sus roles). Sin él se resuelve desde la base. */
+    viewer?: CommunityViewer,
   ): Promise<
     Array<{
       id: string;
@@ -896,10 +1044,57 @@ export class CommunityService {
       createdAt: Date;
     }>
   > {
-    return this.prisma.modCommunityMention.findMany({
+    const blocked = await this.access.blockedSlugs(
+      tenantId,
+      viewer ? spaceViewerOf({ ...viewer, userId }) : await this.access.viewerOf(tenantId, userId),
+    );
+    const rows = await this.prisma.modCommunityMention.findMany({
       where: { tenantId, mentionedUserId: userId },
       orderBy: { createdAt: 'desc' },
       take: limit,
+    });
+    // Una mención en un espacio con nivel que no tiene (o que perdió) no se
+    // enseña: ni el enlace al post ni quién le mencionó.
+    return this.visibleMentions(tenantId, rows, blocked);
+  }
+
+  /**
+   * Quita de una lista de menciones las que caen en posts de espacios
+   * cerrados (`blocked`). Las de un comentario se resuelven por su post.
+   */
+  private async visibleMentions<T extends { postId: string | null; commentId: string | null }>(
+    tenantId: string,
+    rows: T[],
+    blocked: readonly string[],
+  ): Promise<T[]> {
+    if (blocked.length === 0 || rows.length === 0) return rows;
+    const commentIds = rows.map((r) => r.commentId).filter((x): x is string => Boolean(x));
+    const comments = commentIds.length
+      ? await this.prisma.modCommunityComment.findMany({
+          where: { tenantId, id: { in: commentIds } },
+          select: { id: true, postId: true },
+        })
+      : [];
+    const postOfComment = new Map(comments.map((c) => [c.id, c.postId]));
+    const postIds = new Set<string>();
+    for (const r of rows) {
+      const postId = r.postId ?? (r.commentId ? postOfComment.get(r.commentId) : undefined);
+      if (postId) postIds.add(postId);
+    }
+    const posts = postIds.size
+      ? await this.prisma.modCommunityPost.findMany({
+          where: { tenantId, id: { in: [...postIds] } },
+          select: { id: true, tags: true },
+        })
+      : [];
+    const tagsOf = new Map(posts.map((p) => [p.id, p.tags]));
+    return rows.filter((r) => {
+      const postId = r.postId ?? (r.commentId ? postOfComment.get(r.commentId) : undefined);
+      // Sin post localizable no hay nada que enseñar ni que esconder: se deja.
+      if (!postId) return true;
+      const tags = tagsOf.get(postId);
+      if (!tags) return true;
+      return !SpaceAccess.isBlocked(tags, blocked);
     });
   }
 
@@ -1053,6 +1248,12 @@ export class CommunityService {
     body: string,
     target: { postId?: string; commentId?: string },
     /**
+     * Etiquetas del post donde va la mención. Quien no puede ver ese espacio
+     * (nivel que no tiene) no recibe aviso; la fila sí se guarda y se filtra al
+     * leer, por si gana el nivel más adelante.
+     */
+    postTags: readonly string[],
+    /**
      * Mencionados a los que ya se avisó en una versión anterior del texto. Se
      * les vuelve a crear la fila (la mención sigue existiendo) pero NO se les
      * vuelve a notificar.
@@ -1102,9 +1303,16 @@ export class CommunityService {
 
     await this.prisma.modCommunityMention.createMany({ data: rowsToCreate });
 
+    const audience = await this.access.audienceForTags(
+      tenantId,
+      postTags,
+      rowsToCreate.map((m) => m.mentionedUserId),
+    );
+
     // Notifica vía NotificationHub al mencionado (in-app + email si está configurado).
     for (const m of rowsToCreate) {
       if (yaAvisados.has(m.mentionedUserId)) continue; // ya se le avisó de esta mención
+      if (!audience.has(m.mentionedUserId)) continue; // no puede ver el espacio del post
       await this.ctx.notificationHub
         .send({
           tenantId,
@@ -1146,7 +1354,24 @@ export class CommunityService {
     createdById: string,
     input: { subject: string; bodyText: string; important?: boolean; postId?: string | null },
   ) {
-    const total = await this.prisma.user.count({ where: { tenantId, ...WRITABLE_ACCOUNT } });
+    // Un aviso que nace de un post de un espacio con nivel solo va a quien
+    // puede verlo: el total cuenta solo a esa gente.
+    const postTags = input.postId ? await this.postTagsOf(tenantId, input.postId) : [];
+    const total =
+      postTags.length > 0 && (await this.isRestrictedByTags(tenantId, postTags))
+        ? (
+            await this.access.audienceForTags(
+              tenantId,
+              postTags,
+              (
+                await this.prisma.user.findMany({
+                  where: { tenantId, ...WRITABLE_ACCOUNT },
+                  select: { id: true },
+                })
+              ).map((u) => u.id),
+            )
+          ).size
+        : await this.prisma.user.count({ where: { tenantId, ...WRITABLE_ACCOUNT } });
     return this.prisma.modCommunityBroadcast.create({
       data: {
         tenantId,
@@ -1220,12 +1445,53 @@ export class CommunityService {
       select: { userId: true },
     });
     const optedSet = new Set(optedOut.map((o) => o.userId));
+    // Si el aviso es de un post de un espacio con nivel, quien no lo tiene no
+    // lo recibe: el extracto del post viaja en el correo.
+    const postTags = b.postId ? await this.postTagsOf(b.tenantId, b.postId) : [];
+    const audience =
+      postTags.length > 0
+        ? await this.access.audienceForTags(
+            b.tenantId,
+            postTags,
+            users.map((u) => u.id),
+          )
+        : null;
     const recipients: BroadcastRecipient[] = users.map((u) => ({
       userId: u.id,
       email: u.email,
       optedOut: optedSet.has(u.id),
+      canSee: audience ? audience.has(u.id) : true,
     }));
     return { broadcast: b, recipients, done: false };
+  }
+
+  /** Etiquetas de un post (aunque esté borrado: el aviso ya habla de él). */
+  private async postTagsOf(tenantId: string, postId: string): Promise<string[]> {
+    const post = await this.prisma.modCommunityPost.findFirst({
+      where: { id: postId, tenantId },
+      select: { tags: true },
+    });
+    return post?.tags ?? [];
+  }
+
+  /** ¿Alguna de estas etiquetas es un espacio con nivel? */
+  private async isRestrictedByTags(tenantId: string, tags: readonly string[]): Promise<boolean> {
+    const set = new Set(tags);
+    return (await this.access.restrictedSpaces(tenantId)).some((s) => set.has(s.slug));
+  }
+
+  /**
+   * De `userIds`, quiénes pueden ver el espacio `spaceId` (el equipo siempre).
+   * Lo usa la sala de chat del espacio (mod.messaging) para no empujar
+   * mensajes a quien ya no tiene el nivel.
+   */
+  async filterSpaceAudience(
+    tenantId: string,
+    spaceId: string,
+    userIds: readonly string[],
+  ): Promise<string[]> {
+    const allowed = await this.access.audienceForSpace(tenantId, spaceId, userIds);
+    return userIds.filter((u) => allowed.has(u));
   }
 
   /** Suma contadores y avanza el cursor tras enviar un lote. */
@@ -1282,9 +1548,17 @@ export class CommunityService {
 
   // ── Espacios de comunidad ──────────────────────────────────────────────────
 
-  /** Lista los espacios del tenant ordenados por sortOrder. */
-  async listSpaces(tenantId: string) {
-    return this.prisma.modCommunitySpace.findMany({
+  /**
+   * Lista los espacios del tenant ordenados por sortOrder, tal como los ve
+   * quien pregunta: los que tienen un nivel que no tiene salen CERRADOS (nombre,
+   * icono y niveles con los que se abren; sin descripción). Sin `viewer` se
+   * listan como para un miembro sin niveles.
+   */
+  async listSpaces(
+    tenantId: string,
+    viewer: CommunityViewer = { canModerate: false },
+  ): Promise<CommunitySpaceView[]> {
+    const rows = await this.prisma.modCommunitySpace.findMany({
       where: { tenantId },
       orderBy: { sortOrder: 'asc' },
       select: {
@@ -1296,8 +1570,50 @@ export class CommunityService {
         color: true,
         sortOrder: true,
         isSystem: true,
+        accessGroupIds: true,
       },
     });
+    const sv = spaceViewerOf(viewer);
+    const restricted = rows.filter((r) => (r.accessGroupIds ?? []).length > 0);
+    const mine =
+      restricted.length > 0 && !sv.seesEverything
+        ? new Set(await this.access.viewerGroups(tenantId, sv))
+        : new Set<string>();
+    const levels =
+      restricted.length > 0
+        ? await this.access.levels(
+            tenantId,
+            restricted.flatMap((r) => r.accessGroupIds ?? []),
+          )
+        : [];
+    const levelById = new Map(levels.map((l) => [l.id, l]));
+    return rows.map((r) => {
+      const groupIds = r.accessGroupIds ?? [];
+      const locked =
+        groupIds.length > 0 && !sv.seesEverything && !groupIds.some((g) => mine.has(g));
+      return {
+        id: r.id,
+        slug: r.slug,
+        title: r.title,
+        description: locked ? null : r.description,
+        icon: r.icon,
+        color: r.color,
+        sortOrder: r.sortOrder,
+        isSystem: r.isSystem,
+        locked,
+        accessLevels: groupIds
+          .map((g) => levelById.get(g))
+          .filter((l): l is AccessLevel => Boolean(l)),
+        accessGroupIds: sv.seesEverything ? groupIds : [],
+      };
+    });
+  }
+
+  /** Niveles elegidos para un espacio: existentes y vivos en el aula, sin repetir. */
+  private async validAccessGroupIds(tenantId: string, ids: readonly string[]): Promise<string[]> {
+    const check = await this.access.checkGroups(tenantId, ids);
+    if (!check.ok) throw new AccessGroupUnknownError(check.missing);
+    return check.ids;
   }
 
   /** Crea un espacio. Rechaza slug duplicado en el tenant. */
@@ -1306,6 +1622,7 @@ export class CommunityService {
       where: { tenantId_slug: { tenantId, slug: dto.slug } },
     });
     if (existing) throw new SpaceAlreadyExistsError(dto.slug);
+    const accessGroupIds = await this.validAccessGroupIds(tenantId, dto.accessGroupIds ?? []);
     return this.prisma.modCommunitySpace.create({
       data: {
         tenantId,
@@ -1316,6 +1633,7 @@ export class CommunityService {
         color: dto.color ?? 'var(--didacta-trust)',
         sortOrder: dto.sortOrder ?? 0,
         createdById,
+        accessGroupIds,
       },
     });
   }
@@ -1326,6 +1644,10 @@ export class CommunityService {
       where: { tenantId_slug: { tenantId, slug } },
     });
     if (!space) throw new SpaceNotFoundError(slug);
+    const accessGroupIds =
+      dto.accessGroupIds !== undefined
+        ? await this.validAccessGroupIds(tenantId, dto.accessGroupIds)
+        : undefined;
     return this.prisma.modCommunitySpace.update({
       where: { tenantId_slug: { tenantId, slug } },
       data: {
@@ -1334,6 +1656,7 @@ export class CommunityService {
         ...(dto.icon !== undefined && { icon: dto.icon }),
         ...(dto.color !== undefined && { color: dto.color }),
         ...(dto.sortOrder !== undefined && { sortOrder: dto.sortOrder }),
+        ...(accessGroupIds !== undefined && { accessGroupIds }),
       },
     });
   }

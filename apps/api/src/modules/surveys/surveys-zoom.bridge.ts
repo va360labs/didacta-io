@@ -87,10 +87,12 @@ export class SurveysZoomBridge implements OnModuleInit {
     // `meeting.ended` duplicado no puede re-spamear a los inscritos.
     if (!created) return;
 
-    const registrations = await prisma.modZoomSessionRegistration.findMany({
-      where: { tenantId, sessionId },
-      select: { userId: true },
-    });
+    // Inscritos que todavía pueden ver la clase (service público de
+    // mod.zoom-live, ADR-016): quien perdió el nivel de una clase restringida
+    // no recibe la encuesta.
+    const registrations = (
+      await this.registry.getZoomLiveService().listRegisteredUserIds(tenantId, sessionId)
+    ).map((userId) => ({ userId }));
     if (registrations.length === 0) return;
 
     // Aula del tenant dueño de la clase, no `WEB_PUBLIC_URL` (una sola para

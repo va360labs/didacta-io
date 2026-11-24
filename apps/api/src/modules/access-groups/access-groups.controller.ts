@@ -36,6 +36,8 @@ import {
 import { AccessGroupsService } from './access-groups.service';
 
 const ADMIN_ROLES = ['super_admin', 'tenant_admin'];
+/** Quien programa directos también elige a qué niveles van (formador incluido). */
+const OPTION_ROLES = ['super_admin', 'tenant_admin', 'formador'];
 
 /**
  * mod.access-groups (Fase 2) — gestión de grupos de acceso. Es una pantalla de
@@ -63,6 +65,24 @@ export class AccessGroupsController {
       parseInt(page ?? '1', 10) || 1,
       parseInt(limit ?? '20', 10) || 20,
     );
+  }
+
+  @Get('options')
+  @ApiOperation({
+    summary:
+      'Niveles para «Quién puede verlo» de espacios y directos: los grupos de acceso vivos del aula, solo `{ id, name }` y por nombre (admin o formador). Sin miembros ni cursos.',
+  })
+  async options(
+    @CurrentUser() user: SessionClaims | undefined,
+  ): Promise<Array<{ id: string; name: string }>> {
+    const u = this.requireUser(user);
+    if (!u.roles.some((r) => OPTION_ROLES.includes(r))) {
+      throw new ForbiddenException({
+        message: 'Requiere rol super_admin, tenant_admin o formador',
+        code: 'ACCESS_GROUPS_ADMIN_ROLE_REQUIRED',
+      });
+    }
+    return this.service.listOptions(u.tenantId);
   }
 
   @Get('catalog/courses')

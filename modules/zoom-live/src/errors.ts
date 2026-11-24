@@ -152,3 +152,24 @@ export class InvalidWebhookSignatureError extends ZoomLiveError {
     super('ZOOM_INVALID_WEBHOOK_SIGNATURE', 'Firma de webhook inválida.');
   }
 }
+
+/**
+ * La clase es de un nivel que quien lo intenta no tiene: no puede inscribirse
+ * ni pedir el enlace (aunque se hubiera inscrito antes de perder el nivel).
+ */
+export class SessionLockedError extends ZoomLiveError {
+  constructor() {
+    super('ZOOM_SESSION_LOCKED', 'Esta clase es solo para algunos niveles de la membresía.');
+    this.name = 'SessionLockedError';
+  }
+}
+
+/** Uno de los niveles elegidos para la clase no existe (o se borró) en el aula. */
+export class SessionAccessGroupUnknownError extends ZoomLiveError {
+  constructor(groupId: string) {
+    super('ZOOM_ACCESS_GROUP_UNKNOWN', `El nivel '${groupId}' no existe en esta aula.`, {
+      detail: groupId,
+    });
+    this.name = 'SessionAccessGroupUnknownError';
+  }
+}

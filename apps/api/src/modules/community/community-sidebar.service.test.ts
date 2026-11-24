@@ -118,7 +118,12 @@ function matchesUser(u: UserRow, where: UserWhere): boolean {
 function build(world: World) {
   // `academy` cuenta las lecturas de la tarjeta (en vivo, fuera de la caché);
   // `queries`, todo lo demás.
-  const calls = { queries: 0, academy: 0 };
+  const calls = {
+    queries: 0,
+    academy: 0,
+    /** Quién pidió cada lectura de «últimos comentarios» (van en vivo). */
+    recentViewers: [] as unknown[],
+  };
   const prisma = {
     tenant: {
       findUnique: async ({ where }: { where: { id: string } }) => {
@@ -178,8 +183,9 @@ function build(world: World) {
       },
     }),
     getCommunityService: () => ({
-      listRecentComments: async (tenantId: string, limit: number) => {
-        calls.queries++;
+      listRecentComments: async (tenantId: string, limit: number, viewer: unknown) => {
+        // En vivo y por quien mira: no cuenta como consulta de la parte cacheada.
+        calls.recentViewers.push(viewer);
         return (world.comments[tenantId] ?? []).slice(0, limit);
       },
     }),
@@ -384,7 +390,7 @@ describe('CommunitySidebarService', () => {
     const world = twoAcademies();
     world.presence[A] = [];
     const { service } = build(world);
-    const data = await service.get(A, world.a.ana.id);
+    const data = await service.get(A, { userId: world.a.ana.id, seesAllSpaces: false });
     expect(data.members.online).toBe(1);
     expect(data.members.faces[0]).toMatchObject({ id: world.a.ana.id, online: true });
   });
@@ -404,7 +410,7 @@ describe('CommunitySidebarService', () => {
     const world = twoAcademies();
     world.presence[A] = [];
     const { service } = build(world);
-    const data = await service.get(A, world.b.zoe.id);
+    const data = await service.get(A, { userId: world.b.zoe.id, seesAllSpaces: false });
     expect(data.members.online).toBeNull();
     expect(data.members.faces.map((f) => f.id)).not.toContain(world.b.zoe.id);
   });
@@ -492,7 +498,7 @@ describe('CommunitySidebarService', () => {
     const world = twoAcademies();
     world.enabled[A] = ['mod.community'];
     const { service, calls } = build(world);
-    const data = await service.get(A, world.a.ana.id);
+    const data = await service.get(A, { userId: world.a.ana.id, seesAllSpaces: false });
     expect(data.leaderboard).toBeNull();
     expect(data.members.online).toBeNull();
     expect(data.members.faces.every((f) => !f.online)).toBe(true);
@@ -551,8 +557,10 @@ describe('CommunitySidebarService', () => {
   it('cachea por aula unos segundos y vuelve a leer al caducar', async () => {
     const world = twoAcademies();
     // Sin mensajería: así no hay lecturas EN VIVO de la presencia y cada
-    // consulta contada es de la parte cacheable.
+    // consulta contada es de la parte cacheable. Sin comentarios, por lo mismo:
+    // los «últimos comentarios» (y sus autores) se leen en vivo por quien mira.
     world.enabled[A] = ['mod.community', 'mod.gamification'];
+    world.comments[A] = [];
     const { service, calls } = build(world);
     let now = 1_000_000;
     service.clock = () => now;
@@ -565,6 +573,23 @@ describe('CommunitySidebarService', () => {
     now += SIDEBAR_CACHE_TTL_MS + 1;
     expect((await service.get(A)).leaderboard?.entries[0]?.name).toBe('Bea');
     expect(calls.queries).toBeGreaterThan(tras1);
+  });
+
+  it('los últimos comentarios se piden en cada visita y con quien mira (espacios con nivel)', async () => {
+    const world = twoAcademies();
+    const { service, calls } = build(world);
+    let now = 1_000_000;
+    service.clock = () => now;
+    await service.get(A, { userId: world.a.ana.id, seesAllSpaces: false });
+    now += 1_000; // dentro de la vida de la caché del aula
+    await service.get(A, { userId: world.a.bea.id, seesAllSpaces: true });
+    await service.get(A);
+    expect(calls.recentViewers).toEqual([
+      { canModerate: false, userId: world.a.ana.id, seesAllSpaces: false },
+      { canModerate: false, userId: world.a.bea.id, seesAllSpaces: true },
+      // Sin quien mira: como un miembro sin niveles.
+      { canModerate: false },
+    ]);
   });
 
   it('invalidate() olvida un aula concreta', async () => {

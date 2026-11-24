@@ -27,6 +27,9 @@ import { TenantModulesService } from '../tenant-modules.service';
  *
  * Lo del aula es igual para todos sus miembros, así que se cachea por aula
  * unos segundos: entrar y salir del feed no repite el ranking ni los COUNT.
+ * Los «últimos comentarios» NO: dependen de quien mira (los de un espacio con
+ * un nivel que no tiene no le salen), así que se leen en cada petición — es
+ * una consulta indexada de tres filas.
  * La tarjeta de la academia (nombre, marca, dominio) NO entra en la caché: son
  * tres lecturas por clave, y quien la cambia en Ajustes tiene que verla al
  * volver a la comunidad, no medio minuto después. La presencia también se lee
@@ -115,7 +118,13 @@ interface TenantPart {
   recent: Person[];
   presenceOn: boolean;
   leaderboard: CommunitySidebarData['leaderboard'];
-  recentComments: SidebarComment[];
+}
+
+/** Quien mira la barra: decide qué comentarios recientes puede ver. */
+export interface SidebarViewer {
+  userId: string;
+  /** Equipo del aula (admin o formador): ve también los espacios con nivel. */
+  seesAllSpaces: boolean;
 }
 
 interface CacheEntry {
@@ -142,8 +151,13 @@ export class CommunitySidebarService {
    * cuenta a quien mira: está pidiendo la página, así que está en línea
    * aunque su stream de tiempo real aún no se haya registrado.
    */
-  async get(tenantId: string, viewerId?: string): Promise<CommunitySidebarData> {
-    const [part, academy] = await Promise.all([this.tenantPart(tenantId), this.academy(tenantId)]);
+  async get(tenantId: string, viewer?: SidebarViewer): Promise<CommunitySidebarData> {
+    const viewerId = viewer?.userId;
+    const [part, academy, recentComments] = await Promise.all([
+      this.tenantPart(tenantId),
+      this.academy(tenantId),
+      this.recentComments(tenantId, viewer),
+    ]);
     const live = part.presenceOn
       ? await this.online(tenantId, viewerId)
       : { count: 0, users: [] as Person[] };
@@ -170,7 +184,7 @@ export class CommunitySidebarService {
         faces,
       },
       leaderboard: part.leaderboard,
-      recentComments: part.recentComments,
+      recentComments,
     };
   }
 
@@ -198,7 +212,7 @@ export class CommunitySidebarService {
   private async build(tenantId: string): Promise<TenantPart> {
     const enabled = await this.enabledModules(tenantId);
     const active = { tenantId, status: 'ACTIVE' as const, deletedAt: null };
-    const [total, admins, recent, leaderboard, recentComments] = await Promise.all([
+    const [total, admins, recent, leaderboard] = await Promise.all([
       this.prisma.user.count({ where: active }),
       this.prisma.user.count({
         where: { ...active, roles: { some: { role: { name: { in: ADMIN_ROLES } } } } },
@@ -210,7 +224,6 @@ export class CommunitySidebarService {
         take: SIDEBAR_FACES,
       }),
       enabled.has('mod.gamification') ? this.leaderboard(tenantId) : Promise.resolve(null),
-      this.recentComments(tenantId),
     ]);
     return {
       total,
@@ -219,7 +232,6 @@ export class CommunitySidebarService {
       // Sin mensajería no hay stream y, por tanto, no hay señal de presencia.
       presenceOn: enabled.has('mod.messaging') && this.presence !== undefined,
       leaderboard,
-      recentComments,
     };
   }
 
@@ -322,10 +334,20 @@ export class CommunitySidebarService {
     return entries.length > 0 ? { range: 'month', entries } : null;
   }
 
-  private async recentComments(tenantId: string): Promise<SidebarComment[]> {
+  private async recentComments(
+    tenantId: string,
+    viewer: SidebarViewer | undefined,
+  ): Promise<SidebarComment[]> {
+    // Sin quien mira, como un miembro sin niveles: nada de espacios con nivel.
     const rows = await this.registry
       .getCommunityService()
-      .listRecentComments(tenantId, SIDEBAR_RECENT_COMMENTS);
+      .listRecentComments(
+        tenantId,
+        SIDEBAR_RECENT_COMMENTS,
+        viewer
+          ? { canModerate: false, userId: viewer.userId, seesAllSpaces: viewer.seesAllSpaces }
+          : { canModerate: false },
+      );
     if (rows.length === 0) return [];
     const authors = await this.prisma.user.findMany({
       where: { tenantId, id: { in: [...new Set(rows.map((r) => r.authorId))] } },

@@ -253,7 +253,9 @@ describe('baja de los correos de la comunidad · una baja corta los dos correos'
     const { recipients } = await t.service.claimBroadcastBatch(BROADCAST, 100);
     // El destinatario SIGUE en el lote, marcado: un aviso importante se le
     // manda igual y uno normal se salta.
-    expect(recipients).toEqual([{ userId: 'u1', email: 'u1@example.test', optedOut: true }]);
+    expect(recipients).toEqual([
+      { userId: 'u1', email: 'u1@example.test', optedOut: true, canSee: true },
+    ]);
   });
 });
 

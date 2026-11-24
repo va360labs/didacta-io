@@ -19,7 +19,13 @@ export const manifest: ModuleManifest = parseModuleManifest({
   permissions: ['zoom.session.read', 'zoom.session.write'],
   dependencies: {
     modules: [],
-    optionalModules: [{ name: 'mod.courses', version: '^1.0.0' }],
+    // mod.access-groups: quién es miembro ACTIVO de qué nivel, para las clases
+    // restringidas. Llega resuelto por el host (puerto `AccessGroupMembership`);
+    // el módulo no lee sus tablas.
+    optionalModules: [
+      { name: 'mod.access-groups', version: '^1.0.0' },
+      { name: 'mod.courses', version: '^1.0.0' },
+    ],
   },
   eventsEmitted: [
     'zoom.session.created',

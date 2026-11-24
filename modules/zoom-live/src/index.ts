@@ -7,7 +7,11 @@ import type { DidactaModule, ModuleContext } from '@didacta/core-kernel';
 import { manifest } from './manifest.js';
 
 export { manifest };
-export { ZoomLiveService } from './zoom-live.service.js';
+export {
+  ZoomLiveService,
+  ZOOM_STAFF_ROLES,
+  type ZoomAccessGroupMembership,
+} from './zoom-live.service.js';
 export {
   createSessionSchema,
   externalJoinUrlSchema,
@@ -39,7 +43,9 @@ export {
   InvalidWebhookSignatureError,
   LessonNotInCourseError,
   NotRegisteredError,
+  SessionAccessGroupUnknownError,
   SessionAlreadyEndedError,
+  SessionLockedError,
   SessionNotFoundError,
   SessionNotOpenForRegistrationError,
   ZoomApiError,

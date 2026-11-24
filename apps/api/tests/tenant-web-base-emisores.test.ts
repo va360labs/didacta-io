@@ -439,10 +439,11 @@ describe('ZoomCalendarController · el .ics guarda el enlace del aula del tenant
 
 describe('SurveysReminderWorker · recordatorio de encuesta', () => {
   it('cada encuesta enlaza a la clase en el aula de su tenant', async () => {
-    const prisma = {
-      modZoomSessionRegistration: { findMany: vi.fn().mockResolvedValue([{ userId: USER }]) },
-    };
+    const prisma = {};
     const { factory, sends } = makeFactory(prisma);
+    // Los inscritos salen del service público de mod.zoom-live (que deja fuera
+    // a quien perdió el nivel de una clase restringida).
+    const zoom = { listRegisteredUserIds: vi.fn().mockResolvedValue([USER]) };
     const surveys = {
       findDueReminders: vi.fn().mockResolvedValue([
         { id: 's-a', tenantId: TENANT_A, title: 'Clase A', zoomSessionId: SESSION },
@@ -451,7 +452,10 @@ describe('SurveysReminderWorker · recordatorio de encuesta', () => {
       claimReminder: vi.fn().mockResolvedValue(true),
       filterPendingRespondents: vi.fn().mockResolvedValue([USER]),
     };
-    const registry = { getSurveysService: () => surveys } as never;
+    const registry = {
+      getSurveysService: () => surveys,
+      getZoomLiveService: () => zoom,
+    } as never;
     const worker = new SurveysReminderWorker(registry, factory, logger);
 
     const out = await worker.runSweep();
@@ -472,13 +476,16 @@ describe('SurveysZoomBridge · invitación a la encuesta al terminar la clase', 
   it('el enlace de la encuesta sale del dominio del tenant de la clase', async () => {
     const prisma = {
       modZoomSession: { findFirst: vi.fn().mockResolvedValue({ topic: 'Clase 1' }) },
-      modZoomSessionRegistration: { findMany: vi.fn().mockResolvedValue([{ userId: USER }]) },
     };
     const { factory, sends, handlers } = makeFactory(prisma);
     const surveys = {
       createForZoomSession: vi.fn().mockResolvedValue({ surveyId: 'sv1', created: true }),
     };
-    const registry = { getSurveysService: () => surveys } as never;
+    const zoom = { listRegisteredUserIds: vi.fn().mockResolvedValue([USER]) };
+    const registry = {
+      getSurveysService: () => surveys,
+      getZoomLiveService: () => zoom,
+    } as never;
     new SurveysZoomBridge(registry, factory, logger).onModuleInit();
 
     await handlers.get('zoom.session.ended')!({
@@ -513,7 +520,7 @@ describe('CommunityBroadcastWorker · aviso masivo', () => {
           postId: 'p1',
           cursorUserId: null,
         },
-        recipients: [{ userId: USER, email: 'alumna@example.test', optedOut: false }],
+        recipients: [{ userId: USER, email: 'alumna@example.test', optedOut: false, canSee: true }],
         done: false,
       }),
       commitBroadcastBatch: vi.fn().mockResolvedValue(undefined),

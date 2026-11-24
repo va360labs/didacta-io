@@ -109,6 +109,11 @@ export function formatWhen(startTime: Date, timezone: string, locale: AcademyLoc
 /**
  * Título, cuerpo y etiqueta del post que anuncia una clase, en el idioma del
  * aula. Función pura (tests en `zoom-live-community.bridge.test.ts`).
+ *
+ * Una clase restringida a unos niveles de membresía se anuncia SIN su
+ * descripción: el post lo lee todo el feed, y quien no tiene el nivel solo
+ * puede ver lo mismo que en la tarjeta cerrada (título y hora). La tarjeta
+ * rica del post lee la clase en vivo, con su candado para quien no la tiene.
  */
 export function announcementPost(
   session: {
@@ -117,15 +122,17 @@ export function announcementPost(
     startTime: Date;
     timezone: string;
     durationMinutes: number;
+    accessGroupIds?: string[] | null;
   },
   sessionId: string,
   locale: AcademyLocale,
 ): { title: string; body: string; tag: string } {
   const tx = ANNOUNCEMENT_TEXTS[locale];
+  const restricted = (session.accessGroupIds ?? []).length > 0;
   const body = [
     tx.headline(session.topic),
     `🗓️ ${formatWhen(session.startTime, session.timezone, locale)} · ${session.durationMinutes} ${tx.minutes}.`,
-    session.description?.trim() ? `\n${session.description.trim()}` : '',
+    !restricted && session.description?.trim() ? `\n${session.description.trim()}` : '',
     `\n${tx.cta}`,
     `\n${claseMarker(sessionId)}`,
   ]
@@ -206,6 +213,7 @@ export class ZoomLiveCommunityBridge implements OnModuleInit {
         startTime: true,
         timezone: true,
         durationMinutes: true,
+        accessGroupIds: true,
       },
     });
     if (!session) return;

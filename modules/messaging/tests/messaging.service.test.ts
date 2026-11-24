@@ -665,3 +665,65 @@ describe('MessagingService', () => {
     });
   });
 });
+
+describe('MessagingService · sala de un espacio restringido por nivel', () => {
+  // `ayuda` es un espacio con nivel: alice lo tiene, bob no. El host decide con
+  // el llamante qué espacios ve (`spacesLookup`) y a quién se empuja un
+  // mensaje (`spaceAudience`); aquí se prueba que el módulo lo respeta.
+  const conNivel = new Set([USERS.alice!.id, USERS.profe!.id]);
+  let prisma: MockPrisma;
+  let service: MessagingService;
+
+  beforeEach(() => {
+    prisma = new MockPrisma();
+    service = new MessagingService(
+      prisma as never,
+      buildPublisher().publisher,
+      async (_tenantId, caller) =>
+        !caller || conNivel.has(caller.userId) ? [SPACE_GENERAL, SPACE_AYUDA] : [SPACE_GENERAL],
+      async (_tenantId, ids) => Object.values(USERS).filter((u) => ids.includes(u.id)),
+      async () => [USERS.profe!.id],
+      undefined,
+      async (_tenantId, spaceId, userIds) =>
+        spaceId === SPACE_AYUDA.id ? userIds.filter((u) => conNivel.has(u)) : userIds,
+    );
+  });
+
+  it('sin el nivel la sala no sale en su lista ni se puede abrir', async () => {
+    const lista = await service.listConversations(TENANT, callerOf('bob'));
+    expect(lista.map((c) => c.space?.slug)).not.toContain('ayuda');
+    await expect(service.openSpace(TENANT, callerOf('bob'), 'ayuda')).rejects.toBeInstanceOf(
+      SpaceNotFoundError,
+    );
+    // Control: con el nivel sí.
+    const listaAlice = await service.listConversations(TENANT, callerOf('alice'));
+    expect(listaAlice.map((c) => c.space?.slug)).toContain('ayuda');
+  });
+
+  it('sin el nivel no se lee, no se escribe, no se marca leída ni se ve quién escribe', async () => {
+    const { conversationId } = await service.openSpace(TENANT, callerOf('alice'), 'ayuda');
+    for (const intento of [
+      () => service.listMessages(TENANT, callerOf('bob'), conversationId),
+      () => service.sendMessage(TENANT, callerOf('bob'), conversationId, 'hola'),
+      () => service.markRead(TENANT, callerOf('bob'), conversationId),
+      () => service.recipientsForTyping(TENANT, callerOf('bob'), conversationId),
+    ]) {
+      await expect(intento()).rejects.toBeInstanceOf(NotParticipantError);
+    }
+  });
+
+  it('el push de la sala no llega a quien la abrió y luego perdió el nivel', async () => {
+    const { conversationId } = await service.openSpace(TENANT, callerOf('alice'), 'ayuda');
+    // bob la abrió cuando aún tenía el nivel: su fila de participante sigue ahí.
+    prisma.participants.push({
+      id: 'eeeeeeee-0000-0000-0000-0000000000ff',
+      tenantId: TENANT,
+      conversationId,
+      userId: USERS.bob!.id,
+      lastReadAt: null,
+    });
+    await service.openSpace(TENANT, callerOf('profe', ['formador']), 'ayuda');
+    const r = await service.sendMessage(TENANT, callerOf('alice'), conversationId, 'Solo nivel');
+    expect(r.recipientUserIds).toEqual([USERS.profe!.id]);
+  });
+});

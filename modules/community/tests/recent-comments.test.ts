@@ -23,6 +23,12 @@ interface Row {
 function makeService(rows: Row[]) {
   const seen: unknown[] = [];
   const prisma = {
+    // Ningún espacio con nivel: el filtro por espacio no quita nada.
+    modCommunitySpace: {
+      async findMany() {
+        return [];
+      },
+    },
     modCommunityComment: {
       async findMany(args: any) {
         seen.push(args);

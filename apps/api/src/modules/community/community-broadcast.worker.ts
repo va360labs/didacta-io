@@ -171,6 +171,18 @@ export class CommunityBroadcastWorker implements OnApplicationBootstrap, OnModul
     await runAsTenant(broadcast.tenantId, async () => {
       for (const r of recipients) {
         lastUserId = r.userId;
+        // El post del aviso está en un espacio con un nivel que no tiene: ni
+        // correo ni campana, y no cuenta en el progreso (no es su público).
+        // El cursor avanza igual, o el lote se repetiría en bucle.
+        if (!r.canSee) {
+          await community.commitBroadcastBatch(broadcastId, {
+            sent: 0,
+            failed: 0,
+            skipped: 0,
+            lastUserId,
+          });
+          continue;
+        }
         if (r.optedOut && !broadcast.important) {
           skipped++;
           await community.commitBroadcastBatch(broadcastId, {

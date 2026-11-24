@@ -64,6 +64,12 @@ function makeFakePrisma() {
     rId = 1;
 
   return {
+    // Ningún espacio con nivel: el filtro por espacio no quita nada.
+    modCommunitySpace: {
+      async findMany() {
+        return [];
+      },
+    },
     modCommunityPost: {
       async create(args: { data: Partial<PostRow> }): Promise<PostRow> {
         const row: PostRow = {
