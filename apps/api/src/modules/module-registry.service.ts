@@ -143,6 +143,7 @@ import { buildCourseSaleChecker } from './course-sale-checker';
 import {
   buildAccessGroupMembership,
   type AccessGroupMembershipDb,
+  type AccessGroupMembershipPort,
 } from './access-groups/access-group-membership';
 import { discountCodesAllowedFor } from './gamification/discount-codes-allowed';
 import { PayoutsRuntime } from './payouts/payouts-runtime.service';
@@ -176,6 +177,7 @@ export class ModuleRegistryService implements OnModuleInit {
   private certificates?: CertificatesService;
   private assessments?: AssessmentsService;
   private community?: CommunityService;
+  private accessGroupMembership?: AccessGroupMembershipPort;
   private theming?: ThemingService;
   private zoomLive?: ZoomLiveService;
   private fundae?: FundaeService;
@@ -301,7 +303,12 @@ export class ModuleRegistryService implements OnModuleInit {
     // tablas.
     const pertenencia = buildAccessGroupMembership(
       () => this.factory.getPrisma() as unknown as AccessGroupMembershipDb,
+      // Nombres y orden de los niveles: los pone mod.subscriptions, dueño de
+      // los niveles. Perezoso: se resuelve en cada lectura, tras el boot.
+      (tenantId) =>
+        this.getMembershipTiersService().listTierSummaries(tenantId, { includeInactive: true }),
     );
+    this.accessGroupMembership = pertenencia;
     this.community = new CommunityService(prisma, context, pertenencia);
     this.theming = new ThemingService(prisma, context);
     this.zoomLive = new ZoomLiveService(prisma, context, undefined, pertenencia);
@@ -1409,6 +1416,14 @@ export class ModuleRegistryService implements OnModuleInit {
       throw new Error('MembershipService no está inicializado (boot incompleto).');
     }
     return this.membership;
+  }
+
+  /** Pertenencia a grupos de acceso y opciones de «Quién puede verlo». */
+  getAccessGroupMembership(): AccessGroupMembershipPort {
+    if (!this.accessGroupMembership) {
+      throw new Error('La pertenencia a grupos no está inicializada (boot incompleto).');
+    }
+    return this.accessGroupMembership;
   }
 
   /** Niveles de la membresía. SIEMPRE inicializado tras el boot (como la membresía). */

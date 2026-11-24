@@ -25,7 +25,28 @@ export interface AccessGroupMembershipPort {
   activeGroupIdsOf(tenantId: string, userId: string): Promise<string[]>;
   activeMembersAmong(tenantId: string, groupIds: string[], userIds: string[]): Promise<string[]>;
   groupNames(tenantId: string, groupIds: string[]): Promise<Array<{ id: string; name: string }>>;
+  /**
+   * Opciones de «Quién puede verlo». Si el aula tiene niveles de pago, SOLO
+   * esos niveles, en su orden y con el nombre del nivel (el grupo que adoptó el
+   * primer nivel conserva su nombre antiguo, que el creador no reconocería). El
+   * nivel gratis no se ofrece: lo que ve el gratis lo ven todos los miembros, y
+   * restringir a él dejaría fuera a quien paga. Sin niveles, todos los grupos.
+   */
+  levelOptions(tenantId: string): Promise<Array<{ id: string; name: string }>>;
 }
+
+/** Un nivel de membresía tal como lo ve este fichero (lo pone el registro). */
+export interface MembershipLevelName {
+  accessGroupId: string | null;
+  name: string;
+  isFree: boolean;
+}
+
+/**
+ * Niveles de la membresía del aula, en su orden. Lo inyecta el registro desde
+ * mod.subscriptions (dueño de los niveles); sin él, los grupos van con su nombre.
+ */
+export type MembershipLevelNames = (tenantId: string) => Promise<MembershipLevelName[]>;
 
 /** Lo único que este fichero lee de Prisma. */
 export interface AccessGroupMembershipDb {
@@ -52,7 +73,12 @@ export interface AccessGroupMembershipDb {
 
 export function buildAccessGroupMembership(
   getDb: () => AccessGroupMembershipDb,
+  levelNames?: MembershipLevelNames,
 ): AccessGroupMembershipPort {
+  // Un fallo leyendo los niveles no debe dejar a nadie sin ver su contenido:
+  // los nombres caen a los del grupo y las opciones, a todos los grupos.
+  const levels = async (tenantId: string): Promise<MembershipLevelName[]> =>
+    levelNames ? levelNames(tenantId).catch(() => []) : [];
   return {
     async activeGroupIdsOf(tenantId, userId) {
       const rows = await getDb().modAccessGroupMember.findMany({
@@ -79,7 +105,33 @@ export function buildAccessGroupMembership(
 
     async groupNames(tenantId, groupIds) {
       if (groupIds.length === 0) return [];
-      return listAccessGroupOptions(getDb(), tenantId, groupIds);
+      const [groups, tiers] = await Promise.all([
+        listAccessGroupOptions(getDb(), tenantId, groupIds),
+        levels(tenantId),
+      ]);
+      const tierName = new Map(
+        tiers.filter((t) => t.accessGroupId).map((t) => [t.accessGroupId as string, t.name]),
+      );
+      return groups.map((g) => ({ id: g.id, name: tierName.get(g.id) ?? g.name }));
+    },
+
+    async levelOptions(tenantId) {
+      const [groups, tiers] = await Promise.all([
+        listAccessGroupOptions(getDb(), tenantId),
+        levels(tenantId),
+      ]);
+      const paid = tiers.filter((t) => !t.isFree && t.accessGroupId);
+      if (paid.length === 0) return groups;
+      const alive = new Set(groups.map((g) => g.id));
+      const seen = new Set<string>();
+      const out: Array<{ id: string; name: string }> = [];
+      for (const t of paid) {
+        const id = t.accessGroupId as string;
+        if (!alive.has(id) || seen.has(id)) continue;
+        seen.add(id);
+        out.push({ id, name: t.name });
+      }
+      return out;
     },
   };
 }

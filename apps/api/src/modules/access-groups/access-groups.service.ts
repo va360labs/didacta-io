@@ -21,7 +21,6 @@ import { TenantContextService } from '../../tenancy/tenant-context.service';
 import { PrismaAuditLogService } from '../prisma-audit-log.service';
 import { ModuleRegistryService } from '../module-registry.service';
 import { countLiveCourseGrants } from './live-course-grants';
-import { listAccessGroupOptions, type AccessGroupMembershipDb } from './access-group-membership';
 
 type LearningServiceLike = ReturnType<ModuleRegistryService['getLearningService']>;
 
@@ -118,11 +117,12 @@ export class AccessGroupsService {
   // ----------------------------- Lectura -----------------------------
 
   /**
-   * Grupos vivos del aula como opciones de «Quién puede verlo» (espacios y
-   * directos restringidos por nivel). Solo `{ id, name }`.
+   * Opciones de «Quién puede verlo» (espacios y directos restringidos por
+   * nivel): los niveles de pago de la membresía si los hay, y si no, los grupos
+   * vivos del aula. Solo `{ id, name }`. Ver `levelOptions`.
    */
   async listOptions(tenantId: string): Promise<Array<{ id: string; name: string }>> {
-    return listAccessGroupOptions(this.prisma as unknown as AccessGroupMembershipDb, tenantId);
+    return this.registry.getAccessGroupMembership().levelOptions(tenantId);
   }
 
   /** ¿Algún grupo le sigue dando este curso a esta persona? */
