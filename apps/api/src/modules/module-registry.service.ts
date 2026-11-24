@@ -29,6 +29,7 @@ import {
 } from '@didacta/mod-billing';
 import {
   MembershipService,
+  MembershipTiersService,
   RetentionService as SubscriptionRetentionService,
   StripeConfigMissingError as SubscriptionsStripeConfigMissingError,
   SubscriptionsService,
@@ -193,6 +194,7 @@ export class ModuleRegistryService implements OnModuleInit {
   private billing?: BillingService;
   private subscriptions?: SubscriptionsService;
   private membership?: MembershipService;
+  private membershipTiers?: MembershipTiersService;
   /** Oferta al darse de baja (mod.subscriptions): motivo, pausa y descuento. */
   private subscriptionRetention?: SubscriptionRetentionService;
   private stripeResolver?: TenantStripeResolverService;
@@ -601,6 +603,9 @@ export class ModuleRegistryService implements OnModuleInit {
     // (el admin puede dejarlo todo listo antes de configurar la key); el
     // checkout lanza StripeConfigMissingError → 503 si falta.
     this.membership = new MembershipService(prisma, subscriptionsStripeFor, subsPublisher);
+    // Niveles de la membresía (Básico, Pro, Gratis): filas propias del módulo.
+    // El grupo de acceso de cada nivel lo crea el host con mod.access-groups.
+    this.membershipTiers = new MembershipTiersService(prisma);
 
     // Oferta al darse de baja: motivo, pausa y descuento de retención. Cancela
     // con la baja de siempre (al final del periodo) de SubscriptionsService.
@@ -1404,6 +1409,14 @@ export class ModuleRegistryService implements OnModuleInit {
       throw new Error('MembershipService no está inicializado (boot incompleto).');
     }
     return this.membership;
+  }
+
+  /** Niveles de la membresía. SIEMPRE inicializado tras el boot (como la membresía). */
+  getMembershipTiersService(): MembershipTiersService {
+    if (!this.membershipTiers) {
+      throw new Error('MembershipTiersService no está inicializado (boot incompleto).');
+    }
+    return this.membershipTiers;
   }
 
   getPaymentConnectionsService(): PaymentConnectionsService {

@@ -19,6 +19,7 @@
 
 import type Stripe from 'stripe';
 import {
+  MembershipPlanChangePaymentFailedError,
   StripeApiError,
   StripeConfigMissingError,
   WebhookSignatureInvalidError,
@@ -103,6 +104,68 @@ export interface SubscriptionsStripeAdapter {
    * `once`: solo la siguiente). Idempotente por `idempotencyKey`.
    */
   applyRetentionDiscount(params: RetentionDiscountParams): Promise<RetentionDiscountResult>;
+  /**
+   * Cambio de nivel: cambia el precio de la (única) línea de una suscripción
+   * viva. Con `always_invoice` Stripe factura y cobra la diferencia EN EL
+   * MOMENTO; con `create_prorations`, la diferencia (a favor) queda en la
+   * próxima factura; con `none`, no hay prorrateo (prueba gratis).
+   *
+   * Siempre con `payment_behavior: error_if_incomplete`: si el cobro falla,
+   * Stripe NO aplica el cambio y esto lanza
+   * `MembershipPlanChangePaymentFailedError`. Idempotente: si la línea ya
+   * tiene ese precio, no vuelve a tocarla.
+   */
+  changeSubscriptionPrice(params: ChangeSubscriptionPriceParams): Promise<SubscriptionPriceChange>;
+  /**
+   * Lo que costaría cambiar de precio AHORA (factura de vista previa con
+   * `always_invoice`): positivo = se cobra hoy; negativo = queda a favor del
+   * alumno en sus próximas facturas. No cambia nada.
+   */
+  previewSubscriptionPriceChange(
+    params: PreviewSubscriptionPriceChangeParams,
+  ): Promise<SubscriptionPriceChangePreview>;
+}
+
+export type PlanChangeProrationBehavior = 'always_invoice' | 'create_prorations' | 'none';
+
+export interface ChangeSubscriptionPriceParams {
+  subscriptionId: string;
+  priceId: string;
+  prorationBehavior: PlanChangeProrationBehavior;
+  /** Se FUSIONA con la de la suscripción (Stripe solo pisa las claves dadas). */
+  metadata: Record<string, string>;
+  idempotencyKey: string;
+}
+
+export interface SubscriptionPriceChange {
+  id: string;
+  status: string;
+  /** Epoch en segundos. */
+  currentPeriodEnd: number | null;
+  /** El precio que ha quedado en la línea. */
+  priceId: string | null;
+  /** La factura que generó el cambio (con `always_invoice`), si la hubo. */
+  latestInvoice: {
+    id: string;
+    status: string | null;
+    amountPaid: number;
+    total: number;
+    currency: string;
+    billingReason: string | null;
+  } | null;
+}
+
+export interface PreviewSubscriptionPriceChangeParams {
+  subscriptionId: string;
+  priceId: string;
+}
+
+export interface SubscriptionPriceChangePreview {
+  /** Lo que Stripe cobraría hoy (unidad mínima, >= 0). */
+  amountDue: number;
+  /** Total de la factura: negativo = saldo a favor del alumno. */
+  total: number;
+  currency: string;
 }
 
 /** Lo que la oferta al darse de baja necesita saber de una suscripción en Stripe. */
@@ -642,6 +705,68 @@ export class SubscriptionsStripeSdkAdapter implements SubscriptionsStripeAdapter
     }
   }
 
+  async changeSubscriptionPrice(
+    p: ChangeSubscriptionPriceParams,
+  ): Promise<SubscriptionPriceChange> {
+    try {
+      const current = await this.client.subscriptions.retrieve(p.subscriptionId);
+      const item = current.items?.data?.[0];
+      if (!item) throw new StripeApiError(`la suscripción ${p.subscriptionId} no tiene líneas`);
+      // Reintento de un cambio que ya se aplicó: no se vuelve a facturar.
+      if (item.price?.id === p.priceId) return priceChangeView(current, null);
+      const sub = await this.client.subscriptions.update(
+        p.subscriptionId,
+        {
+          items: [{ id: item.id, price: p.priceId }],
+          proration_behavior: p.prorationBehavior,
+          // Subir de nivel solo se aplica si el cobro entra: si la tarjeta
+          // falla, Stripe devuelve 402 y la suscripción sigue como estaba.
+          payment_behavior: 'error_if_incomplete',
+          metadata: p.metadata,
+          expand: ['latest_invoice'],
+        },
+        { idempotencyKey: p.idempotencyKey },
+      );
+      const invoice =
+        sub.latest_invoice && typeof sub.latest_invoice !== 'string' ? sub.latest_invoice : null;
+      return priceChangeView(sub, invoice);
+    } catch (err) {
+      if (err instanceof StripeApiError) throw err;
+      if (isPaymentFailure(err)) {
+        throw new MembershipPlanChangePaymentFailedError((err as Error).message);
+      }
+      throw new StripeApiError((err as Error).message);
+    }
+  }
+
+  async previewSubscriptionPriceChange(
+    p: PreviewSubscriptionPriceChangeParams,
+  ): Promise<SubscriptionPriceChangePreview> {
+    try {
+      const current = await this.client.subscriptions.retrieve(p.subscriptionId);
+      const item = current.items?.data?.[0];
+      if (!item) throw new StripeApiError(`la suscripción ${p.subscriptionId} no tiene líneas`);
+      const customer =
+        typeof current.customer === 'string' ? current.customer : current.customer.id;
+      const preview = await this.client.invoices.createPreview({
+        customer,
+        subscription: p.subscriptionId,
+        subscription_details: {
+          items: [{ id: item.id, price: p.priceId }],
+          proration_behavior: 'always_invoice',
+        },
+      });
+      return {
+        amountDue: Math.max(0, preview.amount_due ?? 0),
+        total: preview.total ?? 0,
+        currency: preview.currency,
+      };
+    } catch (err) {
+      if (err instanceof StripeApiError) throw err;
+      throw new StripeApiError((err as Error).message);
+    }
+  }
+
   constructWebhookEvent(rawBody: string | Buffer, signatureHeader: string): Stripe.Event {
     try {
       return this.client.webhooks.constructEvent(rawBody, signatureHeader, this.webhookSecret);
@@ -692,4 +817,50 @@ function discountEndOf(sub: unknown, couponId: string): number | null {
     return typeof disc.end === 'number' ? disc.end : null;
   }
   return null;
+}
+
+/** La vista del cambio de precio, leída con los lectores tolerantes. */
+function priceChangeView(sub: unknown, invoice: unknown): SubscriptionPriceChange {
+  const s = sub as {
+    id?: unknown;
+    status?: unknown;
+    items?: { data?: Array<{ price?: { id?: unknown } }> };
+  };
+  const priceId = s.items?.data?.[0]?.price?.id;
+  const inv = invoice as {
+    id?: unknown;
+    status?: unknown;
+    amount_paid?: unknown;
+    total?: unknown;
+    currency?: unknown;
+    billing_reason?: unknown;
+  } | null;
+  return {
+    id: typeof s.id === 'string' ? s.id : '',
+    status: typeof s.status === 'string' ? s.status : 'unknown',
+    currentPeriodEnd: currentPeriodEndFromSubscription(sub),
+    priceId: typeof priceId === 'string' ? priceId : null,
+    latestInvoice:
+      inv && typeof inv.id === 'string'
+        ? {
+            id: inv.id,
+            status: typeof inv.status === 'string' ? inv.status : null,
+            amountPaid: typeof inv.amount_paid === 'number' ? inv.amount_paid : 0,
+            total: typeof inv.total === 'number' ? inv.total : 0,
+            currency: typeof inv.currency === 'string' ? inv.currency : '',
+            billingReason: typeof inv.billing_reason === 'string' ? inv.billing_reason : null,
+          }
+        : null,
+  };
+}
+
+/**
+ * ¿El error de Stripe es un cobro que no entró? Tarjeta rechazada (402,
+ * `StripeCardError`) o un pago que pide una autenticación que aquí no se puede
+ * dar (también 402).
+ */
+function isPaymentFailure(err: unknown): boolean {
+  const e = err as { type?: unknown; statusCode?: unknown; code?: unknown } | null;
+  if (!e) return false;
+  return e.type === 'StripeCardError' || e.statusCode === 402 || e.code === 'card_declined';
 }

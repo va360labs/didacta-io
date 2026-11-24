@@ -129,6 +129,42 @@ function matches(row: Record<string, unknown>, where: Record<string, unknown>): 
 }
 
 class MockPrisma {
+  /** Niveles de la membresía (vacío = aula sin niveles, lo de siempre). */
+  tiers: Array<{
+    id: string;
+    tenantId: string;
+    name: string;
+    description: string | null;
+    accessGroupId: string | null;
+    isFree: boolean;
+    sortOrder: number;
+    active: boolean;
+    createdAt: Date;
+  }> = [];
+  groups: Array<{
+    id: string;
+    tenantId: string;
+    kind: string;
+    deletedAt: Date | null;
+    courses: Array<{ courseId: string }>;
+  }> = [];
+  modSubscriptionsTier = {
+    findMany: async (args: { where?: Record<string, unknown> }) =>
+      this.tiers
+        .filter((t) => matches(t as never, args.where ?? {}))
+        .sort((a, b) => a.sortOrder - b.sortOrder),
+    findFirst: async (args: { where: Record<string, unknown> }) =>
+      this.tiers.find((t) => matches(t as never, args.where)) ?? null,
+    count: async (args: { where: Record<string, unknown> }) =>
+      this.tiers.filter((t) => matches(t as never, args.where)).length,
+  };
+  modAccessGroup = {
+    findMany: async (args: { where: { tenantId: string; id: { in: string[] } } }) =>
+      this.groups.filter(
+        (g) =>
+          g.tenantId === args.where.tenantId && args.where.id.in.includes(g.id) && !g.deletedAt,
+      ),
+  };
   plans = new Map<string, PlanRow>();
   configs = new Map<string, ConfigRow>();
   subs = new Map<string, SubRow>();
@@ -346,6 +382,12 @@ function stubStripe() {
       throw new Error('no usado');
     },
     pauseCollection: async () => {
+      throw new Error('no usado');
+    },
+    changeSubscriptionPrice: async () => {
+      throw new Error('no usado');
+    },
+    previewSubscriptionPriceChange: async () => {
       throw new Error('no usado');
     },
     applyRetentionDiscount: async () => {

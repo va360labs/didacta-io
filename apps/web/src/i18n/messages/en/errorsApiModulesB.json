@@ -273,5 +273,12 @@
   "COMMUNITY_SPACE_LOCKED": "That space is only for some membership levels.",
   "COMMUNITY_ACCESS_GROUP_UNKNOWN": "One of the chosen levels no longer exists. Please choose again.",
   "ZOOM_SESSION_LOCKED": "This class is only for some membership levels.",
-  "ZOOM_ACCESS_GROUP_UNKNOWN": "One of the chosen levels no longer exists. Please choose again."
+  "ZOOM_ACCESS_GROUP_UNKNOWN": "One of the chosen levels no longer exists. Please choose again.",
+  "MEMBERSHIP_TIER_NOT_FOUND": "That level no longer exists. Reload the page.",
+  "MEMBERSHIP_TIER_INVALID": "Check the level: the name can't be empty or repeated, and there can only be one free level.",
+  "MEMBERSHIP_TIER_IN_USE": "This level already has students, so it can't be deleted. Turn it off and it stops being sold; people who have it keep it.",
+  "MEMBERSHIP_TIER_IS_FREE": "The free level has no prices: people join without paying.",
+  "MEMBERSHIP_PLAN_NAME_TAKEN": "You already have a price with that name. Choose another one.",
+  "MEMBERSHIP_PLAN_CHANGE_NOT_ALLOWED": "You can't change your plan right now. If you have a pending payment, a pause or a scheduled cancellation, sort that out first.",
+  "MEMBERSHIP_PLAN_CHANGE_PAYMENT_FAILED": "We couldn't charge the difference to your card. Your plan hasn't changed: check your card and try again."
 }

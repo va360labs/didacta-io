@@ -78,7 +78,14 @@ const planShape = {
   sortOrder: z.number().int().min(0).max(1000).optional(),
 };
 
-export const createPlanSchema = z.object(planShape);
+export const createPlanSchema = z.object({
+  ...planShape,
+  /**
+   * Nivel del plan (Básico, Pro…). Solo al crearlo: después no cambia (quien
+   * ya lo paga no cambia de contenido). Sin él, el plan de siempre.
+   */
+  tierId: z.string().uuid().nullable().optional(),
+});
 export type CreatePlanDto = z.infer<typeof createPlanSchema>;
 
 export const updatePlanSchema = z.object(planShape).partial();

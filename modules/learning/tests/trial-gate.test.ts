@@ -40,6 +40,8 @@ interface BuildOpts {
     isActive: boolean;
   }>;
   memberGroupIds?: string[];
+  /** Grupos de los niveles de pago de la membresía (mod_subscriptions_tier). */
+  paidTierGroupIds?: string[];
 }
 
 /** Curso: módulo m0 → [L0, L1], módulo m1 → [L2]. Enrollment vivo anclado hoy. */
@@ -52,6 +54,7 @@ function build(opts: BuildOpts = {}) {
     liveGrantGroupIds = [MEMBERSHIP_GROUP],
     schedules = [],
     memberGroupIds = [],
+    paidTierGroupIds = [],
   } = opts;
 
   const prisma = {
@@ -102,18 +105,24 @@ function build(opts: BuildOpts = {}) {
       findFirst: async ({ where }: { where: { status?: string } }) =>
         membershipStatus && where.status === membershipStatus ? { id: 'sub_mem' } : null,
     },
+    modSubscriptionsTier: {
+      findMany: async () => paidTierGroupIds.map((accessGroupId) => ({ accessGroupId })),
+    },
     modAccessGroupGrant: {
-      // Dos queries del gate: (a) grant del grupo de la membresía
-      // ({ groupId: <id> }) y (b) grant de cualquier OTRO grupo
-      // ({ NOT: { groupId: <id> } }).
-      findFirst: async ({ where }: { where: { groupId?: string; NOT?: { groupId: string } } }) => {
+      // Dos queries del gate: (a) grant de un grupo de la membresía
+      // ({ groupId: { in: [...] } }) y (b) grant de cualquier OTRO grupo
+      // ({ NOT: { groupId: { in: [...] } } }).
+      findFirst: async ({
+        where,
+      }: {
+        where: { groupId?: { in: string[] }; NOT?: { groupId: { in: string[] } } };
+      }) => {
         if (where.groupId) {
-          return liveGrantGroupIds.includes(where.groupId)
-            ? { id: `grant_${where.groupId}` }
-            : null;
+          const match = liveGrantGroupIds.find((g) => where.groupId!.in.includes(g));
+          return match ? { id: `grant_${match}` } : null;
         }
-        const excluded = where.NOT?.groupId;
-        const match = liveGrantGroupIds.find((g) => g !== excluded);
+        const excluded = where.NOT?.groupId.in ?? [];
+        const match = liveGrantGroupIds.find((g) => !excluded.includes(g));
         return match ? { id: `grant_${match}` } : null;
       },
     },
@@ -171,6 +180,38 @@ describe('Gate de trial — getCourseAvailability', () => {
     const svc = build({ accessGroupId: null });
     const res = await svc.getCourseAvailability(TENANT, USER, COURSE);
     expect(res.drip).toBe(false);
+  });
+
+  it('NIVELES: el curso viene del grupo de un nivel de pago en prueba → se limita igual', async () => {
+    const svc = build({
+      accessGroupId: null,
+      paidTierGroupIds: ['g_pro'],
+      liveGrantGroupIds: ['g_pro'],
+    });
+    const res = await svc.getCourseAvailability(TENANT, USER, COURSE);
+    expect(res.trial).toEqual({ lessonLimit: 2 });
+    expect(res.lessons['L2']).toMatchObject({ available: false, reason: 'TRIAL' });
+  });
+
+  it('NIVELES: el curso también lo da el nivel GRATIS (no es de pago) → acceso completo', async () => {
+    const svc = build({
+      accessGroupId: null,
+      paidTierGroupIds: ['g_pro'],
+      liveGrantGroupIds: ['g_pro', 'g_gratis'],
+    });
+    const res = await svc.getCourseAvailability(TENANT, USER, COURSE);
+    expect(res.drip).toBe(false);
+    expect(res.trial).toBeUndefined();
+  });
+
+  it('NIVELES: dos niveles de pago dan el curso → sigue limitado (los dos son la membresía)', async () => {
+    const svc = build({
+      accessGroupId: MEMBERSHIP_GROUP,
+      paidTierGroupIds: ['g_basico', 'g_pro'],
+      liveGrantGroupIds: ['g_basico', 'g_pro'],
+    });
+    const res = await svc.getCourseAvailability(TENANT, USER, COURSE);
+    expect(res.trial).toEqual({ lessonLimit: 2 });
   });
 
   it('ANTI-BYPASS: cancelar y re-automatricularse (source ADMIN) NO apaga el gate — decide el GRANT vivo', async () => {

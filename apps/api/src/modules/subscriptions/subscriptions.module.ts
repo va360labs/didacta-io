@@ -18,6 +18,7 @@ import { MembershipAdminController } from './membership-admin.controller';
 import { MembershipProvisioningService } from './membership-provisioning.service';
 import { MembershipAccessGroupsBridge } from './membership-access-groups.bridge';
 import { RetentionMailerBridge } from './retention-mailer.bridge';
+import { MembershipTiersOrchestrator } from './membership-tiers.orchestrator';
 
 /// Backend del módulo `mod.subscriptions`. Encapsula los controllers
 /// alumno + webhook idempotente, el filter, el bridge cross-module hacia
@@ -45,6 +46,8 @@ import { RetentionMailerBridge } from './retention-mailer.bridge';
     SubscriptionsGraceExpirationWorker,
     MembershipProvisioningService,
     MembershipAccessGroupsBridge,
+    // Niveles de la membresía: filas propias + grupo de acceso de cada nivel.
+    MembershipTiersOrchestrator,
     // Oferta al darse de baja: correo de confirmación (pausa, descuento, baja).
     RetentionMailerBridge,
     { provide: APP_FILTER, useClass: SubscriptionsErrorFilter },

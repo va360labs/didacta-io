@@ -59,6 +59,11 @@ interface FakeCatalog {
       where: { tenantId: string; name: { in: string[] } };
     }): Promise<Array<{ name: string; isFree: boolean }>>;
   };
+  modSubscriptionsTier: {
+    findMany(args: {
+      where: { tenantId: string; isFree: false; accessGroupId: { not: null } };
+    }): Promise<Array<{ accessGroupId: string | null }>>;
+  };
 }
 
 interface Grupo {
@@ -77,6 +82,8 @@ function catalogo(seed: {
   /** Grupo que concede la membresía del tenant T. */
   grupoMembresia?: string | null;
   tiers?: Array<{ tenantId?: string; name: string; isFree: boolean }>;
+  /** Niveles de la membresía (mod.subscriptions): su grupo y si son gratis. */
+  niveles?: Array<{ tenantId?: string; accessGroupId: string | null; isFree: boolean }>;
 }): FakeCatalog {
   const grupos: Grupo[] = (seed.grupos ?? []).map((g) => ({
     tenantId: T,
@@ -123,6 +130,18 @@ function catalogo(seed: {
       async findUnique({ where }) {
         if (where.tenantId !== T || seed.grupoMembresia === undefined) return null;
         return { accessGroupId: seed.grupoMembresia };
+      },
+    },
+    modSubscriptionsTier: {
+      async findMany({ where }) {
+        return (seed.niveles ?? [])
+          .filter(
+            (n) =>
+              (n.tenantId ?? T) === where.tenantId &&
+              n.isFree === false &&
+              n.accessGroupId !== null,
+          )
+          .map((n) => ({ accessGroupId: n.accessGroupId }));
       },
     },
     modPaymentConnectionsTier: {
@@ -188,6 +207,34 @@ describe('buildCourseSaleChecker — por qué cursos cobra el tenant', () => {
         grupoMembresia: 'g-socios',
       });
       expect(await seVende(db)).toBe(false);
+    });
+
+    it('NIVELES: el curso del nivel Básico y el del Pro se venden; el del nivel gratis no', async () => {
+      const db = catalogo({
+        grupos: [
+          { id: 'g-basico', courseIds: ['c-a'] },
+          { id: 'g-pro', courseIds: ['c-a', 'c-b'] },
+          { id: 'g-gratis', courseIds: ['c-libre'] },
+        ],
+        grupoMembresia: null,
+        niveles: [
+          { accessGroupId: 'g-basico', isFree: false },
+          { accessGroupId: 'g-pro', isFree: false },
+          { accessGroupId: 'g-gratis', isFree: true },
+        ],
+      });
+      expect(await seVende(db, 'c-a')).toBe(true);
+      expect(await seVende(db, 'c-b')).toBe(true);
+      expect(await seVende(db, 'c-libre')).toBe(false);
+      expect(await seVende(db, 'c-suelto')).toBe(false);
+    });
+
+    it('NIVELES: el nivel de pago de OTRO tenant no vende los cursos de este', async () => {
+      const db = catalogo({
+        grupos: [{ id: 'g-pro', courseIds: ['c-1'] }],
+        niveles: [{ tenantId: OTRO_TENANT, accessGroupId: 'g-pro', isFree: false }],
+      });
+      expect(await seVende(db, 'c-1')).toBe(false);
     });
 
     it('membresía sin grupo configurado: no hay nada que proteger', async () => {

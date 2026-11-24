@@ -244,5 +244,12 @@
   "COMMUNITY_SPACE_LOCKED": "Ese espacio es solo para algunos niveles de la membresía.",
   "COMMUNITY_ACCESS_GROUP_UNKNOWN": "Uno de los niveles elegidos ya no existe. Vuelve a elegirlos.",
   "ZOOM_SESSION_LOCKED": "Esta clase es solo para algunos niveles de la membresía.",
-  "ZOOM_ACCESS_GROUP_UNKNOWN": "Uno de los niveles elegidos ya no existe. Vuelve a elegirlos."
+  "ZOOM_ACCESS_GROUP_UNKNOWN": "Uno de los niveles elegidos ya no existe. Vuelve a elegirlos.",
+  "MEMBERSHIP_TIER_NOT_FOUND": "Ese nivel ya no existe. Recarga la página.",
+  "MEMBERSHIP_TIER_INVALID": "Revisa el nivel: el nombre no puede estar vacío ni repetirse, y solo puede haber un nivel gratis.",
+  "MEMBERSHIP_TIER_IN_USE": "Este nivel ya tiene alumnos: no se puede borrar. Apágalo y dejará de venderse; quien ya lo tiene lo conserva.",
+  "MEMBERSHIP_TIER_IS_FREE": "El nivel gratis no lleva precios: se entra sin pagar.",
+  "MEMBERSHIP_PLAN_NAME_TAKEN": "Ya tienes un precio con ese nombre. Ponle otro.",
+  "MEMBERSHIP_PLAN_CHANGE_NOT_ALLOWED": "Ahora no puedes cambiar de plan. Si tienes un pago pendiente, una pausa o la baja programada, resuélvelo primero.",
+  "MEMBERSHIP_PLAN_CHANGE_PAYMENT_FAILED": "No se pudo cobrar la diferencia con tu tarjeta. Tu plan no ha cambiado: revisa tu tarjeta y vuelve a intentarlo."
 }

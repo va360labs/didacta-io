@@ -29,6 +29,12 @@ import {
   withLocalCurrencyHint,
 } from '../payouts/platform-checkout-gate';
 import { membershipCheckoutSchema, type MembershipCheckoutDto } from './membership.dto';
+import { MemberRegistrationSettings } from '@didacta/mod-member-registration';
+import { PrismaTenantConfigService } from '../prisma-tenant-config.service';
+import { TenantModulesService } from '../tenant-modules.service';
+
+/** Página pública del registro gratis: la puerta del nivel gratis. */
+export const FREE_SIGNUP_PATH = '/member-registration';
 import { resolvePublicHost } from '../../common/resolve-public-host';
 import {
   checkoutSessionNotFound,
@@ -56,8 +62,37 @@ export class MembershipPublicController {
      * plataforma y su cuenta aún no puede vender, la página no ofrece planes y
      * el checkout responde 409, como los cursos.
      */
+    private readonly tenantModules: TenantModulesService,
+    private readonly tenantConfig: PrismaTenantConfigService,
     @Optional() private readonly payoutsGate?: PlatformCheckoutGate,
   ) {}
+
+  /**
+   * ¿Se puede entrar gratis ahora? El registro gratis (mod.member-registration)
+   * encendido y con su política abierta y operativa. Es lo que enlaza la
+   * tarjeta del nivel gratis («Entrar gratis»).
+   */
+  private async freeSignupPath(tenantId: string): Promise<string | null> {
+    const modules = await this.tenantModules.list(tenantId);
+    if (!modules.some((m) => m.name === 'mod.member-registration' && m.enabled)) return null;
+    const policy = await new MemberRegistrationSettings(this.tenantConfig).resolveEffectivePolicy(
+      tenantId,
+    );
+    return policy.enabled && policy.operational ? FREE_SIGNUP_PATH : null;
+  }
+
+  @Get('tiers')
+  @ApiOperation({
+    summary:
+      'Lectura pública de los niveles encendidos de la membresía: id, nombre, grupo de ' +
+      'acceso que dan y si son gratis. Tenant por Host. Para restringir contenido por nivel.',
+  })
+  async tiers(@Req() req: FastifyRequest) {
+    const tenantId = await this.resolveTenantId(req);
+    return runAsTenant(tenantId, async () => ({
+      tiers: await this.registry.getMembershipTiersService().listTierSummaries(tenantId),
+    }));
+  }
 
   @Get('page')
   @ApiOperation({
@@ -69,7 +104,12 @@ export class MembershipPublicController {
     // RLS F2: ruta pública sin middleware de tenant — las queries corren bajo
     // el ALS del tenant resuelto por Host.
     return runAsTenant(tenantId, async () => {
-      const page = await this.registry.getMembershipService().getPublicPage(tenantId);
+      const base = await this.registry.getMembershipService().getPublicPage(tenantId);
+      // Nivel gratis: «Entrar gratis» lleva al registro gratis si está abierto.
+      // Sin nivel gratis, la página sale tal cual la da el módulo.
+      const page = base.tiers?.some((t) => t.isFree)
+        ? { ...base, freeSignupPath: await this.freeSignupPath(tenantId) }
+        : base;
       // Sin modo plataforma (Community) la página sale tal cual, sin campos nuevos.
       const checkoutInfo = await this.payoutsGate?.publicCheckoutInfo(tenantId);
       if (!checkoutInfo) return page;

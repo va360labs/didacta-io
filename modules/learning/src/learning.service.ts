@@ -1834,7 +1834,23 @@ export class LearningService {
       where: { tenantId },
       select: { accessGroupId: true, trialLessonLimit: true },
     });
-    if (!config?.accessGroupId || config.trialLessonLimit <= 0) return null;
+    if (!config || config.trialLessonLimit <= 0) return null;
+
+    // Grupos que da la membresía DE PAGO: el de la configuración (aulas sin
+    // niveles) y el de cada nivel de pago. El del nivel gratis no cuenta: lo
+    // que da el nivel gratis se ve entero también durante la prueba.
+    const paidTiers = await this.prisma.modSubscriptionsTier.findMany({
+      where: { tenantId, isFree: false, accessGroupId: { not: null } },
+      select: { accessGroupId: true },
+    });
+    const membershipGroupIds = [
+      ...new Set(
+        [config.accessGroupId, ...paidTiers.map((t) => t.accessGroupId)].filter(
+          (id): id is string => !!id,
+        ),
+      ),
+    ];
+    if (membershipGroupIds.length === 0) return null;
 
     const trialing = await this.prisma.modSubscriptionsSubscription.findFirst({
       where: { tenantId, userId, planId: { not: null }, status: 'TRIALING' },
@@ -1842,9 +1858,15 @@ export class LearningService {
     });
     if (!trialing) return null;
 
-    // ¿El acceso a ESTE curso viene del grupo de la membresía? (grant vivo)
+    // ¿El acceso a ESTE curso viene de un grupo de la membresía? (grant vivo)
     const membershipGrant = await this.prisma.modAccessGroupGrant.findFirst({
-      where: { tenantId, userId, courseId, groupId: config.accessGroupId, revokedAt: null },
+      where: {
+        tenantId,
+        userId,
+        courseId,
+        groupId: { in: membershipGroupIds },
+        revokedAt: null,
+      },
       select: { id: true },
     });
     if (!membershipGrant) return null;
@@ -1856,7 +1878,7 @@ export class LearningService {
         userId,
         courseId,
         revokedAt: null,
-        NOT: { groupId: config.accessGroupId },
+        NOT: { groupId: { in: membershipGroupIds } },
       },
       select: { id: true },
     });

@@ -35,6 +35,15 @@ import {
   type UpdatePlanDto,
 } from './membership.dto';
 import { retentionConfigSchema, type RetentionConfigDto } from './retention.dto';
+import {
+  createTierSchema,
+  reorderTiersSchema,
+  updateTierSchema,
+  type CreateTierDto,
+  type ReorderTiersDto,
+  type UpdateTierDto,
+} from './membership-tiers.dto';
+import { MembershipTiersOrchestrator } from './membership-tiers.orchestrator';
 
 const ADMIN_ROLES = new Set(['super_admin', 'tenant_admin']);
 
@@ -49,6 +58,8 @@ const ADMIN_ROLES = new Set(['super_admin', 'tenant_admin']);
 export class MembershipAdminController {
   constructor(
     private readonly registry: ModuleRegistryService,
+    /** Niveles: filas de la membresía + su grupo de acceso (mod.access-groups). */
+    private readonly tiers: MembershipTiersOrchestrator,
     // Solo con cobros de plataforma encendidos: valida monedas e importes.
     @Optional() private readonly payoutsGate?: PlatformCheckoutGate,
   ) {}
@@ -177,6 +188,72 @@ export class MembershipAdminController {
   ) {
     const user = this.requireAdmin(rawUser);
     return this.registry.getMembershipService().updateConfig(user.tenantId, dto);
+  }
+
+  // ---------------- Niveles (Básico, Pro, Gratis…) ----------------
+
+  @Get('tiers')
+  @ApiOperation({
+    summary:
+      'Niveles de la membresía con sus cursos, sus planes y cuánta gente tienen dentro; ' +
+      'planes sin nivel (los de antes) y si el registro gratis está abierto.',
+  })
+  async listTiers(@CurrentUser() rawUser: SessionClaims | undefined) {
+    const user = this.requireAdmin(rawUser);
+    return this.tiers.list(user.tenantId);
+  }
+
+  @Post('tiers')
+  @ApiOperation({
+    summary:
+      'Crea un nivel con su grupo de acceso (todos los cursos o los elegidos). El primer ' +
+      'nivel de pago se queda con los planes y el grupo de siempre. El gratis abre el ' +
+      'registro gratis y su grupo pasa a ser el de las inscripciones aprobadas.',
+  })
+  async createTier(
+    @CurrentUser() rawUser: SessionClaims | undefined,
+    @Body(new ZodValidationPipe(createTierSchema)) dto: CreateTierDto,
+  ) {
+    const user = this.requireAdmin(rawUser);
+    return this.tiers.create(user.tenantId, user.sub, dto);
+  }
+
+  @Put('tiers/order')
+  @ApiOperation({ summary: 'Ordena los niveles (el orden de las tarjetas de /join).' })
+  async reorderTiers(
+    @CurrentUser() rawUser: SessionClaims | undefined,
+    @Body(new ZodValidationPipe(reorderTiersSchema)) dto: ReorderTiersDto,
+  ) {
+    const user = this.requireAdmin(rawUser);
+    return this.tiers.reorder(user.tenantId, dto.tierIds);
+  }
+
+  @Patch('tiers/:id')
+  @ApiOperation({
+    summary:
+      'Edita un nivel: nombre, descripción, encendido/apagado y sus cursos (no si da todos).',
+  })
+  async updateTier(
+    @CurrentUser() rawUser: SessionClaims | undefined,
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Body(new ZodValidationPipe(updateTierSchema)) dto: UpdateTierDto,
+  ) {
+    const user = this.requireAdmin(rawUser);
+    return this.tiers.update(user.tenantId, user.sub, id, dto);
+  }
+
+  @Delete('tiers/:id')
+  @ApiOperation({
+    summary:
+      'Borra un nivel sin nadie dentro (y su grupo). Con alumnos: 409, se apaga en su lugar.',
+  })
+  async deleteTier(
+    @CurrentUser() rawUser: SessionClaims | undefined,
+    @Param('id', new ParseUUIDPipe()) id: string,
+  ) {
+    const user = this.requireAdmin(rawUser);
+    await this.tiers.remove(user.tenantId, id);
+    return { ok: true };
   }
 
   // ---------------- Oferta al darse de baja ----------------

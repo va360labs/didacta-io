@@ -458,6 +458,34 @@ export class AcademyHomeService {
   private async free(tenantId: string): Promise<AcademyHomeFree | null> {
     const policy = await this.registration.resolveEffectivePolicy(tenantId);
     if (!policy.enabled || !policy.operational) return null;
+    // Con NIVEL GRATIS en la membresía, lo que se da gratis es lo de ese nivel
+    // (su grupo de acceso): la portada nombra esos cursos.
+    const freeTier = await this.prisma.modSubscriptionsTier.findFirst({
+      where: { tenantId, isFree: true, active: true, accessGroupId: { not: null } },
+      select: { accessGroupId: true },
+    });
+    if (freeTier?.accessGroupId) {
+      const group = await this.prisma.modAccessGroup.findFirst({
+        where: { id: freeTier.accessGroupId, tenantId, deletedAt: null },
+        select: { kind: true, courses: { select: { courseId: true } } },
+      });
+      if (group) {
+        const rows = await this.prisma.modCoursesCourse.findMany({
+          where: {
+            tenantId,
+            status: 'PUBLISHED',
+            deletedAt: null,
+            ...(group.kind === 'ALL_COURSES'
+              ? {}
+              : { id: { in: group.courses.map((c) => c.courseId) } }),
+          },
+          orderBy: { publishedAt: 'desc' },
+          take: ACADEMY_HOME_MAX_FREE_COURSES,
+          select: { slug: true, title: true, thumbnailUrl: true },
+        });
+        return { courses: rows };
+      }
+    }
     const published = await this.prisma.modCoursesCourse.findMany({
       where: { tenantId, status: 'PUBLISHED', deletedAt: null, externalPurchaseUrl: null },
       orderBy: { publishedAt: 'desc' },

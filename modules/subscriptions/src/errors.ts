@@ -281,3 +281,90 @@ export class SubscriptionAlreadyLeavingError extends SubscriptionsError {
     this.name = 'SubscriptionAlreadyLeavingError';
   }
 }
+
+// ---------------- Niveles de la membresía ----------------
+
+/** El nivel no existe en esta aula. */
+export class MembershipTierNotFoundError extends SubscriptionsError {
+  constructor(id: string) {
+    super(`Nivel de membresía no encontrado: ${id}`, 'MEMBERSHIP_TIER_NOT_FOUND', { detail: id });
+    this.name = 'MembershipTierNotFoundError';
+  }
+}
+
+/** Datos del nivel no válidos (nombre vacío o repetido, segundo nivel gratis…). */
+export class MembershipTierInvalidError extends SubscriptionsError {
+  constructor(que: string) {
+    super(`Nivel de membresía no válido: ${que}.`, 'MEMBERSHIP_TIER_INVALID', { detail: que });
+    this.name = 'MembershipTierInvalidError';
+  }
+}
+
+/**
+ * El nivel ya tiene a gente dentro (planes vendidos o miembros gratis): no se
+ * borra, se apaga. Así quien lo paga no pierde nada por un clic del creador.
+ */
+export class MembershipTierInUseError extends SubscriptionsError {
+  constructor(id: string) {
+    super('Este nivel ya tiene alumnos: apágalo en vez de borrarlo.', 'MEMBERSHIP_TIER_IN_USE', {
+      detail: id,
+    });
+    this.name = 'MembershipTierInUseError';
+  }
+}
+
+/** Un plan en un nivel gratis: el nivel gratis no se cobra. */
+export class MembershipTierIsFreeError extends SubscriptionsError {
+  constructor(id: string) {
+    super('El nivel gratis no lleva planes de pago.', 'MEMBERSHIP_TIER_IS_FREE', { detail: id });
+    this.name = 'MembershipTierIsFreeError';
+  }
+}
+
+/** Ya hay otro plan con ese nombre en el aula (los nombres son únicos por aula). */
+export class MembershipPlanNameTakenError extends SubscriptionsError {
+  constructor(name: string) {
+    super(`Ya hay un plan que se llama «${name}».`, 'MEMBERSHIP_PLAN_NAME_TAKEN', {
+      detail: name,
+    });
+    this.name = 'MembershipPlanNameTakenError';
+  }
+}
+
+/**
+ * Cambio de nivel no permitido ahora: la membresía no está al día o en prueba
+ * (impago, pausa, baja programada) o no hay membresía que cambiar. `reason`
+ * dice cuál, para que la cuenta lo explique.
+ */
+export class MembershipPlanChangeNotAllowedError extends SubscriptionsError {
+  constructor(
+    public readonly reason:
+      | 'no_membership'
+      | 'not_active'
+      | 'cancel_scheduled'
+      | 'pause_scheduled'
+      | 'same_plan'
+      | 'currency_mismatch'
+      | 'target_unavailable',
+  ) {
+    super(`No se puede cambiar de plan ahora (${reason}).`, 'MEMBERSHIP_PLAN_CHANGE_NOT_ALLOWED', {
+      detail: reason,
+    });
+    this.name = 'MembershipPlanChangeNotAllowedError';
+  }
+}
+
+/**
+ * Stripe no pudo cobrar la diferencia al subir de nivel. La suscripción NO
+ * cambia (`payment_behavior: error_if_incomplete`): sigue en su nivel.
+ */
+export class MembershipPlanChangePaymentFailedError extends SubscriptionsError {
+  constructor(detail: string) {
+    super(
+      'No se pudo cobrar la diferencia: tu plan no ha cambiado.',
+      'MEMBERSHIP_PLAN_CHANGE_PAYMENT_FAILED',
+      { detail },
+    );
+    this.name = 'MembershipPlanChangePaymentFailedError';
+  }
+}

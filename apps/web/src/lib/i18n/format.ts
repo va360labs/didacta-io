@@ -112,6 +112,16 @@ export function formatNumber(n: number, opts?: Intl.NumberFormatOptions & FmtOve
 }
 
 /**
+ * Enumeración en el idioma activo: «A, B y C» / «A, B, and C» / «A, B e C».
+ * Reemplazo de `new Intl.ListFormat(locale, { type: 'conjunction' }).format(items)`.
+ */
+export function formatList(items: readonly string[], opts?: FmtOverrides): string {
+  return new Intl.ListFormat(resolveLocale(opts), { style: 'long', type: 'conjunction' }).format(
+    items,
+  );
+}
+
+/**
  * Decimales del importe en el CAMINO DEGRADADO de moneda. No es una preferencia:
  * es el formato exacto que ya daban los `formatAmount`/`fmtAmount` por página a
  * los que sustituyeron estos helpers, y que sí llevaban el `try/catch` que aquí

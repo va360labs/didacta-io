@@ -41,6 +41,9 @@ export interface SubscriptionRow {
   planId: string | null;
   /** Nombre real del plan ("Membresía Anual") — lo resuelve el backend. */
   planName?: string | null;
+  /** Nivel de la membresía (Básico, Pro…), o null en un aula sin niveles. */
+  tierId?: string | null;
+  tierName?: string | null;
   /** Título real del curso (filas por curso) — lo resuelve el backend. */
   courseTitle?: string | null;
   stripeSubscriptionId: string | null;
@@ -107,6 +110,72 @@ export interface StartSubscriptionResult {
   subscriptionId: string;
   sessionId: string;
   url: string;
+}
+
+/** Sube (cuesta más al mes) o baja respecto al plan actual. */
+export type PlanChangeDirection = 'upgrade' | 'downgrade';
+
+/** Por qué no se puede cambiar de nivel ahora. */
+export type PlanChangeBlockReason =
+  | 'no_membership'
+  | 'not_active'
+  | 'cancel_scheduled'
+  | 'pause_scheduled';
+
+/** Un plan al que el alumno puede pasar desde su cuenta. */
+export interface PlanChangeOption {
+  planId: string;
+  planName: string;
+  tierId: string;
+  tierName: string;
+  intervalMonths: number;
+  amountCents: number;
+  currency: string;
+  compareAtCents: number | null;
+  isFeatured: boolean;
+  direction: PlanChangeDirection;
+}
+
+/** `GET /me/membership/change-options`. */
+export interface PlanChangeOptions {
+  subscription: {
+    id: string;
+    status: SubscriptionStatus;
+    planId: string | null;
+    planName: string | null;
+    tierId: string | null;
+    tierName: string | null;
+    amountCents: number;
+    currency: string;
+    intervalMonths: number;
+  } | null;
+  /** `null` = puede cambiar. */
+  blockedReason: PlanChangeBlockReason | null;
+  /** Vacío en un aula sin niveles (no se ofrece cambiar). */
+  options: PlanChangeOption[];
+  /** Nivel gratis del aula: pasar a él es darse de baja (flujo de siempre). */
+  freeTier: { id: string; name: string } | null;
+}
+
+/** `POST /me/membership/change-preview`. */
+export interface PlanChangePreview {
+  planId: string;
+  direction: PlanChangeDirection;
+  /** En prueba gratis: no se cobra nada hoy. */
+  trialing: boolean;
+  /** Lo que se cobra hoy (céntimos). */
+  amountDueNow: number;
+  /** Lo que queda a favor para las próximas facturas (céntimos). */
+  creditCents: number;
+  currency: string;
+}
+
+/** `POST /me/membership/change`. */
+export interface PlanChangeResult {
+  subscription: SubscriptionRow;
+  direction: PlanChangeDirection;
+  /** Lo cobrado hoy al subir, o null. */
+  charged: { amountCents: number; currency: string } | null;
 }
 
 /** Motivos de baja (mismo orden que la API). */
@@ -230,6 +299,37 @@ export const subscriptionsApi = {
     return apiFetch<{ subscription: SubscriptionRow }>(
       `${BASE}/me/membership/pay-now`,
       { method: 'POST', body: JSON.stringify({}) },
+      bearer,
+    );
+  },
+
+  /** Cambiar de nivel: a qué planes puede pasar y si algo lo impide ahora. */
+  async membershipChangeOptions(bearer: string): Promise<PlanChangeOptions> {
+    return apiFetch<PlanChangeOptions>(
+      `${BASE}/me/membership/change-options`,
+      { method: 'GET' },
+      bearer,
+    );
+  },
+
+  /** Cuánto se cobra hoy (subir) o cuánto queda a favor (bajar). No cambia nada. */
+  async membershipChangePreview(bearer: string, planId: string): Promise<PlanChangePreview> {
+    return apiFetch<PlanChangePreview>(
+      `${BASE}/me/membership/change-preview`,
+      { method: 'POST', body: JSON.stringify({ planId }) },
+      bearer,
+    );
+  },
+
+  /**
+   * Cambia de plan/nivel al momento. Subir cobra la diferencia ya: si la
+   * tarjeta falla, la API responde 402 (`MEMBERSHIP_PLAN_CHANGE_PAYMENT_FAILED`)
+   * y no cambia nada.
+   */
+  async membershipChange(bearer: string, planId: string): Promise<PlanChangeResult> {
+    return apiFetch<PlanChangeResult>(
+      `${BASE}/me/membership/change`,
+      { method: 'POST', body: JSON.stringify({ planId }) },
       bearer,
     );
   },
