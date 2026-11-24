@@ -49,8 +49,28 @@ export type {
   MembershipCourseView,
   MembershipPublicPage,
   MembershipPublicStats,
+  MembershipPublicTier,
+  MembershipTierCourseView,
+  PlanChangeBlockReason,
+  PlanChangeOption,
+  PlanChangeOptions,
+  PlanChangePreview,
+  PlanChangeResult,
   UserProvisioner,
 } from './membership.service.js';
+export {
+  MembershipTiersService,
+  TIER_DESCRIPTION_MAX,
+  TIER_NAME_MAX,
+} from './membership-tiers.service.js';
+export type { MembershipTierSummary, TierInput, TierRow } from './membership-tiers.service.js';
+export {
+  MEMBERSHIP_PLAN_CHANGED_EVENT,
+  intervalLabel,
+  monthlyEquivalent,
+  planChangeDirection,
+} from './plan-change.js';
+export type { PlanChangeDirection } from './plan-change.js';
 export { RetentionService, RETENTION_EVENT } from './retention.service.js';
 export type {
   CancelAtPeriodEnd,
@@ -98,6 +118,11 @@ export type {
   PauseCollectionParams,
   RetentionDiscountParams,
   RetentionDiscountResult,
+  ChangeSubscriptionPriceParams,
+  PlanChangeProrationBehavior,
+  PreviewSubscriptionPriceChangeParams,
+  SubscriptionPriceChange,
+  SubscriptionPriceChangePreview,
 } from './stripe-subscriptions.client.js';
 export {
   SubscriptionsError,
@@ -122,6 +147,13 @@ export {
   RetentionConfigInvalidError,
   RetentionReasonInvalidError,
   SubscriptionAlreadyLeavingError,
+  MembershipTierNotFoundError,
+  MembershipTierInvalidError,
+  MembershipTierInUseError,
+  MembershipTierIsFreeError,
+  MembershipPlanNameTakenError,
+  MembershipPlanChangeNotAllowedError,
+  MembershipPlanChangePaymentFailedError,
 } from './errors.js';
 
 export function buildSubscriptionsModule(_service: SubscriptionsService): DidactaModule {

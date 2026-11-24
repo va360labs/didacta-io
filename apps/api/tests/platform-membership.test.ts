@@ -176,6 +176,20 @@ function fakeSubscriptions(
       log.push([tag, 'applyRetentionDiscount', `${p.subscriptionId}:${p.percentOff}`]);
       return { couponId: `coupon_${label}`, discountEnd: null };
     },
+    changeSubscriptionPrice: async (p) => {
+      log.push([tag, 'changeSubscriptionPrice', `${p.subscriptionId}:${p.priceId}`]);
+      return {
+        id: p.subscriptionId,
+        status: 'active',
+        currentPeriodEnd: 1_800_000_000,
+        priceId: p.priceId,
+        latestInvoice: null,
+      };
+    },
+    previewSubscriptionPriceChange: async (p) => {
+      log.push([tag, 'previewSubscriptionPriceChange', `${p.subscriptionId}:${p.priceId}`]);
+      return { amountDue: 0, total: 0, currency: 'eur' };
+    },
     constructWebhookEvent: () => {
       throw new Error('no se usa');
     },
@@ -379,6 +393,33 @@ describe('PlatformSubscriptionsStripeAdapter · objetos que ya existen (enrutado
     ]);
   });
 
+  it('cambio de nivel: la vista previa y el cambio van a la cuenta donde vive la suscripción', async () => {
+    const { adapters, log } = build(READY, { own: true, registered: ['sub_1P'] });
+    const adapter = await adapters.subscriptions(A);
+    const change = {
+      priceId: 'price_pro',
+      prorationBehavior: 'always_invoice' as const,
+      metadata: { planId: 'plan_pro' },
+      idempotencyKey: 'k',
+    };
+    await adapter.previewSubscriptionPriceChange({
+      subscriptionId: 'sub_1H',
+      priceId: 'price_pro',
+    });
+    await adapter.previewSubscriptionPriceChange({
+      subscriptionId: 'sub_1P',
+      priceId: 'price_pro',
+    });
+    await adapter.changeSubscriptionPrice({ ...change, subscriptionId: 'sub_1H' });
+    await adapter.changeSubscriptionPrice({ ...change, subscriptionId: 'sub_1P' });
+    expect(log.map(([who, what]) => `${who.split('@')[0]}:${what}`)).toEqual([
+      'propia:previewSubscriptionPriceChange',
+      'plataforma:previewSubscriptionPriceChange',
+      'propia:changeSubscriptionPrice',
+      'plataforma:changeSubscriptionPrice',
+    ]);
+  });
+
   it('con la cuenta restringida la pausa y el descuento siguen yendo a la plataforma', async () => {
     const { adapters, log } = build(
       { mode: 'platform', ready: false, reason: 'restricted' },
@@ -519,6 +560,9 @@ describe('PlatformCheckoutGate en /join (MembershipPublicController)', () => {
         resolveTenantWebBaseUrl: async () => 'https://aula.test',
       } as never,
       fakeConsents() as never,
+      // Módulos y ajustes del aula: solo los mira el nivel gratis, que aquí no hay.
+      { list: async () => [] } as never,
+      {} as never,
       withGate ? gate : undefined,
     );
     return { ctrl, membership, isPlatformObject };

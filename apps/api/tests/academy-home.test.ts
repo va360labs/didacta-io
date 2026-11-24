@@ -145,6 +145,9 @@ function world(tenants: Record<string, TenantFixture>) {
     modSubscriptionsSubscription: { findFirst: async () => null },
     modAccessGroup: { findMany: async () => [] },
     modSubscriptionsMembershipConfig: { findUnique: async () => null },
+    // Niveles de la membresía: ninguno (sin nivel gratis, la portada nombra los
+    // cursos que no se venden, como siempre).
+    modSubscriptionsTier: { findFirst: async () => null, findMany: async () => [] },
     modPaymentConnectionsTier: { findMany: async () => [] },
   };
   const registry = {

@@ -22,6 +22,7 @@ export type CourseSaleCatalogDb = Pick<
   | 'modSubscriptionsSubscription'
   | 'modAccessGroup'
   | 'modSubscriptionsMembershipConfig'
+  | 'modSubscriptionsTier'
   | 'modPaymentConnectionsTier'
 >;
 
@@ -36,7 +37,10 @@ export type CourseSaleCatalogDb = Pick<
  *  2. **Suscripción al curso** — existe una suscripción por ese curso.
  *  3. **Se entrega con algo que se paga** — el curso pertenece a un grupo de
  *     acceso que se concede a cambio de dinero:
- *       - el grupo de la MEMBRESÍA (`/join`, `mod.subscriptions`), o
+ *       - el grupo de la MEMBRESÍA (`/join`, `mod.subscriptions`): el de la
+ *         configuración (aula sin niveles) o el de cualquier NIVEL DE PAGO
+ *         (Básico, Pro…; también los apagados: quien ya los paga sigue
+ *         pagándolos). El del nivel GRATIS no cuenta: se entra sin pagar; o
  *       - un grupo vinculado a un TIER de pago (`linkedTierName`, que el sync
  *         de `mod.payment-connections` reparte a quien tiene la suscripción en
  *         Stripe/PayPal/WooCommerce).
@@ -95,11 +99,22 @@ async function deliveredByPaidGroup(
   // El grupo de la membresía cuenta en cuanto está configurado, esté o no
   // activa la página de venta: quien ya la compró sigue pagándola aunque el
   // admin haya pausado las altas nuevas.
-  const membership = await db.modSubscriptionsMembershipConfig.findUnique({
-    where: { tenantId },
-    select: { accessGroupId: true },
-  });
-  if (membership?.accessGroupId && groups.some((g) => g.id === membership.accessGroupId)) {
+  const [membership, paidTiers] = await Promise.all([
+    db.modSubscriptionsMembershipConfig.findUnique({
+      where: { tenantId },
+      select: { accessGroupId: true },
+    }),
+    db.modSubscriptionsTier.findMany({
+      where: { tenantId, isFree: false, accessGroupId: { not: null } },
+      select: { accessGroupId: true },
+    }),
+  ]);
+  const paidMembershipGroups = new Set(
+    [membership?.accessGroupId, ...paidTiers.map((t) => t.accessGroupId)].filter(
+      (id): id is string => !!id,
+    ),
+  );
+  if (groups.some((g) => paidMembershipGroups.has(g.id))) {
     return true;
   }
 

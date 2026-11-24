@@ -33,6 +33,10 @@ import {
   type SubscriptionCheckoutSessionStatus,
   type SubscriptionsStripeAdapter,
   type SubscriptionsStripeAdapterOptions,
+  type ChangeSubscriptionPriceParams,
+  type PreviewSubscriptionPriceChangeParams,
+  type SubscriptionPriceChange,
+  type SubscriptionPriceChangePreview,
 } from '@didacta/mod-subscriptions';
 import {
   PayoutsNotReadyError,
@@ -414,6 +418,25 @@ export class PlatformSubscriptionsStripeAdapter implements SubscriptionsStripeAd
 
   async applyRetentionDiscount(params: RetentionDiscountParams): Promise<RetentionDiscountResult> {
     return (await this.route(params.subscriptionId)).applyRetentionDiscount(params);
+  }
+
+  /**
+   * Cambio de nivel (y su vista previa): a la cuenta donde vive la suscripción.
+   * De plataforma → la factura de la diferencia sale en nombre del creador (la
+   * suscripción ya lleva su `on_behalf_of`) y, al cobrarse, `mod.payouts` la
+   * anota como venta con su %, como cualquier otra factura de la suscripción.
+   * De las claves propias → esa cuenta.
+   */
+  async changeSubscriptionPrice(
+    params: ChangeSubscriptionPriceParams,
+  ): Promise<SubscriptionPriceChange> {
+    return (await this.route(params.subscriptionId)).changeSubscriptionPrice(params);
+  }
+
+  async previewSubscriptionPriceChange(
+    params: PreviewSubscriptionPriceChangeParams,
+  ): Promise<SubscriptionPriceChangePreview> {
+    return (await this.route(params.subscriptionId)).previewSubscriptionPriceChange(params);
   }
 
   constructWebhookEvent(rawBody: string | Buffer, signatureHeader: string): Stripe.Event {

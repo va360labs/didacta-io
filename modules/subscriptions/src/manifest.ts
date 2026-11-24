@@ -26,7 +26,9 @@ export const manifest: ModuleManifest = parseModuleManifest({
       { name: 'mod.learning', version: '^1.0.0' },
       { name: 'mod.courses', version: '^1.0.0' },
     ],
-    optionalModules: [],
+    // Niveles de la membresía: la página pública nombra los cursos de cada
+    // nivel leyendo su grupo de acceso (solo lectura, filtrada por tenant).
+    optionalModules: [{ name: 'mod.access-groups', version: '^1.0.0' }],
   },
   eventsEmitted: [
     'subscriptions.subscription.created',
@@ -43,6 +45,9 @@ export const manifest: ModuleManifest = parseModuleManifest({
     // Membresía (página pública /join): concede/revoca un grupo de acceso.
     'subscriptions.membership.activated',
     'subscriptions.membership.revoked',
+    // Cambio de plan/nivel desde la cuenta del alumno (o reconciliado por el
+    // webhook): el host concede el grupo del nivel nuevo y retira el viejo.
+    'subscriptions.membership.plan_changed',
     // Oferta al darse de baja: lo que eligió el alumno (correos de confirmación).
     'subscriptions.retention.paused',
     'subscriptions.retention.discounted',

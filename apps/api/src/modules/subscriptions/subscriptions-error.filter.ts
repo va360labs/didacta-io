@@ -44,6 +44,17 @@ const STATUS_BY_CODE: Record<string, number> = {
   SUBSCRIPTIONS_RETENTION_CONFIG_INVALID: HttpStatus.BAD_REQUEST,
   SUBSCRIPTIONS_RETENTION_REASON_INVALID: HttpStatus.BAD_REQUEST,
   SUBSCRIPTIONS_ALREADY_LEAVING: HttpStatus.CONFLICT,
+  // Niveles de la membresía.
+  MEMBERSHIP_TIER_NOT_FOUND: HttpStatus.NOT_FOUND,
+  MEMBERSHIP_TIER_INVALID: HttpStatus.BAD_REQUEST,
+  // Con gente dentro un nivel no se borra: se apaga.
+  MEMBERSHIP_TIER_IN_USE: HttpStatus.CONFLICT,
+  MEMBERSHIP_TIER_IS_FREE: HttpStatus.BAD_REQUEST,
+  MEMBERSHIP_PLAN_NAME_TAKEN: HttpStatus.CONFLICT,
+  // Cambio de nivel desde la cuenta.
+  MEMBERSHIP_PLAN_CHANGE_NOT_ALLOWED: HttpStatus.CONFLICT,
+  // La tarjeta no pasó al subir: el plan no cambió (402 como Stripe).
+  MEMBERSHIP_PLAN_CHANGE_PAYMENT_FAILED: HttpStatus.PAYMENT_REQUIRED,
 };
 
 @Catch(SubscriptionsError)

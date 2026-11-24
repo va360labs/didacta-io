@@ -225,6 +225,8 @@ describe('monedas en modo plataforma (§9) — planes de la membresía', () => {
     };
     const ctrl = new MembershipAdminController(
       { getMembershipService: () => membership } as never,
+      // Niveles: no intervienen en la validación de precios.
+      {} as never,
       g,
     );
     return { ctrl, membership };

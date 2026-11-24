@@ -383,6 +383,14 @@ class StripeStub implements SubscriptionsStripeAdapter {
     throw new Error('not used in unit tests');
   }
 
+  async changeSubscriptionPrice(): Promise<never> {
+    throw new Error('no usado');
+  }
+
+  async previewSubscriptionPriceChange(): Promise<never> {
+    throw new Error('no usado');
+  }
+
   async applyRetentionDiscount(): Promise<never> {
     throw new Error('not used in unit tests');
   }

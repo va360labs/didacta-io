@@ -67,6 +67,7 @@ import {
   toDateOrNull,
 } from './stripe-shape.js';
 import { PAUSE_TIME_SLACK_MS } from './retention.js';
+import { applyMembershipPlanChange } from './plan-change.js';
 
 /** Resuelve el SubscriptionsStripeAdapter a usar para un tenant concreto, por llamada. */
 export type SubscriptionsStripeAdapterResolver = (
@@ -756,6 +757,13 @@ export class SubscriptionsService {
     if (!sub) return;
     this.assertSameTenant(sub.tenantId, tenantId, `suscripción ${stripeSub.id}`);
 
+    // CAMBIO DE NIVEL que Stripe ya aplicó y la fila aún no refleja: el
+    // cambio desde la cuenta del alumno escribe el plan nuevo en la metadata de
+    // la suscripción. Si esa petición se cortó después de Stripe (o llegaron
+    // dos cambios a la vez), aquí se reconcilia con el mismo compare-and-swap:
+    // un único aviso por cambio, venga por donde venga.
+    await this.reconcileMembershipPlan(sub, stripeSub, tenantId);
+
     let newStatus = mapStripeStatus(stripeSub.status);
 
     // ⚠️ ORDEN REAL DE STRIPE al terminar un trial: la sub transiciona
@@ -881,6 +889,41 @@ export class SubscriptionsService {
         immediate: true,
       });
     }
+  }
+
+  /**
+   * Membresía cuyo plan en Stripe (metadata `planId`, la pone el cambio de
+   * nivel) ya no es el de la fila: se aplica el cambio local. El plan tiene que
+   * ser de ESTE tenant; si no existe, no se toca nada.
+   */
+  private async reconcileMembershipPlan(
+    sub: SubscriptionRow,
+    stripeSub: Stripe.Subscription,
+    tenantId: string,
+  ): Promise<void> {
+    if (!sub.planId) return;
+    const metaPlanId = (stripeSub.metadata ?? {})['planId'];
+    if (typeof metaPlanId !== 'string' || !metaPlanId || metaPlanId === sub.planId) return;
+    const plan = await this.prisma.modSubscriptionsPlan.findFirst({
+      where: { id: metaPlanId, tenantId },
+    });
+    if (!plan) return;
+    const items = (stripeSub as { items?: { data?: Array<{ price?: { id?: unknown } }> } }).items;
+    const priceId = items?.data?.[0]?.price?.id;
+    await applyMembershipPlanChange(this.prisma, this.publisher, {
+      tenantId,
+      subscriptionId: sub.id,
+      userId: sub.userId,
+      fromPlanId: sub.planId,
+      toPlan: plan,
+      stripePriceId:
+        typeof priceId === 'string' && priceId
+          ? priceId
+          : (plan.stripePriceId ?? sub.stripePriceId),
+      currentPeriodEnd: toDateOrNull(currentPeriodEndFromSubscription(stripeSub)),
+      via: 'webhook',
+      direction: null,
+    });
   }
 
   private async onSubscriptionDeleted(

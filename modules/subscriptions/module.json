@@ -49,6 +49,9 @@
       "name": "subscriptions.membership.revoked"
     },
     {
+      "name": "subscriptions.membership.plan_changed"
+    },
+    {
       "name": "subscriptions.retention.paused"
     },
     {

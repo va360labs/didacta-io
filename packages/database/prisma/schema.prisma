@@ -3187,12 +3187,51 @@ model ModSubscriptionsPlan {
   stripeProductId String?  @map("stripe_product_id")
   /// Stripe Price recurring vigente para este plan. NULL = pendiente de sync.
   stripePriceId   String?  @map("stripe_price_id")
+  /// Nivel de la membresía al que pertenece el plan (ModSubscriptionsTier,
+  /// mismo módulo, sin FK real: patrón `planId`). NULL = plan de siempre: da el
+  /// grupo de la configuración (`accessGroupId` de la membresía). Se fija al
+  /// crear el plan y no se cambia (quien ya lo paga no cambia de contenido).
+  tierId          String?  @map("tier_id") @db.Uuid
   createdAt       DateTime @default(now()) @map("created_at")
   updatedAt       DateTime @updatedAt @map("updated_at")
 
   @@unique([tenantId, name])
   @@index([tenantId, active, sortOrder])
+  @@index([tenantId, tierId])
   @@map("mod_subscriptions_plan")
+}
+
+/// NIVEL de la membresía (Básico, Pro…). Cada nivel da su propio contenido —un
+/// grupo de acceso de mod.access-groups creado y mantenido a través de su
+/// service público— y se vende con uno o varios planes (periodicidades).
+///
+/// Un nivel `isFree` no tiene planes ni pasa por Stripe: se entra con el
+/// registro gratis (mod.member-registration), que concede su grupo al aprobar
+/// la inscripción (grupo «por defecto al aprobar»).
+///
+/// Sin niveles, la membresía funciona como siempre: un único grupo
+/// (`accessGroupId` de la configuración) para todos los planes.
+model ModSubscriptionsTier {
+  id            String   @id @default(uuid()) @db.Uuid
+  tenantId      String   @map("tenant_id") @db.Uuid
+  /// Nombre visible: «Básico», «Pro»…
+  name          String
+  /// Lo que se cuenta en la tarjeta de /join, en lenguaje llano.
+  description   String?
+  /// Grupo de acceso (mod.access-groups) que concede. ID lógico sin FK
+  /// cross-module.
+  accessGroupId String?  @map("access_group_id") @db.Uuid
+  /// Nivel gratis: sin planes ni cobro; entra por el registro gratis.
+  isFree        Boolean  @default(false) @map("is_free")
+  sortOrder     Int      @default(0) @map("sort_order")
+  /// Apagado: no se vende ni se ofrece para cambiar, pero quien ya lo paga
+  /// conserva su acceso.
+  active        Boolean  @default(true)
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  @@index([tenantId, active, sortOrder])
+  @@map("mod_subscriptions_tier")
 }
 
 /// Configuración (1 fila por tenant) de la página pública de membresía.

@@ -34,11 +34,26 @@ import {
   MembershipConfigIncompleteError,
   MembershipNotTrialingError,
   MembershipPageInactiveError,
+  MembershipPlanChangeNotAllowedError,
   MembershipPlanIntervalInvalidError,
+  MembershipPlanNameTakenError,
   MembershipPlanNotFoundError,
+  MembershipTierInvalidError,
+  MembershipTierIsFreeError,
+  MembershipTierNotFoundError,
   WebhookTenantMismatchError,
 } from './errors.js';
-import type { SubscriptionsStripeAdapter } from './stripe-subscriptions.client.js';
+import {
+  MEMBERSHIP_PLAN_CHANGED_EVENT,
+  applyMembershipPlanChange,
+  intervalLabel,
+  planChangeDirection,
+  type PlanChangeDirection,
+} from './plan-change.js';
+import type {
+  PlanChangeProrationBehavior,
+  SubscriptionsStripeAdapter,
+} from './stripe-subscriptions.client.js';
 import type {
   SubscriptionsEventPublisher,
   SubscriptionsStripeAdapterResolver,
@@ -52,6 +67,8 @@ export const MEMBERSHIP_EVENT = {
   ACTIVATED: 'subscriptions.membership.activated',
   /** La membresía deja de dar acceso (cancelación efectiva o impago agotado). */
   REVOKED: 'subscriptions.membership.revoked',
+  /** El alumno cambió de plan desde su cuenta (o lo reconcilió el webhook). */
+  PLAN_CHANGED: MEMBERSHIP_PLAN_CHANGED_EVENT,
 } as const;
 
 /**
@@ -118,6 +135,11 @@ function assertPlanInterval(intervalMonths: number): void {
 
 export interface PlanInput {
   name: string;
+  /**
+   * Nivel del plan (solo al crearlo; no cambia después: quien ya lo paga no
+   * cambia de contenido). Sin él, el plan de siempre (grupo de la config).
+   */
+  tierId?: string | null;
   intervalMonths: number;
   amountCents: number;
   currency?: string;
@@ -174,6 +196,36 @@ export interface MembershipPublicStats {
   totalMinutes: number;
 }
 
+/** Un curso tal y como se nombra en la tarjeta de un nivel. */
+export interface MembershipTierCourseView {
+  id: string;
+  title: string;
+  thumbnailUrl: string | null;
+}
+
+/**
+ * Un nivel de la membresía tal y como lo pinta /join. `includes` es lo que da
+ * el nivel; hoy los cursos de su grupo. Es un objeto (y no una lista suelta)
+ * para que se le puedan añadir más cosas que dé el nivel (espacios de la
+ * comunidad, directos) sin romper a quien ya lo lee.
+ */
+export interface MembershipPublicTier {
+  id: string;
+  name: string;
+  description: string | null;
+  isFree: boolean;
+  sortOrder: number;
+  /** Id del grupo de acceso que da el nivel (lo que restringe contenido). */
+  accessGroupId: string | null;
+  includes: {
+    /** `true`: todos los cursos publicados, también los que se publiquen después. */
+    allCourses: boolean;
+    courses: MembershipTierCourseView[];
+  };
+  /** Planes del nivel (periodicidades), en el orden de la página. Vacío en el gratis. */
+  planIds: string[];
+}
+
 export interface MembershipPublicPage {
   /** El titular del aula, o `null` para que la web ponga el suyo en el idioma del aula. */
   headline: string | null;
@@ -181,6 +233,8 @@ export interface MembershipPublicPage {
   plans: Array<{
     id: string;
     name: string;
+    /** Nivel del plan, o `null` en un aula sin niveles (lo de siempre). */
+    tierId: string | null;
     intervalMonths: number;
     amountCents: number;
     currency: string;
@@ -188,6 +242,11 @@ export interface MembershipPublicPage {
     trialDays: number;
     isFeatured: boolean;
   }>;
+  /**
+   * Niveles encendidos, en su orden (con el gratis si lo hay). Vacío en un aula
+   * sin niveles: la página se pinta como siempre, con `plans`.
+   */
+  tiers: MembershipPublicTier[];
   courses: MembershipCourseView[];
   /** Suma de los precios individuales configurados (céntimos), o null si no hay. */
   standaloneTotalCents: number | null;
@@ -233,9 +292,25 @@ export class MembershipService {
 
   async createPlan(tenantId: string, input: PlanInput): Promise<PlanRow> {
     assertPlanInterval(input.intervalMonths);
+    const tierId = input.tierId ?? null;
+    if (tierId) {
+      const tier = await this.prisma.modSubscriptionsTier.findFirst({
+        where: { id: tierId, tenantId },
+        select: { id: true, isFree: true },
+      });
+      if (!tier) throw new MembershipTierNotFoundError(tierId);
+      if (tier.isFree) throw new MembershipTierIsFreeError(tierId);
+    } else if (
+      (await this.prisma.modSubscriptionsTier.count({ where: { tenantId, isFree: false } })) > 0
+    ) {
+      // Con niveles, un plan suelto no se vería en ningún sitio de /join.
+      throw new MembershipTierInvalidError('tier_required');
+    }
+    await this.assertPlanNameFree(tenantId, input.name, null);
     return this.prisma.modSubscriptionsPlan.create({
       data: {
         tenantId,
+        tierId,
         name: input.name,
         intervalMonths: input.intervalMonths,
         amountCents: input.amountCents,
@@ -275,6 +350,7 @@ export class MembershipService {
       (input.currency !== undefined && input.currency !== plan.currency) ||
       (input.intervalMonths !== undefined && input.intervalMonths !== plan.intervalMonths);
     const nameChanged = input.name !== undefined && input.name !== plan.name;
+    if (nameChanged) await this.assertPlanNameFree(tenantId, input.name!, plan.id);
 
     const updated = await this.prisma.modSubscriptionsPlan.update({
       where: { id: plan.id },
@@ -306,6 +382,22 @@ export class MembershipService {
     }
 
     return updated;
+  }
+
+  /**
+   * Los nombres de plan son únicos por aula (índice de la tabla). Se mira antes
+   * para responder un 409 claro en vez del error de la base.
+   */
+  private async assertPlanNameFree(
+    tenantId: string,
+    name: string,
+    exceptId: string | null,
+  ): Promise<void> {
+    const clash = await this.prisma.modSubscriptionsPlan.findFirst({
+      where: { tenantId, name, ...(exceptId ? { NOT: { id: exceptId } } : {}) },
+      select: { id: true },
+    });
+    if (clash) throw new MembershipPlanNameTakenError(name);
   }
 
   async deletePlan(tenantId: string, planId: string): Promise<void> {
@@ -366,10 +458,19 @@ export class MembershipService {
     const config = await this.getConfig(tenantId);
     if (!config.active) throw new MembershipPageInactiveError();
 
-    const plans = await this.prisma.modSubscriptionsPlan.findMany({
+    const allPlans = await this.prisma.modSubscriptionsPlan.findMany({
       where: { tenantId, active: true },
       orderBy: [{ sortOrder: 'asc' }, { amountCents: 'asc' }],
     });
+    const tierRows = await this.prisma.modSubscriptionsTier.findMany({
+      where: { tenantId, active: true },
+      orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
+    });
+    // Con niveles, solo se venden los planes de un nivel de pago encendido; un
+    // plan de un nivel apagado no se ofrece (quien ya lo paga lo conserva).
+    const sellingTierIds = new Set(tierRows.filter((t) => !t.isFree).map((t) => t.id));
+    const plans = allPlans.filter((p) => !p.tierId || sellingTierIds.has(p.tierId));
+    const tiers = await this.publicTiers(tenantId, tierRows, plans);
 
     const priceByCourse = new Map(
       parseCoursePrices(config.coursePrices).map((p) => [p.courseId, p.amountCents]),
@@ -454,6 +555,7 @@ export class MembershipService {
       plans: plans.map((p) => ({
         id: p.id,
         name: p.name,
+        tierId: p.tierId ?? null,
         intervalMonths: p.intervalMonths,
         amountCents: p.amountCents,
         currency: p.currency,
@@ -461,6 +563,7 @@ export class MembershipService {
         trialDays: p.trialDays,
         isFeatured: p.isFeatured,
       })),
+      tiers,
       courses,
       standaloneTotalCents,
       stats,
@@ -469,6 +572,62 @@ export class MembershipService {
       // ven durante la prueba (0 = acceso completo también en trial).
       trialLessonLimit: config.trialLessonLimit,
     };
+  }
+
+  /**
+   * Los niveles de /join con lo que incluye cada uno: los cursos PUBLICADOS de
+   * su grupo de acceso (lectura cross-module de mod.access-groups y
+   * mod.courses, permitida en core first-party: solo lectura, filtrada por
+   * tenant y declarada en el manifest).
+   */
+  private async publicTiers(
+    tenantId: string,
+    tierRows: Array<{
+      id: string;
+      name: string;
+      description: string | null;
+      isFree: boolean;
+      sortOrder: number;
+      accessGroupId: string | null;
+    }>,
+    plans: Array<{ id: string; tierId: string | null }>,
+  ): Promise<MembershipPublicTier[]> {
+    if (tierRows.length === 0) return [];
+    const groupIds = tierRows.map((t) => t.accessGroupId).filter((x): x is string => !!x);
+    const groups = groupIds.length
+      ? await this.prisma.modAccessGroup.findMany({
+          where: { tenantId, id: { in: groupIds }, deletedAt: null },
+          select: { id: true, kind: true, courses: { select: { courseId: true } } },
+        })
+      : [];
+    const groupById = new Map(groups.map((g) => [g.id, g]));
+    const published = await this.prisma.modCoursesCourse.findMany({
+      where: { tenantId, status: 'PUBLISHED', deletedAt: null },
+      orderBy: { publishedAt: 'desc' },
+      select: { id: true, title: true, thumbnailUrl: true },
+    });
+    const publishedById = new Map(published.map((c) => [c.id, c]));
+    return tierRows.map((tier) => {
+      const group = tier.accessGroupId ? groupById.get(tier.accessGroupId) : undefined;
+      const allCourses = group?.kind === 'ALL_COURSES';
+      const courseIds = new Set((group?.courses ?? []).map((c) => c.courseId));
+      const courses = allCourses ? published : published.filter((c) => courseIds.has(c.id));
+      return {
+        id: tier.id,
+        name: tier.name,
+        description: tier.description,
+        isFree: tier.isFree,
+        sortOrder: tier.sortOrder,
+        accessGroupId: tier.accessGroupId,
+        includes: {
+          allCourses,
+          courses: courses
+            .filter((c) => publishedById.has(c.id))
+            .map((c) => ({ id: c.id, title: c.title, thumbnailUrl: c.thumbnailUrl })),
+        },
+        planIds: tier.isFree ? [] : plans.filter((p) => p.tierId === tier.id).map((p) => p.id),
+      };
+    });
   }
 
   // ---------------- Checkout ----------------
@@ -577,6 +736,14 @@ export class MembershipService {
       where: { id: args.planId, tenantId: args.tenantId, active: true },
     });
     if (!plan) throw new MembershipPlanNotFoundError(args.planId);
+    // Un plan de un nivel apagado (o gratis) no se vende, igual que no sale en /join.
+    if (plan.tierId) {
+      const tier = await this.prisma.modSubscriptionsTier.findFirst({
+        where: { id: plan.tierId, tenantId: args.tenantId, active: true, isFree: false },
+        select: { id: true },
+      });
+      if (!tier) throw new MembershipPlanNotFoundError(args.planId);
+    }
 
     const stripe = await this.stripeFor(args.tenantId);
     const priceId = await this.ensureStripePrice(plan, stripe);
@@ -1000,6 +1167,323 @@ export class MembershipService {
 
     return updated;
   }
+
+  // ---------------- Cambiar de nivel (cuenta del alumno) ----------------
+
+  /**
+   * La membresía del alumno que se puede cambiar de plan: la viva más reciente
+   * (con su plan y nivel). `null` si no tiene.
+   */
+  private async liveMembership(tenantId: string, userId: string) {
+    return this.prisma.modSubscriptionsSubscription.findFirst({
+      where: {
+        tenantId,
+        userId,
+        planId: { not: null },
+        status: { in: [...MEMBERSHIP_LIVE_STATUSES] },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  /**
+   * Por qué esta membresía no se puede cambiar ahora, o `null` si se puede.
+   * Solo al día (ACTIVE) o en prueba (TRIALING), sin baja ni pausa programadas:
+   * con un impago o una pausa, lo primero es arreglar eso.
+   */
+  private changeBlocker(sub: {
+    status: string;
+    cancelAtPeriodEnd: boolean;
+    pauseStartsAt: Date | null;
+    stripeSubscriptionId: string | null;
+  }): PlanChangeBlockReason | null {
+    if (sub.status !== 'ACTIVE' && sub.status !== 'TRIALING') return 'not_active';
+    if (!sub.stripeSubscriptionId) return 'not_active';
+    if (sub.cancelAtPeriodEnd) return 'cancel_scheduled';
+    if (sub.pauseStartsAt) return 'pause_scheduled';
+    return null;
+  }
+
+  /**
+   * A qué planes puede pasar el alumno desde su cuenta: los de los niveles de
+   * pago encendidos, en la misma moneda que paga (Stripe no mezcla monedas en
+   * una suscripción). Solo en aulas con niveles: sin ellos, la cuenta sigue
+   * como siempre (sin opciones). También dice cuál es el nivel gratis, si hay:
+   * pasar a él es darse de baja (el flujo de siempre).
+   */
+  async getPlanChangeOptions(tenantId: string, userId: string): Promise<PlanChangeOptions> {
+    const tiers = await this.prisma.modSubscriptionsTier.findMany({
+      where: { tenantId, active: true },
+      orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
+    });
+    const freeTier = tiers.find((t) => t.isFree) ?? null;
+    const sub = await this.liveMembership(tenantId, userId);
+    const paidTiers = tiers.filter((t) => !t.isFree);
+    const base: PlanChangeOptions = {
+      subscription: null,
+      blockedReason: null,
+      options: [],
+      freeTier: freeTier ? { id: freeTier.id, name: freeTier.name } : null,
+    };
+    if (!sub) return { ...base, blockedReason: 'no_membership' };
+
+    const currentPlan = sub.planId
+      ? await this.prisma.modSubscriptionsPlan.findFirst({ where: { id: sub.planId, tenantId } })
+      : null;
+    const currentTier = currentPlan?.tierId
+      ? ((await this.prisma.modSubscriptionsTier.findFirst({
+          where: { id: currentPlan.tierId, tenantId },
+        })) ?? null)
+      : null;
+    const current = {
+      amountCents: currentPlan?.amountCents ?? sub.unitAmount,
+      intervalMonths: currentPlan?.intervalMonths ?? 1,
+    };
+    const view: PlanChangeOptions['subscription'] = {
+      id: sub.id,
+      status: sub.status,
+      planId: sub.planId,
+      planName: currentPlan?.name ?? null,
+      tierId: currentTier?.id ?? null,
+      tierName: currentTier?.name ?? null,
+      amountCents: current.amountCents,
+      currency: sub.currency,
+      intervalMonths: current.intervalMonths,
+    };
+    if (paidTiers.length === 0) return { ...base, subscription: view };
+
+    const plans = await this.prisma.modSubscriptionsPlan.findMany({
+      where: {
+        tenantId,
+        active: true,
+        tierId: { in: paidTiers.map((t) => t.id) },
+        NOT: { id: sub.planId ?? undefined },
+      },
+      orderBy: [{ sortOrder: 'asc' }, { amountCents: 'asc' }],
+    });
+    const tierOrder = new Map(paidTiers.map((t, i) => [t.id, i]));
+    const tierById = new Map(paidTiers.map((t) => [t.id, t]));
+    const options: PlanChangeOption[] = plans
+      .filter((p) => p.currency === sub.currency)
+      .sort(
+        (a, b) =>
+          (tierOrder.get(a.tierId!) ?? 0) - (tierOrder.get(b.tierId!) ?? 0) ||
+          a.intervalMonths - b.intervalMonths,
+      )
+      .map((p) => ({
+        planId: p.id,
+        planName: p.name,
+        tierId: p.tierId!,
+        tierName: tierById.get(p.tierId!)?.name ?? '',
+        intervalMonths: p.intervalMonths,
+        amountCents: p.amountCents,
+        currency: p.currency,
+        compareAtCents: p.compareAtCents,
+        isFeatured: p.isFeatured,
+        direction: planChangeDirection(current, p),
+      }));
+    return {
+      ...base,
+      subscription: view,
+      blockedReason: this.changeBlocker(sub),
+      options,
+    };
+  }
+
+  /**
+   * Lo que pasaría al cambiar a `planId` AHORA: cuánto se cobra hoy (subir) o
+   * cuánto queda a favor para las próximas facturas (bajar). En la prueba
+   * gratis no se cobra nada: el precio nuevo se paga al acabar la prueba.
+   */
+  async previewPlanChange(
+    tenantId: string,
+    userId: string,
+    planId: string,
+  ): Promise<PlanChangePreview> {
+    const { sub, target, current } = await this.resolveChange(tenantId, userId, planId);
+    const direction = planChangeDirection(current, target);
+    if (sub.status === 'TRIALING') {
+      return {
+        planId: target.id,
+        direction,
+        trialing: true,
+        amountDueNow: 0,
+        creditCents: 0,
+        currency: sub.currency,
+      };
+    }
+    const stripe = await this.stripeFor(tenantId);
+    const priceId = await this.ensureStripePrice(target, stripe);
+    const preview = await stripe.previewSubscriptionPriceChange({
+      subscriptionId: sub.stripeSubscriptionId!,
+      priceId,
+    });
+    return {
+      planId: target.id,
+      direction,
+      trialing: false,
+      // Bajar no cobra nada hoy: la diferencia queda para las próximas facturas.
+      amountDueNow: direction === 'upgrade' ? preview.amountDue : 0,
+      creditCents: preview.total < 0 ? -preview.total : 0,
+      currency: preview.currency || sub.currency,
+    };
+  }
+
+  /**
+   * Cambia la membresía del alumno a `planId` (otro nivel u otra periodicidad),
+   * al momento y con prorrateo de Stripe:
+   *   - SUBIR (cuesta más al mes): Stripe factura y cobra la diferencia ya. Si
+   *     el cobro falla, NO cambia nada (`MembershipPlanChangePaymentFailedError`).
+   *   - BAJAR: la diferencia queda a favor del alumno en su próxima factura.
+   *   - En PRUEBA GRATIS: sin prorrateo; sigue la prueba y al acabar paga el
+   *     plan nuevo.
+   * Con Stripe confirmado, la fila cambia de plan (compare-and-swap) y se avisa
+   * `subscriptions.membership.plan_changed`: el host da el grupo del nivel
+   * nuevo y quita el del viejo. Vale igual con cobros de plataforma (la
+   * suscripción ya lleva su `on_behalf_of` y la comisión se calcula por
+   * factura) y con las claves propias del aula.
+   */
+  async changePlan(tenantId: string, userId: string, planId: string): Promise<PlanChangeResult> {
+    const { sub, target, current } = await this.resolveChange(tenantId, userId, planId);
+    const direction = planChangeDirection(current, target);
+    const proration: PlanChangeProrationBehavior =
+      sub.status === 'TRIALING'
+        ? 'none'
+        : direction === 'upgrade'
+          ? 'always_invoice'
+          : 'create_prorations';
+
+    const stripe = await this.stripeFor(tenantId);
+    const priceId = await this.ensureStripePrice(target, stripe);
+    const change = await stripe.changeSubscriptionPrice({
+      subscriptionId: sub.stripeSubscriptionId!,
+      priceId,
+      prorationBehavior: proration,
+      // El webhook `customer.subscription.updated` reconcilia por aquí si esta
+      // petición se corta después de Stripe.
+      metadata: { planId: target.id, ...(target.tierId ? { tierId: target.tierId } : {}) },
+      // Un doble clic no cobra dos veces; un cambio posterior (la fila ya
+      // cambió `updatedAt`) lleva otra clave.
+      idempotencyKey: `plan-change:${sub.id}:${sub.planId ?? 'none'}:${target.id}:${sub.updatedAt.getTime()}`,
+    });
+
+    await applyMembershipPlanChange(this.prisma, this.publisher, {
+      tenantId,
+      subscriptionId: sub.id,
+      userId,
+      fromPlanId: sub.planId,
+      toPlan: target,
+      stripePriceId: change.priceId ?? priceId,
+      currentPeriodEnd: change.currentPeriodEnd ? new Date(change.currentPeriodEnd * 1000) : null,
+      via: 'account',
+      direction,
+    });
+
+    const updated = await this.prisma.modSubscriptionsSubscription.findFirstOrThrow({
+      where: { id: sub.id, tenantId },
+    });
+    const invoice = change.latestInvoice;
+    return {
+      subscription: updated,
+      direction,
+      charged:
+        proration === 'always_invoice' && invoice && invoice.amountPaid > 0
+          ? { amountCents: invoice.amountPaid, currency: invoice.currency || sub.currency }
+          : null,
+    };
+  }
+
+  /** Comprobaciones comunes de la vista previa y del cambio. */
+  private async resolveChange(tenantId: string, userId: string, planId: string) {
+    const sub = await this.liveMembership(tenantId, userId);
+    if (!sub) throw new MembershipPlanChangeNotAllowedError('no_membership');
+    const blocker = this.changeBlocker(sub);
+    if (blocker) throw new MembershipPlanChangeNotAllowedError(blocker);
+    if (sub.planId === planId) throw new MembershipPlanChangeNotAllowedError('same_plan');
+
+    const target = await this.prisma.modSubscriptionsPlan.findFirst({
+      where: { id: planId, tenantId, active: true, tierId: { not: null } },
+    });
+    const targetTier = target?.tierId
+      ? await this.prisma.modSubscriptionsTier.findFirst({
+          where: { id: target.tierId, tenantId, active: true, isFree: false },
+          select: { id: true },
+        })
+      : null;
+    if (!target || !targetTier) {
+      throw new MembershipPlanChangeNotAllowedError('target_unavailable');
+    }
+    if (target.currency !== sub.currency) {
+      throw new MembershipPlanChangeNotAllowedError('currency_mismatch');
+    }
+    const currentPlan = sub.planId
+      ? await this.prisma.modSubscriptionsPlan.findFirst({ where: { id: sub.planId, tenantId } })
+      : null;
+    const current = {
+      amountCents: currentPlan?.amountCents ?? sub.unitAmount,
+      intervalMonths: currentPlan?.intervalMonths ?? 1,
+    };
+    return { sub, target, current };
+  }
+}
+
+export type PlanChangeBlockReason =
+  | 'no_membership'
+  | 'not_active'
+  | 'cancel_scheduled'
+  | 'pause_scheduled';
+
+export interface PlanChangeOption {
+  planId: string;
+  planName: string;
+  tierId: string;
+  tierName: string;
+  intervalMonths: number;
+  amountCents: number;
+  currency: string;
+  compareAtCents: number | null;
+  isFeatured: boolean;
+  /** Respecto al plan actual, por precio al mes. */
+  direction: PlanChangeDirection;
+}
+
+export interface PlanChangeOptions {
+  /** La membresía viva del alumno, o `null` si no tiene. */
+  subscription: {
+    id: string;
+    status: string;
+    planId: string | null;
+    planName: string | null;
+    tierId: string | null;
+    tierName: string | null;
+    amountCents: number;
+    currency: string;
+    intervalMonths: number;
+  } | null;
+  /** Por qué no puede cambiar ahora (o `null` si puede). */
+  blockedReason: PlanChangeBlockReason | null;
+  /** Planes a los que puede pasar (vacío en un aula sin niveles). */
+  options: PlanChangeOption[];
+  /** Nivel gratis del aula: pasar a él es darse de baja. */
+  freeTier: { id: string; name: string } | null;
+}
+
+export interface PlanChangePreview {
+  planId: string;
+  direction: PlanChangeDirection;
+  trialing: boolean;
+  /** Lo que se cobra hoy (unidad mínima). */
+  amountDueNow: number;
+  /** Lo que queda a favor del alumno para sus próximas facturas. */
+  creditCents: number;
+  currency: string;
+}
+
+export interface PlanChangeResult {
+  subscription: MembershipSubscriptionRow;
+  direction: PlanChangeDirection;
+  /** Lo cobrado hoy al subir, o `null` si no se cobró nada. */
+  charged: { amountCents: number; currency: string } | null;
 }
 
 type MembershipSubscriptionRow = Awaited<
@@ -1025,10 +1509,6 @@ function isMembershipPaymentSettled(session: Stripe.Checkout.Session): boolean {
 }
 
 /**
- * Etiqueta informativa para la columna `interval` (texto libre): los periodos
- * con nombre usan el término clásico y el resto queda como «Nm» (p. ej. '6m').
- */
-/**
  * País del comprador que confirmó Stripe en el checkout del alta
  * (`customer_details.address.country`), en ISO alfa-2 y mayúsculas; `null` si
  * no viene. Para «Ventas»: cada cuota cobrada hereda el de su suscripción.
@@ -1039,13 +1519,6 @@ export function checkoutBuyerCountry(
   const raw = session.customer_details?.address?.country;
   const code = typeof raw === 'string' ? raw.trim().toUpperCase() : '';
   return /^[A-Z]{2}$/.test(code) ? code : null;
-}
-
-function intervalLabel(intervalMonths: number): string {
-  if (intervalMonths === 12) return 'year';
-  if (intervalMonths === 3) return 'quarter';
-  if (intervalMonths === 1) return 'month';
-  return `${intervalMonths}m`;
 }
 
 function configData(input: MembershipConfigInput) {

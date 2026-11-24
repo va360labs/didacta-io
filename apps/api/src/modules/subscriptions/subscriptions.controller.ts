@@ -36,6 +36,7 @@ import {
   type WithdrawalWaiverDto,
 } from '../purchase-consent/withdrawal-waiver';
 import { leaveSchema, type LeaveDto } from './retention.dto';
+import { changePlanSchema, type ChangePlanDto } from './membership-tiers.dto';
 import { SubscriptionsGraceExpirationWorker } from './subscriptions-grace-expiration.worker';
 
 /**
@@ -166,7 +167,7 @@ export class SubscriptionsController {
       planIds.length
         ? this.prisma.modSubscriptionsPlan.findMany({
             where: { tenantId: user.tenantId, id: { in: planIds } },
-            select: { id: true, name: true },
+            select: { id: true, name: true, tierId: true },
           })
         : Promise.resolve([]),
       courseIds.length
@@ -177,6 +178,16 @@ export class SubscriptionsController {
         : Promise.resolve([]),
     ]);
     const planName = new Map(plans.map((p) => [p.id, p.name]));
+    // Nivel de cada membresía (Básico, Pro…), para que la cuenta lo nombre.
+    const tierIds = [...new Set(plans.map((p) => p.tierId).filter((x): x is string => !!x))];
+    const tierRows = tierIds.length
+      ? await this.prisma.modSubscriptionsTier.findMany({
+          where: { tenantId: user.tenantId, id: { in: tierIds } },
+          select: { id: true, name: true },
+        })
+      : [];
+    const tierName = new Map(tierRows.map((t) => [t.id, t.name]));
+    const planTier = new Map(plans.map((p) => [p.id, p.tierId]));
     const courseTitle = new Map(courses.map((c) => [c.id, c.title]));
     // Portal de cliente: solo se ofrece donde sabemos que está configurado —
     // los clientes cobrados por la plataforma, cuyo portal crea Didacta con el
@@ -195,6 +206,8 @@ export class SubscriptionsController {
       subscriptions: subs.map((s) => ({
         ...s,
         planName: s.planId ? (planName.get(s.planId) ?? null) : null,
+        tierId: s.planId ? (planTier.get(s.planId) ?? null) : null,
+        tierName: s.planId ? (tierName.get(planTier.get(s.planId) ?? '') ?? null) : null,
         courseTitle: s.courseId ? (courseTitle.get(s.courseId) ?? null) : null,
         billingPortal: platformCustomers.has(s.stripeCustomerId),
         retentionDiscount: discounts.get(s.id) ?? null,
@@ -241,6 +254,54 @@ export class SubscriptionsController {
     if (!user) throw new UnauthorizedException();
     const updated = await this.registry.getMembershipService().payNow(user.tenantId, user.sub);
     return { subscription: updated };
+  }
+
+  @Get('me/membership/change-options')
+  @ApiOperation({
+    summary:
+      'Cambiar de nivel: la membresía viva del alumno, a qué planes puede pasar (niveles de ' +
+      'pago encendidos, misma moneda) y si algo lo impide ahora (impago, pausa, baja ' +
+      'programada). Solo en aulas con niveles; sin ellos, sin opciones.',
+  })
+  async membershipChangeOptions(@CurrentUser() user: SessionClaims | undefined): Promise<object> {
+    if (!user) throw new UnauthorizedException();
+    return this.registry.getMembershipService().getPlanChangeOptions(user.tenantId, user.sub);
+  }
+
+  @Post('me/membership/change-preview')
+  @HttpCode(200)
+  @ApiOperation({
+    summary:
+      'Lo que pasaría al cambiar a ese plan AHORA: cuánto se cobra hoy (subir) o cuánto ' +
+      'queda a favor para las próximas facturas (bajar). No cambia nada.',
+  })
+  async membershipChangePreview(
+    @CurrentUser() user: SessionClaims | undefined,
+    @Body(new ZodValidationPipe(changePlanSchema)) body: ChangePlanDto,
+  ): Promise<object> {
+    if (!user) throw new UnauthorizedException();
+    const membership = this.registry.getMembershipService();
+    // Cobros de plataforma: el precio del plan nuevo, en la cuenta que cobra.
+    await this.payoutsGate?.prepareMembershipCheckout(user.tenantId, body.planId, membership);
+    return membership.previewPlanChange(user.tenantId, user.sub, body.planId);
+  }
+
+  @Post('me/membership/change')
+  @HttpCode(200)
+  @ApiOperation({
+    summary:
+      'Cambia la membresía a otro plan/nivel AL MOMENTO con prorrateo de Stripe: subir cobra ' +
+      'la diferencia ya (si el cobro falla, 402 y no cambia nada); bajar deja la diferencia a ' +
+      'favor en la próxima factura. En prueba gratis, sin cobro. El acceso cambia al confirmar.',
+  })
+  async membershipChange(
+    @CurrentUser() user: SessionClaims | undefined,
+    @Body(new ZodValidationPipe(changePlanSchema)) body: ChangePlanDto,
+  ): Promise<object> {
+    if (!user) throw new UnauthorizedException();
+    const membership = this.registry.getMembershipService();
+    await this.payoutsGate?.prepareMembershipCheckout(user.tenantId, body.planId, membership);
+    return membership.changePlan(user.tenantId, user.sub, body.planId);
   }
 
   @Get('me/:id/invoices')
