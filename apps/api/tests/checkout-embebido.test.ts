@@ -119,6 +119,9 @@ describe('MembershipPublicController — pago dentro de /join', () => {
         resolveTenantWebBaseUrl: async () => 'https://primersorbo.test',
       } as never,
       fakeConsents() as never,
+      // Módulos y ajustes del aula: solo los mira el nivel gratis, que aquí no hay.
+      { list: async () => [] } as never,
+      {} as never,
     );
     return { ctrl, membership };
   }

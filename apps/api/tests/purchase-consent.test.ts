@@ -335,6 +335,9 @@ describe('sin la casilla no se paga', () => {
         resolveTenantWebBaseUrl: async () => 'https://luz.test',
       } as never,
       service(prisma),
+      // Módulos y ajustes del aula: solo los mira el nivel gratis, que aquí no hay.
+      { list: async () => [] } as never,
+      {} as never,
     );
     await expect(controller.checkout(req(), { planId: PLAN })).rejects.toMatchObject({
       response: { code: 'CHECKOUT_WITHDRAWAL_WAIVER_REQUIRED' },
