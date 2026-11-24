@@ -177,6 +177,62 @@ describe('PayoutsBrandingService.sync', () => {
     await expect(caido.service.sync(TENANT, BRAND)).resolves.toMatchObject({ applied: false });
   });
 
+  describe('la web del negocio (la dirección del aula)', () => {
+    const CON_WEB: PayoutsBrandInput = { ...BRAND, businessUrl: 'https://primer-sorbo.didacta.io' };
+
+    it('va como `business_profile.url` y `support_url`', async () => {
+      const { stripe, service } = world();
+      await service.sync(TENANT, CON_WEB);
+      const update = stripe.calls.find(
+        (c) => c.method === 'POST' && c.path === `/v1/accounts/${ACCT}`,
+      )!;
+      expect(update.params['business_profile']).toEqual({
+        name: 'Primer Sorbo',
+        url: 'https://primer-sorbo.didacta.io',
+        support_url: 'https://primer-sorbo.didacta.io',
+      });
+    });
+
+    it('si el aula cambia de dirección, la huella cambia y se vuelve a aplicar', async () => {
+      const { stripe, service } = world();
+      await service.sync(TENANT, CON_WEB);
+      const nueva = await service.sync(TENANT, {
+        ...CON_WEB,
+        businessUrl: 'https://sorbo-dos.didacta.io',
+      });
+      expect(nueva).toMatchObject({ applied: true, changed: true });
+      const posts = stripe.calls.filter(
+        (c) => c.method === 'POST' && c.path === `/v1/accounts/${ACCT}`,
+      );
+      expect(posts.at(-1)!.params['business_profile']).toMatchObject({
+        url: 'https://sorbo-dos.didacta.io',
+      });
+    });
+
+    it('sin dirección publicable la huella es la de antes: no reescribe ninguna cuenta', () => {
+      expect(prepareBranding({ ...BRAND, businessUrl: null }).fingerprint).toBe(
+        prepareBranding(BRAND).fingerprint,
+      );
+      expect(prepareBranding(CON_WEB).fingerprint).not.toBe(prepareBranding(BRAND).fingerprint);
+    });
+
+    it('si Stripe rechaza la web (aún no resuelve), la marca se aplica sin ella', async () => {
+      const { stripe, service } = world();
+      stripe.failNext(`/v1/accounts/${ACCT}`, {
+        method: 'POST',
+        message: 'Not a valid URL',
+        param: 'business_profile[url]',
+      });
+      const result = await service.sync(TENANT, CON_WEB);
+      expect(result).toMatchObject({ applied: true, changed: true });
+      const posts = stripe.calls.filter(
+        (c) => c.method === 'POST' && c.path.startsWith('/v1/accounts/'),
+      );
+      expect(posts).toHaveLength(2);
+      expect(posts[1]!.params).not.toHaveProperty('business_profile');
+    });
+  });
+
   it('un nombre que no da para descriptor no manda descriptor', () => {
     const prepared = prepareBranding({ ...BRAND, name: 'Té' });
     expect(prepared.statementDescriptor).toBeNull();

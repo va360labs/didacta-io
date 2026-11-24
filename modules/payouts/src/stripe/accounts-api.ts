@@ -200,6 +200,11 @@ export interface UpdateAccountBrandingInput {
    * vendedor en el pago y en sus recibos.
    */
   readonly businessName?: string | null;
+  /**
+   * Web del negocio (`business_profile.url`, y también `support_url`): la
+   * dirección pública del aula. Ya filtrada con `publicBusinessUrl`.
+   */
+  readonly businessUrl?: string | null;
   /** Metadatos a fusionar (la huella de la marca aplicada). */
   readonly metadata?: Readonly<Record<string, string>>;
 }
@@ -771,8 +776,14 @@ export function brandingParams(input: UpdateAccountBrandingInput): StripeParams 
   if (input.statementDescriptorPrefix) {
     settings['card_payments'] = { statement_descriptor_prefix: input.statementDescriptorPrefix };
   }
+  const businessProfile: Record<string, unknown> = {};
+  if (input.businessName) businessProfile['name'] = input.businessName;
+  if (input.businessUrl) {
+    businessProfile['url'] = input.businessUrl;
+    businessProfile['support_url'] = input.businessUrl;
+  }
   return {
-    ...(input.businessName ? { business_profile: { name: input.businessName } } : {}),
+    ...(Object.keys(businessProfile).length > 0 ? { business_profile: businessProfile } : {}),
     ...(Object.keys(settings).length > 0 ? { settings } : {}),
     ...(input.metadata && Object.keys(input.metadata).length > 0
       ? { metadata: { ...input.metadata } }

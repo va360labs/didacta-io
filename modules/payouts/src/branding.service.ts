@@ -35,6 +35,11 @@ import {
  *  - `primary_color` / `secondary_color` — el color del aula;
  *  - `business_profile.name` — el nombre del aula, el que Stripe enseña como
  *    vendedor («Paga de forma segura en …») y en sus recibos;
+ *  - `business_profile.url` y `support_url` — la dirección pública del aula.
+ *    Al crear la cuenta se pone la de ese momento; si el aula cambia de
+ *    dirección (Ajustes → «Dirección de tu academia»), es aquí donde se pone
+ *    al día. Solo entra en la huella cuando hay una dirección publicable, así
+ *    que un aula sin ella conserva la huella de antes;
  *  - `settings.payments.statement_descriptor` y el prefijo de las tarjetas —
  *    el nombre del aula, saneado a lo que admite Stripe (5–22 y 2–10
  *    caracteres latinos, al menos una letra, sin `< > \ ' " *`).
@@ -67,6 +72,11 @@ export interface PayoutsBrandInput {
   readonly icon: PayoutsBrandImage | null;
   /** El logo con nombre (modo «solo logo»); `null` = que Stripe pinte el nombre. */
   readonly logo: PayoutsBrandImage | null;
+  /**
+   * Web pública del aula (`https://<su dirección>`), ya filtrada con
+   * `publicBusinessUrl`. `null`/ausente = no se toca la que tenga la cuenta.
+   */
+  readonly businessUrl?: string | null;
 }
 
 export type PayoutsBrandingResult =
@@ -91,6 +101,7 @@ export interface PreparedBranding {
   readonly secondaryColor: string | null;
   readonly iconSha: string | null;
   readonly logoSha: string | null;
+  readonly businessUrl: string | null;
   readonly fingerprint: string;
 }
 
@@ -106,6 +117,7 @@ export function prepareBranding(input: PayoutsBrandInput): PreparedBranding {
   const secondaryColor = color(input.secondaryColor);
   const iconSha = input.icon ? sha256(input.icon.bytes) : null;
   const logoSha = input.logo ? sha256(input.logo.bytes) : null;
+  const businessUrl = input.businessUrl?.trim() || null;
   const fingerprint = sha256(
     JSON.stringify({
       v: 2,
@@ -116,6 +128,9 @@ export function prepareBranding(input: PayoutsBrandInput): PreparedBranding {
       secondaryColor,
       iconSha,
       logoSha,
+      // Solo si la hay: sin dirección publicable la huella es la de siempre y
+      // la cuenta no se reescribe por este campo.
+      ...(businessUrl ? { businessUrl } : {}),
     }),
   ).slice(0, 32);
   return {
@@ -126,6 +141,7 @@ export function prepareBranding(input: PayoutsBrandInput): PreparedBranding {
     secondaryColor,
     iconSha,
     logoSha,
+    businessUrl,
     fingerprint,
   };
 }
@@ -133,16 +149,18 @@ export function prepareBranding(input: PayoutsBrandInput): PreparedBranding {
 const SILENT: PayoutsLogger = { warn: () => undefined, log: () => undefined };
 
 /**
- * ¿El error de Stripe es por el descriptor del extracto o por el nombre del
- * comercio? (Stripe puede no dejar cambiarlos según el estado de la cuenta.)
+ * ¿El error de Stripe es por el descriptor del extracto, por el nombre del
+ * comercio o por su web? (Stripe puede no dejar cambiarlos según el estado de
+ * la cuenta, y rechaza con `url_invalid` una web que aún no resuelve.)
  */
 function isIdentityRejection(err: unknown): boolean {
   return (
     err instanceof PlatformStripeApiError &&
     err.status === 400 &&
-    /statement_descriptor|business_profile/.test(
-      `${err.param ?? ''} ${err.detail ?? ''} ${err.message}`,
-    )
+    (err.stripeCode === 'url_invalid' ||
+      /statement_descriptor|business_profile|support_url/.test(
+        `${err.param ?? ''} ${err.detail ?? ''} ${err.message}`,
+      ))
   );
 }
 
@@ -207,6 +225,7 @@ export class PayoutsBrandingService {
         statementDescriptor: prepared.statementDescriptor,
         statementDescriptorPrefix: prepared.statementDescriptorPrefix,
         businessName: prepared.businessName,
+        businessUrl: prepared.businessUrl,
         metadata: { [BRANDING_METADATA_KEY]: prepared.fingerprint },
       };
       try {
@@ -215,13 +234,14 @@ export class PayoutsBrandingService {
         if (!isIdentityRejection(err)) throw err;
         this.logger.warn(
           { tenantId, stripeAccountId: accountId, err: describe(err) },
-          'mod.payouts: Stripe rechaza el nombre o el descriptor del extracto; se aplica la marca sin ellos',
+          'mod.payouts: Stripe rechaza el nombre, la web o el descriptor del extracto; se aplica la marca sin ellos',
         );
         await this.api.updateBranding(accountId, {
           ...update,
           statementDescriptor: null,
           statementDescriptorPrefix: null,
           businessName: null,
+          businessUrl: null,
         });
       }
       this.logger.log?.(

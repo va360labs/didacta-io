@@ -5,7 +5,11 @@
 
 import { Injectable, Optional } from '@nestjs/common';
 import { ModuleRef } from '@nestjs/core';
-import type { PayoutsBrandImage, PayoutsBrandInput } from '@didacta/mod-payouts';
+import {
+  publicBusinessUrl,
+  type PayoutsBrandImage,
+  type PayoutsBrandInput,
+} from '@didacta/mod-payouts';
 import { Logger as PinoLogger } from 'nestjs-pino';
 import sharp from 'sharp';
 import { runAsTenant } from '../../tenancy/tenant-context.storage';
@@ -13,8 +17,9 @@ import { ModuleRegistryService } from '../module-registry.service';
 import { PayoutsRuntime } from './payouts-runtime.service';
 
 /**
- * Lleva la MARCA DEL AULA (nombre, logo y color) a su cuenta conectada de
- * Stripe, para que el pago, los recibos y el extracto del banco la enseñen.
+ * Lleva la MARCA DEL AULA (nombre, logo, color y dirección) a su cuenta
+ * conectada de Stripe, para que el pago, los recibos y el extracto del banco
+ * la enseñen.
  * El dominio (qué se manda y cuándo no hace falta) vive en
  * `PayoutsBrandingService` (`mod.payouts`); aquí se reúne la marca del aula y
  * se prepara la imagen.
@@ -22,6 +27,7 @@ import { PayoutsRuntime } from './payouts-runtime.service';
  * Cuándo se sincroniza (siempre en segundo plano, nunca bloquea una venta):
  *
  *  - al guardar la marca del aula (logo, color) → `request`;
+ *  - al cambiar la dirección del aula (`AcademyAddressService`) → `request`;
  *  - al volver del alta de cobros y en el barrido de las cuentas listas;
  *  - cuando alguien abre la ficha de venta o paga (`ensureFresh`, como mucho
  *    una vez cada 10 minutos por aula): cubre un cambio de nombre o cualquier
@@ -164,10 +170,10 @@ export class PayoutsBrandingSync {
     return job;
   }
 
-  /** Nombre, color y logo del aula (mod.theming), listos para Stripe. */
+  /** Nombre, color, logo (mod.theming) y dirección del aula, listos para Stripe. */
   private async collect(tenantId: string): Promise<PayoutsBrandInput | null> {
     const prisma = this.runtime.prisma;
-    const [tenant, theme] = await runAsTenant(
+    const [tenant, theme, domain] = await runAsTenant(
       tenantId,
       () =>
         Promise.all([
@@ -180,6 +186,10 @@ export class PayoutsBrandingSync {
               logoStorageKey: true,
               logoDisplayMode: true,
             },
+          }),
+          prisma.tenantDomain.findFirst({
+            where: { tenantId, isPrimary: true, isVerified: true, surface: 'APP' },
+            select: { hostname: true },
           }),
         ]),
       { traceLabel: 'payouts-branding' },
@@ -203,6 +213,9 @@ export class PayoutsBrandingSync {
       secondaryColor: primary,
       icon,
       logo,
+      // La web del negocio: la dirección del aula de AHORA. Si el aula la
+      // cambia, la siguiente sincronización la pone al día en Stripe.
+      businessUrl: publicBusinessUrl(domain?.hostname),
     };
   }
 
