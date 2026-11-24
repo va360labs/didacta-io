@@ -38,5 +38,14 @@
   "ADMIN_VIDEO_PROTECTION_FORBIDDEN": "Only super_admin or tenant_admin can manage video protection.",
   "ADMIN_VIDEO_PROTECTION_LIMITS_INVALID": "The daily limit cannot be lower than the hourly limit.",
   "ADMIN_STRIPE_PUBLISHABLE_KEY_INVALID": "The publishable key must start with pk_test_ or pk_live_.",
-  "ADMIN_STRIPE_PUBLISHABLE_KEY_MODE_MISMATCH": "The publishable key is in a different mode from the secret key (test vs live)."
+  "ADMIN_STRIPE_PUBLISHABLE_KEY_MODE_MISMATCH": "The publishable key is in a different mode from the secret key (test vs live).",
+  "ACADEMY_ADDRESS_DISABLED": "This installation doesn't allow changing the academy's address.",
+  "ACADEMY_ADDRESS_FORBIDDEN": "Only the academy's administrators can change its address.",
+  "ACADEMY_ADDRESS_TAKEN": "Another academy already uses that address. Try a different one.",
+  "ACADEMY_ADDRESS_RESERVED": "That address can't be used. Try a different one.",
+  "ACADEMY_ADDRESS_INVALID": "The address can only contain letters without accents, numbers and hyphens (3 to 63).",
+  "ACADEMY_ADDRESS_UNCHANGED": "That's already your academy's address.",
+  "ACADEMY_ADDRESS_CHANGE_LIMIT": "You've already changed the address 3 times in the last 30 days. You'll be able to change it again later.",
+  "ACADEMY_ADDRESS_OWN_DOMAIN": "Your academy uses its own domain: its address isn't changed from here.",
+  "ACADEMY_ADDRESS_NONE": "Your academy doesn't have an address to change."
 }

@@ -25,6 +25,7 @@ import { ReplyToCard } from '@/components/admin/reply-to-card';
 import { SmtpSettingsCard } from '@/components/admin/smtp-settings-card';
 import { StripeSettingsCard } from '@/components/admin/stripe-settings-card';
 import { TenantIdentityCard } from '@/components/admin/tenant-identity-card';
+import { AcademyAddressCard } from '@/components/admin/academy-address-card';
 import { AcademyLanguageCard } from '@/components/admin/academy-language-card';
 import { PublicHomeToggle } from '@/components/admin/public-home-card';
 import { adminModulesApi, type TenantModuleListItem } from '@/lib/admin-modules';
@@ -319,6 +320,8 @@ function ConfiguracionCompleta() {
       {tab === 'general' ? (
         <div className="space-y-4">
           <AcademyLanguageCard />
+          {/* Solo con TENANT_SUBDOMAIN_SUFFIX en la instancia: si no, no pinta nada. */}
+          <AcademyAddressCard />
           <PublicHomeToggle />
           {isSuperAdmin ? <TenantIdentityCard /> : null}
         </div>

@@ -390,5 +390,36 @@
     "saved": "Saved",
     "error": "Couldn't save. Please try again.",
     "loadError": "Couldn't load this setting."
+  },
+  "direccionAula": {
+    "title": "Your academy's address",
+    "description": "It's your academy's web address: the one you and your students use to get in. You can change it yourself.",
+    "current": "Right now it is",
+    "label": "New address",
+    "hint": {
+      "checking": "Checking…",
+      "available": "It's free!",
+      "current": "This is already your academy's address.",
+      "taken": "Another academy already uses it. Try a different one.",
+      "reserved": "This address can't be used. Try a different one.",
+      "invalid": "Use only letters without accents, numbers and hyphens (3 to 63).",
+      "error": "We couldn't check it. Please try again."
+    },
+    "left": "Changes left: {left} of {max} (every {days} days).",
+    "change": "Change address",
+    "limit": "You've already changed the address {max} times in the last {days} days. You can change it again from {date}.",
+    "ownDomain": "Your academy uses its own domain ({host}), so its address isn't changed from here.",
+    "confirmTitle": "Change your academy's address?",
+    "confirmFromTo": "It will go from {old} to {new}.",
+    "confirmOldLinks": "Old links will keep working: they'll take people to the new address on their own.",
+    "confirmSignin": "Everyone, you included, will need to log in again with their email and password at the new address.",
+    "confirmShare": "If the address is on your website or social media, update it there when you can.",
+    "confirm": "Yes, change the address",
+    "cancel": "Cancel",
+    "saving": "Changing…",
+    "done": "Done. Your academy is now at {url}. Taking you there so you can log in again…",
+    "goNow": "Go now",
+    "error": "The address couldn't be changed. Please try again.",
+    "loadError": "Your academy's address couldn't be loaded."
   }
 }
