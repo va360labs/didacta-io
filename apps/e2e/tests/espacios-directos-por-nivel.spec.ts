@@ -373,7 +373,17 @@ test.describe('Espacios y directos por nivel de membresía', () => {
     const nombre = `Nivel UI ${w.stamp}`;
     await page.locator('#space-title').fill(nombre);
     await page.locator('#space-niveles').check();
-    await page.locator(`#space-nivel-${w.groupPro.id}`).check();
+    // Al pasar a «Solo estos niveles» salen TODOS marcados (un nivel no
+    // incluye a otro), con la nota que lo explica. Se deja solo Pro.
+    const casillasEspacio = page.locator('[data-testid="space-quien"] input[type="checkbox"]');
+    await expect(casillasEspacio.first()).toBeChecked();
+    for (const casilla of await casillasEspacio.all()) await expect(casilla).toBeChecked();
+    await expect(page.getByTestId('space-nota-niveles')).toBeVisible();
+    for (const casilla of await casillasEspacio.all()) {
+      if ((await casilla.getAttribute('id')) !== `space-nivel-${w.groupPro.id}`) {
+        await casilla.uncheck();
+      }
+    }
     await page.getByRole('button', { name: 'Crear espacio' }).click();
     // La fila del espacio nuevo, con su marca de nivel (no la de «Sala Pro»).
     const fila = page.locator('li', { hasText: nombre });
@@ -395,7 +405,13 @@ test.describe('Espacios y directos por nivel de membresía', () => {
     await page.locator('#topic').fill(tema);
     await page.locator('#startTime').fill('2027-03-10T18:00');
     await page.locator('#clase-niveles').check();
-    await page.locator(`#clase-nivel-${w.groupPro.id}`).check();
+    const casillasClase = page.locator('[data-testid="clase-quien"] input[type="checkbox"]');
+    for (const casilla of await casillasClase.all()) await expect(casilla).toBeChecked();
+    for (const casilla of await casillasClase.all()) {
+      if ((await casilla.getAttribute('id')) !== `clase-nivel-${w.groupPro.id}`) {
+        await casilla.uncheck();
+      }
+    }
     await page.getByRole('button', { name: 'Crear sesión' }).click();
     await expect(page.getByText(tema)).toBeVisible();
     const clases = await ok<Array<Record<string, unknown>>>(
@@ -424,8 +440,13 @@ test.describe('Espacios y directos por nivel de membresía', () => {
       const enlace = page.locator('#directo-enlace');
       if (await enlace.isVisible())
         await enlace.fill(`https://meet.example.com/sencilla-${w.stamp}`);
-      // Sin marcar ningún nivel no deja guardar.
+      // Al pasar a «Solo estos niveles» salen todos marcados; sin ninguno no
+      // deja guardar.
       await page.locator('#directo-niveles').check();
+      const casillas = page.locator('[data-testid="directo-quien"] input[type="checkbox"]');
+      for (const casilla of await casillas.all()) await expect(casilla).toBeChecked();
+      await expect(page.getByTestId('directo-nota-niveles')).toBeVisible();
+      for (const casilla of await casillas.all()) await casilla.uncheck();
       await page.getByRole('button', { name: 'Crear clase' }).click();
       await expect(page.getByText('Marca al menos un nivel.')).toBeVisible();
       await page.locator(`#directo-nivel-${w.groupBasico.id}`).check();
