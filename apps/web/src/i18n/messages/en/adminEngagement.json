@@ -146,7 +146,7 @@
   "spaces": {
     "noAccess": "Only tenant administrators can manage community spaces.",
     "title": "Community spaces",
-    "subtitle": "Create, edit and reorder the spaces shown in the sidebar. System spaces (marked with 🔒) cannot be deleted.",
+    "subtitle": "Create, edit and reorder the spaces shown in the sidebar. Spaces labelled “System” cannot be deleted.",
     "listTitle": "Existing spaces",
     "loading": "Loading…",
     "emptyList": "No spaces yet. Create the first one.",
@@ -180,7 +180,8 @@
     "saving": "Saving…",
     "saveChanges": "Save changes",
     "create": "Create space",
-    "deleteConfirm": "Delete the space \"{name}\"? This action cannot be undone."
+    "deleteConfirm": "Delete the space \"{name}\"? This action cannot be undone.",
+    "systemBadge": "System"
   },
   "tags": {
     "noAccess": "Only tenant administrators can manage community tags.",

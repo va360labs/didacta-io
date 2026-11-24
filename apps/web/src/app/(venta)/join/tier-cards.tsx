@@ -28,6 +28,7 @@ import {
   type MembershipPlan,
   type MembershipPublicTier,
 } from '@/lib/membership';
+import { formatDateTime } from '@/lib/i18n/format';
 import { intervalDescriptionLabel, intervalSuffixLabel } from './interval-labels';
 
 /** Títulos de curso que se ven de entrada en una tarjeta (el resto, a un clic). */
@@ -349,20 +350,58 @@ function IncludesItem({ children }: { children: React.ReactNode }) {
 }
 
 /**
- * HUECO para lo que da el nivel ADEMÁS de los cursos: los espacios de la
- * comunidad y los directos del nivel. Lo rellena la rama
- * `feat/espacios-directos-por-nivel`; hoy no pinta nada y la tarjeta queda
- * igual.
- *
- * Se alimenta del propio nivel: `tier.accessGroupId` (el grupo de acceso que da
- * el nivel, que es lo que abre espacios y directos) y `tier.includes`, que es
- * un objeto precisamente para crecer (p. ej. `includes.spaces`,
- * `includes.liveSessions`) sin romper a quien ya lo lee. Va justo debajo de la
- * lista de cursos, dentro de «Qué incluye»: lo suyo es pintar su propia lista
- * con el mismo `IncludesItem` (marca verde + texto) y nada si no hay nada.
+ * Lo que da el nivel ADEMÁS de los cursos: los espacios de la comunidad y los
+ * próximos directos que son solo para él (`tier.includes.spaces` / `.lives`,
+ * que compone la API con los módulos de comunidad y directos). Solo nombres, y
+ * la fecha en los directos: nada del contenido ni enlaces. Sin nada, no pinta.
  */
-export function TierIncludesExtra(_props: {
+export function TierIncludesExtra({
+  tier,
+}: {
   tier: MembershipPublicTier;
 }): React.JSX.Element | null {
-  return null;
+  const t = useTranslations('publicSite');
+  const locale = useLocale();
+  const spaces = tier.includes.spaces ?? [];
+  const lives = tier.includes.lives ?? [];
+  if (spaces.length === 0 && lives.length === 0) return null;
+  return (
+    <div className="mt-4 flex flex-col gap-3" data-testid={`nivel-incluye-extra-${tier.id}`}>
+      {spaces.length > 0 ? (
+        <div>
+          <p className="text-[13px] font-semibold text-text">{t('unete.tierSpacesHeading')}</p>
+          <ul
+            className="mt-2 flex flex-col gap-2 text-sm"
+            data-testid={`nivel-espacios-${tier.id}`}
+          >
+            {spaces.map((space) => (
+              <IncludesItem key={space.name}>{space.name}</IncludesItem>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+      {lives.length > 0 ? (
+        <div>
+          <p className="text-[13px] font-semibold text-text">{t('unete.tierLivesHeading')}</p>
+          <ul
+            className="mt-2 flex flex-col gap-2 text-sm"
+            data-testid={`nivel-directos-${tier.id}`}
+          >
+            {lives.map((live) => (
+              <IncludesItem key={`${live.title}-${live.startTime}`}>
+                {live.title}
+                <span className="block text-[13px] text-text-muted">
+                  {formatDateTime(live.startTime, {
+                    locale,
+                    dateStyle: 'medium',
+                    timeStyle: 'short',
+                  })}
+                </span>
+              </IncludesItem>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+    </div>
+  );
 }

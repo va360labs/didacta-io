@@ -221,6 +221,16 @@ export interface MembershipPublicTier {
     /** `true`: todos los cursos publicados, también los que se publiquen después. */
     allCourses: boolean;
     courses: MembershipTierCourseView[];
+    /**
+     * Espacios de la comunidad restringidos a este nivel (solo el nombre). Los
+     * añade el host al componer la página con mod.community; ausente si no.
+     */
+    spaces?: Array<{ name: string }>;
+    /**
+     * Próximos directos restringidos a este nivel (título y fecha ISO). Los
+     * añade el host con mod.zoom-live; ausente si no.
+     */
+    lives?: Array<{ title: string; startTime: string }>;
   };
   /** Planes del nivel (periodicidades), en el orden de la página. Vacío en el gratis. */
   planIds: string[];

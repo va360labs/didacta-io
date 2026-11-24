@@ -142,12 +142,17 @@
         "priceSaved": "Preço salvo.",
         "priceDeleted": "Preço excluído (ou desligado, se alguém já pagava por ele).",
         "priceTurnedOff": "Preço desligado: não é mais vendido.",
-        "priceTurnedOn": "Preço ligado."
+        "priceTurnedOn": "Preço ligado.",
+        "manualReviewOn": "Agora você revisa à mão cada inscrição grátis.",
+        "manualReviewOff": "As inscrições grátis entram sozinhas assim que confirmam o e-mail."
       },
       "page": {
         "groupByTier": "Cada nível dá os seus próprios cursos: mude-os acima, em “Níveis”.",
         "loosePlansDescription": "Estes preços não estão em nenhum nível e não aparecem na página de venda. Desligue-os ou exclua-os."
-      }
+      },
+      "manualReviewLabel": "Revisar à mão cada inscrição grátis",
+      "manualReviewOffHelp": "Desligado: quem entra grátis confirma o e-mail com um código e entra na hora.",
+      "manualReviewOnHelp": "Ligado: cada inscrição grátis espera até você aprovar em Alunos."
     }
   },
   "interval": {

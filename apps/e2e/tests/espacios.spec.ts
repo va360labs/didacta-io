@@ -333,9 +333,13 @@ test.describe('Panel admin — /admin/community/spaces', () => {
     await expect(page.getByText('/general').first()).toBeVisible({ timeout: 8000 });
   });
 
-  test('espacios de sistema muestran el icono de candado 🔒', async ({ page }) => {
+  test('espacios de sistema llevan la etiqueta «Del sistema», no un candado', async ({ page }) => {
     await withAdminSession(page, '/admin/community/spaces');
-    await expect(page.getByText('🔒').first()).toBeVisible({ timeout: 8000 });
+    // El candado es de los espacios solo para algunos niveles de la membresía:
+    // la marca de sistema es una etiqueta y no se confunde con él.
+    await expect(page.getByTestId('espacio-sistema-general')).toBeVisible({ timeout: 8000 });
+    await expect(page.getByTestId('espacio-sistema-general')).toHaveText(/Del sistema|System/);
+    await expect(page.getByText('🔒')).toHaveCount(0);
   });
 
   test('existe formulario para crear nuevo espacio', async ({ page }) => {

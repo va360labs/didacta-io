@@ -116,7 +116,10 @@
     "doneNotInGroupTitle": "You are not in the {name} group",
     "doneNotInGroupBody": "We received your request anyway. We will review your case and email you.",
     "doneUnknownTitle": "Request received",
-    "doneUnknownBody": "We could not verify your group membership, but we received your request. We will review your case and email you."
+    "doneUnknownBody": "We could not verify your group membership, but we received your request. We will review your case and email you.",
+    "doneActiveTitle": "You're in",
+    "doneActiveBody": "Your account is ready. Sign in with your email and password.",
+    "doneActiveCta": "Sign in"
   },
   "unete": {
     "metaTitle": "Join",
@@ -208,7 +211,9 @@
     "tierFreeClosed": "Free sign-ups are closed right now.",
     "tierChosenLabel": "You chose",
     "tierChange": "Change",
-    "tierIncludesTitle": "Everything {name} includes"
+    "tierIncludesTitle": "Everything {name} includes",
+    "tierSpacesHeading": "Community spaces only for this plan",
+    "tierLivesHeading": "Upcoming live sessions only for this plan"
   },
   "verificar": {
     "notFoundTitle": "Certificate not found",

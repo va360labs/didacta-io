@@ -12,6 +12,7 @@ import { Icon } from '@/components/icon';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Switch } from '@/components/ui/switch';
 import { ApiHttpError } from '@/lib/api-client';
 import { authStorage } from '@/lib/auth-storage';
 import { coursesApi, type Course } from '@/lib/courses';
@@ -248,6 +249,14 @@ export function TiersEditor({
                 tiers={tiers}
                 courses={courses}
                 freeSignupOpen={data.freeSignup.open}
+                manualReview={data.freeSignup.manualReview === true}
+                onToggleManualReview={() =>
+                  void mutate(async (bearer) => {
+                    const next = data.freeSignup.manualReview !== true;
+                    await membershipAdminApi.updateTier(bearer, tier.id, { manualReview: next });
+                    return next ? t('notices.manualReviewOn') : t('notices.manualReviewOff');
+                  }, onCardError(tier.id))
+                }
                 first={index === 0}
                 last={index === tiers.length - 1}
                 open={open}
@@ -386,6 +395,8 @@ function TierCard({
   tiers,
   courses,
   freeSignupOpen,
+  manualReview,
+  onToggleManualReview,
   first,
   last,
   open,
@@ -407,6 +418,9 @@ function TierCard({
   tiers: readonly MembershipAdminTier[];
   courses: readonly Course[];
   freeSignupOpen: boolean;
+  /** Solo el nivel gratis: el creador revisa a mano cada alta. */
+  manualReview: boolean;
+  onToggleManualReview: () => void;
   first: boolean;
   last: boolean;
   open: OpenForm;
@@ -531,7 +545,33 @@ function TierCard({
       ) : null}
 
       {tier.isFree ? (
-        <FreeSignupStatus t={t} open={freeSignupOpen} tierActive={tier.active} />
+        <>
+          <FreeSignupStatus t={t} open={freeSignupOpen} tierActive={tier.active} />
+          <div className="flex items-start gap-3 rounded-lg border border-border px-3 py-2">
+            <Switch
+              id={`nivel-gratis-revision-${tier.id}`}
+              data-testid="nivel-gratis-revision-manual"
+              checked={manualReview}
+              disabled={busy}
+              onCheckedChange={() => onToggleManualReview()}
+              aria-describedby={`nivel-gratis-revision-ayuda-${tier.id}`}
+            />
+            <div className="min-w-0">
+              <label
+                htmlFor={`nivel-gratis-revision-${tier.id}`}
+                className="block cursor-pointer text-sm font-semibold text-text"
+              >
+                {t('manualReviewLabel')}
+              </label>
+              <p
+                id={`nivel-gratis-revision-ayuda-${tier.id}`}
+                className="text-[13px] text-text-muted"
+              >
+                {manualReview ? t('manualReviewOnHelp') : t('manualReviewOffHelp')}
+              </p>
+            </div>
+          </div>
+        </>
       ) : (
         <div className="flex flex-col gap-2 border-t border-border pt-3">
           <p className="text-sm font-semibold text-text">{t('pricesTitle')}</p>

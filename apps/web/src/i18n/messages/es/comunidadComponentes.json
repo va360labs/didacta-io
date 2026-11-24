@@ -202,6 +202,7 @@
     "disponibleEnOtros": "Disponible en otros niveles de la membresía.",
     "verPlanes": "Ver planes",
     "soloAlgunos": "Solo algunos niveles",
-    "soloPara": "Solo para: {niveles}"
+    "soloPara": "Solo para: {niveles}",
+    "nivelNoIncluyeOtro": "Un nivel no incluye a otro: marca todos los que deben verlo."
   }
 }

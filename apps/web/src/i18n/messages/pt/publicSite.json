@@ -116,7 +116,10 @@
     "doneNotInGroupTitle": "Você não está no grupo de {name}",
     "doneNotInGroupBody": "Recebemos sua solicitação mesmo assim. Vamos analisar o seu caso e avisar você por e-mail.",
     "doneUnknownTitle": "Solicitação recebida",
-    "doneUnknownBody": "Não conseguimos verificar sua participação no grupo, mas recebemos sua solicitação. Vamos analisar o seu caso e avisar você por e-mail."
+    "doneUnknownBody": "Não conseguimos verificar sua participação no grupo, mas recebemos sua solicitação. Vamos analisar o seu caso e avisar você por e-mail.",
+    "doneActiveTitle": "Você já está dentro",
+    "doneActiveBody": "Sua conta está pronta. Entre com seu e-mail e sua senha.",
+    "doneActiveCta": "Entrar"
   },
   "unete": {
     "metaTitle": "Faça parte",
@@ -208,7 +211,9 @@
     "tierFreeClosed": "No momento, não há cadastro gratuito.",
     "tierChosenLabel": "Você escolheu",
     "tierChange": "Trocar",
-    "tierIncludesTitle": "Tudo o que {name} inclui"
+    "tierIncludesTitle": "Tudo o que {name} inclui",
+    "tierSpacesHeading": "Espaços da comunidade só para este plano",
+    "tierLivesHeading": "Próximas aulas ao vivo só para este plano"
   },
   "verificar": {
     "notFoundTitle": "Certificado não encontrado",

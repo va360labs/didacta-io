@@ -165,6 +165,8 @@ describe('MembershipPublicController — pago dentro de /join', () => {
     expect(args['successUrl']).toBe(
       'https://primersorbo.test/join?status=success&session_id={CHECKOUT_SESSION_ID}',
     );
+    // Al volver de un pago cancelado sigue elegido el plan (nivel y periodicidad).
+    expect(args['cancelUrl']).toBe(`https://primersorbo.test/join?status=cancel&plan=${PLAN}`);
   });
 
   it('vuelta: plan, importe y fecha; 404 si no es de esta academia o el id no es de sesión', async () => {

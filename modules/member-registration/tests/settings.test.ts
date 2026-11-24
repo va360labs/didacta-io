@@ -177,3 +177,46 @@ describe('MemberRegistrationSettings', () => {
     });
   });
 });
+
+describe('resolveAutoApprove / resolveManualReview (nivel gratis de la membresía)', () => {
+  const OTP = { verification: { enabled: true, verifiers: ['otp'] } };
+
+  it('sin la clave: nada cambia (aprobación manual de siempre)', async () => {
+    const { service } = makeService(OTP);
+    expect(await service.resolveAutoApprove(TENANT_ID)).toBe(false);
+    expect(await service.resolveManualReview(TENANT_ID)).toBe(false);
+  });
+
+  it('encendida y con código por correo: entra sola', async () => {
+    const { service } = makeService({
+      ...OTP,
+      'auto-approve': { enabled: true, manualReview: false },
+    });
+    expect(await service.resolveAutoApprove(TENANT_ID)).toBe(true);
+  });
+
+  it('encendida pero SIN código (registro libre): no, el correo no está verificado', async () => {
+    const { service } = makeService({
+      verification: { enabled: true, verifiers: [] },
+      'auto-approve': { enabled: true, manualReview: false },
+    });
+    expect(await service.resolveAutoApprove(TENANT_ID)).toBe(false);
+  });
+
+  it('encendida con el registro cerrado: no', async () => {
+    const { service } = makeService({
+      verification: { enabled: false, verifiers: ['otp'] },
+      'auto-approve': { enabled: true, manualReview: false },
+    });
+    expect(await service.resolveAutoApprove(TENANT_ID)).toBe(false);
+  });
+
+  it('«Revisar a mano»: apagada y la preferencia se lee', async () => {
+    const { service } = makeService({
+      ...OTP,
+      'auto-approve': { enabled: false, manualReview: true },
+    });
+    expect(await service.resolveAutoApprove(TENANT_ID)).toBe(false);
+    expect(await service.resolveManualReview(TENANT_ID)).toBe(true);
+  });
+});

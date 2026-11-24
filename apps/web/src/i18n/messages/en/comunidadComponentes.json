@@ -202,6 +202,7 @@
     "disponibleEnOtros": "Available in other membership levels.",
     "verPlanes": "See plans",
     "soloAlgunos": "Only some levels",
-    "soloPara": "Only for: {niveles}"
+    "soloPara": "Only for: {niveles}",
+    "nivelNoIncluyeOtro": "One level doesn't include another: tick every level that should see it."
   }
 }

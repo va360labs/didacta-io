@@ -328,6 +328,12 @@ export class MemberDecisionService {
     userId: string,
     action: 'APPROVE' | 'REJECT',
     ctx: ClientContext,
+    /**
+     * Quién decide: el panel (lo de siempre) o la aprobación AUTOMÁTICA del
+     * alta con el correo verificado (`auto`, nivel gratis). Mismo camino y
+     * mismos efectos; solo cambia lo que queda en la auditoría y el evento.
+     */
+    via: 'admin-panel' | 'auto' = 'admin-panel',
   ): Promise<{ outcome: 'approved' | 'rejected' | 'invalid' }> {
     const user = await this.prisma.user.findFirst({
       where: { tenantId, id: userId },
@@ -385,12 +391,12 @@ export class MemberDecisionService {
         action: 'member.approved',
         resourceType: 'user',
         resourceId: userId,
-        metadata: { email: user.email, via: 'admin-panel' },
+        metadata: { email: user.email, via },
         ip: ctx.ip ?? undefined,
         userAgent: ctx.userAgent ?? undefined,
       });
       await this.events.publish(tenantId, userId, 'member_registration.request.approved', {
-        via: 'admin-panel',
+        via,
       });
       return { outcome: 'approved' };
     }

@@ -218,9 +218,15 @@ export default function EspaciosAdminPage() {
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-1.5 text-sm font-medium">
                         {s.title}
+                        {/* Etiqueta y no candado: el candado es de los espacios
+                            solo para algunos niveles de la membresía. */}
                         {s.isSystem ? (
-                          <span title={t('spaces.systemTitle')} className="text-text-subtle">
-                            🔒
+                          <span
+                            title={t('spaces.systemTitle')}
+                            data-testid={`espacio-sistema-${s.slug}`}
+                            className="rounded-full bg-bg-subtle px-2 py-0.5 text-[11px] font-semibold text-text-muted"
+                          >
+                            {t('spaces.systemBadge')}
                           </span>
                         ) : null}
                       </div>

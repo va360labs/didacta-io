@@ -146,7 +146,7 @@
   "spaces": {
     "noAccess": "Somente os administradores do tenant podem gerenciar os espaços da comunidade.",
     "title": "Espaços da comunidade",
-    "subtitle": "Crie, edite e reordene os espaços que aparecem na barra lateral. Os espaços de sistema (marcados com 🔒) não podem ser excluídos.",
+    "subtitle": "Crie, edite e reordene os espaços que aparecem na barra lateral. Os espaços com a etiqueta «Do sistema» não podem ser excluídos.",
     "listTitle": "Espaços existentes",
     "loading": "Carregando…",
     "emptyList": "Ainda não há espaços. Crie o primeiro.",
@@ -180,7 +180,8 @@
     "saving": "Salvando…",
     "saveChanges": "Salvar alterações",
     "create": "Criar espaço",
-    "deleteConfirm": "Excluir o espaço \"{name}\"? Esta ação não pode ser desfeita."
+    "deleteConfirm": "Excluir o espaço \"{name}\"? Esta ação não pode ser desfeita.",
+    "systemBadge": "Do sistema"
   },
   "tags": {
     "noAccess": "Somente os administradores do tenant podem gerenciar as tags da comunidade.",

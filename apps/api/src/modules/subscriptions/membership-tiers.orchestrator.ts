@@ -8,6 +8,7 @@ import { BadRequestException, Injectable } from '@nestjs/common';
 import { Logger as PinoLogger } from 'nestjs-pino';
 import { slugify } from '@didacta/mod-access-groups';
 import {
+  AUTO_APPROVE_SETTING_KEY,
   MEMBER_REGISTRATION_SCOPE,
   MemberRegistrationSettings,
   VERIFICATION_SETTING_KEY,
@@ -52,8 +53,12 @@ export interface MembershipTiersAdminView {
   tiers: MembershipTierAdminView[];
   /** Planes sin nivel (los de antes): pasan al primer nivel de pago que se cree. */
   legacyPlanCount: number;
-  /** El registro gratis (la puerta del nivel gratis) está encendido y abierto. */
-  freeSignup: { moduleEnabled: boolean; open: boolean };
+  /**
+   * El registro gratis (la puerta del nivel gratis): encendido y abierto, y
+   * si el creador revisa a mano cada alta (`manualReview`) o entran solas en
+   * cuanto verifican el correo con código.
+   */
+  freeSignup: { moduleEnabled: boolean; open: boolean; manualReview: boolean };
 }
 
 /**
@@ -67,7 +72,10 @@ export interface MembershipTiersAdminView {
  *    nada.
  *  - El nivel gratis hace de su grupo el «grupo por defecto al aprobar» del
  *    registro gratis y enciende ese registro (módulo y política), que es la
- *    puerta de entrada al nivel gratis.
+ *    puerta de entrada al nivel gratis: el correo se verifica con código y,
+ *    salvo que el creador quiera revisar a mano cada alta, se entra al momento
+ *    (aprobación automática). Apagar o borrar el nivel gratis apaga la
+ *    aprobación automática: sin nivel gratis, el registro vuelve a lo de antes.
  */
 @Injectable()
 export class MembershipTiersOrchestrator {
@@ -233,8 +241,23 @@ export class MembershipTiersOrchestrator {
       await this.renamePlans(tenantId, after.id, before.name, after.name);
     }
 
+    // «Revisar a mano cada alta gratis»: solo tiene sentido en el nivel gratis.
+    if (dto.manualReview !== undefined) {
+      if (!after.isFree) {
+        throw new BadRequestException({
+          message: 'Solo el nivel gratis tiene altas que revisar.',
+          code: 'MEMBERSHIP_TIER_INVALID',
+          detail: 'manual_review_not_free',
+        });
+      }
+      await this.writeAutoApprove(tenantId, actorId, {
+        manualReview: dto.manualReview,
+        active: after.active,
+      });
+    }
+
     // El nivel gratis apagado deja de ser la puerta del registro (las altas
-    // nuevas ya no lo reciben); encendido, vuelve a serlo.
+    // nuevas ya no lo reciben ni entran solas); encendido, vuelve a serlo.
     if (after.isFree && after.accessGroupId && after.active !== before.active) {
       if (after.active) {
         await this.openFreeSignup(tenantId, actorId, after.accessGroupId);
@@ -242,6 +265,7 @@ export class MembershipTiersOrchestrator {
         await this.accessGroups.updateGroup(tenantId, after.accessGroupId, {
           isDefaultForApproval: false,
         });
+        await this.writeAutoApprove(tenantId, actorId, { active: false });
       }
     }
     return this.get(tenantId, after.id);
@@ -264,6 +288,8 @@ export class MembershipTiersOrchestrator {
     if (group && (await this.ownsGroup(tenantId, tier))) {
       await this.accessGroups.deleteGroup(tenantId, group.id);
     }
+    // Sin nivel gratis, las altas vuelven a esperar al creador.
+    if (tier.isFree) await this.writeAutoApprove(tenantId, null, { active: false });
   }
 
   // ---------------- Helpers ----------------
@@ -348,26 +374,54 @@ export class MembershipTiersOrchestrator {
     if (!modules.some((m) => m.name === FREE_SIGNUP_MODULE && m.enabled)) {
       await this.tenantModules.enable(tenantId, FREE_SIGNUP_MODULE, actorId);
     }
+    // Registro abierto y con el correo verificado por código: es lo que deja
+    // entrar sin esperar al creador. Los verificadores que hubiera (Telegram)
+    // se conservan.
     const settings = new MemberRegistrationSettings(this.tenantConfig);
     const policy = await settings.resolvePolicy(tenantId);
-    if (!policy.enabled) {
+    if (!policy.enabled || !policy.verifiers.includes('otp')) {
       await this.tenantConfig.set(
         tenantId,
         MEMBER_REGISTRATION_SCOPE,
         VERIFICATION_SETTING_KEY,
-        { enabled: true, verifiers: policy.verifiers },
+        { enabled: true, verifiers: [...new Set([...policy.verifiers, 'otp'])] },
         { actorId },
       );
     }
+    await this.writeAutoApprove(tenantId, actorId, { active: true });
+  }
+
+  /**
+   * Aprobación automática de las altas gratis: encendida si el nivel gratis
+   * está encendido y el creador no pidió revisarlas a mano. La preferencia
+   * («Revisar a mano») se guarda aunque el nivel esté apagado.
+   */
+  private async writeAutoApprove(
+    tenantId: string,
+    actorId: string | null,
+    change: { active: boolean; manualReview?: boolean },
+  ) {
+    const settings = new MemberRegistrationSettings(this.tenantConfig);
+    const manualReview = change.manualReview ?? (await settings.resolveManualReview(tenantId));
+    await this.tenantConfig.set(
+      tenantId,
+      MEMBER_REGISTRATION_SCOPE,
+      AUTO_APPROVE_SETTING_KEY,
+      { enabled: change.active && !manualReview, manualReview },
+      actorId ? { actorId } : undefined,
+    );
   }
 
   private async freeSignupState(tenantId: string) {
     const modules = await this.tenantModules.list(tenantId);
     const moduleEnabled = modules.some((m) => m.name === FREE_SIGNUP_MODULE && m.enabled);
-    const policy = await new MemberRegistrationSettings(this.tenantConfig).resolveEffectivePolicy(
-      tenantId,
-    );
-    return { moduleEnabled, open: moduleEnabled && policy.enabled && policy.operational };
+    const settings = new MemberRegistrationSettings(this.tenantConfig);
+    const policy = await settings.resolveEffectivePolicy(tenantId);
+    return {
+      moduleEnabled,
+      open: moduleEnabled && policy.enabled && policy.operational,
+      manualReview: await settings.resolveManualReview(tenantId),
+    };
   }
 }
 

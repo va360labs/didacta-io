@@ -301,7 +301,12 @@
       "priceSaved": "Precio guardado.",
       "priceDeleted": "Precio borrado (o apagado, si alguien ya lo pagaba).",
       "priceTurnedOff": "Precio apagado: ya no se vende.",
-      "priceTurnedOn": "Precio encendido."
-    }
+      "priceTurnedOn": "Precio encendido.",
+      "manualReviewOn": "Ahora revisas a mano cada alta gratis.",
+      "manualReviewOff": "Las altas gratis entran solas en cuanto confirman su correo."
+    },
+    "manualReviewLabel": "Revisar a mano cada alta gratis",
+    "manualReviewOffHelp": "Apagado: quien se apunta gratis confirma su correo con un código y entra al momento.",
+    "manualReviewOnHelp": "Encendido: cada alta gratis espera a que tú la apruebes en Alumnos."
   }
 }

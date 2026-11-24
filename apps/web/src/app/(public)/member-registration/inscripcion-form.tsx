@@ -6,6 +6,7 @@
  */
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -136,6 +137,8 @@ export function InscripcionForm() {
   const [bio, setBio] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [done, setDone] = useState(false);
+  /** El aula le dejó entrar al momento (alta con el correo verificado). */
+  const [activeNow, setActiveNow] = useState(false);
 
   const hasTelegram = verifiers.includes('telegram');
   const hasOtp = verifiers.includes('otp');
@@ -229,7 +232,7 @@ export function InscripcionForm() {
     setSubmitting(true);
     setError(null);
     try {
-      await createInscripcion({
+      const result = await createInscripcion({
         name: name.trim(),
         password,
         bio: bio.trim() === '' ? undefined : bio.trim(),
@@ -240,6 +243,7 @@ export function InscripcionForm() {
               ...(hasTelegram ? { ticket: ticket ?? undefined } : {}),
             }),
       });
+      setActiveNow(result.status === 'ACTIVE');
       setDone(true);
     } catch (e) {
       setError(
@@ -263,6 +267,30 @@ export function InscripcionForm() {
         : datosReady;
 
   // ── Pantalla final tras crear la solicitud ──────────────────────────────────
+  if (done && activeNow) {
+    return (
+      <Card>
+        <CardContent className="space-y-3 p-8 text-center" data-testid="inscripcion-dentro">
+          <div
+            aria-hidden="true"
+            className="mx-auto grid h-14 w-14 place-items-center rounded-full bg-success-500 text-2xl text-white"
+          >
+            ✓
+          </div>
+          <h1 className="font-display text-xl font-bold tracking-tight">
+            {t('inscripcion.doneActiveTitle')}
+          </h1>
+          <p className="text-sm text-text-muted">{t('inscripcion.doneActiveBody')}</p>
+          <Button asChild className="mt-2">
+            <Link href="/signin" data-testid="inscripcion-entrar">
+              {t('inscripcion.doneActiveCta')}
+            </Link>
+          </Button>
+        </CardContent>
+      </Card>
+    );
+  }
+
   if (done) {
     const finalCopy =
       !hasTelegram || inGroup === 'true'

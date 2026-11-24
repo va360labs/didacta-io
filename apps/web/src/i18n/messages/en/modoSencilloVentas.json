@@ -301,7 +301,12 @@
       "priceSaved": "Price saved.",
       "priceDeleted": "Price deleted (or turned off, if someone was already paying for it).",
       "priceTurnedOff": "Price turned off: it is no longer sold.",
-      "priceTurnedOn": "Price turned on."
-    }
+      "priceTurnedOn": "Price turned on.",
+      "manualReviewOn": "You now review every free sign-up by hand.",
+      "manualReviewOff": "Free sign-ups now get in as soon as they confirm their email."
+    },
+    "manualReviewLabel": "Review every free sign-up by hand",
+    "manualReviewOffHelp": "Off: people who join for free confirm their email with a code and get in straight away.",
+    "manualReviewOnHelp": "On: every free sign-up waits until you approve it in Students."
   }
 }

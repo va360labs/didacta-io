@@ -80,7 +80,14 @@ export function AccessLevelsField({
           name={`${idPrefix}-quien`}
           checked={value.mode === 'levels'}
           disabled={noLevels}
-          onChange={() => onChange({ mode: 'levels', ids })}
+          // Al pasar a «Solo estos niveles» se marcan TODOS: un nivel no incluye
+          // a otro, y empezar sin ninguno dejaba fuera a quien también paga.
+          onChange={() =>
+            onChange({
+              mode: 'levels',
+              ids: anyChecked ? ids : (options ?? []).map((o) => o.id),
+            })
+          }
           className="mt-0.5 h-4 w-4"
         />
         {t('soloNiveles')}
@@ -117,6 +124,12 @@ export function AccessLevelsField({
             </label>
           ))}
           <p className="pt-1 text-xs text-text-subtle">{t('soloNivelesAyuda')}</p>
+          <p
+            className="text-xs font-medium text-text-muted"
+            data-testid={`${idPrefix}-nota-niveles`}
+          >
+            {t('nivelNoIncluyeOtro')}
+          </p>
           {showIncomplete && !anyChecked ? (
             <p role="alert" className="text-xs font-semibold text-danger-700">
               {t('eligeUno')}

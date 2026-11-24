@@ -202,6 +202,7 @@
     "disponibleEnOtros": "Disponível em outros níveis da assinatura.",
     "verPlanes": "Ver planos",
     "soloAlgunos": "Só alguns níveis",
-    "soloPara": "Só para: {niveles}"
+    "soloPara": "Só para: {niveles}",
+    "nivelNoIncluyeOtro": "Um nível não inclui outro: marque todos os que devem ver."
   }
 }

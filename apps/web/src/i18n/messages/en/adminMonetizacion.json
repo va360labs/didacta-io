@@ -142,12 +142,17 @@
         "priceSaved": "Price saved.",
         "priceDeleted": "Price deleted (or turned off, if someone was already paying for it).",
         "priceTurnedOff": "Price turned off: it is no longer sold.",
-        "priceTurnedOn": "Price turned on."
+        "priceTurnedOn": "Price turned on.",
+        "manualReviewOn": "You now review every free sign-up by hand.",
+        "manualReviewOff": "Free sign-ups now get in as soon as they confirm their email."
       },
       "page": {
         "groupByTier": "Each level gives its own courses: change them above, in “Levels”.",
         "loosePlansDescription": "These prices are not in any level and do not show on the sales page. Turn them off or delete them."
-      }
+      },
+      "manualReviewLabel": "Review every free sign-up by hand",
+      "manualReviewOffHelp": "Off: people who join for free confirm their email with a code and get in straight away.",
+      "manualReviewOnHelp": "On: every free sign-up waits until you approve it in Students."
     }
   },
   "interval": {

@@ -257,6 +257,37 @@ export class ZoomLiveService {
     );
   }
 
+  /**
+   * Próximos directos restringidos a ALGUNO de estos grupos de acceso (niveles
+   * de la membresía): solo el título, la fecha y a qué grupos van. Lo usa la
+   * página de venta para decir qué directos incluye cada nivel; nunca lleva
+   * enlaces ni descripción. Los abiertos a todos y los cancelados no salen.
+   */
+  async listUpcomingForGroups(
+    tenantId: string,
+    groupIds: readonly string[],
+    opts: { now?: Date; limit?: number } = {},
+  ): Promise<Array<{ id: string; title: string; startTime: Date; accessGroupIds: string[] }>> {
+    if (groupIds.length === 0) return [];
+    const rows = await this.prisma.modZoomSession.findMany({
+      where: {
+        tenantId,
+        status: 'SCHEDULED',
+        startTime: { gte: opts.now ?? new Date() },
+        accessGroupIds: { hasSome: [...groupIds] },
+      },
+      orderBy: { startTime: 'asc' },
+      take: Math.min(Math.max(opts.limit ?? 20, 1), 100),
+      select: { id: true, topic: true, startTime: true, accessGroupIds: true },
+    });
+    return rows.map((r) => ({
+      id: r.id,
+      title: r.topic,
+      startTime: r.startTime,
+      accessGroupIds: r.accessGroupIds,
+    }));
+  }
+
   async get(tenantId: string, sessionId: string, viewer?: SessionViewer): Promise<SessionView> {
     const row = await this.prisma.modZoomSession.findFirst({
       where: { tenantId, id: sessionId },

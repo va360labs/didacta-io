@@ -59,6 +59,7 @@ export {
   MemberRegistrationSettings,
   TELEGRAM_SETTING_KEY,
   VERIFICATION_SETTING_KEY,
+  AUTO_APPROVE_SETTING_KEY,
 } from './settings.js';
 export type {
   EffectiveRegistrationPolicy,

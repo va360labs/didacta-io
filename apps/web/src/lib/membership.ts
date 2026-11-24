@@ -93,6 +93,10 @@ export interface MembershipPublicTier {
     /** Todos los cursos publicados (también los nuevos). */
     allCourses: boolean;
     courses: MembershipTierCourse[];
+    /** Espacios de la comunidad solo para este nivel (solo el nombre). */
+    spaces?: Array<{ name: string }>;
+    /** Próximos directos solo para este nivel (título y fecha ISO). */
+    lives?: Array<{ title: string; startTime: string }>;
   };
   /** Planes del nivel (ids de `MembershipPage.plans`). Vacío en el gratis. */
   planIds: string[];
@@ -192,8 +196,11 @@ export interface MembershipAdminTiers {
   tiers: MembershipAdminTier[];
   /** Planes sin nivel (los de antes): pasan al primer nivel de pago que se cree. */
   legacyPlanCount: number;
-  /** El registro gratis (puerta del nivel gratis) encendido y abierto. */
-  freeSignup: { moduleEnabled: boolean; open: boolean };
+  /**
+   * El registro gratis (puerta del nivel gratis) encendido y abierto, y si el
+   * creador revisa a mano cada alta (si no, entran solas al verificar el correo).
+   */
+  freeSignup: { moduleEnabled: boolean; open: boolean; manualReview?: boolean };
 }
 
 export interface CreateTierInput {
@@ -209,6 +216,8 @@ export interface UpdateTierInput {
   description?: string | null;
   active?: boolean;
   courseIds?: string[];
+  /** Solo el nivel gratis: «Revisar a mano cada alta gratis». */
+  manualReview?: boolean;
 }
 
 /** Lectura pública de los niveles (`GET /membership/tiers`). */

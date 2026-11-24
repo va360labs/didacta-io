@@ -83,7 +83,11 @@ export interface CreateInscripcionInput {
 
 export interface CreateInscripcionResult {
   ok: boolean;
-  status: 'PENDING';
+  /**
+   * `ACTIVE`: el aula deja entrar sola a quien verifica su correo (nivel
+   * gratis): ya puede iniciar sesión. `PENDING`: espera a que la aprueben.
+   */
+  status: 'PENDING' | 'ACTIVE';
 }
 
 // ── Funciones del cliente ─────────────────────────────────────────────────────

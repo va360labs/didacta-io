@@ -36,6 +36,11 @@ export const updateTierSchema = z
     /** Apagado: no se vende ni se ofrece; quien ya lo paga conserva su acceso. */
     active: z.boolean().optional(),
     courseIds: courseIds.optional(),
+    /**
+     * Solo el nivel gratis: «Revisar a mano cada alta gratis». Apagado (lo
+     * normal), quien verifica su correo con código entra al momento.
+     */
+    manualReview: z.boolean().optional(),
   })
   .strict();
 export type UpdateTierDto = z.infer<typeof updateTierSchema>;

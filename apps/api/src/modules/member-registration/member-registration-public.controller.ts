@@ -338,10 +338,17 @@ export class MemberRegistrationPublicController {
         email = this.requireEmail(dto);
       }
 
+      // Aprobación AUTOMÁTICA (nivel gratis de la membresía): el aula la
+      // encendió y el correo llega verificado con código. Entonces no se avisa
+      // al aprobador (no hay nada que aprobar) y el alta entra al momento.
+      const autoApprove =
+        policy.verifiers.includes('otp') && (await this.settings.resolveAutoApprove(tenantId));
+
       // Base del API para los enlaces de decisión (aprobar/rechazar) del email,
       // que apuntan de vuelta a este controller (`GET .../decision`).
       const apiBase = await this.resolveApiBaseUrl(tenantId, req);
-      await this.registration.createPending(
+      const ctx = extractClientContext(req);
+      const created = await this.registration.createPending(
         tenantId,
         {
           name: dto.name,
@@ -352,9 +359,30 @@ export class MemberRegistrationPublicController {
           inGroup,
         },
         apiBase,
-        extractClientContext(req),
+        ctx,
+        { skipAutoNotify: autoApprove },
       );
-      return { ok: true, status: 'PENDING' };
+      if (autoApprove) {
+        // Solo una inscripción que SIGUE pendiente: una rechazada o una cuenta
+        // que ya existía no cambian por volver a apuntarse.
+        const user = await this.prisma.user.findFirst({
+          where: { id: created.userId, tenantId },
+          select: { status: true },
+        });
+        if (user?.status === 'PENDING') {
+          // El mismo camino que «Aprobar» en el panel: grupo por defecto (el
+          // del nivel gratis), correo de bienvenida, auditoría y evento.
+          const decided = await this.decision.decideByAdmin(
+            tenantId,
+            created.userId,
+            'APPROVE',
+            ctx,
+            'auto',
+          );
+          if (decided.outcome === 'approved') return { ok: true, status: 'ACTIVE' as const };
+        }
+      }
+      return { ok: true, status: 'PENDING' as const };
     });
   }
 

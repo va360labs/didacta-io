@@ -28,7 +28,14 @@ export const manifest: ModuleManifest = parseModuleManifest({
     ],
     // Niveles de la membresía: la página pública nombra los cursos de cada
     // nivel leyendo su grupo de acceso (solo lectura, filtrada por tenant).
-    optionalModules: [{ name: 'mod.access-groups', version: '^1.0.0' }],
+    // Y nombra los espacios (mod.community) y los próximos directos
+    // (mod.zoom-live) restringidos a cada nivel: lo compone el host con los
+    // services públicos de esos módulos.
+    optionalModules: [
+      { name: 'mod.access-groups', version: '^1.0.0' },
+      { name: 'mod.community', version: '^1.0.0' },
+      { name: 'mod.zoom-live', version: '^1.0.0' },
+    ],
   },
   eventsEmitted: [
     'subscriptions.subscription.created',

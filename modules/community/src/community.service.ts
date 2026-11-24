@@ -1609,6 +1609,24 @@ export class CommunityService {
     });
   }
 
+  /**
+   * Espacios restringidos a ALGUNO de estos grupos de acceso (niveles de la
+   * membresía): solo su nombre y a qué grupos van. Lo usa la página de venta
+   * para decir qué espacios incluye cada nivel; no lleva descripción ni nada
+   * del contenido. Los espacios abiertos a todos no se listan aquí.
+   */
+  async listSpaceNamesForGroups(
+    tenantId: string,
+    groupIds: readonly string[],
+  ): Promise<Array<{ slug: string; title: string; accessGroupIds: string[] }>> {
+    if (groupIds.length === 0) return [];
+    return this.prisma.modCommunitySpace.findMany({
+      where: { tenantId, accessGroupIds: { hasSome: [...groupIds] } },
+      orderBy: { sortOrder: 'asc' },
+      select: { slug: true, title: true, accessGroupIds: true },
+    });
+  }
+
   /** Niveles elegidos para un espacio: existentes y vivos en el aula, sin repetir. */
   private async validAccessGroupIds(tenantId: string, ids: readonly string[]): Promise<string[]> {
     const check = await this.access.checkGroups(tenantId, ids);

@@ -44,7 +44,10 @@ function policy(overrides: Partial<EffectiveRegistrationPolicy>): EffectiveRegis
   };
 }
 
-function makeController(effectivePolicy: EffectiveRegistrationPolicy) {
+function makeController(
+  effectivePolicy: EffectiveRegistrationPolicy,
+  opts: { autoApprove?: boolean; userStatus?: string } = {},
+) {
   const telegram = {
     verifyLoginHash: vi.fn().mockReturnValue(true),
     getChatMember: vi.fn().mockResolvedValue('true'),
@@ -56,9 +59,13 @@ function makeController(effectivePolicy: EffectiveRegistrationPolicy) {
   const registration = {
     createPending: vi.fn().mockResolvedValue({ userId: 'u1', created: true, status: 'PENDING' }),
   };
-  const decision = { decide: vi.fn() };
+  const decision = {
+    decide: vi.fn(),
+    decideByAdmin: vi.fn().mockResolvedValue({ outcome: 'approved' }),
+  };
   const settings = {
     resolveEffectivePolicy: vi.fn().mockResolvedValue(effectivePolicy),
+    resolveAutoApprove: vi.fn().mockResolvedValue(opts.autoApprove ?? false),
     resolveTelegram: vi.fn().mockResolvedValue({
       botToken: 'tok',
       groupId: '-100',
@@ -83,9 +90,20 @@ function makeController(effectivePolicy: EffectiveRegistrationPolicy) {
     tenantResolver as never,
     // U7: el tenant de este harness admite altas, que es el estado por defecto
     // de cualquier instalacion y el unico que ve un self-hoster.
-    { tenant: { findUnique: vi.fn().mockResolvedValue({ signupsFrozenAt: null }) } } as never,
+    {
+      tenant: { findUnique: vi.fn().mockResolvedValue({ signupsFrozenAt: null }) },
+      user: { findFirst: vi.fn().mockResolvedValue({ status: opts.userStatus ?? 'PENDING' }) },
+    } as never,
   );
-  return { controller, telegram, emailVerification, registration, settings, tenantResolver };
+  return {
+    controller,
+    telegram,
+    emailVerification,
+    registration,
+    decision,
+    settings,
+    tenantResolver,
+  };
 }
 
 const ORIGINAL_AUTH_SECRET = process.env['AUTH_SECRET'];
@@ -277,6 +295,84 @@ describe('MemberRegistrationPublicController · register', () => {
         verificationToken: token,
       } as never),
     ).rejects.toBeInstanceOf(UnauthorizedException);
+  });
+
+  /** Evidencia OTP válida para este tenant (el correo se verificó con código). */
+  function otpToken(email = 'ana@x.com') {
+    return signTicket(
+      {
+        telegramId: null,
+        inGroup: 'unknown',
+        email,
+        purpose: 'member-register',
+        tenantId: TENANT_ID,
+      },
+      AUTH_SECRET,
+      1800,
+    );
+  }
+
+  it('APROBACIÓN AUTOMÁTICA: correo verificado + ajuste encendido → ACTIVE por el camino de «Aprobar»', async () => {
+    const { controller, registration, decision } = makeController(policy({ verifiers: ['otp'] }), {
+      autoApprove: true,
+    });
+    const res = await controller.register(REQ, {
+      name: 'Ana',
+      password: 'x'.repeat(12),
+      verificationToken: otpToken(),
+    } as never);
+    expect(res).toEqual({ ok: true, status: 'ACTIVE' });
+    // Sin aviso al aprobador: no hay nada que aprobar.
+    expect(registration.createPending.mock.calls[0]![4]).toEqual({ skipAutoNotify: true });
+    expect(decision.decideByAdmin).toHaveBeenCalledWith(
+      TENANT_ID,
+      'u1',
+      'APPROVE',
+      expect.anything(),
+      'auto',
+    );
+  });
+
+  it('ajuste apagado («Revisar a mano»): queda PENDING y se avisa al aprobador', async () => {
+    const { controller, registration, decision } = makeController(policy({ verifiers: ['otp'] }), {
+      autoApprove: false,
+    });
+    const res = await controller.register(REQ, {
+      name: 'Ana',
+      password: 'x'.repeat(12),
+      verificationToken: otpToken(),
+    } as never);
+    expect(res).toEqual({ ok: true, status: 'PENDING' });
+    expect(registration.createPending.mock.calls[0]![4]).toEqual({ skipAutoNotify: false });
+    expect(decision.decideByAdmin).not.toHaveBeenCalled();
+  });
+
+  it('sin código (registro libre) no hay aprobación automática aunque el ajuste diga que sí', async () => {
+    const { controller, settings, decision } = makeController(policy({ verifiers: [] }), {
+      autoApprove: true,
+    });
+    const res = await controller.register(REQ, {
+      name: 'Ana',
+      password: 'x'.repeat(12),
+      email: 'ana@x.com',
+    } as never);
+    expect(res.status).toBe('PENDING');
+    expect(settings.resolveAutoApprove).not.toHaveBeenCalled();
+    expect(decision.decideByAdmin).not.toHaveBeenCalled();
+  });
+
+  it('una cuenta que ya existía (rechazada o activa) no cambia por volver a apuntarse', async () => {
+    const { controller, decision } = makeController(policy({ verifiers: ['otp'] }), {
+      autoApprove: true,
+      userStatus: 'DEACTIVATED',
+    });
+    const res = await controller.register(REQ, {
+      name: 'Ana',
+      password: 'x'.repeat(12),
+      verificationToken: otpToken(),
+    } as never);
+    expect(res.status).toBe('PENDING');
+    expect(decision.decideByAdmin).not.toHaveBeenCalled();
   });
 
   it('política solo-telegram: ticket del widget + email del formulario', async () => {

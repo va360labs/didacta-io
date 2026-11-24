@@ -31,6 +31,7 @@ import {
 import { membershipCheckoutSchema, type MembershipCheckoutDto } from './membership.dto';
 import { MemberRegistrationSettings } from '@didacta/mod-member-registration';
 import { PrismaTenantConfigService } from '../prisma-tenant-config.service';
+import { withTierExtras } from './membership-tier-extras';
 import { TenantModulesService } from '../tenant-modules.service';
 
 /** Página pública del registro gratis: la puerta del nivel gratis. */
@@ -72,9 +73,8 @@ export class MembershipPublicController {
    * encendido y con su política abierta y operativa. Es lo que enlaza la
    * tarjeta del nivel gratis («Entrar gratis»).
    */
-  private async freeSignupPath(tenantId: string): Promise<string | null> {
-    const modules = await this.tenantModules.list(tenantId);
-    if (!modules.some((m) => m.name === 'mod.member-registration' && m.enabled)) return null;
+  private async freeSignupPath(tenantId: string, enabled: Set<string>): Promise<string | null> {
+    if (!enabled.has('mod.member-registration')) return null;
     const policy = await new MemberRegistrationSettings(this.tenantConfig).resolveEffectivePolicy(
       tenantId,
     );
@@ -105,11 +105,26 @@ export class MembershipPublicController {
     // el ALS del tenant resuelto por Host.
     return runAsTenant(tenantId, async () => {
       const base = await this.registry.getMembershipService().getPublicPage(tenantId);
-      // Nivel gratis: «Entrar gratis» lleva al registro gratis si está abierto.
-      // Sin nivel gratis, la página sale tal cual la da el módulo.
-      const page = base.tiers?.some((t) => t.isFree)
-        ? { ...base, freeSignupPath: await this.freeSignupPath(tenantId) }
-        : base;
+      // Sin niveles, la página sale tal cual la da el módulo.
+      let page: typeof base & { freeSignupPath?: string | null } = base;
+      if (base.tiers?.length) {
+        const enabled = new Set(
+          (await this.tenantModules.list(tenantId)).filter((m) => m.enabled).map((m) => m.name),
+        );
+        // Cada nivel de pago nombra también sus espacios y próximos directos.
+        page = await withTierExtras(page, {
+          spaces: enabled.has('mod.community')
+            ? (ids) => this.registry.getCommunityService().listSpaceNamesForGroups(tenantId, ids)
+            : null,
+          lives: enabled.has('mod.zoom-live')
+            ? (ids) => this.registry.getZoomLiveService().listUpcomingForGroups(tenantId, ids)
+            : null,
+        });
+        // Nivel gratis: «Entrar gratis» lleva al registro gratis si está abierto.
+        if (base.tiers.some((t) => t.isFree)) {
+          page = { ...page, freeSignupPath: await this.freeSignupPath(tenantId, enabled) };
+        }
+      }
       // Sin modo plataforma (Community) la página sale tal cual, sin campos nuevos.
       const checkoutInfo = await this.payoutsGate?.publicCheckoutInfo(tenantId);
       if (!checkoutInfo) return page;
@@ -175,7 +190,9 @@ export class MembershipPublicController {
         locale: requestLocale,
         ...(checkoutLocale ? { checkoutLocale } : {}),
         successUrl: `${base}/join?status=success&session_id={CHECKOUT_SESSION_ID}`,
-        cancelUrl: `${base}/join?status=cancel`,
+        // Con el plan: al volver de un pago cancelado sigue elegido el nivel y
+        // la periodicidad (la página lo preselecciona con `?plan=`).
+        cancelUrl: `${base}/join?status=cancel&plan=${encodeURIComponent(dto.planId)}`,
         // Embebido: una sola vuelta que PREGUNTA si se pagó.
         ...(publishableKey
           ? {

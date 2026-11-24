@@ -333,8 +333,29 @@ describe('Tarjetas de nivel', () => {
     expect(list.querySelectorAll('li')).toHaveLength(8);
   });
 
-  it('el hueco de espacios y directos no pinta nada todavía', () => {
-    expect(TierIncludesExtra({ tier: PRO })).toBeNull();
+  it('sin espacios ni directos propios, el nivel no pinta nada más', async () => {
+    await render('es');
+    expect(byTestId(`nivel-incluye-extra-${PRO.id}`)).toBeNull();
+  });
+
+  it('nombra los espacios y los próximos directos del nivel (solo nombre y fecha)', async () => {
+    const conExtras: MembershipPublicTier = {
+      ...PRO,
+      includes: {
+        ...PRO.includes,
+        spaces: [{ name: 'Sala Pro' }],
+        lives: [{ title: 'Directo de retrato', startTime: '2026-12-01T18:00:00.000Z' }],
+      },
+    };
+    await render('es', { tiers: [FREE, BASIC, conExtras] });
+    expect(byTestId(`nivel-espacios-${PRO.id}`)!.textContent).toBe('Sala Pro');
+    const directo = byTestId(`nivel-directos-${PRO.id}`)!.textContent ?? '';
+    expect(directo).toContain('Directo de retrato');
+    expect(directo).toMatch(/1 dic 2026/);
+    expect(byTestId(`nivel-incluye-extra-${PRO.id}`)!.querySelector('a')).toBeNull();
+    // El nivel sin extras no enseña nada de esto.
+    expect(byTestId(`nivel-incluye-extra-${BASIC.id}`)).toBeNull();
+    expect(TierIncludesExtra).toBeTypeOf('function');
   });
 
   it('en portugués y en inglés no se cuela español', async () => {

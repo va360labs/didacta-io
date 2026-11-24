@@ -116,7 +116,10 @@
     "doneNotInGroupTitle": "No estás en el grupo de {name}",
     "doneNotInGroupBody": "Recibimos tu solicitud igualmente. Revisaremos tu caso y te avisaremos por email.",
     "doneUnknownTitle": "Solicitud recibida",
-    "doneUnknownBody": "No pudimos verificar tu pertenencia al grupo, pero recibimos tu solicitud. Revisaremos tu caso y te avisaremos por email."
+    "doneUnknownBody": "No pudimos verificar tu pertenencia al grupo, pero recibimos tu solicitud. Revisaremos tu caso y te avisaremos por email.",
+    "doneActiveTitle": "Ya estás dentro",
+    "doneActiveBody": "Tu cuenta está lista. Entra con tu correo y tu contraseña.",
+    "doneActiveCta": "Entrar"
   },
   "unete": {
     "metaTitle": "Únete",
@@ -208,7 +211,9 @@
     "tierFreeClosed": "Ahora mismo no se admiten altas gratis.",
     "tierChosenLabel": "Has elegido",
     "tierChange": "Cambiar",
-    "tierIncludesTitle": "Todo lo que incluye {name}"
+    "tierIncludesTitle": "Todo lo que incluye {name}",
+    "tierSpacesHeading": "Espacios de la comunidad solo para este plan",
+    "tierLivesHeading": "Próximos directos solo para este plan"
   },
   "verificar": {
     "notFoundTitle": "Certificado no encontrado",

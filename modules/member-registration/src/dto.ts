@@ -92,7 +92,11 @@ export type RegisterDto = z.infer<typeof registerSchema>;
 
 export interface RegisterResponse {
   ok: boolean;
-  status: 'PENDING';
+  /**
+   * `ACTIVE`: el aula aprueba sola las altas con el correo verificado (nivel
+   * gratis de la membresía): ya puede entrar. `PENDING`: espera al creador.
+   */
+  status: 'PENDING' | 'ACTIVE';
 }
 
 // ─── Admin: gestión de impagos (mod_member_registration_payment_flag) ────────

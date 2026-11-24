@@ -18,6 +18,15 @@ export const TELEGRAM_SETTING_KEY = 'telegram';
 export const VERIFICATION_SETTING_KEY = 'verification';
 /** Key del aprobador de solicitudes (plana). */
 export const APPROVAL_SETTING_KEY = 'approval';
+/**
+ * Key de la APROBACIÓN AUTOMÁTICA (plana): `{ enabled, manualReview }`. Con
+ * `enabled`, una inscripción cuyo correo se verificó con código (OTP) entra
+ * ACTIVE al momento, sin esperar a nadie. Lo enciende el nivel gratis de la
+ * membresía (una comunidad gratis no puede esperar a que el creador apruebe);
+ * `manualReview` guarda la preferencia del creador («Revisar a mano cada alta
+ * gratis»). Sin la clave, nada cambia: aprobación manual de siempre.
+ */
+export const AUTO_APPROVE_SETTING_KEY = 'auto-approve';
 
 /** Verificadores componibles soportados. El orden define los pasos del wizard. */
 export const MEMBER_VERIFIERS = ['telegram', 'otp'] as const;
@@ -133,6 +142,29 @@ export class MemberRegistrationSettings {
       return { ...policy, operational: false, botUsername: null };
     }
     return { ...policy, operational: policy.enabled, botUsername: telegram.botUsername };
+  }
+
+  /**
+   * ¿Las inscripciones con el correo verificado entran solas? Solo si el aula
+   * lo encendió (`auto-approve.enabled`) Y su política exige OTP: sin código
+   * no hay prueba de que el correo es de quien se apunta, y entonces sigue la
+   * aprobación manual.
+   */
+  async resolveAutoApprove(tenantId: string): Promise<boolean> {
+    const raw = await this.safeGet(tenantId, AUTO_APPROVE_SETTING_KEY);
+    const enabled =
+      !!raw && typeof raw === 'object' && (raw as { enabled?: unknown }).enabled === true;
+    if (!enabled) return false;
+    const policy = await this.resolvePolicy(tenantId);
+    return policy.enabled && policy.verifiers.includes('otp');
+  }
+
+  /** Preferencia «Revisar a mano cada alta gratis» (false si no se dijo nada). */
+  async resolveManualReview(tenantId: string): Promise<boolean> {
+    const raw = await this.safeGet(tenantId, AUTO_APPROVE_SETTING_KEY);
+    return (
+      !!raw && typeof raw === 'object' && (raw as { manualReview?: unknown }).manualReview === true
+    );
   }
 
   /** Email del aprobador de solicitudes del tenant (setting → env → null). */
