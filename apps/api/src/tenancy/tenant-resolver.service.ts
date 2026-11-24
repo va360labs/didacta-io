@@ -28,6 +28,12 @@ export interface ResolvedTenant {
    * miran un dominio; resolver por slug no pasa por ninguno.
    */
   surface?: TenantDomainSurface;
+  /**
+   * El dominio por el que se resolvió es una dirección ANTERIOR del aula (su
+   * administrador cambió el subdominio): sigue siendo del aula, pero sus
+   * páginas se redirigen al primario. Ver `resolveAliasRedirect`.
+   */
+  redirectToPrimary?: boolean;
 }
 
 /**
@@ -118,8 +124,31 @@ export class TenantResolverService {
         matchedBy: 'hostname',
         hostname,
         surface: domain.surface,
+        redirectToPrimary: domain.redirectToPrimary,
       },
     };
+  }
+
+  /**
+   * Adónde mandar las PÁGINAS pedidas por una dirección anterior del aula: su
+   * dominio primario verificado de la app, o `null` si el host no es una
+   * dirección anterior (o el aula se ha quedado sin primario, en cuyo caso se
+   * sigue sirviendo por donde llegó en vez de redirigir a ninguna parte).
+   *
+   * Solo hace la segunda consulta en el caso raro: el de siempre (un dominio
+   * normal) sale sin tocar la base, para que `GET /tenancy/resolve`, que corre
+   * en cada navegación, siga siendo una sola consulta.
+   */
+  async resolveAliasRedirect(tenant: ResolvedTenant): Promise<string | null> {
+    if (!tenant.redirectToPrimary || tenant.surface === 'SITE') return null;
+    const primary = await runAsTenant(tenant.id, () =>
+      this.prisma.tenantDomain.findFirst({
+        where: { tenantId: tenant.id, isPrimary: true, isVerified: true, surface: 'APP' },
+        select: { hostname: true },
+      }),
+    );
+    if (!primary || primary.hostname === tenant.hostname) return null;
+    return primary.hostname;
   }
 
   /**

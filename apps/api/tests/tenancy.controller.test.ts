@@ -45,7 +45,10 @@ function fakePrisma(aula: Aula) {
 }
 
 /** `'suspended'` = el host es de un tenant que existe pero está suspendido. */
-function makeController(resolved: typeof TENANT | null | 'suspended', aula: Aula = {}) {
+function makeController(
+  resolved: (typeof TENANT & { redirectToPrimary?: boolean }) | null | 'suspended',
+  aula: Aula = {},
+) {
   const resolveByHost = vi.fn(async (_host: string | undefined) =>
     resolved === 'suspended' ? null : resolved,
   );
@@ -65,12 +68,18 @@ function makeController(resolved: typeof TENANT | null | 'suspended', aula: Aula
   const resolveByRequest = vi.fn(async (req: { headers: Record<string, string> }) =>
     resolveByHost(req.headers['x-forwarded-host'] ?? req.headers['host']),
   );
+  // Dirección anterior del aula → su primario. El doble reproduce la regla del
+  // servicio (solo los dominios marcados), no la consulta.
+  const resolveAliasRedirect = vi.fn(async (t: { redirectToPrimary?: boolean }) =>
+    t.redirectToPrimary ? 'aula-nueva.didacta.io' : null,
+  );
   const prisma = fakePrisma(aula);
   const controller = new TenancyController(
     {
       resolveByHost,
       resolveByRequest,
       resolveHostStatusByRequest,
+      resolveAliasRedirect,
     } as unknown as TenantResolverService,
     prisma as never,
   );
@@ -91,6 +100,7 @@ describe('TenancyController', () => {
       host: 'aula-demo.didacta.io',
       surface: 'APP',
       suspended: false,
+      redirectTo: null,
     });
     // Lo importante no es el 200: es CON QUÉ preguntó.
     expect(resolveByHost).toHaveBeenCalledWith('aula-demo.didacta.io');
@@ -105,6 +115,7 @@ describe('TenancyController', () => {
       host: 'zzz-random.didacta.io',
       surface: null,
       suspended: false,
+      redirectTo: null,
     });
     expect(resolveByHost).toHaveBeenCalledWith('zzz-random.didacta.io');
   });
@@ -124,8 +135,30 @@ describe('TenancyController', () => {
       host: 'aula-impagada.didacta.io',
       surface: null,
       suspended: true,
+      redirectTo: null,
     });
     expect(resolveByHost).toHaveBeenCalledWith('aula-impagada.didacta.io');
+  });
+
+  /**
+   * El administrador cambió la dirección del aula: la vieja sigue siendo del
+   * aula (`known`) y dice adónde se ha ido, para que el web redirija sus páginas.
+   */
+  it('una dirección ANTERIOR del aula se reconoce y dice cuál es la nueva', async () => {
+    const { controller } = makeController({
+      ...TENANT,
+      hostname: 'aula-vieja.didacta.io',
+      redirectToPrimary: true,
+    });
+    const res = await controller.resolve(reqTrasProxy('aula-vieja.didacta.io'));
+    expect(res).toEqual({
+      known: true,
+      slug: 'aula-demo',
+      host: 'aula-vieja.didacta.io',
+      surface: 'APP',
+      suspended: false,
+      redirectTo: 'aula-nueva.didacta.io',
+    });
   });
 
   /**

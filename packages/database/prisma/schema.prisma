@@ -121,21 +121,31 @@ enum TenantDomainSurface {
 }
 
 model TenantDomain {
-  id         String              @id @default(uuid()) @db.Uuid
-  tenantId   String              @map("tenant_id") @db.Uuid
+  id                String              @id @default(uuid()) @db.Uuid
+  tenantId          String              @map("tenant_id") @db.Uuid
   /// Host completo en lowercase, sin puerto ni path.
   /// Ejemplos: "aula.academia.com", "didacta.local", "localhost".
-  hostname   String              @unique @db.VarChar(253)
+  hostname          String              @unique @db.VarChar(253)
   /// El primary identifica el dominio canónico para emails y enlaces.
   /// Solo uno por tenant tiene `isPrimary=true`.
-  isPrimary  Boolean             @default(false) @map("is_primary")
+  isPrimary         Boolean             @default(false) @map("is_primary")
   /// Para custom domains de clientes: requiere validación DNS antes de activar.
   /// `localhost` y dominios default del seed nacen verified=true.
-  isVerified Boolean             @default(false) @map("is_verified")
+  isVerified        Boolean             @default(false) @map("is_verified")
   /// Qué superficie sirve este dominio. Ver `TenantDomainSurface`.
-  surface    TenantDomainSurface @default(APP)
-  createdAt  DateTime            @default(now()) @map("created_at")
-  updatedAt  DateTime            @updatedAt @map("updated_at")
+  surface           TenantDomainSurface @default(APP)
+  /// Dirección ANTERIOR del aula, la que tenía antes de que su administrador
+  /// cambiara el subdominio (`admin/academy-address`). Se conserva para
+  /// siempre: sigue resolviendo el aula —así nadie más puede quedársela y los
+  /// enlaces viejos no se pueden suplantar— y sus PÁGINAS responden 308 al
+  /// dominio primario conservando ruta y query. `/api/*` NO se redirige
+  /// (webhooks y clientes registrados con la dirección vieja).
+  ///
+  /// `false` en cualquier otro dominio: un dominio secundario de los de
+  /// siempre sigue sirviendo el aula igual que antes de existir este campo.
+  redirectToPrimary Boolean             @default(false) @map("redirect_to_primary")
+  createdAt         DateTime            @default(now()) @map("created_at")
+  updatedAt         DateTime            @updatedAt @map("updated_at")
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
