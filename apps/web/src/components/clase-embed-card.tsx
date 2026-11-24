@@ -13,6 +13,7 @@ import { ApiHttpError } from '@/lib/api-client';
 import { apiErrorMessage } from '@/lib/i18n/api-error';
 import { formatDate, formatDateTime } from '@/lib/i18n/format';
 import type { TranslatorLike } from '@/lib/i18n/labels';
+import { LockedByLevel } from '@/components/locked-by-level';
 import { AddToCalendarDialog, zoomLiveApi, type ZoomSession } from '@/modules/zoom-live';
 import { cn } from '@/lib/utils';
 
@@ -156,6 +157,26 @@ export function ClaseEmbedCard({ sessionId }: { sessionId: string }) {
     return (
       <div className="mt-3 rounded-card border border-border bg-bg-subtle px-4 py-3 text-sm text-text-muted">
         {t('claseEmbed.cancelled')}
+      </div>
+    );
+  }
+
+  // Clase de un nivel que no tiene: candado y a qué niveles se abre, sin
+  // inscripción (el anuncio del feed tampoco lleva la descripción).
+  if (session.locked) {
+    return (
+      <div
+        data-testid={`clase-embed-${session.id}`}
+        onClick={(e) => e.stopPropagation()}
+        onKeyDown={(e) => e.stopPropagation()}
+        className="mt-3 rounded-card border border-border bg-bg-subtle px-4"
+      >
+        <LockedByLevel
+          kind="live"
+          variant="inline"
+          title={session.topic}
+          levels={session.accessLevels ?? []}
+        />
       </div>
     );
   }

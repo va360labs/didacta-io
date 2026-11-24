@@ -7,7 +7,15 @@
 
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { useTranslations } from 'next-intl';
+import { AccessLevelsField } from '@/components/access-levels-field';
+import { AccessLevelsBadge } from '@/components/locked-by-level';
 import { Icon } from '@/components/icon';
+import {
+  accessChoiceFrom,
+  accessChoiceToIds,
+  useAccessLevelOptions,
+  type AccessChoice,
+} from '@/lib/access-levels';
 import { ApiHttpError } from '@/lib/api-client';
 import { authStorage } from '@/lib/auth-storage';
 import { formatDateTime } from '@/lib/i18n/format';
@@ -164,6 +172,7 @@ export function SimpleLive() {
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="truncate font-semibold text-text">{s.topic}</div>
+                  <AccessLevelsBadge groupIds={s.accessGroupIds} levels={s.accessLevels} />
                   <div className="text-sm text-text-subtle">
                     {formatDateTime(s.startTime, {
                       weekday: 'long',
@@ -242,6 +251,12 @@ function LiveForm({
   const [link, setLink] = useState(session && externa ? (session.joinUrl ?? '') : '');
   const [useZoom, setUseZoom] = useState(false);
   const [announce, setAnnounce] = useState(true);
+  // «Quién puede verla»: todos o solo unos niveles de membresía.
+  const levelOptions = useAccessLevelOptions();
+  const [access, setAccess] = useState<AccessChoice>(() =>
+    accessChoiceFrom(session?.accessGroupIds),
+  );
+  const [accessIncomplete, setAccessIncomplete] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -254,6 +269,8 @@ function LiveForm({
     const conEnlace = externa && !useZoom;
     if (conEnlace && !link.trim()) return setError(t('faltaEnlace'));
     if (conEnlace && !isHttpsUrl(link)) return setError(t('enlaceMal'));
+    const accessGroupIds = accessChoiceToIds(access, levelOptions);
+    if (accessGroupIds === null) return setAccessIncomplete(true);
     setSaving(true);
     try {
       if (session) {
@@ -262,6 +279,7 @@ function LiveForm({
           startTime,
           durationMinutes: duration,
           timezone: tz,
+          accessGroupIds,
           ...(conEnlace ? { externalJoinUrl: link.trim() } : {}),
         });
       } else {
@@ -272,6 +290,7 @@ function LiveForm({
           timezone: tz,
           hostEmail: authStorage.getSession()?.user.email ?? '',
           announce,
+          accessGroupIds,
           ...(conEnlace ? { externalJoinUrl: link.trim() } : {}),
         });
       }
@@ -392,6 +411,18 @@ function LiveForm({
           ) : null}
         </div>
       ) : null}
+
+      <AccessLevelsField
+        idPrefix="directo"
+        size="large"
+        value={access}
+        onChange={(next) => {
+          setAccess(next);
+          setAccessIncomplete(false);
+        }}
+        options={levelOptions}
+        showIncomplete={accessIncomplete}
+      />
 
       {!session ? (
         <label className="flex items-center gap-2.5 text-sm font-medium text-text">

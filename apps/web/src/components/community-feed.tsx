@@ -18,6 +18,7 @@ import {
 import { ThreadCard, TAG_COLORS } from '@/components/community-thread-card';
 import { usePublicUsers } from '@/lib/public-users';
 import { Icon } from '@/components/icon';
+import { LockedByLevel } from '@/components/locked-by-level';
 import { PostComposerModal } from '@/components/post-composer-modal';
 import { PostDetailView } from '@/components/post-detail-view';
 import { Button } from '@/components/ui/button';
@@ -128,6 +129,10 @@ export function CommunityFeed({
   }, [posts, activeTag]);
 
   const filtered = posts ?? [];
+  // Filtro puesto en un espacio de un nivel que quien mira no tiene: en vez de
+  // un feed vacío, el candado y a qué niveles se abre.
+  const activeSpace = spaces.find((s) => s.slug === activeTag);
+  const activeLocked = activeSpace?.locked === true;
 
   const viewerUserId = useMemo(() => authStorage.getSession()?.user.id ?? null, []);
   const tagsByName = useCommunityTags();
@@ -259,6 +264,9 @@ export function CommunityFeed({
                       : 'border-border bg-surface text-text-muted hover:text-text',
                   )}
                 >
+                  {'locked' in sp && sp.locked ? (
+                    <Icon name="lock" size={13} className="mr-1 inline align-[-2px]" />
+                  ) : null}
                   {sp.title}
                 </button>
               );
@@ -368,7 +376,13 @@ export function CommunityFeed({
             </div>
           ) : null}
 
-          {posts === null ? (
+          {activeLocked && activeSpace ? (
+            <LockedByLevel
+              kind="space"
+              title={activeSpace.title}
+              levels={activeSpace.accessLevels ?? []}
+            />
+          ) : posts === null ? (
             <>
               {[0, 1, 2].map((i) => (
                 <div key={i} className="skeleton h-32 w-full" />

@@ -20,6 +20,7 @@ import { useParams } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { Icon } from '@/components/icon';
+import { LockedByLevel } from '@/components/locked-by-level';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -204,6 +205,24 @@ export default function ClasePage() {
         ) : null}
         <div className="skeleton h-40 w-full" />
       </div>
+    );
+  }
+
+  // Clase de un nivel de membresía que no tiene: título, hora, candado y a qué
+  // niveles se abre. Ni descripción, ni enlace, ni grabación (la API no los
+  // manda), ni botón de inscribirse.
+  if (session.locked) {
+    return (
+      <section className="mx-auto max-w-3xl space-y-4">
+        <LockedByLevel
+          kind="live"
+          title={session.topic}
+          meta={`${formatStartLocal(session.startTime)} · ${t('minutesShort', {
+            minutes: session.durationMinutes,
+          })}`}
+          levels={session.accessLevels ?? []}
+        />
+      </section>
     );
   }
 

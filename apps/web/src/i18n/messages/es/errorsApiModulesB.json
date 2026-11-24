@@ -240,5 +240,9 @@
   "SOPORTE_CAPTURA_PESADA": "La captura pesa más de 5 MB.",
   "SOPORTE_CAPTURA_NO_CASA": "El contenido de la captura no corresponde a una imagen de ese tipo.",
   "SOPORTE_NO_ENCONTRADO": "Ticket no encontrado.",
-  "SOPORTE_SIN_PERMISO": "Solo quien administra el aula puede gestionar los tickets."
+  "SOPORTE_SIN_PERMISO": "Solo quien administra el aula puede gestionar los tickets.",
+  "COMMUNITY_SPACE_LOCKED": "Ese espacio es solo para algunos niveles de la membresía.",
+  "COMMUNITY_ACCESS_GROUP_UNKNOWN": "Uno de los niveles elegidos ya no existe. Vuelve a elegirlos.",
+  "ZOOM_SESSION_LOCKED": "Esta clase es solo para algunos niveles de la membresía.",
+  "ZOOM_ACCESS_GROUP_UNKNOWN": "Uno de los niveles elegidos ya no existe. Vuelve a elegirlos."
 }

@@ -9,6 +9,7 @@ import { useTranslations } from 'next-intl';
 import { useFocusTrap } from '@/lib/use-focus-trap';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { createPortal } from 'react-dom';
+import { AccessLevelsField } from '@/components/access-levels-field';
 import { ColorField, SUGGESTED_COLORS } from '@/components/color-field';
 import { Icon, type IconName } from '@/components/icon';
 import { SpaceIcon } from '@/components/space-icon';
@@ -17,6 +18,7 @@ import { DialogBackdrop } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { apiErrorMessage } from '@/lib/i18n/api-error';
+import { accessChoiceToIds, useAccessLevelOptions, type AccessChoice } from '@/lib/access-levels';
 import {
   communityApi,
   invalidateCommunitySpacesCache,
@@ -50,6 +52,10 @@ export function CreateSpaceModal({ open, onClose }: Props) {
   const [color, setColor] = useState<string>(SUGGESTED_COLORS[0]!);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  // «Quién puede verlo»: todos o solo unos niveles de membresía.
+  const levelOptions = useAccessLevelOptions();
+  const [access, setAccess] = useState<AccessChoice>({ mode: 'all' });
+  const [accessIncomplete, setAccessIncomplete] = useState(false);
   const emojiRef = useRef<HTMLInputElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
 
@@ -68,6 +74,8 @@ export function CreateSpaceModal({ open, onClose }: Props) {
       setColor(SUGGESTED_COLORS[0]!);
       setError(null);
       setPending(false);
+      setAccess({ mode: 'all' });
+      setAccessIncomplete(false);
       // El foco inicial lo pone `useFocusTrap` sobre `[data-autofocus]`.
     }
   }, [open]);
@@ -89,6 +97,11 @@ export function CreateSpaceModal({ open, onClose }: Props) {
     e.preventDefault();
     if (!title.trim() || !slug.trim()) return;
     const icon = iconMode === 'emoji' ? emojiValue.trim() || 'hash' : selectedIcon;
+    const accessGroupIds = accessChoiceToIds(access, levelOptions);
+    if (accessGroupIds === null) {
+      setAccessIncomplete(true);
+      return;
+    }
     setPending(true);
     setError(null);
     try {
@@ -98,6 +111,7 @@ export function CreateSpaceModal({ open, onClose }: Props) {
         icon,
         color,
         sortOrder: 99,
+        accessGroupIds,
       });
       invalidateCommunitySpacesCache();
       window.dispatchEvent(new Event('didacta:spaces-changed'));
@@ -231,6 +245,17 @@ export function CreateSpaceModal({ open, onClose }: Props) {
               swatchAriaLabel={(c) => t('colorAria', { color: c })}
             />
           </div>
+
+          <AccessLevelsField
+            idPrefix="cs"
+            value={access}
+            onChange={(next) => {
+              setAccess(next);
+              setAccessIncomplete(false);
+            }}
+            options={levelOptions}
+            showIncomplete={accessIncomplete}
+          />
 
           {/* Preview */}
           <div

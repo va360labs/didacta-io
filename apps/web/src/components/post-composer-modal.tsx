@@ -63,7 +63,9 @@ export function PostComposerModal({ open, onClose, spaceSlug, onSuccess, editPos
   const roles = session?.user.roles ?? [];
   const isAdmin = roles.includes('super_admin') || roles.includes('tenant_admin');
   const isEdit = Boolean(editPost);
-  const spaces = useCommunitySpaces();
+  // Los espacios de un nivel que no tiene no se ofrecen para publicar (la API
+  // además lo rechaza con COMMUNITY_SPACE_LOCKED).
+  const spaces = useCommunitySpaces().filter((s) => !s.locked);
 
   const [selectedSpace, setSelectedSpace] = useState(spaceSlug);
   const [spaceOpen, setSpaceOpen] = useState(false);

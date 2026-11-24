@@ -433,6 +433,8 @@ export const communityApi = {
     icon?: string;
     color?: string;
     sortOrder?: number;
+    /** Quién puede verlo: niveles (grupos de acceso). `[]` = todos. */
+    accessGroupIds?: string[];
   }): Promise<CommunitySpace> {
     return apiFetch<CommunitySpace>(
       '/api/v1/modules/community/spaces',
@@ -449,6 +451,8 @@ export const communityApi = {
       icon?: string;
       color?: string;
       sortOrder?: number;
+      /** Quién puede verlo: niveles (grupos de acceso). `[]` = todos. */
+      accessGroupIds?: string[];
     },
   ): Promise<CommunitySpace> {
     return apiFetch<CommunitySpace>(
@@ -486,6 +490,15 @@ export interface CommunitySpace {
   color: string;
   sortOrder: number;
   isSystem: boolean;
+  /**
+   * Cerrado para quien mira (un nivel de membresía que no tiene): solo se
+   * enseñan el nombre, el candado y `accessLevels`; la descripción llega null.
+   */
+  locked?: boolean;
+  /** Niveles con los que se abre (vacío = todos los miembros). */
+  accessLevels?: Array<{ id: string; name: string }>;
+  /** Grupos elegidos, tal cual. Solo llegan al equipo del aula. */
+  accessGroupIds?: string[];
 }
 
 /**

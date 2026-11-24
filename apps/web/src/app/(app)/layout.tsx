@@ -365,11 +365,13 @@ function Shell({
     collapsible: true,
     canAdd: isAdmin,
     onAdd: isAdmin ? () => setCreateSpaceOpen(true) : undefined,
+    // Un espacio de un nivel que no tiene sale con candado (y abre la página
+    // que dice en qué niveles está disponible).
     items: rawSpaces.map((s) => ({
       href: `/spaces/${s.slug}`,
       label: s.title,
-      icon: (isIconName(s.icon) ? s.icon : 'hash') as IconName,
-      emoji: isIconName(s.icon) ? undefined : s.icon,
+      icon: (s.locked ? 'lock' : isIconName(s.icon) ? s.icon : 'hash') as IconName,
+      emoji: s.locked || isIconName(s.icon) ? undefined : s.icon,
     })),
   };
 

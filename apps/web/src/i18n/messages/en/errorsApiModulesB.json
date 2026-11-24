@@ -269,5 +269,9 @@
   "SOPORTE_CAPTURA_PESADA": "The screenshot is larger than 5 MB.",
   "SOPORTE_CAPTURA_NO_CASA": "The content of the screenshot does not match an image of that type.",
   "SOPORTE_NO_ENCONTRADO": "Ticket not found.",
-  "SOPORTE_SIN_PERMISO": "Only those who run the academy can manage tickets."
+  "SOPORTE_SIN_PERMISO": "Only those who run the academy can manage tickets.",
+  "COMMUNITY_SPACE_LOCKED": "That space is only for some membership levels.",
+  "COMMUNITY_ACCESS_GROUP_UNKNOWN": "One of the chosen levels no longer exists. Please choose again.",
+  "ZOOM_SESSION_LOCKED": "This class is only for some membership levels.",
+  "ZOOM_ACCESS_GROUP_UNKNOWN": "One of the chosen levels no longer exists. Please choose again."
 }

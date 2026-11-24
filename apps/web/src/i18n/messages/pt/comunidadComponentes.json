@@ -187,5 +187,21 @@
   "userFallback": "Usuário",
   "viewConversation": "Ver conversa",
   "visibleToAll": "Visível para toda a comunidade",
-  "you": "Você"
+  "you": "Você",
+  "nivelAcceso": {
+    "quienPuedeVerlo": "Quem pode ver",
+    "todos": "Todos os membros",
+    "soloNiveles": "Só estes níveis",
+    "soloNivelesAyuda": "Os membros dos níveis que você marcar podem ver. Você e sua equipe sempre veem.",
+    "sinNiveles": "Sua escola ainda não tem níveis de assinatura. Quando você criar, poderá escolher aqui quem vê.",
+    "cargando": "Carregando níveis…",
+    "eligeUno": "Marque pelo menos um nível.",
+    "candadoEspacio": "Este espaço é só para alguns níveis da assinatura.",
+    "candadoClase": "Esta aula é só para alguns níveis da assinatura.",
+    "disponibleEn": "Disponível em: {niveles}",
+    "disponibleEnOtros": "Disponível em outros níveis da assinatura.",
+    "verPlanes": "Ver planos",
+    "soloAlgunos": "Só alguns níveis",
+    "soloPara": "Só para: {niveles}"
+  }
 }

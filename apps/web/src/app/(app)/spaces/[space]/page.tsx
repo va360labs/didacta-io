@@ -11,6 +11,7 @@ import { CommunityGalleryModal } from '@/components/community-gallery-modal';
 import { ThreadCard } from '@/components/community-thread-card';
 import { usePublicUsers } from '@/lib/public-users';
 import { Icon } from '@/components/icon';
+import { LockedByLevel } from '@/components/locked-by-level';
 import { PostComposerModal } from '@/components/post-composer-modal';
 import { PostDetailView } from '@/components/post-detail-view';
 import { Button } from '@/components/ui/button';
@@ -42,6 +43,9 @@ export default function SpacePage({ params }: { params: Promise<{ space: string 
   const { space } = use(params);
   const spaces = useCommunitySpaces();
   const meta = spaces.find((s) => s.slug === space) ?? spaces[0];
+  // Espacio de un nivel que quien mira no tiene: solo el candado (la API ya no
+  // devuelve sus publicaciones ni su descripción).
+  const locked = meta?.slug === space && meta.locked === true;
 
   const [posts, setPosts] = useState<Post[] | null>(null);
   const authorAvatars = usePublicUsers((posts ?? []).map((p) => p.authorId));
@@ -70,9 +74,10 @@ export default function SpacePage({ params }: { params: Promise<{ space: string 
   }
 
   useEffect(() => {
+    if (locked) return;
     void reload({ sort });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [space, sort]);
+  }, [space, sort, locked]);
 
   async function handleReactPost(postId: string, emoji: string) {
     const post = posts?.find((p) => p.id === postId);
@@ -88,6 +93,14 @@ export default function SpacePage({ params }: { params: Promise<{ space: string 
     } catch {
       // Best-effort: la reacción fallida no amerita romper el feed.
     }
+  }
+
+  if (locked && meta) {
+    return (
+      <section className="mx-auto max-w-[720px] space-y-6 py-4">
+        <LockedByLevel kind="space" title={meta.title} levels={meta.accessLevels ?? []} />
+      </section>
+    );
   }
 
   return (
@@ -224,6 +237,9 @@ export default function SpacePage({ params }: { params: Promise<{ space: string 
                     >
                       <SpaceIcon icon={s.icon} color={s.color} size={16} />
                       <span>{s.title}</span>
+                      {s.locked ? (
+                        <Icon name="lock" size={13} className="ml-auto text-text-subtle" />
+                      ) : null}
                     </a>
                   ))}
                 </div>

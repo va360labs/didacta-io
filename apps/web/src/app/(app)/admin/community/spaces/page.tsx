@@ -7,6 +7,8 @@
 
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { useTranslations } from 'next-intl';
+import { AccessLevelsField } from '@/components/access-levels-field';
+import { AccessLevelsBadge } from '@/components/locked-by-level';
 import { ColorField, SUGGESTED_COLORS } from '@/components/color-field';
 import { Icon, type IconName } from '@/components/icon';
 import { SpaceIcon, isIconName } from '@/components/space-icon';
@@ -16,6 +18,12 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { apiErrorMessage } from '@/lib/i18n/api-error';
 import { authStorage } from '@/lib/auth-storage';
+import {
+  accessChoiceFrom,
+  accessChoiceToIds,
+  useAccessLevelOptions,
+  type AccessChoice,
+} from '@/lib/access-levels';
 import {
   COMMUNITY_SPACE_ICONS,
   communityApi,
@@ -56,6 +64,10 @@ export default function EspaciosAdminPage() {
   const t = useTranslations('adminEngagement');
   const tErrors = useTranslations('errors');
   const [spaces, setSpaces] = useState<CommunitySpace[] | null>(null);
+  // «Quién puede verlo»: todos o solo unos niveles de membresía.
+  const levelOptions = useAccessLevelOptions();
+  const [access, setAccess] = useState<AccessChoice>({ mode: 'all' });
+  const [accessIncomplete, setAccessIncomplete] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const [editing, setEditing] = useState<CommunitySpace | null>(null);
@@ -89,16 +101,25 @@ export default function EspaciosAdminPage() {
       color: space.color,
       sortOrder: String(space.sortOrder),
     });
+    setAccess(accessChoiceFrom(space.accessGroupIds));
+    setAccessIncomplete(false);
   }
 
   function cancelEdit() {
     setEditing(null);
     setForm(EMPTY_FORM);
     setIconMode('icon');
+    setAccess({ mode: 'all' });
+    setAccessIncomplete(false);
   }
 
   async function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    const accessGroupIds = accessChoiceToIds(access, levelOptions);
+    if (accessGroupIds === null) {
+      setAccessIncomplete(true);
+      return;
+    }
     setPending(true);
     setError(null);
     try {
@@ -108,6 +129,7 @@ export default function EspaciosAdminPage() {
         icon: form.icon,
         color: form.color,
         sortOrder: Number(form.sortOrder) || 0,
+        accessGroupIds,
       };
       if (editing) {
         await communityApi.updateSpace(editing.slug, payload);
@@ -205,6 +227,7 @@ export default function EspaciosAdminPage() {
                       <div className="text-xs text-text-subtle">
                         /{s.slug} · {t('spaces.orderMeta', { order: s.sortOrder })}
                       </div>
+                      <AccessLevelsBadge groupIds={s.accessGroupIds} levels={s.accessLevels} />
                     </div>
                     <div className="flex items-center gap-2">
                       <Button
@@ -384,6 +407,17 @@ export default function EspaciosAdminPage() {
                   swatchAriaLabel={(value) => t('spaces.colorAria', { value })}
                 />
               </div>
+
+              <AccessLevelsField
+                idPrefix="space"
+                value={access}
+                onChange={(next) => {
+                  setAccess(next);
+                  setAccessIncomplete(false);
+                }}
+                options={levelOptions}
+                showIncomplete={accessIncomplete}
+              />
 
               <div className="space-y-1.5">
                 <Label htmlFor="space-order">{t('spaces.orderLabel')}</Label>

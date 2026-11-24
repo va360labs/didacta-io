@@ -187,5 +187,21 @@
   "userFallback": "User",
   "viewConversation": "View conversation",
   "visibleToAll": "Visible to the whole community",
-  "you": "You"
+  "you": "You",
+  "nivelAcceso": {
+    "quienPuedeVerlo": "Who can see it",
+    "todos": "All members",
+    "soloNiveles": "Only these levels",
+    "soloNivelesAyuda": "Members of the levels you tick can see it. You and your team always can.",
+    "sinNiveles": "You don't have membership levels yet. Once you create them, you can choose here who sees it.",
+    "cargando": "Loading levels…",
+    "eligeUno": "Tick at least one level.",
+    "candadoEspacio": "This space is only for some membership levels.",
+    "candadoClase": "This class is only for some membership levels.",
+    "disponibleEn": "Available in: {niveles}",
+    "disponibleEnOtros": "Available in other membership levels.",
+    "verPlanes": "See plans",
+    "soloAlgunos": "Only some levels",
+    "soloPara": "Only for: {niveles}"
+  }
 }

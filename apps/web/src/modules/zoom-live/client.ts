@@ -31,6 +31,16 @@ export interface ZoomSession {
   recordingDurationMinutes: number | null;
   registeredCount: number;
   isRegistered: boolean;
+  /**
+   * Clase de un nivel de membresía que quien mira no tiene: solo se enseñan el
+   * título, la hora y `accessLevels` (la API no manda descripción, enlace ni
+   * grabación).
+   */
+  locked?: boolean;
+  /** Niveles con los que se abre (vacío = todos los miembros). */
+  accessLevels?: Array<{ id: string; name: string }>;
+  /** Grupos elegidos, tal cual. Solo llegan al staff. */
+  accessGroupIds?: string[];
   createdAt: string;
   updatedAt: string;
 }
@@ -241,6 +251,8 @@ export const zoomLiveApi = {
      * él no se habla con Zoom y no hacen falta credenciales.
      */
     externalJoinUrl?: string;
+    /** Quién puede verla: niveles (grupos de acceso). `[]` = todos. */
+    accessGroupIds?: string[];
   }): Promise<ZoomSession> {
     return apiFetch<ZoomSession>(
       '/api/v1/modules/zoom-live/sessions',
@@ -266,6 +278,8 @@ export const zoomLiveApi = {
       announce?: boolean;
       /** Cambiar el enlace propio de una clase creada con él. */
       externalJoinUrl?: string;
+      /** Quién puede verla: niveles (grupos de acceso). `[]` = todos. */
+      accessGroupIds?: string[];
     },
   ): Promise<ZoomSession> {
     return apiFetch<ZoomSession>(

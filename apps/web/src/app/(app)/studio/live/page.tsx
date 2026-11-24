@@ -10,6 +10,8 @@ import { useSimpleMode } from '@/lib/simple-mode';
 import Link from 'next/link';
 import { useEffect, useState, type FormEvent } from 'react';
 import { useTranslations } from 'next-intl';
+import { AccessLevelsField } from '@/components/access-levels-field';
+import { AccessLevelsBadge } from '@/components/locked-by-level';
 import { Icon } from '@/components/icon';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -18,6 +20,12 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import {
+  accessChoiceFrom,
+  accessChoiceToIds,
+  useAccessLevelOptions,
+  type AccessChoice,
+} from '@/lib/access-levels';
 import { ApiHttpError } from '@/lib/api-client';
 import { authStorage } from '@/lib/auth-storage';
 import { coursesApi, type Course, type CourseDetail } from '@/lib/courses';
@@ -202,6 +210,7 @@ function AulaVirtualCompleta() {
                     <Badge variant={STATUS_VARIANT[s.status]} dot>
                       {labelOr(t, `sessionStatus.${s.status}`, s.status)}
                     </Badge>
+                    <AccessLevelsBadge groupIds={s.accessGroupIds} levels={s.accessLevels} />
                   </div>
                   <p className="text-sm text-text-muted">
                     {t.rich('aula.sessionMeta', {
@@ -306,6 +315,12 @@ function SessionForm({
   const t = useTranslations('formadorAula');
   const tErrors = useTranslations('errors');
   const isEdit = editing !== null;
+  // «Quién puede verla»: todos o solo unos niveles de membresía.
+  const levelOptions = useAccessLevelOptions();
+  const [access, setAccess] = useState<AccessChoice>(() =>
+    accessChoiceFrom(editing?.accessGroupIds),
+  );
+  const [accessIncomplete, setAccessIncomplete] = useState(false);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [courses, setCourses] = useState<Course[]>([]);
@@ -376,6 +391,11 @@ function SessionForm({
       setError(t('sessionForm.missingStartTime'));
       return;
     }
+    const accessGroupIds = accessChoiceToIds(access, levelOptions);
+    if (accessGroupIds === null) {
+      setAccessIncomplete(true);
+      return;
+    }
     setPending(true);
     setError(null);
     try {
@@ -392,6 +412,7 @@ function SessionForm({
           // `null` limpia la agenda; `undefined` la dejaría intacta.
           description: form.get('description') ? String(form.get('description')) : null,
           announce: form.get('announce') === 'on',
+          accessGroupIds,
         });
       } else {
         await zoomLiveApi.create({
@@ -404,6 +425,7 @@ function SessionForm({
           courseId: form.get('courseId') ? String(form.get('courseId')) : undefined,
           lessonId: form.get('lessonId') ? String(form.get('lessonId')) : undefined,
           announce: form.get('announce') === 'on',
+          accessGroupIds,
         });
       }
       await onSaved();
@@ -582,6 +604,17 @@ function SessionForm({
               defaultValue={editing?.description ?? ''}
             />
           </div>
+
+          <AccessLevelsField
+            idPrefix="clase"
+            value={access}
+            onChange={(next) => {
+              setAccess(next);
+              setAccessIncomplete(false);
+            }}
+            options={levelOptions}
+            showIncomplete={accessIncomplete}
+          />
 
           <div className="flex items-start gap-2.5 rounded-lg border border-border-soft bg-bg-subtle p-3">
             <input

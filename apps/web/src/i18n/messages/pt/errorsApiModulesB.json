@@ -269,5 +269,9 @@
   "SOPORTE_CAPTURA_PESADA": "A captura de tela tem mais de 5 MB.",
   "SOPORTE_CAPTURA_NO_CASA": "O conteúdo da captura de tela não corresponde a uma imagem desse tipo.",
   "SOPORTE_NO_ENCONTRADO": "Ticket não encontrado.",
-  "SOPORTE_SIN_PERMISO": "Só quem administra a escola pode gerenciar os tickets."
+  "SOPORTE_SIN_PERMISO": "Só quem administra a escola pode gerenciar os tickets.",
+  "COMMUNITY_SPACE_LOCKED": "Esse espaço é só para alguns níveis da assinatura.",
+  "COMMUNITY_ACCESS_GROUP_UNKNOWN": "Um dos níveis escolhidos não existe mais. Escolha de novo.",
+  "ZOOM_SESSION_LOCKED": "Esta aula é só para alguns níveis da assinatura.",
+  "ZOOM_ACCESS_GROUP_UNKNOWN": "Um dos níveis escolhidos não existe mais. Escolha de novo."
 }

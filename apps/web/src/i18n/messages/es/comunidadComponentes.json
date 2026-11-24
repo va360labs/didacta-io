@@ -187,5 +187,21 @@
   "userFallback": "Usuario",
   "viewConversation": "Ver conversación",
   "visibleToAll": "Visible para toda la comunidad",
-  "you": "Tú"
+  "you": "Tú",
+  "nivelAcceso": {
+    "quienPuedeVerlo": "Quién puede verlo",
+    "todos": "Todos los miembros",
+    "soloNiveles": "Solo estos niveles",
+    "soloNivelesAyuda": "Lo ven los miembros de los niveles que marques. Tú y tu equipo lo veis siempre.",
+    "sinNiveles": "Todavía no tienes niveles de membresía. Cuando los crees, aquí podrás elegir quién lo ve.",
+    "cargando": "Cargando niveles…",
+    "eligeUno": "Marca al menos un nivel.",
+    "candadoEspacio": "Este espacio es solo para algunos niveles de la membresía.",
+    "candadoClase": "Esta clase es solo para algunos niveles de la membresía.",
+    "disponibleEn": "Disponible en: {niveles}",
+    "disponibleEnOtros": "Disponible en otros niveles de la membresía.",
+    "verPlanes": "Ver planes",
+    "soloAlgunos": "Solo algunos niveles",
+    "soloPara": "Solo para: {niveles}"
+  }
 }
