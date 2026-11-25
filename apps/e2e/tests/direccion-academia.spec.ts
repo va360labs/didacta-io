@@ -433,3 +433,48 @@ test('sin TENANT_SUBDOMAIN_SUFFIX: la API responde 404 y la tarjeta no aparece',
   }
   expect(dominios(t.slug)).toBe(`${t.host}:true:false`);
 });
+
+test('bienvenida (modo completo): con dirección de la plataforma el resumen no ofrece dominio propio; sin ella, sí', async ({
+  browser,
+}) => {
+  test.setTimeout(120_000);
+  const t = await freshTenant(`dirbienv${uniq()}`, false);
+  const bearer = await creadoraLista(t);
+  // El asistente de la academia, abierto y parado en su último paso.
+  await apiAs(t.host, '/api/v1/tenant-settings/onboarding/academy', {
+    method: 'PUT',
+    bearer,
+    body: {
+      value: {
+        step: 'resumen',
+        done: ['nombre', 'marca'],
+        skipped: ['curso', 'alumnos', 'cobros', 'correo'],
+        completedAt: null,
+      },
+      isSecret: false,
+    },
+  });
+  const dominioPropio = /propio dominio/;
+
+  const page = await nuevaPagina(browser);
+  await entrar(page, t.base, t);
+  await page.goto(`${t.base}/welcome`);
+  await expect(page.getByRole('heading', { name: /^Listo, / })).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText(t.host).first()).toBeVisible();
+  // Didacta Cloud (la instancia tiene «Dirección de tu academia»): no hay
+  // dominio propio que ofrecer.
+  await expect(page.getByText(dominioPropio)).toHaveCount(0);
+
+  // Control: una instancia sin la función (la API responde 404) sí lo ofrece.
+  await page.route(`**${ADDRESS}`, (route) =>
+    route.fulfill({
+      status: 404,
+      contentType: 'application/json',
+      body: JSON.stringify({ code: 'ACADEMY_ADDRESS_DISABLED' }),
+    }),
+  );
+  await page.reload();
+  await expect(page.getByRole('heading', { name: /^Listo, / })).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText(dominioPropio)).toBeVisible();
+  await page.context().close();
+});
