@@ -345,8 +345,15 @@ export class MemberRegistrationPublicController {
       // Aprobación AUTOMÁTICA (nivel gratis de la membresía): el aula la
       // encendió y el correo llega verificado con código. Entonces no se avisa
       // al aprobador (no hay nada que aprobar) y el alta entra al momento.
+      //
+      // Si el aula exige además estar en su grupo de Telegram, solo entra al
+      // momento quien SÍ está en el grupo. Fuera del grupo (o sin poder
+      // comprobarlo) queda pendiente como siempre: el ajuste del nivel gratis
+      // no puede saltarse la puerta que el aula puso.
       const autoApprove =
-        policy.verifiers.includes('otp') && (await this.settings.resolveAutoApprove(tenantId));
+        policy.verifiers.includes('otp') &&
+        (!policy.verifiers.includes('telegram') || inGroup === 'true') &&
+        (await this.settings.resolveAutoApprove(tenantId));
 
       // Base del API para los enlaces de decisión (aprobar/rechazar) del email,
       // que apuntan de vuelta a este controller (`GET .../decision`).

@@ -367,6 +367,53 @@ describe('MemberRegistrationPublicController · register', () => {
     expect(decision.decideByAdmin).not.toHaveBeenCalled();
   });
 
+  /** Evidencia OTP que arrastra la de Telegram (política telegram+otp). */
+  function otpTokenConTelegram(inGroup: 'true' | 'false' | 'unknown') {
+    return signTicket(
+      {
+        telegramId: '777',
+        inGroup,
+        email: 'ana@x.com',
+        purpose: 'member-register',
+        tenantId: TENANT_ID,
+      },
+      AUTH_SECRET,
+      1800,
+    );
+  }
+
+  it('telegram+otp: quien SÍ está en el grupo entra al momento', async () => {
+    const { controller, decision } = makeController(policy({ verifiers: ['telegram', 'otp'] }), {
+      autoApprove: true,
+    });
+    const res = await controller.register(REQ, {
+      name: 'Ana',
+      password: 'x'.repeat(12),
+      verificationToken: otpTokenConTelegram('true'),
+    } as never);
+    expect(res).toEqual({ ok: true, status: 'ACTIVE' });
+    expect(decision.decideByAdmin).toHaveBeenCalled();
+  });
+
+  it.each(['false', 'unknown'] as const)(
+    'telegram+otp: fuera del grupo (%s) queda PENDING aunque el nivel gratis entre al momento',
+    async (inGroup) => {
+      const { controller, registration, decision } = makeController(
+        policy({ verifiers: ['telegram', 'otp'] }),
+        { autoApprove: true },
+      );
+      const res = await controller.register(REQ, {
+        name: 'Ana',
+        password: 'x'.repeat(12),
+        verificationToken: otpTokenConTelegram(inGroup),
+      } as never);
+      expect(res).toEqual({ ok: true, status: 'PENDING' });
+      // Se avisa al aprobador: alguien tiene que decidir.
+      expect(registration.createPending.mock.calls[0]![4]).toEqual({ skipAutoNotify: false });
+      expect(decision.decideByAdmin).not.toHaveBeenCalled();
+    },
+  );
+
   it('una cuenta que ya existía (rechazada o activa) no cambia por volver a apuntarse', async () => {
     const { controller, decision } = makeController(policy({ verifiers: ['otp'] }), {
       autoApprove: true,

@@ -180,6 +180,10 @@ export function InscripcionForm() {
       const res = await verifyTelegram(user);
       setTicket(res.ticket);
       setInGroup(res.inGroup);
+      // Fuera del grupo (o sin poder comprobarlo) no se entra al momento: la
+      // API deja el alta pendiente, así que el formulario vuelve a hablar de
+      // «tu solicitud».
+      if (res.inGroup !== 'true') setAutoApprove(false);
     } catch (e) {
       setError(
         e instanceof ApiHttpError ? apiErrorMessage(e, tErrors) : t('inscripcion.telegramError'),
