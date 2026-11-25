@@ -118,8 +118,8 @@ export class AccessGroupsService {
 
   /**
    * Opciones de «Quién puede verlo» (espacios y directos restringidos por
-   * nivel): los niveles de pago de la membresía si los hay, y si no, los grupos
-   * vivos del aula. Solo `{ id, name }`. Ver `levelOptions`.
+   * nivel): los niveles de pago de la membresía; sin ellos, ninguna. Solo
+   * `{ id, name }`. Ver `levelOptions`.
    */
   async listOptions(tenantId: string): Promise<Array<{ id: string; name: string }>> {
     return this.registry.getAccessGroupMembership().levelOptions(tenantId);

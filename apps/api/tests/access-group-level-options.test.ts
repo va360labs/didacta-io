@@ -12,8 +12,9 @@ import {
 
 /**
  * «Quién puede verlo» de espacios y directos: con niveles de pago se ofrecen
- * los niveles (nombre y orden del nivel, sin el gratis); sin niveles, todos los
- * grupos vivos. El candado dice el nombre del nivel, no el del grupo.
+ * los niveles (nombre y orden del nivel, sin el gratis); sin niveles de pago,
+ * ninguna opción (los grupos internos no son niveles). El candado dice el
+ * nombre del nivel, no el del grupo.
  */
 
 const TENANT = 't-1';
@@ -40,13 +41,25 @@ const GROUPS = [
 ];
 
 describe('levelOptions', () => {
-  it('sin niveles ofrece todos los grupos vivos', async () => {
+  it('sin niveles no ofrece nada, aunque el aula tenga grupos', async () => {
     const port = buildAccessGroupMembership(
       () => db(GROUPS),
       async () => [],
     );
-    const opts = await port.levelOptions(TENANT);
-    expect(opts.map((o) => o.id).sort()).toEqual(['g-free', 'g-fundae', 'g-legacy', 'g-pro']);
+    expect(await port.levelOptions(TENANT)).toEqual([]);
+  });
+
+  it('con solo el nivel gratis tampoco: restringir a él dejaría fuera a quien paga', async () => {
+    const port = buildAccessGroupMembership(
+      () => db(GROUPS),
+      async () => [{ accessGroupId: 'g-free', name: 'Gratis', isFree: true }],
+    );
+    expect(await port.levelOptions(TENANT)).toEqual([]);
+  });
+
+  it('sin lector de niveles (sin membresía) no ofrece nada', async () => {
+    const port = buildAccessGroupMembership(() => db(GROUPS));
+    expect(await port.levelOptions(TENANT)).toEqual([]);
   });
 
   it('con niveles de pago ofrece SOLO esos, en su orden y con el nombre del nivel', async () => {
@@ -76,14 +89,14 @@ describe('levelOptions', () => {
     expect(await port.levelOptions(TENANT)).toEqual([{ id: 'g-legacy', name: 'Básico' }]);
   });
 
-  it('si leer los niveles falla, cae a todos los grupos (nadie se queda sin opciones)', async () => {
+  it('si leer los niveles falla, lanza (el cliente no se queda con una lista vacía falsa)', async () => {
     const port = buildAccessGroupMembership(
       () => db(GROUPS),
       async () => {
         throw new Error('boom');
       },
     );
-    expect(await port.levelOptions(TENANT)).toHaveLength(4);
+    await expect(port.levelOptions(TENANT)).rejects.toThrow('boom');
   });
 });
 

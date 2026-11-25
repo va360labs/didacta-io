@@ -6,6 +6,7 @@ import {
   signupOnboarded,
 } from '../helpers/api';
 import { injectSession } from '../helpers/auth';
+import { sql } from '../helpers/simple-tenant';
 
 /**
  * Espacios de la comunidad y directos restringidos por nivel de membresía
@@ -16,6 +17,11 @@ import { injectSession } from '../helpers/auth';
  * control: la cuenta «pro» los ve. Después, la experiencia en el navegador
  * (candado + «Disponible en» + botón a /join para el básico; el contenido para
  * el pro) y la del creador, en modo completo y en modo sencillo.
+ *
+ * «Solo estos niveles» ofrece solo NIVELES DE PAGO de la membresía (un grupo
+ * de acceso suelto no es un nivel): por eso los dos grupos se dan de alta como
+ * niveles, con su mismo nombre, y se quitan al acabar. Sin niveles de pago no
+ * se ofrece nada (lo fija `access-group-level-options.test.ts`).
  */
 
 const TENANT = process.env.E2E_TENANT_SLUG ?? 'demo';
@@ -105,6 +111,12 @@ test.describe('Espacios y directos por nivel de membresía', () => {
       password: E2E_USER_PASSWORD,
       name: 'Basico E2E',
     });
+    // Los dos grupos, niveles de pago de la membresía (mismo nombre).
+    sql(
+      `INSERT INTO mod_subscriptions_tier (id, tenant_id, name, access_group_id, is_free, sort_order, active, created_at, updated_at)
+       SELECT gen_random_uuid(), tenant_id, name, id, false, 900, true, now(), now()
+       FROM mod_access_groups_group WHERE id IN ('${groupPro.id}', '${groupBasico.id}')`,
+    );
     await ok('POST', `/modules/access-groups/${groupPro.id}/members`, tk, {
       userIds: [pro.user.id],
     });
@@ -158,6 +170,13 @@ test.describe('Espacios y directos por nivel de membresía', () => {
       commentId: comment.id,
       sessionId: session.id,
     };
+  });
+
+  test.afterAll(() => {
+    if (!w) return;
+    sql(
+      `DELETE FROM mod_subscriptions_tier WHERE access_group_id IN ('${w.groupPro.id}', '${w.groupBasico.id}')`,
+    );
   });
 
   test('API: sin el nivel no se ve nada por ningún camino; con él, sí', async () => {

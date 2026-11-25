@@ -30,7 +30,15 @@ export interface AccessGroupMembershipPort {
    * esos niveles, en su orden y con el nombre del nivel (el grupo que adoptó el
    * primer nivel conserva su nombre antiguo, que el creador no reconocería). El
    * nivel gratis no se ofrece: lo que ve el gratis lo ven todos los miembros, y
-   * restringir a él dejaría fuera a quien paga. Sin niveles, todos los grupos.
+   * restringir a él dejaría fuera a quien paga.
+   *
+   * Sin niveles de pago, NINGUNA opción: el campo dice «Todavía no tienes
+   * niveles» y solo deja «Todos los miembros». Antes se ofrecían los grupos de
+   * acceso internos («Membresía VA», «Curso FUNDAE marzo»…) bajo el título
+   * «Solo estos niveles», que el creador no reconoce como niveles.
+   *
+   * Si leer los niveles falla, lanza: el cliente no guarda una lista vacía que
+   * no es verdad y lo reintenta en el siguiente montaje.
    */
   levelOptions(tenantId: string): Promise<Array<{ id: string; name: string }>>;
 }
@@ -76,7 +84,7 @@ export function buildAccessGroupMembership(
   levelNames?: MembershipLevelNames,
 ): AccessGroupMembershipPort {
   // Un fallo leyendo los niveles no debe dejar a nadie sin ver su contenido:
-  // los nombres caen a los del grupo y las opciones, a todos los grupos.
+  // los nombres caen a los del grupo.
   const levels = async (tenantId: string): Promise<MembershipLevelName[]> =>
     levelNames ? levelNames(tenantId).catch(() => []) : [];
   return {
@@ -116,12 +124,10 @@ export function buildAccessGroupMembership(
     },
 
     async levelOptions(tenantId) {
-      const [groups, tiers] = await Promise.all([
-        listAccessGroupOptions(getDb(), tenantId),
-        levels(tenantId),
-      ]);
+      const tiers = levelNames ? await levelNames(tenantId) : [];
       const paid = tiers.filter((t) => !t.isFree && t.accessGroupId);
-      if (paid.length === 0) return groups;
+      if (paid.length === 0) return [];
+      const groups = await listAccessGroupOptions(getDb(), tenantId);
       const alive = new Set(groups.map((g) => g.id));
       const seen = new Set<string>();
       const out: Array<{ id: string; name: string }> = [];
