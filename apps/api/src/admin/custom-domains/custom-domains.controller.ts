@@ -16,6 +16,14 @@
  * directo el upsell card. Sin licencia → 402 Payment Required vía
  * LicenseExceptionFilter (registrado globalmente en `main.ts`).
  *
+ * **En Didacta Cloud no hay dominios propios.** Con la licencia de edición
+ * `cloud` el proxy solo enruta los subdominios de la plataforma: un dominio
+ * propio se «verificaba» aquí y luego daba 404 y no tenía certificado. Ahí no
+ * se añaden, ni se verifican, ni se activan (404
+ * `ADMIN_CUSTOM_DOMAINS_NOT_IN_CLOUD`); la dirección se cambia en «Dirección
+ * de tu academia». Listar y borrar siguen, para que quien ya añadió uno pueda
+ * verlo y quitarlo.
+ *
  * Cada acción persistente registra un entry en el audit log con prefijo
  * `tenancy.custom_domain.<verb>` para que el panel /admin/audit pueda
  * filtrar por tipo de evento.
@@ -29,6 +37,7 @@ import {
   Get,
   HttpCode,
   HttpStatus,
+  NotFoundException,
   Param,
   Patch,
   Post,
@@ -38,7 +47,7 @@ import {
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import type { FastifyRequest } from 'fastify';
-import { LICENSE_CAPABILITIES, RequiresCapability } from '@didacta/license-sdk';
+import { LICENSE_CAPABILITIES, LicenseService, RequiresCapability } from '@didacta/license-sdk';
 import { CurrentUser } from '../../auth/decorators';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import type { SessionClaims } from '../../auth/token.service';
@@ -76,7 +85,18 @@ export class CustomDomainsController {
   constructor(
     private readonly domains: CustomDomainsService,
     private readonly auditLog: PrismaAuditLogService,
+    private readonly license: LicenseService,
   ) {}
+
+  /** En Didacta Cloud no se sirven dominios propios (ver la cabecera). */
+  private assertServedHere(): void {
+    if (this.license.getState().subject?.edition !== 'cloud') return;
+    throw new NotFoundException({
+      message:
+        'En Didacta Cloud tu academia usa su dirección de la plataforma, que puedes cambiar en Ajustes. Los dominios propios no están disponibles.',
+      code: 'ADMIN_CUSTOM_DOMAINS_NOT_IN_CLOUD',
+    });
+  }
 
   @Get()
   @RequiresCapability(LICENSE_CAPABILITIES.CUSTOM_DOMAINS)
@@ -111,6 +131,7 @@ export class CustomDomainsController {
     @Body(new ZodValidationPipe(addCustomDomainDtoSchema)) dto: AddCustomDomainDto,
   ) {
     const u = requireTenantAdmin(user);
+    this.assertServedHere();
     const domain = await this.domains.addDomain(u.tenantId, dto, { userId: u.sub });
 
     const ctx = extractClientContext(req);
@@ -149,6 +170,7 @@ export class CustomDomainsController {
     @Body(new ZodValidationPipe(verifyCustomDomainDtoSchema)) dto: VerifyCustomDomainDto,
   ) {
     const u = requireTenantAdmin(user);
+    this.assertServedHere();
     const domain = await this.domains.verifyDomain(u.tenantId, id, dto, { userId: u.sub });
 
     const ctx = extractClientContext(req);
@@ -184,6 +206,7 @@ export class CustomDomainsController {
     @Body(new ZodValidationPipe(setCustomDomainStatusDtoSchema)) dto: SetCustomDomainStatusDto,
   ) {
     const u = requireTenantAdmin(user);
+    this.assertServedHere();
     const domain = await this.domains.setActive(u.tenantId, id, dto, { userId: u.sub });
 
     const ctx = extractClientContext(req);

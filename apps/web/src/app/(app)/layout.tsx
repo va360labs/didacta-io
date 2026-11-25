@@ -11,6 +11,7 @@ import { useTranslations } from 'next-intl';
 import { AppSidebar, type SidebarGroup } from '@/components/app-sidebar';
 import { CommandPalette } from '@/components/command-palette';
 import { Icon } from '@/components/icon';
+import { useLicense } from '@didacta/license-sdk/react';
 import { LicenseProvider } from '@/components/license-provider';
 import { NotificationsBell } from '@/components/notifications-bell';
 import { NotificationsSetupBanner } from '@/components/notifications-setup-banner';
@@ -383,13 +384,18 @@ function Shell({
   // activo en el tenant) y la entrada aparece únicamente si hay alguno.
   const inspectionGroups = useFundaeInspectionGroups(activeModules?.has('mod.fundae') ?? false);
 
+  // Didacta Cloud (licencia de edición `cloud`) no sirve dominios propios: sin
+  // entrada en el menú, tampoco en «Más» del modo sencillo.
+  const { state: licencia } = useLicense();
+  const customDomains = licencia.edition !== 'cloud';
+
   // Área de admin: cuando el admin está en /admin o /super, el sidebar cambia a
   // las sub-secciones de administración (buildAdminGroups). Fuera de ahí, el
   // menú principal (con una sola entrada "Administración").
   const isAdminArea =
     isAdmin && ((pathname ?? '').startsWith('/admin') || (pathname ?? '').startsWith('/super'));
   const baseGroups = isAdminArea
-    ? buildAdminGroups({ isSuperAdmin })
+    ? buildAdminGroups({ isSuperAdmin, customDomains })
     : buildGroups({
         isAdminOrFormador,
         isAdmin,
@@ -477,7 +483,7 @@ function Shell({
     // «Más», para que nada se pierda; las pestañas las decide `simple-nav`.
     const fullBase = [
       ...buildGroups({ isAdminOrFormador, isAdmin, isSuperAdmin, espacios: espaciosGroup }),
-      ...(isAdmin ? buildAdminGroups({ isSuperAdmin }) : []),
+      ...(isAdmin ? buildAdminGroups({ isSuperAdmin, customDomains }) : []),
     ];
     const fullGroups = filterByActiveModules(
       mergeExtensionSidebarItems(fullBase, moduleExtensions, userRoles),

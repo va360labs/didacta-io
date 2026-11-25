@@ -111,7 +111,7 @@ describe('CustomDomainsController · gate feat:custom_domains', () => {
     const a = makeAuditLog();
     auditLog = a.audit;
     recordSpy = a.recordSpy;
-    controller = new CustomDomainsController(service, auditLog);
+    controller = new CustomDomainsController(service, auditLog, license);
   });
 
   // -------------------------------------------------------------------------
@@ -296,6 +296,74 @@ describe('CustomDomainsController · gate feat:custom_domains', () => {
       const superAdmin: SessionClaims = { ...adminUser, roles: ['super_admin'] };
       const created = await controller.add(FAKE_REQ, superAdmin, { hostname: 'acme.com' });
       expect(created.hostname).toBe('acme.com');
+    });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// En Didacta Cloud (licencia de edición `cloud`) el proxy solo enruta los
+// subdominios de la plataforma: no se añade, verifica ni activa un dominio
+// propio. Listar y borrar siguen (quien ya añadió uno puede quitarlo).
+// ---------------------------------------------------------------------------
+describe('CustomDomainsController · en Didacta Cloud no hay dominios propios', () => {
+  function withEdition(edition: 'cloud' | 'enterprise') {
+    const tenantConfig = makeTenantConfig();
+    const service = new CustomDomainsService(tenantConfig);
+    const { audit, recordSpy } = makeAuditLog();
+    const license = {
+      getState: () => ({ subject: { edition } }),
+    } as unknown as LicenseService;
+    return {
+      controller: new CustomDomainsController(service, audit, license),
+      service,
+      recordSpy,
+    };
+  }
+
+  async function notInCloud(p: Promise<unknown>) {
+    const err = await p.then(
+      () => null,
+      (e: unknown) => e,
+    );
+    expect(err).toBeInstanceOf(NotFoundException);
+    expect((err as NotFoundException).getResponse()).toMatchObject({
+      code: 'ADMIN_CUSTOM_DOMAINS_NOT_IN_CLOUD',
+    });
+  }
+
+  it('añadir → 404 ADMIN_CUSTOM_DOMAINS_NOT_IN_CLOUD, sin guardar nada ni auditar', async () => {
+    const { controller, recordSpy } = withEdition('cloud');
+    await notInCloud(controller.add(FAKE_REQ, adminUser, { hostname: 'aula.example.com' }));
+    expect((await controller.list(adminUser)).domains).toEqual([]);
+    expect(recordSpy).not.toHaveBeenCalled();
+  });
+
+  it('control: con otra edición, el mismo alta funciona', async () => {
+    const { controller } = withEdition('enterprise');
+    const created = await controller.add(FAKE_REQ, adminUser, { hostname: 'aula.example.com' });
+    expect(created.status).toBe('pending');
+  });
+
+  it('un dominio que ya estaba: no se verifica ni se activa, pero se ve y se borra', async () => {
+    const { controller, service } = withEdition('cloud');
+    // Añadido antes del cambio (por el servicio, sin pasar por el controlador).
+    const prev = await service.addDomain(
+      'tenant-1',
+      { hostname: 'aula.example.com' },
+      {
+        userId: 'user-1',
+      },
+    );
+    await notInCloud(
+      controller.verify(FAKE_REQ, adminUser, prev.id, { providedToken: prev.verificationToken }),
+    );
+    await notInCloud(controller.patch(FAKE_REQ, adminUser, prev.id, { status: 'verified' }));
+    expect((await controller.list(adminUser)).domains.map((d) => d.hostname)).toEqual([
+      'aula.example.com',
+    ]);
+    expect(await controller.remove(FAKE_REQ, adminUser, prev.id)).toEqual({
+      id: prev.id,
+      removed: true,
     });
   });
 });

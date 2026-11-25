@@ -1,5 +1,6 @@
 {
   "ADMIN_CUSTOM_DOMAINS_FORBIDDEN": "Somente super_admin e tenant_admin podem gerenciar domínios próprios.",
+  "ADMIN_CUSTOM_DOMAINS_NOT_IN_CLOUD": "No Didacta Cloud sua escola usa o endereço da plataforma, que você pode mudar em Configurações. Domínios próprios não estão disponíveis.",
   "ADMIN_CUSTOM_DOMAIN_EXISTS": "O domínio {detail} já está registrado para este tenant.",
   "ADMIN_CUSTOM_DOMAIN_NOT_FOUND": "Domínio {detail} não encontrado.",
   "ADMIN_CUSTOM_DOMAIN_TOKEN_MISMATCH": "O token de verificação não confere. Revise o registro TXT no seu DNS.",

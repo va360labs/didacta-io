@@ -186,7 +186,17 @@ export function applyAdminBadges(
  * item de módulo se insertaría en ambos árboles. Por eso 'Personas y accesos'
  * y no 'Personas'. También verificado en el test.
  */
-export function buildAdminGroups({ isSuperAdmin }: { isSuperAdmin: boolean }): SidebarGroup[] {
+export function buildAdminGroups({
+  isSuperAdmin,
+  customDomains = true,
+}: {
+  isSuperAdmin: boolean;
+  /**
+   * La instancia sirve dominios propios. En Didacta Cloud no (el proxy solo
+   * enruta los subdominios de la plataforma): ahí la entrada no se pinta.
+   */
+  customDomains?: boolean;
+}): SidebarGroup[] {
   const resumen: SidebarGroup = {
     label: 'Resumen',
     icon: 'chart',
@@ -277,7 +287,9 @@ export function buildAdminGroups({ isSuperAdmin }: { isSuperAdmin: boolean }): S
     icon: 'palette',
     items: [
       { href: '/admin/branding', label: 'Branding', icon: 'palette' },
-      { href: '/admin/domains', label: 'Dominios propios', icon: 'globe' },
+      ...(customDomains
+        ? [{ href: '/admin/domains', label: 'Dominios propios', icon: 'globe' as const }]
+        : []),
       { href: '/admin/settings', label: 'Configuración', icon: 'cog' },
     ],
   };

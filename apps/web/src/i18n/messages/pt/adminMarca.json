@@ -306,7 +306,10 @@
     "upsellTitle": "Funcionalidade Enterprise — faça upgrade do seu plano",
     "upsellDescription": "Os domínios personalizados fazem parte do pacote Didacta Enterprise. Seu plano atual (community) usa o subdomínio compartilhado <code>{slugHost}</code>; com o Enterprise, você pode servir seu LMS a partir do seu próprio hostname (ex.: <code>learn.acme.com</code>).",
     "upsellBody": "A capability necessária é <code>feat:custom_domains</code>. Se a sua licença Enterprise expirar ou for revogada, os domínios validados ficam inertes e os usuários continuam acessando pelo subdomínio compartilhado — a configuração salva NÃO é apagada.",
-    "upsellCta": "Ver planos Enterprise"
+    "upsellCta": "Ver planos Enterprise",
+    "cloudTitle": "Não disponível no Didacta Cloud",
+    "cloudBody": "Sua escola usa o endereço do Didacta Cloud, que você pode mudar quando quiser em «Endereço da sua escola». Domínios próprios não estão disponíveis por enquanto.",
+    "cloudCta": "Mudar o endereço da minha escola"
   },
   "imagenes": {
     "title": "Imagens",

@@ -30,7 +30,8 @@
 
 import { useEffect, useState, type FormEvent } from 'react';
 import { useTranslations } from 'next-intl';
-import { EeGate, LICENSE_CAPABILITIES } from '@didacta/license-sdk/react';
+import Link from 'next/link';
+import { EeGate, LICENSE_CAPABILITIES, useLicense } from '@didacta/license-sdk/react';
 import { Icon } from '@/components/icon';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -45,6 +46,7 @@ import { formatDateTime } from '@/lib/i18n/format';
 
 export default function AdminDominiosPage() {
   const t = useTranslations('adminMarca');
+  const { state } = useLicense();
   return (
     <div className="flex flex-col gap-6">
       <header className="flex flex-col gap-1">
@@ -56,12 +58,16 @@ export default function AdminDominiosPage() {
         </p>
       </header>
 
-      <EeGate
-        capability={LICENSE_CAPABILITIES.CUSTOM_DOMAINS}
-        fallback={<CustomDomainsUpsellCard />}
-      >
-        <CustomDomainsPanel />
-      </EeGate>
+      {state.edition === 'cloud' ? (
+        <CustomDomainsCloudCard />
+      ) : (
+        <EeGate
+          capability={LICENSE_CAPABILITIES.CUSTOM_DOMAINS}
+          fallback={<CustomDomainsUpsellCard />}
+        >
+          <CustomDomainsPanel />
+        </EeGate>
+      )}
     </div>
   );
 }
@@ -345,6 +351,29 @@ function DomainStatusBadge({ status }: { status: CustomDomainStatus }) {
     <Badge variant="outline" className="border-warning-200 bg-warning-50 text-warning-700">
       {t('dominios.statusPending')}
     </Badge>
+  );
+}
+
+/**
+ * Didacta Cloud: el proxy solo enruta los subdominios de la plataforma, así que
+ * aquí no se ofrece nada que luego no funcione (la API tampoco deja añadir,
+ * verificar ni activar). Lleva a «Dirección de tu academia», que es lo que sí
+ * se puede cambiar.
+ */
+function CustomDomainsCloudCard() {
+  const t = useTranslations('adminMarca');
+  return (
+    <Card role="region" data-testid="dominios-cloud">
+      <CardHeader>
+        <CardTitle>{t('dominios.cloudTitle')}</CardTitle>
+        <CardDescription>{t('dominios.cloudBody')}</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <Button asChild>
+          <Link href="/admin/settings?tab=general">{t('dominios.cloudCta')}</Link>
+        </Button>
+      </CardContent>
+    </Card>
   );
 }
 

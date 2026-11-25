@@ -306,7 +306,10 @@
     "upsellTitle": "Función Enterprise — actualiza tu plan",
     "upsellDescription": "Los dominios personalizados son parte del paquete Didacta Enterprise. Tu plan actual (community) usa el subdominio compartido <code>{slugHost}</code>; con Enterprise puedes servir tu LMS desde tu propio hostname (ej. <code>learn.acme.com</code>).",
     "upsellBody": "La capability requerida es <code>feat:custom_domains</code>. Si tu licencia Enterprise expira o se revoca, los dominios validados quedan inertes y los usuarios siguen accediendo por el subdominio compartido — la configuración guardada NO se borra.",
-    "upsellCta": "Ver planes Enterprise"
+    "upsellCta": "Ver planes Enterprise",
+    "cloudTitle": "No disponible en Didacta Cloud",
+    "cloudBody": "Tu academia usa su dirección de Didacta Cloud, que puedes cambiar cuando quieras en «Dirección de tu academia». Los dominios propios no están disponibles por ahora.",
+    "cloudCta": "Cambiar la dirección de mi academia"
   },
   "imagenes": {
     "title": "Imágenes",

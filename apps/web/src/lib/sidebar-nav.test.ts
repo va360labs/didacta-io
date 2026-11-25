@@ -118,4 +118,16 @@ describe('integridad del árbol de navegación', () => {
       .map((g) => `${g.label} (${g.items.length})`);
     expect(tooBig, `Grupos demasiado grandes: ${tooBig.join(', ')}`).toEqual([]);
   });
+
+  it('sin dominios propios (Didacta Cloud) no hay entrada «Dominios propios»; por defecto, sí', () => {
+    const hrefs = (customDomains?: boolean) =>
+      buildAdminGroups({ isSuperAdmin: false, customDomains }).flatMap((g) =>
+        g.items.map((i) => i.href),
+      );
+    expect(hrefs()).toContain('/admin/domains');
+    expect(hrefs(true)).toContain('/admin/domains');
+    expect(hrefs(false)).not.toContain('/admin/domains');
+    // El resto del grupo sigue igual.
+    expect(hrefs(false)).toEqual(hrefs(true).filter((h) => h !== '/admin/domains'));
+  });
 });

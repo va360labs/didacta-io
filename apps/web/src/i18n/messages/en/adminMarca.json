@@ -306,7 +306,10 @@
     "upsellTitle": "Enterprise feature — upgrade your plan",
     "upsellDescription": "Custom domains are part of the Didacta Enterprise package. Your current plan (community) uses the shared subdomain <code>{slugHost}</code>; with Enterprise you can serve your LMS from your own hostname (e.g. <code>learn.acme.com</code>).",
     "upsellBody": "The required capability is <code>feat:custom_domains</code>. If your Enterprise license expires or is revoked, validated domains become inert and users keep accessing through the shared subdomain — the saved configuration is NOT deleted.",
-    "upsellCta": "See Enterprise plans"
+    "upsellCta": "See Enterprise plans",
+    "cloudTitle": "Not available on Didacta Cloud",
+    "cloudBody": "Your academy uses its Didacta Cloud address, which you can change whenever you like under \"Your academy's address\". Custom domains aren't available for now.",
+    "cloudCta": "Change my academy's address"
   },
   "imagenes": {
     "title": "Images",
