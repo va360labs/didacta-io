@@ -73,8 +73,12 @@ export class AssessmentsService {
 
   async addQuestion(tenantId: string, quizId: string, dto: CreateQuestionDto) {
     await this.requireQuiz(tenantId, quizId);
+    // Las borradas cuentan: siguen en la tabla (borrado lógico) y conservan su
+    // posición, que es única por cuestionario. Si solo se mirasen las vivas,
+    // borrar la última y añadir otra repetiría su posición y la BD la
+    // rechazaría. Los huecos que dejan no importan: solo se usa para ordenar.
     const lastPosition = await this.prisma.modAssessmentsQuestion.findFirst({
-      where: { tenantId, quizId, deletedAt: null },
+      where: { tenantId, quizId },
       orderBy: { position: 'desc' },
       select: { position: true },
     });
