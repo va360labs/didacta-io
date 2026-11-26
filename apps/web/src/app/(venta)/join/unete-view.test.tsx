@@ -7,7 +7,8 @@
  *     «Continuar al pago seguro»), sin tarjetas;
  *   - con niveles, el botón de una tarjeta abre el pago de siempre con SOLO los
  *     planes de ese nivel y el elegido marcado, y el pago arranca con él;
- *   - un `?plan=` de un nivel entra directo a su pago, y «Cambiar» vuelve.
+ *   - un `?plan=` de un nivel entra directo a su pago, y «Cambiar» vuelve;
+ *   - la pregunta de la prueba gratis solo sale si algún plan tiene prueba.
  */
 
 import { act, type ReactNode } from 'react';
@@ -281,5 +282,27 @@ describe('/join', () => {
     expect(byTestId('nivel-periodo-p-pro-m')!.getAttribute('aria-checked')).toBe('true');
     // El otro nivel conserva su «mejor valor».
     expect(byTestId('nivel-periodo-p-basic-y')!.getAttribute('aria-checked')).toBe('true');
+  });
+
+  describe('«¿Qué pasa cuando termina la prueba gratis?»', () => {
+    const PREGUNTA = '¿Qué pasa cuando termina la prueba gratis?';
+
+    it('sin prueba en ningún plan, no sale', async () => {
+      await render(BASE_PAGE);
+      expect(document.body.textContent).toContain('¿Puedo cancelar cuando quiera?');
+      expect(document.body.textContent).not.toContain(PREGUNTA);
+    });
+
+    it('sin prueba y con niveles, tampoco', async () => {
+      await render(TIERED_PAGE);
+      expect(document.body.textContent).toContain('¿Puedo cancelar cuando quiera?');
+      expect(document.body.textContent).not.toContain(PREGUNTA);
+    });
+
+    it('si algún plan tiene prueba, sale', async () => {
+      const plans = PLANS.map((p) => (p.id === 'p-pro-m' ? { ...p, trialDays: 7 } : p));
+      await render({ ...BASE_PAGE, plans });
+      expect(document.body.textContent).toContain(PREGUNTA);
+    });
   });
 });

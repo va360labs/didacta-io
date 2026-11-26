@@ -2,8 +2,9 @@
  * Copyright (c) VA360 LABS S.L.
  * SPDX-License-Identifier: LicenseRef-Didacta-Sustainable-Use
  *
- * La regla única de cuándo un aula enseña sus cifras en público (login y
- * portada). Si cambia el umbral, cambia aquí y en las dos pantallas a la vez.
+ * La regla única de cuándo un aula enseña sus cifras en público (login,
+ * portada y página de venta de la membresía). Si cambia el umbral, cambia
+ * aquí y en las tres pantallas a la vez.
  */
 
 import { describe, expect, it } from 'vitest';
@@ -11,7 +12,7 @@ import {
   MIN_STUDENTS_FOR_PUBLIC_COUNTS,
   STAFF_ROLES,
   showsPublicCounts,
-} from '../src/public/public-counts';
+} from '../src/public/public-counts.js';
 
 describe('showsPublicCounts', () => {
   it('el umbral es de 10 alumnos', () => {

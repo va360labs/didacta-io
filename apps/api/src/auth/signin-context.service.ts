@@ -6,7 +6,7 @@
 import { Injectable } from '@nestjs/common';
 import { Logger as PinoLogger } from 'nestjs-pino';
 import { PrismaService } from '../prisma/prisma.service';
-import { STAFF_ROLES, showsPublicCounts } from '../public/public-counts';
+import { STAFF_ROLES, showsPublicCounts } from '@didacta/core-kernel';
 
 /**
  * Copy y cifras del panel de marca de las pantallas de acceso (/signin y

@@ -291,11 +291,22 @@ class MockPrisma {
     name: string | null;
     status: string;
     email?: string;
+    /** Nombres de rol; el equipo (`STAFF_ROLES`) no cuenta como alumno. */
+    roles?: string[];
   }> = [];
 
   user = {
-    count: async (args: { where: Record<string, unknown> }) =>
-      this.users.filter((u) => matches(u as never, args.where)).length,
+    // Entiende el `NOT: { roles: { some: { role: { name: { in } } } } }` con el
+    // que se excluye al equipo del recuento de alumnos.
+    count: async (args: { where: Record<string, unknown> }) => {
+      const { NOT, ...where } = args.where as {
+        NOT?: { roles: { some: { role: { name: { in: string[] } } } } };
+      };
+      const excluded = NOT?.roles.some.role.name.in ?? [];
+      return this.users.filter(
+        (u) => matches(u as never, where) && !(u.roles ?? []).some((r) => excluded.includes(r)),
+      ).length;
+    },
     findFirst: async (args: { where: Record<string, unknown> }) =>
       this.users.find((u) => matches(u as never, args.where)) ?? null,
     findMany: async (args: { where: { tenantId: string; id: { in: string[] } } }) =>
@@ -726,12 +737,50 @@ describe('MembershipService · página pública', () => {
     expect(c3.teacherName).toBeNull();
   });
 
-  it('los tiles usan datos reales: alumnos ACTIVE y suma de minutos del catálogo', async () => {
+  it('los tiles usan datos reales: suma de minutos del catálogo', async () => {
     await ctx.service.updateConfig(TENANT, { active: true });
     const page = await ctx.service.getPublicPage(TENANT);
-    // prof_1 + al_1 son ACTIVE; al_2 es PENDING y no cuenta.
-    expect(page.stats.activeMembers).toBe(2);
     expect(page.stats.totalMinutes).toBe(180);
+  });
+
+  describe('«N alumnos activos»: sin el equipo y solo desde 10 alumnos', () => {
+    const equipo = [
+      { id: 'admin_1', tenantId: TENANT, name: 'Admin', status: 'ACTIVE', roles: ['tenant_admin'] },
+      {
+        id: 'admin_2',
+        tenantId: TENANT,
+        name: 'Admin 2',
+        status: 'ACTIVE',
+        roles: ['super_admin'],
+      },
+      { id: 'formador_1', tenantId: TENANT, name: 'Profe', status: 'ACTIVE', roles: ['formador'] },
+    ];
+    const alumnos = (n: number, status = 'ACTIVE') =>
+      Array.from({ length: n }, (_, i) => ({
+        id: `al_${status}_${i}`,
+        tenantId: TENANT,
+        name: null,
+        status,
+        roles: ['alumno'],
+      }));
+
+    it('un aula con solo el equipo no enseña cifra (antes: «2 alumnos activos»)', async () => {
+      ctx.prisma.users = [...equipo];
+      await ctx.service.updateConfig(TENANT, { active: true });
+      expect((await ctx.service.getPublicPage(TENANT)).stats.activeMembers).toBe(0);
+    });
+
+    it('con 9 alumnos y el equipo, aún no enseña cifra', async () => {
+      ctx.prisma.users = [...equipo, ...alumnos(9)];
+      await ctx.service.updateConfig(TENANT, { active: true });
+      expect((await ctx.service.getPublicPage(TENANT)).stats.activeMembers).toBe(0);
+    });
+
+    it('con 10 alumnos enseña 10: ni el equipo ni los pendientes suman', async () => {
+      ctx.prisma.users = [...equipo, ...alumnos(10), ...alumnos(5, 'PENDING')];
+      await ctx.service.updateConfig(TENANT, { active: true });
+      expect((await ctx.service.getPublicPage(TENANT)).stats.activeMembers).toBe(10);
+    });
   });
 
   it('testimonial solo si hay cita Y autor (prohibido inventar personas)', async () => {

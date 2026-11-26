@@ -415,6 +415,8 @@ export function UneteView() {
 
   // Cobro por la plataforma: el pago no admite cupones, así que no se prometen.
   const coupons = couponsAtCheckout(page);
+  // «¿Qué pasa cuando termina la prueba gratis?» solo si algún plan la tiene.
+  const offersTrial = page.plans.some((p) => p.trialDays > 0);
 
   // ── Aula con niveles y ninguno elegido: una tarjeta por nivel ──────────────
   if (tiers.length > 0 && !chosenTier) {
@@ -441,7 +443,7 @@ export function UneteView() {
         <div className="mx-auto w-full max-w-xl">
           <AccountBox session={session} />
         </div>
-        <MembershipFaq coupons={coupons} />
+        <MembershipFaq coupons={coupons} trial={offersTrial} />
         {page.testimonial ? <MembershipTestimonial testimonial={page.testimonial} /> : null}
       </div>
     );
@@ -792,7 +794,7 @@ export function UneteView() {
         ) : null}
 
         {/* FAQ: afirmaciones verificables del producto (no datos inventados). */}
-        <MembershipFaq coupons={coupons} className="mt-8" />
+        <MembershipFaq coupons={coupons} trial={offersTrial} className="mt-8" />
 
         {/* Testimonial oscuro (solo si el admin lo configuró) */}
         {page.testimonial && (
@@ -891,24 +893,35 @@ function AccountBox({ session }: { session: StoredSession | null }) {
   );
 }
 
-/** Preguntas frecuentes: afirmaciones verificables del producto. */
-function MembershipFaq({ coupons, className }: { coupons: boolean; className?: string }) {
+/**
+ * Preguntas frecuentes: afirmaciones verificables del producto. La de la
+ * prueba gratis solo sale si algún plan tiene prueba (`trial`): sin ella,
+ * la pregunta promete algo que el aula no ofrece.
+ */
+function MembershipFaq({
+  coupons,
+  trial,
+  className,
+}: {
+  coupons: boolean;
+  trial: boolean;
+  className?: string;
+}) {
   const t = useTranslations('publicSite');
+  const faqs = [
+    { q: t('unete.faq1Q'), a: t('unete.faq1A') },
+    ...(trial ? [{ q: t('unete.faq2Q'), a: t('unete.faq2A') }] : []),
+    { q: t('unete.faq3Q'), a: t('unete.faq3A') },
+    {
+      q: t('unete.faq4Q'),
+      a: coupons ? t('unete.faq4A') : t('unete.faq4ANoCoupon'),
+    },
+  ];
   return (
     <div className={className}>
       <h3 className="mb-4 text-xl font-bold">{t('unete.faqTitle')}</h3>
       <div className="grid gap-4 sm:grid-cols-2">
-        {(
-          [
-            { q: t('unete.faq1Q'), a: t('unete.faq1A') },
-            { q: t('unete.faq2Q'), a: t('unete.faq2A') },
-            { q: t('unete.faq3Q'), a: t('unete.faq3A') },
-            {
-              q: t('unete.faq4Q'),
-              a: coupons ? t('unete.faq4A') : t('unete.faq4ANoCoupon'),
-            },
-          ] as const
-        ).map((faq) => (
+        {faqs.map((faq) => (
           <div key={faq.q} className="rounded-xl border border-border bg-surface px-5 py-4">
             <div className="mb-1.5 text-[15px] font-semibold">{faq.q}</div>
             <div className="text-sm leading-[21px] text-text-muted">{faq.a}</div>
