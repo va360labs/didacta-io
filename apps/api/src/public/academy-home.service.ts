@@ -15,7 +15,7 @@ import { TenantModulesService } from '../modules/tenant-modules.service';
 import { PlatformCheckoutGate } from '../modules/payouts/platform-checkout-gate';
 import { PrismaService } from '../prisma/prisma.service';
 import { isShareableHost, publicName } from '../modules/community/community-sidebar.service';
-import { STAFF_ROLES, showsPublicCounts } from './public-counts';
+import { STAFF_ROLES, showsPublicCounts } from '@didacta/core-kernel';
 
 /**
  * La PÁGINA PÚBLICA de la academia (la raíz del aula para quien entra sin

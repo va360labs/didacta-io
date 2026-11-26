@@ -5,8 +5,10 @@
 
 /**
  * Cuándo enseña un aula sus cifras a quien entra SIN sesión: el panel de las
- * pantallas de acceso («N alumnos activos · N cursos») y los miembros de la
- * portada pública. Una sola regla para las dos pantallas.
+ * pantallas de acceso («N alumnos activos · N cursos»), los miembros de la
+ * portada pública y los «N alumnos activos» de la página de venta de la
+ * membresía (`/join`, en `mod.subscriptions`). Una sola regla para todas;
+ * vive en el core-kernel para que el host y los módulos la compartan.
  *
  * Por qué hay umbral: una cifra pequeña no convence a nadie, al revés. En la
  * primera venta real de Didacta Cloud (14-nov-2026) la entrada del aula

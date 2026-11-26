@@ -27,6 +27,7 @@
  * MISMA tabla `mod_subscriptions_subscription` (courseId NULL + planId).
  */
 
+import { STAFF_ROLES, showsPublicCounts } from '@didacta/core-kernel';
 import { Prisma, type PrismaClient } from '@didacta/database';
 import type Stripe from 'stripe';
 import {
@@ -190,7 +191,10 @@ export interface MembershipCourseView {
 
 /** Datos agregados REALES del tenant para los tiles de la página de venta. */
 export interface MembershipPublicStats {
-  /** Usuarios ACTIVE del tenant (alumnos con acceso). */
+  /**
+   * Alumnos activos del tenant (sin el equipo). 0 = no se enseña: el aula aún
+   * no llega al mínimo de `showsPublicCounts`.
+   */
   activeMembers: number;
   /** Suma de estimatedMinutes de los cursos publicados (0 si ninguno lo define). */
   totalMinutes: number;
@@ -537,11 +541,21 @@ export class MembershipService {
     // Tiles con datos REALES (nada inventado): alumnos con acceso y horas del
     // catálogo. Si un dato no existe (p.ej. sin estimatedMinutes), la UI no
     // pinta ese tile.
-    const activeMembers = await this.prisma.user.count({
-      where: { tenantId, status: 'ACTIVE', deletedAt: null },
+    //
+    // Alumnos = usuarios activos SIN rol de equipo, y con la misma regla que
+    // el login y la portada (`showsPublicCounts`): por debajo del umbral sale
+    // 0 y la página no pinta la cifra. Antes contaba a todos y un aula con
+    // dos administradores y ningún alumno presumía de «2 alumnos activos».
+    const students = await this.prisma.user.count({
+      where: {
+        tenantId,
+        status: 'ACTIVE',
+        deletedAt: null,
+        NOT: { roles: { some: { role: { name: { in: [...STAFF_ROLES] } } } } },
+      },
     });
     const stats: MembershipPublicStats = {
-      activeMembers,
+      activeMembers: showsPublicCounts(students) ? students : 0,
       totalMinutes: courses.reduce((sum, c) => sum + (c.estimatedMinutes ?? 0), 0),
     };
 

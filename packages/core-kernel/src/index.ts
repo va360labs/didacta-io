@@ -58,3 +58,9 @@ export {
 } from './html/sanitize.js';
 
 export type { SanitizeHtmlOptions } from './html/sanitize.js';
+
+export {
+  STAFF_ROLES,
+  MIN_STUDENTS_FOR_PUBLIC_COUNTS,
+  showsPublicCounts,
+} from './public/public-counts.js';
